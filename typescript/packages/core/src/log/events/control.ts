@@ -3,7 +3,7 @@ import { Actor, ActorWithPrincipal, ParkAddress } from "../common";
 import { type EventSchema, event } from "../envelope";
 import { EventId, ThreadId } from "../ids";
 import { Int, TimeMs } from "../primitives";
-import type { EnumOf, Opt, Strict } from "../zod-types";
+import type { EnumOf, Lit, Opt, Strict } from "../zod-types";
 
 // Parking, cancellation, turn ends and budget stops.
 
@@ -112,7 +112,7 @@ export const TurnCompleted: EventSchema<
   true
 > = event("turn_completed", true, Actor, TurnCompletedData);
 
-const BUDGET_SCOPES = ["run", "thread", "ancestor"] as const;
+const OWN_SCOPES = ["run", "thread"] as const;
 const BUDGET_LIMITS = [
   "max_cost_nanos",
   "max_input_tokens",
@@ -121,22 +121,36 @@ const BUDGET_LIMITS = [
   "max_turns",
   "max_wall_ms",
 ] as const;
-/** A tree-wide budget reservation before a model_request failed. */
-export const BudgetExceededData: Strict<{
-  scope: EnumOf<typeof BUDGET_SCOPES>;
-  owner_thread_id: Opt<typeof ThreadId>;
+type BudgetShape = {
   limit: EnumOf<typeof BUDGET_LIMITS>;
   limit_value: typeof Int;
   observed: typeof Int;
   observed_is_upper_bound: z.ZodBoolean;
-}> = z.strictObject({
-  scope: z.enum(BUDGET_SCOPES),
-  owner_thread_id: ThreadId.optional(),
+};
+const budgetShape: BudgetShape = {
   limit: z.enum(BUDGET_LIMITS),
   limit_value: Int,
   observed: Int,
   observed_is_upper_bound: z.boolean(),
-});
+};
+/** A tree-wide budget reservation before a model_request failed. */
+// An own budget's owner is the envelope thread; only an ancestor's is named.
+export const BudgetExceededData: z.ZodDiscriminatedUnion<
+  [
+    Strict<BudgetShape & { scope: EnumOf<typeof OWN_SCOPES> }>,
+    Strict<
+      BudgetShape & { scope: Lit<"ancestor">; owner_thread_id: typeof ThreadId }
+    >,
+  ],
+  "scope"
+> = z.discriminatedUnion("scope", [
+  z.strictObject({ ...budgetShape, scope: z.enum(OWN_SCOPES) }),
+  z.strictObject({
+    ...budgetShape,
+    scope: z.literal("ancestor"),
+    owner_thread_id: ThreadId,
+  }),
+]);
 export const BudgetExceeded: EventSchema<
   "budget_exceeded",
   typeof BudgetExceededData,

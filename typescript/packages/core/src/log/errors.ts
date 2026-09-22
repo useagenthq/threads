@@ -40,6 +40,8 @@ const ERROR_CODES = [
   "output_invalid",
   "tool_not_loaded",
   "permission_rule_invalid",
+  "branch_not_runnable",
+  "resource_unknown",
 ] as const;
 
 /** Pinned typed-error codes shared by both implementations. Add only; never rename. */

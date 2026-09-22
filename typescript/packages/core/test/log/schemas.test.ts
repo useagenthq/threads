@@ -72,6 +72,43 @@ describe("data schemas", () => {
     ["tool_result", result("answered"), user, "event"],
     ["tool_result", result("executed"), {}, "event"],
     [
+      "settings_changed",
+      { reason: "user", settings: settings() },
+      { actor: { kind: "recovery", principal: alice } },
+      "invalid_line",
+    ],
+    [
+      "settings_changed",
+      { reason: "revert", settings: settings() },
+      { actor: { kind: "user" } },
+      "invalid_line",
+    ],
+    [
+      "budget_exceeded",
+      {
+        scope: "ancestor",
+        limit: "max_turns",
+        limit_value: 1,
+        observed: 2,
+        observed_is_upper_bound: false,
+      },
+      {},
+      "invalid_line",
+    ],
+    [
+      "budget_exceeded",
+      {
+        scope: "run",
+        owner_thread_id: header.thread_id,
+        limit: "max_turns",
+        limit_value: 1,
+        observed: 2,
+        observed_is_upper_bound: false,
+      },
+      {},
+      "invalid_line",
+    ],
+    [
       "effect_resolved",
       { call_id: "c", outcome: "not_sent", by: "human" },
       {},

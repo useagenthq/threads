@@ -103,19 +103,21 @@ export const ToolsChanged: EventSchema<
   true
 > = event("tools_changed", true, Actor, ToolsChangedData);
 
-// Only the host, recovery, or an operator principal (reason user) may change settings. Never model or tool.
-const SETTINGS_ACTORS = ["host", "user", "recovery"] as const;
+// reason user names an operator principal (actor user, or host acting for it). The automatic
+// reasons come from the host or recovery only. Never model or tool.
+const OPERATOR_KINDS = ["user", "host"] as const;
+const AUTOMATIC_KINDS = ["host", "recovery"] as const;
 const SettingsActor: Strict<{
-  kind: EnumOf<typeof SETTINGS_ACTORS>;
+  kind: EnumOf<typeof AUTOMATIC_KINDS>;
   principal: Opt<typeof Principal>;
 }> = z.strictObject({
-  kind: z.enum(SETTINGS_ACTORS),
+  kind: z.enum(AUTOMATIC_KINDS),
   principal: Principal.optional(),
 });
 const SettingsOperator: Strict<{
-  kind: EnumOf<typeof SETTINGS_ACTORS>;
+  kind: EnumOf<typeof OPERATOR_KINDS>;
   principal: typeof Principal;
-}> = z.strictObject({ kind: z.enum(SETTINGS_ACTORS), principal: Principal });
+}> = z.strictObject({ kind: z.enum(OPERATOR_KINDS), principal: Principal });
 const AUTOMATIC_REASONS = ["fallback", "escalation", "revert"] as const;
 type SettingsShape = {
   settings: typeof ModelSettings;
@@ -168,6 +170,7 @@ export const SnapshotData: Strict<{
   capture_class: EnumOf<typeof CAPTURE_CLASSES>;
   expires_at: z.ZodNullable<typeof TimeMs>;
   manifest_hash: typeof Sha256;
+  knowledge_revision: Opt<typeof Int>;
   quiesced: Strict<{
     frozen: Arr<typeof NonEmpty>;
     stopped: Arr<typeof NonEmpty>;
@@ -180,6 +183,7 @@ export const SnapshotData: Strict<{
   capture_class: z.enum(CAPTURE_CLASSES),
   expires_at: TimeMs.nullable(),
   manifest_hash: Sha256,
+  knowledge_revision: Int.optional(),
   quiesced: z.strictObject({
     frozen: z.array(NonEmpty),
     stopped: z.array(NonEmpty),
@@ -191,19 +195,26 @@ export const Snapshot: EventSchema<"snapshot", typeof SnapshotData, true> =
 
 type ForkShape = { parent_branch_id: typeof BranchId; at_hash: typeof Sha256 };
 const forkShape: ForkShape = { parent_branch_id: BranchId, at_hash: Sha256 };
-// sandbox_id is present exactly when the fork restores a snapshot.
-export const ForkData: z.ZodUnion<
-  readonly [
+const KNOWLEDGE_POLICIES = ["pinned", "current"] as const;
+// sandbox_id and knowledge_policy are present exactly when the fork restores a snapshot.
+export const ForkData: z.ZodDiscriminatedUnion<
+  [
     Strict<
-      ForkShape & { reason: Lit<"snapshot">; sandbox_id: typeof SandboxId }
+      ForkShape & {
+        reason: Lit<"snapshot">;
+        sandbox_id: typeof SandboxId;
+        knowledge_policy: EnumOf<typeof KNOWLEDGE_POLICIES>;
+      }
     >,
     Strict<ForkShape & { reason: Lit<"repair"> }>,
-  ]
-> = z.union([
+  ],
+  "reason"
+> = z.discriminatedUnion("reason", [
   z.strictObject({
     ...forkShape,
     reason: z.literal("snapshot"),
     sandbox_id: SandboxId,
+    knowledge_policy: z.enum(KNOWLEDGE_POLICIES),
   }),
   z.strictObject({ ...forkShape, reason: z.literal("repair") }),
 ]);

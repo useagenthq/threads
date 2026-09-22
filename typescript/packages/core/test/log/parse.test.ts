@@ -18,6 +18,9 @@ describe("framing lines", () => {
 
   test("a newer format_version is unsupported, not corrupt", () => {
     expect(kind({ ...header, format_version: 2 })).toBe("unsupported_format");
+    expect(kind({ ...header, format_version: 0 })).toBe("invalid_line");
+    expect(kind({ ...header, format_version: "2" })).toBe("invalid_line");
+    expect(kind({ ...header, format: "threads.other" })).toBe("invalid_line");
   });
 
   test("unknown keys and bad ids are invalid", () => {

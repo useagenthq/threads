@@ -50,26 +50,39 @@ function invalid(
   );
 }
 
+function readSeq(value: Record<string, unknown>): number | undefined {
+  const { seq } = value;
+  return typeof seq === "number" ? seq : undefined;
+}
+
+// Wire rule 8: a known format at a newer integer version is a newer writer, not corruption.
+// Any other bad version or format is invalid. The error seq is 0 for a header, the head's own seq.
 function parseFramingLine(
   value: Record<string, unknown>,
 ): Result<ParsedLine, ParseError> {
   const { format, format_version: version } = value;
-  if (typeof format === "string" && FORMATS.has(format) && version !== 1) {
-    return err({
-      code: "unsupported_format",
-      message: `${format} format_version is not 1`,
-    });
+  const isHead = format === "threads.head";
+  const seq = isHead ? readSeq(value) : 0;
+  const newer =
+    typeof version === "number" && Number.isInteger(version) && version > 1;
+  if (typeof format === "string" && FORMATS.has(format) && newer) {
+    const message = `${format} format_version ${version} is newer than 1`;
+    return err(
+      seq === undefined
+        ? { code: "unsupported_format", message }
+        : { code: "unsupported_format", message, seq },
+    );
   }
-  if (format === "threads.head") {
+  if (isHead) {
     const head = Head.safeParse(value);
     return head.success
       ? ok({ kind: "head", head: head.data })
-      : invalid(describe(head.error));
+      : invalid(describe(head.error), seq);
   }
   const header = Header.safeParse(value);
   return header.success
     ? ok({ kind: "header", header: header.data })
-    : invalid(describe(header.error));
+    : invalid(describe(header.error), 0);
 }
 
 function parseEventLine(
@@ -77,8 +90,7 @@ function parseEventLine(
 ): Result<ParsedLine, ParseError> {
   const known = KnownEvent.safeParse(value);
   if (known.success) return ok({ kind: "event", event: known.data });
-  const { seq: rawSeq } = value;
-  const seq = typeof rawSeq === "number" ? rawSeq : undefined;
+  const seq = readSeq(value);
   const unknown = UnknownEvent.safeParse(value);
   if (!unknown.success) return invalid(describe(known.error), seq);
   if (unknown.data.critical) {
