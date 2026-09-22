@@ -27,9 +27,12 @@ from . import (
     recovery,
     renders,
     rules,
+    structure,
 )
 from .common import CASES, sha
+from .integrity import FOREIGN_WRITER
 from .jcs import selftest
+from .log import WRITERS, set_writer
 
 FAMILIES = (
     integrity,
@@ -47,6 +50,7 @@ FAMILIES = (
     policy,
     ladder,
     extras,
+    structure,
 )
 
 
@@ -67,11 +71,49 @@ def _diff(generated: pathlib.Path, committed: pathlib.Path) -> list[str]:
     return diffs
 
 
-def _generate(out: pathlib.Path) -> None:
-    selftest()
+def _build(out: pathlib.Path) -> None:
     out.mkdir()
     for family in FAMILIES:
         family.build(out)
+
+
+def _split_recover(out: pathlib.Path, other: pathlib.Path) -> None:
+    """Recover cases append, and only the header's writer may: each keeps one
+    log and expected file per implementation. Everything else in the case must be identical."""
+    py, ts = WRITERS
+    for d in out.iterdir():
+        if json.loads((d / "case.json").read_text())["kind"] != "recover":
+            continue
+        o = other / d.name
+        logs = {py: d / "log.jsonl", ts: o / "log.jsonl"}
+        if d.name == FOREIGN_WRITER:  # each runner gets the other implementation's log
+            logs = {py: logs[ts], ts: logs[py]}
+        for impl, log in logs.items():
+            (d / f"log.{impl}.jsonl").write_bytes(log.read_bytes())
+        for impl, src in ((py, d), (ts, o)):
+            (d / f"expected.{impl}.json").write_bytes((src / "expected.json").read_bytes())
+        for name in ("log.jsonl", "expected.json"):
+            (d / name).unlink()
+            (o / name).unlink()
+        if sorted(_diff(d, o)) != [f"{n}: only in generated" for n in _per_impl_files(d)]:
+            raise AssertionError(f"{d.name}: differs between writers beyond log and expected")
+
+
+def _per_impl_files(d: pathlib.Path) -> list[str]:
+    return sorted(f.name for f in d.iterdir() if f.name.startswith(("log.threads-", "expected.")))
+
+
+def _generate(out: pathlib.Path) -> None:
+    selftest()
+    _build(out)
+    with tempfile.TemporaryDirectory() as tmp:
+        other = pathlib.Path(tmp) / "cases"
+        set_writer(WRITERS[1])
+        try:
+            _build(other)
+        finally:
+            set_writer(WRITERS[0])
+        _split_recover(out, other)
     for f in out.rglob("*.json"):
         json.loads(f.read_text())
     for f in out.rglob("artifacts/*"):

@@ -85,7 +85,8 @@
         "tool_not_loaded",
         "permission_rule_invalid",
         "branch_not_runnable",
-        "resource_unknown"
+        "resource_unknown",
+        "writer_mismatch"
       ]
     },
 

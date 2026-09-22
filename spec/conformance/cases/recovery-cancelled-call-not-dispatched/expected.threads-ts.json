@@ -1,0 +1,65 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [
+      "call_1"
+    ],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 80,
+      "output_tokens": 25,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 7,
+      "hash": "b60a04960be9c6fd9e9b5c603eed706d94957dfbaef6bcc114436b2b9eaa4164"
+    }
+  },
+  "appended": [
+    {
+      "type": "tool_result",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "is_error": true,
+        "origin": "not_executed",
+        "preview": "not executed: cancelled"
+      }
+    },
+    {
+      "type": "cancelled",
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000007"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "cancelled"
+      }
+    }
+  ],
+  "sandbox": {
+    "dispatches": {
+      "send_email": 0
+    }
+  }
+}

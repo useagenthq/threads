@@ -1,0 +1,9 @@
+{
+  "name": "recover-foreign-writer-refused",
+  "family": "log",
+  "kind": "recover",
+  "description": "The branch header names the other implementation as its writer. Reading is portable, writing is not: the runner opens it read-only and refuses to append anything, recovery included: writer_mismatch at the header.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

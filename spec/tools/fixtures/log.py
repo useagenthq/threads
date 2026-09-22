@@ -21,6 +21,16 @@ class AddOpts(TypedDict, total=False):
     branch_id: str
 
 
+# The implementation named in every header this run writes. Recover cases append, and only the
+# header's writer may append, so __main__ builds them once per implementation.
+WRITERS = ("threads-py", "threads-ts")
+_writer = [WRITERS[0]]
+
+
+def set_writer(impl: str) -> None:
+    _writer[0] = impl
+
+
 class Log:
     def __init__(self, branch: str = BRANCH, epoch: int = 1) -> None:
         self.branch, self.epoch = branch, epoch
@@ -37,7 +47,7 @@ class Log:
                 "thread_id": THREAD,
                 "branch_id": branch,
                 "created_at": T0,
-                "writer": {"impl": "threads-py", "version": "0.1.0"},
+                "writer": {"impl": _writer[0], "version": "0.1.0"},
             }
         )
 

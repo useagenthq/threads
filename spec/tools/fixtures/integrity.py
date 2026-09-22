@@ -172,8 +172,29 @@ def _torn(root: pathlib.Path, name: str, desc: str, served: Log, dropped: bytes)
     )
 
 
+FOREIGN_WRITER = "recover-foreign-writer-refused"
+
+
+def _foreign_writer(root: pathlib.Path) -> None:
+    # __main__ hands each runner the log whose header names the other implementation.
+    write_case(
+        root,
+        case(
+            FOREIGN_WRITER,
+            "log",
+            "recover",
+            "The branch header names the other implementation as its writer. Reading is "
+            "portable, writing is not: the runner opens it read-only and "
+            "refuses to append anything, recovery included: writer_mismatch at the header.",
+        ),
+        base_simple(),
+        {"outcome": "error", "error": {"code": "writer_mismatch", "seq": 0}, "appended": []},
+    )
+
+
 def build(root: pathlib.Path) -> None:
     _admission(root)
+    _foreign_writer(root)
     # reduce-simple-run
     log = base_simple()
     write_case(
