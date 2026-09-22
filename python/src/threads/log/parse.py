@@ -77,7 +77,8 @@ def _parse_framing(value: dict[str, JsonValue]) -> Ok[LogLine] | Err[ParseError]
     # schema below as invalid_line.
     version = value.get("format_version")
     newer = isinstance(version, int) and not isinstance(version, bool) and version > 1
-    if value["format"] in _FORMATS and newer:
+    known = isinstance(fmt := value["format"], str) and fmt in _FORMATS
+    if known and newer:
         return Err(ParseError("unsupported_format", f"format_version {version} is newer"))
     return Ok(_FRAMING.validate_python(value))
 

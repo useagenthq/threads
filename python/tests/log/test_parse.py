@@ -283,6 +283,12 @@ HEAD: dict[str, JsonValue] = {
         pytest.param(
             HEADER | {"format": 1, "format_version": 2}, "invalid_line", id="format not a string"
         ),
+        pytest.param(
+            HEADER | {"format": [], "format_version": 2}, "invalid_line", id="format list"
+        ),
+        pytest.param(
+            HEAD | {"format": {}, "format_version": 2}, "invalid_line", id="format object"
+        ),
     ],
 )
 def test_format_admission(value: JsonValue, code: str) -> None:
