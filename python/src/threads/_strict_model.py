@@ -71,15 +71,24 @@ def _literal_values(annotation: object) -> tuple[JsonValue, ...]:
 
 
 def holds(schema: JsonValue, value: object) -> bool:
-    """Evaluates the JSON Schema keyword subset the generator leaves to runtime."""
+    """Evaluates the JSON Schema keyword subset the generator leaves to runtime, plus `type`,
+    `items` and `additionalProperties` for pinned output schemas (semantic rule 20).
+
+    An unsupported keyword raises TypeError rather than being skipped: a rule that can't be
+    checked must never pass silently.
+    """
+    if isinstance(schema, bool):
+        return schema
     if not isinstance(schema, dict):
         raise TypeError(f"not a schema: {schema!r}")
     if "if" in schema:
         branch = schema.get("then") if holds(schema["if"], value) else schema.get("else")
         if branch is not None and not holds(branch, value):
             return False
+    if "additionalProperties" in schema and not _additional(schema, value):
+        return False
     for keyword, argument in schema.items():
-        if keyword in ("if", "then", "else", "description"):
+        if keyword in ("if", "then", "else", "description", "additionalProperties"):
             continue
         check = _CHECKS.get(keyword)
         if check is None:
@@ -117,6 +126,49 @@ def _properties(argument: JsonValue, value: object) -> bool:
     )
 
 
+def _additional(schema: dict[str, JsonValue], value: object) -> bool:
+    if not _is_object(value):
+        return True
+    declared = schema.get("properties", {})
+    if not isinstance(declared, dict):
+        raise TypeError(f"expected a map of schemas: {declared!r}")
+    extra = schema["additionalProperties"]
+    return all(holds(extra, value[key]) for key in value if key not in declared)
+
+
+def _is_array(value: object) -> TypeGuard[Sequence[object]]:
+    return isinstance(value, list)
+
+
+def _items(argument: JsonValue, value: object) -> bool:
+    return not _is_array(value) or all(holds(argument, item) for item in value)
+
+
+def _is_integer(value: object) -> bool:
+    if isinstance(value, float):
+        return value.is_integer()
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+_JSON_TYPES: Mapping[str, Callable[[object], bool]] = {
+    "object": _is_object,
+    "array": _is_array,
+    "string": lambda value: isinstance(value, str),
+    "boolean": lambda value: isinstance(value, bool),
+    "null": lambda value: value is None,
+    "integer": _is_integer,
+    "number": lambda value: isinstance(value, int | float) and not isinstance(value, bool),
+}
+
+
+def _type(argument: JsonValue, value: object) -> bool:
+    names = argument if isinstance(argument, list) else [argument]
+    for name in names:
+        if not isinstance(name, str) or name not in _JSON_TYPES:
+            raise TypeError(f"unknown JSON type {name!r}")
+    return any(_JSON_TYPES[str(name)](value) for name in names)
+
+
 def _min_properties(argument: JsonValue, value: object) -> bool:
     return not _is_object(value) or (isinstance(argument, int) and len(value) >= argument)
 
@@ -131,4 +183,6 @@ _CHECKS: Mapping[str, _Check] = {
     "required": _required,
     "properties": _properties,
     "minProperties": _min_properties,
+    "type": _type,
+    "items": _items,
 }

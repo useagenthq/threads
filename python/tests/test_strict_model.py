@@ -36,6 +36,17 @@ RULE_IF: JsonValue = {
         ({"properties": {"a": {"const": 1}}}, {"a": True}, False),
         ({"properties": {"a": {"const": "x"}}}, {}, True),
         ({"required": ["a"]}, "not an object", True),
+        ({"type": "boolean"}, True, True),
+        ({"type": "boolean"}, "yes", False),
+        ({"type": "integer"}, True, False),
+        ({"type": "integer"}, 2.0, True),
+        ({"type": ["string", "null"]}, None, True),
+        ({"items": {"type": "number"}}, [1, 2.5], True),
+        ({"items": {"type": "number"}}, [1, "2"], False),
+        ({"properties": {"a": {}}, "additionalProperties": False}, {"a": 1}, True),
+        ({"properties": {"a": {}}, "additionalProperties": False}, {"a": 1, "b": 2}, False),
+        ({"additionalProperties": {"type": "string"}}, {"b": "x"}, True),
+        (False, None, False),
     ],
 )
 def test_holds(schema: JsonValue, value: object, *, expected: bool) -> None:
