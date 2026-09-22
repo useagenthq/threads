@@ -5,7 +5,7 @@
   "conventions": {
     "names": "Functions and methods: TS lowerCamelCase, Python snake_case of the same words (ts is lowerCamel of py; check_api.py enforces it). Types: PascalCase, identical in both. Param and field keys here are the Python names; in TS they are lowerCamel, except inside casing wire types, which are snake_case in both.",
     "params": "kind positional params are positional in both languages. kind option params are the trailing options object in TS and keyword-only arguments in Python. required false means optional; default is the value used when omitted.",
-    "results": "{result, errors} is an expected-failure value: TS {ok: true, value} | {ok: false, error: {code, message}}, Python Ok[T] | Err[Failure] (frozen dataclasses). errors is the closed code set; every code is in the events ErrorCode or host-api ApiErrorCode enum. Only ConfigError at setup is thrown (throws).",
+    "results": "{result, errors} is an expected-failure value: TS {ok: true, value} | {ok: false, error: {code, message}}, Python Ok[T] | Err[Failure] (frozen dataclasses). errors is the closed code set; every code is in the events ErrorCode enum (what the log records) or the ApiErrorCode enum in schema/api.schema.json (what public calls return). Only ConfigError at setup is thrown (throws).",
     "async": "async true: TS returns a Promise, Python is async def. A stream is TS AsyncIterable, Python AsyncIterator.",
     "refs": "urn:threads:schema:events:v1 is spec/schema/events.v1.schema.json, urn:threads:schema:host-api:v1 is spec/schema/host-api/host-api.v1.schema.json, urn:threads:schema:conformance:v1 is spec/conformance/case.schema.json. #/types/X is a type in this file.",
     "generics": "Deps defaults to null (TS undefined, Python None); Output defaults to string (the final text). Agent<Deps, Output> carries both into RunContext and RunResult.",
@@ -57,8 +57,8 @@
     {
       "id": "control-principal",
       "open": "gives resolveParked(key, resolution) and cancel() without a principal, yet effect_resolved{by: human} and cancel_requested require one.",
-      "choice": "approve, deny, answer and resolveParked take the principal positionally; cancel, compact, setModel, setOutputStyle and setMode take an optional principal defaulting to the local operator {api, local, operator}.",
-      "why": "Human decisions must name who decided; operator actions default sensibly for local use."
+      "choice": "Every Thread method that appends an event takes a required positional principal: approve, deny, answer, resolveParked, cancel, compact, setModel, setOutputStyle, setMode. Only agent.run()/stream() default it, to the local operator {api, local, operator}, so the two-line example stays two lines.",
+      "why": "The events they write carry the actor's principal; a control action must name who took it."
     },
     {
       "id": "mcp-one-function",
@@ -117,14 +117,14 @@
     {
       "id": "run-error-codes",
       "open": "names stop_hook_exhausted, continuation_limit, the pinned turn_completed reason is stop_hook_limit; max_turns has no RunResult mapping.",
-      "choice": "failed.error.code uses stop_hook_limit and adds max_turns plus the pre-dispatch codes that end a run (host-api RunErrorCode).",
+      "choice": "stop_hook_limit everywhere (RunResult, the onStop limit, ADRs 0012 and 0014 corrected); failed.error.code also adds max_turns and the pre-dispatch codes that end a run (host-api RunErrorCode).",
       "why": "Pinned wire names win."
     },
     {
       "id": "hook-decision-names",
       "open": "gives before_tool_result pass | redact | block and before_input inject; hook_decision.decision has no pass, block or inject.",
-      "choice": "beforeToolResult returns Proceed | Redact | Deny; beforeInput returns Allow | Deny | injections.",
-      "why": "Use only decisions the wire can record."
+      "choice": "One vocabulary, the wire hook_decision.decision enum: beforeToolResult proceed | redact(spans) | deny, beforeInput allow | deny(reason), beforeModel proceed | deny(reason). Injections are a separate list on allow/proceed, recorded as injected{source: hook}. corrected to match.",
+      "why": "Docs, api.json and the wire agree."
     },
     {
       "id": "host-auth",
@@ -1304,11 +1304,10 @@
           "params": [
             {
               "name": "principal",
-              "kind": "option",
+              "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
-              "required": false,
-              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
-              "doc": "The operator this control action is recorded under. The host authorizes it."
+              "required": true,
+              "doc": "Who takes this action; recorded as the event's actor and authorized by the host."
             }
           ],
           "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden"]}
@@ -1319,15 +1318,14 @@
           "source": "",
           "async": true,
           "params": [
-            {"name": "instructions", "kind": "option", "type": {"prim": "string"}, "required": false},
             {
               "name": "principal",
-              "kind": "option",
+              "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
-              "required": false,
-              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
-              "doc": "The operator this control action is recorded under. The host authorizes it."
-            }
+              "required": true,
+              "doc": "Who takes this action; recorded as the event's actor and authorized by the host."
+            },
+            {"name": "instructions", "kind": "option", "type": {"prim": "string"}, "required": false}
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
@@ -1349,11 +1347,10 @@
             },
             {
               "name": "principal",
-              "kind": "option",
+              "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
-              "required": false,
-              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
-              "doc": "The operator this control action is recorded under. The host authorizes it."
+              "required": true,
+              "doc": "Who takes this action; recorded as the event's actor and authorized by the host."
             }
           ],
           "returns": {
@@ -1370,11 +1367,10 @@
             {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true},
             {
               "name": "principal",
-              "kind": "option",
+              "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
-              "required": false,
-              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
-              "doc": "The operator this control action is recorded under. The host authorizes it."
+              "required": true,
+              "doc": "Who takes this action; recorded as the event's actor and authorized by the host."
             }
           ],
           "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "not_found"]}
@@ -1393,11 +1389,10 @@
             },
             {
               "name": "principal",
-              "kind": "option",
+              "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
-              "required": false,
-              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
-              "doc": "The operator this control action is recorded under. The host authorizes it."
+              "required": true,
+              "doc": "Who takes this action; recorded as the event's actor and authorized by the host."
             }
           ],
           "returns": {
@@ -1553,15 +1548,25 @@
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "allow"}, "required": true},
+                      "injections": {
+                        "type": {"array": {"prim": "string"}},
+                        "required": false,
+                        "default": [],
+                        "doc": "Recorded as injected{source: hook} events; not a decision."
+                      }
+                    },
+                    "casing": "wire"
+                  },
                   {
                     "object": {
                       "decision": {"type": {"literal": "deny"}, "required": true},
                       "reason": {"type": {"prim": "string"}, "required": true}
                     },
                     "casing": "wire"
-                  },
-                  {"array": {"prim": "string"}}
+                  }
                 ]
               }
             }
@@ -1588,7 +1593,18 @@
               ],
               "returns": {
                 "union": [
-                  {"array": {"prim": "string"}},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "proceed"}, "required": true},
+                      "injections": {
+                        "type": {"array": {"prim": "string"}},
+                        "required": false,
+                        "default": [],
+                        "doc": "Recorded as injected{source: hook} events; not a decision."
+                      }
+                    },
+                    "casing": "wire"
+                  },
                   {
                     "object": {
                       "decision": {"type": {"literal": "deny"}, "required": true},
