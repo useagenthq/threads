@@ -95,7 +95,8 @@ def _cleared(root: pathlib.Path) -> None:
     )
 
 
-def _compacted_log(summary_text: str) -> Log:
+def _compacted_log(summary_text: str, response_text: str | None = None) -> Log:
+    """Rule 10: summary_ref is the response text, unless a case breaks that on purpose."""
     log = Log()
     started(log, [READ_FILE], policy=policy(context=CONTEXT))
     read_turn(log)
@@ -111,7 +112,8 @@ def _compacted_log(summary_text: str) -> Log:
     }
     log.add("hook_decision", guide)
     side = log.model_request(compaction=True)
-    log.model_response(side, [{"type": "text", "text": SUMMARY}], "end_turn", tokens(900, 40))
+    response = summary_text if response_text is None else response_text
+    log.model_response(side, [{"type": "text", "text": response}], "end_turn", tokens(900, 40))
     log.add(
         "compacted",
         {
@@ -150,7 +152,7 @@ def _summary(root: pathlib.Path) -> None:
         ),
         log,
     )
-    log = _compacted_log("A different summary.")
+    log = _compacted_log("A different summary.", response_text=SUMMARY)
     reject(
         root,
         (
