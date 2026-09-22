@@ -1,0 +1,47 @@
+[project]
+# Placeholder name; not published to PyPI yet (the "Private" classifier makes uploads fail).
+name = "threads"
+version = "0.0.0"
+description = "Event-log agent framework."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["pydantic>=2"]
+classifiers = ["Private :: Do Not Upload"]
+
+[dependency-groups]
+dev = ["pyright", "ruff", "pytest", "hypothesis"]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = "error"
+reportUnknownMemberType = "error"
+reportUnknownArgumentType = "error"
+reportUnknownVariableType = "error"
+reportUnknownParameterType = "error"
+reportUnknownLambdaType = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF", "ANN", "PT", "TC", "PL"]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest is built on bare assert.
+"tests/**" = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+xfail_strict = true
+filterwarnings = ["error"]
