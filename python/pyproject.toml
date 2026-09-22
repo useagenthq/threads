@@ -23,6 +23,7 @@ build-backend = "uv_build"
 
 [tool.pyright]
 include = ["src", "tests", "tools"]
+extraPaths = ["src", "tests"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = "error"
@@ -50,6 +51,7 @@ select = ["E", "F", "W", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF", "ANN", "P
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
 xfail_strict = true
 filterwarnings = ["error"]

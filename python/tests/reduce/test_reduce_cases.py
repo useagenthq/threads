@@ -14,7 +14,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
-from pydantic import JsonValue, TypeAdapter
+from corpus import CASES, cases, load, now_of, own, stored_artifacts
 
 from threads.log import (
     CompactedEvent,
@@ -29,10 +29,8 @@ from threads.log.digest import sha256_hex
 from threads.reduce import PROJECTIONS
 from threads.render import render
 from threads.result import Err, Ok
-from threads.store import MemoryArtifacts, SqliteStore, VerifiedLog, Writer, verify_export
+from threads.store import SqliteStore, VerifiedLog, verify_export
 
-CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
-_JSON: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 CASE_KEYS = frozenset(
     {"name", "family", "kind", "description", "clock", "model_script", "sandbox_script"}
     | {"stub_script", "input"}
@@ -41,46 +39,12 @@ EXPECTED_KEYS = frozenset(
     {"outcome", "error", "state", "committed_bytes", "appended", "sandbox", "fork", "resources"}
     | {"render", "head_verified", "stubs", "responses", "inbox", "decisions", "projections"}
 )
-IMPL = "threads-py"
 LATER = {
-    "recover": "leases exist, but semantic recovery and the loop are not built yet",
     "fork": "the fork operation (eligibility, sandbox restore, resource ledger) is not built yet",
-    "stub": "stub mode is not built yet",
     "intake": "the host intake pipeline is not built yet",
 }
-OWN_RUNNER = frozenset({"policy"})
-"""Kinds another runner owns: policy (tests/permissions)."""
-
-
-def own(case: Path, name: str) -> Path:
-    """A recover case ships one file per writer; this runner uses its own."""
-    stem, dot, ext = name.partition(".")
-    mine = case / f"{stem}.{IMPL}{dot}{ext}"
-    return mine if mine.exists() else case / name
-
-
-def load(case: Path, name: str) -> dict[str, JsonValue]:
-    return _JSON.validate_json(own(case, name).read_bytes())
-
-
-def cases(*kinds: str) -> list[str]:
-    return sorted(d.name for d in CASES.iterdir() if load(d, "case.json")["kind"] in kinds)
-
-
-def now_of(case: dict[str, JsonValue]) -> int:
-    clock = case["clock"]
-    assert isinstance(clock, dict)
-    now = clock["now"]
-    assert isinstance(now, int)
-    return now
-
-
-def stored_artifacts(case: Path) -> MemoryArtifacts:
-    """The case's artifacts, in the store before import: import replays every request."""
-    store = MemoryArtifacts()
-    for path in sorted((case / "artifacts").glob("*")):
-        store.put(path.read_bytes())
-    return store
+OWN_RUNNER = frozenset({"policy", "recover", "stub"})
+"""Kinds another runner owns: policy (tests/permissions), recover and stub (tests/loop)."""
 
 
 def _error(error: ParseError) -> Err[str]:
@@ -220,7 +184,7 @@ def test_render_case(name: str) -> None:
     _history_is_prefix(case, events, result.value)
 
 
-READER_VIEW = [n for n in cases(*LATER) if own(CASES / n, "log.jsonl").exists()]
+READER_VIEW = [n for n in cases(*LATER, *OWN_RUNNER) if own(CASES / n, "log.jsonl").exists()]
 
 
 @pytest.mark.parametrize("name", READER_VIEW)
@@ -247,26 +211,3 @@ def test_later_kind_steps(name: str) -> None:
     kind = load(CASES / name, "case.json")["kind"]
     assert isinstance(kind, str)
     pytest.skip(f"{kind}: {LATER[kind]}")
-
-
-def test_foreign_writer_branch_refuses_to_append() -> None:
-    """recover-foreign-writer-refused: the branch reads fine, but this runner may not append."""
-    case = CASES / "recover-foreign-writer-refused"
-    meta, expected = load(case, "case.json"), load(case, "expected.json")
-    verified = verify_export(own(case, "log.jsonl").read_bytes(), now_of(meta))
-    assert isinstance(verified, Ok)
-
-    async def refused() -> Err[ParseError] | Ok[Writer]:
-        opened = await SqliteStore.open(artifacts=stored_artifacts(case))
-        assert isinstance(opened, Ok)
-        store = opened.value
-        try:
-            assert await store.import_log(verified.value) == Ok(None)
-            branch = verified.value.segments[-1].header.branch_id
-            return await store.acquire(branch, "runner", lambda: now_of(meta))
-        finally:
-            await store.close()
-
-    result = asyncio.run(refused())
-    assert isinstance(result, Err)
-    assert {"code": result.error.code, "seq": result.error.seq} == expected["error"]
