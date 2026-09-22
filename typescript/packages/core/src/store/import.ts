@@ -13,6 +13,7 @@ import { eventLines, getBranch, insertBranch, insertEvents } from "./tables";
 export function importSegments(
   db: SqliteDriver,
   log: VerifiedLog,
+  tenantId: string,
 ): Result<void, LogError> {
   const leafAt = log.segments.length - 1;
   for (const [index, segment] of log.segments.entries()) {
@@ -20,7 +21,7 @@ export function importSegments(
     if (!existing.ok) return existing;
     const stored =
       existing.value === undefined
-        ? insertSegment(db, log, index, index === leafAt)
+        ? insertSegment(db, log, tenantId, index, index === leafAt)
         : sameLines(db, segment, existing.value.header_line);
     if (!stored.ok) return stored;
   }
@@ -30,6 +31,7 @@ export function importSegments(
 function insertSegment(
   db: SqliteDriver,
   log: VerifiedLog,
+  tenantId: string,
   index: number,
   leaf: boolean,
 ): Result<void, LogError> {
@@ -40,6 +42,7 @@ function insertSegment(
   insertBranch(db, {
     branch_id: segment.header.branch_id,
     thread_id: segment.header.thread_id,
+    tenant_id: tenantId,
     parent_branch_id: log.segments[index - 1]?.header.branch_id ?? null,
     fork_at_seq: fork === undefined ? null : fork.seq - 1,
     header_line: segment.bytes,

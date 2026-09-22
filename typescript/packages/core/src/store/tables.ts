@@ -5,41 +5,12 @@ import { err, ok, type Result } from "../result";
 import type { ChainEvent } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import type { SqliteDriver } from "./driver";
+import { STORE_SQL, STORE_VERSION } from "./generated/sql";
 
-// . Each line is stored as its exact bytes; parent rows are referenced through
-// parent_branch_id and fork_at_seq, never copied. UNIQUE (branch_id, event_id) is physical
-// only: the resolved-chain rule (semantic rule 28) is checked by validate_next.
-// ponytail: no tenant_id or threads table yet; add them with tenancy.
-export const DDL = `
-CREATE TABLE IF NOT EXISTS branches (
-  branch_id TEXT PRIMARY KEY,
-  thread_id TEXT NOT NULL,
-  parent_branch_id TEXT REFERENCES branches (branch_id),
-  fork_at_seq INTEGER,
-  header_line BLOB NOT NULL,
-  state TEXT NOT NULL,
-  head_seq INTEGER NOT NULL,
-  head_hash TEXT NOT NULL
-) STRICT;
-CREATE TABLE IF NOT EXISTS events (
-  branch_id TEXT NOT NULL REFERENCES branches (branch_id),
-  seq INTEGER NOT NULL,
-  event_id TEXT NOT NULL,
-  type TEXT NOT NULL,
-  type_version INTEGER NOT NULL,
-  critical INTEGER NOT NULL,
-  epoch INTEGER NOT NULL,
-  line BLOB NOT NULL,
-  PRIMARY KEY (branch_id, seq),
-  UNIQUE (branch_id, event_id)
-) STRICT;
-CREATE TABLE IF NOT EXISTS leases (
-  branch_id TEXT PRIMARY KEY REFERENCES branches (branch_id),
-  holder_id TEXT NOT NULL,
-  epoch INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL
-) STRICT;
-`;
+// . The DDL is spec/schema/store.sql, embedded by spec/tools/gen_store_sql.py.
+
+/** The tenant of local use: the local operator's (spec/api.json, ). */
+export const LOCAL_TENANT = "local";
 
 const BRANCH_STATES = [
   "forking",
@@ -55,6 +26,7 @@ const Bytes: z.ZodCustom<Uint8Array, Uint8Array> = z.instanceof(Uint8Array);
 export const BranchRow: Strict<{
   branch_id: typeof BranchId;
   thread_id: typeof ThreadId;
+  tenant_id: z.ZodString;
   parent_branch_id: z.ZodNullable<typeof BranchId>;
   fork_at_seq: z.ZodNullable<typeof Int>;
   header_line: typeof Bytes;
@@ -64,6 +36,7 @@ export const BranchRow: Strict<{
 }> = z.strictObject({
   branch_id: BranchId,
   thread_id: ThreadId,
+  tenant_id: z.string(),
   parent_branch_id: BranchId.nullable(),
   fork_at_seq: Int.nullable(),
   header_line: Bytes,
@@ -79,6 +52,10 @@ export const LeaseRow: Strict<{
   expires_at: typeof Int;
 }> = z.strictObject({ holder_id: z.string(), epoch: PosInt, expires_at: Int });
 export type LeaseRow = z.infer<typeof LeaseRow>;
+
+const VersionRow: Strict<{ user_version: typeof Int }> = z.strictObject({
+  user_version: Int,
+});
 
 const LineRow: Strict<{ line: typeof Bytes }> = z.strictObject({ line: Bytes });
 
@@ -97,6 +74,22 @@ function parseRows<T>(
   return ok(parsed);
 }
 
+/** Creates the store.sql tables. A database a newer schema wrote is refused, never downgraded. */
+export function installSchema(db: SqliteDriver): Result<void, LogError> {
+  const rows = parseRows(VersionRow, db.all("PRAGMA user_version", []));
+  if (!rows.ok) return rows;
+  const found = rows.value[0]?.user_version ?? 0;
+  if (found > STORE_VERSION)
+    return err(
+      logError(
+        "unsupported_format",
+        `store schema ${found} is newer than ${STORE_VERSION}`,
+      ),
+    );
+  db.exec(STORE_SQL);
+  return ok(undefined);
+}
+
 export function getBranch(
   db: SqliteDriver,
   branchId: string,
@@ -104,7 +97,7 @@ export function getBranch(
   const rows = parseRows(
     BranchRow,
     db.all(
-      `SELECT branch_id, thread_id, parent_branch_id, fork_at_seq, header_line, state,
+      `SELECT branch_id, thread_id, tenant_id, parent_branch_id, fork_at_seq, header_line, state,
         head_seq, head_hash FROM branches WHERE branch_id = ?`,
       [branchId],
     ),
@@ -112,13 +105,20 @@ export function getBranch(
   return rows.ok ? ok(rows.value[0]) : rows;
 }
 
+/** Inserts the branch and, for a new thread, its thread row. The foreign key refuses a branch
+ * whose tenant is not its thread's. */
 export function insertBranch(db: SqliteDriver, row: BranchRow): void {
   db.run(
-    `INSERT INTO branches (branch_id, thread_id, parent_branch_id, fork_at_seq, header_line,
-      state, head_seq, head_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    "INSERT INTO threads (thread_id, tenant_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+    [row.thread_id, row.tenant_id],
+  );
+  db.run(
+    `INSERT INTO branches (branch_id, thread_id, tenant_id, parent_branch_id, fork_at_seq,
+      header_line, state, head_seq, head_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       row.branch_id,
       row.thread_id,
+      row.tenant_id,
       row.parent_branch_id,
       row.fork_at_seq,
       row.header_line,

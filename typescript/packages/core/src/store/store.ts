@@ -18,10 +18,11 @@ import { importSegments } from "./import";
 import { branchLines, exportBytes, headLine } from "./lines";
 import {
   atomically,
-  DDL,
   getBranch,
   getLease,
   insertBranch,
+  installSchema,
+  LOCAL_TENANT,
   putLease,
 } from "./tables";
 import { Writer } from "./writer";
@@ -47,15 +48,26 @@ export class LogStore {
   readonly #db: SqliteDriver;
   readonly #now: () => number;
 
-  /** `now` is the injected clock for leases, event times and snapshot expiry. */
-  constructor(db: SqliteDriver, now: () => number) {
-    db.exec(DDL);
+  private constructor(db: SqliteDriver, now: () => number) {
     this.#db = db;
     this.#now = now;
   }
 
+  /**
+   * Opens the store on `db`, creating the store.sql tables. A database a newer schema wrote is
+   * `unsupported_format`. `now` is the injected clock for leases, event times and snapshot expiry.
+   */
+  static open(db: SqliteDriver, now: () => number): Result<LogStore, LogError> {
+    const installed = installSchema(db);
+    return installed.ok ? ok(new LogStore(db, now)) : installed;
+  }
+
   /** Writes a new root branch: its header line, head at seq 0. */
-  createBranch(threadId: ThreadId, branchId: BranchId): Result<void, LogError> {
+  createBranch(
+    threadId: ThreadId,
+    branchId: BranchId,
+    tenantId: string = LOCAL_TENANT,
+  ): Result<void, LogError> {
     return atomically(this.#db, () => {
       const exists = this.#absent(branchId);
       if (!exists.ok) return exists;
@@ -64,6 +76,7 @@ export class LogStore {
       insertBranch(this.#db, {
         branch_id: branchId,
         thread_id: threadId,
+        tenant_id: tenantId,
         parent_branch_id: null,
         fork_at_seq: null,
         header_line: header.value,
@@ -90,11 +103,14 @@ export class LogStore {
   }
 
   /** `threads import`: verifies the export, then stores the same bytes, segment by segment. */
-  importLog(bytes: Uint8Array): Result<VerifiedLog, LogError> {
+  importLog(
+    bytes: Uint8Array,
+    tenantId: string = LOCAL_TENANT,
+  ): Result<VerifiedLog, LogError> {
     const log = verifyExport(bytes);
     if (!log.ok) return log;
     const stored = atomically(this.#db, () =>
-      importSegments(this.#db, log.value),
+      importSegments(this.#db, log.value, tenantId),
     );
     return stored.ok ? log : stored;
   }
@@ -214,11 +230,16 @@ export class LogStore {
     if (!exists.ok) return exists;
     const threadId = parent.segments[0]?.header.thread_id;
     if (threadId === undefined) throw new Error("a verified log has a header");
+    const parentRow = getBranch(this.#db, request.parent);
+    if (!parentRow.ok) return parentRow;
+    const tenantId = parentRow.value?.tenant_id;
+    if (tenantId === undefined) throw new Error("a verified parent has a row");
     const header = this.#header(threadId, request.branch);
     if (!header.ok) return header;
     insertBranch(this.#db, {
       branch_id: request.branch,
       thread_id: threadId,
+      tenant_id: tenantId,
       parent_branch_id: request.parent,
       fork_at_seq: request.atSeq,
       header_line: header.value,

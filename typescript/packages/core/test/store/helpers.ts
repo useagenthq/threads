@@ -24,7 +24,7 @@ export type Fixture = {
 export function fixture(): Fixture {
   const db = openBunSqlite(":memory:");
   const clock = { now: T0 };
-  return { db, store: new LogStore(db, () => clock.now), clock };
+  return { db, store: unwrap(LogStore.open(db, () => clock.now)), clock };
 }
 
 /** The value of an ok result; a test fails loudly on an error. */
