@@ -23,7 +23,7 @@
     "status": "in_turn",
     "head": {
       "seq": 3,
-      "hash": "7b6cae466ee1ca2c567e8d37cb77de59c9ea05cd11e4bc6d51ec24804dc28d49"
+      "hash": "db0c63c964fca078a9c57a02e072ea2c27d9ccce79c2c7352f8870e147c249b1"
     }
   },
   "appended": [
@@ -54,7 +54,7 @@
     },
     {
       "type": "retry_scheduled",
-      "critical": false,
+      "critical": true,
       "data": {
         "delay_ms": 2000,
         "basis": "retry_after"
@@ -76,7 +76,7 @@
     },
     {
       "type": "retry_scheduled",
-      "critical": false,
+      "critical": true,
       "data": {
         "delay_ms": 2000,
         "basis": "backoff"

@@ -26,60 +26,85 @@ def _policy(log: Log) -> Obj:
     return obj(ts.get("policy", {}))
 
 
-def _requests(log: Log) -> dict[JsonValue, tuple[Obj, int]]:
-    """model_request event_id -> (settings epoch at that request, request bytes)."""
+INPUT_SIDE = ("input", "cache_read", "cache_write")
+
+
+def reservation(model: Obj, params: Obj, input_bound: int | None = None) -> int | None:
+    """The per-attempt upper bound, or None when no bound is declared."""
+    price = obj(model["price"])
+    if input_bound is None:
+        if model["input_billing_bound"] != "context_window":
+            return None
+        input_bound = num(model["context_window"])
+    top = max(num(price.get(k, 0)) for k in INPUT_SIDE)
+    return input_bound * top + num(params["max_tokens"]) * num(price["output"])
+
+
+def _attempts(log: Log) -> list[tuple[Obj, Obj, Obj | None, Obj | None]]:
+    """(request data, epoch settings, response data or None, abandon data or None)."""
     ts = obj(log.events[0]["data"])
     settings: Obj = {"model": ts["model"], "model_params": ts["model_params"]}
-    out: dict[JsonValue, tuple[Obj, int]] = {}
+    reqs: dict[JsonValue, list[Obj | None]] = {}
+    order: list[tuple[JsonValue, Obj, Obj]] = []
     for e in log.events:
-        d = obj(e["data"])
-        if e["type"] == "settings_changed":
+        d, t = obj(e["data"]), e["type"]
+        if t == "settings_changed":
             settings = obj(d["settings"])
-        elif e["type"] == "model_request":
-            out[e["event_id"]] = (settings, num(obj(d["request_ref"])["bytes"]))
-    return out
+        elif t == "model_request":
+            order.append((e["event_id"], d, settings))
+            reqs[e["event_id"]] = [None, None]
+        elif t in ("model_response", "model_response_recovered"):
+            reqs[d["request_event_id"]][0] = d
+        elif t == "model_attempt_abandoned":
+            reqs[d["request_event_id"]][1] = d
+    return [(d, st, reqs[k][0], reqs[k][1]) for k, d, st in order]
+
+
+def _not_billed(abandon: Obj | None) -> bool:
+    if abandon is None:
+        return False
+    return abandon["provider_outcome"] == "not_sent" or abandon.get("billing") == "not_billed"
+
+
+def _response_cost(usage: Obj, price: Obj, bound: int | None) -> tuple[int, int | None]:
+    """(known nanos, upper nanos or None when unbounded) for one response."""
+    known = sum(
+        num(v) * num(price.get(k, 0)) for f, k in USAGE_FIELDS if (v := usage.get(f)) is not None
+    )
+    if all(usage.get(f) is not None for f, _ in USAGE_FIELDS if f in usage):
+        return known, known
+    return known, None if bound is None else known + bound
 
 
 def cost(log: Log) -> Obj:
-    """Known cost, and a conservative upper bound that charges unknown fields at their bound:
-    request bytes for input and cache fields, the epoch's max_tokens for output."""
+    """Known cost and a conservative bound. Every potentially sent attempt without a response,
+    and every response with unknown usage, is charged at its model-declared reservation."""
     pol = _policy(log)
-    prices = {
-        (text(obj(m)["provider"]), text(obj(m)["name"])): obj(obj(m)["price"])
-        for m in arr(pol["models"])
-    }
-    requests = _requests(log)
+    models = {(text(obj(m)["provider"]), text(obj(m)["name"])): obj(m) for m in arr(pol["models"])}
     known = upper = 0
-    complete = True
-    for e in log.events:
-        if e["type"] not in ("model_response", "model_response_recovered"):
+    complete = bounded = True
+    for req, settings, response, abandon in _attempts(log):
+        m = obj(settings["model"])
+        model = models[(text(m["provider"]), text(m["name"]))]
+        ib = req.get("input_bound_tokens")
+        bound = reservation(model, obj(settings["model_params"]), None if ib is None else num(ib))
+        if response is None and _not_billed(abandon):
             continue
-        d = obj(e["data"])
-        settings, req_bytes = requests[d["request_event_id"]]
-        model = obj(settings["model"])
-        price = prices[(text(model["provider"]), text(model["name"]))]
-        usage = obj(d["usage"])
-        for field, key in USAGE_FIELDS:
-            if field not in usage:
-                continue
-            p = num(price.get(key, 0))
-            v = usage[field]
-            if v is None:
-                complete = False
-                bound = (
-                    num(obj(settings["model_params"])["max_tokens"])
-                    if key == "output"
-                    else req_bytes
-                )
-                upper += bound * p
-            else:
-                known += num(v) * p
-                upper += num(v) * p
+        k, u = (
+            (0, bound)
+            if response is None
+            else _response_cost(obj(response["usage"]), obj(model["price"]), bound)
+        )
+        known += k
+        complete = complete and u == k
+        bounded = bounded and u is not None
+        upper += k if u is None else u
     return {
         "currency": pol["currency"],
         "known_nanos": known,
         "upper_bound_nanos": upper,
         "complete": complete,
+        "bounded": bounded,
     }
 
 

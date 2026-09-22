@@ -239,8 +239,9 @@ def _unknown_usage(root: pathlib.Path) -> None:
             "reduce",
             "The stream broke after a streamed tool call and before the usage report: the "
             "attempt is sealed as a partial response whose usage fields are null (unknown). "
-            "reduce sums only known values and counts the unknown response; cost is incomplete "
-            "and its upper bound charges request bytes for input and max_tokens for output.",
+            "reduce sums only known values and counts the unknown response. Cost is incomplete; "
+            "its bound charges the model-declared input bound (context_window at the highest "
+            "input-side price) plus max_tokens of output, never artifact byte length.",
         ),
         log,
         {"outcome": "ok", "state": reduce(log, NOW), "projections": {"cost": cost(log)}},

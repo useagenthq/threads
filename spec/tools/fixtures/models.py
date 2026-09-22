@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import ALICE, NOW, tokens
+from .common import ALICE, NOW, obj, tokens
 from .jcs import JsonValue, Obj, canonical
 from .log import Log, reduce
 from .pieces import (
@@ -13,6 +13,7 @@ from .pieces import (
     READ_FILE,
     call,
     case,
+    negative,
     reduce_case,
     reject,
     render_case,
@@ -23,16 +24,20 @@ from .pieces import (
 )
 from .policies import FINAL_OUTPUT, OUTPUT, RETRY, SMALL_SETTINGS, policy
 from .projections import cost
+from .render import render
 
 if TYPE_CHECKING:
     import pathlib
 
 FAM = "cancellation_resume"
-BUDGET = 5_000_000
+BUDGET = 770_000_000
+# One scripted-1 attempt reserves 200000 x 3750 + 1024 x 15000 = 765,360,000 nanos.
+RESERVE = 200_000 * 3750 + 1024 * 15_000
 
 
 def build(root: pathlib.Path) -> None:
     _epochs(root)
+    _prefix_cases(root)
     _fallback(root)
     _budget(root)
     _output(root)
@@ -75,7 +80,7 @@ def _epochs(root: pathlib.Path) -> None:
     started(log, [READ_FILE], policy=policy())
     user(log, "hi")
     log.model_request()
-    log.add("settings_changed", {"reason": "user", "settings": SMALL_SETTINGS})
+    log.add("settings_changed", {"reason": "fallback", "settings": SMALL_SETTINGS})
     reject(
         root,
         (
@@ -84,6 +89,50 @@ def _epochs(root: pathlib.Path) -> None:
             "settings_changed while a model_request awaits its response: invalid_transition.",
         ),
         log,
+    )
+
+
+def _prefix_cases(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [READ_FILE], policy=policy())
+    user(log, "hi")
+    r = log.model_request()
+    log.model_response(r, [{"type": "text", "text": "Hello!"}], "end_turn", tokens(40, 3))
+    log.add("turn_completed", {"reason": "end_turn"})
+    change: Obj = {"reason": "user", "settings": SMALL_SETTINGS}
+    log.add("settings_changed", change, actor="user", principal=ALICE)
+    user(log, "again")
+    body, _ = render(log.events, log.artifacts)
+    old = obj(r["data"])["declared_prefix"]
+    data: Obj = {
+        "attempt": 1,
+        "request_ref": log.art(body, "application/x-ndjson"),
+        "declared_prefix": old,
+    }
+    log.add("model_request", data)
+    write_case(
+        root,
+        case(
+            "prefix-changed-mid-epoch-rejected",
+            FAM,
+            "render",
+            "After an authorized settings_changed, a request declares the previous epoch's "
+            "prefix. Each epoch's prefix must match its own pinned settings; the baseline is "
+            "never reset to whatever was sent: prefix_changed.",
+        ),
+        log,
+        {"outcome": "error", "error": {"code": "prefix_changed", "seq": log.seq}},
+    )
+    log = Log()
+    started(log, [READ_FILE], policy=policy())
+    log.add("settings_changed", change, actor="model")
+    negative(
+        root,
+        "settings-change-by-model-rejected",
+        "A settings_changed whose actor is the model. Only the host, recovery or an operator "
+        "principal may change settings: the line fails its schema (invalid_line).",
+        log,
+        ("invalid_line", log.seq),
     )
 
 
@@ -108,14 +157,14 @@ def _fallback(root: pathlib.Path) -> None:
         _abandoned("rate_limited", 429, retry_after_ms=2000),
         {
             "type": "retry_scheduled",
-            "critical": False,
+            "critical": True,
             "data": {"delay_ms": 2000, "basis": "retry_after"},
         },
         {"type": "model_request", "data": {"attempt": 3}},
         _abandoned("overloaded", 529),
         {
             "type": "retry_scheduled",
-            "critical": False,
+            "critical": True,
             "data": {"delay_ms": 2000, "basis": "backoff"},
         },
         {"type": "model_request", "data": {"attempt": 4}},
@@ -183,8 +232,8 @@ def _budget_log() -> Log:
         "scope": "run",
         "limit": "max_cost_nanos",
         "limit_value": BUDGET,
-        "observed": 1000 * 3000 + 200 * 15000,
-        "observed_is_upper_bound": False,
+        "observed": 1000 * 3000 + 200 * 15000 + RESERVE,
+        "observed_is_upper_bound": True,
     }
     log.add("budget_exceeded", exceeded)
     return log
@@ -198,9 +247,11 @@ def _budget(root: pathlib.Path) -> None:
         (
             "budget-exceeded-terminal",
             FAM,
-            "A run budget of 5,000,000 nanos rides on the user_input. Before the second request "
-            "the known cost is 6,000,000, so budget_exceeded is recorded and the turn ends "
-            "budget_exhausted (RunResult budget_exhausted). One response may overshoot.",
+            "A run budget of 770,000,000 nanos rides on the user_input. Each attempt first "
+            "reserves its model-declared bound (765,360,000). The first fits; after it settles "
+            "at 6,000,000 the second reservation would reach 771,360,000, so budget_exceeded is "
+            "recorded before any request exists and the turn ends budget_exhausted. Reservation "
+            "before dispatch means no response can overshoot.",
         ),
         log,
         {"cost": cost(log)},

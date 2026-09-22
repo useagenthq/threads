@@ -1,0 +1,9 @@
+{
+  "name": "prefix-changed-mid-epoch-rejected",
+  "family": "cancellation_resume",
+  "kind": "render",
+  "description": "After an authorized settings_changed, a request declares the previous epoch's prefix. Each epoch's prefix must match its own pinned settings; the baseline is never reset to whatever was sent: prefix_changed.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

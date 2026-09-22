@@ -74,6 +74,7 @@
         "unmatched_external_op",
         "egress_policy_unsupported",
         "case_missing_dependency",
+        "budget_unenforceable",
         "content_unsupported",
         "continuation_unsupported",
         "hosted_tool_unsupported",
@@ -374,12 +375,13 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["provider", "name", "context_window", "max_output_tokens"],
+            "required": ["provider", "name", "context_window", "max_output_tokens", "input_billing_bound"],
             "properties": {
               "provider": { "$ref": "#/$defs/Name" },
               "name": { "$ref": "#/$defs/NonEmpty" },
               "context_window": { "$ref": "#/$defs/PosInt" },
               "max_output_tokens": { "$ref": "#/$defs/PosInt" },
+              "input_billing_bound": { "description": "context_window: the adapter declares that billed input units (input plus cache reads and writes) per attempt never exceed the context window. none: no bound is known, so a cost budget can't be enforced for this model (setup refuses it unless on_unknown_usage is stop).", "enum": ["context_window", "none"] },
               "price": {
                 "description": "Nano-currency units per token (USD 3 per million tokens = 3000).",
                 "type": "object",
@@ -586,7 +588,8 @@
             "settings_changed", "retry_scheduled", "budget_exceeded", "output_validated",
             "context_edited", "compaction_failed", "mode_changed", "permission_rule_added",
             "agent_spawned", "agent_finished", "handoff", "todos_updated",
-            "team_task_created", "team_task_claimed", "team_task_updated", "team_message"
+            "team_task_created", "team_task_claimed", "team_task_updated", "team_message",
+            "context_preflight_blocked"
           ]
         },
         "type_version": { "const": 1 }
@@ -653,7 +656,8 @@
             { "$ref": "#/$defs/ev_team_task_created" },
             { "$ref": "#/$defs/ev_team_task_claimed" },
             { "$ref": "#/$defs/ev_team_task_updated" },
-            { "$ref": "#/$defs/ev_team_message" }
+            { "$ref": "#/$defs/ev_team_message" },
+            { "$ref": "#/$defs/ev_context_preflight_blocked" }
           ]
         }
       ]
@@ -815,6 +819,7 @@
           "additionalProperties": false,
           "required": ["attempt", "request_ref", "declared_prefix"],
           "properties": {
+            "input_bound_tokens": { "description": "A pre-dispatch upper bound on billed input units for this attempt, from the provider's token-counting API when the adapter supports it. Absent: the model's context_window bounds it.", "$ref": "#/$defs/PosInt" },
             "purpose": { "description": "turn (absent means turn) or compaction: the summarizer side request. A compaction request and its response render nothing into later requests.", "enum": ["turn", "compaction"] },
             "attempt": { "description": "1 for a fresh request; n+1 when re-sending after model_attempt_abandoned.", "$ref": "#/$defs/PosInt" },
             "request_ref": { "$ref": "#/$defs/ArtifactRef" },
@@ -878,7 +883,8 @@
             "provider_outcome": { "enum": ["not_sent", "unknown", "failed"] },
             "reason": { "description": "rate_limited (429), overloaded (529), server_error (5xx or connection reset) and prompt_too_long are provider rejections: provider_outcome failed. guardrail: a parallel input guardrail denied.", "enum": ["crash", "timeout", "provider_error", "stream_broken", "cancelled", "steered", "rate_limited", "overloaded", "server_error", "prompt_too_long", "guardrail"] },
             "http_status": { "$ref": "#/$defs/Int" },
-            "retry_after_ms": { "$ref": "#/$defs/Int" }
+            "retry_after_ms": { "$ref": "#/$defs/Int" },
+            "billing": { "description": "not_billed only when provider_outcome is not_sent or the adapter's declared billing contract (in line 0 adapter settings) states this rejection class is not billed; a status code alone is not proof. Absent means unknown: the attempt is charged at its bound.", "enum": ["not_billed", "unknown"] }
           }
         }
       }
@@ -1332,9 +1338,15 @@
     },
 
     "ev_settings_changed": {
+      "if": { "properties": { "data": { "properties": { "reason": { "const": "user" } } } } },
+      "then": { "properties": { "actor": { "$ref": "#/$defs/ActorWithPrincipal" } } },
       "description": "Starts a new settings epoch: Render v1 line 0 takes model, params and adapter from here, system and tools stay pinned. C7 holds within each epoch. Never while a model attempt awaits its response. model must be listed in policy.models when policy is present.",
       "properties": {
         "type": { "const": "settings_changed" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "actor": {
+          "description": "Only the host (fallback, escalation, revert), recovery, or an operator principal (reason user). Never model or tool.",
+          "allOf": [{ "$ref": "#/$defs/Actor" }, { "properties": { "kind": { "enum": ["host", "user", "recovery"] } } }]
+        },
         "data": {
           "type": "object",
           "additionalProperties": false,
@@ -1348,9 +1360,9 @@
       }
     },
     "ev_retry_scheduled": {
-      "description": "A recorded wait before re-sending after a retryable rejection. Recovery after a crash waits only until not_before. Skipping it cannot change reduce or render.",
+      "description": "A recorded wait before re-sending after a retryable rejection. Execution reads it: recovery after a crash waits only until not_before, and delay_ms counts toward max_total_wait_ms. So it is critical. The transient stream status during the wait is not logged.",
       "properties": {
-        "type": { "const": "retry_scheduled" }, "type_version": { "const": 1 }, "critical": { "const": false },
+        "type": { "const": "retry_scheduled" }, "type_version": { "const": 1 }, "critical": { "const": true },
         "data": {
           "type": "object",
           "additionalProperties": false,
@@ -1365,7 +1377,7 @@
       }
     },
     "ev_budget_exceeded": {
-      "description": "A budget check before a model_request failed. The run ends: pending calls close, then turn_completed{budget_exhausted}; no model_request follows until a new user_input.",
+      "description": "A tree-wide budget reservation before a model_request failed. observed = settled usage of the whole tree under that budget plus the refused reservation. The run ends: pending calls close, then turn_completed{budget_exhausted}; no model_request follows until a new user_input.",
       "properties": {
         "type": { "const": "budget_exceeded" }, "type_version": { "const": 1 }, "critical": { "const": true },
         "data": {
@@ -1373,7 +1385,8 @@
           "additionalProperties": false,
           "required": ["scope", "limit", "limit_value", "observed", "observed_is_upper_bound"],
           "properties": {
-            "scope": { "enum": ["run", "thread"] },
+            "scope": { "description": "Which budget refused the reservation. ancestor: a budget of an ancestor thread in the agent tree (owner_thread_id).", "enum": ["run", "thread", "ancestor"] },
+            "owner_thread_id": { "$ref": "#/$defs/ThreadId" },
             "limit": { "enum": ["max_cost_nanos", "max_input_tokens", "max_output_tokens", "max_model_requests", "max_turns", "max_wall_ms"] },
             "limit_value": { "$ref": "#/$defs/Int" },
             "observed": { "$ref": "#/$defs/Int" },
@@ -1413,6 +1426,7 @@
           "required": ["reason", "edits"],
           "properties": {
             "reason": { "enum": ["threshold", "idle", "provider", "guardrail", "manual", "compaction_fallback"] },
+            "request_event_id": { "description": "reason provider only: the attempt whose effective context the provider edited, as the adapter reported it. That attempt's effective context is non-exact for replay.", "$ref": "#/$defs/EventId" },
             "edits": {
               "type": "array",
               "minItems": 1,
@@ -1431,7 +1445,10 @@
                 "else": { "not": { "anyOf": [{ "required": ["part"] }, { "required": ["spans"] }] } }
               }
             }
-          }
+          },
+          "if": { "properties": { "reason": { "const": "provider" } } },
+          "then": { "required": ["request_event_id"] },
+          "else": { "not": { "required": ["request_event_id"] } }
         }
       }
     },
@@ -1626,6 +1643,22 @@
             "ref": { "$ref": "#/$defs/ArtifactRef" }
           },
           "allOf": [{ "$ref": "#/$defs/TextOrRef" }]
+        }
+      }
+    },
+    "ev_context_preflight_blocked": {
+      "description": "before any model_request exists, the context estimate reached the effective window, so no request was created, sent or billed. action compact runs the once-per-step reactive compaction; fail ends the turn context_exhausted. estimated_tokens is an estimate (rendered bytes / 4), labeled as such.",
+      "properties": {
+        "type": { "const": "context_preflight_blocked" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["estimated_tokens", "window_tokens", "action"],
+          "properties": {
+            "estimated_tokens": { "$ref": "#/$defs/Int" },
+            "window_tokens": { "$ref": "#/$defs/Int" },
+            "action": { "enum": ["compact", "fail"] }
+          }
         }
       }
     }

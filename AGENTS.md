@@ -128,7 +128,7 @@ Inside the boundary, trust the types. Do not re-validate internally.
 2. One writer and one executor per branch. Appends are serialized through a single writer, and only the current lease holder (fencing epoch) may dispatch model calls or effects. A second or stale owner is rejected, and a test proves it.
 3. Side effects never silently repeat. `effect_begin` is durable before dispatch, and a dispatched attempt is potentially sent until it is settled: by provider dedup inside the key's window, by the adapter proving nothing was sent, by a final reconciliation, or by a human. Anything else parks. Recovery re-checks approval, cancellation and policy before dispatching a call that never began. A human retry is recorded as accepting duplicate risk. No effect is ever described as exactly-once.
 4. Credentials never enter the sandbox.
-5. The declared prompt prefix (Render v1 line 0: system, tools, pinned instructions, model and adapter settings) is byte-equal on every request of a branch. A test fails on any change, and a starts-with check does not count.
+5. The declared prompt prefix (Render v1 line 0: system, tools, pinned instructions, model and adapter settings) is byte-equal on every request of an authorized settings epoch. It changes only through an authorized `settings_changed`, never by resetting the baseline when a comparison fails. A test fails on any other change, and a starts-with check does not count.
 6. Recalled memory, knowledge, and summaries are injected as untrusted reference, never as instructions.
 7. The agent cannot write its own config, skills, or hooks.
 8. Event-log style only. No graph/node/edge abstractions.

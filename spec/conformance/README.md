@@ -83,7 +83,7 @@ Unknown non-critical events are skipped by every rule except `head`.
 
 | Key | Rule |
 |---|---|
-| `cost` | `{currency, known_nanos, upper_bound_nanos, complete}` over model responses: each usage field times the price (`policy.models[].price`) of its request's epoch model. A `null` field is charged at its bound (request bytes for input and cache fields, the epoch's `max_tokens` for output) in the upper bound only, and makes `complete` false |
+| `cost` | `{currency, known_nanos, upper_bound_nanos, complete, bounded}`, with one disposition per `model_request`, priced by its epoch's model (`policy.models[].price`). A response: known fields at their price, and if any field is `null` the upper bound adds the attempt's bound. No response and proven not billed (`provider_outcome: not_sent` or `billing: not_billed`): nothing. No response otherwise: the bound, and `complete` is false. The bound is `input_bound_tokens` (else `context_window` when `input_billing_bound` is `context_window`) × the highest input-side price, plus `max_tokens` × the output price. With no declared bound, `bounded` is false |
 | `cache_breaks` | `{request_event_id, likely_cause}` per turn response whose `cache_read_tokens` fell below 95% of the previous turn response's (`20·now < 19·prev`) by at least 2000. The cause is the first `settings_changed`, `compacted`, `context_edited` or `tools_changed` between them, else `ttl_expired` or `unknown` |
 | `todos` | The latest `todos_updated.todos`, else `[]` |
 | `children` | `{child_thread_id, status}` per `agent_spawned` in order: `running` until its `agent_finished` |
@@ -133,7 +133,7 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 
 **`policy`**
 1. Build the permission engine from `input.permissions` with `input.workspace` as the workspace root.
-2. Decide each call in `input.calls` under its own `mode`, with the call's `category` (`read_only`, `edit`, `other`) standing in for the tool's class. No hooks, no principal limits, no thread rules.
+2. Decide each call in `input.calls` under its own `mode`, with the call's `category` (`read_only`, `edit`, `other`) standing in for the tool's class. No hooks, no principal limits, no thread rules. With `input.ceiling` (a handoff target's principal and host ceiling, ), also decide the call under the ceiling, in its own mode, and keep the stricter decision (deny > ask > allow). On a tie, report the target's decision.
 3. Compare `decisions` in order: `decision`, `source`, and `rule` (the matched rule string) when listed.
 
 **`security`** and **`parity`** are reserved kinds. `security` covers trust-boundary and fail-closed cases. `parity` covers the cross-language round trip below.

@@ -2,7 +2,7 @@
   "name": "budget-exceeded-terminal",
   "family": "cancellation_resume",
   "kind": "reduce",
-  "description": "A run budget of 5,000,000 nanos rides on the user_input. Before the second request the known cost is 6,000,000, so budget_exceeded is recorded and the turn ends budget_exhausted (RunResult budget_exhausted). One response may overshoot.",
+  "description": "A run budget of 770,000,000 nanos rides on the user_input. Each attempt first reserves its model-declared bound (765,360,000). The first fits; after it settles at 6,000,000 the second reservation would reach 771,360,000, so budget_exceeded is recorded before any request exists and the turn ends budget_exhausted. Reservation before dispatch means no response can overshoot.",
   "clock": {
     "now": 1790000060000
   }

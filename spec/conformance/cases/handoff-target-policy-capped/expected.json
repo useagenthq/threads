@@ -1,0 +1,22 @@
+{
+  "outcome": "ok",
+  "decisions": [
+    {
+      "decision": "allow",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(git push:*)"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "allow",
+      "source": "mode"
+    }
+  ]
+}

@@ -107,6 +107,10 @@
               "items": {
                 "$ref": "#/$defs/PolicyCall"
               }
+            },
+            "ceiling": {
+              "description": "policy: the principal/host ceiling a handoff target is intersected with. Each call is decided under both; the stricter decision wins (deny > ask > allow), the target's on a tie.",
+              "$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"
             }
           }
         },
@@ -904,7 +908,8 @@
             "currency",
             "known_nanos",
             "upper_bound_nanos",
-            "complete"
+            "complete",
+            "bounded"
           ],
           "properties": {
             "currency": {
@@ -918,6 +923,10 @@
             },
             "complete": {
               "type": "boolean"
+            },
+            "bounded": {
+              "type": "boolean",
+              "description": "false when some unknown usage has no declared bound; upper_bound_nanos is then not a bound."
             }
           }
         },

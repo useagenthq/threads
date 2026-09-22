@@ -31,7 +31,7 @@
     "status": "idle",
     "head": {
       "seq": 9,
-      "hash": "57e604a72919efc73c50ba6e2c4981412b767fdf5bf252a011dce8c3994d72ef"
+      "hash": "7ffcf5ddf30b915e96c719c9ccf3153730196ec1b668fb6f5d46cf6bf9a0053e"
     }
   },
   "projections": {
@@ -39,7 +39,8 @@
       "currency": "USD",
       "known_nanos": 6000000,
       "upper_bound_nanos": 6000000,
-      "complete": true
+      "complete": true,
+      "bounded": true
     }
   }
 }

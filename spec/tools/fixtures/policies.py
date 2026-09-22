@@ -14,6 +14,7 @@ MODELS: list[JsonValue] = [
         "name": "scripted-1",
         "context_window": 200_000,
         "max_output_tokens": 8192,
+        "input_billing_bound": "context_window",
         "price": PRICE,
     },
     {
@@ -21,6 +22,7 @@ MODELS: list[JsonValue] = [
         "name": "scripted-small",
         "context_window": 200_000,
         "max_output_tokens": 8192,
+        "input_billing_bound": "context_window",
         "price": {"input": 1000, "output": 5000},
     },
 ]

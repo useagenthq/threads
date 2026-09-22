@@ -1,0 +1,9 @@
+{
+  "name": "settings-change-by-model-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A settings_changed whose actor is the model. Only the host, recovery or an operator principal may change settings: the line fails its schema (invalid_line).",
+  "clock": {
+    "now": 1790000060000
+  }
+}

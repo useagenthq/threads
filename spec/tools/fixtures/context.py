@@ -40,6 +40,7 @@ def build(root: pathlib.Path) -> None:
     _summary(root)
     _deferred(root)
     _reactive(root)
+    _preflight(root)
     _cache(root)
 
 
@@ -250,6 +251,44 @@ def _reactive(root: pathlib.Path) -> None:
                 ]
             }
         },
+    )
+
+
+def _preflight(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [READ_FILE], policy=policy(context=CONTEXT))
+    read_turn(log)
+    first, last = log.events[1], log.events[-1]
+    user(log, "Now summarize README.md.")
+    blocked: Obj = {"estimated_tokens": 185_000, "window_tokens": 180_000, "action": "compact"}
+    log.add("context_preflight_blocked", blocked)
+    side = log.model_request(compaction=True)
+    log.model_response(side, [{"type": "text", "text": SUMMARY}], "end_turn", tokens(900, 40))
+    log.add(
+        "compacted",
+        {
+            "from_seq": first["seq"],
+            "to_seq": last["seq"],
+            "from_event_id": first["event_id"],
+            "to_event_id": last["event_id"],
+            "summary_ref": log.art(SUMMARY.encode(), "text/plain"),
+            "summary_request_event_id": side["event_id"],
+            "trigger": "reactive",
+        },
+    )
+    answer(log, "It has one heading.")
+    reduce_case(
+        root,
+        (
+            "context-preflight-blocked-no-attempt",
+            FAM,
+            "L4: the estimate (labeled an estimate) reaches the window before any request "
+            "exists. context_preflight_blocked is recorded instead of an abandoned attempt, so "
+            "no request is invented or billed; the step's one reactive compaction follows and "
+            "the turn request is sent after it.",
+        ),
+        log,
+        {},
     )
 
 

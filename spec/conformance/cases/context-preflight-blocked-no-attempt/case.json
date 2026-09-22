@@ -1,0 +1,9 @@
+{
+  "name": "context-preflight-blocked-no-attempt",
+  "family": "context_compaction",
+  "kind": "reduce",
+  "description": "L4: the estimate (labeled an estimate) reaches the window before any request exists. context_preflight_blocked is recorded instead of an abandoned attempt, so no request is invented or billed; the step's one reactive compaction follows and the turn request is sent after it.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

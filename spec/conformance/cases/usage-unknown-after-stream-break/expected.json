@@ -35,15 +35,16 @@
     "status": "idle",
     "head": {
       "seq": 10,
-      "hash": "4ae32e80e7c61a2103b5debf2de3f1d7b9c389bbd424ae52b45eccc1342fae52"
+      "hash": "6bd5aa0c5ffea367f047143934c9ab2ac02a25645fad7a1a4733efb17dfb319d"
     }
   },
   "projections": {
     "cost": {
       "currency": "USD",
       "known_nanos": 660000,
-      "upper_bound_nanos": 17403000,
-      "complete": false
+      "upper_bound_nanos": 766020000,
+      "complete": false,
+      "bounded": true
     }
   }
 }

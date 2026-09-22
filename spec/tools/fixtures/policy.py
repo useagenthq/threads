@@ -27,7 +27,7 @@ def _path(p: str) -> Obj:
     return {"path": p}
 
 
-def _write(root: pathlib.Path, name: str, desc: str, perms: Obj, rows: list[Row]) -> None:
+def _write(root: pathlib.Path, name: str, desc: str, inp: Obj, rows: list[Row]) -> None:
     calls: list[JsonValue] = [
         {"mode": m, "tool": t, "category": c, "input": i} for m, t, c, i, *_ in rows
     ]
@@ -39,9 +39,7 @@ def _write(root: pathlib.Path, name: str, desc: str, perms: Obj, rows: list[Row]
         decisions.append(d)
     write_case(
         root,
-        case(
-            name, FAM, "policy", desc, input={"workspace": WS, "permissions": perms, "calls": calls}
-        ),
+        case(name, FAM, "policy", desc, input={"workspace": WS, **inp, "calls": calls}),
         None,
         {"outcome": "ok", "decisions": decisions},
     )
@@ -73,7 +71,7 @@ def build(root: pathlib.Path) -> None:
         "command, every simple command of a compound must be allowed, safe env assignments "
         "and wrappers are stripped, a deny matches any simple command, and an unparseable "
         "construct can still be denied but never allowed.",
-        perms,
+        {"permissions": perms},
         rows,
     )
 
@@ -121,7 +119,7 @@ def build(root: pathlib.Path) -> None:
         "path outside the workspace never matches a relative rule and a read there asks. Ask "
         "rules beat allow rules. MCP rules take a trailing *. web_fetch domain rules match the "
         "host exactly.",
-        perms,
+        {"permissions": perms},
         rows,
     )
 
@@ -150,6 +148,26 @@ def build(root: pathlib.Path) -> None:
         "plan tools, even when a rule allows it. accept_edits allows workspace edits. dont_ask "
         "turns every ask into deny. bypass allows the rest. Protected paths ask in every mode "
         "and deny in dont_ask and plan.",
-        perms,
+        {"permissions": perms},
+        rows,
+    )
+
+    push = "bash(git push:*)"
+    target: Obj = {**permissions("bypass"), "allow": [push]}
+    ceiling: Obj = {**permissions("default"), "allow": ["edit(src/**)"], "deny": [push]}
+    b = "bypass"
+    rows = [
+        (b, "edit", "edit", _path("src/a.ts"), "allow", "mode", ""),
+        (b, "bash", "other", _bash("git push origin main"), "deny", "policy", push),
+        (b, "bash", "other", _bash("curl https://x.test"), "ask", "mode", ""),
+        (b, "read", "read_only", _path("README.md"), "allow", "mode", ""),
+    ]
+    _write(
+        root,
+        "handoff-target-policy-capped",
+        "A handoff target's own pinned policy (bypass, allows git push) intersected with the "
+        "thread principal and host ceiling (default mode, denies git push). Each call is "
+        "decided under both and the stricter wins; the target's decision is reported on a tie.",
+        {"permissions": target, "ceiling": ceiling},
         rows,
     )
