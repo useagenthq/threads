@@ -1,21 +1,33 @@
-"""Conformance runner for the log: every `reduce` case in full, and the reader's view of every
-other case's log (spec/conformance/README.md, "What a runner does per kind").
+"""Conformance runner for the log: every `reduce` and `render` case in full, and the reader's
+view of every other case's log (spec/conformance/README.md, "What a runner does per kind").
 
 A `reduce` case imports its log read-only into a fresh SQLite store, reads it back through the
-same boundary, and compares `state` and `projections`, or the error `code` and `seq`. The other
-kinds need the loop, render, fork or host, which don't exist yet. Their logs must still import
-to the pinned `state`, and each of them is listed below as skipped, with the reason.
+same boundary, and compares `state` and `projections`, or the error `code` and `seq`. A `render`
+case also replays every recorded request and renders the next one. The other kinds need the
+loop, fork or host, which don't exist yet. Their logs must still import to the pinned `state`,
+and each of them is listed below as skipped, with the reason.
 """
 
 import asyncio
 import json
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
 from pydantic import JsonValue, TypeAdapter
 
-from threads.log import ParseError
+from threads.log import (
+    CompactedEvent,
+    ContextEditedEvent,
+    Event,
+    HookDecisionEvent,
+    ModelRequestEvent,
+    ParseError,
+    SettingsChangedEvent,
+)
+from threads.log.digest import sha256_hex
 from threads.reduce import PROJECTIONS
+from threads.render import render, verify_requests
 from threads.result import Err, Ok
 from threads.store import SqliteStore, VerifiedLog, Writer, verify_export
 
@@ -31,7 +43,6 @@ EXPECTED_KEYS = frozenset(
 )
 IMPL = "threads-py"
 LATER = {
-    "render": "Render v1 re-rendering, C7 and the request hash checks are not built yet",
     "recover": "leases exist, but semantic recovery and the loop are not built yet",
     "fork": "the fork operation (eligibility, sandbox restore, resource ledger) is not built yet",
     "stub": "stub mode is not built yet",
@@ -90,7 +101,7 @@ def test_corpus_kinds_and_keys_are_known() -> None:
         meta, expected = load(case, "case.json"), load(case, "expected.json")
         assert set(meta) <= CASE_KEYS, case.name
         assert set(expected) <= EXPECTED_KEYS, case.name
-        assert meta["kind"] == "reduce" or meta["kind"] in LATER, case.name
+        assert meta["kind"] in ("reduce", "render") or meta["kind"] in LATER, case.name
 
 
 @pytest.mark.parametrize("name", cases("reduce"))
@@ -106,6 +117,7 @@ def test_reduce_case(name: str) -> None:
         assert expected.get("appended", []) == []
         return
     assert isinstance(result, Ok), result
+    assert verify_requests(result.value.fold.events, artifacts(case)) == Ok(None)
     assert result.value.state.to_json() == expected["state"]
     reader = verify_export(log, now_of(meta))
     assert isinstance(reader, Ok)
@@ -117,6 +129,85 @@ def test_reduce_case(name: str) -> None:
     for key, value in projections.items():
         assert key in PROJECTIONS, f"projection {key} is not implemented"
         assert PROJECTIONS[key](result.value.fold) == value, key
+
+
+def artifacts(case: Path) -> Callable[[str], Ok[bytes] | Err[ParseError]]:
+    """The case's artifacts as an artifact store's `get`; the renderer verifies each hash."""
+    folder = case / "artifacts"
+
+    def get(sha256: str) -> Ok[bytes] | Err[ParseError]:
+        path = folder / sha256
+        if not path.exists():
+            return Err(ParseError("artifact_missing", f"no artifact {sha256}"))
+        return Ok(path.read_bytes())
+
+    return get
+
+
+def _replay(case: Path, events: Sequence[Event]) -> Ok[bytes] | Err[ParseError]:
+    """Steps 2-4: C7 and every recorded request, then the next request."""
+    read = artifacts(case)
+    verified = verify_requests(events, read)
+    if isinstance(verified, Err):
+        return verified
+    rendered = render(events, read)
+    if isinstance(rendered, Err):
+        return rendered
+    expected = load(case, "expected.json")["render"]
+    assert isinstance(expected, dict)
+    line0 = rendered.value.line0
+    assert expected["declared_prefix"] == {"bytes": len(line0), "sha256": sha256_hex(line0)}
+    body = rendered.value.body
+    assert sha256_hex(body) == expected["next_request_sha256"]
+    assert body == (case / "request.bytes").read_bytes()
+    return Ok(body)
+
+
+def _breaks_history(event: Event) -> bool:
+    if isinstance(event, HookDecisionEvent):
+        d = event.data
+        return d.hook == "before_input" and d.decision in ("deny", "failed")
+    return isinstance(event, CompactedEvent | ContextEditedEvent | SettingsChangedEvent)
+
+
+def _history_is_prefix(case: Path, events: Sequence[Event], next_body: bytes) -> None:
+    """Step 5, the cache-reuse property: each turn request is a byte prefix of the next turn
+    request unless an edit, compaction, settings change or denied input lies between."""
+    read = artifacts(case)
+    previous: bytes | None = None
+    for event in [*events, None]:
+        if event is not None and _breaks_history(event):
+            previous = None
+            continue
+        if event is None:
+            body = next_body
+        elif isinstance(event, ModelRequestEvent) and event.data.purpose != "compaction":
+            got = read(event.data.request_ref.sha256)
+            assert isinstance(got, Ok)
+            body = got.value
+        else:
+            continue
+        assert previous is None or body.startswith(previous)
+        previous = body
+
+
+@pytest.mark.parametrize("name", cases("render"))
+def test_render_case(name: str) -> None:
+    case = CASES / name
+    meta, expected = load(case, "case.json"), load(case, "expected.json")
+    log = (case / "log.jsonl").read_bytes()
+    read = asyncio.run(import_and_read(log, now_of(meta)))
+    assert isinstance(read, Ok), read
+    if "state" in expected:
+        assert read.value.state.to_json() == expected["state"]
+    events = read.value.fold.events
+    result = _replay(case, events)
+    if expected["outcome"] == "error":
+        assert isinstance(result, Err), result
+        assert {"code": result.error.code, "seq": result.error.seq} == expected["error"]
+        return
+    assert isinstance(result, Ok), result
+    _history_is_prefix(case, events, result.value)
 
 
 READER_VIEW = [n for n in cases(*LATER) if own(CASES / n, "log.jsonl").exists()]
@@ -138,6 +229,8 @@ def test_reader_view(name: str) -> None:
     read = asyncio.run(import_and_read(log, now_of(meta)))
     assert isinstance(read, Ok), read
     assert read.value.state == verified.value.state
+    # Every recorded request in the corpus replays: C7 and its request_ref bytes.
+    assert verify_requests(read.value.fold.events, artifacts(case)) == Ok(None)
 
 
 @pytest.mark.parametrize("name", cases(*LATER))
