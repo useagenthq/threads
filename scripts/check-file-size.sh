@@ -8,7 +8,7 @@ root="${1:-.}"
 
 too_long=$(find "$root" -type f \( -name '*.ts' -o -name '*.py' \) \
   -not -path '*/node_modules/*' -not -path '*/.venv/*' \
-  -not -path '*/generated/*' -not -path '*/dist/*' -print0 \
+  -not -path '*/generated/*' -not -path '*/_generated/*' -not -path '*/_wire/*' -not -path '*/dist/*' -print0 \
   | xargs -0 -r wc -l | awk -v max="$MAX_LINES" '$2 != "total" && $1 > max')
 
 if [[ -n "$too_long" ]]; then

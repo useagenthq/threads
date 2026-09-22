@@ -16,3 +16,9 @@ plans/
 
 # Agent worktrees
 .claude/worktrees/
+
+# Python caches
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
