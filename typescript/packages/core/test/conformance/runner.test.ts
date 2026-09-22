@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { projections, reduce } from "../../src/reduce";
 import { type VerifiedLog, verifyExport } from "../../src/verify";
+import { fixture, unwrap } from "../store/helpers";
 import { CASE_NAMES, type Case, type Kind, loadCase, plain } from "./cases";
 
 // One runner for every case in spec/conformance/cases, no per-case code. `reduce` cases run in
@@ -62,6 +63,37 @@ function runImport(c: Case, bytes: Uint8Array): void {
   if (!log.ok) throw new Error(`${log.error.code}: ${log.error.message}`);
   checkState(c, log.value);
 }
+
+/**
+ * Replay: SQLite storage and JSONL are one contract. The log stored and exported again is the
+ * same bytes (a torn tail is dropped, so only its prefix is), and it reduces to the same state.
+ */
+function replay(c: Case, bytes: Uint8Array): void {
+  const direct = unwrap(verifyExport(bytes));
+  const { db, store } = fixture();
+  unwrap(store.importLog(bytes));
+  const leaf = direct.segments.at(-1)?.header.branch_id;
+  if (leaf === undefined) throw new Error("a verified log has a header");
+  const exported = unwrap(store.exportBranch(leaf));
+  if (direct.torn === undefined) expect(exported).toEqual(bytes);
+  else
+    expect(exported.subarray(0, direct.committedBytes)).toEqual(
+      bytes.subarray(0, direct.committedBytes),
+    );
+  const stored = unwrap(store.read(leaf));
+  expect(reduce(stored, c.now)).toEqual(reduce(direct, c.now));
+  expect(projections(stored)).toEqual(projections(direct));
+  db.close();
+}
+
+describe("replay: every importable case log round-trips through SQLite", () => {
+  for (const name of CASE_NAMES) {
+    const c = loadCase(name);
+    const { log } = c;
+    if (log === undefined || !verifyExport(log).ok) continue;
+    test(name, () => replay(c, log));
+  }
+});
 
 describe("conformance", () => {
   for (const name of CASE_NAMES) {
