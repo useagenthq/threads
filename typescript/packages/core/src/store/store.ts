@@ -18,6 +18,7 @@ import type { SqliteDriver } from "./driver";
 import { canonicalLine } from "./encode";
 import { importSegments } from "./import";
 import { branchLines, exportBytes } from "./lines";
+import { isTorn, markRepaired, recordRepair } from "./repair";
 import {
   atomically,
   type BranchRow,
@@ -151,7 +152,8 @@ export class LogStore {
 
   /**
    * Takes the branch lease: free or expired, else `branch_busy`. The new epoch is one above
-   * both the old lease and every epoch on the resolved chain (wire rule 11).
+   * both the old lease and every epoch on the resolved chain (wire rule 11). A branch imported
+   * with a torn tail records log_repaired under the new lease and becomes runnable.
    */
   acquire(
     branchId: BranchId,
@@ -160,6 +162,9 @@ export class LogStore {
   ): Result<Writer, LogError> {
     return atomically(this.#db, () => {
       const now = this.#now();
+      const row = ownedBranch(this.#db, branchId, this.#tenant);
+      const torn = row.ok && isTorn(row.value) ? row.value : undefined;
+      if (torn !== undefined) markRepaired(this.#db, branchId);
       const log = this.#runnable(branchId);
       if (!log.ok) return log;
       const lease = getLease(this.#db, branchId);
@@ -174,7 +179,16 @@ export class LogStore {
           logError("branch_busy", `branch ${branchId} has a live lease`),
         );
       const epoch = Math.max(held?.epoch ?? 0, log.value.fold.epoch) + 1;
-      return ok(this.#lease(branchId, holderId, epoch, now + ttlMs, log.value));
+      const writer = this.#lease(
+        branchId,
+        holderId,
+        epoch,
+        now + ttlMs,
+        log.value,
+      );
+      return torn === undefined
+        ? ok(writer)
+        : recordRepair(writer, this.#artifacts, torn, log.value);
     });
   }
 
@@ -188,7 +202,11 @@ export class LogStore {
     const state: BranchRow["state"] = branch.value.state;
     if (state !== "ready")
       return err(
-        logError("branch_not_runnable", `branch ${branchId} is ${state}`),
+        logError(
+          "branch_not_runnable",
+          `branch ${branchId} is ${state}`,
+          branch.value.head_seq,
+        ),
       );
     const log = this.read(branchId);
     if (!log.ok)

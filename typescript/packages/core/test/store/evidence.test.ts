@@ -71,7 +71,30 @@ describe("an import without a verified head keeps its evidence", () => {
     expect(db.all("SELECT state, head_verified FROM branches", [])).toEqual([
       { state: "inspection_only", head_verified: 0 },
     ]);
-    expect(code(store.acquire(ROOT, "holder-a"))).toBe("branch_not_runnable");
+  });
+
+  test("acquiring a torn import records log_repaired and makes it runnable", () => {
+    const torn = new TextEncoder().encode("x".repeat(57));
+    const prefix = withoutHead();
+    const { store, db } = fixture();
+    unwrap(store.importLog(join2(prefix, torn)));
+    const writer = unwrap(store.acquire(ROOT, "holder-a"));
+    const repaired = writer.chain.events.at(-1)?.event;
+    expect(repaired?.type).toBe("log_repaired");
+    expect(repaired?.critical).toBe(false);
+    expect(repaired?.data).toEqual({
+      truncated_bytes: 57,
+      at_offset: prefix.length,
+      dropped_ref: {
+        sha256: sha256Hex(torn),
+        bytes: 57,
+        media_type: "application/octet-stream",
+      },
+    });
+    expect(db.all("SELECT state, head_verified FROM branches", [])).toEqual([
+      { state: "ready", head_verified: 1 },
+    ]);
+    expect(unwrap(store.read(ROOT)).headVerified).toBe(true);
   });
 
   test("a terminated prefix without its head line stays unverified", () => {
