@@ -201,13 +201,30 @@ function result(ctx: LineContext, e: ResultEvent): Line {
   return withParts(ctx, e, parts, line(parts));
 }
 
-/** Replaces each UTF-8 byte span with `[redacted]`, right to left so offsets stay valid. */
-function redact(
-  text: string,
-  spans: readonly { start: number; end: number }[],
-): string {
+type Span = { readonly start: number; readonly end: number };
+
+/** Overlapping and adjacent spans merged into their disjoint union, in order. */
+function union(spans: readonly Span[]): Span[] {
+  const merged: Span[] = [];
+  for (const span of spans.toSorted((a, b) => a.start - b.start)) {
+    const last = merged.at(-1);
+    if (last !== undefined && span.start <= last.end)
+      merged[merged.length - 1] = {
+        start: last.start,
+        end: Math.max(last.end, span.end),
+      };
+    else merged.push(span);
+  }
+  return merged;
+}
+
+/**
+ * Replaces the union of the UTF-8 byte spans with `[redacted]`, right to left so every offset
+ * stays valid and on a character boundary.
+ */
+function redact(text: string, spans: readonly Span[]): string {
   let bytes = encoder.encode(text);
-  for (const { start, end } of spans.toSorted((a, b) => b.start - a.start)) {
+  for (const { start, end } of union(spans).toReversed()) {
     bytes = Uint8Array.from([
       ...bytes.subarray(0, start),
       ...REDACTED,
