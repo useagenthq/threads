@@ -5,7 +5,7 @@ version = "0.0.0"
 description = "Event-log agent framework."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2"]
+dependencies = ["pydantic>=2,<3"]
 classifiers = ["Private :: Do Not Upload"]
 
 [dependency-groups]

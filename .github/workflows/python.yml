@@ -19,6 +19,7 @@ jobs:
           working-directory: python
       - run: uv sync --locked
       - run: uv run pyright
+      - run: uv run pyright --verifytypes threads --ignoreexternal
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pytest
