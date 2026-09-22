@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { Actor, ArtifactRef, Budget, Usage } from "../common";
-import { type EventSchema, event } from "../envelope";
+import { ArtifactRef, Budget, Usage } from "../common";
+import { type EventDef, event } from "../envelope";
 import { CallId, ThreadId } from "../ids";
 import { NonEmpty } from "../primitives";
-import type { Arr, EnumOf, Lit, Opt, Strict } from "../zod-types";
-import { type TextOrRef, textOrRef } from "./one-of";
+import { withRule } from "../rules";
+import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
+import { TextOrRef } from "./one-of";
 
 // Subagents, handoffs, todos and teams.
 
@@ -15,7 +16,16 @@ const ISOLATIONS = [
   "worktree",
   "forked_sandbox",
 ] as const;
-/** Durable before the child's thread_started, so cancellation and recovery can find it. */
+const CHILD_STATUSES = [
+  "completed",
+  "failed",
+  "cancelled",
+  "budget_exhausted",
+] as const;
+const FORWARDED = ["none", "summary", "transcript"] as const;
+const TODO_STATUSES = ["pending", "in_progress", "completed"] as const;
+const TASK_UPDATES = ["completed", "failed", "released"] as const;
+
 export const AgentSpawnedData: Strict<{
   call_id: typeof CallId;
   child_thread_id: typeof ThreadId;
@@ -31,18 +41,18 @@ export const AgentSpawnedData: Strict<{
   isolation: z.enum(ISOLATIONS),
   budget: Budget.optional(),
 });
-export const AgentSpawned: EventSchema<
+export const AgentSpawned: EventDef<
   "agent_spawned",
   typeof AgentSpawnedData,
   true
-> = event("agent_spawned", true, Actor, AgentSpawnedData);
+> = event({
+  type: "agent_spawned",
+  critical: true,
+  description:
+    "A child thread was created for a spawn call. Durable before the child's thread_started, so cancellation and recovery can find it.",
+  data: AgentSpawnedData,
+});
 
-const CHILD_STATUSES = [
-  "completed",
-  "failed",
-  "cancelled",
-  "budget_exhausted",
-] as const;
 export const AgentFinishedData: Strict<{
   child_thread_id: typeof ThreadId;
   status: EnumOf<typeof CHILD_STATUSES>;
@@ -52,77 +62,82 @@ export const AgentFinishedData: Strict<{
   child_thread_id: ThreadId,
   status: z.enum(CHILD_STATUSES),
   output_ref: ArtifactRef.optional(),
-  usage: Usage,
+  usage: Usage.describe(
+    "The child's aggregate usage; null fields are unknown.",
+  ),
 });
-export const AgentFinished: EventSchema<
+export const AgentFinished: EventDef<
   "agent_finished",
   typeof AgentFinishedData,
   true
-> = event("agent_finished", true, Actor, AgentFinishedData);
+> = event({
+  type: "agent_finished",
+  critical: true,
+  description:
+    "The child's one terminal result (F7.5). Exactly once per agent_spawned.",
+  data: AgentFinishedData,
+});
 
-type HandoffShape = {
+export const HandoffData: Strict<{
   call_id: typeof CallId;
   to_agent: typeof NonEmpty;
   to_thread_id: typeof ThreadId;
-};
-const handoffShape: HandoffShape = {
-  call_id: CallId,
-  to_agent: NonEmpty,
-  to_thread_id: ThreadId,
-};
-const FORWARDED = ["summary", "transcript"] as const;
-// forwarded_ref is present exactly when something is forwarded.
-export const HandoffData: z.ZodDiscriminatedUnion<
-  [
-    Strict<HandoffShape & { forwarded: Lit<"none"> }>,
-    Strict<
-      HandoffShape & {
-        forwarded: EnumOf<typeof FORWARDED>;
-        forwarded_ref: typeof ArtifactRef;
-      }
-    >,
-  ],
-  "forwarded"
-> = z.discriminatedUnion("forwarded", [
-  z.strictObject({ ...handoffShape, forwarded: z.literal("none") }),
+  forwarded: EnumOf<typeof FORWARDED>;
+  forwarded_ref: Opt<typeof ArtifactRef>;
+}> = withRule(
   z.strictObject({
-    ...handoffShape,
+    call_id: CallId,
+    to_agent: NonEmpty,
+    to_thread_id: ThreadId,
     forwarded: z.enum(FORWARDED),
-    forwarded_ref: ArtifactRef,
+    forwarded_ref: ArtifactRef.optional(),
   }),
-]);
-export const Handoff: EventSchema<"handoff", typeof HandoffData, true> = event(
-  "handoff",
-  true,
-  Actor,
-  HandoffData,
+  {
+    if: { properties: { forwarded: { const: "none" } } },
+    then: { not: { required: ["forwarded_ref"] } },
+    else: { required: ["forwarded_ref"] },
+  },
 );
-
-const TODO_STATUSES = ["pending", "in_progress", "completed"] as const;
-export const Todo: Strict<{
-  id: typeof NonEmpty;
-  content: typeof NonEmpty;
-  status: EnumOf<typeof TODO_STATUSES>;
-  active_form: Opt<z.ZodString>;
-}> = z.strictObject({
-  id: NonEmpty,
-  content: NonEmpty,
-  status: z.enum(TODO_STATUSES),
-  active_form: z.string().optional(),
+export const Handoff: EventDef<"handoff", typeof HandoffData, true> = event({
+  type: "handoff",
+  critical: true,
+  description:
+    "The conversation moves to another agent's new thread. After it this thread takes no new input and no model_request; the host routes the conversation to to_thread_id.",
+  data: HandoffData,
 });
-/** The agent's complete todo list after a todo_write call. */
+
 export const TodosUpdatedData: Strict<{
   call_id: typeof CallId;
-  todos: Arr<typeof Todo>;
+  todos: Arr<
+    Strict<{
+      id: typeof NonEmpty;
+      content: typeof NonEmpty;
+      status: EnumOf<typeof TODO_STATUSES>;
+      active_form: Opt<z.ZodString>;
+    }>
+  >;
 }> = z.strictObject({
   call_id: CallId,
-  todos: z.array(Todo),
+  todos: z.array(
+    z.strictObject({
+      id: NonEmpty,
+      content: NonEmpty,
+      status: z.enum(TODO_STATUSES),
+      active_form: z.string().optional(),
+    }),
+  ),
 });
-export const TodosUpdated: EventSchema<
+export const TodosUpdated: EventDef<
   "todos_updated",
   typeof TodosUpdatedData,
   true
-> = event("todos_updated", true, Actor, TodosUpdatedData);
+> = event({
+  type: "todos_updated",
+  critical: true,
+  description:
+    "The agent's complete todo list after a todo_write call (F8). reduce keeps the latest. ids are unique.",
+  data: TodosUpdatedData,
+});
 
 export const TeamTaskCreatedData: Strict<{
   task_id: typeof NonEmpty;
@@ -135,49 +150,77 @@ export const TeamTaskCreatedData: Strict<{
   description: z.string().optional(),
   blocked_by: z.array(NonEmpty),
 });
-export const TeamTaskCreated: EventSchema<
+export const TeamTaskCreated: EventDef<
   "team_task_created",
   typeof TeamTaskCreatedData,
   true
-> = event("team_task_created", true, Actor, TeamTaskCreatedData);
+> = event({
+  type: "team_task_created",
+  critical: true,
+  description:
+    "A shared team task, in the team lead's log (the one writer for team state).",
+  data: TeamTaskCreatedData,
+});
 
 export const TeamTaskClaimedData: Strict<{
   task_id: typeof NonEmpty;
   member: typeof NonEmpty;
-}> = z.strictObject({
-  task_id: NonEmpty,
-  member: NonEmpty,
-});
-export const TeamTaskClaimed: EventSchema<
+}> = z.strictObject({ task_id: NonEmpty, member: NonEmpty });
+export const TeamTaskClaimed: EventDef<
   "team_task_claimed",
   typeof TeamTaskClaimedData,
   true
-> = event("team_task_claimed", true, Actor, TeamTaskClaimedData);
+> = event({
+  type: "team_task_claimed",
+  critical: true,
+  description:
+    "Atomic claim: the task exists, is open and unclaimed, and every blocker is completed.",
+  data: TeamTaskClaimedData,
+});
 
-const TASK_UPDATES = ["completed", "failed", "released"] as const;
 export const TeamTaskUpdatedData: Strict<{
   task_id: typeof NonEmpty;
   status: EnumOf<typeof TASK_UPDATES>;
-}> = z.strictObject({ task_id: NonEmpty, status: z.enum(TASK_UPDATES) });
-export const TeamTaskUpdated: EventSchema<
+}> = z.strictObject({
+  task_id: NonEmpty,
+  status: z.enum(TASK_UPDATES),
+});
+export const TeamTaskUpdated: EventDef<
   "team_task_updated",
   typeof TeamTaskUpdatedData,
   true
-> = event("team_task_updated", true, Actor, TeamTaskUpdatedData);
+> = event({
+  type: "team_task_updated",
+  critical: true,
+  description:
+    "completed and failed close a claimed task; released returns it to the open pool.",
+  data: TeamTaskUpdatedData,
+});
 
-type TeamMessageShape = {
+export const TeamMessageData: Strict<{
   message_id: typeof NonEmpty;
   from: typeof NonEmpty;
   to: typeof NonEmpty;
-};
-/** `to` is a member id, or `*` for every member. */
-export const TeamMessageData: TextOrRef<TeamMessageShape> = textOrRef({
-  message_id: NonEmpty,
-  from: NonEmpty,
-  to: NonEmpty,
-});
-export const TeamMessage: EventSchema<
+  text: Opt<z.ZodString>;
+  ref: Opt<typeof ArtifactRef>;
+}> = withRule(
+  z.strictObject({
+    message_id: NonEmpty,
+    from: NonEmpty,
+    to: NonEmpty.describe("A member id, or * for every member."),
+    text: z.string().optional(),
+    ref: ArtifactRef.optional(),
+  }),
+  { allOf: [{ $ref: TextOrRef }] },
+);
+export const TeamMessage: EventDef<
   "team_message",
   typeof TeamMessageData,
   true
-> = event("team_message", true, Actor, TeamMessageData);
+> = event({
+  type: "team_message",
+  critical: true,
+  description:
+    "An addressed message between members. message_id is unique; delivery into a member's thread is injected{source: agent, origin.id: message_id}, deduplicated by that id.",
+  data: TeamMessageData,
+});

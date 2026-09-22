@@ -10,7 +10,8 @@
     "lint": "biome check --error-on-warnings .",
     "test": "bun test",
     "check": "bun run typecheck && bun run lint && bun run test",
-    "schema:export": "bun packages/core/scripts/export-schema.ts"
+    "schema:export": "bun packages/core/scripts/export-schema.ts",
+    "schema:check": "bun packages/core/scripts/export-schema.ts --check"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",

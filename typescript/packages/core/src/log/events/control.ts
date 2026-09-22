@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { Actor, ActorWithPrincipal, ParkAddress } from "../common";
-import { type EventSchema, event } from "../envelope";
+import { ActorWithPrincipal, ParkAddress } from "../common";
+import { type EventDef, event, eventWithActor } from "../envelope";
 import { EventId, ThreadId } from "../ids";
 import { Int, TimeMs } from "../primitives";
-import type { EnumOf, Lit, Opt, Strict } from "../zod-types";
+import { withRule } from "../rules";
+import type { EnumOf, Opt, Strict } from "../zod-types";
 
 // Parking, cancellation, turn ends and budget stops.
 
@@ -13,79 +14,7 @@ const PARK_REASONS = [
   "awaiting_input",
   "awaiting_resource",
 ] as const;
-export const ParkedData: Strict<{
-  address: typeof ParkAddress;
-  reason: EnumOf<typeof PARK_REASONS>;
-  expires_at: Opt<typeof TimeMs>;
-}> = z.strictObject({
-  address: ParkAddress,
-  reason: z.enum(PARK_REASONS),
-  expires_at: TimeMs.optional(),
-});
-export const Parked: EventSchema<"parked", typeof ParkedData, true> = event(
-  "parked",
-  true,
-  Actor,
-  ParkedData,
-);
-
-/** A parked address outlived its TTL. Nothing is auto-resolved. */
-export const ParkEscalatedData: Strict<{ address: typeof ParkAddress }> =
-  z.strictObject({ address: ParkAddress });
-export const ParkEscalated: EventSchema<
-  "park_escalated",
-  typeof ParkEscalatedData,
-  false
-> = event("park_escalated", false, Actor, ParkEscalatedData);
-
-export const ResumedData: Strict<{
-  address: typeof ParkAddress;
-  cause_event_id: typeof EventId;
-}> = z.strictObject({
-  address: ParkAddress,
-  cause_event_id: EventId,
-});
-export const Resumed: EventSchema<"resumed", typeof ResumedData, true> = event(
-  "resumed",
-  true,
-  Actor,
-  ResumedData,
-);
-
 const CANCEL_SCOPES = ["turn", "thread", "tree"] as const;
-/** Durable cancellation barrier and the hard-stop control event. */
-export const CancelRequestedData: Strict<{
-  scope: EnumOf<typeof CANCEL_SCOPES>;
-  reason: Opt<z.ZodString>;
-}> = z.strictObject({
-  scope: z.enum(CANCEL_SCOPES),
-  reason: z.string().optional(),
-});
-export const CancelRequested: EventSchema<
-  "cancel_requested",
-  typeof CancelRequestedData,
-  true,
-  typeof ActorWithPrincipal
-> = event("cancel_requested", true, ActorWithPrincipal, CancelRequestedData);
-
-export const CancelledData: Strict<{ request_event_id: typeof EventId }> =
-  z.strictObject({
-    request_event_id: EventId,
-  });
-export const Cancelled: EventSchema<"cancelled", typeof CancelledData, true> =
-  event("cancelled", true, Actor, CancelledData);
-
-export const StopWhenIdleData: Strict<{ reason: Opt<z.ZodString> }> =
-  z.strictObject({
-    reason: z.string().optional(),
-  });
-export const StopWhenIdle: EventSchema<
-  "stop_when_idle",
-  typeof StopWhenIdleData,
-  true,
-  typeof ActorWithPrincipal
-> = event("stop_when_idle", true, ActorWithPrincipal, StopWhenIdleData);
-
 const TURN_END_REASONS = [
   "end_turn",
   "max_turns",
@@ -101,18 +30,7 @@ const TURN_END_REASONS = [
   "model_unavailable",
   "handoff",
 ] as const;
-export const TurnCompletedData: Strict<{
-  reason: EnumOf<typeof TURN_END_REASONS>;
-}> = z.strictObject({
-  reason: z.enum(TURN_END_REASONS),
-});
-export const TurnCompleted: EventSchema<
-  "turn_completed",
-  typeof TurnCompletedData,
-  true
-> = event("turn_completed", true, Actor, TurnCompletedData);
-
-const OWN_SCOPES = ["run", "thread"] as const;
+const BUDGET_SCOPES = ["run", "thread", "ancestor"] as const;
 const BUDGET_LIMITS = [
   "max_cost_nanos",
   "max_input_tokens",
@@ -121,38 +39,152 @@ const BUDGET_LIMITS = [
   "max_turns",
   "max_wall_ms",
 ] as const;
-type BudgetShape = {
+
+export const ParkedData: Strict<{
+  address: typeof ParkAddress;
+  reason: EnumOf<typeof PARK_REASONS>;
+  expires_at: Opt<typeof TimeMs>;
+}> = z.strictObject({
+  address: ParkAddress,
+  reason: z
+    .enum(PARK_REASONS)
+    .describe(
+      "awaiting_input: an ask_user question; the address is {kind: input, id: <call_id>}.",
+    ),
+  expires_at: TimeMs.optional(),
+});
+export const Parked: EventDef<"parked", typeof ParkedData, true> = event({
+  type: "parked",
+  critical: true,
+  data: ParkedData,
+});
+
+export const ParkEscalatedData: Strict<{ address: typeof ParkAddress }> =
+  z.strictObject({ address: ParkAddress });
+export const ParkEscalated: EventDef<
+  "park_escalated",
+  typeof ParkEscalatedData,
+  false
+> = event({
+  type: "park_escalated",
+  critical: false,
+  description:
+    "A parked address outlived its TTL. The host notifies an approver; nothing is auto-resolved.",
+  data: ParkEscalatedData,
+});
+
+export const ResumedData: Strict<{
+  address: typeof ParkAddress;
+  cause_event_id: typeof EventId;
+}> = z.strictObject({
+  address: ParkAddress,
+  cause_event_id: EventId.describe(
+    "The event that satisfied the address (approval, effect_resolved, user_input).",
+  ),
+});
+export const Resumed: EventDef<"resumed", typeof ResumedData, true> = event({
+  type: "resumed",
+  critical: true,
+  data: ResumedData,
+});
+
+export const CancelRequestedData: Strict<{
+  scope: EnumOf<typeof CANCEL_SCOPES>;
+  reason: Opt<z.ZodString>;
+}> = z.strictObject({
+  scope: z.enum(CANCEL_SCOPES),
+  reason: z.string().optional(),
+});
+export const CancelRequested: EventDef<
+  "cancel_requested",
+  typeof CancelRequestedData,
+  true,
+  typeof ActorWithPrincipal
+> = eventWithActor({
+  type: "cancel_requested",
+  critical: true,
+  description:
+    "Durable cancellation barrier; also the hard-stop control event. No dispatch happens after it.",
+  data: CancelRequestedData,
+  actor: ActorWithPrincipal,
+});
+
+export const CancelledData: Strict<{ request_event_id: typeof EventId }> =
+  z.strictObject({ request_event_id: EventId });
+export const Cancelled: EventDef<"cancelled", typeof CancelledData, true> =
+  event({
+    type: "cancelled",
+    critical: true,
+    description:
+      "Work stopped. Must not be written while any effect is unsettled; unsettled effects park instead.",
+    data: CancelledData,
+  });
+
+export const StopWhenIdleData: Strict<{ reason: Opt<z.ZodString> }> =
+  z.strictObject({ reason: z.string().optional() });
+export const StopWhenIdle: EventDef<
+  "stop_when_idle",
+  typeof StopWhenIdleData,
+  true,
+  typeof ActorWithPrincipal
+> = eventWithActor({
+  type: "stop_when_idle",
+  critical: true,
+  description:
+    "Reserved control event: finish in-flight work (model attempt, pending calls, deferred results), start nothing new, then stop. A hard stop is cancel_requested.",
+  data: StopWhenIdleData,
+  actor: ActorWithPrincipal,
+});
+
+export const TurnCompletedData: Strict<{
+  reason: EnumOf<typeof TURN_END_REASONS>;
+}> = z.strictObject({ reason: z.enum(TURN_END_REASONS) });
+export const TurnCompleted: EventDef<
+  "turn_completed",
+  typeof TurnCompletedData,
+  true
+> = event({ type: "turn_completed", critical: true, data: TurnCompletedData });
+
+export const BudgetExceededData: Strict<{
+  scope: EnumOf<typeof BUDGET_SCOPES>;
+  owner_thread_id: Opt<typeof ThreadId>;
   limit: EnumOf<typeof BUDGET_LIMITS>;
   limit_value: typeof Int;
   observed: typeof Int;
   observed_is_upper_bound: z.ZodBoolean;
-};
-const budgetShape: BudgetShape = {
-  limit: z.enum(BUDGET_LIMITS),
-  limit_value: Int,
-  observed: Int,
-  observed_is_upper_bound: z.boolean(),
-};
-/** A tree-wide budget reservation before a model_request failed. */
-// An own budget's owner is the envelope thread; only an ancestor's is named.
-export const BudgetExceededData: z.ZodDiscriminatedUnion<
-  [
-    Strict<BudgetShape & { scope: EnumOf<typeof OWN_SCOPES> }>,
-    Strict<
-      BudgetShape & { scope: Lit<"ancestor">; owner_thread_id: typeof ThreadId }
-    >,
-  ],
-  "scope"
-> = z.discriminatedUnion("scope", [
-  z.strictObject({ ...budgetShape, scope: z.enum(OWN_SCOPES) }),
+}> = withRule(
   z.strictObject({
-    ...budgetShape,
-    scope: z.literal("ancestor"),
-    owner_thread_id: ThreadId,
+    scope: z
+      .enum(BUDGET_SCOPES)
+      .describe(
+        "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id.",
+      ),
+    owner_thread_id: ThreadId.describe(
+      "Required exactly when scope is ancestor: the ancestor thread whose budget refused the reservation.",
+    ).optional(),
+    limit: z.enum(BUDGET_LIMITS),
+    limit_value: Int,
+    observed: Int,
+    observed_is_upper_bound: z
+      .boolean()
+      .describe(
+        "true when unknown usage was counted at its conservative upper bound.",
+      ),
   }),
-]);
-export const BudgetExceeded: EventSchema<
+  {
+    if: { properties: { scope: { const: "ancestor" } } },
+    then: { required: ["owner_thread_id"] },
+    else: { not: { required: ["owner_thread_id"] } },
+  },
+);
+export const BudgetExceeded: EventDef<
   "budget_exceeded",
   typeof BudgetExceededData,
   true
-> = event("budget_exceeded", true, Actor, BudgetExceededData);
+> = event({
+  type: "budget_exceeded",
+  critical: true,
+  description:
+    "A tree-wide budget reservation before a model_request failed. observed = settled usage of the whole tree under that budget plus the refused reservation. The run ends: pending calls close, then turn_completed{budget_exhausted}; no model_request follows until a new user_input.",
+  data: BudgetExceededData,
+});

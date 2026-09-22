@@ -45,8 +45,9 @@ const ERROR_CODES = [
   "writer_mismatch",
 ] as const;
 
-/** Pinned typed-error codes shared by both implementations. Add only; never rename. */
-export const ErrorCode: EnumOf<typeof ERROR_CODES> = z
-  .enum(ERROR_CODES)
-  .meta({ id: "ErrorCode" });
+export const ErrorCode: EnumOf<typeof ERROR_CODES> = z.enum(ERROR_CODES).meta({
+  id: "ErrorCode",
+  description:
+    "Pinned typed-error codes shared by both implementations. Add only; never rename after the first release.",
+});
 export type ErrorCode = z.infer<typeof ErrorCode>;

@@ -1,26 +1,11 @@
 import { z } from "zod";
-import { Actor, ActorWithPrincipal, PermissionMode } from "../common";
-import { type EventSchema, event } from "../envelope";
+import { ActorWithPrincipal, PermissionMode } from "../common";
+import { type EventDef, event, eventWithActor } from "../envelope";
 import { CallId, ChallengeId, EventId } from "../ids";
 import { JsonObject, Name, Sha256, TimeMs } from "../primitives";
 import type { EnumOf, Opt, Strict } from "../zod-types";
 
 // Tool calls and the decisions that gate them: permissions, hooks and approvals.
-
-/** A schema-validated call, durable before authorization and dispatch. */
-export const ToolCallData: Strict<{
-  call_id: typeof CallId;
-  name: typeof Name;
-  input: typeof JsonObject;
-  request_event_id: typeof EventId;
-}> = z.strictObject({
-  call_id: CallId,
-  name: Name,
-  input: JsonObject,
-  request_event_id: EventId,
-});
-export const ToolCall: EventSchema<"tool_call", typeof ToolCallData, true> =
-  event("tool_call", true, Actor, ToolCallData);
 
 const PERMISSION_DECISIONS = ["allow", "deny", "ask"] as const;
 const PERMISSION_SOURCES = [
@@ -32,27 +17,6 @@ const PERMISSION_SOURCES = [
   "protected_path",
   "thread_rule",
 ] as const;
-export const PermissionDecisionData: Strict<{
-  call_id: typeof CallId;
-  decision: EnumOf<typeof PERMISSION_DECISIONS>;
-  source: EnumOf<typeof PERMISSION_SOURCES>;
-  rule_id: Opt<z.ZodString>;
-  mode: Opt<typeof PermissionMode>;
-  reason: Opt<z.ZodString>;
-}> = z.strictObject({
-  call_id: CallId,
-  decision: z.enum(PERMISSION_DECISIONS),
-  source: z.enum(PERMISSION_SOURCES),
-  rule_id: z.string().optional(),
-  mode: PermissionMode.optional(),
-  reason: z.string().optional(),
-});
-export const PermissionDecision: EventSchema<
-  "permission_decision",
-  typeof PermissionDecisionData,
-  true
-> = event("permission_decision", true, Actor, PermissionDecisionData);
-
 const HOOKS = [
   "before_model",
   "after_model",
@@ -88,7 +52,68 @@ const HOOK_DECISIONS = [
   "failed",
   "redact",
 ] as const;
-/** A policy hook's decision, durable before any work it gates. Replay never re-runs the hook. */
+
+export const ApprovalBinding: Strict<{
+  challenge_id: typeof ChallengeId;
+  call_id: typeof CallId;
+  args_hash: typeof Sha256;
+  reason: Opt<z.ZodString>;
+}> = z
+  .strictObject({
+    challenge_id: ChallengeId,
+    call_id: CallId,
+    args_hash: Sha256,
+    reason: z.string().optional(),
+  })
+  .meta({ id: "ApprovalBinding" });
+
+export const ToolCallData: Strict<{
+  call_id: typeof CallId;
+  name: typeof Name;
+  input: typeof JsonObject;
+  request_event_id: typeof EventId;
+}> = z.strictObject({
+  call_id: CallId,
+  name: Name,
+  input: JsonObject,
+  request_event_id: EventId,
+});
+export const ToolCall: EventDef<"tool_call", typeof ToolCallData, true> = event(
+  {
+    type: "tool_call",
+    critical: true,
+    description:
+      "A schema-validated call, durable before authorization and dispatch. input is the parsed args exactly. Derived, not stored: args_hash = sha256(RFC 8785 of input); effect_class and dedup_window_ms from the pinned ToolSpec named name; effect key = <this event's branch_id>:<call_id>. request_event_id lets a streamed call be recorded before its model_response.",
+    data: ToolCallData,
+  },
+);
+
+export const PermissionDecisionData: Strict<{
+  call_id: typeof CallId;
+  decision: EnumOf<typeof PERMISSION_DECISIONS>;
+  source: EnumOf<typeof PERMISSION_SOURCES>;
+  rule_id: Opt<z.ZodString>;
+  mode: Opt<typeof PermissionMode>;
+  reason: Opt<z.ZodString>;
+}> = z.strictObject({
+  call_id: CallId,
+  decision: z.enum(PERMISSION_DECISIONS),
+  source: z.enum(PERMISSION_SOURCES),
+  rule_id: z.string().optional(),
+  mode: PermissionMode.optional(),
+  reason: z.string().optional(),
+});
+export const PermissionDecision: EventDef<
+  "permission_decision",
+  typeof PermissionDecisionData,
+  true
+> = event({
+  type: "permission_decision",
+  critical: true,
+  description: "Precedence is deny > ask > allow.",
+  data: PermissionDecisionData,
+});
+
 export const HookDecisionData: Strict<{
   extension: typeof Name;
   hook: EnumOf<typeof HOOKS>;
@@ -104,15 +129,22 @@ export const HookDecisionData: Strict<{
   reason: z.string().optional(),
   request_event_id: EventId.optional(),
   call_id: CallId.optional(),
-  input_event_id: EventId.optional(),
+  input_event_id: EventId.describe(
+    "before_input: the user_input or steer decided on. A deny or failed decision means that input renders nothing.",
+  ).optional(),
 });
-export const HookDecision: EventSchema<
+export const HookDecision: EventDef<
   "hook_decision",
   typeof HookDecisionData,
   true
-> = event("hook_decision", true, Actor, HookDecisionData);
+> = event({
+  type: "hook_decision",
+  critical: true,
+  description:
+    "A policy hook's decision, durable before any work it gates. Replay reads it and never re-runs the hook. failed means the hook threw or timed out: a gating hook's failure denies; an observation hook's failure changes nothing.",
+  data: HookDecisionData,
+});
 
-/** A single-use challenge bound to one invocation. */
 export const ApprovalRequestedData: Strict<{
   challenge_id: typeof ChallengeId;
   call_id: typeof CallId;
@@ -124,35 +156,40 @@ export const ApprovalRequestedData: Strict<{
   args_hash: Sha256,
   expires_at: TimeMs,
 });
-export const ApprovalRequested: EventSchema<
+export const ApprovalRequested: EventDef<
   "approval_requested",
   typeof ApprovalRequestedData,
   true
-> = event("approval_requested", true, Actor, ApprovalRequestedData);
+> = event({
+  type: "approval_requested",
+  critical: true,
+  description:
+    "A single-use challenge bound to one invocation. The full binding (tenant, installation, file hashes) lives in the approvals table; args_hash is recorded because it is what the approver is shown.",
+  data: ApprovalRequestedData,
+});
 
-export const ApprovalBinding: Strict<{
-  challenge_id: typeof ChallengeId;
-  call_id: typeof CallId;
-  args_hash: typeof Sha256;
-  reason: Opt<z.ZodString>;
-}> = z
-  .strictObject({
-    challenge_id: ChallengeId,
-    call_id: CallId,
-    args_hash: Sha256,
-    reason: z.string().optional(),
-  })
-  .meta({ id: "ApprovalBinding" });
-/** actor.principal is the approver. */
-export const ApprovalGranted: EventSchema<
+export const ApprovalGranted: EventDef<
   "approval_granted",
   typeof ApprovalBinding,
   true,
   typeof ActorWithPrincipal
-> = event("approval_granted", true, ActorWithPrincipal, ApprovalBinding);
-export const ApprovalDenied: EventSchema<
+> = eventWithActor({
+  type: "approval_granted",
+  critical: true,
+  description:
+    "actor.principal is the approver, checked against current approver policy at consumption. challenge_id, call_id and args_hash must match the open challenge; the branch is the envelope branch_id.",
+  data: ApprovalBinding,
+  actor: ActorWithPrincipal,
+});
+
+export const ApprovalDenied: EventDef<
   "approval_denied",
   typeof ApprovalBinding,
   true,
   typeof ActorWithPrincipal
-> = event("approval_denied", true, ActorWithPrincipal, ApprovalBinding);
+> = eventWithActor({
+  type: "approval_denied",
+  critical: true,
+  data: ApprovalBinding,
+  actor: ActorWithPrincipal,
+});

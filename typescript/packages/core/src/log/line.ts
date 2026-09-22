@@ -1,63 +1,42 @@
 import { z } from "zod";
-import { Actor } from "./common";
-import { type EnvelopeShape, envelopeShape, Head, Header } from "./envelope";
-import { EVENT_TYPES, KnownEvent } from "./events";
-import { JsonObject, PosInt } from "./primitives";
-import type { EnumOf, Strict } from "./zod-types";
+import { Envelope, Head, Header } from "./envelope";
+import { EVENT_FRAGMENTS, EVENT_TYPES } from "./events";
+import { withRule } from "./rules";
+import type { EnumOf, Lit } from "./zod-types";
 
-type UnknownShape<
-  T extends z.core.SomeType,
-  V extends z.core.SomeType,
-> = Strict<
-  EnvelopeShape & {
-    type: T;
-    type_version: V;
-    critical: z.ZodBoolean;
-    actor: typeof Actor;
-    data: typeof JsonObject;
-  }
->;
-
-// "Not a known (type, type_version)" is spelled positively so it survives z.toJSONSchema:
-// either the name is unknown, or the name is known at a version this schema does not have.
-const unknownName = new RegExp(
-  `^(?!(?:${EVENT_TYPES.join("|")})$)[a-z][a-z0-9_]{0,63}$`,
-);
+/** A `(type, type_version)` this schema version knows. */
+export const KnownTag: z.ZodObject<{
+  type: EnumOf<typeof EVENT_TYPES>;
+  type_version: Lit<1>;
+}> = z
+  .object({ type: z.enum(EVENT_TYPES), type_version: z.literal(1) })
+  .meta({ id: "KnownTag" });
 
 /** An envelope whose `(type, type_version)` this schema version does not know. */
-export const UnknownEvent: z.ZodUnion<
-  readonly [
-    UnknownShape<z.ZodString, typeof PosInt>,
-    UnknownShape<EnumOf<typeof EVENT_TYPES>, z.ZodInt>,
-  ]
-> = z
-  .union([
-    z.strictObject({
-      ...envelopeShape,
-      type: z.string().regex(unknownName),
-      type_version: PosInt,
-      critical: z.boolean(),
-      actor: Actor,
-      data: JsonObject,
-    }),
-    z.strictObject({
-      ...envelopeShape,
-      type: z.enum(EVENT_TYPES),
-      type_version: z.int().min(2).max(Number.MAX_SAFE_INTEGER),
-      critical: z.boolean(),
-      actor: Actor,
-      data: JsonObject,
-    }),
-  ])
-  .meta({ id: "UnknownEvent" });
+export const UnknownEvent: typeof Envelope = withRule(
+  Envelope,
+  { allOf: [{ not: { $ref: KnownTag } }] },
+  {
+    id: "UnknownEvent",
+    description:
+      "An envelope whose (type, type_version) this schema version does not know.",
+  },
+);
 export type UnknownEvent = z.infer<typeof UnknownEvent>;
 
-/** One canonical line of a branch: its header, an event, or the head checkpoint of an export. */
-export const LogLine: z.ZodUnion<
-  readonly [typeof Header, typeof Head, typeof KnownEvent, typeof UnknownEvent]
-> = z.union([Header, Head, KnownEvent, UnknownEvent]).meta({
+// The export's view of a known event: the Envelope plus exactly one `ev_<type>` def. It accepts
+// what KnownEvent parses; the parser uses KnownEvent, which is keyed on `type` and fully typed.
+const Event: z.ZodIntersection<
+  typeof Envelope,
+  z.ZodXor<readonly z.ZodType[]>
+> = z.intersection(Envelope, z.xor(EVENT_FRAGMENTS)).meta({ id: "Event" });
+
+/** One canonical line of a branch: the root of the exported schema. */
+export const LogLine: z.ZodXor<
+  readonly [typeof Header, typeof Head, typeof Event, typeof UnknownEvent]
+> = z.xor([Header, Head, Event, UnknownEvent]).meta({
+  id: "LogLine",
   title: "threads log line (format 1)",
   description:
-    "A Header, the Head checkpoint, a known event, or an unknown event. An unknown event is admissible only when critical is false.",
+    "One canonical line of a threads branch: a Header (a branch's first line), an event, or the Head checkpoint (the last line of an export). SQLite stores each line's exact bytes; a JSONL export is the same bytes, one per line. A line that matches UnknownEvent is schema-valid but only admissible when critical is false (see README).",
 });
-export type LogLine = z.infer<typeof LogLine>;

@@ -11,28 +11,32 @@ import type { Arr, EnumOf, Opt, Strict } from "./zod-types";
 // The resolved, secret-free runtime policy pinned by thread_started (ADRs 0019-0023).
 // Each section is absent (ADR defaults apply) or complete.
 
-/** Absolute tokens, or a fraction of the effective context window in permille (850 = 85%). */
-export const Threshold: z.ZodUnion<
+export const Threshold: z.ZodXor<
   readonly [Strict<{ tokens: typeof PosInt }>, Strict<{ permille: z.ZodInt }>]
 > = z
-  .union([
+  .xor([
     z.strictObject({ tokens: PosInt }),
     z.strictObject({ permille: z.int().min(1).max(1000) }),
   ])
-  .meta({ id: "Threshold" });
+  .meta({
+    id: "Threshold",
+    description:
+      "Absolute tokens, or a fraction of the effective context window in permille (850 = 85%). Integers only.",
+  });
 
-/** Nano-currency units per token. */
 export const Price: Strict<{
   input: typeof Int;
   output: typeof Int;
   cache_read: Opt<typeof Int>;
   cache_write: Opt<typeof Int>;
-}> = z.strictObject({
-  input: Int,
-  output: Int,
-  cache_read: Int.optional(),
-  cache_write: Int.optional(),
-});
+}> = z
+  .strictObject({
+    input: Int,
+    output: Int,
+    cache_read: Int.optional(),
+    cache_write: Int.optional(),
+  })
+  .describe("Nano-currency units per token (USD 3 per million tokens = 3000).");
 
 const BILLING_BOUNDS = ["context_window", "none"] as const;
 export const PolicyModel: Strict<{
@@ -47,7 +51,11 @@ export const PolicyModel: Strict<{
   name: NonEmpty,
   context_window: PosInt,
   max_output_tokens: PosInt,
-  input_billing_bound: z.enum(BILLING_BOUNDS),
+  input_billing_bound: z
+    .enum(BILLING_BOUNDS)
+    .describe(
+      "context_window: the adapter declares that billed input units (input plus cache reads and writes) per attempt never exceed the context window. none: no bound is known, so a cost budget can't be enforced for this model (setup refuses it unless on_unknown_usage is stop).",
+    ),
   price: Price.optional(),
 });
 
@@ -156,31 +164,32 @@ export const PermissionsPolicy: Strict<{
   protected_paths: Arr<typeof NonEmpty>;
   allow_bypass: z.ZodBoolean;
   plan_exit_mode: typeof PermissionMode;
-}> = z
-  .strictObject({
-    mode: PermissionMode,
-    allow: z.array(PermissionRule),
-    ask: z.array(PermissionRule),
-    deny: z.array(PermissionRule),
-    protected_paths: z.array(NonEmpty),
-    allow_bypass: z.boolean(),
-    plan_exit_mode: PermissionMode,
-  })
-  .meta({ id: "PermissionsPolicy" });
+}> = z.strictObject({
+  mode: PermissionMode,
+  allow: z.array(PermissionRule),
+  ask: z.array(PermissionRule),
+  deny: z.array(PermissionRule),
+  protected_paths: z.array(NonEmpty),
+  allow_bypass: z.boolean(),
+  plan_exit_mode: PermissionMode,
+});
 
 const OUTPUT_MODES = ["tool", "native"] as const;
-/** Structured final output. schema_sha256 is the RFC 8785 hash of schema. */
 export const OutputPolicy: Strict<{
   schema: typeof JsonObject;
   schema_sha256: typeof Sha256;
   mode: EnumOf<typeof OUTPUT_MODES>;
   max_retries: typeof Int;
-}> = z.strictObject({
-  schema: JsonObject,
-  schema_sha256: Sha256,
-  mode: z.enum(OUTPUT_MODES),
-  max_retries: Int,
-});
+}> = z
+  .strictObject({
+    schema: JsonObject,
+    schema_sha256: Sha256,
+    mode: z.enum(OUTPUT_MODES),
+    max_retries: Int,
+  })
+  .describe(
+    "Structured final output. schema_sha256 is the RFC 8785 hash of schema.",
+  );
 
 const ON_UNKNOWN_USAGE = ["upper_bound", "stop"] as const;
 export const Policy: Strict<{
@@ -196,7 +205,13 @@ export const Policy: Strict<{
   handoffs: Opt<Arr<typeof NonEmpty>>;
 }> = z
   .strictObject({
-    models: z.array(PolicyModel).min(1).optional(),
+    models: z
+      .array(PolicyModel)
+      .min(1)
+      .describe(
+        "Every model this thread may use (primary and fallbacks), with its window, output cap and price. settings_changed may only name a listed model.",
+      )
+      .optional(),
     currency: z
       .string()
       .regex(/^[A-Z]{3}$/)
@@ -204,11 +219,22 @@ export const Policy: Strict<{
     retry: RetryPolicy.optional(),
     fallback: z.array(ModelSettings).optional(),
     context: ContextPolicy.optional(),
-    budget: Budget.optional(),
+    budget: Budget.describe(
+      "Thread-level budget. A run budget rides on the user_input that starts the run.",
+    ).optional(),
     on_unknown_usage: z.enum(ON_UNKNOWN_USAGE).optional(),
     permissions: PermissionsPolicy.optional(),
     output: OutputPolicy.optional(),
-    handoffs: z.array(NonEmpty).optional(),
+    handoffs: z
+      .array(NonEmpty)
+      .describe(
+        "Agent names this agent may hand the conversation to.",
+      )
+      .optional(),
   })
-  .meta({ id: "Policy" });
+  .meta({
+    id: "Policy",
+    description:
+      "The resolved, secret-free runtime policy pinned at thread start (covered by config_hash, not model-visible). Each section is absent (the ADR defaults apply) or complete. ADRs 0019-0023.",
+  });
 export type Policy = z.infer<typeof Policy>;

@@ -263,10 +263,6 @@ function tool(extra: Record<string, unknown>): unknown {
 }
 
 test("the event union covers exactly the pinned type names", () => {
-  const [tagged, ...paired] = KnownEvent.options;
-  const names = [
-    ...tagged.options.map((o) => o.shape.type.value),
-    ...paired.map((u) => u.options[0].shape.type.value),
-  ];
-  expect(names.toSorted()).toEqual([...EVENT_TYPES].toSorted());
+  const names = KnownEvent.options.map((o) => o.shape.type.value);
+  expect(names).toEqual([...EVENT_TYPES]);
 });

@@ -1,27 +1,60 @@
 import { z } from "zod";
 import { Actor, ActorWithPrincipal, ArtifactRef } from "../common";
 import { ResultPart } from "../content";
-import { type EventSchema, event } from "../envelope";
+import { type EventDef, event, eventWithActor } from "../envelope";
 import { CallId } from "../ids";
 import { PosInt } from "../primitives";
-import type { Arr, EnumOf, Lit, Opt, Strict } from "../zod-types";
-import { Completeness } from "./model";
+import { withRule } from "../rules";
+import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
 
 // Side effects (begin, commit, unknown, resolved) and tool results.
 
-/** Durable before dispatch. From then on the effect is potentially sent until settled. */
+const UNKNOWN_REASONS = [
+  "crash_after_begin",
+  "timeout",
+  "transport_error",
+] as const;
+const RESOLVED_OUTCOMES = [
+  "confirmed_success",
+  "safe_to_retry",
+  "not_sent",
+  "interrupted",
+  "assume_done",
+  "assume_not_done",
+] as const;
+const RESOLVERS = [
+  "provider_dedup",
+  "reconcile",
+  "adapter",
+  "sandbox_terminated",
+  "human",
+] as const;
+const COMPLETENESS = ["complete", "partial"] as const;
+const RESULT_ORIGINS = [
+  "executed",
+  "materialized_from_commit",
+  "denied",
+  "not_executed",
+  "interrupted",
+  "deferred",
+  "answered",
+] as const;
+
 export const EffectBeginData: Strict<{
   call_id: typeof CallId;
   attempt: typeof PosInt;
-}> = z.strictObject({
-  call_id: CallId,
-  attempt: PosInt,
-});
-export const EffectBegin: EventSchema<
+}> = z.strictObject({ call_id: CallId, attempt: PosInt });
+export const EffectBegin: EventDef<
   "effect_begin",
   typeof EffectBeginData,
   true
-> = event("effect_begin", true, Actor, EffectBeginData);
+> = event({
+  type: "effect_begin",
+  critical: true,
+  description:
+    "Durable before dispatch. From the moment dispatch is accepted the effect is potentially sent until an effect_commit or effect_resolved settles it. A re-dispatch after safe_to_retry, not_sent or assume_not_done reuses the derived effect key with attempt+1.",
+  data: EffectBeginData,
+});
 
 export const EffectCommitData: Strict<{
   call_id: typeof CallId;
@@ -32,148 +65,142 @@ export const EffectCommitData: Strict<{
   result_ref: ArtifactRef,
   provider_receipt: z.string().optional(),
 });
-export const EffectCommit: EventSchema<
+export const EffectCommit: EventDef<
   "effect_commit",
   typeof EffectCommitData,
   true
-> = event("effect_commit", true, Actor, EffectCommitData);
+> = event({ type: "effect_commit", critical: true, data: EffectCommitData });
 
-const UNKNOWN_REASONS = [
-  "crash_after_begin",
-  "timeout",
-  "transport_error",
-] as const;
 export const EffectUnknownData: Strict<{
   call_id: typeof CallId;
   reason: EnumOf<typeof UNKNOWN_REASONS>;
 }> = z.strictObject({ call_id: CallId, reason: z.enum(UNKNOWN_REASONS) });
-export const EffectUnknown: EventSchema<
+export const EffectUnknown: EventDef<
   "effect_unknown",
   typeof EffectUnknownData,
   true
-> = event("effect_unknown", true, Actor, EffectUnknownData);
+> = event({
+  type: "effect_unknown",
+  critical: true,
+  description:
+    "The outcome of a begun attempt is uncertain. Timeouts and transport errors after dispatch land here too, never in a plain error result.",
+  data: EffectUnknownData,
+});
 
-// Each outcome may only be settled by the parties that can prove it (C3).
-type Resolved<O extends z.core.SomeType, B extends z.core.SomeType> = Strict<{
+export const EffectResolvedData: Strict<{
   call_id: typeof CallId;
-  outcome: O;
-  by: B;
+  outcome: EnumOf<typeof RESOLVED_OUTCOMES>;
+  by: EnumOf<typeof RESOLVERS>;
   result_ref: Opt<typeof ArtifactRef>;
-}>;
-const BY_SUCCESS = ["reconcile", "adapter"] as const;
-const BY_RETRY = ["provider_dedup", "reconcile"] as const;
-const ASSUMED = ["assume_done", "assume_not_done"] as const;
-export const EffectResolvedData: z.ZodDiscriminatedUnion<
-  [
-    Strict<{
-      call_id: typeof CallId;
-      outcome: Lit<"confirmed_success">;
-      by: EnumOf<typeof BY_SUCCESS>;
-      result_ref: typeof ArtifactRef;
-    }>,
-    Resolved<Lit<"safe_to_retry">, EnumOf<typeof BY_RETRY>>,
-    Resolved<Lit<"not_sent">, Lit<"adapter">>,
-    Resolved<Lit<"interrupted">, Lit<"sandbox_terminated">>,
-    Resolved<EnumOf<typeof ASSUMED>, Lit<"human">>,
-  ],
-  "outcome"
-> = z.discriminatedUnion("outcome", [
+}> = withRule(
   z.strictObject({
     call_id: CallId,
-    outcome: z.literal("confirmed_success"),
-    by: z.enum(BY_SUCCESS),
-    result_ref: ArtifactRef,
-  }),
-  z.strictObject({
-    call_id: CallId,
-    outcome: z.literal("safe_to_retry"),
-    by: z.enum(BY_RETRY),
+    outcome: z.enum(RESOLVED_OUTCOMES),
+    by: z.enum(RESOLVERS),
     result_ref: ArtifactRef.optional(),
   }),
-  z.strictObject({
-    call_id: CallId,
-    outcome: z.literal("not_sent"),
-    by: z.literal("adapter"),
-    result_ref: ArtifactRef.optional(),
-  }),
-  z.strictObject({
-    call_id: CallId,
-    outcome: z.literal("interrupted"),
-    by: z.literal("sandbox_terminated"),
-    result_ref: ArtifactRef.optional(),
-  }),
-  z.strictObject({
-    call_id: CallId,
-    outcome: z.enum(ASSUMED),
-    by: z.literal("human"),
-    result_ref: ArtifactRef.optional(),
-  }),
-]);
-export const EffectResolved: EventSchema<
+  {
+    allOf: [
+      {
+        if: { properties: { outcome: { const: "confirmed_success" } } },
+        then: {
+          required: ["result_ref"],
+          properties: { by: { enum: ["reconcile", "adapter"] } },
+        },
+      },
+      {
+        if: { properties: { outcome: { const: "safe_to_retry" } } },
+        then: { properties: { by: { enum: ["provider_dedup", "reconcile"] } } },
+      },
+      {
+        if: { properties: { outcome: { const: "not_sent" } } },
+        then: { properties: { by: { const: "adapter" } } },
+      },
+      {
+        if: { properties: { outcome: { const: "interrupted" } } },
+        then: { properties: { by: { const: "sandbox_terminated" } } },
+      },
+      {
+        if: {
+          properties: { outcome: { enum: ["assume_done", "assume_not_done"] } },
+        },
+        then: { properties: { by: { const: "human" } } },
+      },
+    ],
+  },
+);
+export const EffectResolved: EventDef<
   "effect_resolved",
   typeof EffectResolvedData,
   true
-> = event("effect_resolved", true, Actor, EffectResolvedData);
+> = event({
+  type: "effect_resolved",
+  critical: true,
+  description:
+    "Settles an unknown effect (C3). confirmed_success: the effect happened (final lookup or provider receipt). safe_to_retry: a re-send under the same key is deduplicated by the provider inside its window (by provider_dedup), or a lookup whose contract is final proved absence (by reconcile). not_sent: the adapter proves the request never left, or the provider confirmed cancellation with finality. interrupted: a sandbox_local process group was confirmed terminated. assume_*: an authorized human decision. An effect that stays unknown is parked, not resolved.",
+  data: EffectResolvedData,
+});
 
-type ResultShape = {
+export const ToolResultData: Strict<{
   call_id: typeof CallId;
   is_error: z.ZodBoolean;
-  completeness: typeof Completeness;
+  completeness: EnumOf<typeof COMPLETENESS>;
   preview: z.ZodString;
   content: Opt<Arr<typeof ResultPart>>;
   ref: Opt<typeof ArtifactRef>;
-};
-const resultShape: ResultShape = {
+  origin: EnumOf<typeof RESULT_ORIGINS>;
+}> = z.strictObject({
   call_id: CallId,
   is_error: z.boolean(),
-  completeness: Completeness,
+  completeness: z.enum(COMPLETENESS),
   preview: z.string(),
   content: z.array(ResultPart).min(1).optional(),
   ref: ArtifactRef.optional(),
-};
-const EXECUTED_ORIGINS = [
-  "executed",
-  "materialized_from_commit",
-  "denied",
-  "not_executed",
-  "interrupted",
-  "deferred",
-] as const;
-// An answered result is an ask_user answer and carries the answering principal.
-export const ToolResult: z.ZodUnion<
-  readonly [
-    EventSchema<
-      "tool_result",
-      Strict<ResultShape & { origin: Lit<"answered"> }>,
-      true,
-      typeof ActorWithPrincipal
-    >,
-    EventSchema<
-      "tool_result",
-      Strict<ResultShape & { origin: EnumOf<typeof EXECUTED_ORIGINS> }>,
-      true
-    >,
-  ]
-> = z.union([
-  event(
-    "tool_result",
-    true,
-    ActorWithPrincipal,
-    z.strictObject({ ...resultShape, origin: z.literal("answered") }),
-  ),
-  event(
-    "tool_result",
-    true,
-    Actor,
-    z.strictObject({ ...resultShape, origin: z.enum(EXECUTED_ORIGINS) }),
-  ),
-]);
+  origin: z.enum(RESULT_ORIGINS),
+});
+export const ToolResult: EventDef<
+  "tool_result",
+  typeof ToolResultData,
+  true,
+  typeof Actor
+> = eventWithActor({
+  type: "tool_result",
+  critical: true,
+  description:
+    "Without content, preview is exactly what the model sees (one text part). With content, the model sees exactly those ordered parts and preview is a plain-text rendering for logs and channels. ref holds the full output when it exceeds the spill threshold. origin deferred is a placeholder for a non-blocking call whose real result arrives later as tool_result_late. origin answered is an ask_user answer and carries the answering principal.",
+  data: ToolResultData,
+  actor: Actor,
+  rule: {
+    if: {
+      properties: { data: { properties: { origin: { const: "answered" } } } },
+    },
+    then: { properties: { actor: { $ref: ActorWithPrincipal } } },
+  },
+});
 
-/** The real result of a non-blocking call, after its deferred placeholder. */
-export const ToolResultLateData: Strict<ResultShape> =
-  z.strictObject(resultShape);
-export const ToolResultLate: EventSchema<
+export const ToolResultLateData: Strict<{
+  call_id: typeof CallId;
+  is_error: z.ZodBoolean;
+  completeness: EnumOf<typeof COMPLETENESS>;
+  preview: z.ZodString;
+  content: Opt<Arr<typeof ResultPart>>;
+  ref: Opt<typeof ArtifactRef>;
+}> = z.strictObject({
+  call_id: CallId,
+  is_error: z.boolean(),
+  completeness: z.enum(COMPLETENESS),
+  preview: z.string(),
+  content: z.array(ResultPart).min(1).optional(),
+  ref: ArtifactRef.optional(),
+});
+export const ToolResultLate: EventDef<
   "tool_result_late",
   typeof ToolResultLateData,
   true
-> = event("tool_result_late", true, Actor, ToolResultLateData);
+> = event({
+  type: "tool_result_late",
+  critical: true,
+  description:
+    "Reserved: the real result of a non-blocking call, appended after its deferred placeholder and possibly after later turns. History is never rewritten; the placeholder stays.",
+  data: ToolResultLateData,
+});

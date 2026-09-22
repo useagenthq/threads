@@ -1,15 +1,12 @@
 import { z } from "zod";
-import { Actor, ActorWithPrincipal, Budget } from "../common";
-import { type EventSchema, event } from "../envelope";
+import { ActorWithPrincipal, ArtifactRef, Budget } from "../common";
+import { InputPart } from "../content";
+import { type EventDef, event, eventWithActor } from "../envelope";
 import { CallId, EventId, OccurrenceId } from "../ids";
 import { Name, NonEmpty, TimeMs } from "../primitives";
-import type { Arr, EnumOf, Lit, Opt, Strict } from "../zod-types";
-import {
-  type TextOrContent,
-  type TextOrRef,
-  textOrContent,
-  textOrRef,
-} from "./one-of";
+import { withRule } from "../rules";
+import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
+import { TextOrContent, TextOrRef } from "./one-of";
 
 // Everything that enters a thread from outside the model: user input, context, channels, schedules.
 
@@ -21,148 +18,227 @@ const INPUT_SOURCES = [
   "parent_agent",
   "handoff",
 ] as const;
-type UserInputShape = {
+const STEER_SOURCES = ["api", "cli", "channel", "parent_agent"] as const;
+const INJECTED_SOURCES = [
+  "memory",
+  "knowledge",
+  "skill",
+  "hook",
+  "attachment",
+  "recovery",
+  "todo",
+  "mode",
+  "output_style",
+  "agent",
+  "handoff",
+] as const;
+const TRUST_LEVELS = ["untrusted_reference", "trusted_instruction"] as const;
+const SKIP_REASONS = ["missed", "overlap"] as const;
+
+export const UserInputData: Strict<{
   source: EnumOf<typeof INPUT_SOURCES>;
+  text: Opt<z.ZodString>;
+  content: Opt<Arr<typeof InputPart>>;
   delivery_event_id: Opt<typeof EventId>;
   budget: Opt<typeof Budget>;
-};
-export const UserInputData: TextOrContent<UserInputShape> = textOrContent({
-  source: z.enum(INPUT_SOURCES),
-  delivery_event_id: EventId.optional(),
-  budget: Budget.optional(),
-});
-/** Opens a turn. actor.principal is the verified sender. */
-export const UserInput: EventSchema<
+}> = withRule(
+  z.strictObject({
+    source: z.enum(INPUT_SOURCES),
+    text: z.string().optional(),
+    content: z.array(InputPart).min(1).optional(),
+    delivery_event_id: EventId.describe(
+      "The channel_delivery or schedule_fired event this input came from.",
+    ).optional(),
+    budget: Budget.describe(
+      "The budget of the run this input starts.",
+    ).optional(),
+  }),
+  { allOf: [{ $ref: TextOrContent }] },
+);
+export const UserInput: EventDef<
   "user_input",
   typeof UserInputData,
   true,
   typeof ActorWithPrincipal
-> = event("user_input", true, ActorWithPrincipal, UserInputData);
-
-const STEER_SOURCES = ["api", "cli", "channel", "parent_agent"] as const;
-type SteerShape = {
-  source: EnumOf<typeof STEER_SOURCES>;
-  delivery_event_id: Opt<typeof EventId>;
-};
-export const SteerData: TextOrContent<SteerShape> = textOrContent({
-  source: z.enum(STEER_SOURCES),
-  delivery_event_id: EventId.optional(),
+> = eventWithActor({
+  type: "user_input",
+  critical: true,
+  description: "Opens a turn. actor.principal is the verified sender.",
+  data: UserInputData,
+  actor: ActorWithPrincipal,
 });
-/** Input that arrives while a turn is open. It does not open a turn. */
-export const Steer: EventSchema<
+
+export const SteerData: Strict<{
+  source: EnumOf<typeof STEER_SOURCES>;
+  text: Opt<z.ZodString>;
+  content: Opt<Arr<typeof InputPart>>;
+  delivery_event_id: Opt<typeof EventId>;
+}> = withRule(
+  z.strictObject({
+    source: z.enum(STEER_SOURCES),
+    text: z.string().optional(),
+    content: z.array(InputPart).min(1).optional(),
+    delivery_event_id: EventId.optional(),
+  }),
+  { allOf: [{ $ref: TextOrContent }] },
+);
+export const Steer: EventDef<
   "steer",
   typeof SteerData,
   true,
   typeof ActorWithPrincipal
-> = event("steer", true, ActorWithPrincipal, SteerData);
-
-// These sources are always untrusted reference, never instructions (framework invariant 6).
-const UNTRUSTED_SOURCES = [
-  "memory",
-  "knowledge",
-  "attachment",
-  "todo",
-  "agent",
-  "handoff",
-] as const;
-const OTHER_SOURCES = [
-  "skill",
-  "hook",
-  "recovery",
-  "mode",
-  "output_style",
-] as const;
-const TRUST_LEVELS = ["untrusted_reference", "trusted_instruction"] as const;
-export const Origin: Strict<{
-  id: typeof NonEmpty;
-  version: Opt<z.ZodString>;
-  location: Opt<z.ZodString>;
-}> = z.strictObject({
-  id: NonEmpty,
-  version: z.string().optional(),
-  location: z.string().optional(),
+> = eventWithActor({
+  type: "steer",
+  critical: true,
+  description:
+    "Reserved control event: new user input that arrives while a turn is open. It does not open a turn; it renders as a user line at the next model request and may preempt an in-flight model attempt (that attempt is then model_attempt_abandoned{reason: steered}).",
+  data: SteerData,
+  actor: ActorWithPrincipal,
 });
-type UntrustedShape = {
-  source: EnumOf<typeof UNTRUSTED_SOURCES>;
-  trust: Lit<"untrusted_reference">;
-  origin: typeof Origin;
-};
-type OtherShape = {
-  source: EnumOf<typeof OTHER_SOURCES>;
+
+// Recalled context is always untrusted reference, never instructions (framework invariant 6).
+export const InjectedData: Strict<{
+  source: EnumOf<typeof INJECTED_SOURCES>;
   trust: EnumOf<typeof TRUST_LEVELS>;
-  origin: typeof Origin;
-};
-export const InjectedData: z.ZodUnion<
-  readonly [TextOrRef<UntrustedShape>, TextOrRef<OtherShape>]
-> = z.union([
-  textOrRef({
-    source: z.enum(UNTRUSTED_SOURCES),
-    trust: z.literal("untrusted_reference"),
-    origin: Origin,
-  }),
-  textOrRef({
-    source: z.enum(OTHER_SOURCES),
+  origin: Strict<{
+    id: typeof NonEmpty;
+    version: Opt<z.ZodString>;
+    location: Opt<z.ZodString>;
+  }>;
+  text: Opt<z.ZodString>;
+  ref: Opt<typeof ArtifactRef>;
+}> = withRule(
+  z.strictObject({
+    source: z.enum(INJECTED_SOURCES),
     trust: z.enum(TRUST_LEVELS),
-    origin: Origin,
+    origin: z.strictObject({
+      id: NonEmpty,
+      version: z.string().optional(),
+      location: z.string().optional(),
+    }),
+    text: z.string().optional(),
+    ref: ArtifactRef.optional(),
   }),
-]);
-export const Injected: EventSchema<"injected", typeof InjectedData, true> =
-  event("injected", true, Actor, InjectedData);
+  {
+    allOf: [
+      { $ref: TextOrRef },
+      {
+        if: {
+          properties: {
+            source: {
+              enum: [
+                "memory",
+                "knowledge",
+                "attachment",
+                "todo",
+                "agent",
+                "handoff",
+              ],
+            },
+          },
+        },
+        then: { properties: { trust: { const: "untrusted_reference" } } },
+      },
+    ],
+  },
+);
+export const Injected: EventDef<"injected", typeof InjectedData, true> = event({
+  type: "injected",
+  critical: true,
+  description:
+    "Model-visible context not typed by the user. memory, knowledge, attachment, todo (the agent's own list), agent (child or teammate output) and handoff (forwarded history) are always untrusted_reference.",
+  data: InjectedData,
+});
 
 export const HeartbeatData: Strict<{ running_call_ids: Arr<typeof CallId> }> =
-  z.strictObject({
-    running_call_ids: z.array(CallId),
+  z.strictObject({ running_call_ids: z.array(CallId) });
+export const Heartbeat: EventDef<"heartbeat", typeof HeartbeatData, true> =
+  event({
+    type: "heartbeat",
+    critical: true,
+    description:
+      "Reserved control event: wakes a model turn while only non-blocking tool calls are pending. Renders as a user line listing the running calls.",
+    data: HeartbeatData,
   });
-export const Heartbeat: EventSchema<"heartbeat", typeof HeartbeatData, true> =
-  event("heartbeat", true, Actor, HeartbeatData);
 
-type ChannelShape = {
+export const ChannelDeliveryData: Strict<{
   channel: typeof Name;
   installation: typeof NonEmpty;
   conversation: typeof NonEmpty;
   delivery_id: typeof NonEmpty;
   item_key: typeof NonEmpty;
-};
-export const ChannelDeliveryData: TextOrRef<ChannelShape> = textOrRef({
-  channel: Name,
-  installation: NonEmpty,
-  conversation: NonEmpty,
-  delivery_id: NonEmpty,
-  item_key: NonEmpty,
-});
-export const ChannelDelivery: EventSchema<
+  text: Opt<z.ZodString>;
+  ref: Opt<typeof ArtifactRef>;
+}> = withRule(
+  z.strictObject({
+    channel: Name,
+    installation: NonEmpty,
+    conversation: NonEmpty,
+    delivery_id: NonEmpty,
+    item_key: NonEmpty,
+    text: z.string().optional(),
+    ref: ArtifactRef.optional(),
+  }),
+  { allOf: [{ $ref: TextOrRef }] },
+);
+export const ChannelDelivery: EventDef<
   "channel_delivery",
   typeof ChannelDeliveryData,
   true,
   typeof ActorWithPrincipal
-> = event("channel_delivery", true, ActorWithPrincipal, ChannelDeliveryData);
+> = eventWithActor({
+  type: "channel_delivery",
+  critical: true,
+  description:
+    "One inbound item, appended when the run consumes it from the inbox. The inbox row (unique per item_key) was durable before the webhook response. item_key is the provider's per-item id, or <delivery_id>#<index> for batches without one. actor.principal is the mapped sender.",
+  data: ChannelDeliveryData,
+  actor: ActorWithPrincipal,
+});
 
-type OccurrenceShape = {
+export const ScheduleFiredData: Strict<{
   schedule_id: typeof NonEmpty;
   occurrence_id: typeof OccurrenceId;
   scheduled_for: typeof TimeMs;
   timezone: typeof NonEmpty;
-};
-const occurrenceShape: OccurrenceShape = {
+}> = z.strictObject({
+  schedule_id: NonEmpty,
+  occurrence_id: OccurrenceId,
+  scheduled_for: TimeMs,
+  timezone: NonEmpty.describe("IANA zone; UTC when the schedule omits one."),
+});
+export const ScheduleFired: EventDef<
+  "schedule_fired",
+  typeof ScheduleFiredData,
+  true
+> = event({
+  type: "schedule_fired",
+  critical: true,
+  description:
+    "occurrence_id is (schedule_id, scheduled instant UTC), claimed atomically in schedule_occurrences before this event is appended.",
+  data: ScheduleFiredData,
+});
+
+export const ScheduleSkippedData: Strict<{
+  schedule_id: typeof NonEmpty;
+  occurrence_id: typeof OccurrenceId;
+  scheduled_for: typeof TimeMs;
+  timezone: typeof NonEmpty;
+  reason: EnumOf<typeof SKIP_REASONS>;
+}> = z.strictObject({
   schedule_id: NonEmpty,
   occurrence_id: OccurrenceId,
   scheduled_for: TimeMs,
   timezone: NonEmpty,
-};
-export const ScheduleFiredData: Strict<OccurrenceShape> =
-  z.strictObject(occurrenceShape);
-export const ScheduleFired: EventSchema<
-  "schedule_fired",
-  typeof ScheduleFiredData,
-  true
-> = event("schedule_fired", true, Actor, ScheduleFiredData);
-
-const SKIP_REASONS = ["missed", "overlap"] as const;
-export const ScheduleSkippedData: Strict<
-  OccurrenceShape & { reason: EnumOf<typeof SKIP_REASONS> }
-> = z.strictObject({ ...occurrenceShape, reason: z.enum(SKIP_REASONS) });
-export const ScheduleSkipped: EventSchema<
+  reason: z.enum(SKIP_REASONS),
+});
+export const ScheduleSkipped: EventDef<
   "schedule_skipped",
   typeof ScheduleSkippedData,
   false
-> = event("schedule_skipped", false, Actor, ScheduleSkippedData);
+> = event({
+  type: "schedule_skipped",
+  critical: false,
+  description:
+    "An occurrence that was claimed but not run. Skipping it cannot change reduce or render output.",
+  data: ScheduleSkippedData,
+});

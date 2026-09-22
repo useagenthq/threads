@@ -1,38 +1,22 @@
 import { z } from "zod";
-import { ArtifactRef } from "../common";
-import { InputPart } from "../content";
-import type { Arr, Strict } from "../zod-types";
+import { withRule } from "../rules";
 
-// "Exactly one of two keys" as a union of two strict objects: each branch forbids the other key.
+// "Exactly one of two keys". The data object lists both keys as optional and adds one of these.
 
-export type TextOrRef<S extends z.core.$ZodLooseShape> = z.ZodUnion<
-  readonly [
-    Strict<S & { text: z.ZodString }>,
-    Strict<S & { ref: typeof ArtifactRef }>,
-  ]
->;
+export const TextOrRef: z.ZodUnknown = withRule(
+  z.unknown(),
+  { oneOf: [{ required: ["text"] }, { required: ["ref"] }] },
+  {
+    id: "TextOrRef",
+    description: "Exactly one of inline text or an artifact ref.",
+  },
+);
 
-export function textOrRef<S extends z.core.$ZodLooseShape>(
-  shape: S,
-): TextOrRef<S> {
-  return z.union([
-    z.strictObject({ ...shape, text: z.string() }),
-    z.strictObject({ ...shape, ref: ArtifactRef }),
-  ]);
-}
-
-export type TextOrContent<S extends z.core.$ZodLooseShape> = z.ZodUnion<
-  readonly [
-    Strict<S & { text: z.ZodString }>,
-    Strict<S & { content: Arr<typeof InputPart> }>,
-  ]
->;
-
-export function textOrContent<S extends z.core.$ZodLooseShape>(
-  shape: S,
-): TextOrContent<S> {
-  return z.union([
-    z.strictObject({ ...shape, text: z.string() }),
-    z.strictObject({ ...shape, content: z.array(InputPart).min(1) }),
-  ]);
-}
+export const TextOrContent: z.ZodUnknown = withRule(
+  z.unknown(),
+  { oneOf: [{ required: ["text"] }, { required: ["content"] }] },
+  {
+    id: "TextOrContent",
+    description: "Exactly one of plain text or ordered input parts.",
+  },
+);
