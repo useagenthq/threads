@@ -1,0 +1,9 @@
+{
+  "name": "header-format-unknown",
+  "family": "log",
+  "kind": "reduce",
+  "description": "The header's format is not threads.log: invalid_line, not unsupported_format.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "head-format-version-zero",
+  "family": "log",
+  "kind": "reduce",
+  "description": "The head line's format_version is zero. A known format with an integer format_version above 1 is unsupported_format (the reader is too old, not corruption); a missing, non-integer or non-positive version is invalid_line. This is checked before the line's schema.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

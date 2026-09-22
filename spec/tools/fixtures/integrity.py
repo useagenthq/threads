@@ -13,6 +13,7 @@ from .pieces import (
     base_simple,
     case,
     negative,
+    read_turn,
     snapshot,
     started,
     user,
@@ -23,7 +24,55 @@ if TYPE_CHECKING:
     import pathlib
 
 
+FORMAT_VERSION = b',"format_version":1'
+# (name suffix, replacement bytes, expected code). Admission reads format and format_version
+# before the strict schema: a newer integer version means a newer writer, anything else is junk.
+VERSIONS = (
+    ("2", b',"format_version":2', "unsupported_format"),
+    ("missing", b"", "invalid_line"),
+    ("string", b',"format_version":"1"', "invalid_line"),
+    ("fraction", b',"format_version":1.5', "invalid_line"),
+    ("zero", b',"format_version":0', "invalid_line"),
+)
+
+
+def _admission(root: pathlib.Path) -> None:
+    for suffix, version, code in VERSIONS:
+        for line in ("header", "head"):
+            log = Log()
+            if line == "header":
+                log.lines[0] = log.lines[0].replace(FORMAT_VERSION, version)
+            started(log, [READ_FILE])
+            read_turn(log)
+            head = log.head()
+            if line == "head":
+                head = head.replace(FORMAT_VERSION, version)
+            seq = 0 if line == "header" else log.seq
+            negative(
+                root,
+                f"{line}-format-version-{suffix}",
+                f"The {line} line's format_version is {suffix}. A known format with an integer "
+                "format_version above 1 is unsupported_format (the reader is too old, not "
+                "corruption); a missing, non-integer or non-positive version is invalid_line. "
+                "This is checked before the line's schema.",
+                log,
+                (code, seq, log.body() + head + b"\n"),
+            )
+    log = Log()
+    log.lines[0] = log.lines[0].replace(b'"format":"threads.log"', b'"format":"threads.other"')
+    started(log, [READ_FILE])
+    read_turn(log)
+    negative(
+        root,
+        "header-format-unknown",
+        "The header's format is not threads.log: invalid_line, not unsupported_format.",
+        log,
+        ("invalid_line", 0),
+    )
+
+
 def build(root: pathlib.Path) -> None:
+    _admission(root)
     # reduce-simple-run
     log = base_simple()
     write_case(

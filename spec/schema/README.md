@@ -50,6 +50,7 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
 6. **Pinned names.** Event `type` names, every enum literal and every `ErrorCode` are frozen by a golden test in both languages. Add only. Never update the pins in a rename PR.
 7. **Header** (a branch's first line): `{format: "threads.log", format_version: 1, thread_id, branch_id, created_at, writer: {impl, version}}`. It is not an event: no `seq`, no `prev_hash`. Every branch, root or child, has its own header. `writer` pins the only implementation and major version that may append.
 8. **Head checkpoint** (the last line of every export): `{format: "threads.head", format_version: 1, branch_id, seq, hash}`.
+   - **Format admission** (header and head lines), checked before the line's schema: if `format` is `threads.log` or `threads.head` and `format_version` is an integer greater than 1, the error is `unsupported_format`: a newer writer, not corruption. A missing `format_version`, a non-integer (`"1"`, `1.5`), zero or a negative number, or an unknown `format` string is `invalid_line`. The error `seq` is 0 for the header and the checkpoint's `seq` for the head (`header-format-version-*`, `head-format-version-*`, `header-format-unknown`).
 9. **Envelope** (every event):
 
    | Field | Rule |

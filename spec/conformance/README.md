@@ -99,7 +99,7 @@ Unknown non-critical events are skipped by every rule except `head`.
 Each runner gets a fresh temp directory with a copy of the case, a fresh store, the injected clock, a `ScriptedModel`, a `ScriptedSandbox` and, for `stub`, the stub gateway. Tool calls the runner creates are authorized by a fixed conformance policy: `permission_decision{decision: allow, source: policy, rule_id: conformance_allow}`.
 
 **`reduce`**
-1. Import the log **read-only**: UTF-8 and JSON per line, header, envelope, `seq`, `prev_hash`, fork links, the critical rule, the data schema, `validate_next`, then the head checkpoint.
+1. Import the log **read-only**: UTF-8 and JSON per line, format admission of the header and head lines (`unsupported_format` or `invalid_line`, schema README wire rule 8), header, envelope, `seq`, `prev_hash`, fork links, the critical rule, the data schema, `validate_next`, then the head checkpoint.
 2. Reduce.
 3. Compare `state`, or `error`. The input file is byte-unchanged.
 

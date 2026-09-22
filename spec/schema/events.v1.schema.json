@@ -516,7 +516,7 @@
     },
 
     "Header": {
-      "description": "First line of every branch (root or child). Not an event: no seq, no prev_hash. The branch's first event has prev_hash = sha256 of this line. A child branch has its own header; its parent link is the fork event that follows it.",
+      "description": "First line of every branch (root or child). Not an event: no seq, no prev_hash. Readers admit format and format_version before this schema: an integer format_version above 1 is unsupported_format, any other bad version is invalid_line (README wire rule 8). The branch's first event has prev_hash = sha256 of this line. A child branch has its own header; its parent link is the fork event that follows it.",
       "type": "object",
       "additionalProperties": false,
       "required": ["format", "format_version", "thread_id", "branch_id", "created_at", "writer"],
@@ -540,7 +540,7 @@
     },
 
     "Head": {
-      "description": "Committed head checkpoint. Stored per branch in SQLite (updated in the append transaction) and written as the last line of every export. hash is sha256 of the branch's last line (the header when seq is 0). Detects tail edits and suffix removal against the checkpoint; it is not a signature.",
+      "description": "Admission as for Header (README wire rule 8). Committed head checkpoint. Stored per branch in SQLite (updated in the append transaction) and written as the last line of every export. hash is sha256 of the branch's last line (the header when seq is 0). Detects tail edits and suffix removal against the checkpoint; it is not a signature.",
       "type": "object",
       "additionalProperties": false,
       "required": ["format", "format_version", "branch_id", "seq", "hash"],
