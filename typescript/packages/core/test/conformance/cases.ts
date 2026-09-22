@@ -72,6 +72,15 @@ export type Case = {
   readonly log: Uint8Array | undefined;
 };
 
+const IMPL = "threads-ts";
+
+/** A recover case ships one file per writer; this runner reads its own. */
+export function ownFile(dir: string, name: string): string {
+  const dot = name.indexOf(".");
+  const mine = join(dir, `${name.slice(0, dot)}.${IMPL}${name.slice(dot)}`);
+  return existsSync(mine) ? mine : join(dir, name);
+}
+
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, "utf8"));
 }
@@ -79,8 +88,8 @@ function readJson(path: string): unknown {
 export function loadCase(name: string): Case {
   const dir = join(CASES_DIR, name);
   const meta = CaseFile.parse(readJson(join(dir, "case.json")));
-  const expected = ExpectedFile.parse(readJson(join(dir, "expected.json")));
-  const logPath = join(dir, "log.jsonl");
+  const expected = ExpectedFile.parse(readJson(ownFile(dir, "expected.json")));
+  const logPath = ownFile(dir, "log.jsonl");
   return {
     name,
     kind: meta.kind,

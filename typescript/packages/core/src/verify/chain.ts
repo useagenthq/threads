@@ -4,8 +4,16 @@ import { sha256Hex } from "../hash";
 import { type Header, type ParsedLine, parseLogLine } from "../log";
 import { err, ok, type Result } from "../result";
 import { validateNext } from "../validate";
-import { type ChainFields, readEnvelope } from "./envelope";
 import { type LogError, logError } from "./error";
+
+/** The envelope fields the chain checks read. */
+type ChainFields = {
+  readonly seq: number;
+  readonly prev_hash: string;
+  readonly branch_id: string;
+  readonly type: string;
+  readonly data: { readonly [key: string]: unknown };
+};
 
 /** An event line with its stored bytes and their hash. */
 export type ChainEvent = EventLine & {
@@ -35,9 +43,10 @@ export function emptyChain(): Chain {
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 /**
- * Admits one stored line (without its newline) in the conformance order: UTF-8, JSON, format
- * admission, header, envelope, seq, prev_hash, fork links, critical rule, data schema,
- * validate_next. A head line is returned for the caller to check against the end.
+ * Admits one stored line (without its newline) in the conformance order: first the line on its
+ * own (UTF-8, JSON admission, canonical form, format admission, full schema incl. the critical
+ * rule), then the chain (segment structure, seq, prev_hash, fork links, validate_next). A head
+ * line is returned for the caller to check against the end.
  */
 export function addLine(
   chain: Chain,
@@ -53,11 +62,9 @@ export function addLine(
   }
   const parsed = parseLogLine(text);
   if (!parsed.ok) {
-    const envelope = readEnvelope(text);
-    const earlier =
-      envelope === undefined ? undefined : checkLinks(chain, envelope);
+    // The whole line is checked before the chain (conformance README, step 1).
     const { code, message, seq = position } = parsed.error;
-    return err(earlier ?? logError(code, message, seq));
+    return err(logError(code, message, seq));
   }
   const line = parsed.value;
   if (line.kind === "header") {
@@ -95,7 +102,7 @@ export function tipHash(chain: Chain): string | undefined {
 function checkLinks(chain: Chain, e: ChainFields): LogError | undefined {
   const segment = chain.segments.at(-1);
   if (segment === undefined)
-    return logError("invalid_line", "an event before any header", e.seq);
+    return logError("invalid_transition", "an event before any header", e.seq);
   if (e.seq !== chain.fold.seq + 1) {
     const message = `seq ${e.seq} does not follow ${chain.fold.seq}`;
     return logError("seq_mismatch", message, e.seq);

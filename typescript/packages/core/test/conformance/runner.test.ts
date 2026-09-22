@@ -21,18 +21,6 @@ const LATER: Readonly<Record<Kind, string | undefined>> = {
   parity: "no runner yet for this reserved kind",
 };
 
-// Fixtures that break a semantic rule the spec states. The test pins the rejection, so it
-// fails (and must be removed) once the generator is fixed.
-const SPEC_DEFECTS: Readonly<
-  Record<string, { code: string; seq: number; why: string }>
-> = {
-  "render-reference-framing-escaped": {
-    code: "invalid_transition",
-    seq: 19,
-    why: "rule 10: summary_ref is not the text of its summary_request_event_id response",
-  },
-};
-
 function checkState(c: Case, log: VerifiedLog): void {
   if (c.state !== undefined) expect(plain(reduce(log, c.now))).toEqual(c.state);
   if (c.projections !== undefined) {
@@ -100,14 +88,7 @@ describe("conformance", () => {
     const c = loadCase(name);
     const later = LATER[c.kind];
     const { log } = c;
-    const defect = SPEC_DEFECTS[name];
-    if (defect !== undefined && log !== undefined) {
-      test(`${c.kind}: ${name} (spec defect, rejected: ${defect.why})`, () => {
-        const result = verifyExport(log);
-        const got = result.ok ? "ok" : [result.error.code, result.error.seq];
-        expect(plain(got)).toEqual([defect.code, defect.seq]);
-      });
-    } else if (later === undefined && log !== undefined) {
+    if (later === undefined && log !== undefined) {
       test(`${c.kind}: ${name}`, () => runReduce(c, log));
     } else if (log !== undefined) {
       test(`${c.kind}: ${name} (import and state only; skipped: ${later})`, () =>

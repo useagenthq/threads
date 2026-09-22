@@ -65,7 +65,7 @@ describe("verifyExport rejects", () => {
 
   test("an event before any header", () => {
     const [first = ""] = turn;
-    expect(outcome(exportOf(first))).toEqual(["invalid_line", 1]);
+    expect(outcome(exportOf(first))).toEqual(["invalid_transition", 1]);
   });
 
   test("a line after the head checkpoint", () => {

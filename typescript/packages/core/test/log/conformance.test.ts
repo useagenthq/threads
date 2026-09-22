@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { assertNever } from "../../src/assert-never";
 import { type ParsedLine, type ParseError, parseLogLine } from "../../src/log";
 import type { Result } from "../../src/result";
+import { ownFile } from "../conformance/cases";
 
 // Schema-level conformance: every line of every case log parses, except the torn tail of an
 // interrupted export and the line a negative case breaks on purpose (spec/conformance/README.md).
@@ -21,7 +22,7 @@ function expectedLineError(
   caseDir: string,
 ): { code: string; seq?: number } | undefined {
   const expected: unknown = JSON.parse(
-    readFileSync(join(caseDir, "expected.json"), "utf8"),
+    readFileSync(ownFile(caseDir, "expected.json"), "utf8"),
   );
   if (
     typeof expected !== "object" ||
@@ -111,7 +112,7 @@ describe("conformance: every log line parses", () => {
 
   for (const name of caseNames) {
     const caseDir = join(CASES, name);
-    const logPath = join(caseDir, "log.jsonl");
+    const logPath = ownFile(caseDir, "log.jsonl");
     if (!existsSync(logPath)) continue; // intake and policy cases have no log.
 
     test(name, () => {
