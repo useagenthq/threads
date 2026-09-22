@@ -155,7 +155,9 @@ def test_foreign_writer_branch_refuses_to_append() -> None:
     assert isinstance(verified, Ok)
 
     async def refused() -> Err[ParseError] | Ok[Writer]:
-        store = await SqliteStore.open()
+        opened = await SqliteStore.open()
+        assert isinstance(opened, Ok)
+        store = opened.value
         try:
             assert await store.import_log(verified.value) == Ok(None)
             branch = verified.value.segments[-1].header.branch_id

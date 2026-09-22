@@ -33,6 +33,10 @@ class Branch:
     state: str
     head_seq: int
     head_hash: str
+    head_verified: bool = True
+    """False after importing a log with no head checkpoint or a torn tail."""
+    dropped_ref: str | None = None
+    """The sha256 of the torn tail's artifact, if the import dropped bytes."""
 
 
 def connect(path: str) -> sqlite3.Connection:
@@ -71,12 +75,12 @@ def transaction(conn: sqlite3.Connection) -> Generator[None]:
 def branch(conn: sqlite3.Connection, branch_id: BranchId) -> Branch | None:
     row: tuple[object, ...] | None = conn.execute(
         "SELECT thread_id, tenant_id, parent_branch_id, fork_at_seq, header_line, state, head_seq,"
-        " head_hash FROM branches WHERE branch_id = ?",
+        " head_hash, head_verified, dropped_ref FROM branches WHERE branch_id = ?",
         (branch_id,),
     ).fetchone()
     if row is None:
         return None
-    thread, tenant, parent, at_seq, header, state, head_seq, head_hash = row
+    thread, tenant, parent, at_seq, header, state, head_seq, head_hash, verified, dropped = row
     return Branch(
         branch_id,
         ThreadId(_text(thread)),
@@ -87,6 +91,8 @@ def branch(conn: sqlite3.Connection, branch_id: BranchId) -> Branch | None:
         _text(state),
         _int(head_seq),
         _text(head_hash),
+        _int(verified) == 1,
+        None if dropped is None else _text(dropped),
     )
 
 
@@ -134,7 +140,8 @@ def insert_branch(conn: sqlite3.Connection, row: Branch) -> None:
     )
     conn.execute(
         "INSERT INTO branches (branch_id, thread_id, tenant_id, parent_branch_id, fork_at_seq,"
-        " header_line, state, head_seq, head_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " header_line, state, head_seq, head_hash, head_verified, dropped_ref)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             row.branch_id,
             row.thread_id,
@@ -145,6 +152,8 @@ def insert_branch(conn: sqlite3.Connection, row: Branch) -> None:
             row.state,
             row.head_seq,
             row.head_hash,
+            int(row.head_verified),
+            row.dropped_ref,
         ),
     )
 
