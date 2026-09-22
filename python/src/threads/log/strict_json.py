@@ -7,16 +7,13 @@ implementations read the same bytes differently, so they are rejected here.
 
 import json
 import math
-import re
 from collections import Counter
 from collections.abc import Sequence
 
 from pydantic import JsonValue
 
+from threads.log.jcs import MAX_SAFE_INTEGER, has_lone_surrogate
 from threads.result import Err, Ok
-
-MAX_SAFE_INTEGER = 2**53 - 1
-_SURROGATE = re.compile("[\ud800-\udfff]")
 
 
 class _InadmissibleError(ValueError):
@@ -82,5 +79,5 @@ def _reject_lone_surrogates(value: JsonValue) -> None:
         elif isinstance(item, dict):
             strings.extend(item)
             stack.extend(item.values())
-    if any(_SURROGATE.search(s) for s in strings):
+    if any(has_lone_surrogate(s) for s in strings):
         raise _InadmissibleError("lone surrogate in a string")
