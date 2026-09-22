@@ -1,4 +1,3 @@
-import type { z } from "zod";
 import { err, ok, type Result } from "../result";
 import { MAX_DEPTH } from "./json";
 
@@ -7,7 +6,14 @@ import { MAX_DEPTH } from "./json";
 
 export type JcsError = { readonly message: string };
 
-type Json = z.core.util.JSONType;
+/** JSON as parsed or built. An optional key may hold `undefined`; it is omitted, as by JSON.stringify. */
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly Json[]
+  | { readonly [key: string]: Json | undefined };
 
 function scalar(value: string | number | boolean | null): string | JcsError {
   if (typeof value === "number" && !Number.isFinite(value)) {
@@ -19,17 +25,25 @@ function scalar(value: string | number | boolean | null): string | JcsError {
   return JSON.stringify(value);
 }
 
+// Array.isArray does not narrow a readonly array out of a union.
+function isArray(value: Json): value is readonly Json[] {
+  return Array.isArray(value);
+}
+
 /** `depth` is the level `value` occupies if it is an array or object; the root is 1. */
 function serialize(value: Json, depth: number): string | JcsError {
   if (value === null || typeof value !== "object") return scalar(value);
   if (depth > MAX_DEPTH)
     return { message: `nesting deeper than ${MAX_DEPTH} levels` };
-  return Array.isArray(value)
+  return isArray(value)
     ? serializeArray(value, depth)
     : serializeObject(value, depth);
 }
 
-function serializeArray(items: Json[], depth: number): string | JcsError {
+function serializeArray(
+  items: readonly Json[],
+  depth: number,
+): string | JcsError {
   const parts: string[] = [];
   for (const item of items) {
     const text = serialize(item, depth + 1);
@@ -40,7 +54,7 @@ function serializeArray(items: Json[], depth: number): string | JcsError {
 }
 
 function serializeObject(
-  obj: { [key: string]: Json },
+  obj: { readonly [key: string]: Json | undefined },
   depth: number,
 ): string | JcsError {
   const parts: string[] = [];
