@@ -30,6 +30,7 @@ jobs:
           uv run ruff check ../spec/tools
           uv run ruff format --check ../spec/tools
           uv run python ../spec/tools/gen_fixtures.py --check
+          uv run python ../spec/tools/check_api.py
       - name: No file over 400 lines
         working-directory: .
         run: ./scripts/check-file-size.sh python
