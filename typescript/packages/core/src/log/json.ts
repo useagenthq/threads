@@ -11,8 +11,8 @@ export type JsonParseError = {
   readonly message: string;
 };
 
-// ponytail: fixed nesting cap so hostile input can't overflow the stack; log lines are shallow.
-const MAX_DEPTH = 512;
+/** Levels of arrays and objects a line may nest, the line object being level 1 (wire rule 2). */
+export const MAX_DEPTH = 64;
 const NUMBER = /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/y;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: JSON forbids raw control characters in strings.
 const STRING = /"(?:[^"\\\u0000-\u001f]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*"/y;
@@ -41,10 +41,12 @@ class Parser {
     this.pos = WHITESPACE.lastIndex;
   }
 
+  /** `depth` is the level of the enclosing container, 0 at the top. */
   value(depth: number): Json | Fail {
-    if (depth > MAX_DEPTH) return this.fail("nesting too deep");
     this.skipWhitespace();
     const c = this.text[this.pos];
+    if ((c === "{" || c === "[") && depth >= MAX_DEPTH)
+      return this.fail(`nesting deeper than ${MAX_DEPTH} levels`);
     if (c === "{") return this.object(depth + 1);
     if (c === "[") return this.array(depth + 1);
     if (c === '"') return this.string();

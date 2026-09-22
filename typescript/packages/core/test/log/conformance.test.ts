@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type ParseError, parseLogLine } from "../../src/log";
+import { assertNever } from "../../src/assert-never";
+import { type ParsedLine, type ParseError, parseLogLine } from "../../src/log";
+import type { Result } from "../../src/result";
 
 // Schema-level conformance: every line of every case log parses, except the torn tail of an
 // interrupted export and the line a negative case breaks on purpose (spec/conformance/README.md).
@@ -42,15 +44,49 @@ function expectedLineError(
     : { code: error.code };
 }
 
-function parseLine(bytes: Uint8Array): ParseError | undefined {
+function parseLine(bytes: Uint8Array): Result<ParsedLine, ParseError> {
   let text: string;
   try {
     text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
-    return { code: "invalid_line", message: "invalid UTF-8" };
+    return {
+      ok: false,
+      error: { code: "invalid_line", message: "invalid UTF-8" },
+    };
   }
-  const result = parseLogLine(text);
-  return result.ok ? undefined : result.error;
+  return parseLogLine(text);
+}
+
+/** The seq after `line`. A child segment's header doesn't restart the count. */
+function nextPosition(line: ParsedLine, position: number): number {
+  switch (line.kind) {
+    case "head":
+      return position;
+    case "header":
+      return Math.max(position, 1);
+    case "event":
+    case "unknown_event":
+      return line.event.seq + 1;
+    default:
+      return assertNever(line);
+  }
+}
+
+/** Every failing line. An unreadable seq is named by position (conformance README). */
+function lineFailures(lines: readonly Uint8Array[]): LineFailure[] {
+  const failures: LineFailure[] = [];
+  let position = 0;
+  for (const [index, bytes] of lines.entries()) {
+    const result = parseLine(bytes);
+    if (result.ok) {
+      position = nextPosition(result.value, position);
+      continue;
+    }
+    const seq = result.error.seq ?? position;
+    failures.push({ index, error: { ...result.error, seq } });
+    position = seq + 1;
+  }
+  return failures;
 }
 
 /** Splits an export on "\n". A last line without its newline is a torn tail. */
@@ -80,10 +116,7 @@ describe("conformance: every log line parses", () => {
 
     test(name, () => {
       const { lines, torn } = splitLines(new Uint8Array(readFileSync(logPath)));
-      const failures: LineFailure[] = lines.flatMap((bytes, index) => {
-        const error = parseLine(bytes);
-        return error === undefined ? [] : [{ index, error }];
-      });
+      const failures = lineFailures(lines);
       const tornIndex = torn ? lines.length - 1 : -1;
       if (torn) {
         expect(failures.find((f) => f.index === tornIndex)?.error.code).toBe(

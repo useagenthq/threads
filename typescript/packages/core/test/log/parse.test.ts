@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseLogLine } from "../../src/log";
+import { parseLogLine, parseStrictJson } from "../../src/log";
 import { envelope, HASH, header, jcs, kind, parse } from "./fixtures";
 
 describe("framing lines", () => {
@@ -157,5 +157,21 @@ describe("critical vs ignorable", () => {
         envelope("park_escalated", { address: { kind: "input", id: "c1" } }),
       ),
     ).toBe("invalid_line");
+  });
+});
+
+describe("nesting limit (wire rule 2)", () => {
+  test.each([
+    ["[".repeat(64) + "]".repeat(64), true],
+    ["[".repeat(65) + "]".repeat(65), false],
+    [`${'{"a":'.repeat(64)}0${"}".repeat(64)}`, true],
+    [`${'{"a":'.repeat(65)}0${"}".repeat(65)}`, false],
+  ])("depth boundary %#", (text, admitted) => {
+    expect(parseStrictJson(text).ok).toBe(admitted);
+  });
+
+  test("deep nesting is an invalid line, not a crash", () => {
+    const result = parseLogLine(`${"[".repeat(500)}0${"]".repeat(500)}`);
+    expect(result.ok ? undefined : result.error.code).toBe("invalid_line");
   });
 });

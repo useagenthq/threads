@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { z } from "zod";
 import { canonicalize } from "../../src/log";
 
 function text(value: Parameters<typeof canonicalize>[0]): string {
@@ -119,5 +120,14 @@ describe("RFC 8785 §3.2", () => {
     expect(text({ b: [3, -0, { d: 1, c: 2 }], a: null })).toBe(
       '{"a":null,"b":[3,0,{"c":2,"d":1}]}',
     );
+  });
+});
+
+describe("nesting limit (wire rule 2)", () => {
+  test("64 levels canonicalize, 65 are an error", () => {
+    let deep: z.core.util.JSONType = [];
+    for (let i = 1; i < 64; i++) deep = [deep];
+    expect(canonicalize(deep).ok).toBe(true);
+    expect(canonicalize([deep]).ok).toBe(false);
   });
 });
