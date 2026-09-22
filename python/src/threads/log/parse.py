@@ -6,7 +6,7 @@ from typing import Annotated, get_args
 from pydantic import Field, JsonValue, TypeAdapter, ValidationError
 
 from threads._generated.events_v1 import ErrorCode, Event, Head, Header, KnownTag, UnknownEvent
-from threads.log.jcs import canonicalize
+from threads.log.jcs import MAX_SAFE_INTEGER, canonicalize
 from threads.log.strict_json import parse_json
 from threads.result import Err, Ok
 
@@ -21,6 +21,8 @@ checkpoint. Unknown critical events never parse: they refuse the log."""
 class ParseError:
     code: ErrorCode
     message: str
+    seq: int | None = None
+    """The line's seq when it has a readable one; 0 for a header (schema README wire rule 8)."""
 
 
 _FRAMING: TypeAdapter[Header | Head] = TypeAdapter(
@@ -48,35 +50,42 @@ def parse_log_line(line: str) -> Ok[LogLine] | Err[ParseError]:
         case Err(error=reason):
             return _invalid(reason)
         case Ok(value=value):
+            if not isinstance(value, dict):
+                return _invalid("a log line is a JSON object")
+            seq = _line_seq(value)
             if canonicalize(value) != Ok(line):
                 # Hashes cover stored bytes, so two spellings of one value must not both be
                 # admissible: a line is exactly the RFC 8785 form of what it parses to.
-                return _invalid("line is not in RFC 8785 canonical form")
-            return _parse_value(value)
+                return _invalid("line is not in RFC 8785 canonical form", seq)
+            try:
+                return _parse_object(value, seq)
+            except ValidationError as error:
+                return _invalid(str(error), seq)
 
 
-def _parse_value(value: JsonValue) -> Ok[LogLine] | Err[ParseError]:
-    if not isinstance(value, dict):
-        return _invalid("a log line is a JSON object")
-    try:
-        if "format" in value:
-            return _parse_framing(value)
-        if _is_known(value):
-            return Ok(_EVENT.validate_python(value))
-        unknown = UnknownEvent.model_validate(value)
-    except ValidationError as error:
-        return _invalid(str(error))
+def _parse_object(value: dict[str, JsonValue], seq: int | None) -> Ok[LogLine] | Err[ParseError]:
+    if "format" in value:
+        return _parse_framing(value, seq)
+    if _is_known(value):
+        return Ok(_EVENT.validate_python(value))
+    unknown = UnknownEvent.model_validate(value)
     if unknown.critical:
-        return Err(
-            ParseError(
-                "unsupported_critical_event",
-                f"critical event {unknown.type} v{unknown.type_version} is unknown to this reader",
-            )
-        )
+        message = f"critical event {unknown.type} v{unknown.type_version} is unknown to this reader"
+        return Err(ParseError("unsupported_critical_event", message, seq))
     return Ok(unknown)
 
 
-def _parse_framing(value: dict[str, JsonValue]) -> Ok[LogLine] | Err[ParseError]:
+def _line_seq(value: dict[str, JsonValue]) -> int | None:
+    # Any line with a `format` other than the head's is framed as a header, which has seq 0.
+    if "format" in value and value["format"] != "threads.head":
+        return 0
+    seq = value.get("seq")
+    if isinstance(seq, bool) or not isinstance(seq, int | float) or not float(seq).is_integer():
+        return None
+    return int(seq) if 0 <= seq <= MAX_SAFE_INTEGER else None
+
+
+def _parse_framing(value: dict[str, JsonValue], seq: int | None) -> Ok[LogLine] | Err[ParseError]:
     # Format admission runs before the schema (schema README wire rule 8): a known format with a
     # newer integer version is a newer writer, not corruption. Any other bad version fails the
     # schema below as invalid_line.
@@ -84,7 +93,7 @@ def _parse_framing(value: dict[str, JsonValue]) -> Ok[LogLine] | Err[ParseError]
     newer = isinstance(version, int) and not isinstance(version, bool) and version > 1
     known = isinstance(fmt := value["format"], str) and fmt in _FORMATS
     if known and newer:
-        return Err(ParseError("unsupported_format", f"format_version {version} is newer"))
+        return Err(ParseError("unsupported_format", f"format_version {version} is newer", seq))
     return Ok(_FRAMING.validate_python(value))
 
 
@@ -98,5 +107,5 @@ def _is_known(value: dict[str, JsonValue]) -> bool:
     return True
 
 
-def _invalid(message: str) -> Err[ParseError]:
-    return Err(ParseError("invalid_line", message))
+def _invalid(message: str, seq: int | None = None) -> Err[ParseError]:
+    return Err(ParseError("invalid_line", message, seq))

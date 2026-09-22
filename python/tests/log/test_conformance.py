@@ -63,7 +63,7 @@ def test_case_log_parses(name: str) -> None:
     assert error.code == code
     if seq is not None:
         # A header line has no seq; its errors carry seq 0 (schema README wire rule 8).
-        assert json.loads(raw).get("seq", 0) == seq
+        assert error.seq == seq
     else:
         assert log.endswith(raw)
 

@@ -53,7 +53,9 @@ function invalid(
 
 function readSeq(value: Record<string, unknown>): number | undefined {
   const { seq } = value;
-  return typeof seq === "number" ? seq : undefined;
+  return Number.isSafeInteger(seq) && typeof seq === "number" && seq >= 0
+    ? seq
+    : undefined;
 }
 
 /** The seq an error names: 0 for a header, else the line's own seq (wire rule 8). */
