@@ -17,3 +17,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run check
+      - name: No file over 400 lines
+        working-directory: .
+        run: ./scripts/check-file-size.sh typescript

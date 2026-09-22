@@ -23,3 +23,6 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pytest
+      - name: No file over 400 lines
+        working-directory: .
+        run: ./scripts/check-file-size.sh python
