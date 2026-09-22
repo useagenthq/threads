@@ -47,8 +47,9 @@ LATER = {
     "fork": "the fork operation (eligibility, sandbox restore, resource ledger) is not built yet",
     "stub": "stub mode is not built yet",
     "intake": "the host intake pipeline is not built yet",
-    "policy": "the permission engine is not built yet",
 }
+OWN_RUNNER = frozenset({"policy"})
+"""Kinds another runner owns: policy (tests/permissions)."""
 
 
 def own(case: Path, name: str) -> Path:
@@ -115,7 +116,7 @@ def test_corpus_kinds_and_keys_are_known() -> None:
         meta, expected = load(case, "case.json"), load(case, "expected.json")
         assert set(meta) <= CASE_KEYS, case.name
         assert set(expected) <= EXPECTED_KEYS, case.name
-        assert meta["kind"] in ("reduce", "render") or meta["kind"] in LATER, case.name
+        assert meta["kind"] in {"reduce", "render", *LATER, *OWN_RUNNER}, case.name
 
 
 @pytest.mark.parametrize("name", cases("reduce"))
