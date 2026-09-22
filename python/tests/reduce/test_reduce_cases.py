@@ -27,9 +27,9 @@ from threads.log import (
 )
 from threads.log.digest import sha256_hex
 from threads.reduce import PROJECTIONS
-from threads.render import render, verify_requests
+from threads.render import render
 from threads.result import Err, Ok
-from threads.store import SqliteStore, VerifiedLog, Writer, verify_export
+from threads.store import MemoryArtifacts, SqliteStore, VerifiedLog, Writer, verify_export
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 _JSON: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
@@ -74,17 +74,31 @@ def now_of(case: dict[str, JsonValue]) -> int:
     return now
 
 
-async def import_and_read(log: bytes, now: int) -> Ok[VerifiedLog] | Err[str]:
-    """Imports an export into a fresh store and reads the last branch back from SQLite."""
+def stored_artifacts(case: Path) -> MemoryArtifacts:
+    """The case's artifacts, in the store before import: import replays every request."""
+    store = MemoryArtifacts()
+    for path in sorted((case / "artifacts").glob("*")):
+        store.put(path.read_bytes())
+    return store
+
+
+def _error(error: ParseError) -> Err[str]:
+    return Err(json.dumps({"code": error.code, "seq": error.seq}))
+
+
+async def import_and_read(case: Path, log: bytes, now: int) -> Ok[VerifiedLog] | Err[str]:
+    """Imports an export into a fresh store holding the case's artifacts and reads the last
+    branch back from SQLite."""
     verified = verify_export(log, now)
     if isinstance(verified, Err):
-        return Err(json.dumps({"code": verified.error.code, "seq": verified.error.seq}))
-    opened = await SqliteStore.open()
+        return _error(verified.error)
+    opened = await SqliteStore.open(artifacts=stored_artifacts(case))
     assert isinstance(opened, Ok)
     store = opened.value
     try:
         stored = await store.import_log(verified.value)
-        assert stored == Ok(None)
+        if isinstance(stored, Err):
+            return _error(stored.error)
         branch = verified.value.segments[-1].header.branch_id
         if verified.value.head_verified:
             # SQLite and JSONL are one contract: the export is the imported bytes.
@@ -109,7 +123,7 @@ def test_reduce_case(name: str) -> None:
     case = CASES / name
     meta, expected = load(case, "case.json"), load(case, "expected.json")
     log = own(case, "log.jsonl").read_bytes()
-    result = asyncio.run(import_and_read(log, now_of(meta)))
+    result = asyncio.run(import_and_read(case, log, now_of(meta)))
     assert own(case, "log.jsonl").read_bytes() == log
     if expected["outcome"] == "error":
         assert isinstance(result, Err)
@@ -117,7 +131,6 @@ def test_reduce_case(name: str) -> None:
         assert expected.get("appended", []) == []
         return
     assert isinstance(result, Ok), result
-    assert verify_requests(result.value.fold.events, artifacts(case)) == Ok(None)
     assert result.value.state.to_json() == expected["state"]
     reader = verify_export(log, now_of(meta))
     assert isinstance(reader, Ok)
@@ -144,15 +157,11 @@ def artifacts(case: Path) -> Callable[[str], Ok[bytes] | Err[ParseError]]:
     return get
 
 
-def _replay(case: Path, events: Sequence[Event]) -> Ok[bytes] | Err[ParseError]:
-    """Steps 2-4: C7 and every recorded request, then the next request."""
-    read = artifacts(case)
-    verified = verify_requests(events, read)
-    if isinstance(verified, Err):
-        return verified
-    rendered = render(events, read)
+def _next(case: Path, events: Sequence[Event]) -> Ok[bytes] | Err[str]:
+    """Step 4: the next request. Import already replayed every recorded one (step 3)."""
+    rendered = render(events, artifacts(case))
     if isinstance(rendered, Err):
-        return rendered
+        return _error(rendered.error)
     expected = load(case, "expected.json")["render"]
     assert isinstance(expected, dict)
     line0 = rendered.value.line0
@@ -196,16 +205,16 @@ def test_render_case(name: str) -> None:
     case = CASES / name
     meta, expected = load(case, "case.json"), load(case, "expected.json")
     log = (case / "log.jsonl").read_bytes()
-    read = asyncio.run(import_and_read(log, now_of(meta)))
+    read = asyncio.run(import_and_read(case, log, now_of(meta)))
+    result = _next(case, read.value.fold.events) if isinstance(read, Ok) else read
+    if expected["outcome"] == "error":
+        assert isinstance(result, Err), result
+        assert json.loads(result.error) == expected["error"]
+        return
     assert isinstance(read, Ok), read
     if "state" in expected:
         assert read.value.state.to_json() == expected["state"]
     events = read.value.fold.events
-    result = _replay(case, events)
-    if expected["outcome"] == "error":
-        assert isinstance(result, Err), result
-        assert {"code": result.error.code, "seq": result.error.seq} == expected["error"]
-        return
     assert isinstance(result, Ok), result
     _history_is_prefix(case, events, result.value)
 
@@ -226,11 +235,10 @@ def test_reader_view(name: str) -> None:
     assert verified.value.head_verified == expected.get("head_verified", True)
     if "committed_bytes" in expected:
         assert verified.value.committed_bytes == expected["committed_bytes"]
-    read = asyncio.run(import_and_read(log, now_of(meta)))
+    # Import replays every recorded request in the corpus: C7 and its request_ref bytes.
+    read = asyncio.run(import_and_read(case, log, now_of(meta)))
     assert isinstance(read, Ok), read
     assert read.value.state == verified.value.state
-    # Every recorded request in the corpus replays: C7 and its request_ref bytes.
-    assert verify_requests(read.value.fold.events, artifacts(case)) == Ok(None)
 
 
 @pytest.mark.parametrize("name", cases(*LATER))
@@ -248,7 +256,7 @@ def test_foreign_writer_branch_refuses_to_append() -> None:
     assert isinstance(verified, Ok)
 
     async def refused() -> Err[ParseError] | Ok[Writer]:
-        opened = await SqliteStore.open()
+        opened = await SqliteStore.open(artifacts=stored_artifacts(case))
         assert isinstance(opened, Ok)
         store = opened.value
         try:

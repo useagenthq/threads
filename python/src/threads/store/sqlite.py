@@ -14,6 +14,7 @@ from pydantic import JsonValue
 from threads import VERSION
 from threads.log import BranchId, ParseError, ThreadId
 from threads.log.digest import sha256_hex
+from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
@@ -78,10 +79,15 @@ class SqliteStore:
         return _result(await self._worker.call(lambda c: lease.create(c, row, (), None)))
 
     async def import_log(self, log: VerifiedLog) -> Ok[None] | Err[ParseError]:
-        """Stores a verified export's lines byte for byte: parents referenced, never copied."""
+        """Stores a verified export's lines byte for byte: parents referenced, never copied.
+        Every model request must first replay from the log and the artifacts already in the
+        store (C7, Render v1): the first failing request's error is the result."""
         tenant, artifacts = self._tenant, self._artifacts
 
         def store(conn: sqlite3.Connection) -> ParseError | None:
+            replayed = verify_requests(log.fold.events, artifacts.get)
+            if isinstance(replayed, Err):
+                return replayed.error
             # The dropped bytes are durable before the row that references them.
             dropped = artifacts.put(log.dropped) if log.dropped else None
             return sql.import_segments(conn, log, tenant, dropped)

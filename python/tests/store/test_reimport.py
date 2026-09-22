@@ -8,7 +8,7 @@ import pytest
 from threads.log import BranchId, ThreadId
 from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
-from threads.store import SqliteStore, verify_export
+from threads.store import MemoryArtifacts, SqliteStore, verify_export
 from threads.store.lines import head_line, header_line
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
@@ -49,13 +49,18 @@ def test_reimport_compares_head_evidence(first: bytes, second: bytes, code: str)
 
 
 def test_an_awaited_model_request_requires_recovery() -> None:
-    export = (CASES / "model-response-recovered-by-lookup" / "log.threads-py.jsonl").read_bytes()
+    case = CASES / "model-response-recovered-by-lookup"
+    export = (case / "log.threads-py.jsonl").read_bytes()
     verified = verify_export(export, T0)
     assert isinstance(verified, Ok)
     branch = verified.value.segments[-1].header.branch_id
 
     async def main() -> bool:
-        opened = await SqliteStore.open()
+        # Import replays every recorded request, so its artifacts are stored first.
+        artifacts = MemoryArtifacts()
+        for path in (case / "artifacts").iterdir():
+            artifacts.put(path.read_bytes())
+        opened = await SqliteStore.open(artifacts=artifacts)
         assert isinstance(opened, Ok)
         try:
             assert await opened.value.import_log(verified.value) == Ok(None)
