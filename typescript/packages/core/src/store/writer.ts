@@ -95,6 +95,11 @@ export class Writer {
         .some((e) => e.status === "begun" || e.status === "unknown");
   }
 
+  /** The committed chain this writer appends to. Each append replaces it; none mutates it. */
+  get chain(): Chain {
+    return this.#chain;
+  }
+
   /** Appends drafts in order and returns once their transaction has committed with full sync. */
   append(
     drafts: readonly EventDraft[],

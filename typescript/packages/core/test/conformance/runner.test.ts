@@ -14,6 +14,7 @@ import {
   loadCase,
   plain,
 } from "./cases";
+import { runAppending } from "./recover";
 
 // One runner for every case in spec/conformance/cases, no per-case code. `reduce` and `render`
 // cases run in full. Other kinds need features after step 2b; their log still imports and reduces here, and
@@ -22,12 +23,11 @@ import {
 const LATER: Readonly<Record<Kind, string | undefined>> = {
   reduce: undefined,
   render: undefined,
-  recover:
-    "appending (log_repaired, recovery) needs the loop and the scripted model and sandbox",
-  fork: "fork() needs the sandbox adapter and the resource ledger",
-  stub: "stub mode needs the stub gateway",
-  intake: "intake needs the host webhook pipeline",
-  policy: "policy needs the permission engine",
+  recover: undefined,
+  fork: "fork() needs the sandbox restore and the resource ledger (host sandbox slice)",
+  stub: undefined,
+  intake: "intake needs the host webhook pipeline (host slice)",
+  policy: undefined,
   security: "no runner yet for this reserved kind",
   parity: "no runner yet for this reserved kind",
 };
@@ -154,20 +154,39 @@ describe("replay: every importable case log round-trips through SQLite", () => {
   }
 });
 
+/** The runner for one case: its kind's, or import and state only for a later kind. */
+function runnerFor(
+  c: Case,
+  log: Uint8Array,
+): (() => void | Promise<void>) | undefined {
+  switch (c.kind) {
+    case "recover":
+    case "stub":
+      return async () => {
+        runImport(c, log);
+        await runAppending(c, log);
+      };
+    case "render":
+      return () => runRender(c, log);
+    case "reduce":
+      return () => runReduce(c, log);
+    default:
+      return undefined;
+  }
+}
+
 describe("conformance", () => {
   for (const name of CASE_NAMES) {
     const c = loadCase(name);
     const later = LATER[c.kind];
     const { log } = c;
-    if (c.kind === "render" && log !== undefined) {
-      test(`${c.kind}: ${name}`, () => runRender(c, log));
-    } else if (later === undefined && log !== undefined) {
-      test(`${c.kind}: ${name}`, () => runReduce(c, log));
-    } else if (log !== undefined) {
+    // test/permissions/policy.test.ts runs the policy cases.
+    if (c.kind === "policy") continue;
+    const run = log === undefined ? undefined : runnerFor(c, log);
+    if (run !== undefined) test(`${c.kind}: ${name}`, run);
+    else if (log !== undefined)
       test(`${c.kind}: ${name} (import and state only; skipped: ${later})`, () =>
         runImport(c, log));
-    } else {
-      test.skip(`${c.kind}: ${name} (skipped: ${later})`, () => {});
-    }
+    else test.skip(`${c.kind}: ${name} (skipped: ${later})`, () => {});
   }
 });

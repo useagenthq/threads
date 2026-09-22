@@ -47,8 +47,25 @@ const ExpectedFile = z.strictObject({
   committed_bytes: z.int().min(0).optional(),
   head_verified: z.boolean().optional(),
   projections: z.record(z.string(), z.unknown()).optional(),
-  appended: z.array(z.unknown()).optional(),
-  sandbox: z.unknown().optional(),
+  appended: z
+    .array(
+      z.strictObject({
+        type: z.string(),
+        seq: z.int().optional(),
+        actor_kind: z.string().optional(),
+        epoch: z.int().optional(),
+        branch_id: z.string().optional(),
+        critical: z.boolean().optional(),
+        data: z.record(z.string(), z.unknown()).optional(),
+      }),
+    )
+    .optional(),
+  sandbox: z
+    .partialRecord(
+      z.enum(["dispatches", "new_executions", "lookups"]),
+      z.record(z.string(), z.int()),
+    )
+    .optional(),
   fork: z.unknown().optional(),
   resources: z.unknown().optional(),
   render: z
@@ -57,14 +74,44 @@ const ExpectedFile = z.strictObject({
       declared_prefix: z.strictObject({ bytes: z.int(), sha256: z.string() }),
     })
     .optional(),
-  stubs: z.unknown().optional(),
+  stubs: z.strictObject({ consumed: z.int(), unmatched: z.int() }).optional(),
   responses: z.unknown().optional(),
   inbox: z.unknown().optional(),
   decisions: z.unknown().optional(),
 });
 
+/** An EventMatcher of case.schema.json: data is a deep subset. */
+export type Matcher = {
+  readonly type: string;
+  readonly seq?: number | undefined;
+  readonly actor_kind?: string | undefined;
+  readonly epoch?: number | undefined;
+  readonly branch_id?: string | undefined;
+  readonly critical?: boolean | undefined;
+  readonly data?: Readonly<Record<string, unknown>> | undefined;
+};
+
+export type Counters = Partial<
+  Record<
+    "dispatches" | "new_executions" | "lookups",
+    Readonly<Record<string, number>>
+  >
+>;
+
 /** What the runner reads from one case directory. */
 export type Case = {
+  readonly dir: string;
+  readonly appended: readonly Matcher[] | undefined;
+  readonly sandbox: Counters | undefined;
+  readonly stubs:
+    | { readonly consumed: number; readonly unmatched: number }
+    | undefined;
+  /** Parsed script files, by name; the test kit parses their shape. */
+  readonly scripts: {
+    readonly model: unknown;
+    readonly sandbox: unknown;
+    readonly stubs: unknown;
+  };
   readonly name: string;
   readonly kind: Kind;
   readonly now: number;
@@ -121,7 +168,18 @@ export function loadCase(name: string): Case {
   const meta = CaseFile.parse(readJson(join(dir, "case.json")));
   const expected = ExpectedFile.parse(readJson(ownFile(dir, "expected.json")));
   const logPath = ownFile(dir, "log.jsonl");
+  const script = (file: string | undefined): unknown =>
+    file === undefined ? undefined : readJson(join(dir, file));
   return {
+    dir,
+    appended: expected.appended,
+    sandbox: expected.sandbox,
+    stubs: expected.stubs,
+    scripts: {
+      model: script(meta.model_script),
+      sandbox: script(meta.sandbox_script),
+      stubs: script(meta.stub_script),
+    },
     name,
     kind: meta.kind,
     now: meta.clock.now,

@@ -64,7 +64,7 @@ function settle(byId: Map<string, Attempt>, e: KnownEvent): void {
 }
 
 /** The per-attempt upper bound, or undefined when none is declared. */
-function reservation(
+export function reservation(
   model: PolicyModel,
   price: Price,
   params: Settings["params"],
