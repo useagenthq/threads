@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import ALICE, BRANCH, CHILD, NOW, aref, eid, num
-from .jcs import canonical
+from .jcs import JsonValue, canonical
 from .log import Log, reduce
 from .pieces import (
     READ_FILE,
@@ -71,8 +71,32 @@ def _noncanonical(root: pathlib.Path) -> None:
         )
 
 
+MAX_DEPTH = 64
+
+
+def _too_deep(root: pathlib.Path) -> None:
+    # The line object is depth 1 and its data object depth 2, so this puts arrays at 3..65.
+    deep: JsonValue = []
+    for _ in range(MAX_DEPTH - 2):
+        deep = [deep]
+    log = Log()
+    started(log, [READ_FILE])
+    read_turn(log)
+    log.add("telemetry_ping", {"deep": deep}, critical=False)
+    negative(
+        root,
+        "line-nesting-too-deep",
+        f"The last line nests arrays and objects {MAX_DEPTH + 1} levels deep (the line itself is "
+        f"level 1). Readers admit at most {MAX_DEPTH} levels, so parsing never depends on stack "
+        "depth: invalid_line, even though the line is otherwise canonical and ignorable.",
+        log,
+        ("invalid_line", log.seq),
+    )
+
+
 def _admission(root: pathlib.Path) -> None:
     _noncanonical(root)
+    _too_deep(root)
     for suffix, version, code in VERSIONS:
         for line in ("header", "head"):
             log = Log()

@@ -40,7 +40,7 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 | Field | Meaning |
 |---|---|
 | `outcome` | `ok` or `error` |
-| `error` | `{code, seq?}`. `code` is a pinned `ErrorCode`. A runner compares the code and seq, never the message |
+| `error` | `{code, seq?}`. `code` is a pinned `ErrorCode`. A runner compares the code and seq, never the message. A line whose `seq` can't be read (not JSON, or nested too deep) is named by its position: 0 if it is the first line, else the last readable `seq` before it plus 1 (a header counts as 0; a child segment's header doesn't restart the count) |
 | `state` | `reduce` of the input log **as a reader sees it**, before any append. Compared by deep equality |
 | `committed_bytes` | Length of the valid prefix that readers serve |
 | `head_verified` | `false` when the input has no valid head checkpoint. Absent means `true` |

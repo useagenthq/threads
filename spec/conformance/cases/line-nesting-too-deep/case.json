@@ -1,0 +1,9 @@
+{
+  "name": "line-nesting-too-deep",
+  "family": "log",
+  "kind": "reduce",
+  "description": "The last line nests arrays and objects 65 levels deep (the line itself is level 1). Readers admit at most 64 levels, so parsing never depends on stack depth: invalid_line, even though the line is otherwise canonical and ignorable.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

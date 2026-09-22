@@ -1170,6 +1170,11 @@
           "kind": "case",
           "ref": "header-format-array",
           "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "line-nesting-too-deep",
+          "status": "implemented"
         }
       ]
     },

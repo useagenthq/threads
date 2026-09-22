@@ -34,6 +34,7 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
 2. **Lines.** Each line is one JSON object in **RFC 8785 (JCS) canonical form**. The maximum line is 1 MiB; anything larger goes in an artifact.
    - Writers emit JCS, so a Python writer and a TS writer produce identical bytes for the same event.
    - **Admission:** a reader admits a line only if its bytes equal the RFC 8785 serialization of its parsed value. Anything else (`1e3`, `1000.0`, `-0`, keys out of order, whitespace, a non-minimal or uppercase `\u` escape, `\/`) is `invalid_line`. This runs after strict JSON parsing and before format admission (the header and head rule below) and the schema (`line-noncanonical-*`).
+   - **Nesting:** a line nests at most **64** levels of arrays and objects (the line object is level 1). A deeper line is `invalid_line`, checked while parsing so no stage depends on stack depth (`line-nesting-too-deep`).
    - Readers hash the **raw bytes as stored** and never re-serialize to compute or verify a hash. The admission check compares bytes; it never replaces them.
 3. **Hashes.** All are lowercase hex SHA-256.
 
