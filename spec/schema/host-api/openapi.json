@@ -19,14 +19,14 @@
         "name": "Idempotency-Key",
         "in": "header",
         "required": true,
-        "description": "Scoped to the authenticated tenant and the operation, and stored atomically with the accepted user_input. The same key and body hash replays the same receipt and starts nothing; the same key with a different body is idempotency_key_reused (409).",
+        "description": "Stored atomically with the accepted user_input, bound to the tenant, the full authenticated principal (issuer, tenant, subject), the operation and the body hash. The same key, principal and body replays the same receipt and starts nothing; a different body is idempotency_key_reused (409); a different principal in the same tenant is idempotency_key_principal_mismatch (409) and never sees the other receipt.",
         "schema": { "type": "string", "minLength": 1, "maxLength": 255 }
       }
     },
     "responses": {
       "StartRunError": {
         "description": "Typed failure of startRun.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused", "idempotency_key_principal_mismatch"] } } } } }] } } }
       },
       "SubscribeRunError": {
         "description": "Typed failure of subscribeRun.",
@@ -87,7 +87,7 @@
       "post": {
         "operationId": "startRun",
         "x-api": ["Host.startRun"],
-        "x-error-codes": ["unauthenticated", "forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused"],
+        "x-error-codes": ["unauthenticated", "forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused", "idempotency_key_principal_mismatch"],
         "parameters": [{ "$ref": "#/components/parameters/idempotency_key" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/StartRunRequest" } } } },
         "responses": {

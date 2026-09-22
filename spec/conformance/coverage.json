@@ -1523,6 +1523,17 @@
       ]
     },
     {
+      "id": "F12.12",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "host-run-idempotency-other-principal",
+          "status": "planned"
+        }
+      ]
+    },
+    {
       "id": "F13.1",
       "step1": true,
       "evidence": [

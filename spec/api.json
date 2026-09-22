@@ -453,25 +453,33 @@
           "doc": "Required exactly when effect is idempotent."
         },
         {
-          "name": "lookup",
+          "name": "reconcile",
           "kind": "option",
           "type": {
-            "fn": {
-              "async": true,
-              "params": [
-                {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
-                {
-                  "name": "ctx",
-                  "kind": "positional",
-                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
-                }
-              ],
-              "returns": {"$ref": "#/types/LookupResult", "args": [{"generic": "Output"}]}
+            "object": {
+              "lookup": {
+                "type": {
+                  "fn": {
+                    "async": true,
+                    "params": [
+                      {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
+                      {
+                        "name": "ctx",
+                        "kind": "positional",
+                        "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                        "required": true
+                      }
+                    ],
+                    "returns": {"$ref": "#/types/LookupResult", "args": [{"generic": "Output"}]}
+                  }
+                },
+                "required": true
+              },
+              "finality": {"type": {"enum": ["final", "nonfinal"]}, "required": true}
             }
           },
           "required": false,
-          "doc": "Required when effect is reconcilable. Each answer states its finality: return not_found only when the provider's contract proves nothing happened, else not_found_nonfinal."
+          "doc": "Required exactly when effect is reconcilable. finality is the tool's declared LookupCapability: the runtime accepts a not_found answer as final only when it is final; under nonfinal a not_found is treated as not_found_nonfinal and the call parks."
         },
         {
           "name": "concurrent",
@@ -2435,7 +2443,7 @@
         "lookupSnapshot": {
           "ts": "lookupSnapshot",
           "py": "lookup_snapshot",
-          "doc": "Find a snapshot (with its retention hold) whose capture response was lost, by the snapshot call's operation key. Resolves the pending ledger row. Present when info.lookup.snapshot is not none.",
+          "doc": "Find a snapshot whose capture response was lost, by the snapshot call's operation key. Resolves the pending ledger row. Present when info.lookup.snapshot is not none.",
           "async": true,
           "optional": true,
           "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
@@ -2444,15 +2452,20 @@
             "args": [{"$ref": "urn:threads:schema:events:v1#/$defs/ev_snapshot/properties/data"}]
           }
         },
+        "attach": {
+          "ts": "attach",
+          "py": "attach",
+          "doc": "Reattach to a live ledger row's sandbox by its recorded ref, so a restarted host can terminate its processes and close it. not_found is final only when info.lookup.create is final; otherwise the answer is resource_unknown and the row becomes unknown.",
+          "async": true,
+          "params": [{"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "returns": {"result": {"$ref": "#/types/SandboxSession"}, "errors": ["not_found", "resource_unknown", "unavailable"]}
+        },
         "release": {
           "ts": "release",
           "py": "release",
-          "doc": "Release a snapshot or retention hold by its durable ref (ledger row releasing). released or already_gone (the provider proves it no longer exists) → released. An error → release_failed, retried by the next gc, never dropped. Sandboxes are released with SandboxSession.close.",
+          "doc": "Release a snapshot by its durable ref (ledger row releasing). released or already_gone (the provider proves it no longer exists) → released. An error → release_failed, retried by the next gc, never dropped. Sandboxes are released with SandboxSession.close. v0.1 has no retention holds: a snapshot lives until the provider's declared expiry, and restoring an expired one is snapshot_expired.",
           "async": true,
-          "params": [
-            {"name": "kind", "kind": "positional", "type": {"enum": ["snapshot", "retention_hold"]}, "required": true},
-            {"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true}
-          ],
+          "params": [{"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true}],
           "returns": {"result": {"enum": ["released", "already_gone"]}, "errors": ["release_failed", "unavailable"]}
         }
       },
@@ -2585,11 +2598,11 @@
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "exit_code": {"type": {"prim": "integer"}, "required": true},
-        "stdout": {"type": {"prim": "bytes"}, "required": true},
-        "stderr": {"type": {"prim": "bytes"}, "required": true}
+        "exit_code": {"type": {"promise": {"prim": "integer"}}, "required": true, "doc": "Resolves once both streams end."},
+        "stdout": {"type": {"stream": {"prim": "bytes"}}, "required": true, "doc": "Byte chunks: TS AsyncIterable<Uint8Array>, Python AsyncIterator[bytes]."},
+        "stderr": {"type": {"stream": {"prim": "bytes"}}, "required": true, "doc": "Byte chunks, as stdout."}
       },
-      "doc": "What an adapter's exec returns: the complete output, never truncated. The framework's sandbox layer turns it into an ExecResult.",
+      "doc": "What an adapter's exec returns: the complete output as byte streams, never truncated or buffered whole. The framework's sandbox layer consumes them into an ExecResult.",
       "source": ""
     },
     "ExecResult": {
@@ -2606,7 +2619,7 @@
           "doc": "Present exactly when truncated: the complete stdout and stderr, readable with read_tool_result."
         }
       },
-      "doc": "What tools and the log see. The framework's sandbox layer, not the adapter, builds it: it writes the complete ExecOutput to the artifact store at source, then keeps previews, before the tool_result is recorded.",
+      "doc": "What tools and the log see. The framework's sandbox layer, not the adapter, builds it: it writes the ExecOutput streams to the artifact store incrementally while keeping head and tail previews, so full output is never held in host memory, and records full_output before the tool_result.",
       "source": ""
     },
     "Scope": {
@@ -3053,7 +3066,7 @@
         "startRun": {
           "ts": "startRun",
           "py": "start_run",
-          "doc": "POST /v1/runs. Makes the user_input durable together with the idempotency key and returns; the run proceeds in the host. The same key and request replays the same receipt and starts nothing; the same key with a different request is idempotency_key_reused. Keys are scoped to the principal's tenant.",
+          "doc": "POST /v1/runs. Makes the user_input durable together with the idempotency key and returns; the run proceeds in the host. The key binds tenant, the full principal (issuer, tenant, subject), the operation and the request hash: the same key, principal and request replays the same receipt and starts nothing; a different request is idempotency_key_reused; a different principal in the same tenant is idempotency_key_principal_mismatch, and never sees the other principal's receipt.",
           "async": true,
           "params": [
             {"name": "request", "kind": "positional", "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/StartRunRequest"}, "required": true},
@@ -3068,7 +3081,7 @@
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/RunAccepted"},
-            "errors": ["forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused"]
+            "errors": ["forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused", "idempotency_key_principal_mismatch"]
           }
         },
         "subscribe": {
