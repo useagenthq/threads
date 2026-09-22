@@ -6,6 +6,7 @@ from typing import Annotated, get_args
 from pydantic import Field, JsonValue, TypeAdapter, ValidationError
 
 from threads._generated.events_v1 import ErrorCode, Event, Head, Header, KnownTag, UnknownEvent
+from threads.log.jcs import canonicalize
 from threads.log.strict_json import parse_json
 from threads.result import Err, Ok
 
@@ -36,10 +37,10 @@ def parse_log_line(line: str) -> Ok[LogLine] | Err[ParseError]:
     """Parses a line without its trailing newline.
 
     Admission (duplicate keys, non-finite numbers, lone surrogates, unsafe integers, the 1 MiB
-    cap) and schema failures are `invalid_line`. A header or head of a known format with a newer
-    integer `format_version` is `unsupported_format`. An event whose `(type, type_version)` this
-    version doesn't know is kept when `critical` is false and is `unsupported_critical_event`
-    otherwise.
+    cap, bytes other than the RFC 8785 form) and schema failures are `invalid_line`. A header or
+    head of a known format with a newer integer `format_version` is `unsupported_format`. An
+    event whose `(type, type_version)` this version doesn't know is kept when `critical` is false
+    and is `unsupported_critical_event` otherwise.
     """
     if len(line.encode("utf-8", "surrogatepass")) > MAX_LINE_BYTES:
         return _invalid(f"line exceeds {MAX_LINE_BYTES} bytes")
@@ -47,6 +48,10 @@ def parse_log_line(line: str) -> Ok[LogLine] | Err[ParseError]:
         case Err(error=reason):
             return _invalid(reason)
         case Ok(value=value):
+            if canonicalize(value) != Ok(line):
+                # Hashes cover stored bytes, so two spellings of one value must not both be
+                # admissible: a line is exactly the RFC 8785 form of what it parses to.
+                return _invalid("line is not in RFC 8785 canonical form")
             return _parse_value(value)
 
 

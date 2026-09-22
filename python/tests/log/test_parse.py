@@ -13,6 +13,7 @@ from threads.log import (
     UserInputEvent,
     parse_log_line,
 )
+from threads.log.jcs import canonicalize
 from threads.log.parse import MAX_LINE_BYTES
 from threads.result import Err, Ok
 
@@ -41,8 +42,14 @@ def event(kind: str, data: JsonValue, **envelope: JsonValue) -> dict[str, JsonVa
     return line | envelope
 
 
+def canonical(value: JsonValue) -> str:
+    text = canonicalize(value)
+    assert isinstance(text, Ok)
+    return text.value
+
+
 def parse(value: JsonValue) -> Ok[object] | Err[ParseError]:
-    match parse_log_line(json.dumps(value)):
+    match parse_log_line(canonical(value)):
         case Ok(value=parsed):
             return Ok(parsed)
         case Err() as err:
@@ -139,13 +146,11 @@ def test_oversized_line_is_invalid() -> None:
     "value",
     [
         pytest.param(USER_INPUT | {"seq": "1"}, id="string for int (strict)"),
-        pytest.param(USER_INPUT | {"seq": 1.0}, id="float for int"),
         pytest.param(USER_INPUT | {"seq": 0}, id="seq below minimum"),
         pytest.param(USER_INPUT | {"event_id": "not-a-uuid"}, id="id pattern"),
         pytest.param(USER_INPUT | {"critical": False}, id="pinned critical"),
         pytest.param(USER_INPUT | {"critical": 1}, id="1 for literal true"),
         pytest.param(USER_INPUT | {"type_version": True}, id="true for literal 1"),
-        pytest.param(USER_INPUT | {"type_version": 1.0}, id="1.0 for literal 1"),
         pytest.param(USER_INPUT | {"actor": {"kind": "user"}}, id="user_input needs principal"),
         pytest.param(USER_INPUT | {"extra": 1}, id="unknown envelope key"),
         pytest.param(
@@ -266,10 +271,8 @@ HEAD: dict[str, JsonValue] = {
         pytest.param(HEADER | {"format_version": 2}, "unsupported_format", id="header v2"),
         pytest.param(HEAD | {"format_version": 7}, "unsupported_format", id="head v7"),
         pytest.param(HEADER | {"format_version": 1.5}, "invalid_line", id="fraction"),
-        pytest.param(HEADER | {"format_version": 2.0}, "invalid_line", id="float two"),
         pytest.param(HEADER | {"format_version": "2"}, "invalid_line", id="string"),
         pytest.param(HEADER | {"format_version": True}, "invalid_line", id="bool"),
-        pytest.param(HEADER | {"format_version": 1.0}, "invalid_line", id="float one"),
         pytest.param(HEADER | {"format_version": 0}, "invalid_line", id="zero"),
         pytest.param(HEADER | {"format_version": -1}, "invalid_line", id="negative"),
         pytest.param(
@@ -293,3 +296,25 @@ HEAD: dict[str, JsonValue] = {
 )
 def test_format_admission(value: JsonValue, code: str) -> None:
     assert error_code(value) == code
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        pytest.param(" " + canonical(USER_INPUT), id="leading space"),
+        pytest.param(json.dumps(USER_INPUT), id="insignificant whitespace"),
+        pytest.param(json.dumps(USER_INPUT, separators=(",", ":")), id="unsorted keys"),
+        pytest.param(canonical(USER_INPUT).replace('"seq":1', '"seq":1.0'), id="1.0 spelling"),
+        pytest.param(
+            canonical(HEADER).replace('"format_version":1', '"format_version":2.0'),
+            id="format_version 2.0 is not an integer spelling",
+        ),
+        pytest.param(canonical(USER_INPUT).replace('"hi"', '"\\u0068i"'), id="needless escape"),
+        pytest.param(canonical(USER_INPUT).replace('"hi"', '"\\/"'), id="escaped solidus"),
+    ],
+)
+def test_non_canonical_bytes_are_an_invalid_line(line: str) -> None:
+    result = parse_log_line(line)
+    assert isinstance(result, Err)
+    assert result.error.code == "invalid_line"
+    assert "canonical" in result.error.message
