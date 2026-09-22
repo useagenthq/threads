@@ -10,6 +10,7 @@ import { type LogError, logError } from "./error";
 type ChainFields = {
   readonly seq: number;
   readonly prev_hash: string;
+  readonly thread_id: string;
   readonly branch_id: string;
   readonly type: string;
   readonly data: { readonly [key: string]: unknown };
@@ -68,6 +69,11 @@ export function addLine(
   }
   const line = parsed.value;
   if (line.kind === "header") {
+    const thread = chain.segments[0]?.header.thread_id;
+    if (thread !== undefined && line.header.thread_id !== thread)
+      return err(
+        logError("invalid_transition", "a segment of another thread", position),
+      );
     const hash = sha256Hex(bytes);
     chain.segments.push({ header: line.header, bytes, hash, events: [] });
     return ok(line);
@@ -98,7 +104,7 @@ export function tipHash(chain: Chain): string | undefined {
   return chain.events.at(-1)?.hash ?? chain.segments[0]?.hash;
 }
 
-/** Rules 1, 2 and 4, plus the fork link that opens a child segment. */
+/** Rules 1, 2 and 4 (branch and thread), plus the fork link that opens a child segment. */
 function checkLinks(chain: Chain, e: ChainFields): LogError | undefined {
   const segment = chain.segments.at(-1);
   if (segment === undefined)
@@ -112,6 +118,8 @@ function checkLinks(chain: Chain, e: ChainFields): LogError | undefined {
     return logError("prev_hash_mismatch", "prev_hash breaks the chain", e.seq);
   const forkError = checkFork(chain, e);
   if (forkError !== undefined) return forkError;
+  if (e.thread_id !== chain.segments[0]?.header.thread_id)
+    return logError("invalid_transition", "an event of another thread", e.seq);
   if (e.branch_id === segment.header.branch_id) return undefined;
   const message = `branch_id ${e.branch_id} is not its segment's`;
   return logError("invalid_transition", message, e.seq);
