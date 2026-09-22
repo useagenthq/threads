@@ -1,0 +1,9 @@
+{
+  "name": "render-reference-framing-escaped",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "A memory id with a quote and a memory body and summary that try to close the reference and open a trusted <context>. Render v1 escapes & < > \" ' in every wrapper attribute and body, so the request holds exactly one wrapper per event and no forged tag. The artifacts keep the original bytes.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

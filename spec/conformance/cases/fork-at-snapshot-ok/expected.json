@@ -53,7 +53,8 @@
         "parent_branch_id": "0192b000-0000-7000-8000-000000000001",
         "at_hash": "0750a56e3608f48938455f4f35d3500022052f1042f5430fccc06adbc545b75d",
         "reason": "snapshot",
-        "sandbox_id": "sbx_child_01"
+        "sandbox_id": "sbx_child_01",
+        "knowledge_policy": "pinned"
       }
     }
   ],

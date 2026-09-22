@@ -1,0 +1,9 @@
+{
+  "name": "settings-change-auto-reason-by-user-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A settings_changed with an automatic reason (fallback) whose actor is a user. Automatic reasons come only from the host or recovery; a person's change is reason user: invalid_line.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

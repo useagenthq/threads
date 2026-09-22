@@ -1,0 +1,15 @@
+{
+  "name": "fork-knowledge-current",
+  "family": "knowledge",
+  "kind": "fork",
+  "description": "The fork records its corpus policy. pinned is the default: the child searches as of the snapshot's knowledge_revision (7). current: the child searches the live corpus. Either way, recorded retrievals replay as recorded and are never re-run.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "sandbox_script": "sandbox.json",
+  "input": {
+    "fork_at_event_id": "0192e000-0000-7000-8000-00000000000b",
+    "new_branch_id": "0192b000-0000-7000-8000-000000000002",
+    "knowledge_policy": "current"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "outcome": "error",
+  "error": {
+    "code": "resource_unknown",
+    "seq": 11
+  },
+  "appended": [],
+  "fork": {
+    "child_created": false,
+    "parent_unchanged": true
+  },
+  "resources": {
+    "creates": 1,
+    "rows": [
+      {
+        "kind": "sandbox",
+        "state": "unknown"
+      }
+    ]
+  }
+}

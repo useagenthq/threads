@@ -160,3 +160,171 @@ def build(root: pathlib.Path) -> None:
         child,
         ("prev_hash_mismatch", num(s["seq"]) + 1),
     )
+
+    _knowledge(root)
+    _lost_restore(root)
+    _repair(root)
+    _duplicate_id(root)
+
+
+SANDBOX: Obj = {"snapshots": {"snap_01": {"restore_sandbox_id": "sbx_child_01"}}}
+
+
+def _knowledge(root: pathlib.Path) -> None:
+    for policy, revision in (("pinned", 7), ("current", None)):
+        log = base_simple()
+        s = snapshot(log, None, knowledge_revision=7)
+        child = log.fork(num(s["seq"]), CHILD, "sbx_child_01", epoch=2, knowledge=policy)
+        inp: Obj = {"fork_at_event_id": s["event_id"], "new_branch_id": CHILD}
+        if policy == "current":
+            inp["knowledge_policy"] = "current"
+        write_case(
+            root,
+            case(
+                f"fork-knowledge-{policy}",
+                "knowledge",
+                "fork",
+                "The fork records its corpus policy. pinned is the default: "
+                "the child searches as of the snapshot's knowledge_revision (7). current: the "
+                "child searches the live corpus. Either way, recorded retrievals replay as "
+                "recorded and are never re-run.",
+                sandbox_script="sandbox.json",
+                input=inp,
+            ),
+            log,
+            {
+                "outcome": "ok",
+                "appended": [
+                    {
+                        "type": "fork",
+                        "branch_id": CHILD,
+                        "data": child.events[-1]["data"],
+                    }
+                ],
+                "fork": {
+                    "child_created": True,
+                    "at_seq": s["seq"],
+                    "parent_unchanged": True,
+                    "knowledge_revision": revision,
+                },
+            },
+            extra={"sandbox.json": SANDBOX},
+        )
+
+
+def _lost_restore(root: pathlib.Path) -> None:
+    for lookup in ("found", "unsupported"):
+        log = base_simple()
+        s = snapshot(log, None)
+        child = log.fork(num(s["seq"]), CHILD, "sbx_child_01", epoch=2)
+        script: Obj = {
+            "snapshots": {
+                "snap_01": {
+                    "restore_sandbox_id": "sbx_child_01",
+                    "restore_response": "lost",
+                    "create_lookup": lookup,
+                }
+            }
+        }
+        inp: Obj = {"fork_at_event_id": s["event_id"], "new_branch_id": CHILD}
+        expected: Obj
+        if lookup == "found":
+            desc = (
+                "The provider creates the child sandbox but the response is lost. The ledger row "
+                "was written with its operation_key before the call, and the adapter finds the "
+                "sandbox by that key: it is verified and used. Nothing is created twice."
+            )
+            expected = {
+                "outcome": "ok",
+                "appended": [
+                    {
+                        "type": "fork",
+                        "branch_id": CHILD,
+                        "data": child.events[-1]["data"],
+                    }
+                ],
+                "fork": {
+                    "child_created": True,
+                    "at_seq": s["seq"],
+                    "parent_unchanged": True,
+                },
+                "resources": {
+                    "creates": 1,
+                    "rows": [{"kind": "sandbox", "state": "live"}],
+                },
+            }
+        else:
+            desc = (
+                "The child sandbox's create response is lost and the adapter can neither create "
+                "idempotently by operation_key nor look the key up. The fork fails with "
+                "resource_unknown; the ledger row stays unknown and parks for an operator. "
+                "Creation is never retried blindly and no child is listed."
+            )
+            expected = {
+                "outcome": "error",
+                "error": {"code": "resource_unknown", "seq": s["seq"]},
+                "appended": [],
+                "fork": {"child_created": False, "parent_unchanged": True},
+                "resources": {
+                    "creates": 1,
+                    "rows": [{"kind": "sandbox", "state": "unknown"}],
+                },
+            }
+        write_case(
+            root,
+            case(
+                f"fork-restore-lost-{lookup}",
+                "sandboxes",
+                "fork",
+                desc,
+                sandbox_script="sandbox.json",
+                input=inp,
+            ),
+            log,
+            expected,
+            extra={"sandbox.json": script},
+        )
+
+
+def _repair(root: pathlib.Path) -> None:
+    log = base_simple()
+    child = log.fork(log.seq, CHILD, None, epoch=2)
+    write_case(
+        root,
+        case(
+            "repair-child-inspection-only",
+            "log_fork_test",
+            "recover",
+            "An operator repair fork (fork{reason: repair}) has no sandbox that matches its "
+            "log, so it is inspection-only: it reduces and exports, but acquiring it to run "
+            "fails with branch_not_runnable and nothing is appended. To continue work, fork it "
+            "at an eligible snapshot in its resolved chain.",
+            model_script="model.json",
+        ),
+        child,
+        {
+            "outcome": "error",
+            "error": {"code": "branch_not_runnable", "seq": child.seq},
+            "state": reduce(child, NOW),
+            "appended": [],
+        },
+        extra={"model.json": {"responses": []}},
+    )
+
+
+def _duplicate_id(root: pathlib.Path) -> None:
+    log = base_simple()
+    s = snapshot(log, None)
+    child = log.fork(num(s["seq"]), CHILD, "sbx_child_01", epoch=2)
+    e = child.add("user_input", {"source": "api", "text": "Again."}, actor="user", principal=ALICE)
+    e["event_id"] = log.events[0]["event_id"]
+    child.lines[-1] = canonical(e)
+    negative(
+        root,
+        "event-id-duplicate-across-fork-rejected",
+        "A child event reuses the event_id of an ancestor event. Each physical branch is "
+        "unique on its own, but ids must be unique along the resolved chain so an id-only "
+        "reference is never ambiguous: invalid_transition.",
+        child,
+        ("invalid_transition", child.seq),
+    )

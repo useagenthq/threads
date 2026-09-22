@@ -86,6 +86,13 @@
             "new_branch_id": {
               "type": "string"
             },
+            "knowledge_policy": {
+              "description": "fork: the child's corpus policy. Absent means the API default, pinned.",
+              "enum": [
+                "pinned",
+                "current"
+              ]
+            },
             "webhooks": {
               "description": "intake: webhooks delivered in order; a repeated delivery simulates provider redelivery.",
               "type": "array",
@@ -191,6 +198,63 @@
             },
             "parent_unchanged": {
               "const": true
+            },
+            "knowledge_revision": {
+              "description": "The knowledge revision the child searches as of: the snapshot's knowledge_revision under pinned, null under current.",
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "resources": {
+          "description": "fork: the provider create calls the fake sandbox saw, and the resource-ledger rows the operation left.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "creates",
+            "rows"
+          ],
+          "properties": {
+            "creates": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "state"
+                ],
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "sandbox",
+                      "snapshot",
+                      "retention_hold"
+                    ]
+                  },
+                  "state": {
+                    "enum": [
+                      "pending",
+                      "live",
+                      "releasing",
+                      "released",
+                      "release_failed",
+                      "unknown"
+                    ]
+                  }
+                }
+              }
             }
           }
         },
@@ -419,7 +483,8 @@
             "idle",
             "in_turn",
             "parked",
-            "cancelled"
+            "cancelled",
+            "inspection_only"
           ]
         },
         "turns_completed": {
@@ -708,6 +773,20 @@
             "properties": {
               "restore_sandbox_id": {
                 "type": "string"
+              },
+              "restore_response": {
+                "description": "ok (default): the restore create returns normally. lost: the provider creates the sandbox but the response never arrives.",
+                "enum": [
+                  "ok",
+                  "lost"
+                ]
+              },
+              "create_lookup": {
+                "description": "What the adapter can do with the operation_key after a lost response: found (lookup finds the resource) or unsupported (no idempotent create and no lookup).",
+                "enum": [
+                  "found",
+                  "unsupported"
+                ]
               }
             }
           }

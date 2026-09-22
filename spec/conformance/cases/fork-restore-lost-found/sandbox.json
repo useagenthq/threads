@@ -1,0 +1,9 @@
+{
+  "snapshots": {
+    "snap_01": {
+      "restore_sandbox_id": "sbx_child_01",
+      "restore_response": "lost",
+      "create_lookup": "found"
+    }
+  }
+}

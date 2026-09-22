@@ -1,0 +1,14 @@
+{
+  "name": "fork-restore-lost-unsupported",
+  "family": "sandboxes",
+  "kind": "fork",
+  "description": "The child sandbox's create response is lost and the adapter can neither create idempotently by operation_key nor look the key up. The fork fails with resource_unknown; the ledger row stays unknown and parks for an operator. Creation is never retried blindly and no child is listed.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "sandbox_script": "sandbox.json",
+  "input": {
+    "fork_at_event_id": "0192e000-0000-7000-8000-00000000000b",
+    "new_branch_id": "0192b000-0000-7000-8000-000000000002"
+  }
+}

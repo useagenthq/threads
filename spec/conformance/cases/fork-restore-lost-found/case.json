@@ -1,0 +1,14 @@
+{
+  "name": "fork-restore-lost-found",
+  "family": "sandboxes",
+  "kind": "fork",
+  "description": "The provider creates the child sandbox but the response is lost. The ledger row was written with its operation_key before the call, and the adapter finds the sandbox by that key: it is verified and used. Nothing is created twice.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "sandbox_script": "sandbox.json",
+  "input": {
+    "fork_at_event_id": "0192e000-0000-7000-8000-00000000000b",
+    "new_branch_id": "0192b000-0000-7000-8000-000000000002"
+  }
+}

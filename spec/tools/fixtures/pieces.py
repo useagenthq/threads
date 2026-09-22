@@ -204,19 +204,19 @@ def read_turn(log: Log, question: str = "What is in README.md?") -> None:
     log.add("turn_completed", {"reason": "end_turn"})
 
 
-def snapshot(log: Log, expires_at: int | None) -> Obj:
-    return log.add(
-        "snapshot",
-        {
-            "snapshot_id": "snap_01",
-            "provider": "fake",
-            "sandbox_id": "sbx_parent_01",
-            "capture_class": "filesystem",
-            "expires_at": expires_at,
-            "manifest_hash": sha(b"manifest:README.md"),
-            "quiesced": {"frozen": [], "stopped": [], "excluded": []},
-        },
-    )
+def snapshot(log: Log, expires_at: int | None, knowledge_revision: int | None = None) -> Obj:
+    data: Obj = {
+        "snapshot_id": "snap_01",
+        "provider": "fake",
+        "sandbox_id": "sbx_parent_01",
+        "capture_class": "filesystem",
+        "expires_at": expires_at,
+        "manifest_hash": sha(b"manifest:README.md"),
+        "quiesced": {"frozen": [], "stopped": [], "excluded": []},
+    }
+    if knowledge_revision is not None:
+        data["knowledge_revision"] = knowledge_revision
+    return log.add("snapshot", data)
 
 
 def effect_call(

@@ -89,22 +89,33 @@ class Log:
         )
         return c
 
-    def fork(self, at_seq: int, branch: str, sandbox_id: str, epoch: int) -> Log:
-        """Child export: ancestor lines through at_seq, then the child's header and fork event."""
+    def fork(
+        self,
+        at_seq: int,
+        branch: str,
+        sandbox_id: str | None,
+        epoch: int,
+        knowledge: str = "pinned",
+    ) -> Log:
+        """Child export: ancestor lines through at_seq, then the child's header and fork event.
+
+        sandbox_id None is an operator repair fork: no sandbox, no knowledge policy.
+        """
         idx = next(i for i, ln in enumerate(self.lines) if json.loads(ln).get("seq") == at_seq)
         c = self.copy()
         c.branch, c.epoch = branch, epoch
         c.lines = [*self.lines[: idx + 1], Log.header(branch)]
         c.events = [e for e in self.events if num(e["seq"]) <= at_seq]
-        c.add(
-            "fork",
-            {
-                "parent_branch_id": self.branch,
-                "at_hash": sha(self.lines[idx]),
+        data: Obj = {"parent_branch_id": self.branch, "at_hash": sha(self.lines[idx])}
+        if sandbox_id is None:
+            data["reason"] = "repair"
+        else:
+            data |= {
                 "reason": "snapshot",
                 "sandbox_id": sandbox_id,
-            },
-        )
+                "knowledge_policy": knowledge,
+            }
+        c.add("fork", data)
         return c
 
     def model_request(self, attempt: int = 1, *, compaction: bool = False) -> Obj:
@@ -189,7 +200,7 @@ class _Reducer:
     def __init__(self, now: int) -> None:
         self.now = now
         self.epoch = self.turns = self.input_tokens = self.output_tokens = self.unknown = 0
-        self.in_turn = self.cancelled = False
+        self.in_turn = self.cancelled = self.repair = False
         self.pending: list[str] = []
         self.parked: list[JsonValue] = []
         self.fork_points: list[JsonValue] = []
@@ -252,7 +263,13 @@ class _Reducer:
         if not self.in_turn and not self.pending and not self.parked and settled and live:
             self.fork_points.append({"seq": e["seq"], "snapshot_event_id": e["event_id"]})
 
+    def fork(self, _e: Obj, d: Obj) -> None:
+        # The last fork on the resolved chain is this branch's own.
+        self.repair = d["reason"] == "repair"
+
     def status(self) -> str:
+        if self.repair:
+            return "inspection_only"
         if self.cancelled:
             return "cancelled"
         if self.parked:
@@ -272,6 +289,7 @@ HANDLERS: dict[str, Callable[[_Reducer, Obj, Obj], None]] = {
     "cancel_requested": _Reducer.cancel_requested,
     "cancelled": _Reducer.cancelled_event,
     "snapshot": _Reducer.snapshot,
+    "fork": _Reducer.fork,
 }
 
 

@@ -134,6 +134,18 @@ def _prefix_cases(root: pathlib.Path) -> None:
         log,
         ("invalid_line", log.seq),
     )
+    log = Log()
+    started(log, [READ_FILE], policy=policy())
+    log.add("settings_changed", {**change, "reason": "fallback"}, actor="user", principal=ALICE)
+    negative(
+        root,
+        "settings-change-auto-reason-by-user-rejected",
+        "A settings_changed with an automatic reason (fallback) whose actor is a user. "
+        "Automatic reasons come only from the host or recovery; a person's change is reason "
+        "user: invalid_line.",
+        log,
+        ("invalid_line", log.seq),
+    )
 
 
 def _abandoned(reason: str, status: int, **more: JsonValue) -> Obj:
@@ -255,6 +267,18 @@ def _budget(root: pathlib.Path) -> None:
         ),
         log,
         {"cost": cost(log)},
+    )
+    log = _budget_log()
+    last = log.events.pop()
+    log.lines.pop()
+    log.add("budget_exceeded", {**obj(last["data"]), "scope": "ancestor"})
+    negative(
+        root,
+        "budget-exceeded-ancestor-without-owner-rejected",
+        "budget_exceeded with scope ancestor but no owner_thread_id: the ancestor whose "
+        "budget refused the reservation must be named: invalid_line.",
+        log,
+        ("invalid_line", log.seq),
     )
     log = _budget_log()
     log.model_request()

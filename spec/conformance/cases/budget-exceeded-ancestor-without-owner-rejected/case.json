@@ -1,0 +1,9 @@
+{
+  "name": "budget-exceeded-ancestor-without-owner-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "budget_exceeded with scope ancestor but no owner_thread_id: the ancestor whose budget refused the reservation must be named: invalid_line.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -20,7 +20,7 @@
     "TimeMs": { "description": "Unix epoch milliseconds. Informational; never used for ordering.", "$ref": "#/$defs/Int" },
     "Sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "Uuid": {
-      "description": "Lowercase UUID string. Writers generate UUIDv7.",
+      "description": "Lowercase UUID string. Writers MUST generate UUIDv7; readers accept any lowercase UUID, so the version is not an admission rule.",
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
     },
@@ -83,7 +83,9 @@
         "model_unavailable",
         "output_invalid",
         "tool_not_loaded",
-        "permission_rule_invalid"
+        "permission_rule_invalid",
+        "branch_not_runnable",
+        "resource_unknown"
       ]
     },
 
@@ -558,7 +560,7 @@
       "required": ["seq", "event_id", "thread_id", "branch_id", "epoch", "type", "type_version", "time", "actor", "prev_hash", "critical", "data"],
       "properties": {
         "seq": { "$ref": "#/$defs/PosInt" },
-        "event_id": { "$ref": "#/$defs/EventId" },
+        "event_id": { "description": "Unique along the resolved chain (every ancestor segment plus this branch), checked on append and import (semantic rule 28).", "$ref": "#/$defs/EventId" },
         "thread_id": { "$ref": "#/$defs/ThreadId" },
         "branch_id": { "description": "The branch that wrote this event. Always the branch of the segment it is stored in.", "$ref": "#/$defs/BranchId" },
         "epoch": { "description": "Writer fencing epoch from the branch lease. Non-decreasing along the resolved chain.", "$ref": "#/$defs/PosInt" },
@@ -1114,6 +1116,7 @@
             "capture_class": { "enum": ["filesystem", "filesystem_and_processes", "full_vm"] },
             "expires_at": { "oneOf": [{ "$ref": "#/$defs/TimeMs" }, { "type": "null" }] },
             "manifest_hash": { "description": "RFC 8785 hash of the captured file-tree manifest (path, mode, size, sha256).", "$ref": "#/$defs/Sha256" },
+            "knowledge_revision": { "description": "The host knowledge store revision at capture. Present when the thread has a knowledge binding. A fork with knowledge_policy pinned searches as of this revision.", "$ref": "#/$defs/Int" },
             "quiesced": {
               "description": "How sandbox processes that could mutate captured state were handled. excluded lists only processes the provider proves cannot write captured paths.",
               "type": "object",
@@ -1140,12 +1143,13 @@
           "properties": {
             "parent_branch_id": { "$ref": "#/$defs/BranchId" },
             "at_hash": { "description": "sha256 of the parent's line at at_seq. Binds the child to the parent's chain.", "$ref": "#/$defs/Sha256" },
-            "reason": { "description": "snapshot: a user fork at an eligible snapshot event. repair: operator repair of a corrupt parent, continuing from its last valid line; no sandbox is restored.", "enum": ["snapshot", "repair"] },
-            "sandbox_id": { "description": "The isolated child sandbox restored from the snapshot, with its manifest verified.", "$ref": "#/$defs/NonEmpty" }
+            "reason": { "description": "snapshot: a user fork at an eligible snapshot event. repair: operator repair of a corrupt parent at its last valid line; no sandbox is restored and the child is inspection-only (never runnable; ).", "enum": ["snapshot", "repair"] },
+            "sandbox_id": { "description": "The isolated child sandbox restored from the snapshot, with its manifest verified.", "$ref": "#/$defs/NonEmpty" },
+            "knowledge_policy": { "description": "How the child searches knowledge. pinned (the API default): as of the fork snapshot's knowledge_revision. current: the live corpus. Recorded retrievals always replay as recorded.", "enum": ["pinned", "current"] }
           },
           "if": { "properties": { "reason": { "const": "snapshot" } } },
-          "then": { "required": ["sandbox_id"] },
-          "else": { "not": { "required": ["sandbox_id"] } }
+          "then": { "required": ["sandbox_id", "knowledge_policy"] },
+          "else": { "allOf": [{ "not": { "required": ["sandbox_id"] } }, { "not": { "required": ["knowledge_policy"] } }] }
         }
       }
     },
@@ -1338,13 +1342,18 @@
     },
 
     "ev_settings_changed": {
-      "if": { "properties": { "data": { "properties": { "reason": { "const": "user" } } } } },
-      "then": { "properties": { "actor": { "$ref": "#/$defs/ActorWithPrincipal" } } },
+      "allOf": [
+        {
+          "if": { "properties": { "data": { "properties": { "reason": { "const": "user" } } } } },
+          "then": { "properties": { "actor": { "allOf": [{ "$ref": "#/$defs/ActorWithPrincipal" }, { "properties": { "kind": { "enum": ["user", "host"] } } }] } } },
+          "else": { "properties": { "actor": { "properties": { "kind": { "enum": ["host", "recovery"] } } } } }
+        }
+      ],
       "description": "Starts a new settings epoch: Render v1 line 0 takes model, params and adapter from here, system and tools stay pinned. C7 holds within each epoch. Never while a model attempt awaits its response. model must be listed in policy.models when policy is present.",
       "properties": {
         "type": { "const": "settings_changed" }, "type_version": { "const": 1 }, "critical": { "const": true },
         "actor": {
-          "description": "Only the host (fallback, escalation, revert), recovery, or an operator principal (reason user). Never model or tool.",
+          "description": "reason user: an operator principal, as actor user or host (the host API acting for that principal); the host still authorizes the principal, the schema only proves one is named. reason fallback, escalation or revert: automatic, so actor host or recovery only. Never model or tool.",
           "allOf": [{ "$ref": "#/$defs/Actor" }, { "properties": { "kind": { "enum": ["host", "user", "recovery"] } } }]
         },
         "data": {
@@ -1385,13 +1394,16 @@
           "additionalProperties": false,
           "required": ["scope", "limit", "limit_value", "observed", "observed_is_upper_bound"],
           "properties": {
-            "scope": { "description": "Which budget refused the reservation. ancestor: a budget of an ancestor thread in the agent tree (owner_thread_id).", "enum": ["run", "thread", "ancestor"] },
-            "owner_thread_id": { "$ref": "#/$defs/ThreadId" },
+            "scope": { "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id.", "enum": ["run", "thread", "ancestor"] },
+            "owner_thread_id": { "description": "Required exactly when scope is ancestor: the ancestor thread whose budget refused the reservation.", "$ref": "#/$defs/ThreadId" },
             "limit": { "enum": ["max_cost_nanos", "max_input_tokens", "max_output_tokens", "max_model_requests", "max_turns", "max_wall_ms"] },
             "limit_value": { "$ref": "#/$defs/Int" },
             "observed": { "$ref": "#/$defs/Int" },
             "observed_is_upper_bound": { "description": "true when unknown usage was counted at its conservative upper bound.", "type": "boolean" }
-          }
+          },
+          "if": { "properties": { "scope": { "const": "ancestor" } } },
+          "then": { "required": ["owner_thread_id"] },
+          "else": { "not": { "required": ["owner_thread_id"] } }
         }
       }
     },

@@ -46,7 +46,7 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
    | `config_hash`, `args_hash`, `manifest_hash`, `tools_changed.tools_hash` | RFC 8785 bytes of the structured value | canonical |
 
 4. **Numbers.** Envelope fields and framework-authored integer fields are integers in `0 … 2^53−1`. Floats appear only in `JsonValue` positions (tool `input`, `model_params`, adapter `settings`), spelled per . Fractions in policy are integer permille; prices are integer nano-units per token. Token counts are an integer or `null` (unknown, never zero; ).
-5. **Identifiers.** `thread_id`, `branch_id` and `event_id` are lowercase UUIDv7 strings, branded per kind in both languages. `call_id` is opaque and may come from the provider.
+5. **Identifiers.** `thread_id`, `branch_id` and `event_id` are lowercase UUID strings, branded per kind in both languages. Writers MUST generate UUIDv7. Readers accept any lowercase UUID: the version is a writer rule, not an admission rule. `call_id` is opaque and may come from the provider.
 6. **Pinned names.** Event `type` names, every enum literal and every `ErrorCode` are frozen by a golden test in both languages. Add only. Never update the pins in a rename PR.
 7. **Header** (a branch's first line): `{format: "threads.log", format_version: 1, thread_id, branch_id, created_at, writer: {impl, version}}`. It is not an event: no `seq`, no `prev_hash`. Every branch, root or child, has its own header. `writer` pins the only implementation and major version that may append.
 8. **Head checkpoint** (the last line of every export): `{format: "threads.head", format_version: 1, branch_id, seq, hash}`.
@@ -55,7 +55,7 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
    | Field | Rule |
    |---|---|
    | `seq` | Contiguous along the branch's resolved chain. The first event after a root header is 1 |
-   | `event_id` | Unique in the thread. All cross-event references use it |
+   | `event_id` | Unique along the resolved chain: no event of this branch reuses an id from its own segment or any ancestor segment (semantic rule 28). All cross-event references use it |
    | `thread_id`, `branch_id` | `branch_id` is the branch that wrote the event, which is always its segment's header `branch_id` |
    | `epoch` | The writer's lease epoch. Non-decreasing along the resolved chain |
    | `type`, `type_version` | Discriminant plus per-type schema version |
@@ -76,6 +76,8 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
     - Parent rows are **referenced, never copied or rewritten**. SQLite stores only the child's own lines. An export of a child writes each ancestor segment (its header and its lines through the fork point, byte-identical), then the child segment, then the child's `Head`.
     - A parent branch can't be deleted while a child references it (`branch_has_children`). Deleting a thread deletes all its branches together.
     - `fork.reason` is `snapshot` for a user fork at an eligible snapshot event or `repair` for operator repair of a corrupt parent (item 14).
+    - A `snapshot` fork records `knowledge_policy`: `pinned` (the API default) searches knowledge as of the fork snapshot's `knowledge_revision`; `current` searches the live corpus. A `repair` fork has neither a sandbox nor a knowledge policy.
+    - A `repair` child is **inspection-only**: it reduces, renders and exports, but it is never runnable, because no sandbox matches its log. Acquiring it to run fails with `branch_not_runnable` and appends nothing. To continue work, fork it at an eligible snapshot in its resolved chain.
 13. **Derived, never stored.** Payloads carry no field that the envelope or an earlier event already fixes:
 
     | Value | Derivation |
@@ -94,6 +96,8 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
     | budget reservations | The host `budget_ledger`, a durable cache of the tree's logs, rebuilt on restart |
     | the permission mode | `policy.permissions.mode`, then the latest `mode_changed` |
     | todo list, children, team tasks | The latest `todos_updated`; `agent_spawned` / `agent_finished`; the `team_task_*` events |
+    | a pinned fork's knowledge revision | The fork snapshot's `knowledge_revision` (the parent's snapshot event at `at_seq`) |
+    | the owner of a `budget_exceeded` with scope `run` or `thread` | The envelope `thread_id`. Only scope `ancestor` names `owner_thread_id`, and there it is required |
 
 14. **Integrity scope.**
     - The chain detects any change to a line before the last one: the next line's `prev_hash` stops matching.
@@ -111,19 +115,20 @@ The one normative representation of a model request. `req_hash` covers these byt
   - `model`, `params` (`model_params`) and `adapter` come from the latest `thread_started` or `settings_changed` before the request.
   - `adapter` is the model adapter's name, version and every provider-conversion setting, including declared hosted tools.
   - `tools` is `[{name, description, input_schema}]` in declared order. A spec with `defer_loading: true` renders as `{name, description, deferred: true}`. `effect_class`, `dedup_window_ms`, `output_schema` and `ends_turn` aren't model-visible and are omitted.
+- **Framing escape.** Every framing wrapper (`<reference>`, `<context>`, `<heartbeat>`, and the summary reference) escapes each attribute value and its whole body text with `esc`: replace `&` with `&amp;` first, then `<` with `&lt;`, `>` with `&gt;`, `"` with `&quot;` and `'` with `&#39;`. Only the wrapper's own tags are raw, so stored text (a memory id, a memory body, a summary, a call id) can never close a wrapper or open another one. The escape applies to the rendered text only: artifacts and event payloads keep their original bytes (`render-reference-framing-escaped`).
 - **Then one line per model-visible event, in log order:**
 
   | Event | Line |
   |---|---|
   | `user_input`, `steer` | `{"role":"user","content":[{"type":"text","text":<text>}]}`, or `{"role":"user","content":<content>}` when the event has `content` (ordered input parts, as recorded). **Nothing** if a later `hook_decision{hook: before_input, decision: deny \| failed, input_event_id}` before the request names it |
-  | `injected`, trust `untrusted_reference` | A user line whose text is `<reference source="S" id="ID" untrusted="true">\nTEXT\n</reference>` |
-  | `injected`, trust `trusted_instruction` | A user line whose text is `<context source="S" id="ID">\nTEXT\n</context>` |
-  | `heartbeat` | A user line whose text is `<heartbeat>\nrunning: ID, ID\n</heartbeat>` |
+  | `injected`, trust `untrusted_reference` | A user line whose text is `<reference source="esc(S)" id="esc(ID)" untrusted="true">\nesc(TEXT)\n</reference>` |
+  | `injected`, trust `trusted_instruction` | A user line whose text is `<context source="esc(S)" id="esc(ID)">\nesc(TEXT)\n</context>` |
+  | `heartbeat` | A user line whose text is `<heartbeat>\nrunning: esc(ID), esc(ID)\n</heartbeat>` |
   | `model_response`, `model_response_recovered` | `{"role":"assistant","content":<content>}`, parts as recorded. `reasoning` and `hosted_tool` parts of a response recorded before a `settings_changed{reasoning_carryover: omit_prior}` are omitted. If nothing is left, no line. **Nothing** when the response answers a `model_request{purpose: compaction}` |
   | `tools_changed` | `{"role":"tools","tools":[…]}`: the complete new set, rendered as in line 0 (deferred specs as stubs). Line 0 is unchanged |
   | `tool_result` | `{"role":"tool","call_id":…,"is_error":…,"content":<parts>}`. `<parts>` is `[{"type":"text","text":<preview>}]` when the event has no `content`, else `content` as recorded (the preview is then not rendered). A `context_edited` before the request changes it: `clear` makes `<parts>` exactly `[{"type":"text","text":"[tool result cleared: call_id=<id>; read it with read_tool_result]"}]`; `redact` replaces each span (UTF-8 bytes) of text part `part` with `[redacted]` |
   | `tool_result_late` | The same, plus `"late":true`. The earlier placeholder line stays |
-  | `compacted` | The lines of events `from_seq..to_seq` are dropped (a compacted event inside a later range is dropped too). In place of the range's first event go: one user line, the summary artifact's text wrapped as a reference with `source="summary"` and `id=<summary sha256>`, then the line of the **last** `tools_changed` inside the range, if any, so loaded and changed tools survive. The compacted event itself renders nothing. Line 0 is never compacted |
+  | `compacted` | The lines of events `from_seq..to_seq` are dropped (a compacted event inside a later range is dropped too). In place of the range's first event go: one user line, the summary artifact's text wrapped (escaped) as a reference with `source="summary"` and `id=<summary sha256>`, then the line of the **last** `tools_changed` inside the range, if any, so loaded and changed tools survive. The compacted event itself renders nothing. Line 0 is never compacted |
 
   All other events render nothing (`model_request`, `settings_changed`, `context_edited`, `context_preflight_blocked`, `hook_decision`, …).
 - **Artifacts.** Parts carry artifact refs, not bytes. An event whose text is in an artifact renders the verified bytes decoded as UTF-8. Before dispatch every artifact referenced by a rendered part is read and hash-verified. A missing or corrupt artifact is `artifact_missing` / `artifact_corrupt`, never substituted, and the request isn't sent (`render-image-artifact-missing`).
@@ -151,7 +156,7 @@ Checked by readers and writers (`validate_next`) on top of the schema. This is t
 | 11 | `cancelled` is never written while an effect is `begun` or `unknown` | `invalid_transition` | `cancelled-with-unsettled-effect` |
 | 12 | `user_input` opens a turn only when none is open; input during a turn is `steer`. A turn ends at `turn_completed` | `invalid_transition` | `user-input-inside-open-turn` |
 | 13 | `approval_granted` / `approval_denied` match the open challenge's `call_id` and `args_hash` | `approval_mismatch` | `approval-args-mismatch` |
-| 14 | Every `declared_prefix` equals the line 0 derived from the pinned settings of its authorized settings epoch (C7 per epoch). An epoch starts only at a `settings_changed` whose actor is authorized (schema: host, recovery, or an operator principal for `reason: user`), and a mismatch never resets the baseline | `prefix_changed` | `prefix-declared-changed-fails`, `prefix-stable-across-turns`, `settings-change-new-prefix-epoch`, `prefix-changed-mid-epoch-rejected` |
+| 14 | Every `declared_prefix` equals the line 0 derived from the pinned settings of its authorized settings epoch (C7 per epoch). An epoch starts only at a `settings_changed` whose actor is authorized (schema: `reason: user` needs a principal, as actor `user` or `host`; automatic reasons need actor `host` or `recovery`. The host still authorizes the principal at write time: the schema only proves one is named), and a mismatch never resets the baseline | `prefix_changed` | `prefix-declared-changed-fails`, `prefix-stable-across-turns`, `settings-change-new-prefix-epoch`, `prefix-changed-mid-epoch-rejected` |
 | 15 | `request_ref` bytes equal Render v1 of the events before the request (plus the instruction line for a compaction request) | `request_hash_mismatch` | `render-req-hash-mismatch`, `compaction-summarizer-recorded` |
 | 16 | A `fork{reason: snapshot}` is at an eligible snapshot: quiescent and not expired | `no_snapshot_boundary`, `snapshot_expired` | `fork-not-at-snapshot-error`, `fork-snapshot-expired` |
 | 17 | `tools_changed.tools_hash` is the SHA-256 of the RFC 8785 bytes of its `tools` | `invalid_transition` | `tools-changed-hash-mismatch` |
@@ -165,8 +170,9 @@ Checked by readers and writers (`validate_next`) on top of the schema. This is t
 | 25 | `tool_result{origin: answered}` needs an open `parked{address: {kind: input, id: <call_id>}}` | `invalid_transition` | `answer-without-open-question-rejected` |
 | 26 | After `handoff`, the thread takes no `user_input`, `steer` or `model_request` | `invalid_transition` | `handoff-then-input-rejected` |
 | 27 | `mode_changed.from` is the current mode; `to: bypass` needs `policy.permissions.allow_bypass` | `invalid_transition` | `mode-change-bypass-not-allowed` |
+| 28 | `event_id` is unique along the resolved chain, checked on append and on import. SQLite's `(branch_id, event_id)` index is physical only; the writer and importer also check every ancestor segment through its fork point | `invalid_transition` | `event-id-duplicate-across-fork-rejected` |
 
-A line that fails its `data` schema (for example a `tool_use` part inside `user_input`, or a `settings_changed` by the model) is `invalid_line` (`user-input-tool-use-part-rejected`, `settings-change-by-model-rejected`).
+A line that fails its schema is `invalid_line`. Examples: a `tool_use` part inside `user_input`; a `settings_changed` by the model; a `settings_changed` with an automatic reason (`fallback`, `escalation`, `revert`) whose actor is not `host` or `recovery`; a `budget_exceeded` with scope `ancestor` and no `owner_thread_id` (`user-input-tool-use-part-rejected`, `settings-change-by-model-rejected`, `settings-change-auto-reason-by-user-rejected`, `budget-exceeded-ancestor-without-owner-rejected`). These are schema conditionals (`if`/`then`), not semantic rules.
 
 ## Versioning policy
 

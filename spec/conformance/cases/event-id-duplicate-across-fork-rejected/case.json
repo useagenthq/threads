@@ -1,0 +1,9 @@
+{
+  "name": "event-id-duplicate-across-fork-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A child event reuses the event_id of an ancestor event. Each physical branch is unique on its own, but ids must be unique along the resolved chain so an id-only reference is never ambiguous: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

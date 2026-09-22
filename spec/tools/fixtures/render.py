@@ -33,12 +33,32 @@ ROLES = {
 }
 
 
+def esc(s: str) -> str:
+    """Render v1 framing escape: stored text can never close or forge a wrapper tag."""
+    for raw, entity in (
+        ("&", "&amp;"),
+        ("<", "&lt;"),
+        (">", "&gt;"),
+        ('"', "&quot;"),
+        ("'", "&#39;"),
+    ):
+        s = s.replace(raw, entity)
+    return s
+
+
+def reference(source: str, ident: str, body: str) -> str:
+    return (
+        f'<reference source="{esc(source)}" id="{esc(ident)}" untrusted="true">\n'
+        f"{esc(body)}\n</reference>"
+    )
+
+
 def wrap(d: Obj, body: str) -> str:
     origin = text(obj(d["origin"])["id"])
     source = text(d["source"])
     if d["trust"] == "untrusted_reference":
-        return f'<reference source="{source}" id="{origin}" untrusted="true">\n{body}\n</reference>'
-    return f'<context source="{source}" id="{origin}">\n{body}\n</context>'
+        return reference(source, origin, body)
+    return f'<context source="{esc(source)}" id="{esc(origin)}">\n{esc(body)}\n</context>'
 
 
 def user_line(t: str) -> Obj:
@@ -66,7 +86,10 @@ class _View:
     def __init__(self, events: list[Obj], artifacts: dict[str, bytes]) -> None:
         self.events, self.artifacts = events, artifacts
         ts = obj(next(e for e in events if e["type"] == "thread_started")["data"])
-        self.system, self.tools = ts["instructions"], [spec_line(t) for t in arr(ts["tools"])]
+        self.system, self.tools = (
+            ts["instructions"],
+            [spec_line(t) for t in arr(ts["tools"])],
+        )
         self.settings: Obj = {k: ts[k] for k in ("model", "model_params", "adapter")}
         self.cut = 0
         self.side: set[JsonValue] = set()
@@ -133,7 +156,7 @@ class _View:
     def heartbeat(self, e: Obj) -> Obj:
         ids = arr(obj(e["data"])["running_call_ids"])
         return user_line(
-            "<heartbeat>\nrunning: " + ", ".join(text(x) for x in ids) + "\n</heartbeat>"
+            "<heartbeat>\nrunning: " + ", ".join(esc(text(x)) for x in ids) + "\n</heartbeat>"
         )
 
     def tools_changed(self, e: Obj) -> Obj:
@@ -168,9 +191,7 @@ class _View:
         ref = obj(obj(c["data"])["summary_ref"])
         sha = text(ref["sha256"])
         body = self.artifacts[sha].decode()
-        return user_line(
-            f'<reference source="summary" id="{sha}" untrusted="true">\n{body}\n</reference>'
-        )
+        return user_line(reference("summary", sha, body))
 
     # ---------- the body walk ----------
     def walk(self) -> Iterator[tuple[Obj, Callable[[], Obj | None]]]:

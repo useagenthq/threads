@@ -1,0 +1,10 @@
+{
+  "name": "repair-child-inspection-only",
+  "family": "log_fork_test",
+  "kind": "recover",
+  "description": "An operator repair fork (fork{reason: repair}) has no sandbox that matches its log, so it is inspection-only: it reduces and exports, but acquiring it to run fails with branch_not_runnable and nothing is appended. To continue work, fork it at an eligible snapshot in its resolved chain.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

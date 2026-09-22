@@ -33,7 +33,7 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 | `kind` | `reduce`, `render`, `recover`, `fork`, `stub`, `intake`, `policy`, `security` or `parity` |
 | `clock.now` | The injected clock. Runners never read wall time |
 | `model_script`, `sandbox_script`, `stub_script` | Present when the case needs them |
-| `input` | Kind-specific input: `fork_at_event_id` and `new_branch_id` (fork), `webhooks` (intake), `workspace`, `permissions` and `calls` (policy) |
+| `input` | Kind-specific input: `fork_at_event_id`, `new_branch_id` and optional `knowledge_policy` (fork; absent means `pinned`), `webhooks` (intake), `workspace`, `permissions` and `calls` (policy) |
 
 ### expected.json
 
@@ -46,7 +46,8 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 | `head_verified` | `false` when the input has no valid head checkpoint. Absent means `true` |
 | `appended` | Exactly the events the runner must append, in order. Each entry is an `EventMatcher` |
 | `sandbox` | Per-tool `dispatches`, `new_executions` and `lookups` counters from the scripted sandbox |
-| `fork` | `child_created`, `at_seq`, `parent_unchanged` |
+| `fork` | `child_created`, `at_seq`, `parent_unchanged`, and `knowledge_revision` (the revision the child searches as of: the snapshot's under `pinned`, `null` under `current`) |
+| `resources` | fork: `creates` (provider create calls the fake sandbox saw) and the resource-ledger `rows` `{kind, state}` the operation left |
 | `render` | `next_request_sha256` and `declared_prefix` |
 | `stubs` | `consumed` and `unmatched` counts |
 | `responses`, `inbox` | intake: HTTP status per webhook, and the inbox rows in insertion order |
@@ -68,7 +69,7 @@ This is the cross-language comparison target. It is deliberately small.
 | `head` | `{seq, hash}` of the branch's last event line. `hash` is the SHA-256 of its raw bytes |
 | `branch_id` | The branch of the last segment (the one the export is of) |
 | `epoch` | The epoch of the last event |
-| `status` | `cancelled` after a `cancelled` whose request had scope `thread` or `tree`; else `parked` while any park address is open; else `in_turn` while a turn is open; else `idle` |
+| `status` | `inspection_only` when the branch's own `fork` has reason `repair`; else `cancelled` after a `cancelled` whose request had scope `thread` or `tree`; else `parked` while any park address is open; else `in_turn` while a turn is open; else `idle` |
 | `turns_completed` | Count of `turn_completed` events |
 | `pending_calls` | `call_id`s that have a `tool_call` and no `tool_result` (a deferred placeholder counts as a result), in call order |
 | `effects` | One entry per derived effect key, in order of first `effect_begin`. Status is `begun`, `committed`, `unknown` or `resolved`, whichever effect event came last |
@@ -111,16 +112,16 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 
 **`recover`**
 1. Compute `state`, `committed_bytes` and `head_verified` as a reader would.
-2. Acquire the branch lease. This takes the next epoch and runs semantic recovery before anything else.
+2. Acquire the branch lease. This takes the next epoch and runs semantic recovery before anything else. A `repair` child is inspection-only: acquiring it to run fails with `branch_not_runnable` and appends nothing (`repair-child-inspection-only`).
 3. Resume the loop against the scripts until the branch is idle or parked.
 4. Compare `appended` and the `sandbox` counters. For the scripted sandbox: a dispatch whose effect key is in `executed_keys` returns that output without a new execution (provider dedup); `lookup` answers reconciliation with its `final` flag; `process` answers "is the call's process group terminated?". The fake adapter declares `skew_margin_ms = 1000` and uses `clock.now` as provider time.
 5. Leftover scripted model responses, or an unexpected model call, fail the case. `model.json` `lookup` answers adapter response recovery for an open `model_request` (by its `event_id`): a final `found` is recorded as `model_response_recovered` with no new call. Without a `lookup` entry the adapter can't look up, so an open request is abandoned as `unknown` and re-sent under `crash_resends`.
 6. A `model.json` entry `{error: {reason, http_status, retry_after_ms?}}` is a provider rejection before any content, handled per (and for `prompt_too_long`). The fake adapter uses no jitter. A `retry_scheduled` wait advances the injected clock to `not_before`; runners never sleep. The loop's policy comes from `thread_started.policy` (absent sections take the ADR defaults).
 
 **`fork`**
-1. Call `fork(fork_at_event_id, new_branch_id)`.
+1. Call `fork(fork_at_event_id, new_branch_id, {knowledge_policy})`. Every provider create (the child sandbox) first writes a `pending` ledger row with a fresh `operation_key`.
 2. On success, the child's first own line is its header, then the matched `fork` event; the child's export imports cleanly and reduces over the resolved chain; no parent row is copied in the store.
-3. On error, no child branch, no child sandbox and no leftover resource-ledger row may exist.
+3. On error, no child branch and no child sandbox may exist, and every ledger row the fork wrote is released. The one exception is a create whose outcome the adapter can't establish: `sandbox.json` `restore_response: lost` with `create_lookup: unsupported`. That row stays `unknown` and parks for an operator, and the fork fails with `resource_unknown`. With `create_lookup: found` the adapter finds the sandbox by `operation_key` and the fork succeeds. Creation is never retried blindly: `resources.creates` counts the calls.
 4. The parent is byte-unchanged in both cases.
 
 **`stub`**
@@ -149,6 +150,10 @@ For every case of kind `recover`, `fork` or `stub`, the parity job runs four che
 2. The same check in the other direction.
 3. Python runs `recover` on a log TS wrote up to a failpoint, and TS runs `recover` on a log Python wrote. The final states must match. A branch is appended to only by the writer its header names; the other language continues on a new fork branch.
 4. Any line written by either language must be byte-identical to the JCS re-encoding of its parsed value.
+
+## Scenario coverage
+
+`coverage.json` maps every  scenario to its evidence: a corpus `case`, a per-language behavior `test`, a `job` (crash injection, competing processes, cross-language parity) or a `live_gate` (readiness gate 13). Each piece has `status` `planned` or `implemented`. For a case, `implemented` means the fixture directory exists. It never means either runtime passes it; the runners report that. `gen_fixtures.py --check` fails when a case's status disagrees with the corpus and, where the local brief is present, when a scenario or its evidence differs from the brief. The corpus is not complete until every entry is `implemented`.
 
 ## Adding a case
 
