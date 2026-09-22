@@ -9,7 +9,7 @@
     "typecheck": "tsc -p packages/core --noEmit",
     "lint": "biome check --error-on-warnings .",
     "test": "bun test",
-    "check": "bun run typecheck && bun run lint && bun run test",
+    "check": "bun run typecheck && bun run lint && bun run test && bun run schema:check",
     "schema:export": "bun packages/core/scripts/export-schema.ts",
     "schema:check": "bun packages/core/scripts/export-schema.ts --check"
   },

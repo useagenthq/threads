@@ -13,15 +13,15 @@ The wire contract for the threads log. Both implementations read and write exact
 
 One schema, three forms, with a single author.
 
-1. **Authored in Zod 4** in `typescript/` (the log module). The TS types are `z.infer` of it.
-2. **Exported** with `z.toJSONSchema` into `spec/schema/events.v<N>.schema.json`, and committed.
+1. **Authored in Zod 4** in `typescript/packages/core/src/log/`, descriptions included. The TS types are `z.infer` of it.
+2. **Exported** with `z.toJSONSchema` into `spec/schema/events.v<N>.schema.json` by `bun run schema:export` (in `typescript/`), and committed. Keys are in RFC 8785 order, so the bytes are stable.
 3. **Generated** into Pydantic v2 models in `python/` from the committed JSON Schema, with pinned generator settings that never emit `Any`. Arbitrary JSON (tool input, model params, MCP payloads) is the recursive `JsonValue` type, not `Any`.
 
-CI regenerates both steps and fails on any diff. Nobody hand-edits the exported file or the generated Python.
+CI regenerates both steps and fails on any diff (`bun run schema:check`, `tools/regen_models.py --check`). Nobody edits the exported file or the generated Python by hand; change the Zod source and re-export.
 
-**Bootstrap:** the current `events.v1.schema.json` was written by hand, before any Zod exists. The first TypeScript PR writes the Zod source so that it reproduces this file's accepted and rejected values. The conformance corpus and the negative cases are the check. From then on the file is generated only.
+Cross-field rules that Zod has no form for (`if`/`then`/`else`, `not`, `oneOf` over `required`, `minProperties`) are written once, as JSON Schema data, next to the Zod shape they narrow (`withRule` in `src/log/rules.ts`). The export copies them verbatim and both languages enforce the same data at parse time, so they are part of the schema, not hand-written checks.
 
-Rules that JSON Schema can't express, or that don't survive `z.toJSONSchema` (Zod refinements aren't exported), are allowed only when they are listed under [Semantic rules](#semantic-rules) with a conformance case. Both languages implement them by hand.
+Rules that JSON Schema can't express at all are allowed only when they are listed under [Semantic rules](#semantic-rules) with a conformance case. Both languages implement them by hand.
 
 ## One contract for storage and interchange
 

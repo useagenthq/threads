@@ -1,14 +1,15 @@
 # log
 
-The wire schema of a threads log line, authored in Zod 4. It must accept and reject exactly what `spec/schema/events.v1.schema.json` does.
+The wire schema of a threads log line, authored in Zod 4. It is the source of `spec/schema/events.v1.schema.json`: `bun run schema:export` writes that file (`scripts/export-schema.ts`) and `bun run schema:check` fails when it is stale. Descriptions live here, in `.meta` and `.describe`.
 
 | File | What it holds |
 |---|---|
 | `primitives.ts`, `ids.ts` | Integers, hashes, names, `JsonValue`, branded ids |
+| `rules.ts` | `withRule`: a cross-field rule (`if`/`then`/`else`, `not`, ...) written once as JSON Schema data, exported verbatim and enforced by `holds` |
 | `common.ts`, `content.ts`, `policy.ts` | Shared shapes, content parts per position, the pinned `Policy` |
-| `envelope.ts` | `Header`, `Head`, the envelope fields and the `event()` factory |
-| `events/*.ts` | Per-type `data`, grouped by area; `events/index.ts` is the `KnownEvent` union and the pinned `EVENT_TYPES` |
-| `line.ts` | `UnknownEvent` and the `LogLine` union that `bun run schema:export` writes |
+| `envelope.ts` | `Header`, `Head`, `Envelope` and the `event()` factory, which makes each event's parser and its `ev_<type>` def from one definition |
+| `events/*.ts` | Per-type `data`, grouped by area; `events/index.ts` is the `KnownEvent` parser and the pinned `EVENT_TYPES` |
+| `line.ts` | `KnownTag`, `UnknownEvent` and `LogLine`, the root of the export |
 | `json.ts` | Strict JSON (duplicate keys, non-finite numbers, unsafe integers, lone surrogates) |
 | `jcs.ts` | RFC 8785 serializer; writers use it, and readers admit a line only if its bytes equal it (so `-0`, `2.0`, `1e3` are rejected) |
 | `parse.ts` | `parseLogLine`: one stored line in, a tagged line or a typed error out |
