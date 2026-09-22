@@ -10,7 +10,8 @@ Stdlib only, Python 3.12+. Checks:
 - every $ref in every spec schema, api.json and openapi.json resolves (urn:threads:... $ids,
   relative file paths, JSON pointers);
 - every function and method name pair is TS lowerCamel of the Python snake_case name;
-- every typed failure code is a pinned ErrorCode or a host-api ApiErrorCode;
+- every typed failure code is a wire ErrorCode (what the log records) or an ApiErrorCode
+  from api.schema.json (what public calls return);
 - every host API operation names existing api.json methods (x-api) and lists at least
   their failure codes.
 """
@@ -34,6 +35,7 @@ META = SPEC / "schema" / "api.schema.json"
 OPENAPI = SPEC / "schema" / "host-api" / "openapi.json"
 EVENTS_ID = "urn:threads:schema:events:v1"
 HOST_ID = "urn:threads:schema:host-api:v1"
+API_ID = "urn:threads:schema:api:v1"
 IGNORED = frozenset({"$schema", "$id", "$defs", "$comment", "title", "description", "default"})
 TYPES: dict[str, Callable[[Json], bool]] = {
     "object": lambda v: isinstance(v, dict),
@@ -235,10 +237,11 @@ def _failure_lists(node: Json, at: str) -> Iterator[tuple[list[str], str]]:
             yield from _failure_lists(x, f"{at}/{i}")
 
 
-def check_codes(api: Json, events: Json, host: Json, openapi: Json) -> list[str]:
+def check_codes(api: Json, docs: dict[str, Json], openapi: Json) -> list[str]:
+    host = docs[HOST_ID]
     known = {
-        *_strs(_pointer(events, "/$defs/ErrorCode/enum")),
-        *_strs(_pointer(host, "/$defs/ApiErrorCode/enum")),
+        *_strs(_pointer(docs[EVENTS_ID], "/$defs/ErrorCode/enum")),
+        *_strs(_pointer(docs[API_ID], "/$defs/ApiErrorCode/enum")),
     }
     lists = [*_failure_lists(api, "api.json")]
     lists.append(
@@ -286,7 +289,7 @@ def main() -> int:
     problems = sorted(set(Validator(docs[META]).check(docs[META], api, "api.json")))
     problems += check_refs(docs)
     problems += check_names(api)
-    problems += check_codes(api, by_id[EVENTS_ID], by_id[HOST_ID], openapi)
+    problems += check_codes(api, by_id, openapi)
     problems += check_operations(api, openapi)
     for p in problems:
         print(p)

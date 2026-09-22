@@ -49,6 +49,38 @@
     }
   },
   "$defs": {
+    "ApiErrorCode": {
+      "description": "Typed failure codes public API calls return that the log never records. The wire ErrorCode enum (events.v1.schema.json) is what the log records. A public failure code is one of the two; add only.",
+      "enum": [
+        "unauthenticated",
+        "forbidden",
+        "not_found",
+        "invalid_request",
+        "not_quiescent",
+        "model_error",
+        "max_output",
+        "max_turns",
+        "input_denied",
+        "stop_hook_limit",
+        "no_open_question",
+        "not_parked",
+        "unavailable",
+        "timeout",
+        "invalid",
+        "scope_violation",
+        "permission_denied",
+        "is_directory",
+        "invalid_path",
+        "too_large",
+        "unverified",
+        "invalid_config",
+        "missing_secret",
+        "unknown_preset",
+        "duplicate_name",
+        "capability_missing",
+        "mcp_unreachable"
+      ]
+    },
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
     "PyName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
     "FieldName": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },

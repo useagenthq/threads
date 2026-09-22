@@ -4,45 +4,13 @@
   "title": "threads host API data shapes",
   "description": "Request, response and projection shapes of the host HTTP API (openapi.json) and of the matching library methods (spec/api.json). snake_case in both languages: this is data that crosses a trust boundary. Parse it at the boundary like any wire value.",
   "$defs": {
-    "ApiErrorCode": {
-      "description": "Typed failure codes used by the public API that are not log-level ErrorCode values. The full closed set any API failure may carry is ErrorCode (events schema) plus this list. Add only.",
-      "enum": [
-        "unauthenticated",
-        "forbidden",
-        "not_found",
-        "invalid_request",
-        "not_quiescent",
-        "model_error",
-        "max_output",
-        "max_turns",
-        "input_denied",
-        "stop_hook_limit",
-        "no_open_question",
-        "not_parked",
-        "unavailable",
-        "timeout",
-        "invalid",
-        "scope_violation",
-        "permission_denied",
-        "is_directory",
-        "invalid_path",
-        "too_large",
-        "unverified",
-        "invalid_config",
-        "missing_secret",
-        "unknown_preset",
-        "duplicate_name",
-        "capability_missing",
-        "mcp_unreachable"
-      ]
-    },
     "Failure": {
       "description": "The error half of every expected-failure result.",
       "type": "object",
       "additionalProperties": false,
       "required": ["code", "message"],
       "properties": {
-        "code": { "anyOf": [{ "$ref": "urn:threads:schema:events:v1#/$defs/ErrorCode" }, { "$ref": "#/$defs/ApiErrorCode" }] },
+        "code": { "anyOf": [{ "$ref": "urn:threads:schema:events:v1#/$defs/ErrorCode" }, { "$ref": "urn:threads:schema:api:v1#/$defs/ApiErrorCode" }] },
         "message": { "type": "string" }
       }
     },
@@ -54,7 +22,7 @@
       "properties": { "error": { "$ref": "#/$defs/Failure" } }
     },
     "RunErrorCode": {
-      "description": "RunResult failed.error.code, closed. stop_hook_limit is the pinned turn_completed reason. model_error is turn_completed{error}.",
+      "description": "RunResult failed.error.code, closed. stop_hook_limit is the pinned turn_completed reason; model_error is turn_completed{error}.",
       "enum": [
         "model_unavailable",
         "context_exhausted",
