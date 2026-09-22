@@ -1,6 +1,12 @@
 import { BranchId, ThreadId } from "../../src/log";
 import type { Result } from "../../src/result";
-import { type EventDraft, LogStore, type SqliteDriver } from "../../src/store";
+import {
+  type EventDraft,
+  LOCAL_TENANT,
+  LogStore,
+  memoryArtifacts,
+  type SqliteDriver,
+} from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 
 export const THREAD: ThreadId = ThreadId.parse(
@@ -20,11 +26,15 @@ export type Fixture = {
   readonly clock: { now: number };
 };
 
-/** An in-memory store on bun:sqlite with an injected clock. */
-export function fixture(): Fixture {
-  const db = openBunSqlite(":memory:");
+/** An in-memory store on bun:sqlite with an injected clock, bound to one tenant. */
+export function fixture(
+  tenantId: string = LOCAL_TENANT,
+  db: SqliteDriver = openBunSqlite(":memory:"),
+): Fixture {
   const clock = { now: T0 };
-  return { db, store: unwrap(LogStore.open(db, () => clock.now)), clock };
+  const now = (): number => clock.now;
+  const store = unwrap(LogStore.open(db, now, memoryArtifacts(), tenantId));
+  return { db, store, clock };
 }
 
 /** The value of an ok result; a test fails loudly on an error. */
@@ -32,6 +42,13 @@ export function unwrap<T, E>(result: Result<T, E>): T {
   if (!result.ok)
     throw new Error(`expected ok: ${JSON.stringify(result.error)}`);
   return result.value;
+}
+
+/** An error code, or "ok": what most assertions compare. */
+export function code<T, E extends { readonly code: string }>(
+  result: Result<T, E>,
+): string {
+  return result.ok ? "ok" : result.error.code;
 }
 
 const ALICE = { issuer: "api", tenant: "acme", subject: "alice" };

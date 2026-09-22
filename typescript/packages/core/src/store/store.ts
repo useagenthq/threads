@@ -8,24 +8,26 @@ import {
   tipHash,
   type VerifiedLog,
   verifyExport,
-  verifyLines,
 } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import { VERSION } from "../version";
+import type { ArtifactStore } from "./artifacts";
 import type { SqliteDriver } from "./driver";
 import { canonicalLine } from "./encode";
 import { importSegments } from "./import";
-import { branchLines, exportBytes, headLine } from "./lines";
+import { branchLines, exportBytes } from "./lines";
 import {
   atomically,
+  type BranchRow,
   getBranch,
   getLease,
   insertBranch,
   installSchema,
   LOCAL_TENANT,
+  ownedBranch,
   putLease,
 } from "./tables";
-import { Writer } from "./writer";
+import { IMPL, Writer, writerMismatch } from "./writer";
 
 /** 30 s lease TTL, renewed every 10 s by the holder. */
 export const LEASE_TTL_MS = 30_000;
@@ -43,31 +45,46 @@ export type ForkRequest = {
  * The append-only log store on SQLite: exact line bytes, a head checkpoint per
  * branch updated with every append, one fenced writer per branch, and forks that reference
  * their parent's rows. Every read goes back through the import checks.
+ *
+ * A store is bound to one tenant: a branch of any other tenant is `branch_not_found`.
  */
 export class LogStore {
   readonly #db: SqliteDriver;
   readonly #now: () => number;
+  readonly #artifacts: ArtifactStore;
+  readonly #tenant: string;
 
-  private constructor(db: SqliteDriver, now: () => number) {
+  private constructor(
+    db: SqliteDriver,
+    now: () => number,
+    artifacts: ArtifactStore,
+    tenantId: string,
+  ) {
     this.#db = db;
     this.#now = now;
+    this.#artifacts = artifacts;
+    this.#tenant = tenantId;
   }
 
   /**
-   * Opens the store on `db`, creating the store.sql tables. A database a newer schema wrote is
-   * `unsupported_format`. `now` is the injected clock for leases, event times and snapshot expiry.
+   * Opens the store on `db` for one tenant, creating the store.sql tables. A database a newer
+   * schema wrote is `unsupported_format`. `now` is the injected clock for leases, event times
+   * and snapshot expiry; `artifacts` keeps the bytes a torn import dropped.
    */
-  static open(db: SqliteDriver, now: () => number): Result<LogStore, LogError> {
+  static open(
+    db: SqliteDriver,
+    now: () => number,
+    artifacts: ArtifactStore,
+    tenantId: string = LOCAL_TENANT,
+  ): Result<LogStore, LogError> {
     const installed = installSchema(db);
-    return installed.ok ? ok(new LogStore(db, now)) : installed;
+    return installed.ok
+      ? ok(new LogStore(db, now, artifacts, tenantId))
+      : installed;
   }
 
   /** Writes a new root branch: its header line, head at seq 0. */
-  createBranch(
-    threadId: ThreadId,
-    branchId: BranchId,
-    tenantId: string = LOCAL_TENANT,
-  ): Result<void, LogError> {
+  createBranch(threadId: ThreadId, branchId: BranchId): Result<void, LogError> {
     return atomically(this.#db, () => {
       const exists = this.#absent(branchId);
       if (!exists.ok) return exists;
@@ -76,41 +93,50 @@ export class LogStore {
       insertBranch(this.#db, {
         branch_id: branchId,
         thread_id: threadId,
-        tenant_id: tenantId,
+        tenant_id: this.#tenant,
         parent_branch_id: null,
         fork_at_seq: null,
         header_line: header.value,
         state: "ready",
         head_seq: 0,
         head_hash: sha256Hex(header.value),
+        head_verified: 1,
+        dropped_ref: null,
       });
       return ok(undefined);
     });
   }
 
-  /** The branch's verified resolved chain. Storage is a trust boundary, so this re-verifies. */
+  /**
+   * The branch's verified resolved chain. Storage is a trust boundary, so this re-verifies. A
+   * branch imported without a verified head reads back unverified, with its dropped bytes.
+   */
   read(branchId: BranchId): Result<VerifiedLog, LogError> {
-    const branch = branchLines(this.#db, branchId);
-    if (!branch.ok) return branch;
-    const head = headLine(branch.value.row);
-    if (!head.ok) return head;
-    return verifyLines([...branch.value.lines, head.value]);
+    const bytes = this.exportBranch(branchId);
+    return bytes.ok ? verifyExport(bytes.value) : bytes;
   }
 
   /** `threads export`: ancestor segments, the branch's lines, then its head line. */
   exportBranch(branchId: BranchId): Result<Uint8Array, LogError> {
-    return exportBytes(this.#db, branchId);
+    const owned = ownedBranch(this.#db, branchId, this.#tenant);
+    if (!owned.ok) return owned;
+    return exportBytes(this.#db, this.#artifacts, branchId);
   }
 
-  /** `threads import`: verifies the export, then stores the same bytes, segment by segment. */
-  importLog(
-    bytes: Uint8Array,
-    tenantId: string = LOCAL_TENANT,
-  ): Result<VerifiedLog, LogError> {
+  /**
+   * `threads import`: verifies the export, then stores the same bytes, segment by segment. A
+   * torn tail's bytes are kept as an artifact, durable before the rows that name them.
+   */
+  importLog(bytes: Uint8Array): Result<VerifiedLog, LogError> {
     const log = verifyExport(bytes);
     if (!log.ok) return log;
+    const torn = log.value.torn;
+    const target = {
+      tenantId: this.#tenant,
+      droppedRef: torn === undefined ? null : this.#artifacts.put(torn.bytes),
+    };
     const stored = atomically(this.#db, () =>
-      importSegments(this.#db, log.value, tenantId),
+      importSegments(this.#db, log.value, target),
     );
     return stored.ok ? log : stored;
   }
@@ -126,16 +152,8 @@ export class LogStore {
   ): Result<Writer, LogError> {
     return atomically(this.#db, () => {
       const now = this.#now();
-      const branch = getBranch(this.#db, branchId);
-      if (!branch.ok) return branch;
-      const state = branch.value?.state;
-      if (state !== "ready")
-        return err(
-          logError(
-            "branch_not_runnable",
-            `branch ${branchId} is ${state ?? "absent"}`,
-          ),
-        );
+      const log = this.#runnable(branchId);
+      if (!log.ok) return log;
       const lease = getLease(this.#db, branchId);
       if (!lease.ok) return lease;
       const held = lease.value;
@@ -147,12 +165,28 @@ export class LogStore {
         return err(
           logError("branch_busy", `branch ${branchId} has a live lease`),
         );
-      const log = this.read(branchId);
-      if (!log.ok)
-        return err(logError("log_corrupt", log.error.message, log.error.seq));
       const epoch = Math.max(held?.epoch ?? 0, log.value.fold.epoch) + 1;
       return ok(this.#lease(branchId, holderId, epoch, now + ttlMs, log.value));
     });
+  }
+
+  /**
+   * The chain of a branch this implementation may write: this tenant's, `ready`, verified, and
+   * headed by this implementation at this major version.
+   */
+  #runnable(branchId: BranchId): Result<VerifiedLog, LogError> {
+    const branch = ownedBranch(this.#db, branchId, this.#tenant);
+    if (!branch.ok) return branch;
+    const state: BranchRow["state"] = branch.value.state;
+    if (state !== "ready")
+      return err(
+        logError("branch_not_runnable", `branch ${branchId} is ${state}`),
+      );
+    const log = this.read(branchId);
+    if (!log.ok)
+      return err(logError("log_corrupt", log.error.message, log.error.seq));
+    const mismatch = writerMismatch(log.value);
+    return mismatch === undefined ? log : err(mismatch);
   }
 
   /**
@@ -165,6 +199,8 @@ export class LogStore {
     ttlMs: number = LEASE_TTL_MS,
   ): Result<Writer, LogError> {
     return atomically(this.#db, () => {
+      const owned = ownedBranch(this.#db, request.parent, this.#tenant);
+      if (!owned.ok) return owned;
       const parent = this.read(request.parent);
       if (!parent.ok) return parent;
       const eligible = this.#eligible(parent.value, request.atSeq);
@@ -230,22 +266,20 @@ export class LogStore {
     if (!exists.ok) return exists;
     const threadId = parent.segments[0]?.header.thread_id;
     if (threadId === undefined) throw new Error("a verified log has a header");
-    const parentRow = getBranch(this.#db, request.parent);
-    if (!parentRow.ok) return parentRow;
-    const tenantId = parentRow.value?.tenant_id;
-    if (tenantId === undefined) throw new Error("a verified parent has a row");
     const header = this.#header(threadId, request.branch);
     if (!header.ok) return header;
     insertBranch(this.#db, {
       branch_id: request.branch,
       thread_id: threadId,
-      tenant_id: tenantId,
+      tenant_id: this.#tenant,
       parent_branch_id: request.parent,
       fork_at_seq: request.atSeq,
       header_line: header.value,
       state: "ready",
       head_seq: request.atSeq,
       head_hash: sha256Hex(header.value),
+      head_verified: 1,
+      dropped_ref: null,
     });
     const lines = branchLines(this.#db, request.branch);
     if (!lines.ok) return lines;
@@ -294,7 +328,7 @@ export class LogStore {
       thread_id: threadId,
       branch_id: branchId,
       created_at: this.#now(),
-      writer: { impl: "threads-ts", version: VERSION },
+      writer: { impl: IMPL, version: VERSION },
     });
   }
 }

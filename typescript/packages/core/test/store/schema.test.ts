@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { LOCAL_TENANT, LogStore } from "../../src/store";
+import { LOCAL_TENANT, LogStore, memoryArtifacts } from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { fixture, ROOT, THREAD, unwrap } from "./helpers";
 
@@ -38,7 +38,7 @@ describe("store schema", () => {
   test("a database with a newer schema is unsupported_format", () => {
     const db = openBunSqlite(":memory:");
     db.exec("PRAGMA user_version = 2");
-    const opened = LogStore.open(db, () => 0);
+    const opened = LogStore.open(db, () => 0, memoryArtifacts());
     expect(opened.ok ? "ok" : opened.error.code).toBe("unsupported_format");
   });
 });

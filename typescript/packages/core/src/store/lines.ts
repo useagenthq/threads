@@ -1,6 +1,7 @@
 import { err, ok, type Result } from "../result";
 import type { LogError } from "../verify/error";
 import { logError } from "../verify/error";
+import type { ArtifactStore } from "./artifacts";
 import type { SqliteDriver } from "./driver";
 import { canonicalLine } from "./encode";
 import { type BranchRow, eventLines, getBranch } from "./tables";
@@ -27,7 +28,7 @@ export function branchLines(
     const row = getBranch(db, id);
     if (!row.ok) return row;
     if (row.value === undefined)
-      return err(logError("branch_not_runnable", `no branch ${id}`));
+      return err(logError("branch_not_found", `no branch ${id}`));
     leaf ??= row.value;
     const own = eventLines(db, id, through);
     if (!own.ok) return own;
@@ -35,8 +36,7 @@ export function branchLines(
     through = Math.min(through, row.value.fork_at_seq ?? 0);
     id = row.value.parent_branch_id;
   }
-  if (leaf === undefined)
-    return err(logError("branch_not_runnable", "no branch"));
+  if (leaf === undefined) return err(logError("branch_not_found", "no branch"));
   return ok({ row: leaf, lines: segments.flat() });
 }
 
@@ -51,22 +51,36 @@ export function headLine(row: BranchRow): Result<Uint8Array, LogError> {
   });
 }
 
-/** The branch's export: its lines, one per line with "\n", then its head line. */
+/**
+ * The branch's export: its lines, one per line with "\n", then its head line. A branch imported
+ * without a verified head ends as it was imported: with its torn bytes, or with nothing.
+ */
 export function exportBytes(
   db: SqliteDriver,
+  artifacts: ArtifactStore,
   branchId: string,
 ): Result<Uint8Array, LogError> {
   const branch = branchLines(db, branchId);
   if (!branch.ok) return branch;
-  const head = headLine(branch.value.row);
-  if (!head.ok) return head;
-  const parts = [...branch.value.lines, head.value];
-  const out = new Uint8Array(parts.reduce((n, part) => n + part.length + 1, 0));
+  const tail = endLine(artifacts, branch.value.row);
+  if (!tail.ok) return tail;
+  const parts = [...branch.value.lines, tail.value];
+  const size = parts.reduce((n, part) => n + part.length + 1, 0);
+  const out = new Uint8Array(size - (branch.value.row.head_verified ? 0 : 1));
   let at = 0;
   for (const part of parts) {
     out.set(part, at);
-    out[at + part.length] = 0x0a;
+    if (at + part.length < out.length) out[at + part.length] = 0x0a;
     at += part.length + 1;
   }
   return ok(out);
+}
+
+function endLine(
+  artifacts: ArtifactStore,
+  row: BranchRow,
+): Result<Uint8Array, LogError> {
+  if (row.head_verified) return headLine(row);
+  if (row.dropped_ref === null) return ok(new Uint8Array());
+  return artifacts.get(row.dropped_ref);
 }

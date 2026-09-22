@@ -33,6 +33,8 @@ export const BranchRow: Strict<{
   state: EnumOf<typeof BRANCH_STATES>;
   head_seq: typeof Int;
   head_hash: typeof Sha256;
+  head_verified: z.ZodUnion<readonly [z.ZodLiteral<0>, z.ZodLiteral<1>]>;
+  dropped_ref: z.ZodNullable<typeof Sha256>;
 }> = z.strictObject({
   branch_id: BranchId,
   thread_id: ThreadId,
@@ -43,6 +45,8 @@ export const BranchRow: Strict<{
   state: z.enum(BRANCH_STATES),
   head_seq: Int,
   head_hash: Sha256,
+  head_verified: z.union([z.literal(0), z.literal(1)]),
+  dropped_ref: Sha256.nullable(),
 });
 export type BranchRow = z.infer<typeof BranchRow>;
 
@@ -98,11 +102,24 @@ export function getBranch(
     BranchRow,
     db.all(
       `SELECT branch_id, thread_id, tenant_id, parent_branch_id, fork_at_seq, header_line, state,
-        head_seq, head_hash FROM branches WHERE branch_id = ?`,
+        head_seq, head_hash, head_verified, dropped_ref FROM branches WHERE branch_id = ?`,
       [branchId],
     ),
   );
   return rows.ok ? ok(rows.value[0]) : rows;
+}
+
+/** The branch, if it exists and belongs to `tenantId`; any other is `branch_not_found`. */
+export function ownedBranch(
+  db: SqliteDriver,
+  branchId: string,
+  tenantId: string,
+): Result<BranchRow, LogError> {
+  const row = getBranch(db, branchId);
+  if (!row.ok) return row;
+  return row.value?.tenant_id === tenantId
+    ? ok(row.value)
+    : err(logError("branch_not_found", `no branch ${branchId}`));
 }
 
 /** Inserts the branch and, for a new thread, its thread row. The foreign key refuses a branch
@@ -114,7 +131,8 @@ export function insertBranch(db: SqliteDriver, row: BranchRow): void {
   );
   db.run(
     `INSERT INTO branches (branch_id, thread_id, tenant_id, parent_branch_id, fork_at_seq,
-      header_line, state, head_seq, head_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      header_line, state, head_seq, head_hash, head_verified, dropped_ref)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       row.branch_id,
       row.thread_id,
@@ -125,6 +143,8 @@ export function insertBranch(db: SqliteDriver, row: BranchRow): void {
       row.state,
       row.head_seq,
       row.head_hash,
+      row.head_verified,
+      row.dropped_ref,
     ],
   );
 }
