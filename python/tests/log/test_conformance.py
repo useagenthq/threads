@@ -3,7 +3,8 @@
 A case breaks a line on purpose in two ways (spec/conformance/README.md):
 - its expected error is a line-level code (`invalid_line`, `unsupported_format`,
   `unsupported_critical_event`) at `error.seq`: exactly that line fails, with that code;
-- its log ends without a newline: the last chunk is a torn write and fails as `invalid_line`.
+- its log ends without a newline: the last chunk is a torn write. Newline is the commit marker,
+  so that chunk is dropped unparsed, whatever it holds (spec/schema/README.md wire rule 14).
 Semantic errors (`invalid_transition`, `prev_hash_mismatch`, ...) are later stages, so those logs
 must parse in full here.
 """
@@ -51,12 +52,10 @@ def parse_failures(log: bytes) -> list[tuple[bytes, ParseError]]:
     return failures
 
 
-def expected_failure(case: Path, log: bytes) -> tuple[str, int | None] | None:
+def expected_failure(case: Path) -> tuple[str, int | None] | None:
     error = json.loads((case / "expected.json").read_text(encoding="utf-8")).get("error")
     if error is not None and error["code"] in SCHEMA_LEVEL_CODES:
         return error["code"], error.get("seq")
-    if not log.endswith(b"\n"):
-        return "invalid_line", None
     return None
 
 
@@ -64,8 +63,9 @@ def expected_failure(case: Path, log: bytes) -> tuple[str, int | None] | None:
 def test_case_log_parses(name: str) -> None:
     case = CASES / name
     log = (case / "log.jsonl").read_bytes()
+    log = log[: log.rfind(b"\n") + 1]  # drop a torn final chunk
     failures = parse_failures(log)
-    expected = expected_failure(case, log)
+    expected = expected_failure(case)
     if expected is None:
         assert failures == []
         return

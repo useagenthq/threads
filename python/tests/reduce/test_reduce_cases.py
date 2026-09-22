@@ -102,6 +102,11 @@ def test_reduce_case(name: str) -> None:
         return
     assert isinstance(result, Ok), result
     assert result.value.state.to_json() == expected["state"]
+    reader = verify_export(log, now_of(meta))
+    assert isinstance(reader, Ok)
+    assert reader.value.head_verified == expected.get("head_verified", True)
+    if "committed_bytes" in expected:
+        assert reader.value.committed_bytes == expected["committed_bytes"]
     projections = expected.get("projections", {})
     assert isinstance(projections, dict)
     for key, value in projections.items():
