@@ -1,0 +1,19 @@
+name: typescript
+
+on:
+  push:
+    paths: ["typescript/**", "spec/**", ".github/workflows/typescript.yml"]
+  pull_request:
+    paths: ["typescript/**", "spec/**", ".github/workflows/typescript.yml"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
