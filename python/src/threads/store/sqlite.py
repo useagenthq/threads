@@ -4,6 +4,7 @@ Statements run on the store's own thread (`Worker`, ). `SqliteStore.open()`
 with the default ":memory:" path is the in-memory store tests use: the same code, no file.
 """
 
+import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,7 @@ from threads.log import BranchId, ParseError, ThreadId
 from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
 from threads.store import lease, sql
+from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
 from threads.store.forking import start_child
 from threads.store.lines import header_line
 from threads.store.verify import VerifiedLog, verify_export
@@ -34,22 +36,33 @@ class ForkRequest:
 class SqliteStore:
     """Append-only branches of lines, their head checkpoints and their leases."""
 
-    def __init__(self, worker: Worker, tenant_id: str) -> None:
+    def __init__(self, worker: Worker, tenant_id: str, artifacts: ArtifactStore) -> None:
         self._worker = worker
         self._tenant = tenant_id
+        self._artifacts = artifacts
 
     @classmethod
     async def open(
-        cls, path: str | Path = ":memory:", *, tenant_id: str = sql.LOCAL_TENANT
+        cls,
+        path: str | Path = ":memory:",
+        *,
+        tenant_id: str = sql.LOCAL_TENANT,
+        artifacts: ArtifactStore | None = None,
     ) -> Ok["SqliteStore"] | Err[ParseError]:
         """Opens or creates the store, scoped to one tenant: another tenant's branches are
-        branch_not_found. A database a newer schema wrote is unsupported_format."""
+        branch_not_found. A database a newer schema wrote is unsupported_format. Artifacts
+        default to `artifacts/` beside the database file (in memory for ":memory:")."""
         worker = await Worker.open(str(path))
         error = await worker.call(sql.install)
         if error is not None:
             await worker.close()
             return Err(error)
-        return Ok(cls(worker, tenant_id))
+        if artifacts is None:
+            memory = str(path) == ":memory:"
+            artifacts = (
+                MemoryArtifacts() if memory else FileArtifacts(Path(path).parent / "artifacts")
+            )
+        return Ok(cls(worker, tenant_id, artifacts))
 
     async def close(self) -> None:
         await self._worker.close()
@@ -66,15 +79,26 @@ class SqliteStore:
 
     async def import_log(self, log: VerifiedLog) -> Ok[None] | Err[ParseError]:
         """Stores a verified export's lines byte for byte: parents referenced, never copied."""
-        tenant = self._tenant
-        return _result(await self._worker.call(lambda c: sql.import_segments(c, log, tenant)))
+        tenant, artifacts = self._tenant, self._artifacts
+
+        def store(conn: sqlite3.Connection) -> ParseError | None:
+            # The dropped bytes are durable before the row that references them.
+            dropped = artifacts.put(log.dropped) if log.dropped else None
+            return sql.import_segments(conn, log, tenant, dropped)
+
+        return _result(await self._worker.call(store))
 
     async def export(self, branch_id: BranchId) -> Ok[bytes] | Err[ParseError]:
         """The JSONL export of a branch, ending with its committed head checkpoint."""
         found = await self._owned(branch_id)
         if isinstance(found, Err):
             return found
-        return Ok(await self._worker.call(lambda c: sql.export(c, branch_id)))
+        lines = await self._worker.call(lambda c: sql.export(c, branch_id))
+        dropped = found.value.dropped_ref
+        if dropped is None:
+            return Ok(lines)
+        tail = await self._worker.call(lambda _: self._artifacts.get(dropped))
+        return tail if isinstance(tail, Err) else Ok(lines + tail.value)
 
     async def read(self, branch_id: BranchId, now: int) -> Ok[VerifiedLog] | Err[ParseError]:
         """Reads a branch back through the same boundary as an import: storage is untrusted."""

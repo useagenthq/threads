@@ -8,7 +8,7 @@ so a row is never trusted just because it is in the database.
 import sqlite3
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import pairwise
 from typing import Final
 
@@ -98,12 +98,15 @@ def branch(conn: sqlite3.Connection, branch_id: BranchId) -> Branch | None:
 
 def export(conn: sqlite3.Connection, branch_id: BranchId) -> bytes:
     """The branch's export: each ancestor segment through its fork point, the branch's own
-    lines, then the committed head checkpoint."""
+    lines, then the committed head checkpoint. An unverified import has no
+    head line: the caller appends its dropped bytes, so the export stays unverified."""
     found = branch(conn, branch_id)
     if found is None:
         raise LookupError(f"no branch {branch_id}")
-    head = head_line(found.branch_id, found.head_seq, found.head_hash)
-    return segments(conn, found, found.head_seq) + head + b"\n"
+    lines = segments(conn, found, found.head_seq)
+    if not found.head_verified:
+        return lines
+    return lines + head_line(found.branch_id, found.head_seq, found.head_hash) + b"\n"
 
 
 def prefix(conn: sqlite3.Connection, branch_id: BranchId, through: int) -> bytes:
@@ -180,10 +183,12 @@ def insert_events(
 
 
 def import_segments(
-    conn: sqlite3.Connection, log: VerifiedLog, tenant_id: str
+    conn: sqlite3.Connection, log: VerifiedLog, tenant_id: str, dropped_ref: str | None
 ) -> ParseError | None:
     """Stores a verified export's segments, byte for byte, in one transaction. A branch already
-    in the store must hold the same lines (an idempotent re-import)."""
+    in the store must hold the same lines (an idempotent re-import). A leaf whose head didn't
+    verify keeps that evidence (and the dropped bytes' artifact) and is inspection-only until
+    recovery records log_repaired."""
     with transaction(conn):
         new: list[Segment] = []
         for segment in log.segments:
@@ -196,7 +201,11 @@ def import_segments(
                 return ParseError("seq_conflict", f"branch {existing.branch_id} has other lines")
         parents = {s.header.branch_id: p.header.branch_id for p, s in pairwise(log.segments)}
         for segment in new:
-            insert_branch(conn, _row(segment, tenant_id, parents.get(segment.header.branch_id)))
+            row = _row(segment, tenant_id, parents.get(segment.header.branch_id))
+            if segment is log.segments[-1] and not log.head_verified:
+                row = replace(row, state="inspection_only", head_verified=False)
+                row = replace(row, dropped_ref=dropped_ref)
+            insert_branch(conn, row)
             insert_events(conn, segment.events, sha256_hex(segment.last_line))
     return None
 
