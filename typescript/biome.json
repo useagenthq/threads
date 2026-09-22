@@ -6,6 +6,9 @@
     "root": "..",
     "useIgnoreFile": true
   },
+  "files": {
+    "includes": ["**", "!**/generated"]
+  },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
