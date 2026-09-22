@@ -13,3 +13,6 @@ plans/
 .omx/
 
 
+
+# Agent worktrees
+.claude/worktrees/
