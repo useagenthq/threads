@@ -201,15 +201,19 @@ def test_fork_references_parent_rows(tmp_path: Path) -> None:
     async def test(store: SqliteStore) -> None:
         parent = await started(store, clock)
         assert isinstance(await parent.append([user("hi"), DONE, SNAPSHOT]), Ok)
-        before = await store.export(ROOT)
+        exported = await store.export(ROOT)
+        assert isinstance(exported, Ok)
+        before = exported.value
         data = {"reason": "snapshot", "sandbox_id": "sbx_child_01", "knowledge_policy": "pinned"}
         child = await store.fork(ForkRequest(ROOT, 4, CHILD, data), "c", clock)
         assert isinstance(child, Ok)
         assert child.value is not None
         assert child.value.epoch == parent.epoch + 1
         assert isinstance(await child.value.append([user("in the child")]), Ok)
-        assert await store.export(ROOT) == before
+        assert await store.export(ROOT) == Ok(before)
         exported = await store.export(CHILD)
+        assert isinstance(exported, Ok)
+        exported = exported.value
         assert exported.startswith(before[: before.rindex(b"\n", 0, -1) + 1])
         verified = verify_export(exported, clock())
         assert isinstance(verified, Ok)
@@ -292,7 +296,9 @@ def test_import_is_idempotent_and_refuses_other_lines() -> None:
     async def test(store: SqliteStore) -> None:
         writer = await started(store, clock)
         assert isinstance(await writer.append([user("hi")]), Ok)
-        export = await store.export(ROOT)
+        exported = await store.export(ROOT)
+        assert isinstance(exported, Ok)
+        export = exported.value
         verified = verify_export(export, clock())
         assert isinstance(verified, Ok)
         assert await store.import_log(verified.value) == Ok(None)

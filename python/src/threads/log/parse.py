@@ -1,7 +1,7 @@
 """Parses one stored log line: the storage trust boundary (spec/schema/README.md, wire rules)."""
 
 from dataclasses import dataclass
-from typing import Annotated, get_args
+from typing import Annotated, Literal, get_args
 
 from pydantic import Field, JsonValue, TypeAdapter, ValidationError
 
@@ -19,7 +19,9 @@ checkpoint. Unknown critical events never parse: they refuse the log."""
 
 @dataclass(frozen=True, slots=True)
 class ParseError:
-    code: ErrorCode
+    code: ErrorCode | Literal["branch_not_found"]
+    """A wire ErrorCode, or branch_not_found: an ApiErrorCode (spec/schema/api.schema.json)
+    the store returns for a branch that is absent or another tenant's, never logged."""
     message: str
     seq: int | None = None
     """The line's seq when it has a readable one; 0 for a header (schema README wire rule 8)."""

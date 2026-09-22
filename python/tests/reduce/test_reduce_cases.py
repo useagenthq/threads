@@ -77,7 +77,7 @@ async def import_and_read(log: bytes, now: int) -> Ok[VerifiedLog] | Err[str]:
         branch = verified.value.segments[-1].header.branch_id
         if verified.value.head_verified:
             # SQLite and JSONL are one contract: the export is the imported bytes.
-            assert await store.export(branch) == log
+            assert await store.export(branch) == Ok(log)
         read = await store.read(branch, now)
     finally:
         await store.close()

@@ -58,7 +58,9 @@ async def write_and_replay(batches: list[list[Draft]]) -> tuple[ReducedState, by
             assert isinstance(await writer.value.append(batch), Ok)
         read = await store.read(ROOT, NOW)
         assert isinstance(read, Ok)
-        export = await store.export(ROOT)
+        exported = await store.export(ROOT)
+        assert isinstance(exported, Ok)
+        export = exported.value
     finally:
         await store.close()
     opened = await SqliteStore.open()
@@ -69,7 +71,7 @@ async def write_and_replay(batches: list[list[Draft]]) -> tuple[ReducedState, by
         assert isinstance(verified, Ok)
         assert verified.value.state == read.value.state
         assert await copy.import_log(verified.value) == Ok(None)
-        assert await copy.export(ROOT) == export
+        assert await copy.export(ROOT) == Ok(export)
     finally:
         await copy.close()
     return read.value.state, export

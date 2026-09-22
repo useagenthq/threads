@@ -190,6 +190,8 @@ def import_segments(
             existing = branch(conn, segment.header.branch_id)
             if existing is None:
                 new.append(segment)
+            elif existing.tenant_id != tenant_id:
+                return ParseError("branch_not_found", f"no branch {existing.branch_id}")
             elif not _holds(conn, existing, segment):
                 return ParseError("seq_conflict", f"branch {existing.branch_id} has other lines")
         parents = {s.header.branch_id: p.header.branch_id for p, s in pairwise(log.segments)}

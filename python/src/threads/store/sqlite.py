@@ -34,45 +34,52 @@ class ForkRequest:
 class SqliteStore:
     """Append-only branches of lines, their head checkpoints and their leases."""
 
-    def __init__(self, worker: Worker) -> None:
+    def __init__(self, worker: Worker, tenant_id: str) -> None:
         self._worker = worker
+        self._tenant = tenant_id
 
     @classmethod
-    async def open(cls, path: str | Path = ":memory:") -> Ok["SqliteStore"] | Err[ParseError]:
-        """Opens or creates the store. A database a newer schema wrote is unsupported_format."""
+    async def open(
+        cls, path: str | Path = ":memory:", *, tenant_id: str = sql.LOCAL_TENANT
+    ) -> Ok["SqliteStore"] | Err[ParseError]:
+        """Opens or creates the store, scoped to one tenant: another tenant's branches are
+        branch_not_found. A database a newer schema wrote is unsupported_format."""
         worker = await Worker.open(str(path))
         error = await worker.call(sql.install)
         if error is not None:
             await worker.close()
             return Err(error)
-        return Ok(cls(worker))
+        return Ok(cls(worker, tenant_id))
 
     async def close(self) -> None:
         await self._worker.close()
 
     async def create(
-        self, thread_id: ThreadId, branch_id: BranchId, now: int, tenant_id: str = sql.LOCAL_TENANT
+        self, thread_id: ThreadId, branch_id: BranchId, now: int
     ) -> Ok[None] | Err[ParseError]:
         """Creates a root branch: its header line and nothing else."""
         header = header_line(thread_id, branch_id, now)
         row = sql.Branch(
-            branch_id, thread_id, tenant_id, None, None, header, "ready", 0, sha256_hex(header)
+            branch_id, thread_id, self._tenant, None, None, header, "ready", 0, sha256_hex(header)
         )
         return _result(await self._worker.call(lambda c: lease.create(c, row, (), None)))
 
-    async def import_log(
-        self, log: VerifiedLog, tenant_id: str = sql.LOCAL_TENANT
-    ) -> Ok[None] | Err[ParseError]:
+    async def import_log(self, log: VerifiedLog) -> Ok[None] | Err[ParseError]:
         """Stores a verified export's lines byte for byte: parents referenced, never copied."""
-        return _result(await self._worker.call(lambda c: sql.import_segments(c, log, tenant_id)))
+        tenant = self._tenant
+        return _result(await self._worker.call(lambda c: sql.import_segments(c, log, tenant)))
 
-    async def export(self, branch_id: BranchId) -> bytes:
+    async def export(self, branch_id: BranchId) -> Ok[bytes] | Err[ParseError]:
         """The JSONL export of a branch, ending with its committed head checkpoint."""
-        return await self._worker.call(lambda c: sql.export(c, branch_id))
+        found = await self._owned(branch_id)
+        if isinstance(found, Err):
+            return found
+        return Ok(await self._worker.call(lambda c: sql.export(c, branch_id)))
 
     async def read(self, branch_id: BranchId, now: int) -> Ok[VerifiedLog] | Err[ParseError]:
         """Reads a branch back through the same boundary as an import: storage is untrusted."""
-        return verify_export(await self.export(branch_id), now)
+        exported = await self.export(branch_id)
+        return exported if isinstance(exported, Err) else verify_export(exported.value, now)
 
     async def acquire(
         self, branch_id: BranchId, holder_id: str, clock: Clock
@@ -81,9 +88,10 @@ class SqliteStore:
         another holder's lease is live, and with branch_not_runnable for an inspection-only
         branch, and with writer_mismatch at the header for one that another implementation writes
        ."""
-        found = await self._worker.call(lambda c: sql.branch(c, branch_id))
-        if found is None:
-            raise LookupError(f"no branch {branch_id}")
+        owned = await self._owned(branch_id)
+        if isinstance(owned, Err):
+            return owned
+        found = owned.value
         if found.state != "ready":
             message = f"branch {branch_id} is {found.state}"
             return Err(ParseError("branch_not_runnable", message, found.head_seq))
@@ -113,17 +121,10 @@ class SqliteStore:
         Fork-point eligibility (semantic rule 16) and the sandbox restore belong to the fork
         operation above the store."""
         now = clock()
-        parent = await self._worker.call(lambda c: sql.branch(c, request.parent))
-        if parent is None:
-            raise LookupError(f"no branch {request.parent}")
-        prefix = await self._worker.call(lambda c: sql.prefix(c, request.parent, request.at_seq))
-        read = verify_export(prefix, now)
+        read = await self._prefix(request.parent, request.at_seq, now)
         if isinstance(read, Err):
-            return Err(_corrupt(read.error))
-        if read.value.fold.seq != request.at_seq:
-            message = f"the parent has no line {request.at_seq}"
-            return Err(ParseError("seq_mismatch", message, request.at_seq))
-        started = start_child(read.value, parent.tenant_id, request.child, request.data, now)
+            return read
+        started = start_child(read.value, self._tenant, request.child, request.data, now)
         if isinstance(started, Err):
             return started
         start = started.value
@@ -134,6 +135,27 @@ class SqliteStore:
         if taken is None:
             return Ok(None)
         return Ok(Writer(self._worker, taken, start.fold, start.fork[1], clock))
+
+    async def _prefix(
+        self, parent: BranchId, at_seq: int, now: int
+    ) -> Ok[VerifiedLog] | Err[ParseError]:
+        """The parent's verified resolved chain through `at_seq`, where a child forks."""
+        owned = await self._owned(parent)
+        if isinstance(owned, Err):
+            return owned
+        prefix = await self._worker.call(lambda c: sql.prefix(c, parent, at_seq))
+        read = verify_export(prefix, now)
+        if isinstance(read, Err):
+            return Err(_corrupt(read.error))
+        if read.value.fold.seq != at_seq:
+            return Err(ParseError("seq_mismatch", f"the parent has no line {at_seq}", at_seq))
+        return read
+
+    async def _owned(self, branch_id: BranchId) -> Ok[sql.Branch] | Err[ParseError]:
+        found = await self._worker.call(lambda c: sql.branch(c, branch_id))
+        if found is None or found.tenant_id != self._tenant:
+            return Err(ParseError("branch_not_found", f"no branch {branch_id}"))
+        return Ok(found)
 
 
 def _major(version: str) -> str:
