@@ -1,10 +1,13 @@
 """holds(): the JSON Schema keyword subset that generated models check at runtime."""
 
 import pytest
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
+from pydantic.experimental.missing_sentinel import MISSING
 
+from threads._generated.events_v1 import BudgetExceededData
 from threads._strict_model import holds
 
+THREAD = "0192a000-0000-7000-8000-000000000001"
 RULE_IF: JsonValue = {
     "if": {"properties": {"k": {"const": "a"}}},
     "then": {"required": ["x"]},
@@ -42,3 +45,17 @@ def test_holds(schema: JsonValue, value: object, *, expected: bool) -> None:
 def test_unsupported_keyword_is_a_bug() -> None:
     with pytest.raises(TypeError, match="unsupported schema keyword"):
         holds({"pattern": "^a$"}, "a")
+
+
+def test_an_explicit_missing_sentinel_is_rejected() -> None:
+    # MISSING means "absent"; passing it by hand must not satisfy a conditional `required`.
+    data: dict[str, object] = {
+        "scope": "ancestor",
+        "limit": "max_cost_nanos",
+        "limit_value": 770_000_000,
+        "observed": 771_360_000,
+        "observed_is_upper_bound": True,
+    }
+    BudgetExceededData.model_validate({**data, "owner_thread_id": THREAD})
+    with pytest.raises(ValidationError, match="MISSING"):
+        BudgetExceededData.model_validate({**data, "owner_thread_id": MISSING})

@@ -52,6 +52,10 @@ def test_duplicate_keys_are_rejected(key: str, first: JsonValue, second: JsonVal
         ("NaN", False),
         ("-Infinity", False),
         ("[" * 100_000 + "]" * 100_000, False),
+        ("[" * 64 + "]" * 64, True),
+        ("[" * 65 + "]" * 65, False),
+        ('{"a":' * 64 + "0" + "}" * 64, True),
+        ('{"a":' * 65 + "0" + "}" * 65, False),
     ],
 )
 def test_admission_boundaries(text: str, *, admitted: bool) -> None:

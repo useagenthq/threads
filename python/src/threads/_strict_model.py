@@ -6,8 +6,9 @@ the schema into each model's `json_schema_extra["allOf"]`, and `StrictModel` che
 the raw input before field validation. The rules are data from the schema, never code, so they
 can't drift from the TypeScript side.
 
-It also checks `Literal` fields by exact JSON type: Pydantic's literal validator lets `true` pass
-for `Literal[1]` and `1` for `Literal[True]`, even in strict mode.
+It also rejects an explicitly passed `MISSING` sentinel, and checks `Literal` fields by exact
+JSON type: Pydantic's literal validator lets `true` pass for `Literal[1]` and `1` for
+`Literal[True]`, even in strict mode.
 """
 
 import json
@@ -29,6 +30,11 @@ class StrictModel(BaseModel):
     @classmethod
     def _check_schema_conditions(cls, data: object) -> object:
         if _is_object(data):
+            # MISSING stands for an absent field. Passed explicitly it would satisfy a
+            # conditional `required` yet serialize without the field, so it is never input.
+            given = [name for name, value in data.items() if value is MISSING]
+            if given:
+                raise ValueError(f"MISSING given explicitly for {given}; omit the field instead")
             for name, allowed in _literal_fields(cls):
                 if name in data and not any(_json_equal(a, data[name]) for a in allowed):
                     raise ValueError(f"{name} must be one of {allowed!r}")

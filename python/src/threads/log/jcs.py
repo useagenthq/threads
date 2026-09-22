@@ -17,6 +17,8 @@ from pydantic import JsonValue
 from threads.result import Err, Ok
 
 MAX_SAFE_INTEGER = 2**53 - 1
+MAX_DEPTH = 64
+"""Levels of arrays and objects a line may nest, the line object being level 1 (wire rule 2)."""
 _SURROGATE = re.compile("[\ud800-\udfff]")
 # ECMAScript prints a number in fixed notation while its decimal exponent n is in (-6, 21].
 _FIXED_MAX = 21
@@ -31,7 +33,7 @@ def canonicalize(value: JsonValue) -> Ok[str] | Err[str]:
     """Returns the RFC 8785 text of `value`. Encode it as UTF-8 for the canonical bytes."""
     parts: list[str] = []
     try:
-        _write(value, parts)
+        _write(value, parts, 1)
     except _NotCanonicalizableError as error:
         return Err(str(error))
     return Ok("".join(parts))
@@ -41,7 +43,7 @@ def has_lone_surrogate(text: str) -> bool:
     return _SURROGATE.search(text) is not None
 
 
-def _write(value: JsonValue, out: list[str]) -> None:
+def _write(value: JsonValue, out: list[str], depth: int) -> None:
     match value:
         case None:
             out.append("null")
@@ -54,31 +56,37 @@ def _write(value: JsonValue, out: list[str]) -> None:
         case str():
             out.append(_string(value))
         case list():
-            _write_array(value, out)
+            _write_array(value, out, _within_depth(depth))
         case dict():
-            _write_object(value, out)
+            _write_object(value, out, _within_depth(depth))
         case _:
             assert_never(value)
 
 
-def _write_array(items: list[JsonValue], out: list[str]) -> None:
+def _write_array(items: list[JsonValue], out: list[str], depth: int) -> None:
     out.append("[")
     for index, item in enumerate(items):
         if index:
             out.append(",")
-        _write(item, out)
+        _write(item, out, depth + 1)
     out.append("]")
 
 
-def _write_object(obj: dict[str, JsonValue], out: list[str]) -> None:
+def _write_object(obj: dict[str, JsonValue], out: list[str], depth: int) -> None:
     out.append("{")
     for index, key in enumerate(sorted(obj, key=_utf16_key)):
         if index:
             out.append(",")
         out.append(_string(key))
         out.append(":")
-        _write(obj[key], out)
+        _write(obj[key], out, depth + 1)
     out.append("}")
+
+
+def _within_depth(depth: int) -> int:
+    if depth > MAX_DEPTH:
+        raise _NotCanonicalizableError(f"nesting deeper than {MAX_DEPTH} levels")
+    return depth
 
 
 def _utf16_key(key: str) -> bytes:

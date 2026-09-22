@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 from pydantic import JsonValue
 
-from threads.log.jcs import MAX_SAFE_INTEGER, has_lone_surrogate
+from threads.log.jcs import MAX_DEPTH, MAX_SAFE_INTEGER, has_lone_surrogate
 from threads.result import Err, Ok
 
 
@@ -29,7 +29,7 @@ def parse_json(text: str) -> Ok[JsonValue] | Err[str]:
             parse_float=_finite_float,
             parse_int=_safe_int,
         )
-        _reject_lone_surrogates(value)
+        _check_strings_and_depth(value)
     except RecursionError:
         return Err("JSON nests too deeply")
     except ValueError as error:  # JSONDecodeError and _InadmissibleError
@@ -66,18 +66,21 @@ def _safe_int(text: str) -> int:
     return value
 
 
-def _reject_lone_surrogates(value: JsonValue) -> None:
-    # json.loads joins escaped surrogate pairs, so any surrogate left is unpaired.
+def _check_strings_and_depth(value: JsonValue) -> None:
+    # Iterative, so hostile nesting can't exhaust the stack here. json.loads joins escaped
+    # surrogate pairs, so any surrogate left is unpaired.
     strings: list[str] = []
-    stack: list[JsonValue] = [value]
+    stack: list[tuple[JsonValue, int]] = [(value, 1)]
     while stack:
-        item = stack.pop()
+        item, depth = stack.pop()
         if isinstance(item, str):
             strings.append(item)
+        elif isinstance(item, list | dict) and depth > MAX_DEPTH:
+            raise _InadmissibleError(f"nesting deeper than {MAX_DEPTH} levels")
         elif isinstance(item, list):
-            stack.extend(item)
+            stack.extend((child, depth + 1) for child in item)
         elif isinstance(item, dict):
             strings.extend(item)
-            stack.extend(item.values())
+            stack.extend((child, depth + 1) for child in item.values())
     if any(has_lone_surrogate(s) for s in strings):
         raise _InadmissibleError("lone surrogate in a string")

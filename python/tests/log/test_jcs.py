@@ -129,3 +129,11 @@ def test_numbers_ignore_the_callers_decimal_context() -> None:
         context.prec = 6
         assert canonicalize(0.123456789) == Ok("0.123456789")
         assert canonicalize(123456789012.0) == Ok("123456789012")
+
+
+def test_nesting_beyond_the_limit_is_an_error() -> None:
+    deep: JsonValue = 0
+    for _ in range(64):
+        deep = [deep]
+    assert isinstance(canonicalize(deep), Ok)
+    assert isinstance(canonicalize([deep]), Err)

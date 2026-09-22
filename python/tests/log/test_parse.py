@@ -318,3 +318,10 @@ def test_non_canonical_bytes_are_an_invalid_line(line: str) -> None:
     assert isinstance(result, Err)
     assert result.error.code == "invalid_line"
     assert "canonical" in result.error.message
+
+
+def test_deep_nesting_is_an_error_not_a_crash() -> None:
+    # Reproduced RecursionError: the decoder coped, the canonical-form check did not.
+    result = parse_log_line("[" * 500 + "0" + "]" * 500)
+    assert isinstance(result, Err)
+    assert result.error.code == "invalid_line"

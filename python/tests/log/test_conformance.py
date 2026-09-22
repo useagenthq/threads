@@ -9,11 +9,12 @@ must parse in full here.
 """
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from threads.log import ParseError, UnknownEvent, parse_log_line
+from threads.log import Head, Header, LogLine, ParseError, UnknownEvent, parse_log_line
 from threads.result import Err, Ok
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
@@ -26,16 +27,27 @@ def test_corpus_is_present() -> None:
     assert len(CASES_WITH_LOGS) > MIN_CASES
 
 
+def next_position(line: LogLine, position: int) -> int:
+    if isinstance(line, Head):
+        return position
+    if isinstance(line, Header):
+        return max(position, 1)
+    return line.seq + 1
+
+
 def parse_failures(log: bytes) -> list[tuple[bytes, ParseError]]:
     failures: list[tuple[bytes, ParseError]] = []
+    position = 0  # an unreadable line's seq is its predecessor's plus 1 (conformance README)
     for raw in log.split(b"\n"):
         if not raw:
             continue
         match parse_log_line(raw.decode("utf-8")):
             case Err(error=error):
-                failures.append((raw, error))
-            case Ok():
-                pass
+                seq: int = position if error.seq is None else error.seq
+                failures.append((raw, replace(error, seq=seq)))
+                position = seq + 1
+            case Ok(value=line):
+                position = next_position(line, position)
     return failures
 
 
