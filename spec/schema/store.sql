@@ -27,8 +27,8 @@ CREATE TABLE IF NOT EXISTS threads (
 -- transaction. head_verified is 0 after an import whose head checkpoint was missing or whose
 -- tail was torn; dropped_ref is then the sha256 of the torn bytes' artifact, if any. Such a
 -- branch stays inspection_only until recovery appends log_repaired, and its export ends with
--- those bytes instead of a head line. A branch stores only its own rows; parent rows are referenced through
--- parent_branch_id and fork_at_seq, never copied.
+-- those bytes instead of a head line. A branch stores only its own rows; parent rows are
+-- referenced through parent_branch_id and fork_at_seq, never copied.
 CREATE TABLE IF NOT EXISTS branches (
   branch_id TEXT PRIMARY KEY,
   thread_id TEXT NOT NULL,
