@@ -31,6 +31,8 @@ class Writer:
         self._clock = clock
         self._poisoned = False
         self._lock = asyncio.Lock()
+        effects = fold.effects.values()
+        self._requires_recovery = bool(fold.pending) or any(s == "unknown" for _, s in effects)
 
     @property
     def branch_id(self) -> BranchId:
@@ -39,6 +41,13 @@ class Writer:
     @property
     def epoch(self) -> int:
         return self._lease.epoch
+
+    @property
+    def requires_recovery(self) -> bool:
+        """True when the branch had a call without a result or an effect in doubt when this
+        writer took it. Normal dispatch must refuse such a writer: only recovery
+        may dispatch on it, after re-checking approval, cancellation and policy."""
+        return self._requires_recovery
 
     async def append(
         self, drafts: Sequence[Draft]

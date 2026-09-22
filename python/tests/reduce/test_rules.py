@@ -157,3 +157,34 @@ async def last_code(drafts: Sequence[Draft]) -> str | None:
 )
 def test_rule(drafts: list[Draft], code: str | None) -> None:
     assert asyncio.run(last_code(drafts)) == code
+
+
+async def reacquired(drafts: Sequence[Draft]) -> bool:
+    """Appends drafts, then takes the branch again as a restarted runner would."""
+    opened = await SqliteStore.open()
+    assert isinstance(opened, Ok)
+    store = opened.value
+    try:
+        assert await store.create(THREAD, ROOT, NOW) == Ok(None)
+        writer = await store.acquire(ROOT, "a", lambda: NOW)
+        assert isinstance(writer, Ok)
+        assert isinstance(await writer.value.append([STARTED, *drafts]), Ok)
+        again = await store.acquire(ROOT, "a", lambda: NOW)
+        assert isinstance(again, Ok)
+        return again.value.requires_recovery
+    finally:
+        await store.close()
+
+
+@pytest.mark.parametrize(
+    ("drafts", "needed"),
+    [
+        ([], False),
+        ([call("read_file"), allow(), result("ok")], False),
+        ([call("read_file")], True),
+        ([call("send_email"), allow(), BEGIN], True),
+        ([call("send_email"), allow(), BEGIN, result("sent")], False),
+    ],
+)
+def test_acquire_flags_unsettled_work_for_recovery(drafts: list[Draft], needed: bool) -> None:
+    assert asyncio.run(reacquired(drafts)) is needed
