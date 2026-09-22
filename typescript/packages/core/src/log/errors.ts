@@ -1,0 +1,49 @@
+import { z } from "zod";
+import type { EnumOf } from "./zod-types";
+
+const ERROR_CODES = [
+  "invalid_line",
+  "unsupported_format",
+  "unsupported_critical_event",
+  "seq_mismatch",
+  "prev_hash_mismatch",
+  "head_mismatch",
+  "invalid_transition",
+  "log_corrupt",
+  "branch_busy",
+  "seq_conflict",
+  "stale_epoch",
+  "writer_poisoned",
+  "branch_has_children",
+  "no_snapshot_boundary",
+  "snapshot_expired",
+  "snapshot_missing",
+  "snapshot_restore_failed",
+  "snapshot_manifest_mismatch",
+  "artifact_missing",
+  "artifact_corrupt",
+  "request_hash_mismatch",
+  "prefix_changed",
+  "approval_mismatch",
+  "approval_expired",
+  "approval_duplicate",
+  "unmatched_external_op",
+  "egress_policy_unsupported",
+  "case_missing_dependency",
+  "budget_unenforceable",
+  "content_unsupported",
+  "continuation_unsupported",
+  "hosted_tool_unsupported",
+  "context_edit_unreported",
+  "context_exhausted",
+  "model_unavailable",
+  "output_invalid",
+  "tool_not_loaded",
+  "permission_rule_invalid",
+] as const;
+
+/** Pinned typed-error codes shared by both implementations. Add only; never rename. */
+export const ErrorCode: EnumOf<typeof ERROR_CODES> = z
+  .enum(ERROR_CODES)
+  .meta({ id: "ErrorCode" });
+export type ErrorCode = z.infer<typeof ErrorCode>;
