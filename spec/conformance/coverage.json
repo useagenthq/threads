@@ -1018,6 +1018,11 @@
         },
         {
           "kind": "case",
+          "ref": "fork-cross-thread-rejected",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
           "ref": "line-schema-error-before-chain",
           "status": "implemented"
         },

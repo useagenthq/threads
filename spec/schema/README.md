@@ -152,7 +152,7 @@ Checked by readers and writers (`validate_next`) on top of the schema. This is t
 | 1 | `seq` is contiguous along the resolved chain | `seq_mismatch` | `seq-gap-rejected` |
 | 2 | `prev_hash` chains within each segment, and `fork.at_hash` matches the parent's line at `at_seq` | `prev_hash_mismatch` | `chain-middle-edit-detected`, `fork-at-hash-mismatch` |
 | 3 | The head checkpoint equals the last line's seq and hash | `head_mismatch` | `head-checkpoint-suffix-removed` |
-| 4 | Every event's `branch_id` equals its segment header's `branch_id` | `invalid_transition` | `event-branch-id-mismatch` |
+| 4 | Every event's `branch_id` equals its segment header's `branch_id`. Every header and event carries the resolved chain's `thread_id` (the first header's); a child header naming another thread fails at the child's first seq | `invalid_transition` | `event-branch-id-mismatch`, `fork-cross-thread-rejected` |
 | 5 | An unknown critical `(type, type_version)` refuses the log | `unsupported_critical_event` | `unknown-critical-event-refuses` |
 | 6 | `epoch` is non-decreasing | `invalid_transition` | `epoch-decrease-rejected` |
 | 7 | `tool_result` needs a pending `tool_call` with that `call_id`. `tool_result_late` needs an earlier `tool_result{origin: deferred}` for it | `invalid_transition` | `tool-result-without-call`, `late-result-without-placeholder` |

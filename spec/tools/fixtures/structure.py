@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 from .common import ALICE, BRANCH, CHILD, num, obj, sha
@@ -11,6 +12,8 @@ from .pieces import base_simple, negative, snapshot
 
 if TYPE_CHECKING:
     import pathlib
+
+OTHER_THREAD = "0192a000-0000-7000-8000-000000000002"
 
 
 def build(root: pathlib.Path) -> None:
@@ -61,6 +64,25 @@ def build(root: pathlib.Path) -> None:
         "A schema-valid fork event in the middle of a segment. fork is only valid as the first "
         "event after a child header: invalid_transition.",
         log,
+        ("invalid_transition", num(fork["seq"])),
+    )
+
+    log = base_simple()
+    s = snapshot(log, None)
+    child = log.fork(num(s["seq"]), CHILD, "sbx_child_01", epoch=2)
+    header = obj(json.loads(child.lines[-2]))
+    header["thread_id"] = OTHER_THREAD
+    child.lines[-2] = canonical(header)
+    fork: Obj = {**child.events[-1], "thread_id": OTHER_THREAD, "prev_hash": sha(child.lines[-2])}
+    child.lines[-1] = canonical(fork)
+    child.events[-1] = fork
+    negative(
+        root,
+        "fork-cross-thread-rejected",
+        "A child segment whose header and fork event name another thread, its hashes recomputed; "
+        "the parent is intact. Every header and event carries the resolved chain's thread_id "
+        "(semantic rule 4): invalid_transition at the child's first line.",
+        child,
         ("invalid_transition", num(fork["seq"])),
     )
 

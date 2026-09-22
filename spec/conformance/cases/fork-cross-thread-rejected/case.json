@@ -1,0 +1,9 @@
+{
+  "name": "fork-cross-thread-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A child segment whose header and fork event name another thread, its hashes recomputed; the parent is intact. Every header and event carries the resolved chain's thread_id (semantic rule 4): invalid_transition at the child's first line.",
+  "clock": {
+    "now": 1790000060000
+  }
+}
