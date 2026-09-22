@@ -7,9 +7,18 @@ import {
   type EventOf,
   effectKey,
   type Fold,
+  type Output,
   responseText,
   sameAddress,
 } from "./state";
+
+function output(data: EventOf<"output_validated">["data"]): Output {
+  if (data.outcome === "rejected") return { outcome: "rejected" };
+  // The schema's if/then rule requires value when accepted; the type can't see a rule.
+  if (data.value === undefined)
+    throw new Error("accepted output without value");
+  return { outcome: "accepted", value: data.value };
+}
 
 /** Advances the fold past one event that already passed validate_next. */
 export function apply(fold: Fold, line: EventLine): void {
@@ -135,10 +144,7 @@ function applyConfig(fold: Fold, e: ConfigEvent): void {
       fold.handedOff = true;
       return;
     case "output_validated":
-      fold.output =
-        e.data.outcome === "accepted"
-          ? { outcome: "accepted", value: e.data.value }
-          : { outcome: "rejected" };
+      fold.output = output(e.data);
       return;
     default:
       assertNever(e);

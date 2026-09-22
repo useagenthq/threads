@@ -118,6 +118,9 @@ function checkEdit(fold: Fold, edit: Edit): Violation {
   if (result === undefined)
     return invalid(`context_edited names ${edit.call_id}, which has no result`);
   if (edit.action === "clear") return undefined;
+  // The schema's if/then rule requires part and spans on a redaction; the type can't see it.
+  if (edit.part === undefined || edit.spans === undefined)
+    throw new Error("redaction without part or spans");
   const parts = result.data.content ?? [
     { type: "text", text: result.data.preview },
   ];
