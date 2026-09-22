@@ -2,7 +2,7 @@
   "name": "permission-rule-bash-prefix",
   "family": "permissions_approvals",
   "kind": "policy",
-  "description": "Shell rules: prefix:* matches whole leading words, exact rules match the whole command, every simple command of a compound must be allowed, safe env assignments and wrappers are stripped, a deny matches any simple command, and an unparseable construct can still be denied but never allowed.",
+  "description": "Shell rules: prefix:* matches whole leading words, exact rules match the whole command, every simple command of a compound must be allowed, safe env assignments and wrappers are stripped, a deny matches any simple command, and an unparseable construct can still be denied but never allowed. An escaped quote, backticks, command substitution or a newline can't hide a second command from a prefix rule.",
   "clock": {
     "now": 1790000060000
   },
@@ -135,6 +135,54 @@
         "category": "other",
         "input": {
           "command": "echo \"git status\""
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "git status \\\"; printf marker; echo \\\""
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "git status `printf marker`"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "git status \"$(printf marker)\""
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "git status\nprintf marker"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "git status && printf marker"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "git status \\\"; rm -rf build; echo \\\""
         }
       }
     ]

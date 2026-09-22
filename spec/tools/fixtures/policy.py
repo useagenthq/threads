@@ -63,6 +63,13 @@ def build(root: pathlib.Path) -> None:
         (d, "bash", "other", _bash("npm test"), "allow", "policy", npm),
         (d, "bash", "other", _bash("npm test -- --watch"), "ask", "mode", ""),
         (d, "bash", "other", _bash('echo "git status"'), "ask", "mode", ""),
+        # An escape or expansion the matcher doesn't model fails closed.
+        (d, "bash", "other", _bash('git status \\"; printf marker; echo \\"'), "ask", "mode", ""),
+        (d, "bash", "other", _bash("git status `printf marker`"), "ask", "mode", ""),
+        (d, "bash", "other", _bash('git status "$(printf marker)"'), "ask", "mode", ""),
+        (d, "bash", "other", _bash("git status\nprintf marker"), "ask", "mode", ""),
+        (d, "bash", "other", _bash("git status && printf marker"), "ask", "mode", ""),
+        (d, "bash", "other", _bash('git status \\"; rm -rf build; echo \\"'), "deny", "policy", rm),
     ]
     _write(
         root,
@@ -70,7 +77,8 @@ def build(root: pathlib.Path) -> None:
         "Shell rules: prefix:* matches whole leading words, exact rules match the whole "
         "command, every simple command of a compound must be allowed, safe env assignments "
         "and wrappers are stripped, a deny matches any simple command, and an unparseable "
-        "construct can still be denied but never allowed.",
+        "construct can still be denied but never allowed. An escaped quote, backticks, "
+        "command substitution or a newline can't hide a second command from a prefix rule.",
         {"permissions": perms},
         rows,
     )
@@ -78,11 +86,12 @@ def build(root: pathlib.Path) -> None:
     src, anyr, env = "edit(src/**)", "read(**)", "read(**/.env)"
     secrets, gh, delete = "edit(src/secrets/**)", "mcp__github__*", "mcp__github__delete_repo"
     docs = "web_fetch(domain:docs.example.com)"
+    root_only, secret_dir = "write(/safe.txt)", "read(secrets/)"
     perms: Obj = {
         **permissions("default"),
-        "allow": [src, anyr, gh, docs],
+        "allow": [src, anyr, gh, docs, root_only],
         "ask": [secrets],
-        "deny": [env, delete],
+        "deny": [env, delete, secret_dir],
     }
     rows = [
         (d, "edit", "edit", _path("src/app/main.ts"), "allow", "policy", src),
@@ -111,12 +120,19 @@ def build(root: pathlib.Path) -> None:
             "mode",
             "",
         ),
+        # gitignore anchoring and directory patterns.
+        (d, "write", "edit", _path("safe.txt"), "allow", "policy", root_only),
+        (d, "write", "edit", _path("nested/safe.txt"), "ask", "mode", ""),
+        (d, "read", "read_only", _path("secrets/token"), "deny", "policy", secret_dir),
+        (d, "read", "read_only", _path("app/secrets/deep/token"), "deny", "policy", secret_dir),
     ]
     _write(
         root,
         "permission-rule-paths-mcp-web",
         "Path rules are gitignore globs over the normalized path relative to the workspace; a "
-        "path outside the workspace never matches a relative rule and a read there asks. Ask "
+        "path outside the workspace never matches a relative rule and a read there asks. A leading "
+        "slash anchors a rule to the workspace root, and a trailing slash covers the directory "
+        "and everything under it. Ask "
         "rules beat allow rules. MCP rules take a trailing *. web_fetch domain rules match the "
         "host exactly.",
         {"permissions": perms},

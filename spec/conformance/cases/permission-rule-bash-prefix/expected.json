@@ -60,6 +60,31 @@
     {
       "decision": "ask",
       "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
     }
   ]
 }

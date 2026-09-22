@@ -47,6 +47,25 @@
     {
       "decision": "ask",
       "source": "mode"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "write(/safe.txt)"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "read(secrets/)"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "read(secrets/)"
     }
   ]
 }

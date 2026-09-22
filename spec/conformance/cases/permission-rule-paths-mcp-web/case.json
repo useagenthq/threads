@@ -2,7 +2,7 @@
   "name": "permission-rule-paths-mcp-web",
   "family": "permissions_approvals",
   "kind": "policy",
-  "description": "Path rules are gitignore globs over the normalized path relative to the workspace; a path outside the workspace never matches a relative rule and a read there asks. Ask rules beat allow rules. MCP rules take a trailing *. web_fetch domain rules match the host exactly.",
+  "description": "Path rules are gitignore globs over the normalized path relative to the workspace; a path outside the workspace never matches a relative rule and a read there asks. A leading slash anchors a rule to the workspace root, and a trailing slash covers the directory and everything under it. Ask rules beat allow rules. MCP rules take a trailing *. web_fetch domain rules match the host exactly.",
   "clock": {
     "now": 1790000060000
   },
@@ -14,14 +14,16 @@
         "edit(src/**)",
         "read(**)",
         "mcp__github__*",
-        "web_fetch(domain:docs.example.com)"
+        "web_fetch(domain:docs.example.com)",
+        "write(/safe.txt)"
       ],
       "ask": [
         "edit(src/secrets/**)"
       ],
       "deny": [
         "read(**/.env)",
-        "mcp__github__delete_repo"
+        "mcp__github__delete_repo",
+        "read(secrets/)"
       ],
       "protected_paths": [
         ".git/**",
@@ -116,6 +118,38 @@
         "category": "other",
         "input": {
           "url": "https://docs.example.com.evil.test/"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "write",
+        "category": "edit",
+        "input": {
+          "path": "safe.txt"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "write",
+        "category": "edit",
+        "input": {
+          "path": "nested/safe.txt"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "read",
+        "category": "read_only",
+        "input": {
+          "path": "secrets/token"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "read",
+        "category": "read_only",
+        "input": {
+          "path": "app/secrets/deep/token"
         }
       }
     ]
