@@ -44,6 +44,11 @@ class Writer:
         return self._lease.epoch
 
     @property
+    def fold(self) -> Fold:
+        """The committed branch folded through its last append. Read it; never mutate it."""
+        return self._fold
+
+    @property
     def requires_recovery(self) -> bool:
         """True when the branch had a call without a result, a model request without a response,
         or an effect in doubt when this writer took it. Normal dispatch must refuse such a

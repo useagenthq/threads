@@ -134,6 +134,15 @@ def segments(conn: sqlite3.Connection, found: Branch, through: int) -> bytes:
     return ancestors + found.header_line + b"\n" + own
 
 
+def mark_repaired(conn: sqlite3.Connection, branch_id: BranchId) -> None:
+    """A torn import becomes runnable once its log_repaired is committed."""
+    with transaction(conn):
+        conn.execute(
+            "UPDATE branches SET state = 'ready' WHERE branch_id = ? AND dropped_ref IS NOT NULL",
+            (branch_id,),
+        )
+
+
 def insert_branch(conn: sqlite3.Connection, row: Branch) -> None:
     """Inserts the branch and, for a new thread, its thread row. The foreign key refuses a
     branch whose tenant is not its thread's."""

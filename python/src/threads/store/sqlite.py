@@ -5,21 +5,22 @@ with the default ":memory:" path is the in-memory store tests use: the same code
 """
 
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import JsonValue
 
 from threads import VERSION
-from threads.log import BranchId, ParseError, ThreadId
+from threads.log import BranchId, Event, ParseError, ThreadId
 from threads.log.digest import sha256_hex
+from threads.render import Rendered, render
 from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
 from threads.store.forking import start_child
-from threads.store.lines import header_line
+from threads.store.lines import Draft, header_line
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
@@ -94,6 +95,23 @@ class SqliteStore:
 
         return _result(await self._worker.call(store))
 
+    async def put_artifact(self, data: bytes) -> str:
+        """Stores bytes content-addressed and returns their sha256 once they are durable."""
+        return await self._worker.call(lambda _: self._artifacts.put(data))
+
+    async def get_artifact(self, sha256: str) -> Ok[bytes] | Err[ParseError]:
+        """An artifact's bytes, verified against its hash."""
+        return await self._worker.call(lambda _: self._artifacts.get(sha256))
+
+    async def render(
+        self, events: Sequence[Event], *, compaction: bool = False
+    ) -> Ok[Rendered] | Err[ParseError]:
+        """Render v1 of the next request after `events`, reading every artifact it references
+        on the store's thread (a missing or changed one is an error, never a substitute)."""
+        return await self._worker.call(
+            lambda _: render(events, self._artifacts.get, compaction=compaction)
+        )
+
     async def export(self, branch_id: BranchId) -> Ok[bytes] | Err[ParseError]:
         """The JSONL export of a branch, ending with its committed head checkpoint."""
         found = await self._owned(branch_id)
@@ -128,7 +146,37 @@ class SqliteStore:
         read = await self.read(branch_id, clock())
         if isinstance(read, Err):
             return Err(_corrupt(read.error))
-        log = read.value
+        return await self._take(read.value, holder_id, clock)
+
+    async def repair_torn(
+        self, branch_id: BranchId, holder_id: str, clock: Clock
+    ) -> Ok[Writer] | Err[ParseError]:
+        """Takes a torn import (wire rule 14) for its first append: `log_repaired` records where
+        the dropped bytes were and their artifact, and then the branch is runnable. A branch
+        already repaired is simply acquired; any other inspection-only branch is refused."""
+        owned = await self._owned(branch_id)
+        if isinstance(owned, Err):
+            return owned
+        if owned.value.state == "ready":
+            return await self.acquire(branch_id, holder_id, clock)
+        dropped = owned.value.dropped_ref
+        read = await self.read(branch_id, clock())
+        if dropped is None or isinstance(read, Err):
+            message = f"branch {branch_id} is {owned.value.state}"
+            return Err(ParseError("branch_not_runnable", message, owned.value.head_seq))
+        taken = await self._take(read.value, holder_id, clock)
+        if isinstance(taken, Err):
+            return taken
+        repaired = await taken.value.append([_repaired(read.value, dropped)])
+        if isinstance(repaired, Err):
+            return repaired
+        await self._worker.call(lambda c: sql.mark_repaired(c, branch_id))
+        return taken
+
+    async def _take(
+        self, log: VerifiedLog, holder_id: str, clock: Clock
+    ) -> Ok[Writer] | Err[ParseError]:
+        branch_id = log.segments[-1].header.branch_id
         writer = log.segments[-1].header.writer
         if (writer.impl, _major(writer.version)) != ("threads-py", _major(VERSION)):
             message = "another implementation or major version writes this branch; fork it"
@@ -186,6 +234,19 @@ class SqliteStore:
         if found is None or found.tenant_id != self._tenant:
             return Err(ParseError("branch_not_found", f"no branch {branch_id}"))
         return Ok(found)
+
+
+def _repaired(log: VerifiedLog, dropped_sha256: str) -> Draft:
+    data: dict[str, JsonValue] = {
+        "truncated_bytes": len(log.dropped),
+        "at_offset": log.committed_bytes,
+        "dropped_ref": {
+            "sha256": dropped_sha256,
+            "bytes": len(log.dropped),
+            "media_type": "application/octet-stream",
+        },
+    }
+    return Draft("log_repaired", data, {"kind": "recovery"}, critical=False)
 
 
 def _major(version: str) -> str:
