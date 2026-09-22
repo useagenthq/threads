@@ -3,7 +3,7 @@
   "info": {
     "title": "threads host API",
     "version": "1",
-    "description": "The typed HTTP/JSON API of host(). Every route under /v1 is a thin wrapper over the library method named in x-api; its x-error-codes are that method's typed failures plus the HTTP ones. Bodies are defined in host-api.v1.schema.json. Callers are authenticated as principals by host({authenticate}); without authenticate every /v1 route answers 401."
+    "description": "The typed HTTP/JSON API of host(). Every route under /v1 is a thin wrapper over the library method named in x-api; its x-error-codes are that method's typed failures plus the HTTP ones. Bodies are defined in host-api.v1.schema.json. Callers are authenticated as principals by host({authenticate}); without authenticate every /v1 route answers 401. Host contract: every create, read and mutation is scoped to the authenticated principal's tenant (another tenant's thread is not_found); a branch_id must belong to the thread in the path or body; and the host always passes the authenticated principal to the library call, never the local-operator default that agent.run() uses without a host. Each route's error bodies are a Failure whose code is exactly that route's x-error-codes. Status: 400 invalid_request, 401 unauthenticated, 403 forbidden, 404 not_found, 409 any domain code."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "servers": [{ "url": "/" }],
@@ -14,12 +14,67 @@
     },
     "parameters": {
       "thread_id": { "name": "thread_id", "in": "path", "required": true, "schema": { "$ref": "../events.v1.schema.json#/$defs/ThreadId" } },
-      "branch_id": { "name": "branch_id", "in": "query", "required": false, "description": "Default: the thread's main branch.", "schema": { "$ref": "../events.v1.schema.json#/$defs/BranchId" } }
+      "branch_id": { "name": "branch_id", "in": "query", "required": false, "description": "Default: the thread's main branch.", "schema": { "$ref": "../events.v1.schema.json#/$defs/BranchId" } },
+      "idempotency_key": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Scoped to the authenticated tenant and the operation, and stored atomically with the accepted user_input. The same key and body hash replays the same receipt and starts nothing; the same key with a different body is idempotency_key_reused (409).",
+        "schema": { "type": "string", "minLength": 1, "maxLength": 255 }
+      }
     },
     "responses": {
-      "Error": {
-        "description": "Typed failure. The status is 400 invalid_request, 401 unauthenticated, 403 forbidden, 404 not_found, 409 for any domain code.",
-        "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" } } }
+      "StartRunError": {
+        "description": "Typed failure of startRun.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused"] } } } } }] } } }
+      },
+      "SubscribeRunError": {
+        "description": "Typed failure of subscribeRun.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found"] } } } } }] } } }
+      },
+      "GetTimelineError": {
+        "description": "Typed failure of getTimeline.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "log_corrupt"] } } } } }] } } }
+      },
+      "ListBranchesError": {
+        "description": "Typed failure of listBranches.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found"] } } } } }] } } }
+      },
+      "ListForkPointsError": {
+        "description": "Typed failure of listForkPoints.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found"] } } } } }] } } }
+      },
+      "ForkError": {
+        "description": "Typed failure of fork.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "no_snapshot_boundary", "snapshot_expired", "snapshot_missing", "snapshot_restore_failed", "snapshot_manifest_mismatch", "resource_unknown", "egress_policy_unsupported"] } } } } }] } } }
+      },
+      "ListApprovalsError": {
+        "description": "Typed failure of listApprovals.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found"] } } } } }] } } }
+      },
+      "DecideApprovalError": {
+        "description": "Typed failure of decideApproval.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "approval_mismatch", "approval_expired", "approval_duplicate"] } } } } }] } } }
+      },
+      "AnswerQuestionError": {
+        "description": "Typed failure of answerQuestion.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "no_open_question"] } } } } }] } } }
+      },
+      "ResolveParkedError": {
+        "description": "Typed failure of resolveParked.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "not_parked"] } } } } }] } } }
+      },
+      "CancelError": {
+        "description": "Typed failure of cancel.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found"] } } } } }] } } }
+      },
+      "SetModelError": {
+        "description": "Typed failure of setModel.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition"] } } } } }] } } }
+      },
+      "SetModeError": {
+        "description": "Typed failure of setMode.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition"] } } } } }] } } }
       },
       "Appended": {
         "description": "Recorded.",
@@ -31,31 +86,32 @@
     "/v1/runs": {
       "post": {
         "operationId": "startRun",
-        "x-api": ["Agent.run"],
-        "x-error-codes": ["unauthenticated", "forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable"],
+        "x-api": ["Host.startRun"],
+        "x-error-codes": ["unauthenticated", "forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused"],
+        "parameters": [{ "$ref": "#/components/parameters/idempotency_key" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/StartRunRequest" } } } },
         "responses": {
-          "202": { "description": "The user_input is durable; the run proceeds in the host. Follow it with the events stream.", "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/BranchRef" } } } },
-          "4XX": { "$ref": "#/components/responses/Error" }
+          "202": { "description": "The user_input is durable; the run proceeds in the host. A replay under the same Idempotency-Key returns this same receipt. Follow the run with its events stream.", "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/RunAccepted" } } } },
+          "4XX": { "$ref": "#/components/responses/StartRunError" }
         }
       }
     },
-    "/v1/threads/{thread_id}/events": {
+    "/v1/threads/{thread_id}/runs/{run_id}/events": {
       "get": {
-        "operationId": "streamEvents",
-        "x-api": ["Agent.stream"],
+        "operationId": "subscribeRun",
+        "x-api": ["Host.subscribe"],
         "x-error-codes": ["unauthenticated", "forbidden", "not_found"],
         "parameters": [
           { "$ref": "#/components/parameters/thread_id" },
-          { "$ref": "#/components/parameters/branch_id" },
+          { "name": "run_id", "in": "path", "required": true, "description": "From RunAccepted: the run's user_input event_id.", "schema": { "$ref": "../events.v1.schema.json#/$defs/EventId" } },
           { "name": "after_seq", "in": "query", "required": false, "description": "Resume after this seq (also accepted as the SSE Last-Event-ID). Default 0.", "schema": { "$ref": "../events.v1.schema.json#/$defs/Int" } }
         ],
         "responses": {
           "200": {
-            "description": "Server-sent events. Each message's data is one SseMessage; committed events carry their seq as the SSE id. The stream subscribes to the log; it is not a second loop.",
+            "description": "Server-sent events of one run. Each message's data is one SseMessage; committed events carry their seq as the SSE id, and the last message is the result naming run_id. Subscribing takes no input and starts nothing; it reads the log, it is not a second loop.",
             "content": { "text/event-stream": { "schema": { "type": "string" }, "x-sse-data": { "$ref": "host-api.v1.schema.json#/$defs/SseMessage" } } }
           },
-          "4XX": { "$ref": "#/components/responses/Error" }
+          "4XX": { "$ref": "#/components/responses/SubscribeRunError" }
         }
       }
     },
@@ -67,7 +123,7 @@
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "responses": {
           "200": { "description": "The branch's steps.", "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/Timeline" } } } },
-          "4XX": { "$ref": "#/components/responses/Error" }
+          "4XX": { "$ref": "#/components/responses/GetTimelineError" }
         }
       }
     },
@@ -79,7 +135,7 @@
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }],
         "responses": {
           "200": { "description": "Visible branches (a forking branch is not listed).", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "host-api.v1.schema.json#/$defs/BranchInfo" } } } } },
-          "4XX": { "$ref": "#/components/responses/Error" }
+          "4XX": { "$ref": "#/components/responses/ListBranchesError" }
         }
       }
     },
@@ -91,7 +147,7 @@
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "responses": {
           "200": { "description": "Eligible fork points only.", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "host-api.v1.schema.json#/$defs/ForkPoint" } } } } },
-          "4XX": { "$ref": "#/components/responses/Error" }
+          "4XX": { "$ref": "#/components/responses/ListForkPointsError" }
         }
       }
     },
@@ -104,7 +160,7 @@
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/ForkRequest" } } } },
         "responses": {
           "201": { "description": "The child branch, ready and runnable.", "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/BranchRef" } } } },
-          "4XX": { "$ref": "#/components/responses/Error" }
+          "4XX": { "$ref": "#/components/responses/ForkError" }
         }
       }
     },
@@ -116,7 +172,7 @@
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "responses": {
           "200": { "description": "Open challenges.", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "host-api.v1.schema.json#/$defs/PendingApproval" } } } } },
-          "4XX": { "$ref": "#/components/responses/Error" }
+          "4XX": { "$ref": "#/components/responses/ListApprovalsError" }
         }
       }
     },
@@ -130,7 +186,7 @@
           { "name": "challenge_id", "in": "path", "required": true, "schema": { "$ref": "../events.v1.schema.json#/$defs/Uuid" } }
         ],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/ApprovalDecision" } } } },
-        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/DecideApprovalError" } }
       }
     },
     "/v1/threads/{thread_id}/questions/{call_id}/answer": {
@@ -144,7 +200,7 @@
           { "name": "call_id", "in": "path", "required": true, "schema": { "$ref": "../events.v1.schema.json#/$defs/CallId" } }
         ],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/Answer" } } } },
-        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/AnswerQuestionError" } }
       }
     },
     "/v1/threads/{thread_id}/parked/{effect_key}/resolve": {
@@ -158,7 +214,7 @@
           { "name": "effect_key", "in": "path", "required": true, "schema": { "$ref": "../events.v1.schema.json#/$defs/NonEmpty" } }
         ],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/ParkedResolution" } } } },
-        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/ResolveParkedError" } }
       }
     },
     "/v1/threads/{thread_id}/cancel": {
@@ -167,7 +223,7 @@
         "x-api": ["Thread.cancel"],
         "x-error-codes": ["unauthenticated", "forbidden", "not_found"],
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
-        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/CancelError" } }
       }
     },
     "/v1/threads/{thread_id}/settings": {
@@ -177,7 +233,7 @@
         "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition"],
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/SettingsChange" } } } },
-        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/SetModelError" } }
       }
     },
     "/v1/threads/{thread_id}/mode": {
@@ -187,7 +243,7 @@
         "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition"],
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/ModeChange" } } } },
-        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/SetModeError" } }
       }
     },
     "/channels/{channel}/events": {
@@ -200,8 +256,8 @@
         "requestBody": { "required": true, "content": { "*/*": { "schema": { "type": "string", "contentMediaType": "application/octet-stream" } } } },
         "responses": {
           "200": { "description": "The adapter's ack (status, headers and body are the adapter's)." },
-          "401": { "description": "verify failed; nothing was stored.", "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" } } } },
-          "404": { "description": "Unknown channel.", "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" } } } }
+          "401": { "description": "verify failed; nothing was stored.", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unverified"] } } } } }] } } } },
+          "404": { "description": "Unknown channel.", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["not_found"] } } } } }] } } } }
         }
       }
     }

@@ -135,7 +135,7 @@
     {
       "id": "host-run-async",
       "open": "Whether POST /v1/runs waits for the result.",
-      "choice": "It returns 202 with {thread_id, branch_id} once the user_input is durable; the result arrives as the final SSE message.",
+      "choice": "It needs an Idempotency-Key and returns 202 with {thread_id, branch_id, run_id} once the user_input is durable; run_id is that user_input's event_id. GET /v1/threads/{thread_id}/runs/{run_id}/events follows the run, and its final SSE message is the result naming run_id.",
       "why": "Runs can park for hours; HTTP requests shouldn't."
     },
     {
@@ -471,15 +471,7 @@
             }
           },
           "required": false,
-          "doc": "Required when effect is reconcilable."
-        },
-        {
-          "name": "lookup_final",
-          "kind": "option",
-          "type": {"prim": "boolean"},
-          "required": false,
-          "default": false,
-          "doc": "Whether lookup's not_found is final under the provider's contract."
+          "doc": "Required when effect is reconcilable. Each answer states its finality: return not_found only when the provider's contract proves nothing happened, else not_found_nonfinal."
         },
         {
           "name": "concurrent",
@@ -2240,9 +2232,22 @@
           "casing": "wire"
         },
         {"object": {"status": {"type": {"literal": "not_found"}, "required": true}}, "casing": "wire"},
-        {"object": {"status": {"type": {"literal": "unsupported"}, "required": true}}, "casing": "wire"}
+        {"object": {"status": {"type": {"literal": "not_found_nonfinal"}, "required": true}}, "casing": "wire"},
+        {
+          "object": {
+            "status": {"type": {"literal": "unknown"}, "required": true},
+            "reason": {"type": {"prim": "string"}, "required": true}
+          },
+          "casing": "wire"
+        }
       ],
-      "doc": "An adapter's answer about an operation it may have performed. not_found is final only when the adapter declares it.",
+      "doc": "An adapter's answer about an operation it may have performed; each answer carries its own finality. found: it happened (effect confirmed_success, model_response_recovered, ledger row live). not_found: final, the provider's contract proves nothing was created or sent (effect safe_to_retry, model attempt not_sent, ledger row released). not_found_nonfinal (not seen yet, may still appear) and unknown (lookup failed or can't answer) settle nothing: the effect parks, the model attempt is abandoned as unknown, the ledger row becomes unknown (resource_unknown). The runtime accepts not_found only from an operation whose declared LookupCapability is final and treats it as not_found_nonfinal otherwise; finality is never inferred from lookup being available.",
+      "source": ""
+    },
+    "LookupCapability": {
+      "kind": "alias",
+      "type": {"enum": ["none", "nonfinal", "final"]},
+      "doc": "Declared per lookup operation and verified by the provider conformance suite. none: no lookup for this operation. nonfinal: lookup can find it but never proves absence. final: lookup may answer not_found as final.",
       "source": ""
     },
     "Model": {
@@ -2270,7 +2275,7 @@
         "lookup": {
           "ts": "lookup",
           "py": "lookup",
-          "doc": "Recover a response after a crash by client request id. Present when info.lookup.",
+          "doc": "Recover a response after a crash by client request id. Present when info.lookup is not none.",
           "async": true,
           "optional": true,
           "params": [{"name": "request_id", "kind": "positional", "type": {"prim": "string"}, "required": true}],
@@ -2307,7 +2312,7 @@
           "doc": "Input parts it accepts; others fail pre-dispatch with content_unsupported."
         },
         "hosted_tools": {"type": {"array": {"prim": "string"}}, "required": false, "default": []},
-        "lookup": {"type": {"prim": "boolean"}, "required": true}
+        "lookup": {"type": {"$ref": "#/types/LookupCapability"}, "required": true, "doc": "Response lookup by client request id."}
       }
     },
     "ModelRequest": {
@@ -2421,11 +2426,34 @@
         "lookup": {
           "ts": "lookup",
           "py": "lookup",
-          "doc": "Find a sandbox whose create response was lost. Present when info.lookup.",
+          "doc": "Find a sandbox whose create or restore response was lost, by that call's operation key. Resolves the pending ledger row (LookupResult doc). Present when info.lookup.create is not none.",
           "async": true,
           "optional": true,
           "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
           "returns": {"$ref": "#/types/LookupResult", "args": [{"$ref": "#/types/SandboxSession"}]}
+        },
+        "lookupSnapshot": {
+          "ts": "lookupSnapshot",
+          "py": "lookup_snapshot",
+          "doc": "Find a snapshot (with its retention hold) whose capture response was lost, by the snapshot call's operation key. Resolves the pending ledger row. Present when info.lookup.snapshot is not none.",
+          "async": true,
+          "optional": true,
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "returns": {
+            "$ref": "#/types/LookupResult",
+            "args": [{"$ref": "urn:threads:schema:events:v1#/$defs/ev_snapshot/properties/data"}]
+          }
+        },
+        "release": {
+          "ts": "release",
+          "py": "release",
+          "doc": "Release a snapshot or retention hold by its durable ref (ledger row releasing). released or already_gone (the provider proves it no longer exists) → released. An error → release_failed, retried by the next gc, never dropped. Sandboxes are released with SandboxSession.close.",
+          "async": true,
+          "params": [
+            {"name": "kind", "kind": "positional", "type": {"enum": ["snapshot", "retention_hold"]}, "required": true},
+            {"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true}
+          ],
+          "returns": {"result": {"enum": ["released", "already_gone"]}, "errors": ["release_failed", "unavailable"]}
         }
       },
       "doc": "What a sandbox adapter (e2b(), daytona(), modal(), fakeSandbox()) returns. Every create and restore carries an operation key written to the resource ledger first.",
@@ -2445,7 +2473,21 @@
         },
         "browser": {"type": {"enum": ["none", "headless"]}, "required": true},
         "desktop": {"type": {"enum": ["none", "native", "image"]}, "required": true},
-        "lookup": {"type": {"prim": "boolean"}, "required": true}
+        "lookup": {
+          "type": {
+            "object": {
+              "create": {"type": {"$ref": "#/types/LookupCapability"}, "required": true},
+              "snapshot": {"type": {"$ref": "#/types/LookupCapability"}, "required": true}
+            }
+          },
+          "required": true,
+          "doc": "Per operation: create (Sandbox.lookup) and snapshot (Sandbox.lookupSnapshot)."
+        },
+        "termination": {
+          "type": {"enum": ["confirmed", "unconfirmed"]},
+          "required": true,
+          "doc": "Whether terminate can confirm a process group is gone. unconfirmed: every sandbox_local timeout or crash parks."
+        }
       }
     },
     "SandboxSession": {
@@ -2475,9 +2517,24 @@
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
               "required": false
             },
-            {"name": "stdin", "kind": "option", "type": {"prim": "bytes"}, "required": false}
+            {"name": "stdin", "kind": "option", "type": {"prim": "bytes"}, "required": false},
+            {
+              "name": "process_key",
+              "kind": "option",
+              "type": {"prim": "string"},
+              "required": true,
+              "doc": "Durable identity of the process group: the call's effect key, recorded by effect_begin before dispatch, so recovery can terminate it after a crash."
+            }
           ],
-          "returns": {"result": {"$ref": "#/types/ExecResult"}, "errors": ["timeout", "invalid_path", "unavailable"]}
+          "returns": {"result": {"$ref": "#/types/ExecOutput"}, "errors": ["timeout", "invalid_path", "unavailable"]}
+        },
+        "terminate": {
+          "ts": "terminate",
+          "py": "terminate",
+          "doc": "Kill the process group started with this process_key and confirm it is gone. terminated or already_exited → tool_result{origin: interrupted}. unknown or an error → the effect parks. Always unknown when info.termination is unconfirmed.",
+          "async": true,
+          "params": [{"name": "process_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "returns": {"result": {"enum": ["terminated", "already_exited", "unknown"]}, "errors": ["unavailable"]}
         },
         "upload": {
           "ts": "upload",
@@ -2513,8 +2570,26 @@
             "errors": ["not_quiescent", "unavailable", "timeout"]
           }
         },
-        "close": {"ts": "close", "py": "close", "async": true, "params": [], "returns": {"prim": "void"}}
+        "close": {
+          "ts": "close",
+          "py": "close",
+          "doc": "Release the sandbox (ledger row releasing). ok → released. An error → release_failed, retried by the next gc, never dropped.",
+          "async": true,
+          "params": [],
+          "returns": {"result": {"prim": "void"}, "errors": ["release_failed", "unavailable"]}
+        }
       },
+      "source": ""
+    },
+    "ExecOutput": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "exit_code": {"type": {"prim": "integer"}, "required": true},
+        "stdout": {"type": {"prim": "bytes"}, "required": true},
+        "stderr": {"type": {"prim": "bytes"}, "required": true}
+      },
+      "doc": "What an adapter's exec returns: the complete output, never truncated. The framework's sandbox layer turns it into an ExecResult.",
       "source": ""
     },
     "ExecResult": {
@@ -2522,10 +2597,16 @@
       "casing": "wire",
       "fields": {
         "exit_code": {"type": {"prim": "integer"}, "required": true},
-        "stdout": {"type": {"prim": "string"}, "required": true},
-        "stderr": {"type": {"prim": "string"}, "required": true},
-        "truncated": {"type": {"prim": "boolean"}, "required": true}
+        "stdout": {"type": {"prim": "string"}, "required": true, "doc": "Head and tail preview."},
+        "stderr": {"type": {"prim": "string"}, "required": true, "doc": "Head and tail preview."},
+        "truncated": {"type": {"prim": "boolean"}, "required": true},
+        "full_output": {
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"},
+          "required": false,
+          "doc": "Present exactly when truncated: the complete stdout and stderr, readable with read_tool_result."
+        }
       },
+      "doc": "What tools and the log see. The framework's sandbox layer, not the adapter, builds it: it writes the complete ExecOutput to the artifact store at source, then keeps previews, before the tool_result is recorded.",
       "source": ""
     },
     "Scope": {
@@ -2781,7 +2862,6 @@
       "role": "protocol",
       "properties": {
         "agent": {"type": {"prim": "string"}, "required": true, "doc": "The host agent key this channel routes to."},
-        "lookup_final": {"type": {"prim": "boolean"}, "required": true},
         "capabilities": {"type": {"$ref": "#/types/ChannelCapabilities"}, "required": true},
         "limits": {"type": {"map": {"prim": "integer"}}, "required": true, "doc": "Provider limits (message bytes, rate)."}
       },
@@ -2854,6 +2934,7 @@
       "kind": "object",
       "casing": "wire",
       "fields": {
+        "lookup": {"type": {"$ref": "#/types/LookupCapability"}, "required": true, "doc": "Delivery lookup by effect key."},
         "buttons": {"type": {"prim": "boolean"}, "required": true},
         "edits": {"type": {"prim": "boolean"}, "required": true},
         "files": {"type": {"prim": "boolean"}, "required": true},
@@ -2969,6 +3050,47 @@
         }
       },
       "methods": {
+        "startRun": {
+          "ts": "startRun",
+          "py": "start_run",
+          "doc": "POST /v1/runs. Makes the user_input durable together with the idempotency key and returns; the run proceeds in the host. The same key and request replays the same receipt and starts nothing; the same key with a different request is idempotency_key_reused. Keys are scoped to the principal's tenant.",
+          "async": true,
+          "params": [
+            {"name": "request", "kind": "positional", "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/StartRunRequest"}, "required": true},
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": true,
+              "doc": "The authenticated caller, never the local-operator default."
+            },
+            {"name": "idempotency_key", "kind": "option", "type": {"prim": "string"}, "required": true}
+          ],
+          "returns": {
+            "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/RunAccepted"},
+            "errors": ["forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused"]
+          }
+        },
+        "subscribe": {
+          "ts": "subscribe",
+          "py": "subscribe",
+          "doc": "GET /v1/threads/{thread_id}/runs/{run_id}/events. Follows one run from the log: its stream events, then one result message naming run_id. Takes no input and starts nothing.",
+          "async": false,
+          "params": [
+            {"name": "thread_id", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true},
+            {"name": "run_id", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EventId"}, "required": true},
+            {"name": "principal", "kind": "option", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
+            {
+              "name": "after_seq",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Int"},
+              "required": false,
+              "default": 0,
+              "doc": "Resume after this seq (SSE Last-Event-ID)."
+            }
+          ],
+          "returns": {"result": {"stream": {"$ref": "urn:threads:schema:host-api:v1#/$defs/SseMessage"}}, "errors": ["forbidden", "not_found"]}
+        },
         "ready": {
           "ts": "ready",
           "py": "ready",

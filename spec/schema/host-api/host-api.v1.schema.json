@@ -57,6 +57,17 @@
         "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" }
       }
     },
+    "RunAccepted": {
+      "description": "The receipt of POST /v1/runs and Host.startRun: the user_input is durable. run_id is that user_input's event_id, the run's durable identity. A replay under the same Idempotency-Key returns the same receipt.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thread_id", "branch_id", "run_id"],
+      "properties": {
+        "thread_id": { "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" },
+        "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+        "run_id": { "$ref": "urn:threads:schema:events:v1#/$defs/EventId" }
+      }
+    },
     "StartRunRequest": {
       "type": "object",
       "additionalProperties": false,
@@ -177,14 +188,18 @@
       ]
     },
     "SseMessage": {
-      "description": "The data of one SSE message: a StreamEvent, then one final result message when the run ends.",
+      "description": "The data of one SSE message on a run subscription: a StreamEvent, then one final result message naming the run when it ends.",
       "oneOf": [
         { "$ref": "#/$defs/StreamEvent" },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["kind", "result"],
-          "properties": { "kind": { "const": "result" }, "result": { "$ref": "#/$defs/RunOutcome" } }
+          "required": ["kind", "run_id", "result"],
+          "properties": {
+            "kind": { "const": "result" },
+            "run_id": { "$ref": "urn:threads:schema:events:v1#/$defs/EventId" },
+            "result": { "$ref": "#/$defs/RunOutcome" }
+          }
         }
       ]
     },

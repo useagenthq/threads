@@ -78,7 +78,9 @@
         "unknown_preset",
         "duplicate_name",
         "capability_missing",
-        "mcp_unreachable"
+        "mcp_unreachable",
+        "release_failed",
+        "idempotency_key_reused"
       ]
     },
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },

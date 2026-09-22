@@ -1512,6 +1512,17 @@
       ]
     },
     {
+      "id": "F12.11",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "host-run-lost-response-replay",
+          "status": "planned"
+        }
+      ]
+    },
+    {
       "id": "F13.1",
       "step1": true,
       "evidence": [

@@ -13,7 +13,8 @@ Stdlib only, Python 3.12+. Checks:
 - every typed failure code is a wire ErrorCode (what the log records) or an ApiErrorCode
   from api.schema.json (what public calls return);
 - every host API operation names existing api.json methods (x-api) and lists at least
-  their failure codes.
+  their failure codes;
+- every host API route's error responses allow exactly its x-error-codes, no more, no fewer.
 """
 
 from __future__ import annotations
@@ -274,6 +275,41 @@ def check_operations(api: Json, openapi: Json) -> list[str]:
     return errs
 
 
+def _route_codes(response: Json, openapi: Json) -> list[str] | None:
+    """The error.code enum of one error response, following a components $ref."""
+    ref = _obj(response).get("$ref")
+    if isinstance(ref, str):
+        response = _pointer(openapi, ref.removeprefix("#"))
+    schema = _pointer(response, "/content/application~1json/schema")
+    for part in _list(_obj(schema).get("allOf", [])):
+        codes = _pointer(part, "/properties/error/properties/code/enum")
+        if codes is not None:
+            return _strs(codes)
+    return None
+
+
+def check_route_errors(openapi: Json) -> list[str]:
+    errs: list[str] = []
+    for path, ops in _obj(_obj(openapi).get("paths")).items():
+        for verb, op in _obj(ops).items():
+            declared = set(_strs(_obj(op).get("x-error-codes")))
+            allowed: set[str] = set()
+            for status, response in _obj(_obj(op).get("responses")).items():
+                if status.startswith("2"):
+                    continue
+                codes = _route_codes(response, openapi)
+                if codes is None:
+                    errs.append(f"openapi {verb} {path} {status}: error body has no code enum")
+                else:
+                    allowed.update(codes)
+            if allowed != declared:
+                errs.append(
+                    f"openapi {verb} {path}: error codes {sorted(allowed)} "
+                    f"!= x-error-codes {sorted(declared)}"
+                )
+    return errs
+
+
 def main() -> int:
     if sys.argv[1:]:
         print(__doc__)
@@ -291,6 +327,7 @@ def main() -> int:
     problems += check_names(api)
     problems += check_codes(api, by_id, openapi)
     problems += check_operations(api, openapi)
+    problems += check_route_errors(openapi)
     for p in problems:
         print(p)
     print("api contract ok" if not problems else f"{len(problems)} problem(s)")
