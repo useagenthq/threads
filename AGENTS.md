@@ -2,17 +2,36 @@
 
 Rules for anyone (human or agent) writing code in this repo. Read `README.md` first for the design.
 
-## Design idea
+Repo layout: `spec/` (source of truth: JSON Schema + conformance cases), `typescript/`, `python/`.
 
-Pydantic-level strictness in TypeScript: **one schema is the type, the validator, and the tool JSON Schema.**
+## Design idea (both languages)
 
-- Every data shape is a Zod 4 schema. The TypeScript type is `z.infer<typeof Schema>`. Never hand-write a type that duplicates a schema.
-- Tool input schemas sent to models come from `z.toJSONSchema(Schema)`. One source, no drift.
-- Types prove what the compiler can see. Schemas prove what crosses a trust boundary. Use both.
+**One schema is the type, the validator, and the tool JSON Schema**, in TypeScript and in Python.
 
-## Trust boundaries (parse, never cast)
+- Zod 4 authors every shape. `z.toJSONSchema` exports it to `spec/schema/`. Pydantic v2 models are generated from `spec/schema/` for Python.
+- The TypeScript type is `z.infer<typeof Schema>`; the Python type is the generated model. Never hand-write a type that duplicates a schema.
+- Tool input schemas sent to models come from the same exported JSON Schema. One source, no drift.
+- Types prove what the checker can see. Schemas prove what crosses a trust boundary. Use both.
 
-Data is `unknown` until parsed. Call `Schema.parse` (or `safeParse` when failure is expected) at every boundary:
+## Shared rules
+
+### Spec-first workflow
+
+1. A feature starts in `spec/`: schema change plus conformance cases, before code in either language.
+2. Change the Zod schema, re-export to `spec/schema/`, regenerate the Pydantic models. Commit the generated output; CI fails if it is stale. Never hand-edit generated files.
+3. Implement in both languages until `spec/conformance/` passes in each.
+
+### Wire format
+
+- Field names are snake_case on the wire in both languages. TS may expose camelCase accessors; the stored bytes are identical.
+- Anything hashed (idempotency keys, prefix hashes, fingerprints) is serialized as RFC 8785 canonical JSON.
+- Literal values (event tags, enums, error codes) live in the schema, not in code.
+- Wire names and the event schema are pinned by golden tests. Never update the pins in a rename PR.
+- One version number per durable format, shared by both languages. Package versions move in lockstep.
+
+### Trust boundaries (parse, never cast)
+
+Data is `unknown` (TS) / untyped (Python) until parsed. Parse at every boundary: TS `Schema.parse` (or `safeParse` when failure is expected), Python `Model.model_validate` / `model_validate_json`.
 
 1. Model output and tool-call arguments
 2. Events read back from the log (storage is a boundary)
@@ -21,17 +40,35 @@ Data is `unknown` until parsed. Call `Schema.parse` (or `safeParse` when failure
 
 Inside the boundary, trust the types. Do not re-validate internally.
 
-## Type rules
+### Shared code standard
+
+- Discriminated unions for every variant type (the `Event` union is keyed on `t`). Every match over a union is exhaustive.
+- Branded ids: `ThreadId`, `EventId`, `CallId`, `SandboxId` are distinct types. Never pass a raw string where an id is meant.
+- Immutable by default. Events are immutable once appended.
+- Expected failures are values (`{ ok: true, value } | { ok: false, error }`, or the Python equivalent). Raise/throw only for bugs and broken invariants.
+- One job per module. Over ~300 lines is a smell; split it.
+- Search before writing a helper. One implementation per concern.
+- No new dependency without a written reason in the PR.
+- Comments explain why, not what.
+
+## Parity
+
+- A feature starts in `spec/`. Both implementations land in the same PR, or the PR links a parity issue for the other language.
+- Concepts and public names mirror across languages (via `spec/api.json`). Internal module organization may follow each language's idioms.
+- Open parity issues are allowed during development but must all be closed before the v0.1 release gate.
+- Public API names are mapped in `spec/api.json` (e.g. `forkPoints` ↔ `fork_points`). Idiomatic APIs may differ; data may not.
+- Never change pinned wire names in a rename PR.
+- Parity is required where a contract covers it, not for symmetry's sake.
+
+## TypeScript rules
 
 - No `any`. No `as` casts except `as const`. No non-null `!`. No `@ts-ignore`; `@ts-expect-error` only in tests, with a reason.
-- Discriminated unions for every variant type (the `Event` union is keyed on `t`). Every `switch` over a union ends with `assertNever`.
-- Brand identifiers: `ThreadId`, `EventId`, `CallId`, `SandboxId` are distinct branded types (`z.string().brand<"ThreadId">()`). Never pass a raw `string` where an id is meant.
-- `readonly` by default. Events are immutable once appended.
+- Every `switch` over a union ends with `assertNever`.
+- Brand ids with `z.string().brand<"ThreadId">()`.
+- `readonly` by default.
 - Use `satisfies` to check literals against a type without widening.
 - Exported functions declare explicit return types.
-- Expected failures are values (`{ ok: true, value } | { ok: false, error }`). `throw` only for bugs and broken invariants.
-
-## Compiler and tooling
+- 2026 JavaScript: `toSorted`/`toSpliced`/`with`, `structuredClone`, `Object.groupBy`, `Promise.withResolvers`, Set methods, iterator helpers. async/await only, no `.then` chains, no `var`, no CommonJS.
 
 `tsconfig.json` must keep all of these on:
 
@@ -50,28 +87,43 @@ Inside the boundary, trust the types. Do not re-validate internally.
 
 - Runtime and tests: Bun (`bun test`). ESM only.
 - Lint and format: Biome, zero warnings.
+- The **core package** allows one runtime dependency: `zod`. Adapter packages (model, sandbox, channel, memory providers) may use the provider's official SDK, with a written reason reviewed in the PR.
 - CI gate: `tsc --noEmit`, `biome check`, `bun test`. All must pass before merge.
 
-## Code standard
+## Python rules
 
-- 2026 JavaScript: `toSorted`/`toSpliced`/`with`, `structuredClone`, `Object.groupBy`, `Promise.withResolvers`, Set methods, iterator helpers. async/await only, no `.then` chains, no `var`, no CommonJS.
-- One job per module. Over ~300 lines is a smell; split it.
-- Search before writing a helper. One implementation per concern.
-- No new dependency without a written reason in the PR. Current allowed runtime dependency: `zod`.
-- Comments explain why, not what.
+- Python 3.12+. Type hints on everything, including return types of public functions.
+- Boundary schemas are generated Pydantic v2 models with `frozen=True`, `extra="forbid"` and **`strict=True`** (no coercion: `"1"` is not an int). Parse with `model_validate_json` / `model_validate`; never build a model from unchecked data with `model_construct`.
+- Validation must agree with Zod exactly. Shared accept/reject cases in `spec/conformance/` prove it. Only the exportable schema subset is allowed in boundary schemas; a Zod refinement or transform that can't be exported to JSON Schema is a CI error, never silently dropped.
+- Internal value types that never cross a boundary use `@dataclass(frozen=True, slots=True)`.
+- No `Any`, no `typing.cast`, no `# type: ignore` outside tests (tests need a reason on the line). pyright in strict mode.
+- Branded ids with `NewType` (or `Annotated` when a validator is attached). Never a bare `str` where an id is meant.
+- Discriminated unions use `Literal` tags with `Field(discriminator="t")`. Every `match` over a union ends with `case _: assert_never(x)` (`typing.assert_never`).
+- Expected failures return `Ok[T] | Err[E]` (frozen dataclasses). Raise only for bugs and broken invariants.
+- Async: `asyncio` only (stdlib). No threads for I/O, no mixing event-loop libraries.
+- Immutable by default: `tuple` / `frozenset` / `Mapping` in signatures, not `list` / `dict`.
+- The **core package** allows one runtime dependency: `pydantic`. Adapter extras may use the provider's official SDK, with a written reason reviewed in the PR.
+- Lint and format: ruff, zero warnings.
+- Tests: pytest + Hypothesis (property tests for parsers, reducers, and canonical JSON).
+- CI gate: `pyright`, `ruff check`, `ruff format --check`, `pytest`. All must pass before merge.
+
+## Tests (both languages)
+
+- Every non-trivial function gets a test. Every trust boundary gets a test with invalid input.
+- Bug fix = failing test first, then the fix.
+- Both implementations pass every case in `spec/conformance/`.
+- Replay tests: a recorded log must reduce to the same state after any change. The fixture corpus of old logs stays reducible forever.
+- Cross-language round trip: a log written by TS reduces to identical state in Python, and the reverse.
+- Prefix stability is asserted automatically; golden snapshots cover prompts and tool schemas.
+- Tests never hit a real model: use the scripted model and the global model-request guard.
 
 ## Framework invariants (never break)
 
 1. The event log is append-only and the only source of truth. State is `reduce(log)`.
-2. Side effects never silently repeat: `effect` begin/commit with an idempotency key. Exactly-once holds only where a verified adapter contract allows it: provider dedup within the key's valid window, or reconciliation that returns `confirmed_success | safe_to_retry | unknown`. `unknown` stays parked for a human; a human retry is recorded as accepting duplicate risk.
-3. Credentials never enter the sandbox.
-4. The prompt prefix stays byte-identical across turns. A test fails on any prefix change.
-5. Recalled memory is injected as untrusted reference, never as instructions.
-6. The agent cannot write its own config or skills.
-7. Event-log style only. No graph/node/edge abstractions.
-
-## Tests
-
-- Every non-trivial function gets a test. Every trust boundary gets a test with invalid input.
-- Bug fix = failing test first, then the fix.
-- Replay tests: a recorded log must reduce to the same state after any change.
+2. One writer and one executor per thread. Appends are serialized through a single writer, and only the current lease holder (fencing epoch) may dispatch model calls or effects. A second or stale owner is rejected, and a test proves it.
+3. Side effects never silently repeat: `effect` begin/commit with an idempotency key. Exactly-once holds only where a verified adapter contract allows it: provider dedup within the key's valid window, or reconciliation that returns `confirmed_success | safe_to_retry | unknown`. `unknown` stays parked for a human; a human retry is recorded as accepting duplicate risk.
+4. Credentials never enter the sandbox.
+5. The prompt prefix stays byte-identical across turns. A test fails on any prefix change.
+6. Recalled memory, knowledge, and summaries are injected as untrusted reference, never as instructions.
+7. The agent cannot write its own config, skills, or hooks.
+8. Event-log style only. No graph/node/edge abstractions.
