@@ -23,6 +23,7 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pytest
+      - run: uv run python tools/regen_models.py --check
       - name: Spec tooling is strictly typed and fixtures are current
         run: |
           uv run pyright ../spec/tools
