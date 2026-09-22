@@ -122,6 +122,9 @@ class _Reader:
             parent = self.segments[-1]
             if parent.awaits_fork():
                 return _missing_fork(self.fold.seq + 1)
+            if header.thread_id != self.fold.thread_id:
+                message = f"a child segment names another thread, {header.thread_id}"
+                return ParseError("invalid_transition", message, self.fold.seq + 1)
             link = _Link(self.fold.seq, parent.header.branch_id, sha256_hex(parent.last_line()))
             self.segments.append(_Open(header, raw, link))
         enter_segment(self.fold, header)

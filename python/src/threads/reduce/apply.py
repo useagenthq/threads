@@ -45,6 +45,8 @@ def _envelope_error(fold: Fold, event: Event | UnknownEvent) -> ParseError | Non
     # Unknown non-critical events skip every reduce rule, but not the envelope ones.
     if event.branch_id != fold.segment:
         return reject(event, f"branch_id {event.branch_id} differs from its segment's header")
+    if event.thread_id != fold.thread_id:
+        return reject(event, f"thread_id {event.thread_id} is not the resolved chain's")
     if event.epoch < fold.epoch:
         return reject(event, f"epoch {event.epoch} is lower than the previous {fold.epoch}")
     if event.event_id in fold.event_ids:
