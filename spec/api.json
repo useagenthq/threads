@@ -1,0 +1,2992 @@
+{
+  "$schema": "schema/api.schema.json",
+  "format": "threads.api",
+  "format_version": 1,
+  "conventions": {
+    "names": "Functions and methods: TS lowerCamelCase, Python snake_case of the same words (ts is lowerCamel of py; check_api.py enforces it). Types: PascalCase, identical in both. Param and field keys here are the Python names; in TS they are lowerCamel, except inside casing wire types, which are snake_case in both.",
+    "params": "kind positional params are positional in both languages. kind option params are the trailing options object in TS and keyword-only arguments in Python. required false means optional; default is the value used when omitted.",
+    "results": "{result, errors} is an expected-failure value: TS {ok: true, value} | {ok: false, error: {code, message}}, Python Ok[T] | Err[Failure] (frozen dataclasses). errors is the closed code set; every code is in the events ErrorCode or host-api ApiErrorCode enum. Only ConfigError at setup is thrown (throws).",
+    "async": "async true: TS returns a Promise, Python is async def. A stream is TS AsyncIterable, Python AsyncIterator.",
+    "refs": "urn:threads:schema:events:v1 is spec/schema/events.v1.schema.json, urn:threads:schema:host-api:v1 is spec/schema/host-api/host-api.v1.schema.json, urn:threads:schema:conformance:v1 is spec/conformance/case.schema.json. #/types/X is a type in this file.",
+    "generics": "Deps defaults to null (TS undefined, Python None); Output defaults to string (the final text). Agent<Deps, Output> carries both into RunContext and RunResult.",
+    "adapters": "Model, Sandbox, MemoryProvider, KnowledgeProvider, ChannelAdapter and SearchBackend are protocols. Concrete factories (anthropic(), e2b(), mem0(), slack(), ...) live in adapter packages, take a secret() for credentials and return one of these."
+  },
+  "packages": {
+    "core": {
+      "ts": "@threads/core",
+      "py": "threads",
+      "doc": "Pure library. Runtime dependency: zod / pydantic only. Names pending an npm/PyPI check."
+    },
+    "host": {
+      "ts": "@threads/host",
+      "py": "threads.host",
+      "doc": "Channels, schedules, the HTTP API (spec/schema/host-api/) and the CLI."
+    }
+  },
+  "choices": [
+    {
+      "id": "run-as-method",
+      "open": "lists run() and stream() as core functions; README and Consequences write bot.run(task).",
+      "choice": "Methods on the agent only: agent.run(input, opts), agent.stream(input, opts). No top-level run().",
+      "why": "One way to run, as the README shows. (OpenAI Agents SDK uses run(agent, input); a method reads the same and needs no extra import.)"
+    },
+    {
+      "id": "options-object",
+      "open": "Parameter passing style per language.",
+      "choice": "Required inputs are positional; everything else is one trailing options object in TS and keyword-only arguments in Python, with the same names (camelCase/snake_case) and defaults.",
+      "why": "Mirrors OpenAI Agents SDK (run(agent, input, {context, maxTurns, signal})) and Pydantic AI keyword args."
+    },
+    {
+      "id": "default-store",
+      "open": "Which store run() uses when none is given.",
+      "choice": "sqlite(\".threads\"), the same default threads dev uses. Tests pass sqlite(\":memory:\").",
+      "why": "The log is the truth (invariant 1): a run without a durable store couldn't resume, fork or save a case."
+    },
+    {
+      "id": "fork-then-run",
+      "open": "gives fork(point, {input?, ...}); a thread handle has no agent to run with.",
+      "choice": "fork() returns a Thread handle on the new branch; continue it with agent.run(input, {thread: child}).",
+      "why": "Keeps the thread handle pure data and control; one run path."
+    },
+    {
+      "id": "deny-method",
+      "open": "lists approve() but no way to refuse a challenge.",
+      "choice": "Thread.deny(challengeId, principal, {reason}).",
+      "why": "Approvals need both outcomes (approval_denied)."
+    },
+    {
+      "id": "control-principal",
+      "open": "gives resolveParked(key, resolution) and cancel() without a principal, yet effect_resolved{by: human} and cancel_requested require one.",
+      "choice": "approve, deny, answer and resolveParked take the principal positionally; cancel, compact, setModel, setOutputStyle and setMode take an optional principal defaulting to the local operator {api, local, operator}.",
+      "why": "Human decisions must name who decided; operator actions default sensibly for local use."
+    },
+    {
+      "id": "mcp-one-function",
+      "open": "spells mcp({url}) and mcp.stdio({command}).",
+      "choice": "One mcp({name, url | command, ...}); exactly one of url or command.",
+      "why": "mcp.stdio has no plain Python equivalent; one function is smaller."
+    },
+    {
+      "id": "local-provider-names",
+      "open": "names both built-ins local() (memory item 6, knowledge item 8).",
+      "choice": "localMemory() and localKnowledge({paths}).",
+      "why": "One exported name can't be both."
+    },
+    {
+      "id": "test-kit-factories",
+      "open": "names ScriptedModel (a class) and a fake sandbox.",
+      "choice": "scriptedModel(script) and fakeSandbox(script) factories taking the conformance ModelScript and SandboxScript.",
+      "why": "Same factory shape as every other provider; the scripts are already specified."
+    },
+    {
+      "id": "hooks-in-extensions",
+      "open": "Whether agent() takes hooks directly.",
+      "choice": "No. Hooks, observers and extension tools come only through extension().",
+      "why": "One primitive, one ordering rule."
+    },
+    {
+      "id": "observers",
+      "open": "spells on(filter, handler) without saying where it lives.",
+      "choice": "extension({on: {<event type> | \"*\": handler}}).",
+      "why": "Observers are extension code; no new top-level name."
+    },
+    {
+      "id": "tool-errors",
+      "open": "How an app tool reports an expected failure.",
+      "choice": "execute returns the output; a thrown error is recorded as an error tool_result the model sees. Framework APIs still return failures as values.",
+      "why": "Same as OpenAI Agents SDK; tool authors don't wrap every return."
+    },
+    {
+      "id": "builtin-tool-config",
+      "open": "says web, git and browser tools need configuration but not where.",
+      "choice": "agent({web: {fetch, search}, git: {credential}, browser: {auth}}); sandbox tools come with sandbox.",
+      "why": "Config-first; no extra factory names."
+    },
+    {
+      "id": "approvers",
+      "open": "allows roles or principals per tool or effect class.",
+      "choice": "agent({approvers: Principal[]}) covering every ask; per-tool approvers deferred.",
+      "why": "Smallest form that meets the defaults (local operator for run(), nobody for channels)."
+    },
+    {
+      "id": "api-casing",
+      "open": "writes saveCase(name, {expect, external_effects}) in TS.",
+      "choice": "API options are camelCase in TS (externalEffects); wire data types (Budget, Principal, the host-api shapes) keep snake_case in both languages.",
+      "why": "AGENTS.md: TS accessors may be camelCase, wire bytes are snake_case."
+    },
+    {
+      "id": "run-error-codes",
+      "open": "names stop_hook_exhausted, continuation_limit, the pinned turn_completed reason is stop_hook_limit; max_turns has no RunResult mapping.",
+      "choice": "failed.error.code uses stop_hook_limit and adds max_turns plus the pre-dispatch codes that end a run (host-api RunErrorCode).",
+      "why": "Pinned wire names win."
+    },
+    {
+      "id": "hook-decision-names",
+      "open": "gives before_tool_result pass | redact | block and before_input inject; hook_decision.decision has no pass, block or inject.",
+      "choice": "beforeToolResult returns Proceed | Redact | Deny; beforeInput returns Allow | Deny | injections.",
+      "why": "Use only decisions the wire can record."
+    },
+    {
+      "id": "host-auth",
+      "open": "says callers are authenticated as principals, not how.",
+      "choice": "host({authenticate: (request) => Principal | null}); without it every /v1 route is 401.",
+      "why": "Secure by default; the app owns its auth."
+    },
+    {
+      "id": "host-run-async",
+      "open": "Whether POST /v1/runs waits for the result.",
+      "choice": "It returns 202 with {thread_id, branch_id} once the user_input is durable; the result arrives as the final SSE message.",
+      "why": "Runs can park for hours; HTTP requests shouldn't."
+    },
+    {
+      "id": "store-sealed",
+      "open": "lists store among provider interfaces; allows only SQLite in v0.1.",
+      "choice": "Store is opaque in v0.1: sqlite() is the only implementation and no methods are public.",
+      "why": "Don't freeze an interface nobody implements yet."
+    }
+  ],
+  "functions": {
+    "agent": {
+      "ts": "agent",
+      "py": "agent",
+      "package": "core",
+      "doc": "Describe an agent. Pure: no I/O, no env reads, no sockets. Checked by Agent.check() or on the first run.",
+      "source": "",
+      "async": false,
+      "generics": [{"name": "Deps", "default": {"prim": "null"}}, {"name": "Output", "default": {"prim": "string"}}],
+      "params": [
+        {"name": "model", "kind": "option", "type": {"$ref": "#/types/Model"}, "required": true},
+        {
+          "name": "instructions",
+          "kind": "option",
+          "type": {"prim": "string"},
+          "required": false,
+          "default": "",
+          "doc": "Pinned system text (Render v1 line 0)."
+        },
+        {
+          "name": "name",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"},
+          "required": false,
+          "default": "agent",
+          "doc": "Unique among the agents a host, subagent list or handoff list names."
+        },
+        {
+          "name": "tools",
+          "kind": "option",
+          "type": {"array": {"union": [{"$ref": "#/types/Tool"}, {"$ref": "#/types/McpServer"}]}},
+          "required": false,
+          "default": [],
+          "doc": "App tools and MCP servers. Built-in tools come from the sandbox and the options below."
+        },
+        {
+          "name": "extensions",
+          "kind": "option",
+          "type": {"array": {"$ref": "#/types/Extension"}},
+          "required": false,
+          "default": [],
+          "doc": "Instructions and hooks run in this order."
+        },
+        {
+          "name": "sandbox",
+          "kind": "option",
+          "type": {"$ref": "#/types/Sandbox"},
+          "required": false,
+          "doc": "Absent: no sandbox tools (bash, files, browser, computer)."
+        },
+        {"name": "memory", "kind": "option", "type": {"$ref": "#/types/MemoryProvider"}, "required": false},
+        {
+          "name": "memory_write",
+          "kind": "option",
+          "type": {"enum": ["deny", "ask", "allow_principal", "allow"]},
+          "required": false,
+          "default": "ask",
+          "doc": "Write authority for save_memory."
+        },
+        {"name": "knowledge", "kind": "option", "type": {"$ref": "#/types/KnowledgeProvider"}, "required": false},
+        {
+          "name": "skills",
+          "kind": "option",
+          "type": {"array": {"$ref": "#/types/Skill"}},
+          "required": false,
+          "default": [],
+          "doc": "Listed by name and description in line 0; a body is injected when invoked (F4)."
+        },
+        {
+          "name": "output",
+          "kind": "option",
+          "type": {"schema": {"generic": "Output"}},
+          "required": false,
+          "doc": "Structured final output. Absent: completed.output is the final text."
+        },
+        {
+          "name": "output_mode",
+          "kind": "option",
+          "type": {"enum": ["tool", "native"]},
+          "required": false,
+          "default": "tool"
+        },
+        {"name": "output_retries", "kind": "option", "type": {"prim": "integer"}, "required": false, "default": 2},
+        {
+          "name": "subagents",
+          "kind": "option",
+          "type": {"array": {"$ref": "#/types/Agent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}},
+          "required": false,
+          "default": [],
+          "doc": "Agents spawn_agent may start, by name. Team tools come with them."
+        },
+        {
+          "name": "handoffs",
+          "kind": "option",
+          "type": {"array": {"$ref": "#/types/Agent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}},
+          "required": false,
+          "default": [],
+          "doc": "Agents this one may hand the conversation to, pinned as policy.handoffs."
+        },
+        {
+          "name": "fallback",
+          "kind": "option",
+          "type": {"array": {"$ref": "#/types/Model"}},
+          "required": false,
+          "default": [],
+          "doc": "Fallback models in order."
+        },
+        {
+          "name": "permissions",
+          "kind": "option",
+          "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}},
+          "required": false,
+          "default_doc": "mode default, no rules, the protected paths, allow_bypass false, plan_exit_mode default"
+        },
+        {
+          "name": "approvers",
+          "kind": "option",
+          "type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}},
+          "required": false,
+          "default_doc": "[local operator] for run(); nobody for channel-started threads",
+          "doc": "Who may answer approval challenges for this agent."
+        },
+        {
+          "name": "budget",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Budget"},
+          "required": false,
+          "doc": "Thread budget (policy.budget)."
+        },
+        {
+          "name": "on_unknown_usage",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/on_unknown_usage"},
+          "required": false,
+          "default": "upper_bound"
+        },
+        {
+          "name": "retry",
+          "kind": "option",
+          "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/retry"}},
+          "required": false,
+          "default_doc": ""
+        },
+        {
+          "name": "context",
+          "kind": "option",
+          "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/context"}},
+          "required": false,
+          "default_doc": ""
+        },
+        {
+          "name": "egress",
+          "kind": "option",
+          "type": {"union": [{"array": {"prim": "string"}}, {"literal": "unenforced"}]},
+          "required": false,
+          "default": [],
+          "doc": "Sandbox egress allowlist of hosts. [] is deny-all. unenforced opts in to a provider that can't enforce it; stub mode then refuses."
+        },
+        {
+          "name": "web",
+          "kind": "option",
+          "type": {
+            "object": {
+              "fetch": {"type": {"prim": "boolean"}, "required": false, "default": false},
+              "search": {"type": {"$ref": "#/types/SearchBackend"}, "required": false}
+            }
+          },
+          "required": false,
+          "default_doc": "{fetch: false}: no web tools",
+          "doc": "Host-side web_fetch and web_search."
+        },
+        {
+          "name": "git",
+          "kind": "option",
+          "type": {"object": {"credential": {"type": {"$ref": "#/types/Secret"}, "required": true}}},
+          "required": false,
+          "doc": "Enables the git gateway tools."
+        },
+        {
+          "name": "browser",
+          "kind": "option",
+          "type": {
+            "object": {
+              "auth": {
+                "type": {
+                  "array": {
+                    "object": {
+                      "origin": {"type": {"prim": "string"}, "required": true},
+                      "profile": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  }
+                },
+                "required": true
+              }
+            }
+          },
+          "required": false,
+          "doc": "Delegated browser sessions."
+        },
+        {
+          "name": "output_styles",
+          "kind": "option",
+          "type": {"map": {"prim": "string"}},
+          "required": false,
+          "default": {},
+          "doc": "Named output styles for Thread.setOutputStyle."
+        },
+        {
+          "name": "stream_release",
+          "kind": "option",
+          "type": {"enum": ["immediate", "after_guardrails"]},
+          "required": false,
+          "default": "immediate",
+          "doc": "."
+        }
+      ],
+      "returns": {"$ref": "#/types/Agent", "args": [{"generic": "Deps"}, {"generic": "Output"}]}
+    },
+    "tool": {
+      "ts": "tool",
+      "py": "tool",
+      "package": "core",
+      "doc": "Define an app tool. Input and output types are inferred from the schemas.",
+      "source": "",
+      "async": false,
+      "generics": [{"name": "Input"}, {"name": "Output"}, {"name": "Deps", "default": {"prim": "null"}}],
+      "params": [
+        {
+          "name": "name",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"},
+          "required": true
+        },
+        {"name": "description", "kind": "option", "type": {"prim": "string"}, "required": true},
+        {
+          "name": "input",
+          "kind": "option",
+          "type": {"schema": {"generic": "Input"}},
+          "required": true,
+          "doc": "Tool arguments are parsed with it at the boundary; its JSON Schema is the pinned input_schema."
+        },
+        {
+          "name": "output",
+          "kind": "option",
+          "type": {"schema": {"generic": "Output"}},
+          "required": false,
+          "doc": "Pinned output_schema. A result that fails it is an error result; the effect still happened."
+        },
+        {
+          "name": "runs",
+          "kind": "option",
+          "type": {"enum": ["host", "sandbox"]},
+          "required": true,
+          "doc": "Required, no default."
+        },
+        {
+          "name": "execute",
+          "kind": "option",
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {"name": "input", "kind": "positional", "type": {"generic": "Input"}, "required": true},
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"generic": "Output"}
+            }
+          },
+          "required": false,
+          "doc": "runs host: required. The value is the result; a thrown error becomes an error tool_result the model sees."
+        },
+        {
+          "name": "module",
+          "kind": "option",
+          "type": {"prim": "string"},
+          "required": false,
+          "doc": "runs sandbox: required. Path of the module uploaded into the sandbox; JSON on stdin and stdout."
+        },
+        {
+          "name": "entrypoint",
+          "kind": "option",
+          "type": {"prim": "string"},
+          "required": false,
+          "default": "main",
+          "doc": "runs sandbox: the function the module exposes."
+        },
+        {
+          "name": "effect",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EffectClass"},
+          "required": false,
+          "default": "unguarded",
+          "doc": ". Undeclared tools are unguarded: uncertainty always parks."
+        },
+        {
+          "name": "dedup_window_ms",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
+          "required": false,
+          "doc": "Required exactly when effect is idempotent."
+        },
+        {
+          "name": "lookup",
+          "kind": "option",
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"$ref": "#/types/LookupResult", "args": [{"generic": "Output"}]}
+            }
+          },
+          "required": false,
+          "doc": "Required when effect is reconcilable."
+        },
+        {
+          "name": "lookup_final",
+          "kind": "option",
+          "type": {"prim": "boolean"},
+          "required": false,
+          "default": false,
+          "doc": "Whether lookup's not_found is final under the provider's contract."
+        },
+        {
+          "name": "concurrent",
+          "kind": "option",
+          "type": {"prim": "boolean"},
+          "required": false,
+          "default": false,
+          "doc": "May run in parallel with other concurrent calls of one response (F1.1)."
+        },
+        {"name": "ends_turn", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false}
+      ],
+      "returns": {"$ref": "#/types/Tool", "args": [{"generic": "Input"}, {"generic": "Output"}, {"generic": "Deps"}]}
+    },
+    "extension": {
+      "ts": "extension",
+      "py": "extension",
+      "package": "core",
+      "doc": "The one extension primitive: tools, trusted instructions and hooks. Trusted host code, not a security boundary.",
+      "source": "",
+      "async": false,
+      "generics": [{"name": "Deps", "default": {"prim": "null"}}],
+      "params": [
+        {
+          "name": "name",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"},
+          "required": true,
+          "doc": "Unique; tools are namespaced <ext>__<tool>."
+        },
+        {
+          "name": "tools",
+          "kind": "option",
+          "type": {"array": {"union": [{"$ref": "#/types/Tool"}, {"$ref": "#/types/McpServer"}]}},
+          "required": false,
+          "default": []
+        },
+        {
+          "name": "instructions",
+          "kind": "option",
+          "type": {"prim": "string"},
+          "required": false,
+          "default": "",
+          "doc": "Static; goes into line 0 after the base instructions."
+        },
+        {
+          "name": "hooks",
+          "kind": "option",
+          "type": {"$ref": "#/types/Hooks", "args": [{"generic": "Deps"}]},
+          "required": false,
+          "default": {}
+        },
+        {
+          "name": "on",
+          "kind": "option",
+          "type": {
+            "map": {
+              "fn": {
+                "async": true,
+                "params": [
+                  {
+                    "name": "event",
+                    "kind": "positional",
+                    "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Event"},
+                    "required": true
+                  }
+                ],
+                "returns": {"prim": "void"}
+              }
+            }
+          },
+          "required": false,
+          "default": {},
+          "doc": "Observers keyed by event type, or \"*\". Committed events, delivered after append; can't block or change execution."
+        },
+        {
+          "name": "setup",
+          "kind": "option",
+          "type": {"fn": {"async": true, "params": [], "returns": {"prim": "void"}}},
+          "required": false,
+          "doc": "Runs once at check() or first run. Throwing is a ConfigError."
+        },
+        {
+          "name": "hook_timeout_ms",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
+          "required": false,
+          "default": 5000
+        }
+      ],
+      "returns": {"$ref": "#/types/Extension", "args": [{"generic": "Deps"}]}
+    },
+    "mcp": {
+      "ts": "mcp",
+      "py": "mcp",
+      "package": "core",
+      "doc": "An MCP server in one line. The host owns the connection and credentials; an unreachable server is a ConfigError naming it.",
+      "source": "",
+      "async": false,
+      "params": [
+        {
+          "name": "name",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"},
+          "required": true,
+          "doc": "Tools are named mcp__<name>__<tool>."
+        },
+        {
+          "name": "url",
+          "kind": "option",
+          "type": {"prim": "string"},
+          "required": false,
+          "doc": "Streamable HTTP (SSE fallback). Exactly one of url or command."
+        },
+        {
+          "name": "headers",
+          "kind": "option",
+          "type": {"map": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}},
+          "required": false,
+          "default": {}
+        },
+        {"name": "command", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "stdio transport."},
+        {"name": "args", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false, "default": []},
+        {
+          "name": "env",
+          "kind": "option",
+          "type": {"map": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}},
+          "required": false,
+          "default": {}
+        },
+        {
+          "name": "runs",
+          "kind": "option",
+          "type": {"enum": ["host", "sandbox"]},
+          "required": false,
+          "default": "host",
+          "doc": "sandbox: stdio server inside the sandbox, with no host credentials."
+        },
+        {
+          "name": "tools",
+          "kind": "option",
+          "type": {
+            "object": {
+              "allow": {"type": {"array": {"prim": "string"}}, "required": false},
+              "deny": {"type": {"array": {"prim": "string"}}, "required": false}
+            }
+          },
+          "required": false,
+          "doc": "Filter before pinning."
+        },
+        {
+          "name": "effect",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EffectClass"},
+          "required": false,
+          "default": "unguarded"
+        }
+      ],
+      "returns": {"$ref": "#/types/McpServer"}
+    },
+    "secret": {
+      "ts": "secret",
+      "py": "secret",
+      "package": "core",
+      "doc": "A reference to a host secret, resolved only in the host. Values never reach the log, prompts or the sandbox.",
+      "source": "",
+      "async": false,
+      "params": [{"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+      "returns": {"$ref": "#/types/Secret"}
+    },
+    "openThread": {
+      "ts": "openThread",
+      "py": "open_thread",
+      "package": "core",
+      "doc": "A handle for inspection and control, independent of any in-memory run.",
+      "source": "",
+      "async": true,
+      "params": [
+        {"name": "store", "kind": "positional", "type": {"$ref": "#/types/Store"}, "required": true},
+        {
+          "name": "thread_id",
+          "kind": "positional",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"},
+          "required": true
+        },
+        {
+          "name": "branch_id",
+          "kind": "option",
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"},
+          "required": false,
+          "default_doc": "Default: the thread's main branch."
+        }
+      ],
+      "returns": {
+        "result": {"$ref": "#/types/Thread"},
+        "errors": ["not_found", "log_corrupt", "unsupported_format", "unsupported_critical_event"]
+      }
+    },
+    "sqlite": {
+      "ts": "sqlite",
+      "py": "sqlite",
+      "package": "core",
+      "doc": "The one log and artifact store. Opens lazily: no I/O until first use.",
+      "source": "",
+      "async": false,
+      "params": [
+        {
+          "name": "path",
+          "kind": "positional",
+          "type": {"prim": "string"},
+          "required": true,
+          "doc": "\":memory:\" for a throwaway store (tests)."
+        }
+      ],
+      "returns": {"$ref": "#/types/Store"}
+    },
+    "localMemory": {
+      "ts": "localMemory",
+      "py": "local_memory",
+      "package": "core",
+      "doc": "Built-in memory: SQLite FTS5 in the run's store.",
+      "source": "",
+      "async": false,
+      "params": [],
+      "returns": {"$ref": "#/types/MemoryProvider"}
+    },
+    "localKnowledge": {
+      "ts": "localKnowledge",
+      "py": "local_knowledge",
+      "package": "core",
+      "doc": "Built-in knowledge: SQLite FTS5 over admitted versions stored as artifacts.",
+      "source": "",
+      "async": false,
+      "params": [{"name": "paths", "kind": "option", "type": {"array": {"prim": "string"}}, "required": true}],
+      "returns": {"$ref": "#/types/KnowledgeProvider"}
+    },
+    "scriptedModel": {
+      "ts": "scriptedModel",
+      "py": "scripted_model",
+      "package": "core",
+      "doc": "Test kit. Consumes the script in order, deterministic ids; a call past the end fails the run. The exact requests are in the log.",
+      "source": " §5 test kit",
+      "async": false,
+      "params": [
+        {
+          "name": "script",
+          "kind": "positional",
+          "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ModelScript"},
+          "required": true
+        }
+      ],
+      "returns": {"$ref": "#/types/Model"}
+    },
+    "fakeSandbox": {
+      "ts": "fakeSandbox",
+      "py": "fake_sandbox",
+      "package": "core",
+      "doc": "Test kit. Runs the shared sandbox suite on every PR.",
+      "source": "",
+      "async": false,
+      "params": [
+        {
+          "name": "script",
+          "kind": "positional",
+          "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/SandboxScript"},
+          "required": false,
+          "default": {}
+        }
+      ],
+      "returns": {"$ref": "#/types/Sandbox"}
+    },
+    "host": {
+      "ts": "host",
+      "py": "host",
+      "package": "host",
+      "doc": "Bind agents to a store, channels and schedules. Starts nothing until ready().",
+      "source": "",
+      "async": false,
+      "params": [
+        {"name": "store", "kind": "option", "type": {"$ref": "#/types/Store"}, "required": true},
+        {
+          "name": "agents",
+          "kind": "option",
+          "type": {"map": {"$ref": "#/types/Agent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}},
+          "required": true,
+          "doc": "Keyed by the name channels, schedules and the HTTP API use."
+        },
+        {
+          "name": "channels",
+          "kind": "option",
+          "type": {"map": {"$ref": "#/types/ChannelAdapter"}},
+          "required": false,
+          "default": {}
+        },
+        {
+          "name": "schedules",
+          "kind": "option",
+          "type": {"array": {"$ref": "#/types/Schedule"}},
+          "required": false,
+          "default": []
+        },
+        {
+          "name": "authenticate",
+          "kind": "option",
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "request",
+                  "kind": "positional",
+                  "type": {"native": {"ts": "Request", "py": "starlette.requests.Request"}},
+                  "required": true
+                }
+              ],
+              "returns": {"union": [{"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, {"prim": "null"}]}
+            }
+          },
+          "required": false,
+          "doc": "Maps an HTTP API request to a principal, or null for 401. Absent: every /v1 route answers 401; channel webhooks still work."
+        }
+      ],
+      "returns": {"$ref": "#/types/Host"}
+    }
+  },
+  "types": {
+    "Agent": {
+      "kind": "interface",
+      "role": "handle",
+      "generics": [{"name": "Deps", "default": {"prim": "null"}}, {"name": "Output", "default": {"prim": "string"}}],
+      "properties": {"name": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true}},
+      "methods": {
+        "run": {
+          "ts": "run",
+          "py": "run",
+          "doc": "Run one input to a terminal result. Needs no server.",
+          "async": true,
+          "params": [
+            {
+              "name": "input",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Input"},
+              "required": true,
+              "doc": "Text or ordered input parts."
+            },
+            {
+              "name": "thread",
+              "kind": "option",
+              "type": {"union": [{"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, {"$ref": "#/types/Thread"}]},
+              "required": false,
+              "doc": "Continue this thread (a handle continues its branch). Absent: a new thread."
+            },
+            {
+              "name": "store",
+              "kind": "option",
+              "type": {"$ref": "#/types/Store"},
+              "required": false,
+              "default_doc": "the handle's store when thread is a Thread, else sqlite(\".threads\")"
+            },
+            {
+              "name": "deps",
+              "kind": "option",
+              "type": {"generic": "Deps"},
+              "required": false,
+              "doc": "Host-only dependencies for tools and hooks (RunContext.deps). Never serialized. Required when Deps is not null."
+            },
+            {
+              "name": "budget",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Budget"},
+              "required": false,
+              "doc": "Run budget, recorded on the user_input. Covers the thread and every descendant."
+            },
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": false,
+              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
+              "doc": "The verified sender of this input."
+            },
+            {
+              "name": "signal",
+              "kind": "option",
+              "type": {"native": {"ts": "AbortSignal"}},
+              "required": false,
+              "lang": "ts",
+              "doc": "Local cancellation. Python uses task cancellation. Durable cancellation is Thread.cancel()."
+            }
+          ],
+          "returns": {"$ref": "#/types/RunResult", "args": [{"generic": "Output"}]},
+          "throws": ["ConfigError"]
+        },
+        "stream": {
+          "ts": "stream",
+          "py": "stream",
+          "doc": "Same run, as a subscription to its log. Not a second loop.",
+          "async": false,
+          "params": [
+            {
+              "name": "input",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Input"},
+              "required": true,
+              "doc": "Text or ordered input parts."
+            },
+            {
+              "name": "thread",
+              "kind": "option",
+              "type": {"union": [{"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, {"$ref": "#/types/Thread"}]},
+              "required": false,
+              "doc": "Continue this thread (a handle continues its branch). Absent: a new thread."
+            },
+            {
+              "name": "store",
+              "kind": "option",
+              "type": {"$ref": "#/types/Store"},
+              "required": false,
+              "default_doc": "the handle's store when thread is a Thread, else sqlite(\".threads\")"
+            },
+            {
+              "name": "deps",
+              "kind": "option",
+              "type": {"generic": "Deps"},
+              "required": false,
+              "doc": "Host-only dependencies for tools and hooks (RunContext.deps). Never serialized. Required when Deps is not null."
+            },
+            {
+              "name": "budget",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Budget"},
+              "required": false,
+              "doc": "Run budget, recorded on the user_input. Covers the thread and every descendant."
+            },
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": false,
+              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
+              "doc": "The verified sender of this input."
+            },
+            {
+              "name": "signal",
+              "kind": "option",
+              "type": {"native": {"ts": "AbortSignal"}},
+              "required": false,
+              "lang": "ts",
+              "doc": "Local cancellation. Python uses task cancellation. Durable cancellation is Thread.cancel()."
+            }
+          ],
+          "returns": {"$ref": "#/types/RunStream", "args": [{"generic": "Output"}]},
+          "throws": ["ConfigError"]
+        },
+        "check": {
+          "ts": "check",
+          "py": "check",
+          "doc": "Validate the definition and resolve setup (secrets, MCP handshakes, capabilities) without starting a run.",
+          "async": true,
+          "params": [],
+          "returns": {
+            "result": {"prim": "void"},
+            "errors": [
+              "invalid_config",
+              "missing_secret",
+              "unknown_preset",
+              "duplicate_name",
+              "capability_missing",
+              "mcp_unreachable",
+              "budget_unenforceable",
+              "permission_rule_invalid",
+              "hosted_tool_unsupported",
+              "egress_policy_unsupported"
+            ]
+          }
+        }
+      },
+      "source": ""
+    },
+    "RunResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "generics": [{"name": "Output", "default": {"prim": "string"}}],
+      "variants": [
+        {
+          "object": {
+            "status": {"type": {"literal": "completed"}, "required": true},
+            "output": {"type": {"generic": "Output"}, "required": true},
+            "thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {"type": {"literal": "parked"}, "required": true},
+            "reason": {
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_parked/properties/data/properties/reason"},
+              "required": true
+            },
+            "pending": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/ParkAddress"}}, "required": true},
+            "thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {"type": {"literal": "cancelled"}, "required": true},
+            "thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {"type": {"literal": "failed"}, "required": true},
+            "error": {
+              "type": {
+                "object": {
+                  "code": {"type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/RunErrorCode"}, "required": true},
+                  "message": {"type": {"prim": "string"}, "required": true}
+                },
+                "casing": "wire"
+              },
+              "required": true
+            },
+            "thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {"type": {"literal": "budget_exhausted"}, "required": true},
+            "budget": {
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_budget_exceeded/properties/data"},
+              "required": true
+            },
+            "thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {"type": {"literal": "handed_off"}, "required": true},
+            "thread": {"type": {"$ref": "#/types/Thread"}, "required": true},
+            "to_thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "The HTTP form is host-api RunOutcome (ids instead of handles).",
+      "source": ""
+    },
+    "RunStream": {
+      "kind": "interface",
+      "role": "handle",
+      "generics": [{"name": "Output", "default": {"prim": "string"}}],
+      "properties": {
+        "result": {"type": {"promise": {"$ref": "#/types/RunResult", "args": [{"generic": "Output"}]}}, "required": true}
+      },
+      "iterates": {"$ref": "urn:threads:schema:host-api:v1#/$defs/StreamEvent"},
+      "source": ""
+    },
+    "RunContext": {
+      "kind": "object",
+      "casing": "api",
+      "generics": [{"name": "Deps", "default": {"prim": "null"}}],
+      "fields": {
+        "deps": {"type": {"generic": "Deps"}, "required": true},
+        "thread_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true},
+        "branch_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true},
+        "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
+        "call_id": {
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/CallId"},
+          "required": false,
+          "doc": "Set inside a tool or tool hook."
+        },
+        "effect_key": {
+          "type": {"prim": "string"},
+          "required": false,
+          "doc": "<branch_id>:<call_id>; send it to providers that dedup."
+        },
+        "signal": {"type": {"native": {"ts": "AbortSignal"}}, "required": true, "lang": "ts"}
+      },
+      "source": ""
+    },
+    "Thread": {
+      "kind": "interface",
+      "role": "handle",
+      "properties": {
+        "id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true},
+        "branch": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true},
+        "store": {"type": {"$ref": "#/types/Store"}, "required": true}
+      },
+      "methods": {
+        "timeline": {
+          "ts": "timeline",
+          "py": "timeline",
+          "doc": "Every step with the exact request the model saw; fork points marked (F13.1).",
+          "async": true,
+          "params": [],
+          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Timeline"}, "errors": ["log_corrupt"]}
+        },
+        "branches": {
+          "ts": "branches",
+          "py": "branches",
+          "async": true,
+          "params": [],
+          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/BranchInfo"}}
+        },
+        "forkPoints": {
+          "ts": "forkPoints",
+          "py": "fork_points",
+          "doc": "Eligible snapshot events only.",
+          "async": true,
+          "params": [],
+          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/ForkPoint"}}
+        },
+        "fork": {
+          "ts": "fork",
+          "py": "fork",
+          "doc": "A new branch restored into an isolated sandbox. Continue it with agent.run(input, {thread: child}).",
+          "async": true,
+          "params": [
+            {
+              "name": "point",
+              "kind": "positional",
+              "type": {
+                "union": [
+                  {"$ref": "urn:threads:schema:events:v1#/$defs/EventId"},
+                  {"$ref": "urn:threads:schema:host-api:v1#/$defs/ForkPoint"}
+                ]
+              },
+              "required": true
+            },
+            {"name": "mode", "kind": "option", "type": {"enum": ["live", "stub"]}, "required": false, "default": "live"},
+            {
+              "name": "knowledge",
+              "kind": "option",
+              "type": {"enum": ["pinned", "current"]},
+              "required": false,
+              "default": "pinned"
+            }
+          ],
+          "returns": {
+            "result": {"$ref": "#/types/Thread"},
+            "errors": [
+              "no_snapshot_boundary",
+              "snapshot_expired",
+              "snapshot_missing",
+              "snapshot_restore_failed",
+              "snapshot_manifest_mismatch",
+              "resource_unknown",
+              "egress_policy_unsupported"
+            ]
+          }
+        },
+        "saveCase": {
+          "ts": "saveCase",
+          "py": "save_case",
+          "source": "",
+          "async": true,
+          "params": [
+            {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "expect", "kind": "option", "type": {"$ref": "#/types/CaseExpectation"}, "required": true},
+            {
+              "name": "external_effects",
+              "kind": "option",
+              "type": {"literal": "stub"},
+              "required": true,
+              "doc": "The effects policy is required; stub is the only one."
+            },
+            {
+              "name": "at",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EventId"},
+              "required": false,
+              "default_doc": "the latest fork point of the branch",
+              "doc": "The snapshot event the case restores."
+            },
+            {
+              "name": "dir",
+              "kind": "option",
+              "type": {"prim": "string"},
+              "required": false,
+              "default": "cases",
+              "doc": "Directory in the app repo; the case is <dir>/<name>/."
+            }
+          ],
+          "returns": {
+            "result": {"$ref": "#/types/SavedCase"},
+            "errors": ["invalid_request", "no_snapshot_boundary", "case_missing_dependency", "egress_policy_unsupported"]
+          }
+        },
+        "replay": {
+          "ts": "replay",
+          "py": "replay",
+          "doc": "render(reduce(prefix)) equals every recorded request, with zero outbound calls (F13.6).",
+          "async": true,
+          "params": [],
+          "returns": {
+            "result": {"prim": "void"},
+            "errors": ["request_hash_mismatch", "prefix_changed", "artifact_missing", "artifact_corrupt", "log_corrupt"]
+          }
+        },
+        "pendingApprovals": {
+          "ts": "pendingApprovals",
+          "py": "pending_approvals",
+          "async": true,
+          "params": [],
+          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/PendingApproval"}}
+        },
+        "approve": {
+          "ts": "approve",
+          "py": "approve",
+          "async": true,
+          "params": [
+            {
+              "name": "challenge_id",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Uuid"},
+              "required": true
+            },
+            {
+              "name": "principal",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": true
+            },
+            {
+              "name": "remember_rule",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"},
+              "required": false,
+              "doc": "One of the challenge's suggested_rules."
+            }
+          ],
+          "returns": {
+            "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
+            "errors": ["forbidden", "not_found", "approval_mismatch", "approval_expired", "approval_duplicate"]
+          }
+        },
+        "deny": {
+          "ts": "deny",
+          "py": "deny",
+          "async": true,
+          "params": [
+            {
+              "name": "challenge_id",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Uuid"},
+              "required": true
+            },
+            {
+              "name": "principal",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": true
+            },
+            {"name": "reason", "kind": "option", "type": {"prim": "string"}, "required": false}
+          ],
+          "returns": {
+            "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
+            "errors": ["forbidden", "not_found", "approval_mismatch", "approval_expired", "approval_duplicate"]
+          }
+        },
+        "answer": {
+          "ts": "answer",
+          "py": "answer",
+          "source": "",
+          "async": true,
+          "params": [
+            {
+              "name": "call_id",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/CallId"},
+              "required": true
+            },
+            {
+              "name": "answer",
+              "kind": "positional",
+              "type": {"union": [{"prim": "string"}, {"array": {"prim": "string"}}]},
+              "required": true
+            },
+            {
+              "name": "principal",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": true
+            }
+          ],
+          "returns": {
+            "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
+            "errors": ["forbidden", "no_open_question"]
+          }
+        },
+        "resolveParked": {
+          "ts": "resolveParked",
+          "py": "resolve_parked",
+          "source": "C3",
+          "async": true,
+          "params": [
+            {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {
+              "name": "resolution",
+              "kind": "positional",
+              "type": {"enum": ["assume_done", "assume_not_done"]},
+              "required": true
+            },
+            {
+              "name": "principal",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": true
+            }
+          ],
+          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "not_parked"]}
+        },
+        "cancel": {
+          "ts": "cancel",
+          "py": "cancel",
+          "doc": "Durable cancel_requested; unsettled effects park.",
+          "async": true,
+          "params": [
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": false,
+              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
+              "doc": "The operator this control action is recorded under. The host authorizes it."
+            }
+          ],
+          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden"]}
+        },
+        "compact": {
+          "ts": "compact",
+          "py": "compact",
+          "source": "",
+          "async": true,
+          "params": [
+            {"name": "instructions", "kind": "option", "type": {"prim": "string"}, "required": false},
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": false,
+              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
+              "doc": "The operator this control action is recorded under. The host authorizes it."
+            }
+          ],
+          "returns": {
+            "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
+            "errors": ["forbidden", "branch_busy", "model_unavailable"]
+          }
+        },
+        "setModel": {
+          "ts": "setModel",
+          "py": "set_model",
+          "doc": "settings_changed{reason: user}. forbidden also covers a before_model_switch deny.",
+          "source": "",
+          "async": true,
+          "params": [
+            {
+              "name": "settings",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/SettingsChange"},
+              "required": true
+            },
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": false,
+              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
+              "doc": "The operator this control action is recorded under. The host authorizes it."
+            }
+          ],
+          "returns": {
+            "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
+            "errors": ["forbidden", "invalid_transition"]
+          }
+        },
+        "setOutputStyle": {
+          "ts": "setOutputStyle",
+          "py": "set_output_style",
+          "source": "",
+          "async": true,
+          "params": [
+            {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": false,
+              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
+              "doc": "The operator this control action is recorded under. The host authorizes it."
+            }
+          ],
+          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "not_found"]}
+        },
+        "setMode": {
+          "ts": "setMode",
+          "py": "set_mode",
+          "source": "",
+          "async": true,
+          "params": [
+            {
+              "name": "mode",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionMode"},
+              "required": true
+            },
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": false,
+              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
+              "doc": "The operator this control action is recorded under. The host authorizes it."
+            }
+          ],
+          "returns": {
+            "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
+            "errors": ["forbidden", "invalid_transition"]
+          }
+        },
+        "usage": {
+          "ts": "usage",
+          "py": "usage",
+          "async": true,
+          "params": [],
+          "returns": {"$ref": "urn:threads:schema:host-api:v1#/$defs/UsageTotals"}
+        },
+        "cost": {
+          "ts": "cost",
+          "py": "cost",
+          "source": "",
+          "async": true,
+          "params": [
+            {
+              "name": "tree",
+              "kind": "option",
+              "type": {"prim": "boolean"},
+              "required": false,
+              "default": false,
+              "doc": "Add descendants from their logs."
+            }
+          ],
+          "returns": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Cost"}
+        },
+        "cacheBreaks": {
+          "ts": "cacheBreaks",
+          "py": "cache_breaks",
+          "source": "",
+          "async": true,
+          "params": [],
+          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/CacheBreak"}}
+        },
+        "todos": {
+          "ts": "todos",
+          "py": "todos",
+          "source": "",
+          "async": true,
+          "params": [],
+          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Todo"}}
+        },
+        "children": {
+          "ts": "children",
+          "py": "children",
+          "source": "",
+          "async": true,
+          "params": [],
+          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Child"}}
+        }
+      },
+      "doc": "A thread positioned at one branch. Every method reads or appends through the store; none needs the agent in memory.",
+      "source": ""
+    },
+    "CaseExpectation": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "must": {
+          "type": {"array": {"$ref": "urn:threads:schema:conformance:v1#/$defs/EventMatcher"}},
+          "required": true,
+          "doc": "Fails the case when unmatched."
+        },
+        "expect": {
+          "type": {"array": {"$ref": "urn:threads:schema:conformance:v1#/$defs/EventMatcher"}},
+          "required": false,
+          "default": [],
+          "doc": "Only recorded."
+        }
+      },
+      "doc": "Written into case.json.",
+      "source": ""
+    },
+    "SavedCase": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "path": {"type": {"prim": "string"}, "required": true},
+        "portable": {
+          "type": {"prim": "boolean"},
+          "required": true,
+          "doc": "false when the case depends on a named provider."
+        }
+      }
+    },
+    "Hooks": {
+      "kind": "object",
+      "casing": "api",
+      "generics": [{"name": "Deps", "default": {"prim": "null"}}],
+      "fields": {
+        "session_start": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "source",
+                  "kind": "positional",
+                  "type": {"enum": ["startup", "resume", "fork", "compact"]},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"array": {"prim": "string"}}
+            }
+          },
+          "required": false
+        },
+        "session_end": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"prim": "void"}
+            }
+          },
+          "required": false
+        },
+        "before_input": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "input",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_user_input/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "deny"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  },
+                  {"array": {"prim": "string"}}
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "before_model": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "state",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"array": {"prim": "string"}},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "deny"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "after_model": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "state",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
+                  "required": true
+                },
+                {
+                  "name": "response",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_model_response/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "deny"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  },
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "guide"}, "required": true},
+                      "text": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  },
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "retry"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "before_tool": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "call",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "deny"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  },
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "ask"}, "required": true},
+                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false}
+                    },
+                    "casing": "wire"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "permission_request": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "call",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "deny"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  },
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "ask"}, "required": true},
+                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false}
+                    },
+                    "casing": "wire"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "permission_denied": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "call",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"prim": "void"}
+            }
+          },
+          "required": false
+        },
+        "after_tool": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "call",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "result",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_result/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"array": {"prim": "string"}}
+            }
+          },
+          "required": false
+        },
+        "before_tool_result": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "call",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "result",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_result/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "redact"}, "required": true},
+                      "spans": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}}, "required": true}
+                    },
+                    "casing": "wire"
+                  },
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "deny"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "after_tool_batch": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "state",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"array": {"prim": "string"}}
+            }
+          },
+          "required": false
+        },
+        "before_compact": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "state",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "deny"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  },
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "guide"}, "required": true},
+                      "text": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "after_compact": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "state",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"array": {"prim": "string"}}
+            }
+          },
+          "required": false
+        },
+        "on_stop": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "state",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"object": {"decision": {"type": {"literal": "stop"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "continue"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "on_stop_failure": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "code",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/RunErrorCode"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"prim": "void"}
+            }
+          },
+          "required": false
+        },
+        "subagent_start": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "call",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "deny"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "subagent_stop": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "finished",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_agent_finished/properties/data"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"object": {"decision": {"type": {"literal": "stop"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "continue"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "before_model_switch": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "settings",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ModelSettings"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {
+                "union": [
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {
+                    "object": {
+                      "decision": {"type": {"literal": "deny"}, "required": true},
+                      "reason": {"type": {"prim": "string"}, "required": true}
+                    },
+                    "casing": "wire"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
+        "after_model_switch": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "settings",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ModelSettings"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"prim": "void"}
+            }
+          },
+          "required": false
+        },
+        "notification": {
+          "type": {
+            "fn": {
+              "async": true,
+              "params": [
+                {
+                  "name": "event",
+                  "kind": "positional",
+                  "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Event"},
+                  "required": true
+                },
+                {
+                  "name": "ctx",
+                  "kind": "positional",
+                  "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
+                  "required": true
+                }
+              ],
+              "returns": {"prim": "void"}
+            }
+          },
+          "required": false
+        }
+      },
+      "doc": "Every hook is optional, awaited and bounded by hook_timeout_ms. Decisions are {decision: <hook_decision.decision>, ...} objects. Injections are strings rendered as injected{source: hook}. A gating hook that throws or times out denies.",
+      "source": ""
+    },
+    "Tool": {
+      "kind": "interface",
+      "role": "opaque",
+      "generics": [{"name": "Input"}, {"name": "Output"}, {"name": "Deps", "default": {"prim": "null"}}],
+      "doc": "An app tool (tool()). Carries Input, Output and Deps for inference.",
+      "source": ""
+    },
+    "McpServer": {"kind": "interface", "role": "opaque", "doc": "An MCP server binding (mcp()).", "source": ""},
+    "Extension": {
+      "kind": "interface",
+      "role": "opaque",
+      "generics": [{"name": "Deps", "default": {"prim": "null"}}],
+      "doc": "An extension (extension()).",
+      "source": ""
+    },
+    "Store": {
+      "kind": "interface",
+      "role": "opaque",
+      "doc": "The SQLite log and artifact store (sqlite()). Sealed in v0.1: no public methods.",
+      "source": ""
+    },
+    "Secret": {
+      "kind": "interface",
+      "role": "opaque",
+      "properties": {"name": {"type": {"prim": "string"}, "required": true}},
+      "source": ""
+    },
+    "Skill": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "name": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true},
+        "description": {"type": {"prim": "string"}, "required": true},
+        "body": {"type": {"prim": "string"}, "required": true}
+      },
+      "doc": "Loaded from the host config store, pinned by hash. Files in the sandbox are never skills.",
+      "source": ""
+    },
+    "Schedule": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true},
+        "agent": {"type": {"prim": "string"}, "required": true, "doc": "A key of host({agents})."},
+        "cron": {"type": {"prim": "string"}, "required": true},
+        "timezone": {"type": {"prim": "string"}, "required": false, "default": "UTC", "doc": "IANA name."},
+        "input": {"type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Input"}, "required": true}
+      },
+      "source": ""
+    },
+    "ConfigError": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "code": {"type": {"$ref": "#/types/ConfigErrorCode"}, "required": true},
+        "message": {"type": {"prim": "string"}, "required": true}
+      },
+      "doc": "Thrown at setup only: TS class ConfigError extends Error, Python exception ConfigError. Every other expected failure is a value.",
+      "source": ""
+    },
+    "ConfigErrorCode": {
+      "kind": "alias",
+      "type": {
+        "enum": [
+          "invalid_config",
+          "missing_secret",
+          "unknown_preset",
+          "duplicate_name",
+          "capability_missing",
+          "mcp_unreachable",
+          "budget_unenforceable",
+          "permission_rule_invalid",
+          "hosted_tool_unsupported",
+          "egress_policy_unsupported"
+        ]
+      }
+    },
+    "LookupResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "wire",
+      "generics": [{"name": "T"}],
+      "variants": [
+        {
+          "object": {
+            "status": {"type": {"literal": "found"}, "required": true},
+            "value": {"type": {"generic": "T"}, "required": true}
+          },
+          "casing": "wire"
+        },
+        {"object": {"status": {"type": {"literal": "not_found"}, "required": true}}, "casing": "wire"},
+        {"object": {"status": {"type": {"literal": "unsupported"}, "required": true}}, "casing": "wire"}
+      ],
+      "doc": "An adapter's answer about an operation it may have performed. not_found is final only when the adapter declares it.",
+      "source": ""
+    },
+    "Model": {
+      "kind": "interface",
+      "role": "protocol",
+      "properties": {"info": {"type": {"$ref": "#/types/ModelInfo"}, "required": true}},
+      "methods": {
+        "send": {
+          "ts": "send",
+          "py": "send",
+          "doc": "Stream one attempt. A rejection before content is a rejected chunk, never a thrown error.",
+          "async": false,
+          "params": [
+            {"name": "request", "kind": "positional", "type": {"$ref": "#/types/ModelRequest"}, "required": true},
+            {
+              "name": "signal",
+              "kind": "option",
+              "type": {"native": {"ts": "AbortSignal"}},
+              "required": false,
+              "lang": "ts"
+            }
+          ],
+          "returns": {"stream": {"$ref": "#/types/ModelChunk"}}
+        },
+        "lookup": {
+          "ts": "lookup",
+          "py": "lookup",
+          "doc": "Recover a response after a crash by client request id. Present when info.lookup.",
+          "async": true,
+          "optional": true,
+          "params": [{"name": "request_id", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "returns": {"$ref": "#/types/LookupResult", "args": [{"$ref": "#/types/ModelResponse"}]}
+        },
+        "countTokens": {
+          "ts": "countTokens",
+          "py": "count_tokens",
+          "doc": "Pre-dispatch input_bound_tokens.",
+          "async": true,
+          "optional": true,
+          "params": [{"name": "request", "kind": "positional", "type": {"$ref": "#/types/ModelRequest"}, "required": true}],
+          "returns": {"result": {"prim": "integer"}, "errors": ["unavailable", "timeout"]}
+        }
+      },
+      "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off.",
+      "source": ""
+    },
+    "ModelInfo": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "model": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ModelRef"}, "required": true},
+        "adapter": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/AdapterRef"}, "required": true},
+        "params": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"}, "required": true},
+        "limits": {
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/models/items"},
+          "required": true,
+          "doc": "Window, output cap, billing bound and price."
+        },
+        "accepts": {
+          "type": {"array": {"enum": ["text", "image_ref", "document_ref", "audio_ref"]}},
+          "required": true,
+          "doc": "Input parts it accepts; others fail pre-dispatch with content_unsupported."
+        },
+        "hosted_tools": {"type": {"array": {"prim": "string"}}, "required": false, "default": []},
+        "lookup": {"type": {"prim": "boolean"}, "required": true}
+      }
+    },
+    "ModelRequest": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "request_id": {
+          "type": {"prim": "string"},
+          "required": true,
+          "doc": "Client request id, derived from the model_request event."
+        },
+        "body": {"type": {"prim": "bytes"}, "required": true, "doc": "Render v1 bytes."}
+      }
+    },
+    "ModelResponse": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "content": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/OutputPart"}}, "required": true},
+        "stop_reason": {
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_model_response/properties/data/properties/stop_reason"},
+          "required": true
+        },
+        "usage": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Usage"}, "required": true}
+      }
+    },
+    "ModelChunk": {
+      "kind": "union",
+      "discriminator": "kind",
+      "casing": "wire",
+      "variants": [
+        {
+          "object": {
+            "kind": {"type": {"literal": "delta"}, "required": true},
+            "text": {"type": {"prim": "string"}, "required": true}
+          },
+          "casing": "wire"
+        },
+        {
+          "object": {
+            "kind": {"type": {"literal": "part"}, "required": true},
+            "part": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/OutputPart"}, "required": true}
+          },
+          "casing": "wire"
+        },
+        {
+          "object": {
+            "kind": {"type": {"literal": "done"}, "required": true},
+            "stop_reason": {
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_model_response/properties/data/properties/stop_reason"},
+              "required": true
+            },
+            "usage": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Usage"}, "required": true}
+          },
+          "casing": "wire"
+        },
+        {
+          "object": {
+            "kind": {"type": {"literal": "rejected"}, "required": true},
+            "reason": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/ev_model_attempt_abandoned/properties/data/properties/reason"
+              },
+              "required": true
+            },
+            "http_status": {"type": {"prim": "integer"}, "required": false},
+            "retry_after_ms": {"type": {"prim": "integer"}, "required": false},
+            "billing": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/ev_model_attempt_abandoned/properties/data/properties/billing"
+              },
+              "required": false
+            }
+          },
+          "casing": "wire"
+        }
+      ],
+      "source": ""
+    },
+    "Sandbox": {
+      "kind": "interface",
+      "role": "protocol",
+      "properties": {"info": {"type": {"$ref": "#/types/SandboxInfo"}, "required": true}},
+      "methods": {
+        "create": {
+          "ts": "create",
+          "py": "create",
+          "async": true,
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "returns": {"result": {"$ref": "#/types/SandboxSession"}, "errors": ["unavailable", "timeout"]}
+        },
+        "restore": {
+          "ts": "restore",
+          "py": "restore",
+          "async": true,
+          "params": [
+            {"name": "snapshot_id", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}
+          ],
+          "returns": {
+            "result": {"$ref": "#/types/SandboxSession"},
+            "errors": [
+              "snapshot_expired",
+              "snapshot_missing",
+              "snapshot_restore_failed",
+              "snapshot_manifest_mismatch",
+              "unavailable"
+            ]
+          }
+        },
+        "lookup": {
+          "ts": "lookup",
+          "py": "lookup",
+          "doc": "Find a sandbox whose create response was lost. Present when info.lookup.",
+          "async": true,
+          "optional": true,
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "returns": {"$ref": "#/types/LookupResult", "args": [{"$ref": "#/types/SandboxSession"}]}
+        }
+      },
+      "doc": "What a sandbox adapter (e2b(), daytona(), modal(), fakeSandbox()) returns. Every create and restore carries an operation key written to the resource ledger first.",
+      "source": ""
+    },
+    "SandboxInfo": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "provider": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true},
+        "egress": {"type": {"enum": ["enforced", "unenforced"]}, "required": true},
+        "capture_classes": {
+          "type": {
+            "array": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_snapshot/properties/data/properties/capture_class"}
+          },
+          "required": true
+        },
+        "browser": {"type": {"enum": ["none", "headless"]}, "required": true},
+        "desktop": {"type": {"enum": ["none", "native", "image"]}, "required": true},
+        "lookup": {"type": {"prim": "boolean"}, "required": true}
+      }
+    },
+    "SandboxSession": {
+      "kind": "interface",
+      "role": "protocol",
+      "properties": {"id": {"type": {"prim": "string"}, "required": true, "doc": "Branded SandboxId."}},
+      "methods": {
+        "exec": {
+          "ts": "exec",
+          "py": "exec",
+          "doc": "A timeout kills the whole process group.",
+          "async": true,
+          "params": [
+            {"name": "command", "kind": "positional", "type": {"array": {"prim": "string"}}, "required": true},
+            {"name": "cwd", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "/workspace"},
+            {
+              "name": "env",
+              "kind": "option",
+              "type": {"map": {"prim": "string"}},
+              "required": false,
+              "default": {},
+              "doc": "Exactly this env; nothing inherited."
+            },
+            {
+              "name": "timeout_ms",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
+              "required": false
+            },
+            {"name": "stdin", "kind": "option", "type": {"prim": "bytes"}, "required": false}
+          ],
+          "returns": {"result": {"$ref": "#/types/ExecResult"}, "errors": ["timeout", "invalid_path", "unavailable"]}
+        },
+        "upload": {
+          "ts": "upload",
+          "py": "upload",
+          "async": true,
+          "params": [
+            {"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "data", "kind": "positional", "type": {"prim": "bytes"}, "required": true}
+          ],
+          "returns": {
+            "result": {"prim": "void"},
+            "errors": ["invalid_path", "permission_denied", "is_directory", "too_large", "unavailable"]
+          }
+        },
+        "download": {
+          "ts": "download",
+          "py": "download",
+          "async": true,
+          "params": [{"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "returns": {
+            "result": {"prim": "bytes"},
+            "errors": ["not_found", "invalid_path", "permission_denied", "is_directory", "too_large", "unavailable"]
+          }
+        },
+        "snapshot": {
+          "ts": "snapshot",
+          "py": "snapshot",
+          "doc": "Freeze or stop tracked processes, capture, thaw. Returns only once durable and restorable.",
+          "async": true,
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "returns": {
+            "result": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_snapshot/properties/data"},
+            "errors": ["not_quiescent", "unavailable", "timeout"]
+          }
+        },
+        "close": {"ts": "close", "py": "close", "async": true, "params": [], "returns": {"prim": "void"}}
+      },
+      "source": ""
+    },
+    "ExecResult": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "exit_code": {"type": {"prim": "integer"}, "required": true},
+        "stdout": {"type": {"prim": "string"}, "required": true},
+        "stderr": {"type": {"prim": "string"}, "required": true},
+        "truncated": {"type": {"prim": "boolean"}, "required": true}
+      },
+      "source": ""
+    },
+    "Scope": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "tenant_id": {"type": {"prim": "string"}, "required": true},
+        "agent": {"type": {"prim": "string"}, "required": true},
+        "scope": {"type": {"prim": "string"}, "required": true}
+      },
+      "doc": "From host config and the verified principal. Never a tool argument.",
+      "source": ""
+    },
+    "Binding": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "namespace": {"type": {"prim": "string"}, "required": true},
+        "record_id": {"type": {"prim": "string"}, "required": true}
+      },
+      "doc": "Issued by the host; the provider stores it opaquely."
+    },
+    "MemoryRecord": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "text": {"type": {"prim": "string"}, "required": true},
+        "origin": {"type": {"enum": ["user", "tool_output", "model", "host"]}, "required": true},
+        "provenance": {
+          "type": {
+            "object": {
+              "thread_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true},
+              "event_ids": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/EventId"}}, "required": true}
+            },
+            "casing": "wire"
+          },
+          "required": true
+        },
+        "binding": {"type": {"$ref": "#/types/Binding"}, "required": true}
+      }
+    },
+    "RecordRef": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {"id": {"type": {"prim": "string"}, "required": true}, "version": {"type": {"prim": "string"}, "required": true}}
+    },
+    "MemoryHit": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "id": {"type": {"prim": "string"}, "required": true},
+        "version": {"type": {"prim": "string"}, "required": true},
+        "text": {"type": {"prim": "string"}, "required": true},
+        "score": {"type": {"prim": "number"}, "required": true},
+        "origin": {"type": {"enum": ["user", "tool_output", "model", "host"]}, "required": true},
+        "binding": {"type": {"$ref": "#/types/Binding"}, "required": true}
+      }
+    },
+    "MemoryProvider": {
+      "kind": "interface",
+      "role": "protocol",
+      "methods": {
+        "remember": {
+          "ts": "remember",
+          "py": "remember",
+          "async": true,
+          "params": [
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
+            {"name": "record", "kind": "positional", "type": {"$ref": "#/types/MemoryRecord"}, "required": true},
+            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true}
+          ],
+          "returns": {"result": {"$ref": "#/types/RecordRef"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]}
+        },
+        "recall": {
+          "ts": "recall",
+          "py": "recall",
+          "async": true,
+          "params": [
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
+            {"name": "query", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {
+              "name": "k",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
+              "required": false,
+              "default": 5
+            }
+          ],
+          "returns": {
+            "result": {"array": {"$ref": "#/types/MemoryHit"}},
+            "errors": ["unavailable", "timeout", "invalid", "scope_violation"]
+          }
+        },
+        "forget": {
+          "ts": "forget",
+          "py": "forget",
+          "async": true,
+          "params": [
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
+            {"name": "id", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true}
+          ],
+          "returns": {"result": {"prim": "void"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]}
+        }
+      },
+      "source": ""
+    },
+    "KnowledgeSource": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "source_id": {"type": {"prim": "string"}, "required": true},
+        "media_type": {"type": {"prim": "string"}, "required": true},
+        "content": {"type": {"prim": "bytes"}, "required": true},
+        "location": {"type": {"prim": "string"}, "required": false},
+        "binding": {"type": {"$ref": "#/types/Binding"}, "required": true}
+      }
+    },
+    "DocVersion": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "doc_id": {"type": {"prim": "string"}, "required": true},
+        "version": {"type": {"prim": "string"}, "required": true},
+        "content_sha256": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Sha256"}, "required": true},
+        "revision": {"type": {"prim": "integer"}, "required": true, "doc": "The store's monotonic revision after this ingest."}
+      }
+    },
+    "KnowledgeHit": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "doc_id": {"type": {"prim": "string"}, "required": true},
+        "version": {"type": {"prim": "string"}, "required": true},
+        "span": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}, "required": true},
+        "text": {"type": {"prim": "string"}, "required": true},
+        "score": {"type": {"prim": "number"}, "required": true},
+        "binding": {"type": {"$ref": "#/types/Binding"}, "required": true}
+      }
+    },
+    "Doc": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "doc_id": {"type": {"prim": "string"}, "required": true},
+        "version": {"type": {"prim": "string"}, "required": true},
+        "media_type": {"type": {"prim": "string"}, "required": true},
+        "content_ref": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"}, "required": true},
+        "binding": {"type": {"$ref": "#/types/Binding"}, "required": true}
+      }
+    },
+    "KnowledgeProvider": {
+      "kind": "interface",
+      "role": "protocol",
+      "methods": {
+        "ingest": {
+          "ts": "ingest",
+          "py": "ingest",
+          "async": true,
+          "params": [
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
+            {"name": "source", "kind": "positional", "type": {"$ref": "#/types/KnowledgeSource"}, "required": true},
+            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true}
+          ],
+          "returns": {"result": {"$ref": "#/types/DocVersion"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]}
+        },
+        "remove": {
+          "ts": "remove",
+          "py": "remove",
+          "async": true,
+          "params": [
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
+            {"name": "doc_id", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true}
+          ],
+          "returns": {"result": {"prim": "void"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]}
+        },
+        "search": {
+          "ts": "search",
+          "py": "search",
+          "async": true,
+          "params": [
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
+            {"name": "query", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {
+              "name": "k",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
+              "required": false,
+              "default": 5
+            },
+            {"name": "sources", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false},
+            {
+              "name": "as_of",
+              "kind": "option",
+              "type": {"prim": "integer"},
+              "required": false,
+              "doc": "Search as of this revision (a pinned fork)."
+            }
+          ],
+          "returns": {
+            "result": {"array": {"$ref": "#/types/KnowledgeHit"}},
+            "errors": ["unavailable", "timeout", "invalid", "scope_violation"]
+          }
+        },
+        "get": {
+          "ts": "get",
+          "py": "get",
+          "async": true,
+          "params": [
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
+            {"name": "doc_id", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "version", "kind": "positional", "type": {"prim": "string"}, "required": true}
+          ],
+          "returns": {
+            "result": {"$ref": "#/types/Doc"},
+            "errors": ["not_found", "unavailable", "timeout", "invalid", "scope_violation"]
+          }
+        }
+      },
+      "source": ""
+    },
+    "SearchBackend": {
+      "kind": "interface",
+      "role": "protocol",
+      "methods": {
+        "search": {
+          "ts": "search",
+          "py": "search",
+          "async": true,
+          "params": [
+            {"name": "query", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "allowed_domains", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false},
+            {"name": "blocked_domains", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false}
+          ],
+          "returns": {"result": {"array": {"$ref": "#/types/SearchHit"}}, "errors": ["unavailable", "timeout"]}
+        }
+      },
+      "doc": "A web_search backend adapter (Exa, Brave, Tavily).",
+      "source": ""
+    },
+    "SearchHit": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "url": {"type": {"prim": "string"}, "required": true},
+        "title": {"type": {"prim": "string"}, "required": true},
+        "snippet": {"type": {"prim": "string"}, "required": true}
+      }
+    },
+    "ChannelAdapter": {
+      "kind": "interface",
+      "role": "protocol",
+      "properties": {
+        "agent": {"type": {"prim": "string"}, "required": true, "doc": "The host agent key this channel routes to."},
+        "lookup_final": {"type": {"prim": "boolean"}, "required": true},
+        "capabilities": {"type": {"$ref": "#/types/ChannelCapabilities"}, "required": true},
+        "limits": {"type": {"map": {"prim": "integer"}}, "required": true, "doc": "Provider limits (message bytes, rate)."}
+      },
+      "methods": {
+        "verify": {
+          "ts": "verify",
+          "py": "verify",
+          "async": false,
+          "params": [{"name": "raw", "kind": "positional", "type": {"$ref": "#/types/RawRequest"}, "required": true}],
+          "returns": {"result": {"$ref": "#/types/VerifiedDelivery"}, "errors": ["unverified"]}
+        },
+        "parse": {
+          "ts": "parse",
+          "py": "parse",
+          "async": false,
+          "params": [{"name": "raw", "kind": "positional", "type": {"$ref": "#/types/RawRequest"}, "required": true}],
+          "returns": {"result": {"array": {"$ref": "#/types/Inbound"}}, "errors": ["invalid"]}
+        },
+        "ack": {
+          "ts": "ack",
+          "py": "ack",
+          "async": false,
+          "params": [{"name": "raw", "kind": "positional", "type": {"$ref": "#/types/RawRequest"}, "required": true}],
+          "returns": {"$ref": "#/types/RawResponse"}
+        },
+        "render": {
+          "ts": "render",
+          "py": "render",
+          "doc": "Outbound ops (adapter-defined JSON).",
+          "async": false,
+          "params": [
+            {
+              "name": "event",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Event"},
+              "required": true
+            }
+          ],
+          "returns": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"}}
+        },
+        "perform": {
+          "ts": "perform",
+          "py": "perform",
+          "async": true,
+          "params": [
+            {
+              "name": "op",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"},
+              "required": true
+            },
+            {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "credentials", "kind": "positional", "type": {"map": {"prim": "string"}}, "required": true}
+          ],
+          "returns": {"$ref": "#/types/DeliveryOutcome"}
+        },
+        "lookup": {
+          "ts": "lookup",
+          "py": "lookup",
+          "doc": "found carries the platform_ref.",
+          "async": true,
+          "params": [{"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "returns": {"$ref": "#/types/LookupResult", "args": [{"prim": "string"}]}
+        }
+      },
+      "doc": "What a channel adapter (slack(), whatsapp(), github()) returns. verify, parse, ack and render are pure.",
+      "source": ""
+    },
+    "ChannelCapabilities": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "buttons": {"type": {"prim": "boolean"}, "required": true},
+        "edits": {"type": {"prim": "boolean"}, "required": true},
+        "files": {"type": {"prim": "boolean"}, "required": true},
+        "direct_messages": {"type": {"prim": "boolean"}, "required": true},
+        "dedup_window_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false},
+        "delivery": {"type": {"enum": ["reliable", "best_effort"]}, "required": false, "default": "reliable"}
+      }
+    },
+    "RawRequest": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "headers": {"type": {"map": {"prim": "string"}}, "required": true},
+        "body": {"type": {"prim": "bytes"}, "required": true}
+      }
+    },
+    "RawResponse": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "status": {"type": {"prim": "integer"}, "required": true},
+        "headers": {"type": {"map": {"prim": "string"}}, "required": true},
+        "body": {"type": {"prim": "bytes"}, "required": true}
+      }
+    },
+    "VerifiedDelivery": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "tenant": {"type": {"prim": "string"}, "required": true},
+        "installation_id": {"type": {"prim": "string"}, "required": true},
+        "delivery_id": {"type": {"prim": "string"}, "required": true}
+      }
+    },
+    "Inbound": {
+      "kind": "union",
+      "discriminator": "kind",
+      "casing": "wire",
+      "variants": [
+        {
+          "object": {
+            "kind": {"type": {"literal": "message"}, "required": true},
+            "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
+            "address": {"type": {"prim": "string"}, "required": true, "doc": "Conversation key; the host maps it to a thread."},
+            "item_key": {"type": {"prim": "string"}, "required": true},
+            "content": {"type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Input"}, "required": true}
+          },
+          "casing": "wire"
+        },
+        {
+          "object": {
+            "kind": {"type": {"literal": "decision"}, "required": true},
+            "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
+            "address": {"type": {"prim": "string"}, "required": true, "doc": "Conversation key; the host maps it to a thread."},
+            "item_key": {"type": {"prim": "string"}, "required": true},
+            "challenge_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Uuid"}, "required": true},
+            "decision": {"type": {"enum": ["grant", "deny"]}, "required": true}
+          },
+          "casing": "wire"
+        },
+        {
+          "object": {
+            "kind": {"type": {"literal": "control"}, "required": true},
+            "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
+            "address": {"type": {"prim": "string"}, "required": true, "doc": "Conversation key; the host maps it to a thread."},
+            "item_key": {"type": {"prim": "string"}, "required": true},
+            "command": {"type": {"enum": ["cancel", "stop_when_idle"]}, "required": true}
+          },
+          "casing": "wire"
+        },
+        {"object": {"kind": {"type": {"literal": "ignore"}, "required": true}}, "casing": "wire"}
+      ],
+      "source": ""
+    },
+    "DeliveryOutcome": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "wire",
+      "variants": [
+        {
+          "object": {
+            "status": {"type": {"literal": "sent"}, "required": true},
+            "platform_ref": {"type": {"prim": "string"}, "required": true}
+          },
+          "casing": "wire"
+        },
+        {
+          "object": {
+            "status": {"type": {"literal": "delivery_error"}, "required": true},
+            "kind": {"type": {"enum": ["rate_limited", "transient", "permanent"]}, "required": true},
+            "sent": {"type": {"enum": ["definite_not_sent", "outcome_unknown"]}, "required": true}
+          },
+          "casing": "wire"
+        }
+      ],
+      "source": ""
+    },
+    "Host": {
+      "kind": "interface",
+      "role": "handle",
+      "properties": {
+        "fetch": {
+          "type": {"native": {"ts": "(request: Request) => Promise<Response>"}},
+          "required": true,
+          "lang": "ts",
+          "doc": "Mount in Next, Hono, Bun.serve."
+        },
+        "asgi": {
+          "type": {"native": {"py": "starlette.types.ASGIApp"}},
+          "required": true,
+          "lang": "py",
+          "doc": "Mount in FastAPI or any ASGI server."
+        }
+      },
+      "methods": {
+        "ready": {
+          "ts": "ready",
+          "py": "ready",
+          "doc": "Confirms bindings. Sends nothing, starts no run.",
+          "async": true,
+          "params": [],
+          "returns": {"prim": "void"},
+          "throws": ["ConfigError"]
+        },
+        "stop": {
+          "ts": "stop",
+          "py": "stop",
+          "doc": "Drains in-flight intake and releases leases.",
+          "async": true,
+          "params": [],
+          "returns": {"prim": "void"}
+        }
+      },
+      "doc": "TS: supports await using (Symbol.asyncDispose calls stop). Python: an async context manager (__aenter__ calls ready, __aexit__ calls stop).",
+      "source": ""
+    }
+  },
+  "cli": [
+    {
+      "usage": "threads dev [module]",
+      "via": "host().ready() and host().fetch on a local server",
+      "doc": "Prints each channel's webhook URL."
+    },
+    {
+      "usage": "threads start [module]",
+      "via": "host().ready() and host().fetch",
+      "doc": "Production; same as dev without reload."
+    },
+    {"usage": "threads timeline <thread_id> [--branch <branch_id>]", "via": "openThread() then Thread.timeline()"},
+    {"usage": "threads export <branch_id>", "via": "the store's branch export (schema README, JSONL)"}
+  ]
+}

@@ -1,0 +1,324 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:threads:schema:api:v1",
+  "title": "threads public API contract (spec/api.json)",
+  "description": "Shape of spec/api.json. Uses only the keyword subset spec/tools/check_api.py implements: $ref, $defs, type, properties, required, additionalProperties, propertyNames, items, enum, const, oneOf, anyOf, pattern, minLength, minItems, minProperties.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "format_version", "conventions", "packages", "choices", "functions", "types"],
+  "properties": {
+    "$schema": { "const": "schema/api.schema.json" },
+    "format": { "const": "threads.api" },
+    "format_version": { "const": 1 },
+    "conventions": {
+      "description": "Rules every entry follows in both languages (naming, options vs keyword args, results, async).",
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "packages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core", "host"],
+      "properties": {
+        "core": { "$ref": "#/$defs/Package" },
+        "host": { "$ref": "#/$defs/Package" }
+      }
+    },
+    "choices": {
+      "description": "Where the ADRs left a choice open, the option this contract takes and why.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Choice" }
+    },
+    "functions": {
+      "description": "Top-level exported functions, keyed by TS name.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/Callable" }
+    },
+    "types": {
+      "description": "Exported types (handles, protocols, data), keyed by name (PascalCase, same in both languages).",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/TypeDecl" }
+    },
+    "cli": {
+      "description": "CLI commands of the host package. Each is a thin wrapper over a function or method named in via.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/Command" }
+    }
+  },
+  "$defs": {
+    "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+    "PyName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
+    "FieldName": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "Doc": { "type": "string", "minLength": 1 },
+    "Package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts", "py"],
+      "properties": {
+        "ts": { "type": "string", "minLength": 1 },
+        "py": { "type": "string", "minLength": 1 },
+        "doc": { "$ref": "#/$defs/Doc" }
+      }
+    },
+    "Choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "open", "choice", "why"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "open": { "description": "What the ADRs left open or said inconsistently.", "$ref": "#/$defs/Doc" },
+        "choice": { "$ref": "#/$defs/Doc" },
+        "why": { "$ref": "#/$defs/Doc" }
+      }
+    },
+    "Command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usage", "via"],
+      "properties": {
+        "usage": { "type": "string", "pattern": "^threads [a-z]" },
+        "via": { "$ref": "#/$defs/Doc" },
+        "doc": { "$ref": "#/$defs/Doc" }
+      }
+    },
+    "Callable": {
+      "description": "A function or method. params in order; kind positional params come first.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts", "py", "async", "params", "returns"],
+      "properties": {
+        "ts": { "$ref": "#/$defs/TsName" },
+        "py": { "$ref": "#/$defs/PyName" },
+        "package": { "enum": ["core", "host"] },
+        "doc": { "$ref": "#/$defs/Doc" },
+        "source": { "description": "The ADR or brief item that requires it.", "$ref": "#/$defs/Doc" },
+        "async": { "description": "true: TS returns Promise<returns>, Python is async def.", "type": "boolean" },
+        "optional": { "description": "Protocol methods only: an implementation may omit it; the flag named in doc says so.", "type": "boolean" },
+        "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
+        "params": { "type": "array", "items": { "$ref": "#/$defs/Param" } },
+        "returns": { "$ref": "#/$defs/TypeExpr" },
+        "throws": {
+          "description": "Exceptions that are part of the contract. Only ConfigError at setup; everything else expected is a value.",
+          "type": "array",
+          "items": { "const": "ConfigError" }
+        }
+      }
+    },
+    "Generic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Z][A-Za-z]*$" },
+        "default": { "$ref": "#/$defs/TypeExpr" }
+      }
+    },
+    "Param": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "type", "required"],
+      "properties": {
+        "name": { "$ref": "#/$defs/FieldName" },
+        "kind": {
+          "description": "positional: positional in both languages. option: a field of the trailing options object in TS, a keyword-only argument in Python.",
+          "enum": ["positional", "option"]
+        },
+        "type": { "$ref": "#/$defs/TypeExpr" },
+        "required": { "type": "boolean" },
+        "default": { "description": "The literal default when omitted (JSON value)." },
+        "default_doc": { "description": "A default that is not a JSON literal.", "$ref": "#/$defs/Doc" },
+        "lang": { "description": "Present only when the parameter exists in one language.", "enum": ["ts", "py"] },
+        "doc": { "$ref": "#/$defs/Doc" }
+      }
+    },
+    "Field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "required"],
+      "properties": {
+        "type": { "$ref": "#/$defs/TypeExpr" },
+        "required": { "type": "boolean" },
+        "default": {},
+        "default_doc": { "$ref": "#/$defs/Doc" },
+        "lang": { "enum": ["ts", "py"] },
+        "doc": { "$ref": "#/$defs/Doc" }
+      }
+    },
+    "Fields": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/FieldName" },
+      "additionalProperties": { "$ref": "#/$defs/Field" }
+    },
+    "TypeDecl": {
+      "oneOf": [
+        {
+          "description": "Plain data. casing api: TS fields are lowerCamel of the key. casing wire: snake_case in both (it crosses a boundary as JSON).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "casing", "fields"],
+          "properties": {
+            "kind": { "const": "object" },
+            "casing": { "enum": ["api", "wire"] },
+            "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
+            "fields": { "$ref": "#/$defs/Fields" },
+            "doc": { "$ref": "#/$defs/Doc" },
+            "source": { "$ref": "#/$defs/Doc" }
+          }
+        },
+        {
+          "description": "A discriminated union. Every variant is an object with a literal discriminator field.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "discriminator", "variants"],
+          "properties": {
+            "kind": { "const": "union" },
+            "discriminator": { "$ref": "#/$defs/FieldName" },
+            "casing": { "enum": ["api", "wire"] },
+            "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
+            "variants": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/TypeExpr" } },
+            "doc": { "$ref": "#/$defs/Doc" },
+            "source": { "$ref": "#/$defs/Doc" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "type"],
+          "properties": {
+            "kind": { "const": "alias" },
+            "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
+            "type": { "$ref": "#/$defs/TypeExpr" },
+            "doc": { "$ref": "#/$defs/Doc" },
+            "source": { "$ref": "#/$defs/Doc" }
+          }
+        },
+        {
+          "description": "A handle the framework returns (Agent, Thread, Host) or a protocol an adapter implements (Model, Sandbox, ...).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "role"],
+          "properties": {
+            "kind": { "const": "interface" },
+            "role": { "enum": ["handle", "protocol", "opaque"] },
+            "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
+            "properties": { "$ref": "#/$defs/Fields" },
+            "methods": { "type": "object", "additionalProperties": { "$ref": "#/$defs/Callable" } },
+            "iterates": { "description": "The handle is itself async-iterable of this type (TS for await, Python async for).", "$ref": "#/$defs/TypeExpr" },
+            "doc": { "$ref": "#/$defs/Doc" },
+            "source": { "$ref": "#/$defs/Doc" }
+          }
+        }
+      ]
+    },
+    "TypeExpr": {
+      "oneOf": [
+        {
+          "description": "A wire type (urn:threads:schema:...#/$defs/X, any JSON pointer) or an api type (#/types/X). args instantiate the target's generics.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["$ref"],
+          "properties": {
+            "$ref": { "type": "string", "minLength": 1 },
+            "args": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/TypeExpr" } }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["prim"],
+          "properties": { "prim": { "enum": ["string", "integer", "number", "boolean", "null", "void", "bytes", "unknown"] } }
+        },
+        { "type": "object", "additionalProperties": false, "required": ["literal"], "properties": { "literal": {} } },
+        { "type": "object", "additionalProperties": false, "required": ["enum"], "properties": { "enum": { "type": "array", "minItems": 1, "items": { "type": "string" } } } },
+        { "type": "object", "additionalProperties": false, "required": ["array"], "properties": { "array": { "$ref": "#/$defs/TypeExpr" } } },
+        {
+          "description": "String-keyed map. TS Readonly<Record<string, T>>, Python Mapping[str, T].",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["map"],
+          "properties": { "map": { "$ref": "#/$defs/TypeExpr" } }
+        },
+        { "type": "object", "additionalProperties": false, "required": ["union"], "properties": { "union": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/TypeExpr" } } } },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["object"],
+          "properties": { "object": { "$ref": "#/$defs/Fields" }, "casing": { "enum": ["api", "wire"] } }
+        },
+        {
+          "description": "An object with some fields of a wire object type. Omitted fields take the defaults the doc names.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["partial"],
+          "properties": { "partial": { "$ref": "#/$defs/TypeExpr" } }
+        },
+        { "type": "object", "additionalProperties": false, "required": ["generic"], "properties": { "generic": { "type": "string", "pattern": "^[A-Z][A-Za-z]*$" } } },
+        {
+          "description": "A schema value that parses to T: a Zod schema (z.ZodType<T>) in TS, a Pydantic model class (type[T]) in Python.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema"],
+          "properties": { "schema": { "$ref": "#/$defs/TypeExpr" } }
+        },
+        {
+          "description": "Awaitable value: TS Promise<T>, Python Awaitable[T].",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["promise"],
+          "properties": { "promise": { "$ref": "#/$defs/TypeExpr" } }
+        },
+        {
+          "description": "TS AsyncIterable<T>, Python AsyncIterator[T].",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stream"],
+          "properties": { "stream": { "$ref": "#/$defs/TypeExpr" } }
+        },
+        {
+          "description": "An expected-failure value: {ok: true, value: T} | {ok: false, error: {code, message}} in TS, Ok[T] | Err[Failure] in Python. errors is the closed code set.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["result", "errors"],
+          "properties": {
+            "result": { "$ref": "#/$defs/TypeExpr" },
+            "errors": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/FieldName" } }
+          }
+        },
+        {
+          "description": "A callback the user supplies.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fn"],
+          "properties": {
+            "fn": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["async", "params", "returns"],
+              "properties": {
+                "async": { "type": "boolean" },
+                "params": { "type": "array", "items": { "$ref": "#/$defs/Param" } },
+                "returns": { "$ref": "#/$defs/TypeExpr" }
+              }
+            }
+          }
+        },
+        {
+          "description": "A language-native type with no shared data shape (AbortSignal, Request, an ASGI app).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["native"],
+          "properties": {
+            "native": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": { "ts": { "type": "string", "minLength": 1 }, "py": { "type": "string", "minLength": 1 } }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
