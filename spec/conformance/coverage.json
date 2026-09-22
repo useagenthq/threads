@@ -450,6 +450,11 @@
           "kind": "case",
           "ref": "memory-poisoned-tool-output",
           "status": "planned"
+        },
+        {
+          "kind": "case",
+          "ref": "render-reference-framing-escaped",
+          "status": "implemented"
         }
       ]
     },
@@ -975,6 +980,16 @@
           "kind": "case",
           "ref": "torn-tail-truncated",
           "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "repair-child-inspection-only",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "event-id-duplicate-across-fork-rejected",
+          "status": "implemented"
         }
       ]
     },
@@ -1067,6 +1082,11 @@
           "kind": "case",
           "ref": "prefix-changed-mid-epoch-rejected",
           "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "settings-change-auto-reason-by-user-rejected",
+          "status": "implemented"
         }
       ]
     },
@@ -1093,6 +1113,11 @@
         {
           "kind": "case",
           "ref": "model-request-after-budget-exceeded-rejected",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "budget-exceeded-ancestor-without-owner-rejected",
           "status": "implemented"
         }
       ]
@@ -1242,6 +1267,16 @@
           "kind": "job",
           "ref": "fork-crash-no-orphan",
           "status": "planned"
+        },
+        {
+          "kind": "case",
+          "ref": "fork-restore-lost-found",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "fork-restore-lost-unsupported",
+          "status": "implemented"
         }
       ]
     },
@@ -1539,6 +1574,16 @@
           "kind": "case",
           "ref": "knowledge-refresh-replay-preserved",
           "status": "planned"
+        },
+        {
+          "kind": "case",
+          "ref": "fork-knowledge-pinned",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "fork-knowledge-current",
+          "status": "implemented"
         }
       ]
     },
