@@ -117,12 +117,8 @@ describe("conformance: every log line parses", () => {
     test(name, () => {
       const { lines, torn } = splitLines(new Uint8Array(readFileSync(logPath)));
       const failures = lineFailures(lines);
+      // A torn tail is dropped whatever it holds, even a valid head, so it isn't judged here.
       const tornIndex = torn ? lines.length - 1 : -1;
-      if (torn) {
-        expect(failures.find((f) => f.index === tornIndex)?.error.code).toBe(
-          "invalid_line",
-        );
-      }
       const unexpected = failures.filter((f) => f.index !== tornIndex);
       const expected = expectedLineError(caseDir);
       if (expected === undefined) {
