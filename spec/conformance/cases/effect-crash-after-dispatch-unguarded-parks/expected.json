@@ -1,0 +1,72 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [
+      "call_1"
+    ],
+    "effects": [
+      {
+        "effect_key": "0192b000-0000-7000-8000-000000000001:call_1",
+        "call_id": "call_1",
+        "status": "begun"
+      }
+    ],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 80,
+      "output_tokens": 25
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 7,
+      "hash": "6df1e076998458f1064146c63b8ceb3c926efdd6333254931874e73295314ae3"
+    }
+  },
+  "appended": [
+    {
+      "type": "effect_unknown",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "reason": "crash_after_begin"
+      }
+    },
+    {
+      "type": "parked",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "address": {
+          "kind": "effect",
+          "id": "0192b000-0000-7000-8000-000000000001:call_1"
+        },
+        "reason": "effect_unknown",
+        "expires_at": 1790086460000
+      }
+    }
+  ],
+  "sandbox": {
+    "dispatches": {
+      "send_email": 0
+    },
+    "new_executions": {
+      "send_email": 0
+    }
+  }
+}

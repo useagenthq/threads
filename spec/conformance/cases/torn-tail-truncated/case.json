@@ -1,0 +1,9 @@
+{
+  "name": "torn-tail-truncated",
+  "family": "log",
+  "kind": "recover",
+  "description": "An export whose last line is a partial write with no newline and no head checkpoint. Import serves the valid prefix, never edits the source file, flags the head as unverified, keeps the dropped bytes as an artifact, and the imported branch records log_repaired (critical: false). Nothing else is appended because the prefix is balanced.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

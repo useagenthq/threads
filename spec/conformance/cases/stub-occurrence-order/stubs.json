@@ -1,0 +1,16 @@
+{
+  "stubs": [
+    {
+      "tool": "search_web",
+      "args_hash": "a38dc92a6a5e6a0864e93c2ca043865d2d5ba92a475aa52f9df1ea2009176f04",
+      "occurrence": 0,
+      "output": "result A"
+    },
+    {
+      "tool": "search_web",
+      "args_hash": "a38dc92a6a5e6a0864e93c2ca043865d2d5ba92a475aa52f9df1ea2009176f04",
+      "occurrence": 1,
+      "output": "result B"
+    }
+  ]
+}

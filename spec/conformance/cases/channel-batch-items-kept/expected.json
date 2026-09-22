@@ -1,0 +1,26 @@
+{
+  "outcome": "ok",
+  "responses": [
+    200,
+    200,
+    200
+  ],
+  "inbox": [
+    {
+      "channel": "slack",
+      "item_key": "Ev01#0"
+    },
+    {
+      "channel": "slack",
+      "item_key": "Ev01#1"
+    },
+    {
+      "channel": "whatsapp",
+      "item_key": "wamid.A"
+    },
+    {
+      "channel": "whatsapp",
+      "item_key": "wamid.B"
+    }
+  ]
+}

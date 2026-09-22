@@ -1,0 +1,9 @@
+{
+  "name": "reduce-child-branch",
+  "family": "log_fork_test",
+  "kind": "reduce",
+  "description": "A child branch export: the root header and the parent's lines through at_seq (referenced rows, byte-identical), then the child's own header, its fork event and one more event. Seq is contiguous across segments, each segment chains from its own header, and the fork's at_hash binds to the parent's snapshot line. State comes from the resolved chain; branch_id is the child.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

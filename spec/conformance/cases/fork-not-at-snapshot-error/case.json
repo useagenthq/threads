@@ -1,0 +1,14 @@
+{
+  "name": "fork-not-at-snapshot-error",
+  "family": "log_fork_test",
+  "kind": "fork",
+  "description": "Fork requested at a model_response inside an open turn with a pending call. Must fail with no_snapshot_boundary, create no child and restore no sandbox.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "sandbox_script": "sandbox.json",
+  "input": {
+    "fork_at_event_id": "0192e000-0000-7000-8000-00000000000e",
+    "new_branch_id": "0192b000-0000-7000-8000-000000000002"
+  }
+}

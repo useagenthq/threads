@@ -1,0 +1,9 @@
+{
+  "name": "reduce-simple-run",
+  "family": "log",
+  "kind": "reduce",
+  "description": "One completed turn with a read-only tool call. Reduce must produce the pinned state; read-only tools write no effect events.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,2 @@
+{"adapter":{"name":"scripted","settings":{},"version":"1"},"model":{"name":"scripted-1","provider":"scripted"},"params":{"max_tokens":1024},"system":"You are a helpful agent.","tools":[{"description":"Run the test suite (non-blocking).","input_schema":{"additionalProperties":false,"properties":{},"required":[],"type":"object"},"name":"run_tests"}]}
+{"content":[{"text":"Run the tests.","type":"text"}],"role":"user"}

@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-mid-thread",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "An MCP server adds a tool mid-thread. tools_changed records the full new set with its hash and renders as a line after the declared prefix: the log holds exactly what the model saw (C6) and line 0 stays byte-equal (C7).",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "stub-occurrence-order",
+  "family": "log_fork_test",
+  "kind": "stub",
+  "description": "Stub mode. The same host operation (search_web, same args_hash) runs three times. Stubs match on (tool, args_hash, occurrence) and are consumed in order, so calls 1 and 2 get results A and B. Call 3 has no stub: it fails closed with unmatched_external_op, is settled not_sent, and never goes live.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "stub_script": "stubs.json"
+}

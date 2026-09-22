@@ -1,0 +1,8 @@
+{
+  "tools": {
+    "run_shell": {
+      "output": "ok",
+      "process": "terminated"
+    }
+  }
+}

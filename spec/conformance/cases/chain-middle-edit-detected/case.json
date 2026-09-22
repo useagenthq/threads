@@ -1,0 +1,9 @@
+{
+  "name": "chain-middle-edit-detected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A byte edit to an event in the middle of the log (seq 2). The next line's prev_hash no longer matches: prev_hash_mismatch at seq 3.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

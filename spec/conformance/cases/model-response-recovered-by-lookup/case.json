@@ -1,0 +1,10 @@
+{
+  "name": "model-response-recovered-by-lookup",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Crash after a model_request was dispatched, before its response was recorded. The adapter supports lookup and finds the response with finality, so recovery records model_response_recovered and makes no new model call. A non-final not_found would instead abandon the attempt as unknown.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

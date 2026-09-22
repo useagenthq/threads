@@ -1,0 +1,14 @@
+{
+  "name": "fork-snapshot-expired",
+  "family": "log_fork_test",
+  "kind": "fork",
+  "description": "Fork at a snapshot whose expires_at has passed on the injected clock. It is not a fork point; the fork fails with snapshot_expired, creates no child and leaves nothing to clean up.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "sandbox_script": "sandbox.json",
+  "input": {
+    "fork_at_event_id": "0192e000-0000-7000-8000-00000000000b",
+    "new_branch_id": "0192b000-0000-7000-8000-000000000002"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "unknown-critical-event-refuses",
+  "family": "log",
+  "kind": "reduce",
+  "description": "An unknown non-critical event is skipped; the next unknown critical event refuses the whole log as unsupported (a newer writer), not as corruption.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "render-req-hash-mismatch",
+  "family": "log_fork_test",
+  "kind": "render",
+  "description": "The recorded request artifact is intact (its sha256 matches) but is not what Render v1 produces from the events before it: request_hash_mismatch.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

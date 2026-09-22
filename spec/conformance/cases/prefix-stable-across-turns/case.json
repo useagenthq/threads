@@ -1,0 +1,9 @@
+{
+  "name": "prefix-stable-across-turns",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "C7: the declared prefix (Render v1 line 0: model, params, adapter, system, tools) is byte-EQUAL on every recorded request and on the next one. Every recorded request re-renders to its req_hash, and the next request equals request.bytes. Recalled memory renders after the prefix inside the untrusted reference wrapper.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

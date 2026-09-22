@@ -1,0 +1,9 @@
+{
+  "name": "cancelled-with-unsettled-effect",
+  "family": "log",
+  "kind": "reduce",
+  "description": "cancelled written while an effect is begun and unsettled (it must park instead): invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

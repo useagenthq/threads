@@ -1,0 +1,11 @@
+{
+  "name": "effect-crash-after-dispatch-unguarded-parks",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "effect_begin was acked BEFORE dispatch; the process then dispatched the email and crashed before recording anything else (the provider did execute it). The effect is potentially sent and the tool is unguarded, so recovery records it unknown and parks it for a human. It never re-runs it silently and never calls the model.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

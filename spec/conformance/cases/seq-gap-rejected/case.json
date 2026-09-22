@@ -1,0 +1,9 @@
+{
+  "name": "seq-gap-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "seq jumps from 2 to 4 with a valid prev_hash: seq_mismatch.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

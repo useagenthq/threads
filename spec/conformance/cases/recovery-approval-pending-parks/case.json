@@ -1,0 +1,11 @@
+{
+  "name": "recovery-approval-pending-parks",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "Crash while a call awaits approval. The call has no effect_begin, but 'not started' is not permission: recovery re-reads the approval state, finds it pending, and parks. Nothing is dispatched.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

@@ -1,0 +1,954 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:threads:schema:events:v1",
+  "title": "threads log line (format 1)",
+  "description": "One canonical line of a threads branch: a Header (a branch's first line), an event, or the Head checkpoint (the last line of an export). SQLite stores each line's exact bytes; a JSONL export is the same bytes, one per line. A line that matches UnknownEvent is schema-valid but only admissible when critical is false (see README).",
+  "oneOf": [
+    { "$ref": "#/$defs/Header" },
+    { "$ref": "#/$defs/Head" },
+    { "$ref": "#/$defs/Event" },
+    { "$ref": "#/$defs/UnknownEvent" }
+  ],
+  "$defs": {
+    "Int": {
+      "description": "JSON integer in the cross-language safe range.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "PosInt": { "allOf": [{ "$ref": "#/$defs/Int" }, { "minimum": 1 }] },
+    "TimeMs": { "description": "Unix epoch milliseconds. Informational; never used for ordering.", "$ref": "#/$defs/Int" },
+    "Sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "Uuid": {
+      "description": "Lowercase UUID string. Writers generate UUIDv7.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "EventId": { "$ref": "#/$defs/Uuid" },
+    "ThreadId": { "$ref": "#/$defs/Uuid" },
+    "BranchId": { "$ref": "#/$defs/Uuid" },
+    "CallId": { "description": "Tool call id; may be provider-issued. The effect key is derived: <branch_id of the tool_call event>:<call_id>.", "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$" },
+    "Name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+    "NonEmpty": { "type": "string", "minLength": 1 },
+    "JsonValue": {
+      "description": "Any validated JSON value (tool input, model params, MCP payloads). Numbers follow .",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string" },
+        { "type": "array", "items": { "$ref": "#/$defs/JsonValue" } },
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/JsonValue" } }
+      ]
+    },
+    "JsonObject": { "type": "object", "additionalProperties": { "$ref": "#/$defs/JsonValue" } },
+
+    "ErrorCode": {
+      "description": "Pinned typed-error codes shared by both implementations. Add only; never rename after the first release.",
+      "enum": [
+        "invalid_line",
+        "unsupported_format",
+        "unsupported_critical_event",
+        "seq_mismatch",
+        "prev_hash_mismatch",
+        "head_mismatch",
+        "invalid_transition",
+        "log_corrupt",
+        "branch_busy",
+        "seq_conflict",
+        "stale_epoch",
+        "writer_poisoned",
+        "branch_has_children",
+        "no_snapshot_boundary",
+        "snapshot_expired",
+        "snapshot_missing",
+        "snapshot_restore_failed",
+        "snapshot_manifest_mismatch",
+        "artifact_missing",
+        "artifact_corrupt",
+        "request_hash_mismatch",
+        "prefix_changed",
+        "approval_mismatch",
+        "approval_expired",
+        "approval_duplicate",
+        "unmatched_external_op",
+        "egress_policy_unsupported",
+        "case_missing_dependency"
+      ]
+    },
+
+    "ArtifactRef": {
+      "description": "Content-addressed bytes. The artifact is durable before any event references it; readers verify sha256 and length.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "bytes", "media_type"],
+      "properties": {
+        "sha256": { "$ref": "#/$defs/Sha256" },
+        "bytes": { "$ref": "#/$defs/Int" },
+        "media_type": { "type": "string", "pattern": "^[a-z0-9.+-]+/[a-z0-9.+-]+$" }
+      }
+    },
+    "Principal": {
+      "description": "A verified identity, normalized by the host. issuer names the identity authority (e.g. slack:T024BE7LD, api), tenant the isolation scope.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issuer", "tenant", "subject"],
+      "properties": {
+        "issuer": { "$ref": "#/$defs/NonEmpty" },
+        "tenant": { "$ref": "#/$defs/NonEmpty" },
+        "subject": { "$ref": "#/$defs/NonEmpty" }
+      }
+    },
+    "Actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["user", "model", "host", "tool", "channel", "scheduler", "approver", "recovery"] },
+        "principal": { "$ref": "#/$defs/Principal" }
+      }
+    },
+    "ActorWithPrincipal": { "$ref": "#/$defs/Actor", "required": ["kind", "principal"] },
+    "ModelRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "name"],
+      "properties": { "provider": { "$ref": "#/$defs/Name" }, "name": { "$ref": "#/$defs/NonEmpty" } }
+    },
+    "AdapterRef": {
+      "description": "The model adapter and every provider-conversion setting that affects the wire request (API flavour, cache-breakpoint placement, tool-choice mapping). Part of Render v1 line 0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "settings"],
+      "properties": {
+        "name": { "$ref": "#/$defs/Name" },
+        "version": { "$ref": "#/$defs/NonEmpty" },
+        "settings": { "$ref": "#/$defs/JsonObject" }
+      }
+    },
+    "EffectClass": {
+      "description": "read_only: no state change anywhere; no effect events. sandbox_local: changes only sandbox state; valid only under deny-all egress or enforced operation mediation. idempotent: the provider dedups on the effect key within dedup_window_ms. reconcilable: the adapter can look up the outcome with finality. unguarded: no contract; uncertainty always parks. Undeclared tools are unguarded.",
+      "enum": ["read_only", "sandbox_local", "idempotent", "reconcilable", "unguarded"]
+    },
+    "ToolSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description", "input_schema", "effect_class"],
+      "properties": {
+        "name": { "$ref": "#/$defs/Name" },
+        "description": { "type": "string" },
+        "input_schema": { "$ref": "#/$defs/JsonObject" },
+        "effect_class": { "$ref": "#/$defs/EffectClass" },
+        "dedup_window_ms": { "description": "The provider's declared dedup window for this tool's effect key.", "$ref": "#/$defs/PosInt" }
+      },
+      "if": { "properties": { "effect_class": { "const": "idempotent" } } },
+      "then": { "required": ["dedup_window_ms"] },
+      "else": { "not": { "required": ["dedup_window_ms"] } }
+    },
+    "Usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_tokens", "output_tokens"],
+      "properties": {
+        "input_tokens": { "$ref": "#/$defs/Int" },
+        "output_tokens": { "$ref": "#/$defs/Int" },
+        "cache_read_tokens": { "$ref": "#/$defs/Int" },
+        "cache_write_tokens": { "$ref": "#/$defs/Int" }
+      }
+    },
+    "ContentPart": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "text"],
+          "properties": { "type": { "const": "text" }, "text": { "type": "string" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "call_id", "name", "input"],
+          "properties": {
+            "type": { "const": "tool_use" },
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "name": { "$ref": "#/$defs/Name" },
+            "input": { "$ref": "#/$defs/JsonObject" }
+          }
+        }
+      ]
+    },
+    "ParkAddress": {
+      "description": "What a parked branch waits on; resumed must name the same address. For kind effect, id is the derived effect key.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["approval", "effect", "input", "resource"] },
+        "id": { "$ref": "#/$defs/NonEmpty" }
+      }
+    },
+    "TextOrRef": {
+      "description": "Exactly one of inline text or an artifact ref.",
+      "oneOf": [{ "required": ["text"] }, { "required": ["ref"] }]
+    },
+
+    "Header": {
+      "description": "First line of every branch (root or child). Not an event: no seq, no prev_hash. The branch's first event has prev_hash = sha256 of this line. A child branch has its own header; its parent link is the fork event that follows it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "format_version", "thread_id", "branch_id", "created_at", "writer"],
+      "properties": {
+        "format": { "const": "threads.log" },
+        "format_version": { "const": 1 },
+        "thread_id": { "$ref": "#/$defs/ThreadId" },
+        "branch_id": { "$ref": "#/$defs/BranchId" },
+        "created_at": { "$ref": "#/$defs/TimeMs" },
+        "writer": {
+          "description": "The only implementation and major version allowed to append to this branch.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["impl", "version"],
+          "properties": {
+            "impl": { "enum": ["threads-ts", "threads-py"] },
+            "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" }
+          }
+        }
+      }
+    },
+
+    "Head": {
+      "description": "Committed head checkpoint. Stored per branch in SQLite (updated in the append transaction) and written as the last line of every export. hash is sha256 of the branch's last line (the header when seq is 0). Detects tail edits and suffix removal against the checkpoint; it is not a signature.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "format_version", "branch_id", "seq", "hash"],
+      "properties": {
+        "format": { "const": "threads.head" },
+        "format_version": { "const": 1 },
+        "branch_id": { "$ref": "#/$defs/BranchId" },
+        "seq": { "$ref": "#/$defs/Int" },
+        "hash": { "$ref": "#/$defs/Sha256" }
+      }
+    },
+
+    "Envelope": {
+      "description": "Fields common to every event. seq is contiguous along the branch's resolved chain. prev_hash is sha256 of the previous line's exact bytes (without newline) within the same branch segment; the first event of a segment chains to its header.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "event_id", "thread_id", "branch_id", "epoch", "type", "type_version", "time", "actor", "prev_hash", "critical", "data"],
+      "properties": {
+        "seq": { "$ref": "#/$defs/PosInt" },
+        "event_id": { "$ref": "#/$defs/EventId" },
+        "thread_id": { "$ref": "#/$defs/ThreadId" },
+        "branch_id": { "description": "The branch that wrote this event. Always the branch of the segment it is stored in.", "$ref": "#/$defs/BranchId" },
+        "epoch": { "description": "Writer fencing epoch from the branch lease. Non-decreasing along the resolved chain.", "$ref": "#/$defs/PosInt" },
+        "type": { "$ref": "#/$defs/Name" },
+        "type_version": { "$ref": "#/$defs/PosInt" },
+        "time": { "$ref": "#/$defs/TimeMs" },
+        "actor": { "$ref": "#/$defs/Actor" },
+        "prev_hash": { "$ref": "#/$defs/Sha256" },
+        "critical": { "type": "boolean", "description": "true: a reader that does not know (type, type_version) must refuse the log. false: it may skip the event." },
+        "data": { "type": "object" }
+      }
+    },
+
+    "KnownTag": {
+      "type": "object",
+      "required": ["type", "type_version"],
+      "properties": {
+        "type": {
+          "enum": [
+            "thread_started", "tools_changed", "user_input", "steer", "injected", "heartbeat",
+            "model_request", "model_response", "model_response_recovered", "model_attempt_abandoned",
+            "tool_call", "permission_decision", "hook_decision", "approval_requested", "approval_granted", "approval_denied",
+            "effect_begin", "effect_commit", "effect_unknown", "effect_resolved", "tool_result", "tool_result_late",
+            "snapshot", "fork", "parked", "park_escalated", "resumed", "compacted",
+            "cancel_requested", "cancelled", "stop_when_idle", "turn_completed",
+            "schedule_fired", "schedule_skipped", "channel_delivery", "log_repaired"
+          ]
+        },
+        "type_version": { "const": 1 }
+      }
+    },
+    "UnknownEvent": {
+      "description": "An envelope whose (type, type_version) this schema version does not know.",
+      "allOf": [{ "$ref": "#/$defs/Envelope" }, { "not": { "$ref": "#/$defs/KnownTag" } }]
+    },
+
+    "Event": {
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "oneOf": [
+            { "$ref": "#/$defs/ev_thread_started" },
+            { "$ref": "#/$defs/ev_tools_changed" },
+            { "$ref": "#/$defs/ev_user_input" },
+            { "$ref": "#/$defs/ev_steer" },
+            { "$ref": "#/$defs/ev_injected" },
+            { "$ref": "#/$defs/ev_heartbeat" },
+            { "$ref": "#/$defs/ev_model_request" },
+            { "$ref": "#/$defs/ev_model_response" },
+            { "$ref": "#/$defs/ev_model_response_recovered" },
+            { "$ref": "#/$defs/ev_model_attempt_abandoned" },
+            { "$ref": "#/$defs/ev_tool_call" },
+            { "$ref": "#/$defs/ev_permission_decision" },
+            { "$ref": "#/$defs/ev_hook_decision" },
+            { "$ref": "#/$defs/ev_approval_requested" },
+            { "$ref": "#/$defs/ev_approval_granted" },
+            { "$ref": "#/$defs/ev_approval_denied" },
+            { "$ref": "#/$defs/ev_effect_begin" },
+            { "$ref": "#/$defs/ev_effect_commit" },
+            { "$ref": "#/$defs/ev_effect_unknown" },
+            { "$ref": "#/$defs/ev_effect_resolved" },
+            { "$ref": "#/$defs/ev_tool_result" },
+            { "$ref": "#/$defs/ev_tool_result_late" },
+            { "$ref": "#/$defs/ev_snapshot" },
+            { "$ref": "#/$defs/ev_fork" },
+            { "$ref": "#/$defs/ev_parked" },
+            { "$ref": "#/$defs/ev_park_escalated" },
+            { "$ref": "#/$defs/ev_resumed" },
+            { "$ref": "#/$defs/ev_compacted" },
+            { "$ref": "#/$defs/ev_cancel_requested" },
+            { "$ref": "#/$defs/ev_cancelled" },
+            { "$ref": "#/$defs/ev_stop_when_idle" },
+            { "$ref": "#/$defs/ev_turn_completed" },
+            { "$ref": "#/$defs/ev_schedule_fired" },
+            { "$ref": "#/$defs/ev_schedule_skipped" },
+            { "$ref": "#/$defs/ev_channel_delivery" },
+            { "$ref": "#/$defs/ev_log_repaired" }
+          ]
+        }
+      ]
+    },
+
+    "ev_thread_started": {
+      "description": "Pins everything in Render v1 line 0 (the declared immutable prefix) for the thread.",
+      "properties": {
+        "type": { "const": "thread_started" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["agent_name", "config_hash", "model", "model_params", "adapter", "instructions", "tools"],
+          "properties": {
+            "agent_name": { "$ref": "#/$defs/NonEmpty" },
+            "config_hash": { "description": "sha256 of the RFC 8785 bytes of the resolved, secret-free agent config.", "$ref": "#/$defs/Sha256" },
+            "model": { "$ref": "#/$defs/ModelRef" },
+            "model_params": { "description": "Every adapter-visible generation parameter (max_tokens, temperature, tool_choice, ...).", "$ref": "#/$defs/JsonObject" },
+            "adapter": { "$ref": "#/$defs/AdapterRef" },
+            "instructions": { "description": "The full pinned system text: base instructions, extension instructions in order, skill listing, memory guidance.", "type": "string" },
+            "tools": { "type": "array", "items": { "$ref": "#/$defs/ToolSpec" } },
+            "sandbox_provider": { "$ref": "#/$defs/Name" }
+          }
+        }
+      }
+    },
+    "ev_tools_changed": {
+      "description": "The model-visible tool set changed mid-thread (for example an MCP server's tool list). tools is the complete new set; tools_hash is sha256 of its RFC 8785 bytes. It renders as a line after the declared prefix, so line 0 stays equal (C7) while the log still records exactly what the model saw (C6). Later calls derive effect_class and dedup_window_ms from the latest set.",
+      "properties": {
+        "type": { "const": "tools_changed" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tools", "tools_hash"],
+          "properties": {
+            "tools": { "type": "array", "items": { "$ref": "#/$defs/ToolSpec" } },
+            "tools_hash": { "$ref": "#/$defs/Sha256" }
+          }
+        }
+      }
+    },
+    "ev_user_input": {
+      "description": "Opens a turn. actor.principal is the verified sender.",
+      "properties": {
+        "type": { "const": "user_input" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "actor": { "$ref": "#/$defs/ActorWithPrincipal" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "text"],
+          "properties": {
+            "source": { "enum": ["api", "cli", "channel", "schedule", "parent_agent"] },
+            "text": { "type": "string" },
+            "delivery_event_id": { "description": "The channel_delivery or schedule_fired event this input came from.", "$ref": "#/$defs/EventId" }
+          }
+        }
+      }
+    },
+    "ev_steer": {
+      "description": "Reserved control event: new user input that arrives while a turn is open. It does not open a turn; it renders as a user line at the next model request and may preempt an in-flight model attempt (that attempt is then model_attempt_abandoned{reason: steered}).",
+      "properties": {
+        "type": { "const": "steer" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "actor": { "$ref": "#/$defs/ActorWithPrincipal" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "text"],
+          "properties": {
+            "source": { "enum": ["api", "cli", "channel", "parent_agent"] },
+            "text": { "type": "string" },
+            "delivery_event_id": { "$ref": "#/$defs/EventId" }
+          }
+        }
+      }
+    },
+    "ev_injected": {
+      "description": "Model-visible context not typed by the user. memory, knowledge and attachment are always untrusted_reference.",
+      "properties": {
+        "type": { "const": "injected" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "trust", "origin"],
+          "properties": {
+            "source": { "enum": ["memory", "knowledge", "skill", "hook", "attachment", "recovery"] },
+            "trust": { "enum": ["untrusted_reference", "trusted_instruction"] },
+            "origin": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id"],
+              "properties": {
+                "id": { "$ref": "#/$defs/NonEmpty" },
+                "version": { "type": "string" },
+                "location": { "type": "string" }
+              }
+            },
+            "text": { "type": "string" },
+            "ref": { "$ref": "#/$defs/ArtifactRef" }
+          },
+          "allOf": [
+            { "$ref": "#/$defs/TextOrRef" },
+            {
+              "if": { "properties": { "source": { "enum": ["memory", "knowledge", "attachment"] } } },
+              "then": { "properties": { "trust": { "const": "untrusted_reference" } } }
+            }
+          ]
+        }
+      }
+    },
+    "ev_heartbeat": {
+      "description": "Reserved control event: wakes a model turn while only non-blocking tool calls are pending. Renders as a user line listing the running calls.",
+      "properties": {
+        "type": { "const": "heartbeat" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["running_call_ids"],
+          "properties": {
+            "running_call_ids": { "type": "array", "items": { "$ref": "#/$defs/CallId" } }
+          }
+        }
+      }
+    },
+    "ev_model_request": {
+      "description": "One model attempt, durable before dispatch (C2). request_ref holds the Render v1 bytes; req_hash is request_ref.sha256 (not stored twice) and is what the adapter guard checks. declared_prefix describes Render v1 line 0, which must be byte-equal on every request of the branch (C7).",
+      "properties": {
+        "type": { "const": "model_request" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["attempt", "request_ref", "declared_prefix"],
+          "properties": {
+            "attempt": { "description": "1 for a fresh request; n+1 when re-sending after model_attempt_abandoned.", "$ref": "#/$defs/PosInt" },
+            "request_ref": { "$ref": "#/$defs/ArtifactRef" },
+            "declared_prefix": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["bytes", "sha256"],
+              "properties": { "bytes": { "$ref": "#/$defs/PosInt" }, "sha256": { "$ref": "#/$defs/Sha256" } }
+            }
+          }
+        }
+      }
+    },
+    "ev_model_response": {
+      "description": "complete: the stream finished. partial: the stream broke after the listed complete parts; tool calls already recorded from it keep their ids and are not re-requested.",
+      "properties": {
+        "type": { "const": "model_response" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["request_event_id", "content", "stop_reason", "usage", "completeness"],
+          "properties": {
+            "request_event_id": { "$ref": "#/$defs/EventId" },
+            "content": { "type": "array", "items": { "$ref": "#/$defs/ContentPart" } },
+            "stop_reason": { "enum": ["end_turn", "tool_use", "max_tokens", "stop_sequence", "refusal", "other"] },
+            "usage": { "$ref": "#/$defs/Usage" },
+            "completeness": { "enum": ["complete", "partial"] }
+          }
+        }
+      }
+    },
+    "ev_model_response_recovered": {
+      "description": "A response recovered after a crash by adapter lookup (by the derived client request id <branch_id>:<model_request event_id>, or the provider request id) instead of re-sending. Written only when the lookup found the response with finality; not_found that is final becomes model_attempt_abandoned{provider_outcome: not_sent}, anything else is abandoned as unknown. Reduce and render treat it exactly like model_response.",
+      "properties": {
+        "type": { "const": "model_response_recovered" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["request_event_id", "provider_request_id", "content", "stop_reason", "usage", "completeness"],
+          "properties": {
+            "request_event_id": { "$ref": "#/$defs/EventId" },
+            "provider_request_id": { "$ref": "#/$defs/NonEmpty" },
+            "content": { "type": "array", "items": { "$ref": "#/$defs/ContentPart" } },
+            "stop_reason": { "enum": ["end_turn", "tool_use", "max_tokens", "stop_sequence", "refusal", "other"] },
+            "usage": { "$ref": "#/$defs/Usage" },
+            "completeness": { "enum": ["complete", "partial"] }
+          }
+        }
+      }
+    },
+    "ev_model_attempt_abandoned": {
+      "description": "A model_request with no response. provider_outcome unknown means it may have been billed; a new attempt is a new model_request with attempt+1.",
+      "properties": {
+        "type": { "const": "model_attempt_abandoned" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["request_event_id", "provider_outcome", "reason"],
+          "properties": {
+            "request_event_id": { "$ref": "#/$defs/EventId" },
+            "provider_outcome": { "enum": ["not_sent", "unknown", "failed"] },
+            "reason": { "enum": ["crash", "timeout", "provider_error", "stream_broken", "cancelled", "steered"] }
+          }
+        }
+      }
+    },
+    "ev_tool_call": {
+      "description": "A schema-validated call, durable before authorization and dispatch. input is the parsed args exactly. Derived, not stored: args_hash = sha256(RFC 8785 of input); effect_class and dedup_window_ms from the pinned ToolSpec named name; effect key = <this event's branch_id>:<call_id>. request_event_id lets a streamed call be recorded before its model_response.",
+      "properties": {
+        "type": { "const": "tool_call" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "name", "input", "request_event_id"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "name": { "$ref": "#/$defs/Name" },
+            "input": { "$ref": "#/$defs/JsonObject" },
+            "request_event_id": { "$ref": "#/$defs/EventId" }
+          }
+        }
+      }
+    },
+    "ev_permission_decision": {
+      "description": "Precedence is deny > ask > allow.",
+      "properties": {
+        "type": { "const": "permission_decision" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "decision", "source"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "decision": { "enum": ["allow", "deny", "ask"] },
+            "source": { "enum": ["policy", "hook", "default", "self_config_guard"] },
+            "rule_id": { "type": "string" },
+            "reason": { "type": "string" }
+          }
+        }
+      }
+    },
+    "ev_hook_decision": {
+      "description": "A policy hook's decision, durable before any work it gates. Replay reads it and never re-runs the hook. failed means the hook threw or timed out: a gating hook's failure denies; an observation hook's failure changes nothing.",
+      "properties": {
+        "type": { "const": "hook_decision" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["extension", "hook", "decision"],
+          "properties": {
+            "extension": { "$ref": "#/$defs/Name" },
+            "hook": { "enum": ["before_model", "after_model", "before_tool", "after_tool", "on_stop"] },
+            "decision": { "enum": ["proceed", "deny", "guide", "retry", "allow", "ask", "annotate", "stop", "continue", "failed"] },
+            "reason": { "type": "string" },
+            "request_event_id": { "$ref": "#/$defs/EventId" },
+            "call_id": { "$ref": "#/$defs/CallId" }
+          }
+        }
+      }
+    },
+    "ev_approval_requested": {
+      "description": "A single-use challenge bound to one invocation. The full binding (tenant, installation, file hashes) lives in the approvals table; args_hash is recorded because it is what the approver is shown.",
+      "properties": {
+        "type": { "const": "approval_requested" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["challenge_id", "call_id", "args_hash", "expires_at"],
+          "properties": {
+            "challenge_id": { "$ref": "#/$defs/Uuid" },
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "args_hash": { "$ref": "#/$defs/Sha256" },
+            "expires_at": { "$ref": "#/$defs/TimeMs" }
+          }
+        }
+      }
+    },
+    "ev_approval_granted": {
+      "description": "actor.principal is the approver, checked against current approver policy at consumption. challenge_id, call_id and args_hash must match the open challenge; the branch is the envelope branch_id.",
+      "properties": {
+        "type": { "const": "approval_granted" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "actor": { "$ref": "#/$defs/ActorWithPrincipal" },
+        "data": { "$ref": "#/$defs/ApprovalBinding" }
+      }
+    },
+    "ev_approval_denied": {
+      "properties": {
+        "type": { "const": "approval_denied" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "actor": { "$ref": "#/$defs/ActorWithPrincipal" },
+        "data": { "$ref": "#/$defs/ApprovalBinding" }
+      }
+    },
+    "ApprovalBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["challenge_id", "call_id", "args_hash"],
+      "properties": {
+        "challenge_id": { "$ref": "#/$defs/Uuid" },
+        "call_id": { "$ref": "#/$defs/CallId" },
+        "args_hash": { "$ref": "#/$defs/Sha256" },
+        "reason": { "type": "string" }
+      }
+    },
+    "ev_effect_begin": {
+      "description": "Durable before dispatch. From the moment dispatch is accepted the effect is potentially sent until an effect_commit or effect_resolved settles it. A re-dispatch after safe_to_retry, not_sent or assume_not_done reuses the derived effect key with attempt+1.",
+      "properties": {
+        "type": { "const": "effect_begin" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "attempt"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "attempt": { "$ref": "#/$defs/PosInt" }
+          }
+        }
+      }
+    },
+    "ev_effect_commit": {
+      "properties": {
+        "type": { "const": "effect_commit" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "result_ref"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "result_ref": { "$ref": "#/$defs/ArtifactRef" },
+            "provider_receipt": { "type": "string" }
+          }
+        }
+      }
+    },
+    "ev_effect_unknown": {
+      "description": "The outcome of a begun attempt is uncertain. Timeouts and transport errors after dispatch land here too, never in a plain error result.",
+      "properties": {
+        "type": { "const": "effect_unknown" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "reason"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "reason": { "enum": ["crash_after_begin", "timeout", "transport_error"] }
+          }
+        }
+      }
+    },
+    "ev_effect_resolved": {
+      "description": "Settles an unknown effect (C3). confirmed_success: the effect happened (final lookup or provider receipt). safe_to_retry: a re-send under the same key is deduplicated by the provider inside its window (by provider_dedup), or a lookup whose contract is final proved absence (by reconcile). not_sent: the adapter proves the request never left, or the provider confirmed cancellation with finality. interrupted: a sandbox_local process group was confirmed terminated. assume_*: an authorized human decision. An effect that stays unknown is parked, not resolved.",
+      "properties": {
+        "type": { "const": "effect_resolved" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "outcome", "by"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "outcome": { "enum": ["confirmed_success", "safe_to_retry", "not_sent", "interrupted", "assume_done", "assume_not_done"] },
+            "by": { "enum": ["provider_dedup", "reconcile", "adapter", "sandbox_terminated", "human"] },
+            "result_ref": { "$ref": "#/$defs/ArtifactRef" }
+          },
+          "allOf": [
+            { "if": { "properties": { "outcome": { "const": "confirmed_success" } } }, "then": { "required": ["result_ref"], "properties": { "by": { "enum": ["reconcile", "adapter"] } } } },
+            { "if": { "properties": { "outcome": { "const": "safe_to_retry" } } }, "then": { "properties": { "by": { "enum": ["provider_dedup", "reconcile"] } } } },
+            { "if": { "properties": { "outcome": { "const": "not_sent" } } }, "then": { "properties": { "by": { "const": "adapter" } } } },
+            { "if": { "properties": { "outcome": { "const": "interrupted" } } }, "then": { "properties": { "by": { "const": "sandbox_terminated" } } } },
+            { "if": { "properties": { "outcome": { "enum": ["assume_done", "assume_not_done"] } } }, "then": { "properties": { "by": { "const": "human" } } } }
+          ]
+        }
+      }
+    },
+    "ev_tool_result": {
+      "description": "preview is exactly what the model sees. ref holds the full output when it exceeds the preview. origin deferred is a placeholder for a non-blocking call whose real result arrives later as tool_result_late.",
+      "properties": {
+        "type": { "const": "tool_result" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "is_error", "completeness", "preview", "origin"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "is_error": { "type": "boolean" },
+            "completeness": { "enum": ["complete", "partial"] },
+            "preview": { "type": "string" },
+            "ref": { "$ref": "#/$defs/ArtifactRef" },
+            "origin": { "enum": ["executed", "materialized_from_commit", "denied", "not_executed", "interrupted", "deferred"] }
+          }
+        }
+      }
+    },
+    "ev_tool_result_late": {
+      "description": "Reserved: the real result of a non-blocking call, appended after its deferred placeholder and possibly after later turns. History is never rewritten; the placeholder stays.",
+      "properties": {
+        "type": { "const": "tool_result_late" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "is_error", "completeness", "preview"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "is_error": { "type": "boolean" },
+            "completeness": { "enum": ["complete", "partial"] },
+            "preview": { "type": "string" },
+            "ref": { "$ref": "#/$defs/ArtifactRef" }
+          }
+        }
+      }
+    },
+    "ev_snapshot": {
+      "description": "A completed sandbox capture of the state after every event before this one. Appended only after the provider reports it durable and restorable. The event itself is the fork point.",
+      "properties": {
+        "type": { "const": "snapshot" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["snapshot_id", "provider", "sandbox_id", "capture_class", "expires_at", "manifest_hash", "quiesced"],
+          "properties": {
+            "snapshot_id": { "$ref": "#/$defs/NonEmpty" },
+            "provider": { "$ref": "#/$defs/Name" },
+            "sandbox_id": { "$ref": "#/$defs/NonEmpty" },
+            "capture_class": { "enum": ["filesystem", "filesystem_and_processes", "full_vm"] },
+            "expires_at": { "oneOf": [{ "$ref": "#/$defs/TimeMs" }, { "type": "null" }] },
+            "manifest_hash": { "description": "RFC 8785 hash of the captured file-tree manifest (path, mode, size, sha256).", "$ref": "#/$defs/Sha256" },
+            "quiesced": {
+              "description": "How sandbox processes that could mutate captured state were handled. excluded lists only processes the provider proves cannot write captured paths.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["frozen", "stopped", "excluded"],
+              "properties": {
+                "frozen": { "type": "array", "items": { "$ref": "#/$defs/NonEmpty" } },
+                "stopped": { "type": "array", "items": { "$ref": "#/$defs/NonEmpty" } },
+                "excluded": { "type": "array", "items": { "$ref": "#/$defs/NonEmpty" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ev_fork": {
+      "description": "First event of a child branch, right after the child's own header (prev_hash = sha256 of that header). The parent's rows are referenced, never copied. Derived, not stored: at_seq = this event's seq - 1; for reason snapshot the fork point is the parent's snapshot event at at_seq; the thread is the envelope thread_id.",
+      "properties": {
+        "type": { "const": "fork" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["parent_branch_id", "at_hash", "reason"],
+          "properties": {
+            "parent_branch_id": { "$ref": "#/$defs/BranchId" },
+            "at_hash": { "description": "sha256 of the parent's line at at_seq. Binds the child to the parent's chain.", "$ref": "#/$defs/Sha256" },
+            "reason": { "description": "snapshot: a user fork at an eligible snapshot event. repair: operator repair of a corrupt parent, continuing from its last valid line; no sandbox is restored.", "enum": ["snapshot", "repair"] },
+            "sandbox_id": { "description": "The isolated child sandbox restored from the snapshot, with its manifest verified.", "$ref": "#/$defs/NonEmpty" }
+          },
+          "if": { "properties": { "reason": { "const": "snapshot" } } },
+          "then": { "required": ["sandbox_id"] },
+          "else": { "not": { "required": ["sandbox_id"] } }
+        }
+      }
+    },
+    "ev_parked": {
+      "properties": {
+        "type": { "const": "parked" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["address", "reason"],
+          "properties": {
+            "address": { "$ref": "#/$defs/ParkAddress" },
+            "reason": { "enum": ["awaiting_approval", "effect_unknown", "awaiting_input", "awaiting_resource"] },
+            "expires_at": { "$ref": "#/$defs/TimeMs" }
+          }
+        }
+      }
+    },
+    "ev_park_escalated": {
+      "description": "A parked address outlived its TTL. The host notifies an approver; nothing is auto-resolved.",
+      "properties": {
+        "type": { "const": "park_escalated" }, "type_version": { "const": 1 }, "critical": { "const": false },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["address"],
+          "properties": { "address": { "$ref": "#/$defs/ParkAddress" } }
+        }
+      }
+    },
+    "ev_resumed": {
+      "properties": {
+        "type": { "const": "resumed" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["address", "cause_event_id"],
+          "properties": {
+            "address": { "$ref": "#/$defs/ParkAddress" },
+            "cause_event_id": { "description": "The event that satisfied the address (approval, effect_resolved, user_input).", "$ref": "#/$defs/EventId" }
+          }
+        }
+      }
+    },
+    "ev_compacted": {
+      "description": "Render replaces events from..to (whole completed turns) with the summary as untrusted reference. The log is untouched, and the declared prefix (line 0) is never compacted.",
+      "properties": {
+        "type": { "const": "compacted" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from_seq", "to_seq", "from_event_id", "to_event_id", "summary_ref"],
+          "properties": {
+            "from_seq": { "$ref": "#/$defs/PosInt" },
+            "to_seq": { "$ref": "#/$defs/PosInt" },
+            "from_event_id": { "$ref": "#/$defs/EventId" },
+            "to_event_id": { "$ref": "#/$defs/EventId" },
+            "summary_ref": { "$ref": "#/$defs/ArtifactRef" }
+          }
+        }
+      }
+    },
+    "ev_cancel_requested": {
+      "description": "Durable cancellation barrier; also the hard-stop control event. No dispatch happens after it.",
+      "properties": {
+        "type": { "const": "cancel_requested" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "actor": { "$ref": "#/$defs/ActorWithPrincipal" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope"],
+          "properties": {
+            "scope": { "enum": ["turn", "thread", "tree"] },
+            "reason": { "type": "string" }
+          }
+        }
+      }
+    },
+    "ev_cancelled": {
+      "description": "Work stopped. Must not be written while any effect is unsettled; unsettled effects park instead.",
+      "properties": {
+        "type": { "const": "cancelled" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["request_event_id"],
+          "properties": { "request_event_id": { "$ref": "#/$defs/EventId" } }
+        }
+      }
+    },
+    "ev_stop_when_idle": {
+      "description": "Reserved control event: finish in-flight work (model attempt, pending calls, deferred results), start nothing new, then stop. A hard stop is cancel_requested.",
+      "properties": {
+        "type": { "const": "stop_when_idle" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "actor": { "$ref": "#/$defs/ActorWithPrincipal" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "reason": { "type": "string" } }
+        }
+      }
+    },
+    "ev_turn_completed": {
+      "properties": {
+        "type": { "const": "turn_completed" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason"],
+          "properties": {
+            "reason": { "enum": ["end_turn", "max_turns", "budget_exhausted", "cancelled", "error", "interrupted", "stop_hook_limit"] }
+          }
+        }
+      }
+    },
+    "ev_schedule_fired": {
+      "description": "occurrence_id is (schedule_id, scheduled instant UTC), claimed atomically in schedule_occurrences before this event is appended.",
+      "properties": {
+        "type": { "const": "schedule_fired" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schedule_id", "occurrence_id", "scheduled_for", "timezone"],
+          "properties": {
+            "schedule_id": { "$ref": "#/$defs/NonEmpty" },
+            "occurrence_id": { "$ref": "#/$defs/NonEmpty" },
+            "scheduled_for": { "$ref": "#/$defs/TimeMs" },
+            "timezone": { "description": "IANA zone; UTC when the schedule omits one.", "$ref": "#/$defs/NonEmpty" }
+          }
+        }
+      }
+    },
+    "ev_schedule_skipped": {
+      "description": "An occurrence that was claimed but not run. Skipping it cannot change reduce or render output.",
+      "properties": {
+        "type": { "const": "schedule_skipped" }, "type_version": { "const": 1 }, "critical": { "const": false },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schedule_id", "occurrence_id", "scheduled_for", "timezone", "reason"],
+          "properties": {
+            "schedule_id": { "$ref": "#/$defs/NonEmpty" },
+            "occurrence_id": { "$ref": "#/$defs/NonEmpty" },
+            "scheduled_for": { "$ref": "#/$defs/TimeMs" },
+            "timezone": { "$ref": "#/$defs/NonEmpty" },
+            "reason": { "enum": ["missed", "overlap"] }
+          }
+        }
+      }
+    },
+    "ev_channel_delivery": {
+      "description": "One inbound item, appended when the run consumes it from the inbox. The inbox row (unique per item_key) was durable before the webhook response. item_key is the provider's per-item id, or <delivery_id>#<index> for batches without one. actor.principal is the mapped sender.",
+      "properties": {
+        "type": { "const": "channel_delivery" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "actor": { "$ref": "#/$defs/ActorWithPrincipal" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["channel", "installation", "conversation", "delivery_id", "item_key"],
+          "properties": {
+            "channel": { "$ref": "#/$defs/Name" },
+            "installation": { "$ref": "#/$defs/NonEmpty" },
+            "conversation": { "$ref": "#/$defs/NonEmpty" },
+            "delivery_id": { "$ref": "#/$defs/NonEmpty" },
+            "item_key": { "$ref": "#/$defs/NonEmpty" },
+            "text": { "type": "string" },
+            "ref": { "$ref": "#/$defs/ArtifactRef" }
+          },
+          "allOf": [{ "$ref": "#/$defs/TextOrRef" }]
+        }
+      }
+    },
+    "ev_log_repaired": {
+      "description": "Evidence of an import that dropped a torn tail (JSONL framing only; the SQLite store cannot tear). The dropped bytes are kept as an artifact.",
+      "properties": {
+        "type": { "const": "log_repaired" }, "type_version": { "const": 1 }, "critical": { "const": false },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["truncated_bytes", "at_offset"],
+          "properties": {
+            "truncated_bytes": { "$ref": "#/$defs/PosInt" },
+            "at_offset": { "$ref": "#/$defs/Int" },
+            "dropped_ref": { "$ref": "#/$defs/ArtifactRef" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "effect-crash-after-commit-before-result",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Crash after effect_commit but before tool_result. Recovery materializes the tool_result from the commit's result_ref without dispatching the tool again, even though the tool is unguarded.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

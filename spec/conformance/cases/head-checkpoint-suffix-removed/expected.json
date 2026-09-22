@@ -1,0 +1,8 @@
+{
+  "outcome": "error",
+  "error": {
+    "code": "head_mismatch",
+    "seq": 10
+  },
+  "appended": []
+}

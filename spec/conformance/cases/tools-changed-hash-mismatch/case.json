@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-hash-mismatch",
+  "family": "log",
+  "kind": "reduce",
+  "description": "tools_changed.tools_hash is not the hash of the RFC 8785 bytes of its tools: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

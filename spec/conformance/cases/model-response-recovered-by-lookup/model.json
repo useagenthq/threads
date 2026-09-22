@@ -1,0 +1,23 @@
+{
+  "responses": [],
+  "lookup": {
+    "0192e000-0000-7000-8000-000000000003": {
+      "result": "found",
+      "final": true,
+      "provider_request_id": "msg_01",
+      "response": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "usage": {
+          "input_tokens": 200,
+          "output_tokens": 3
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "head-checkpoint-suffix-removed",
+  "family": "log",
+  "kind": "reduce",
+  "description": "The last event was removed and every remaining line still chains. Only the head checkpoint (seq 10) reveals it: head_mismatch.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

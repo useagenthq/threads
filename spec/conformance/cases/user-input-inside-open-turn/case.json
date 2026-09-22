@@ -1,0 +1,9 @@
+{
+  "name": "user-input-inside-open-turn",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A second user_input while a turn is open (new input mid-turn must be steer): invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

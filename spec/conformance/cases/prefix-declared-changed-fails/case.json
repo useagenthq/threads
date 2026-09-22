@@ -1,0 +1,9 @@
+{
+  "name": "prefix-declared-changed-fails",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "Negative C7 case: the second request declares a longer prefix whose first bytes are exactly the old declared prefix. A starts-with check would pass; C7 requires equality, so it fails with prefix_changed.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

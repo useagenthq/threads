@@ -1,0 +1,7 @@
+{
+  "tools": {
+    "send_email": {
+      "output": "sent"
+    }
+  }
+}

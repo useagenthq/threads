@@ -1,0 +1,9 @@
+{
+  "name": "effect-begin-without-permission",
+  "family": "log",
+  "kind": "reduce",
+  "description": "effect_begin with no permission_decision allow (or consumed approval) for the call: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

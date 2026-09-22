@@ -1,0 +1,9 @@
+{
+  "name": "compaction-splits-turn",
+  "family": "log",
+  "kind": "reduce",
+  "description": "compacted ends in the middle of a turn (between a tool_call and its result): invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

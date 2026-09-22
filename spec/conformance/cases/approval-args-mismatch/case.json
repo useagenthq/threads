@@ -1,0 +1,9 @@
+{
+  "name": "approval-args-mismatch",
+  "family": "log",
+  "kind": "reduce",
+  "description": "approval_granted names an args_hash that differs from the open challenge: approval_mismatch.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "recovery-cancelled-call-not-dispatched",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Crash after an allowed call was recorded and the turn was then cancelled. Recovery honours the durable cancellation barrier: the call is closed as not_executed, never dispatched, and the turn ends cancelled.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

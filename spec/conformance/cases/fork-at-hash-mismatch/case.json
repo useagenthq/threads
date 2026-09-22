@@ -1,0 +1,9 @@
+{
+  "name": "fork-at-hash-mismatch",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A child export whose fork event's at_hash does not equal the hash of the parent's line at at_seq. The child is not bound to that parent chain: prev_hash_mismatch at the fork seq.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

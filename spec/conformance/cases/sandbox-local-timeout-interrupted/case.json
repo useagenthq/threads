@@ -1,0 +1,11 @@
+{
+  "name": "sandbox-local-timeout-interrupted",
+  "family": "sandboxes",
+  "kind": "recover",
+  "description": "A sandbox_local command timed out after dispatch. A timeout is uncertainty, not a plain error: it was recorded as effect_unknown. Recovery settles it only after the sandbox confirms the process group is terminated, then tells the model it was interrupted. It is never re-run automatically.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "render-reserved-control-events",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "A non-blocking call gets a deferred placeholder result; later a heartbeat, a new turn, a steer and the late result arrive. Each renders as its own appended line and nothing earlier is rewritten, so the declared prefix stays equal.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "event-branch-id-mismatch",
+  "family": "log",
+  "kind": "reduce",
+  "description": "An event stored in the child segment claims the parent's branch_id. Every event's branch_id must equal its segment header's branch_id: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

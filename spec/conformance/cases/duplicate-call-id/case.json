@@ -1,0 +1,9 @@
+{
+  "name": "duplicate-call-id",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A second tool_call reuses call_id call_1 on the same branch: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

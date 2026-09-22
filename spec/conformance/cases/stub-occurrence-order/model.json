@@ -1,0 +1,55 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "call_1",
+          "name": "search_web",
+          "input": {
+            "q": "threads"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 5
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "call_2",
+          "name": "search_web",
+          "input": {
+            "q": "threads"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 5
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "call_3",
+          "name": "search_web",
+          "input": {
+            "q": "threads"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 5
+      }
+    }
+  ]
+}

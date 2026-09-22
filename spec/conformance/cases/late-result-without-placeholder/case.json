@@ -1,0 +1,9 @@
+{
+  "name": "late-result-without-placeholder",
+  "family": "log",
+  "kind": "reduce",
+  "description": "tool_result_late for a call whose tool_result was not a deferred placeholder: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

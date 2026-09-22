@@ -1,0 +1,7 @@
+{
+  "outcome": "error",
+  "error": {
+    "code": "request_hash_mismatch",
+    "seq": 8
+  }
+}

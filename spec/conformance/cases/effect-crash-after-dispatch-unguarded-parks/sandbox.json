@@ -1,0 +1,10 @@
+{
+  "tools": {
+    "send_email": {
+      "output": "sent message_id=<m-002@example.com>",
+      "executed_keys": {
+        "0192b000-0000-7000-8000-000000000001:call_1": "sent message_id=<m-001@example.com>"
+      }
+    }
+  }
+}

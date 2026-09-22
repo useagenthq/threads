@@ -1,0 +1,11 @@
+{
+  "name": "effect-crash-after-begin-idempotent",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Crash after effect_begin of an idempotent tool, inside its dedup window (provider clock minus skew). The dispatch is potentially sent, so recovery marks it unknown, settles it as safe_to_retry by provider dedup, and re-dispatches with the SAME derived effect key. The provider already executed it, so there is no new external execution.",
+  "clock": {
+    "now": 1790000067000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

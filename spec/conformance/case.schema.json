@@ -1,0 +1,696 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:threads:schema:conformance:v1",
+  "title": "threads conformance fixture files",
+  "description": "Schemas for case.json, expected.json, model.json, sandbox.json and stubs.json. Event shapes come from ../schema/events.v1.schema.json.",
+  "$defs": {
+    "Case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "family",
+        "kind",
+        "description",
+        "clock"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "family": {
+          "enum": [
+            "tools_streaming",
+            "context_compaction",
+            "memory",
+            "skills",
+            "permissions_approvals",
+            "hooks",
+            "agents_teams",
+            "tasks",
+            "cancellation_resume",
+            "scheduling",
+            "sandboxes",
+            "channels",
+            "log_fork_test",
+            "knowledge",
+            "log"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "reduce",
+            "render",
+            "recover",
+            "fork",
+            "stub",
+            "intake",
+            "security",
+            "parity"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clock": {
+          "description": "The injected clock. Runners never read wall time.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "now"
+          ],
+          "properties": {
+            "now": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "model_script": {
+          "const": "model.json"
+        },
+        "sandbox_script": {
+          "const": "sandbox.json"
+        },
+        "input": {
+          "description": "Kind-specific operation input.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fork_at_event_id": {
+              "type": "string"
+            },
+            "new_branch_id": {
+              "type": "string"
+            },
+            "webhooks": {
+              "description": "intake: webhooks delivered in order; a repeated delivery simulates provider redelivery.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Webhook"
+              }
+            }
+          }
+        },
+        "stub_script": {
+          "const": "stubs.json"
+        }
+      }
+    },
+    "Expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code"
+          ],
+          "properties": {
+            "code": {
+              "$ref": "urn:threads:schema:events:v1#/$defs/ErrorCode"
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "state": {
+          "$ref": "#/$defs/ReducedState"
+        },
+        "committed_bytes": {
+          "description": "Length of the prefix readers serve.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "appended": {
+          "description": "Exactly the events the runner must append, in order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EventMatcher"
+          }
+        },
+        "sandbox": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dispatches": {
+              "$ref": "#/$defs/Counts"
+            },
+            "new_executions": {
+              "$ref": "#/$defs/Counts"
+            },
+            "lookups": {
+              "$ref": "#/$defs/Counts"
+            }
+          }
+        },
+        "fork": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "child_created": {
+              "type": "boolean"
+            },
+            "at_seq": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "parent_unchanged": {
+              "const": true
+            }
+          }
+        },
+        "render": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "next_request_sha256",
+            "declared_prefix"
+          ],
+          "properties": {
+            "next_request_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "declared_prefix": {
+              "description": "Render v1 line 0. Every recorded model_request's declared_prefix and the next request's must equal this (C7).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "bytes",
+                "sha256"
+              ],
+              "properties": {
+                "bytes": {
+                  "type": "integer"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          }
+        },
+        "head_verified": {
+          "description": "false when the input has no valid head checkpoint (torn or truncated export). Absent means true.",
+          "type": "boolean"
+        },
+        "stubs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "consumed",
+            "unmatched"
+          ],
+          "properties": {
+            "consumed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unmatched": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "responses": {
+          "description": "intake: HTTP status returned for each webhook, in order.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "inbox": {
+          "description": "intake: inbox rows after all webhooks, in insertion order.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "channel",
+              "item_key"
+            ],
+            "properties": {
+              "channel": {
+                "type": "string"
+              },
+              "item_key": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "error"
+            ]
+          }
+        }
+      ]
+    },
+    "Counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "EventMatcher": {
+      "description": "Matches one appended event. data is a deep subset: objects match by listed keys, arrays and scalars match exactly. event_id, time and prev_hash are never compared; the chain and head are checked separately.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "actor_kind": {
+          "type": "string"
+        },
+        "epoch": {
+          "type": "integer"
+        },
+        "branch_id": {
+          "type": "string"
+        },
+        "critical": {
+          "type": "boolean"
+        },
+        "data": {
+          "type": "object"
+        }
+      }
+    },
+    "ReducedState": {
+      "description": "The normative v1 projection used for cross-language comparison. Compared by deep equality.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "thread_id",
+        "branch_id",
+        "head",
+        "epoch",
+        "status",
+        "turns_completed",
+        "pending_calls",
+        "effects",
+        "parked",
+        "fork_points",
+        "usage",
+        "transcript"
+      ],
+      "properties": {
+        "thread_id": {
+          "type": "string"
+        },
+        "branch_id": {
+          "type": "string"
+        },
+        "head": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "seq",
+            "hash"
+          ],
+          "properties": {
+            "seq": {
+              "type": "integer"
+            },
+            "hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "epoch": {
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "idle",
+            "in_turn",
+            "parked",
+            "cancelled"
+          ]
+        },
+        "turns_completed": {
+          "type": "integer"
+        },
+        "pending_calls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "effect_key",
+              "call_id",
+              "status"
+            ],
+            "properties": {
+              "effect_key": {
+                "type": "string",
+                "description": "Derived: <branch_id of the tool_call event>:<call_id>."
+              },
+              "call_id": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "begun",
+                  "committed",
+                  "unknown",
+                  "resolved"
+                ]
+              }
+            }
+          }
+        },
+        "parked": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/ParkAddress"
+          }
+        },
+        "fork_points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "seq",
+              "snapshot_event_id"
+            ],
+            "properties": {
+              "seq": {
+                "type": "integer"
+              },
+              "snapshot_event_id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "usage": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Usage"
+        },
+        "transcript": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "event_id"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "user",
+                  "context",
+                  "assistant",
+                  "tool",
+                  "summary"
+                ]
+              },
+              "event_id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ModelScript": {
+      "description": "Responses consumed in order. An extra model call, or leftover responses at the end, fails the case. lookup answers adapter response recovery per model_request event_id.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "responses"
+      ],
+      "properties": {
+        "responses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "content",
+              "stop_reason",
+              "usage"
+            ],
+            "properties": {
+              "content": {
+                "type": "array",
+                "items": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/ContentPart"
+                }
+              },
+              "stop_reason": {
+                "type": "string"
+              },
+              "usage": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/Usage"
+              }
+            }
+          }
+        },
+        "lookup": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "result",
+              "final"
+            ],
+            "properties": {
+              "result": {
+                "enum": [
+                  "found",
+                  "not_found"
+                ]
+              },
+              "final": {
+                "type": "boolean"
+              },
+              "provider_request_id": {
+                "type": "string"
+              },
+              "response": {
+                "$ref": "#/$defs/ModelScript/properties/responses/items"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SandboxScript": {
+      "description": "A fake sandbox/provider. A dispatch whose effect key is in executed_keys returns that output with no new execution (provider dedup); any other dispatch is a new execution returning output. lookup answers reconciliation; process answers termination checks.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tools": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "output"
+            ],
+            "properties": {
+              "output": {
+                "type": "string"
+              },
+              "is_error": {
+                "type": "boolean"
+              },
+              "executed_keys": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "lookup": {
+                "description": "Adapter lookup answers per derived effect key. final says whether the adapter contract makes the answer final.",
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "result",
+                    "final"
+                  ],
+                  "properties": {
+                    "result": {
+                      "enum": [
+                        "found",
+                        "not_found"
+                      ]
+                    },
+                    "final": {
+                      "type": "boolean"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "process": {
+                "description": "What the sandbox reports about the call's process group during recovery.",
+                "enum": [
+                  "running",
+                  "terminated",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        },
+        "snapshots": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "restore_sandbox_id"
+            ],
+            "properties": {
+              "restore_sandbox_id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Webhook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "installation_id",
+        "delivery_id",
+        "items"
+      ],
+      "properties": {
+        "channel": {
+          "type": "string"
+        },
+        "installation_id": {
+          "type": "string"
+        },
+        "delivery_id": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "conversation",
+              "sender",
+              "text"
+            ],
+            "properties": {
+              "item_id": {
+                "type": "string"
+              },
+              "conversation": {
+                "type": "string"
+              },
+              "sender": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "StubScript": {
+      "description": "Recorded stubs for stub mode. Matched on (tool, args_hash, occurrence) and consumed in order; an invocation with no unconsumed match fails with unmatched_external_op.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stubs"
+      ],
+      "properties": {
+        "stubs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tool",
+              "args_hash",
+              "occurrence",
+              "output"
+            ],
+            "properties": {
+              "tool": {
+                "type": "string"
+              },
+              "args_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "occurrence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "output": {
+                "type": "string"
+              },
+              "is_error": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

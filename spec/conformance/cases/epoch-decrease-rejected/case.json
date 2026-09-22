@@ -1,0 +1,9 @@
+{
+  "name": "epoch-decrease-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "An event's epoch is lower than the previous event's: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

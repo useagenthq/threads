@@ -1,0 +1,8 @@
+{
+  "outcome": "error",
+  "error": {
+    "code": "unsupported_critical_event",
+    "seq": 4
+  },
+  "appended": []
+}
