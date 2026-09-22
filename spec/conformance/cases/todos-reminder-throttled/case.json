@@ -1,0 +1,9 @@
+{
+  "name": "todos-reminder-throttled",
+  "family": "tasks",
+  "kind": "render",
+  "description": "Ten turns pass with open items and no todo_write, so the reminder producer appends one injected{source: todo} right after the turn's user_input, before the first request. It renders at that position as untrusted reference and fires at most once per 10 turns.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

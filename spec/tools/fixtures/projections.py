@@ -199,3 +199,15 @@ def output(log: Log) -> Obj:
         if "value" in d
         else {"outcome": d["outcome"]}
     )
+
+
+def compaction(log: Log) -> Obj:
+    """The derived circuit breaker."""
+    limit = num(obj(obj(_policy(log)["context"])["compact"])["max_failures"])
+    failures = 0
+    for e in log.events:
+        if e["type"] == "compacted":
+            failures = 0
+        elif e["type"] == "compaction_failed":
+            failures += 1
+    return {"consecutive_failures": failures, "breaker_open": failures >= limit}

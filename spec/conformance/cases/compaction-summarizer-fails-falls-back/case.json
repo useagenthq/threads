@@ -1,0 +1,10 @@
+{
+  "name": "compaction-summarizer-fails-falls-back",
+  "family": "context_compaction",
+  "kind": "recover",
+  "description": "The turn request is too long, and so is the summarizer side request. The fallback clears every clearable result (context_edited{compaction_fallback}, keep 0) and retries the side request once; it succeeds, compaction completes and the turn request is re-sent.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

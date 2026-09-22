@@ -1,0 +1,42 @@
+{
+  "responses": [
+    {
+      "error": {
+        "reason": "prompt_too_long",
+        "http_status": 400
+      }
+    },
+    {
+      "error": {
+        "reason": "prompt_too_long",
+        "http_status": 400
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "The user asked what README.md holds (one heading, demo)."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 700,
+        "output_tokens": 30
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Done."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 200,
+        "output_tokens": 3
+      }
+    }
+  ]
+}

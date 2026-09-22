@@ -1,0 +1,9 @@
+{
+  "name": "hooks-full-set-recorded",
+  "family": "hooks",
+  "kind": "reduce",
+  "description": "Hooks across one turn: session_start (context, with its injection), before_input, before_tool (folded as permission source hook), before_tool_result, after_tool_batch, before_model_switch before settings_changed, and on_stop. A notification observer failing is recorded and changes nothing; the turn completes.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

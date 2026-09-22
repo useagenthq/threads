@@ -1,0 +1,56 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Part"
+        }
+      ],
+      "stop_reason": "max_tokens",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 1024
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Part"
+        }
+      ],
+      "stop_reason": "max_tokens",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 1024
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Part"
+        }
+      ],
+      "stop_reason": "max_tokens",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 1024
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Part"
+        }
+      ],
+      "stop_reason": "max_tokens",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 1024
+      }
+    }
+  ]
+}

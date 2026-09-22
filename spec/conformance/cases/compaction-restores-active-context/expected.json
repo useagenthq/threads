@@ -1,0 +1,56 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 1,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 1070,
+      "output_tokens": 70,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "summary",
+        "event_id": "0192e000-0000-7000-8000-00000000000e"
+      },
+      {
+        "role": "context",
+        "event_id": "0192e000-0000-7000-8000-00000000000f"
+      },
+      {
+        "role": "context",
+        "event_id": "0192e000-0000-7000-8000-000000000010"
+      },
+      {
+        "role": "context",
+        "event_id": "0192e000-0000-7000-8000-000000000011"
+      },
+      {
+        "role": "context",
+        "event_id": "0192e000-0000-7000-8000-000000000012"
+      },
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000013"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 19,
+      "hash": "0e7964ea4b289222fb2d670996f362b9cd049c2fae7be70af242569e34489791"
+    }
+  },
+  "render": {
+    "next_request_sha256": "8b22a6f61352956bfeb7000cc6e57cc70e03ebd7cc841971a17eb7745ac8249a",
+    "declared_prefix": {
+      "bytes": 386,
+      "sha256": "862106e35a5b98c8953a59e6e4e8e547992d3931eb45cc87eb7aadf1ad3af715"
+    }
+  }
+}

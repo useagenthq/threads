@@ -1,0 +1,9 @@
+{
+  "name": "permission-thread-rule-added",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "The approver answers with 'allow for this thread' and picks the prefix rule. permission_rule_added records it with the approver as actor; the next matching call is allowed without a prompt, source thread_rule. Thread rules sit after deny rules and protected paths, so they never open those.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

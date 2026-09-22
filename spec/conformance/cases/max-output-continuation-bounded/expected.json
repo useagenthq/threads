@@ -1,0 +1,119 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 3,
+      "hash": "435e6e45a072c955f538c59037a4094c4a21f510e565a8aa5333679fc4609b0c"
+    }
+  },
+  "appended": [
+    {
+      "type": "model_attempt_abandoned",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000003",
+        "provider_outcome": "unknown",
+        "reason": "crash"
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 2
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "stop_reason": "max_tokens"
+      }
+    },
+    {
+      "type": "injected",
+      "data": {
+        "source": "recovery",
+        "trust": "trusted_instruction",
+        "text": "Output limit reached. Continue exactly where you stopped. Do not repeat earlier output."
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "stop_reason": "max_tokens"
+      }
+    },
+    {
+      "type": "injected",
+      "data": {
+        "source": "recovery",
+        "trust": "trusted_instruction",
+        "text": "Output limit reached. Continue exactly where you stopped. Do not repeat earlier output."
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "stop_reason": "max_tokens"
+      }
+    },
+    {
+      "type": "injected",
+      "data": {
+        "source": "recovery",
+        "trust": "trusted_instruction",
+        "text": "Output limit reached. Continue exactly where you stopped. Do not repeat earlier output."
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "stop_reason": "max_tokens"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "max_output"
+      }
+    }
+  ]
+}

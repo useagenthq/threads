@@ -972,6 +972,22 @@
               }
             }
           }
+        },
+        "compaction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "consecutive_failures",
+            "breaker_open"
+          ],
+          "properties": {
+            "consecutive_failures": {
+              "type": "integer"
+            },
+            "breaker_open": {
+              "type": "boolean"
+            }
+          }
         }
       }
     }

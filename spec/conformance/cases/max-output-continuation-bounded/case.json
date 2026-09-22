@@ -1,0 +1,10 @@
+{
+  "name": "max-output-continuation-bounded",
+  "family": "context_compaction",
+  "kind": "recover",
+  "description": "Every response stops at max_tokens. With no escalation configured, the loop appends the fixed trusted continuation instruction and asks again, three times (max_output_continuations), then ends the turn max_output. A tool_use cut by max_tokens never exists, so nothing is dispatched.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

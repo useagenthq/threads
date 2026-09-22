@@ -1,0 +1,9 @@
+{
+  "name": "compaction-breaker-opens",
+  "family": "context_compaction",
+  "kind": "reduce",
+  "description": "Three consecutive compaction_failed since the last compacted reach compact.max_failures: the breaker is open, derived from the log with no breaker event. Automatic compaction stops; clearing and manual compaction still run.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

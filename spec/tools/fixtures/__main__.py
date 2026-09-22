@@ -16,9 +16,11 @@ from . import (
     content,
     context,
     effects,
+    extras,
     forks,
     host,
     integrity,
+    ladder,
     models,
     policy,
     recovery,
@@ -42,6 +44,8 @@ FAMILIES = (
     models,
     agents,
     policy,
+    ladder,
+    extras,
 )
 
 

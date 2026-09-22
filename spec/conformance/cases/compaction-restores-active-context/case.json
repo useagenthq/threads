@@ -1,0 +1,9 @@
+{
+  "name": "compaction-restores-active-context",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "After compacted, the restore events follow in the fixed order: skills from the dropped range (same origin), recently read files as untrusted attachments with their content hash, the todo list, then a heartbeat of running work. The next request renders summary, restores, then the new input.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,5 @@
+{"adapter":{"name":"scripted","settings":{},"version":"1"},"model":{"name":"scripted-small","provider":"scripted"},"params":{"max_tokens":1024},"system":"You are a helpful agent.","tools":[{"description":"Run a shell command.","input_schema":{"additionalProperties":false,"properties":{"command":{"type":"string"}},"required":["command"],"type":"object"},"name":"bash"}]}
+{"content":[{"text":"<context source=\"hook\" id=\"ops\">\nOn-call: alice.\n</context>","type":"text"}],"role":"user"}
+{"content":[{"text":"Check disk usage.","type":"text"}],"role":"user"}
+{"content":[{"call_id":"call_1","input":{"command":"df -h"},"name":"bash","type":"tool_use"}],"role":"assistant"}
+{"call_id":"call_1","content":[{"text":"/ 40% used","type":"text"}],"is_error":false,"role":"tool"}
