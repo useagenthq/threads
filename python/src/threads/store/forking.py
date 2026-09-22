@@ -29,7 +29,7 @@ class ChildStart:
 
 
 def start_child(
-    prefix: VerifiedLog, child: BranchId, data: Mapping[str, JsonValue], now: int
+    prefix: VerifiedLog, tenant_id: str, child: BranchId, data: Mapping[str, JsonValue], now: int
 ) -> Ok[ChildStart] | Err[ParseError]:
     """Builds and validates a child of `prefix`'s last line. `data` is the fork payload without
     the parent link, which is derived here: parent_branch_id and at_hash."""
@@ -54,6 +54,7 @@ def start_child(
     row = Branch(
         child,
         fold.thread_id,
+        tenant_id,
         parent.header.branch_id,
         at.seq - 1,
         header,

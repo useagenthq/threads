@@ -63,7 +63,9 @@ class Clock:
 
 def run(test: Callable[[SqliteStore], Awaitable[None]], path: str = ":memory:") -> None:
     async def main() -> None:
-        store = await SqliteStore.open(path)
+        opened = await SqliteStore.open(path)
+        assert isinstance(opened, Ok)
+        store = opened.value
         try:
             await test(store)
         finally:
@@ -294,7 +296,9 @@ def test_import_is_idempotent_and_refuses_other_lines() -> None:
         verified = verify_export(export, clock())
         assert isinstance(verified, Ok)
         assert await store.import_log(verified.value) == Ok(None)
-        other = await SqliteStore.open()
+        opened = await SqliteStore.open()
+        assert isinstance(opened, Ok)
+        other = opened.value
         try:
             clash = await other.create(THREAD, ROOT, clock() + 1)
             assert clash == Ok(None)

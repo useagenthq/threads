@@ -108,7 +108,9 @@ CANCEL = Draft("cancel_requested", {"scope": "turn"}, actor=ALICE)
 
 async def last_code(drafts: Sequence[Draft]) -> str | None:
     """Appends drafts one by one; every draft but the last must be accepted."""
-    store = await SqliteStore.open()
+    opened = await SqliteStore.open()
+    assert isinstance(opened, Ok)
+    store = opened.value
     try:
         assert await store.create(THREAD, ROOT, NOW) == Ok(None)
         writer = await store.acquire(ROOT, "a", lambda: NOW)

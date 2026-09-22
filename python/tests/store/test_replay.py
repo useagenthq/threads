@@ -47,7 +47,9 @@ def drafts(turns: list[tuple[str, int, bool]]) -> list[Draft]:
 
 
 async def write_and_replay(batches: list[list[Draft]]) -> tuple[ReducedState, bytes]:
-    store = await SqliteStore.open()
+    opened = await SqliteStore.open()
+    assert isinstance(opened, Ok)
+    store = opened.value
     try:
         assert await store.create(THREAD, ROOT, NOW) == Ok(None)
         writer = await store.acquire(ROOT, "a", lambda: NOW)
@@ -59,7 +61,9 @@ async def write_and_replay(batches: list[list[Draft]]) -> tuple[ReducedState, by
         export = await store.export(ROOT)
     finally:
         await store.close()
-    copy = await SqliteStore.open()
+    opened = await SqliteStore.open()
+    assert isinstance(opened, Ok)
+    copy = opened.value
     try:
         verified = verify_export(export, NOW)
         assert isinstance(verified, Ok)

@@ -37,23 +37,33 @@ class SqliteStore:
         self._worker = worker
 
     @classmethod
-    async def open(cls, path: str | Path = ":memory:") -> "SqliteStore":
-        return cls(await Worker.open(str(path)))
+    async def open(cls, path: str | Path = ":memory:") -> Ok["SqliteStore"] | Err[ParseError]:
+        """Opens or creates the store. A database a newer schema wrote is unsupported_format."""
+        worker = await Worker.open(str(path))
+        error = await worker.call(sql.install)
+        if error is not None:
+            await worker.close()
+            return Err(error)
+        return Ok(cls(worker))
 
     async def close(self) -> None:
         await self._worker.close()
 
     async def create(
-        self, thread_id: ThreadId, branch_id: BranchId, now: int
+        self, thread_id: ThreadId, branch_id: BranchId, now: int, tenant_id: str = sql.LOCAL_TENANT
     ) -> Ok[None] | Err[ParseError]:
         """Creates a root branch: its header line and nothing else."""
         header = header_line(thread_id, branch_id, now)
-        row = sql.Branch(branch_id, thread_id, None, None, header, "ready", 0, sha256_hex(header))
+        row = sql.Branch(
+            branch_id, thread_id, tenant_id, None, None, header, "ready", 0, sha256_hex(header)
+        )
         return _result(await self._worker.call(lambda c: lease.create(c, row, (), None)))
 
-    async def import_log(self, log: VerifiedLog) -> Ok[None] | Err[ParseError]:
+    async def import_log(
+        self, log: VerifiedLog, tenant_id: str = sql.LOCAL_TENANT
+    ) -> Ok[None] | Err[ParseError]:
         """Stores a verified export's lines byte for byte: parents referenced, never copied."""
-        return _result(await self._worker.call(lambda c: sql.import_segments(c, log)))
+        return _result(await self._worker.call(lambda c: sql.import_segments(c, log, tenant_id)))
 
     async def export(self, branch_id: BranchId) -> bytes:
         """The JSONL export of a branch, ending with its committed head checkpoint."""
@@ -101,6 +111,9 @@ class SqliteStore:
         Fork-point eligibility (semantic rule 16) and the sandbox restore belong to the fork
         operation above the store."""
         now = clock()
+        parent = await self._worker.call(lambda c: sql.branch(c, request.parent))
+        if parent is None:
+            raise LookupError(f"no branch {request.parent}")
         prefix = await self._worker.call(lambda c: sql.prefix(c, request.parent, request.at_seq))
         read = verify_export(prefix, now)
         if isinstance(read, Err):
@@ -108,7 +121,7 @@ class SqliteStore:
         if read.value.fold.seq != request.at_seq:
             message = f"the parent has no line {request.at_seq}"
             return Err(ParseError("seq_mismatch", message, request.at_seq))
-        started = start_child(read.value, request.child, request.data, now)
+        started = start_child(read.value, parent.tenant_id, request.child, request.data, now)
         if isinstance(started, Err):
             return started
         start = started.value

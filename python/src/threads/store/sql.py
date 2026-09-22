@@ -10,48 +10,23 @@ from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import pairwise
+from typing import Final
 
+from threads._generated.store_sql import STORE_SQL, STORE_VERSION
 from threads.log import BranchId, ForkEvent, ParseError, ThreadId
 from threads.log.digest import sha256_hex
 from threads.store.lines import head_line
 from threads.store.verify import Segment, StoredEvent, VerifiedLog
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS branches (
-  branch_id TEXT PRIMARY KEY,
-  thread_id TEXT NOT NULL,
-  parent_branch_id TEXT REFERENCES branches (branch_id),
-  fork_at_seq INTEGER,
-  header_line BLOB NOT NULL,
-  state TEXT NOT NULL,
-  head_seq INTEGER NOT NULL,
-  head_hash TEXT NOT NULL
-) STRICT;
-CREATE TABLE IF NOT EXISTS events (
-  branch_id TEXT NOT NULL REFERENCES branches (branch_id),
-  seq INTEGER NOT NULL,
-  event_id TEXT NOT NULL,
-  type TEXT NOT NULL,
-  type_version INTEGER NOT NULL,
-  critical INTEGER NOT NULL,
-  epoch INTEGER NOT NULL,
-  line BLOB NOT NULL,
-  PRIMARY KEY (branch_id, seq),
-  UNIQUE (branch_id, event_id)
-) STRICT;
-CREATE TABLE IF NOT EXISTS leases (
-  branch_id TEXT PRIMARY KEY REFERENCES branches (branch_id),
-  holder_id TEXT NOT NULL,
-  epoch INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL
-) STRICT;
-"""
+LOCAL_TENANT: Final = "local"
+"""The tenant of local use: the local operator's (spec/api.json, )."""
 
 
 @dataclass(frozen=True, slots=True)
 class Branch:
     branch_id: BranchId
     thread_id: ThreadId
+    tenant_id: str
     parent: BranchId | None
     fork_at_seq: int | None
     header_line: bytes
@@ -68,8 +43,18 @@ def connect(path: str) -> sqlite3.Connection:
         conn.execute(f"PRAGMA {pragma}")
     conn.execute("PRAGMA checkpoint_fullfsync=ON")
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(_SCHEMA)
     return conn
+
+
+def install(conn: sqlite3.Connection) -> ParseError | None:
+    """Creates the tables of spec/schema/store.sql. A database a newer schema wrote is
+    refused, never downgraded."""
+    (found,) = conn.execute("PRAGMA user_version").fetchone()
+    if _int(found) > STORE_VERSION:
+        message = f"store schema {found} is newer than {STORE_VERSION}"
+        return ParseError("unsupported_format", message)
+    conn.executescript(STORE_SQL)
+    return None
 
 
 @contextmanager
@@ -85,16 +70,17 @@ def transaction(conn: sqlite3.Connection) -> Generator[None]:
 
 def branch(conn: sqlite3.Connection, branch_id: BranchId) -> Branch | None:
     row: tuple[object, ...] | None = conn.execute(
-        "SELECT thread_id, parent_branch_id, fork_at_seq, header_line, state, head_seq,"
+        "SELECT thread_id, tenant_id, parent_branch_id, fork_at_seq, header_line, state, head_seq,"
         " head_hash FROM branches WHERE branch_id = ?",
         (branch_id,),
     ).fetchone()
     if row is None:
         return None
-    thread, parent, at_seq, header, state, head_seq, head_hash = row
+    thread, tenant, parent, at_seq, header, state, head_seq, head_hash = row
     return Branch(
         branch_id,
         ThreadId(_text(thread)),
+        _text(tenant),
         None if parent is None else BranchId(_text(parent)),
         None if at_seq is None else _int(at_seq),
         _blob(header),
@@ -140,12 +126,19 @@ def segments(conn: sqlite3.Connection, found: Branch, through: int) -> bytes:
 
 
 def insert_branch(conn: sqlite3.Connection, row: Branch) -> None:
+    """Inserts the branch and, for a new thread, its thread row. The foreign key refuses a
+    branch whose tenant is not its thread's."""
     conn.execute(
-        "INSERT INTO branches (branch_id, thread_id, parent_branch_id, fork_at_seq,"
-        " header_line, state, head_seq, head_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO threads (thread_id, tenant_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+        (row.thread_id, row.tenant_id),
+    )
+    conn.execute(
+        "INSERT INTO branches (branch_id, thread_id, tenant_id, parent_branch_id, fork_at_seq,"
+        " header_line, state, head_seq, head_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             row.branch_id,
             row.thread_id,
+            row.tenant_id,
             row.parent,
             row.fork_at_seq,
             row.header_line,
@@ -177,7 +170,9 @@ def insert_events(
     )
 
 
-def import_segments(conn: sqlite3.Connection, log: VerifiedLog) -> ParseError | None:
+def import_segments(
+    conn: sqlite3.Connection, log: VerifiedLog, tenant_id: str
+) -> ParseError | None:
     """Stores a verified export's segments, byte for byte, in one transaction. A branch already
     in the store must hold the same lines (an idempotent re-import)."""
     with transaction(conn):
@@ -190,7 +185,7 @@ def import_segments(conn: sqlite3.Connection, log: VerifiedLog) -> ParseError | 
                 return ParseError("seq_conflict", f"branch {existing.branch_id} has other lines")
         parents = {s.header.branch_id: p.header.branch_id for p, s in pairwise(log.segments)}
         for segment in new:
-            insert_branch(conn, _row(segment, parents.get(segment.header.branch_id)))
+            insert_branch(conn, _row(segment, tenant_id, parents.get(segment.header.branch_id)))
             insert_events(conn, segment.events, sha256_hex(segment.last_line))
     return None
 
@@ -201,12 +196,13 @@ def _holds(conn: sqlite3.Connection, existing: Branch, segment: Segment) -> bool
     return existing.head_seq >= last and stored.endswith(_lines(segment))
 
 
-def _row(segment: Segment, parent: BranchId | None) -> Branch:
+def _row(segment: Segment, tenant_id: str, parent: BranchId | None) -> Branch:
     first = segment.events[0][0] if segment.events else None
     repair = isinstance(first, ForkEvent) and first.data.reason == "repair"
     return Branch(
         segment.header.branch_id,
         segment.header.thread_id,
+        tenant_id,
         parent,
         segment.fork_at_seq,
         segment.header_line,

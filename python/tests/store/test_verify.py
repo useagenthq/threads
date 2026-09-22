@@ -121,7 +121,9 @@ def test_another_implementations_branch_is_writer_mismatch() -> None:
     assert isinstance(log, Ok)
 
     async def main() -> None:
-        store = await SqliteStore.open()
+        opened = await SqliteStore.open()
+        assert isinstance(opened, Ok)
+        store = opened.value
         try:
             assert await store.import_log(log.value) == Ok(None)
             refused = await store.acquire(OTHER, "py", lambda: NOW)

@@ -68,7 +68,9 @@ async def import_and_read(log: bytes, now: int) -> Ok[VerifiedLog] | Err[str]:
     verified = verify_export(log, now)
     if isinstance(verified, Err):
         return Err(json.dumps({"code": verified.error.code, "seq": verified.error.seq}))
-    store = await SqliteStore.open()
+    opened = await SqliteStore.open()
+    assert isinstance(opened, Ok)
+    store = opened.value
     try:
         stored = await store.import_log(verified.value)
         assert stored == Ok(None)
