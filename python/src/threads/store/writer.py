@@ -66,12 +66,32 @@ class Writer:
             if not rows:
                 return Ok(())
             batch = lease.Batch(expected, rows, sha256_hex(rows[-1][1]))
-            error = await self._worker.call(lambda c: lease.append(c, self._lease, now, batch))
+            error = await self._commit(batch, now)
             if error is not None:
-                self._poisoned = True
                 return Err(error)
-            self._last_line = rows[-1][1]
             return Ok(tuple(event for event, _ in rows))
+
+    async def _commit(self, batch: lease.Batch, now: int) -> ParseError | None:
+        """Runs the append to settlement even if the caller is cancelled: the statement can't
+        be recalled once queued, and the fold already holds the batch. Until it settles the
+        writer is poisoned, so a second cancellation leaves it poisoned, never out of step."""
+        self._poisoned = True
+        op = asyncio.ensure_future(
+            self._worker.call(lambda c: lease.append(c, self._lease, now, batch))
+        )
+        try:
+            error = await asyncio.shield(op)
+        except asyncio.CancelledError:
+            if await op is None:
+                self._settled(batch)
+            raise
+        if error is None:
+            self._settled(batch)
+        return error
+
+    def _settled(self, batch: lease.Batch) -> None:
+        self._last_line = batch.rows[-1][1]
+        self._poisoned = False
 
     def _build(
         self, drafts: Sequence[Draft], now: int
