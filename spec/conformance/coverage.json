@@ -1,0 +1,1612 @@
+{
+  "description": " scenario coverage. One entry per scenario; each piece of evidence is a corpus case, a per-language behavior test, a job (crash injection, competing processes, cross-language parity) or a live-provider release gate (readiness gate 13). status implemented means the evidence artifact exists: for a case, its fixture directory. It does not mean either runtime passes it; the runners report that. gen_fixtures.py --check validates this file.",
+  "scenarios": [
+    {
+      "id": "F1.1",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "tool-parallel-safe-reads",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "tool-exclusive-no-overlap",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.3",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "stream-text-deltas",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.4",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "stream-tool-early-dispatch",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.5",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "tool-pre-effect-failure",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.6",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "tool-post-dispatch-uncertain",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.7",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "tool-invalid-args-rejected",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.8",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "mcp-server-one-line",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.9",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "mcp-server-unreachable",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.10",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "mcp-tool-no-auto-retry",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.11",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "render-user-image-input",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "render-screenshot-tool-result",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F1.12",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "user-input-tool-use-part-rejected",
+          "status": "implemented"
+        },
+        {
+          "kind": "live_gate",
+          "ref": "content-unsupported-pre-dispatch",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.13",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "structured-output-retry-then-accept",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "output-validated-schema-mismatch-rejected",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F1.14",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "render-deferred-tool-loaded",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F1.15",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "web-fetch-ssrf-and-record",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.16",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "render-hosted-search-citations",
+          "status": "implemented"
+        },
+        {
+          "kind": "live_gate",
+          "ref": "web-search-citations",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.17",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "hosted-tool-effectful-rejected",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.18",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "tool-result-spill-readable",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.19",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "apply-patch-atomic",
+          "status": "planned"
+        },
+        {
+          "kind": "live_gate",
+          "ref": "notebook-edit-cell",
+          "status": "planned"
+        },
+        {
+          "kind": "live_gate",
+          "ref": "lsp-unavailable-typed",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F1.20",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "mcp-filter-oauth-resources",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F2.1",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "compaction-summary-tail",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F2.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "compaction-replay-uses-recorded-summary",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F2.3",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "compaction-keeps-tool-pairs",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F2.4",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "compaction-summary-missing-artifact",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F2.5",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "render-tool-results-cleared",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "context-edit-unknown-call-rejected",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F2.6",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "compaction-summarizer-recorded",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "compaction-summary-mismatch-rejected",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F2.7",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "compaction-restores-active-context",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F2.8",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "prompt-too-long-compacts-once",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "context-preflight-blocked-no-attempt",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F2.9",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "max-output-continuation-bounded",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F2.10",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "compaction-breaker-opens",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F2.11",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "compaction-summarizer-fails-falls-back",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F2.12",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "cache-break-attributed",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F2.13",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "server-context-edits-require-exact-report",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F2.14",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "compaction-splits-tool-pair",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F3.1",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "memory-save-recall-untrusted",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F3.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "memory-write-is-effect",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F3.3",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "memory-poisoned-tool-output",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F3.4",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "memory-cross-tenant-denied",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F3.5",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "memory-provider-swap",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F3.6",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "memory-provider-error-no-crash",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F3.7",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "memory-third-party-conformance",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F4.1",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "skills-listing-then-load",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F4.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "skills-write-denied-all-paths",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F4.3",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "skills-repo-file-not-trusted",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F5.1",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "approval-exact-call-resume",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F5.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "approval-replay-rejected",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F5.3",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "approval-requester-not-approver",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F5.4",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "approval-toctou-file-changed",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F5.5",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "approval-revoked-authority",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F5.6",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "permission-precedence",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F5.7",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "permission-rule-bash-prefix",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F5.8",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "permission-rule-paths-mcp-web",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F5.9",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "permission-modes-protected-paths",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F5.10",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "plan-exit-approved-mode-changed",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "mode-change-bypass-not-allowed",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F5.11",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "permission-thread-rule-added",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F5.12",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "ask-user-parks-then-answered",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "answer-without-open-question-rejected",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F6.1",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "hook-before-tool-deny",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F6.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "hook-stop-continue-bounded",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F6.3",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "hook-before-tool-fails-closed",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F6.4",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "hook-after-tool-failure-no-reexec",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F6.5",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "observer-failure-isolated",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F6.6",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "hook-before-input-denied-not-rendered",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F6.7",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "render-tool-results-cleared",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F6.8",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "hooks-full-set-recorded",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F6.9",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "otel-export-from-log",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F7.1",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "subagent-child-thread",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F7.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "subagent-background-notify",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F7.3",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "team-shared-tasks-messages",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F7.4",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "team-restart-recovers",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F7.5",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "child-terminal-results",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F7.6",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "cancel-accepted-then-stopped",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F7.7",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "child-budget-exhausted",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F7.8",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "subagent-child-lifecycle",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "agent-finished-twice-rejected",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F7.9",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "subagent-isolation-options",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F7.10",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "handoff-then-input-rejected",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "handoff-target-policy-capped",
+          "status": "implemented"
+        },
+        {
+          "kind": "live_gate",
+          "ref": "handoff-takes-over-channel",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F7.11",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "team-tasks-claim-and-complete",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "team-task-claim-blocked-rejected",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F8.1",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "todos-reduce-survives",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F8.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "todos-malformed-rejected",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F8.3",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "todos-duplicate-id-rejected",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F8.4",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "todos-reminder-throttled",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F9.1",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "job",
+          "ref": "kill-restart-acked-events",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F9.2",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "torn-tail-truncated",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F9.3",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "crash-between-begin-commit",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F9.4",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "crash-between-commit-result",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F9.5",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "crash-model-request-no-response",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F9.6",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "job",
+          "ref": "two-writers-fenced",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F9.7",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "parked-ttl-escalates",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F9.8",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "model-retry-backoff-then-fallback",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F9.9",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "settings-change-new-prefix-epoch",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "settings-change-during-attempt-rejected",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "settings-change-by-model-rejected",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "prefix-changed-mid-epoch-rejected",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F9.10",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "usage-unknown-after-stream-break",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F9.11",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "budget-exceeded-terminal",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "model-request-after-budget-exceeded-rejected",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F10.1",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "schedule-fires-once",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F10.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "schedule-missed-skipped",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F10.3",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "schedule-overlap-skipped",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F10.4",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "schedule-dst-nonexistent",
+          "status": "planned"
+        },
+        {
+          "kind": "case",
+          "ref": "schedule-dst-ambiguous",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F10.5",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "job",
+          "ref": "schedule-two-schedulers-one-run",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F10.6",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "schedule-restart-at-boundary",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.1",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "sandbox-snapshot-fork-isolated",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.2",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "sandbox-credential-canary",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.3",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "sandbox-exec-contract",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.4",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "fork-no-snapshot-boundary",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.5",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "restore-expired-or-missing",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.6",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "snapshot-not-quiescent",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.7",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "job",
+          "ref": "fork-crash-no-orphan",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.8",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "computer-use-screenshot-click",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.9",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "gui-action-crash-parks",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.10",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "fork-restarts-gui-session",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.11",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "browser-delegated-session-scoped",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F11.12",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "live_gate",
+          "ref": "git-push-via-gateway",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F12.1",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "channel-inbox-before-response",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F12.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "channel-approval-authorized-principal",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F12.3",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "channel-redelivery-no-dup",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F12.4",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "channel-forged-rejected",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F12.5",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "channel-identity-cross-workspace",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F12.6",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "channel-approval-duplicate-delivery",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F12.7",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "channel-yes-is-not-approval",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F12.8",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "channel-outbound-uncertain",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F12.9",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "channel-start-sends-nothing",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F12.10",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "channel-mcp-trust",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F13.1",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "timeline-exact-requests",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F13.2",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "fork-change-input-new-branch",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F13.3",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "save-case-stub-runs",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F13.4",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "save-case-never-live",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F13.5",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "save-case-missing-deps",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F13.6",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "replay-render-equals-recorded",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F13.7",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "prefix-stable-across-turns",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F13.8",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "job",
+          "ref": "log-cross-language-roundtrip",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F13.9",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "render-thinking-block-replay",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F13.10",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "render-image-artifact-missing",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "F14.1",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "knowledge-ingest-cite-version",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F14.2",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "knowledge-refresh-replay-preserved",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F14.3",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "knowledge-index-rebuildable",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F14.4",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "knowledge-cross-tenant-denied",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F14.5",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "knowledge-deleted-excluded",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F14.6",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "knowledge-injection-is-reference",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F14.7",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "knowledge-parse-or-backend-failure",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "F14.8",
+      "step1": false,
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "knowledge-third-party-conformance",
+          "status": "planned"
+        }
+      ]
+    }
+  ]
+}

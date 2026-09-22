@@ -15,6 +15,7 @@ from . import (
     changes,
     content,
     context,
+    coverage,
     effects,
     extras,
     forks,
@@ -85,6 +86,11 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         out = pathlib.Path(tmp) / "cases"
         _generate(out)
+        problems = coverage.check(out)
+        for p in problems:
+            print(f"coverage.json: {p}")
+        if problems:
+            return 1
         if sys.argv[1:] == ["--check"]:
             diffs = _diff(out, CASES)
             for d in diffs:
