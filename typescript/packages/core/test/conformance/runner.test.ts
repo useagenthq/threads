@@ -1,16 +1,27 @@
 import { describe, expect, test } from "bun:test";
-import { projections, reduce } from "../../src/reduce";
+import { sha256Hex } from "../../src/hash";
+import type { KnownEvent } from "../../src/log";
+import { knownEvents, projections, reduce } from "../../src/reduce";
+import { refReader, render } from "../../src/render";
+import type { ArtifactStore } from "../../src/store";
 import { type VerifiedLog, verifyExport } from "../../src/verify";
-import { fixture, unwrap } from "../store/helpers";
-import { CASE_NAMES, type Case, type Kind, loadCase, plain } from "./cases";
+import { unwrap } from "../store/helpers";
+import {
+  CASE_NAMES,
+  type Case,
+  caseStore,
+  type Kind,
+  loadCase,
+  plain,
+} from "./cases";
 
-// One runner for every case in spec/conformance/cases, no per-case code. `reduce` cases run in
-// full. Other kinds need features after step 2a; their log still imports and reduces here, and
+// One runner for every case in spec/conformance/cases, no per-case code. `reduce` and `render`
+// cases run in full. Other kinds need features after step 2b; their log still imports and reduces here, and
 // what they need beyond that is skipped by name with the reason below, never silently.
 
 const LATER: Readonly<Record<Kind, string | undefined>> = {
   reduce: undefined,
-  render: "Render v1 re-render, C7 and next-request bytes need the renderer",
+  render: undefined,
   recover:
     "appending (log_repaired, recovery) needs the loop and the scripted model and sandbox",
   fork: "fork() needs the sandbox adapter and the resource ledger",
@@ -45,6 +56,64 @@ function runReduce(c: Case, bytes: Uint8Array): void {
     expect(log.error.seq).toBe(c.error.seq);
 }
 
+/**
+ * Render kind: import into a store holding the case's artifacts (C7 and the re-render of every
+ * recorded request run there), then the next request and the history-prefix property.
+ */
+function runRender(c: Case, bytes: Uint8Array): void {
+  const { db, store, artifacts } = caseStore(c);
+  const log = store.importLog(bytes);
+  db.close();
+  const events = log.ok ? knownEvents(log.value) : [];
+  const rendered = log.ok ? render(events, refReader(artifacts)) : log;
+  if (c.error !== undefined) {
+    expect(rendered.ok ? "ok" : rendered.error.code).toBe(c.error.code);
+    if (!rendered.ok) expect(rendered.error.seq).toBe(c.error.seq);
+    return;
+  }
+  checkState(c, unwrap(log));
+  const next = unwrap(rendered);
+  expect(next.bytes).toEqual(c.request ?? new Uint8Array());
+  expect(sha256Hex(next.bytes)).toBe(c.render?.next_request_sha256 ?? "");
+  expect({
+    bytes: next.prefix.length,
+    sha256: sha256Hex(next.prefix),
+  }).toEqual(c.render?.declared_prefix ?? { bytes: 0, sha256: "" });
+  historyPrefix(events, artifacts, next.bytes);
+}
+
+/** Events after which the next turn request may legitimately stop extending the last one. */
+function breaksHistory(e: KnownEvent): boolean {
+  if (e.type === "hook_decision")
+    return (
+      e.data.hook === "before_input" &&
+      (e.data.decision === "deny" || e.data.decision === "failed")
+    );
+  return ["compacted", "context_edited", "settings_changed"].includes(e.type);
+}
+
+/**
+ * Cache reuse, checked apart from C7: each turn request's bytes (the recorded ones, then the
+ * next) start with the previous turn request's, unless an edit, compaction, settings change or
+ * denied input lies between them. Compaction side requests are skipped.
+ */
+function historyPrefix(
+  events: readonly KnownEvent[],
+  artifacts: ArtifactStore,
+  next: Uint8Array,
+): void {
+  let last: Uint8Array | undefined;
+  for (const e of events) {
+    if (breaksHistory(e)) last = undefined;
+    if (e.type !== "model_request" || e.data.purpose === "compaction") continue;
+    const bytes = unwrap(artifacts.get(e.data.request_ref.sha256));
+    if (last !== undefined)
+      expect(bytes.subarray(0, last.length)).toEqual(last);
+    last = bytes;
+  }
+  if (last !== undefined) expect(next.subarray(0, last.length)).toEqual(last);
+}
+
 /** The import-level part of a later kind: the input log imports and reduces as expected. */
 function runImport(c: Case, bytes: Uint8Array): void {
   const log = verifyExport(bytes);
@@ -58,7 +127,7 @@ function runImport(c: Case, bytes: Uint8Array): void {
  */
 function replay(c: Case, bytes: Uint8Array): void {
   const direct = unwrap(verifyExport(bytes));
-  const { db, store } = fixture();
+  const { db, store } = caseStore(c);
   unwrap(store.importLog(bytes));
   const leaf = direct.segments.at(-1)?.header.branch_id;
   if (leaf === undefined) throw new Error("a verified log has a header");
@@ -78,7 +147,9 @@ describe("replay: every importable case log round-trips through SQLite", () => {
   for (const name of CASE_NAMES) {
     const c = loadCase(name);
     const { log } = c;
+    // A render case that expects an error is refused by import itself.
     if (log === undefined || !verifyExport(log).ok) continue;
+    if (c.kind === "render" && c.error !== undefined) continue;
     test(name, () => replay(c, log));
   }
 });
@@ -88,7 +159,9 @@ describe("conformance", () => {
     const c = loadCase(name);
     const later = LATER[c.kind];
     const { log } = c;
-    if (later === undefined && log !== undefined) {
+    if (c.kind === "render" && log !== undefined) {
+      test(`${c.kind}: ${name}`, () => runRender(c, log));
+    } else if (later === undefined && log !== undefined) {
       test(`${c.kind}: ${name}`, () => runReduce(c, log));
     } else if (log !== undefined) {
       test(`${c.kind}: ${name} (import and state only; skipped: ${later})`, () =>

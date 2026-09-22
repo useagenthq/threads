@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { ErrorCode } from "../../src/log";
+import { type Fixture, fixture } from "../store/helpers";
 
 // Loads spec/conformance/cases. Fixture files are parsed strictly: an unknown key, or an
 // unknown kind, fails the case instead of being ignored (spec/conformance/README.md).
@@ -50,7 +51,12 @@ const ExpectedFile = z.strictObject({
   sandbox: z.unknown().optional(),
   fork: z.unknown().optional(),
   resources: z.unknown().optional(),
-  render: z.unknown().optional(),
+  render: z
+    .strictObject({
+      next_request_sha256: z.string(),
+      declared_prefix: z.strictObject({ bytes: z.int(), sha256: z.string() }),
+    })
+    .optional(),
   stubs: z.unknown().optional(),
   responses: z.unknown().optional(),
   inbox: z.unknown().optional(),
@@ -70,6 +76,19 @@ export type Case = {
   readonly committedBytes: number | undefined;
   readonly headVerified: boolean;
   readonly log: Uint8Array | undefined;
+  /** artifacts/<sha256>: content-addressed bytes the log references. */
+  readonly artifacts: readonly Uint8Array[];
+  /** request.bytes: the next Render v1 request (render kind). */
+  readonly request: Uint8Array | undefined;
+  readonly render:
+    | {
+        readonly next_request_sha256: string;
+        readonly declared_prefix: {
+          readonly bytes: number;
+          readonly sha256: string;
+        };
+      }
+    | undefined;
 };
 
 const IMPL = "threads-ts";
@@ -79,6 +98,18 @@ export function ownFile(dir: string, name: string): string {
   const dot = name.indexOf(".");
   const mine = join(dir, `${name.slice(0, dot)}.${IMPL}${name.slice(dot)}`);
   return existsSync(mine) ? mine : join(dir, name);
+}
+
+function readBytes(path: string): Uint8Array | undefined {
+  return existsSync(path) ? new Uint8Array(readFileSync(path)) : undefined;
+}
+
+function readArtifacts(dir: string): readonly Uint8Array[] {
+  const root = join(dir, "artifacts");
+  if (!existsSync(root)) return [];
+  return readdirSync(root).map(
+    (name) => new Uint8Array(readFileSync(join(root, name))),
+  );
 }
 
 function readJson(path: string): unknown {
@@ -99,9 +130,10 @@ export function loadCase(name: string): Case {
     projections: expected.projections,
     committedBytes: expected.committed_bytes,
     headVerified: expected.head_verified ?? true,
-    log: existsSync(logPath)
-      ? new Uint8Array(readFileSync(logPath))
-      : undefined,
+    log: readBytes(logPath),
+    artifacts: readArtifacts(dir),
+    request: readBytes(join(dir, "request.bytes")),
+    render: expected.render,
   };
 }
 
@@ -110,4 +142,11 @@ export const CASE_NAMES: readonly string[] = readdirSync(CASES_DIR).toSorted();
 /** Plain JSON of a value, so comparisons ignore absent optionals and class identity. */
 export function plain(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
+}
+
+/** A fresh store that already holds the case's artifacts, as an import expects. */
+export function caseStore(c: Case): Fixture {
+  const f = fixture();
+  for (const artifact of c.artifacts) f.artifacts.put(artifact);
+  return f;
 }

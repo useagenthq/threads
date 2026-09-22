@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { sha256Hex } from "../../src/hash";
 import { canonicalLine } from "../../src/store/encode";
+import { caseStore, loadCase } from "../conformance/cases";
 import {
   code,
   fixture,
@@ -128,12 +127,9 @@ describe("only the branch's own writer appends", () => {
 
 describe("an in-doubt branch requires recovery", () => {
   test("an effect begun before a crash flags the writer", () => {
-    const path = join(
-      import.meta.dir,
-      "../../../../../spec/conformance/cases/effect-crash-after-begin-idempotent/log.threads-ts.jsonl",
-    );
-    const { store } = fixture();
-    const log = unwrap(store.importLog(new Uint8Array(readFileSync(path))));
+    const c = loadCase("effect-crash-after-begin-idempotent");
+    const { store } = caseStore(c);
+    const log = unwrap(store.importLog(c.log ?? new Uint8Array()));
     const branch = log.segments.at(-1)?.header.branch_id;
     if (branch === undefined) throw new Error("a verified log has a header");
     expect(unwrap(store.acquire(branch, "holder-a")).requiresRecovery).toBe(
@@ -142,12 +138,9 @@ describe("an in-doubt branch requires recovery", () => {
   });
 
   test("a model request awaiting its response flags the writer", () => {
-    const path = join(
-      import.meta.dir,
-      "../../../../../spec/conformance/cases/model-response-recovered-by-lookup/log.threads-ts.jsonl",
-    );
-    const { store } = fixture();
-    const log = unwrap(store.importLog(new Uint8Array(readFileSync(path))));
+    const c = loadCase("model-response-recovered-by-lookup");
+    const { store } = caseStore(c);
+    const log = unwrap(store.importLog(c.log ?? new Uint8Array()));
     const branch = log.segments.at(-1)?.header.branch_id;
     if (branch === undefined) throw new Error("a verified log has a header");
     expect(unwrap(store.acquire(branch, "holder-a")).requiresRecovery).toBe(

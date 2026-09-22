@@ -1,5 +1,7 @@
 import { sha256Hex } from "../hash";
 import type { BranchId, SandboxId, ThreadId } from "../log";
+import { knownEvents } from "../reduce";
+import { refReader, verifyRequests } from "../render";
 import { err, ok, type Result } from "../result";
 import {
   addLine,
@@ -125,11 +127,17 @@ export class LogStore {
 
   /**
    * `threads import`: verifies the export, then stores the same bytes, segment by segment. A
-   * torn tail's bytes are kept as an artifact, durable before the rows that name them.
+   * torn tail's bytes are kept as an artifact, durable before the rows that name them. Every
+   * model request must replay from the log and the artifacts already stored (C7, Render v1).
    */
   importLog(bytes: Uint8Array): Result<VerifiedLog, LogError> {
     const log = verifyExport(bytes);
     if (!log.ok) return log;
+    const replayed = verifyRequests(
+      knownEvents(log.value),
+      refReader(this.#artifacts),
+    );
+    if (!replayed.ok) return replayed;
     const torn = log.value.torn;
     const target = {
       tenantId: this.#tenant,

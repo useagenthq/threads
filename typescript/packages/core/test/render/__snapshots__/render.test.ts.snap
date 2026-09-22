@@ -1,0 +1,12 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`golden: the declared prefix and tool schemas the model sees line 0 and a tools_changed line (deferred spec as a stub, then loaded) 1`] = `
+"{"adapter":{"name":"scripted","settings":{},"version":"1"},"model":{"name":"scripted-1","provider":"scripted"},"params":{"max_tokens":1024},"system":"You are a helpful agent.","tools":[{"description":"Read a file from the sandbox workspace.","input_schema":{"additionalProperties":false,"properties":{"path":{"type":"string"}},"required":["path"],"type":"object"},"name":"read_file"},{"description":"Find deferred tools by keyword.","input_schema":{"additionalProperties":false,"properties":{"query":{"type":"string"}},"required":["query"],"type":"object"},"name":"tool_search"},{"deferred":true,"description":"Deploy the app.","name":"mcp__ops__deploy"}]}
+"
+`;
+
+exports[`golden: the declared prefix and tool schemas the model sees line 0 and a tools_changed line (deferred spec as a stub, then loaded) 2`] = `
+[
+  "{"role":"tools","tools":[{"description":"Read a file from the sandbox workspace.","input_schema":{"additionalProperties":false,"properties":{"path":{"type":"string"}},"required":["path"],"type":"object"},"name":"read_file"},{"description":"Find deferred tools by keyword.","input_schema":{"additionalProperties":false,"properties":{"query":{"type":"string"}},"required":["query"],"type":"object"},"name":"tool_search"},{"description":"Deploy the app.","input_schema":{"additionalProperties":false,"properties":{"env":{"type":"string"}},"required":["env"],"type":"object"},"name":"mcp__ops__deploy"}]}",
+]
+`;

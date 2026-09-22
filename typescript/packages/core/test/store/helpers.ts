@@ -1,6 +1,7 @@
 import { BranchId, ThreadId } from "../../src/log";
 import type { Result } from "../../src/result";
 import {
+  type ArtifactStore,
   type EventDraft,
   LOCAL_TENANT,
   LogStore,
@@ -21,6 +22,7 @@ export const CHILD: BranchId = BranchId.parse(
 export const T0 = 1_790_000_000_000;
 
 export type Fixture = {
+  readonly artifacts: ArtifactStore;
   readonly db: SqliteDriver;
   readonly store: LogStore;
   readonly clock: { now: number };
@@ -33,8 +35,9 @@ export function fixture(
 ): Fixture {
   const clock = { now: T0 };
   const now = (): number => clock.now;
-  const store = unwrap(LogStore.open(db, now, memoryArtifacts(), tenantId));
-  return { db, store, clock };
+  const artifacts = memoryArtifacts();
+  const store = unwrap(LogStore.open(db, now, artifacts, tenantId));
+  return { db, store, clock, artifacts };
 }
 
 /** The value of an ok result; a test fails loudly on an error. */
