@@ -95,6 +95,12 @@ class Runtime:
         return done
 
 
+async def fence(rt: Runtime) -> Failed | None:
+    """Re-checks the lease right before a dispatch; None means this owner may still send."""
+    held = await rt.writer.fence()
+    return lost(held.error) if isinstance(held, Err) else None
+
+
 def lost(error: ParseError) -> Failed:
     """An append that failed: a lost lease or moved head is branch_busy; anything else is a
     bug in what the loop wrote, which validate_next refused."""

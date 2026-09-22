@@ -12,8 +12,8 @@ from threads.log import ToolSpec
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState
 from threads.loop.model import Found, NotFound
-from threads.loop.results import As, result_draft
-from threads.loop.runtime import Failed, Halt, Parked, Runtime, lost
+from threads.loop.results import As, result_draft, text_ref
+from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import Invocation, NotSent, Output, Uncertain
 from threads.result import Err
 
@@ -40,14 +40,12 @@ async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
     begun = await rt.append(draft("effect_begin", begin))
     if isinstance(begun, Err):
         return lost(begun.error)
+    stale = await fence(rt)
+    if stale is not None:
+        return stale
     match await rt.tools.dispatch(inv):
         case Output(text=text, is_error=is_error):
-            sha = await rt.store.put_artifact(text.encode("utf-8"))
-            ref: JsonValue = {
-                "sha256": sha,
-                "bytes": len(text.encode()),
-                "media_type": "text/plain",
-            }
+            ref = await text_ref(rt, text)
             commit = draft("effect_commit", {"call_id": inv.call_id, "result_ref": ref})
             result = await result_draft(rt, inv.call_id, text, As("executed", is_error))
             done = await rt.append(commit, result)
@@ -101,6 +99,9 @@ async def settle(
 async def _terminate(
     rt: Runtime, inv: Invocation, reason: str, actor: ActorKind
 ) -> Halt | Literal[False] | None:
+    stale = await fence(rt)
+    if stale is not None:
+        return stale
     if await rt.tools.terminate(inv) not in ("terminated", "already_exited"):
         return False
     why = "timed out" if reason == "timeout" else "the run stopped"
@@ -131,14 +132,12 @@ async def _dedup(
 async def _reconcile(
     rt: Runtime, inv: Invocation, actor: ActorKind
 ) -> Halt | Literal[False] | None:
+    stale = await fence(rt)
+    if stale is not None:
+        return stale
     match await rt.tools.lookup(inv):
         case Found(value=text):
-            sha = await rt.store.put_artifact(text.encode("utf-8"))
-            ref: JsonValue = {
-                "sha256": sha,
-                "bytes": len(text.encode()),
-                "media_type": "text/plain",
-            }
+            ref = await text_ref(rt, text)
             data: dict[str, JsonValue] = {
                 "call_id": inv.call_id,
                 "outcome": "confirmed_success",
@@ -166,6 +165,26 @@ async def park_effect(rt: Runtime, inv: Invocation, actor: ActorKind) -> Halt | 
     if isinstance(done, Err):
         return lost(done.error)
     return Parked("effect_unknown", tuple(rt.fold.parked))
+
+
+async def close_settled(rt: Runtime, state: CallState, actor: ActorKind) -> Halt | None:
+    """A call whose effect is settled for good but has no result yet: the result comes from the
+    settlement, and the tool never runs again. Only safe_to_retry, not_sent and assume_not_done
+    may lead to another dispatch."""
+    match state.effect:
+        case "committed" | "confirmed_success":
+            return await materialize(rt, state, actor)
+        case "assume_done":
+            text = "done: an approver resolved the uncertain effect as performed"
+            how = As("materialized_from_commit", actor=actor)
+        case "interrupted":
+            text = "interrupted: the command may have partly run"
+            how = As("interrupted", True, actor)
+        case status:
+            raise AssertionError(f"effect status {status} has no settled result")
+    result = await result_draft(rt, state.call.data.call_id, text, how)
+    done = await rt.append(result)
+    return lost(done.error) if isinstance(done, Err) else None
 
 
 async def materialize(rt: Runtime, state: CallState, actor: ActorKind) -> Halt | None:

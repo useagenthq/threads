@@ -2,37 +2,24 @@
 threshold keeps its full bytes as `ref` and shows the model a bounded preview."""
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-from pydantic.experimental.missing_sentinel import MISSING
+from pydantic import JsonValue
 
-from threads.log import CallId, Spill
+from threads.log import CallId
+from threads.loop.defaults import context
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.runtime import Runtime
-from threads.reduce.fold import policy
 from threads.store import Draft
-
-if TYPE_CHECKING:
-    from pydantic import JsonValue
 
 type Origin = Literal[
     "executed", "materialized_from_commit", "denied", "not_executed", "interrupted"
 ]
 
-_DEFAULT_SPILL = Spill(
-    threshold_bytes=32_768, head_bytes=2048, tail_bytes=1024, request_budget_bytes=204_800
-)
 _MARKER = (
     '\n[output truncated: {n} bytes; read_tool_result(call_id="{id}", offset, length) '
     "returns the rest]\n"
 )
-
-
-def _spill(rt: Runtime) -> Spill:
-    pinned = policy(rt.fold)
-    if pinned is None or pinned.context is MISSING:
-        return _DEFAULT_SPILL
-    return pinned.context.spill
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +29,13 @@ class As:
     origin: Origin
     is_error: bool = False
     actor: ActorKind = "tool"
+
+
+async def text_ref(rt: Runtime, text: str) -> JsonValue:
+    """Stores text as a durable artifact and returns its ref."""
+    raw = text.encode("utf-8")
+    sha = await rt.store.put_artifact(raw)
+    return {"sha256": sha, "bytes": len(raw), "media_type": "text/plain"}
 
 
 async def result_draft(rt: Runtime, call_id: CallId, text: str, how: As) -> Draft:
@@ -54,7 +48,7 @@ async def result_draft(rt: Runtime, call_id: CallId, text: str, how: As) -> Draf
         "preview": text,
     }
     raw = text.encode("utf-8")
-    spill = _spill(rt)
+    spill = context(rt.fold).spill
     if len(raw) > spill.threshold_bytes:
         sha = await rt.store.put_artifact(raw)
         head = raw[: spill.head_bytes].decode("utf-8", "ignore")

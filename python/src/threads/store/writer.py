@@ -131,6 +131,17 @@ class Writer:
             case Err():
                 self._poisoned = True
 
+    async def fence(self) -> Ok[None] | Err[ParseError]:
+        """Checked immediately before anything is dispatched (a model attempt, a tool body, a
+        lookup, a termination): a writer whose lease moved on must not reach the adapter, even
+        though its intent is already durable. A lost lease poisons the writer."""
+        now = self._clock()
+        error = await self._worker.call(lambda c: lease.check(c, self._branch, self._lease, now))
+        if error is not None:
+            self._poisoned = True
+            return Err(error)
+        return Ok(None)
+
     async def renew(self) -> Ok[None] | Err[ParseError]:
         """Extends the lease. Once lost it stays lost: the writer is poisoned."""
         now = self._clock()

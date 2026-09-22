@@ -18,7 +18,7 @@ from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
 from threads.loop.history import CallState, call_state
 from threads.loop.model import Found, NotFound
-from threads.loop.runtime import Halt, Runtime, lost
+from threads.loop.runtime import Halt, Runtime, fence, lost
 from threads.result import Err
 
 if TYPE_CHECKING:
@@ -46,6 +46,9 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
     not_sent; anything else is unknown, and the loop's crash re-send budget decides."""
     outcome = "unknown"
     if rt.model.info.lookup != "none":
+        stale = await fence(rt)
+        if stale is not None:
+            return stale
         match await rt.model.lookup(f"{rt.writer.branch_id}:{request_id}"):
             case Found(value=response, provider_request_id=provider_id):
                 found = response_drafts(rt, request_id, response, provider_id or str(request_id))
@@ -67,8 +70,6 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
 async def _call(rt: Runtime, state: CallState) -> Halt | None:
     spec = rt.fold.tools[state.call.data.name]
     match state.effect:
-        case "committed" | "confirmed_success":
-            return await effects.materialize(rt, state, "recovery")
         case "begun":
             data = {"call_id": state.call.data.call_id, "reason": "crash_after_begin"}
             done = await rt.append(draft("effect_unknown", data, "recovery"))
@@ -81,9 +82,12 @@ async def _call(rt: Runtime, state: CallState) -> Halt | None:
             return await effects.settle(rt, state, spec, reason, "recovery")
         case None:
             return await _never_began(rt, state)
+        case "safe_to_retry" | "not_sent" | "assume_not_done":
+            # Settled as never performed: the loop may re-dispatch under the same key, after
+            # the same cancellation and policy re-checks as a call that never began.
+            return await _never_began(rt, state)
         case _:
-            # Settled safe to retry or not sent: the loop re-dispatches under the same key.
-            return None
+            return await effects.close_settled(rt, state, "recovery")
 
 
 async def _never_began(rt: Runtime, state: CallState) -> Halt | None:

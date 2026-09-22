@@ -67,6 +67,15 @@ def _stale(conn: sqlite3.Connection, branch_id: BranchId, mine: Lease, now: int)
     return (current.holder_id, current.epoch) != (mine.holder_id, mine.epoch)
 
 
+def check(
+    conn: sqlite3.Connection, branch_id: BranchId, mine: Lease, now: int
+) -> ParseError | None:
+    """The gateway fence: the lease is still ours, live, at our epoch."""
+    if _stale(conn, branch_id, mine, now):
+        return ParseError("stale_epoch", f"epoch {mine.epoch} no longer holds the lease")
+    return None
+
+
 def renew(
     conn: sqlite3.Connection, branch_id: BranchId, mine: Lease, now: int
 ) -> Lease | ParseError:

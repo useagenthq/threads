@@ -15,7 +15,7 @@ from threads.loop import effects
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state
 from threads.loop.results import As, result_draft
-from threads.loop.runtime import Failed, Halt, Parked, Runtime, lost
+from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import NotSent, Output, Uncertain
 from threads.reduce.fold import policy
 from threads.result import Err, Ok
@@ -102,8 +102,10 @@ async def _effect(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
             return await effects.dispatch(rt, state, spec)
         case "unknown":
             return await effects.settle(rt, state, spec, state.unknown_reason or "", "host")
-        case status:
-            raise AssertionError(f"a pending call with effect status {status} reached dispatch")
+        case "begun":
+            raise AssertionError("an effect begun in this run is settled before the next step")
+        case _:
+            return await effects.close_settled(rt, state, "host")
 
 
 async def close(
@@ -184,6 +186,9 @@ async def await_approval(rt: Runtime, state: CallState, actor: ActorKind) -> Hal
 async def _read_only(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
     """A read_only call writes no effect events: it changes nothing, so it simply runs."""
     inv = effects.invocation(state, spec)
+    stale = await fence(rt)
+    if stale is not None:
+        return stale
     match await rt.tools.dispatch(inv):
         case Output(text=text, is_error=is_error):
             result = await result_draft(rt, inv.call_id, text, As("executed", is_error))
@@ -232,7 +237,7 @@ async def cancel_call(rt: Runtime, call_id: CallId, actor: ActorKind = "host") -
     match state.effect:
         case "begun" | "unknown":
             return await effects.settle(rt, state, spec, state.unknown_reason or "", actor)
-        case "committed" | "confirmed_success":
-            return await effects.materialize(rt, state, actor)
-        case _:
+        case None | "safe_to_retry" | "not_sent" | "assume_not_done":
             return await close(rt, call_id, "not_executed", "not executed: cancelled", actor)
+        case _:
+            return await effects.close_settled(rt, state, actor)
