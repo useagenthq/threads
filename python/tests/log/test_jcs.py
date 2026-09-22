@@ -1,6 +1,7 @@
 """canonicalize(): RFC 8785 vectors, rejection cases, and round-trip/idempotence properties."""
 
 import struct
+from decimal import localcontext
 
 import pytest
 from hypothesis import given
@@ -120,3 +121,11 @@ def test_numbers_round_trip_exactly(value: float) -> None:
     text = canonicalize(value)
     assert isinstance(text, Ok)
     assert float(text.value) == value
+
+
+def test_numbers_ignore_the_callers_decimal_context() -> None:
+    # Canonical bytes feed hashes, so application decimal settings must not change them.
+    with localcontext() as context:
+        context.prec = 6
+        assert canonicalize(0.123456789) == Ok("0.123456789")
+        assert canonicalize(123456789012.0) == Ok("123456789012")

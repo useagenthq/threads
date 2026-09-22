@@ -109,11 +109,14 @@ def _number(value: float) -> str:
         return "0"  # -0 too
     sign = "-" if value < 0 else ""
     # repr gives the shortest digits that round-trip, which is the digit string ES requires.
-    _, digit_tuple, exponent = Decimal(repr(abs(value))).normalize().as_tuple()
+    # Decimal(str) is exact; normalize() would round under the caller's decimal context.
+    _, digit_tuple, exponent = Decimal(repr(abs(value))).as_tuple()
     if not isinstance(exponent, int):  # only NaN/Infinity have a string exponent
         raise AssertionError(value)
     digits = "".join(map(str, digit_tuple))
-    return sign + _place_point(digits, len(digits) + exponent)
+    stripped = digits.rstrip("0")
+    exponent += len(digits) - len(stripped)
+    return sign + _place_point(stripped, len(stripped) + exponent)
 
 
 def _place_point(digits: str, n: int) -> str:
