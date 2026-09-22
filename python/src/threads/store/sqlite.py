@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pydantic import JsonValue
 
+from threads import VERSION
 from threads.log import BranchId, ParseError, ThreadId
 from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
@@ -90,8 +91,9 @@ class SqliteStore:
         if isinstance(read, Err):
             return Err(_corrupt(read.error))
         log = read.value
-        if log.segments[-1].header.writer.impl != "threads-py":
-            message = "another implementation writes this branch; continue on a fork"
+        writer = log.segments[-1].header.writer
+        if (writer.impl, _major(writer.version)) != ("threads-py", _major(VERSION)):
+            message = "another implementation or major version writes this branch; fork it"
             return Err(ParseError("writer_mismatch", message, 0))
         chain_epoch = log.fold.epoch
         taken = await self._worker.call(
@@ -132,6 +134,10 @@ class SqliteStore:
         if taken is None:
             return Ok(None)
         return Ok(Writer(self._worker, taken, start.fold, start.fork[1], clock))
+
+
+def _major(version: str) -> str:
+    return version.split(".", 1)[0]
 
 
 def _result(error: ParseError | None) -> Ok[None] | Err[ParseError]:
