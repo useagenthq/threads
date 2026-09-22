@@ -110,9 +110,12 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 3. Compare `state`, or `error`. The input file is byte-unchanged.
 
 **`render`**
-1. Import and reduce.
-2. Check C7 per settings epoch: every recorded `declared_prefix` equals the line 0 of its epoch (`prefix_changed` otherwise).
-3. For every `model_request`, re-render from the events before it (adding the instruction line for `purpose: compaction`). The bytes must equal the `request_ref` artifact (`request_hash_mismatch` otherwise), and line 0 must match `declared_prefix`. Every artifact a rendered part references must exist and verify (`artifact_missing`, `artifact_corrupt`, with the seq of the event carrying the part).
+1. Put the case's artifacts in the store. Import needs them: steps 1-3 are import, and the first failure is the result.
+2. Import the log as in `reduce` step 1, and reduce.
+3. **Request verification.** Walk the `model_request` events in seq order. For each one, check in this order, and stop at the first failure (`render-verify-first-failure-wins`):
+   1. C7: its `declared_prefix` equals the line 0 of its own settings epoch (`prefix_changed`).
+   2. Its `request_ref` artifact exists and verifies, sha256 and byte length (`artifact_missing`, `artifact_corrupt`, at the request's seq).
+   3. Its body: re-render from the events before it (adding the instruction line for `purpose: compaction`). Every artifact a rendered part references must exist and verify (`artifact_missing`, `artifact_corrupt`, at the seq of the event carrying the part), and the bytes must equal the `request_ref` artifact (`request_hash_mismatch`).
 4. Render the next request. It must equal `request.bytes` byte for byte, and its line 0 must equal `render.declared_prefix`.
 5. History prefix: each recorded turn request is a byte prefix of the next turn request unless a `compacted`, `context_edited`, `settings_changed` or denying `before_input` decision lies between. Compaction requests are skipped. This is the cache-reuse property, checked separately from C7.
 

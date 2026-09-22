@@ -1,0 +1,7 @@
+{
+  "outcome": "error",
+  "error": {
+    "code": "artifact_missing",
+    "seq": 3
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "render-verify-first-failure-wins",
+  "family": "log_fork_test",
+  "kind": "render",
+  "description": "Three faults: a user image whose artifact is missing, then a request whose request_ref artifact is missing, then a later request with a changed declared prefix. Import walks model_requests in seq order and checks each one's C7 prefix, then its request_ref, then its re-rendered body; the first failure wins, so the result is artifact_missing at the first request, not the image's seq and not prefix_changed.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

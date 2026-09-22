@@ -149,7 +149,8 @@ class Log:
                 break
             d = obj(e["data"])
             guide = d.get("hook") == "before_compact" and d.get("decision") == "guide"
-            if e["type"] == "hook_decision" and guide:
+            # A guide without a reason adds nothing.
+            if e["type"] == "hook_decision" and guide and "reason" in d:
                 guides.insert(0, text(d["reason"]))
         return COMPACT_INSTRUCTION + (GUIDE_PREFIX + "\n".join(guides) if guides else "")
 

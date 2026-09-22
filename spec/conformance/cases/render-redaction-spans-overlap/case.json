@@ -1,0 +1,9 @@
+{
+  "name": "render-redaction-spans-overlap",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "Two context_edited events redact overlapping and adjacent UTF-8 byte spans of one text part of four-byte characters: (8, 48), then (0, 36) and (48, 52). The spans of a part are merged into their disjoint union, (0, 52), before replacement, so the part renders one [redacted] followed by the seven untouched characters.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

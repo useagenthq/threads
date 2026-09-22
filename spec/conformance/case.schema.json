@@ -271,7 +271,7 @@
               "pattern": "^[0-9a-f]{64}$"
             },
             "declared_prefix": {
-              "description": "Render v1 line 0. Every recorded model_request's declared_prefix and the next request's must equal this (C7).",
+              "description": "Render v1 line 0 of the next request. Every recorded model_request's declared_prefix equals the line 0 of its own settings epoch (C7), so it equals this only when no settings_changed lies between them.",
               "type": "object",
               "additionalProperties": false,
               "required": [

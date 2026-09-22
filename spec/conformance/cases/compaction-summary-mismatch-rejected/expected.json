@@ -2,7 +2,7 @@
   "outcome": "error",
   "error": {
     "code": "invalid_transition",
-    "seq": 19
+    "seq": 20
   },
   "appended": []
 }

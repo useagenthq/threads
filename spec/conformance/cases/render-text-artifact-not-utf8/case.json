@@ -1,0 +1,9 @@
+{
+  "name": "render-text-artifact-not-utf8",
+  "family": "log_fork_test",
+  "kind": "render",
+  "description": "An injected memory's text is held in an artifact whose bytes verify but are not UTF-8. Text is never decoded lossily: artifact_corrupt at the injected event.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

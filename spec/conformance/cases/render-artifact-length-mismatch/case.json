@@ -1,0 +1,9 @@
+{
+  "name": "render-artifact-length-mismatch",
+  "family": "log_fork_test",
+  "kind": "render",
+  "description": "A citation part's ref names the right sha256 but the wrong byte length. Every artifact a rendered part references, citations included, is checked against both its sha256 and its bytes, so the next request fails with artifact_corrupt at the response that carries the part.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

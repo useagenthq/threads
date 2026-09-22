@@ -308,6 +308,11 @@
           "kind": "case",
           "ref": "context-edit-unknown-call-rejected",
           "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "render-redaction-spans-overlap",
+          "status": "implemented"
         }
       ]
     },
@@ -1631,6 +1636,11 @@
           "kind": "case",
           "ref": "replay-render-equals-recorded",
           "status": "planned"
+        },
+        {
+          "kind": "case",
+          "ref": "render-verify-first-failure-wins",
+          "status": "implemented"
         }
       ]
     },
@@ -1674,6 +1684,16 @@
         {
           "kind": "case",
           "ref": "render-image-artifact-missing",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "render-artifact-length-mismatch",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "render-text-artifact-not-utf8",
           "status": "implemented"
         }
       ]

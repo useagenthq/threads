@@ -72,11 +72,22 @@ def spec_line(t: JsonValue) -> JsonValue:
     return {k: s[k] for k in ("name", "description", "input_schema")}
 
 
+def union(spans: list[JsonValue]) -> list[tuple[int, int]]:
+    """The disjoint union of byte spans, overlapping and adjacent ones merged, in order."""
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted((num(obj(x)["start"]), num(obj(x)["end"])) for x in spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
 def _redact(part: JsonValue, spans: list[JsonValue]) -> JsonValue:
     p = obj(part)
     b = text(p["text"]).encode()
-    for sp in sorted((obj(x) for x in spans), key=lambda x: num(x["start"]), reverse=True):
-        b = b[: num(sp["start"])] + REDACTED + b[num(sp["end"]) :]
+    for start, end in reversed(union(spans)):
+        b = b[:start] + REDACTED + b[end:]
     return {"type": "text", "text": b.decode()}
 
 

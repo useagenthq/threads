@@ -78,6 +78,8 @@ def _cleared(root: pathlib.Path) -> None:
         log,
     )
 
+    _overlap(root)
+
     log = Log()
     started(log, [READ_FILE])
     read_turn(log)
@@ -110,6 +112,8 @@ def _compacted_log(summary_text: str, response_text: str | None = None) -> Log:
         "decision": "guide",
         "reason": "Keep file names.",
     }
+    # A guide without a reason adds nothing to the instruction.
+    log.add("hook_decision", {k: v for k, v in guide.items() if k != "reason"})
     log.add("hook_decision", guide)
     side = log.model_request(compaction=True)
     response = summary_text if response_text is None else response_text
@@ -129,6 +133,37 @@ def _compacted_log(summary_text: str, response_text: str | None = None) -> Log:
     return log
 
 
+def _overlap(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [READ_FILE])
+    read_turn(log)
+    user(log, "And emoji.txt?")
+    call(log, "read_file", {"path": "emoji.txt"}, "call_2")
+    result(log, "call_2", "\U0001f642" * 20)
+    answer(log, "Twenty smileys.")
+
+    def redact(*spans: tuple[int, int]) -> None:
+        marks: list[JsonValue] = [{"start": a, "end": b} for a, b in spans]
+        edit: Obj = {"call_id": "call_2", "action": "redact", "part": 0, "spans": marks}
+        log.add("context_edited", {"reason": "guardrail", "edits": [edit]})
+
+    redact((8, 48))
+    redact((0, 36), (48, 52))
+    user(log, "Continue.")
+    render_case(
+        root,
+        (
+            "render-redaction-spans-overlap",
+            FAM,
+            "Two context_edited events redact overlapping and adjacent UTF-8 byte spans of one "
+            "text part of four-byte characters: (8, 48), then (0, 36) and (48, 52). The spans "
+            "of a part are merged into their disjoint union, (0, 52), before replacement, so "
+            "the part renders one [redacted] followed by the seven untouched characters.",
+        ),
+        log,
+    )
+
+
 def _summary(root: pathlib.Path) -> None:
     log = _compacted_log(SUMMARY)
     todo: Obj = {"id": "todos"}
@@ -146,9 +181,10 @@ def _summary(root: pathlib.Path) -> None:
             "compaction-summarizer-recorded",
             FAM,
             "The summarizer call is a model_request{purpose: compaction}: the same line 0 (C7 "
-            "holds), the history, then the fixed instruction plus the before_compact guide. Its "
-            "response is the summary artifact. The next request renders the summary, re-emits "
-            "the last tools_changed from the dropped range, then the restored todo list.",
+            "holds), the history, then the fixed instruction plus the before_compact guide; a "
+            "guide without a reason adds nothing. Its response is the summary artifact. The next "
+            "request renders the summary, re-emits the last tools_changed from the dropped "
+            "range, then the restored todo list.",
         ),
         log,
     )
