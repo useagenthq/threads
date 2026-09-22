@@ -1,0 +1,9 @@
+{
+  "name": "model-request-after-budget-exceeded-rejected",
+  "family": "cancellation_resume",
+  "kind": "reduce",
+  "description": "A model_request after budget_exceeded in the same run: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "outcome": "ok",
+  "decisions": [
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "edit(src/**)"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "read(**/.env)"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "read(**)"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "policy",
+      "rule": "edit(src/secrets/**)"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "mcp__github__*"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "mcp__github__delete_repo"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "web_fetch(domain:docs.example.com)"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    }
+  ]
+}

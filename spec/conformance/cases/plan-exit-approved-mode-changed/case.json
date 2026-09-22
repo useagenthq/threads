@@ -1,0 +1,9 @@
+{
+  "name": "plan-exit-approved-mode-changed",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "In plan mode exit_plan_mode asks; the approval is consumed and mode_changed{plan -> default} names it. The mode is log state, not line 0.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

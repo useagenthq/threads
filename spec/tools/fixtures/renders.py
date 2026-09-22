@@ -5,9 +5,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import ALICE, ALLOW, NOW, render, sha, tokens
+from .common import ALICE, ALLOW, NOW, sha, tokens
 from .log import Log, reduce
 from .pieces import READ_FILE, TESTS, case, started, user, write_case
+from .render import render
 
 if TYPE_CHECKING:
     import pathlib
@@ -41,7 +42,7 @@ def build(root: pathlib.Path) -> None:
     )
     log.add("turn_completed", {"reason": "end_turn"})
     user(log, "Thanks.")
-    body, line0 = render(log.events)
+    body, line0 = render(log.events, log.artifacts)
     write_case(
         root,
         case(
@@ -66,7 +67,7 @@ def build(root: pathlib.Path) -> None:
     )
 
     log = two_turns()
-    body, line0 = render(log.events)
+    body, line0 = render(log.events, log.artifacts)
     grown = line0 + body[len(line0) :].split(b"\n", 1)[0] + b"\n"
     e = log.add(
         "model_request",
@@ -91,9 +92,9 @@ def build(root: pathlib.Path) -> None:
     )
 
     log = two_turns()
-    body, _ = render(log.events)
+    body, _ = render(log.events, log.artifacts)
     wrong = body.replace(b"User prefers short answers.", b"User prefers long answers.")
-    _, line0 = render(log.events)
+    _, line0 = render(log.events, log.artifacts)
     e = log.add(
         "model_request",
         {
@@ -165,7 +166,7 @@ def build(root: pathlib.Path) -> None:
         },
         actor="tool",
     )
-    body, line0 = render(log.events)
+    body, line0 = render(log.events, log.artifacts)
     write_case(
         root,
         case(

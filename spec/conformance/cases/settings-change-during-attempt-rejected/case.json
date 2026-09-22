@@ -1,0 +1,9 @@
+{
+  "name": "settings-change-during-attempt-rejected",
+  "family": "cancellation_resume",
+  "kind": "reduce",
+  "description": "settings_changed while a model_request awaits its response: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

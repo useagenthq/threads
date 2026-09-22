@@ -1,0 +1,145 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 3,
+      "hash": "7b6cae466ee1ca2c567e8d37cb77de59c9ea05cd11e4bc6d51ec24804dc28d49"
+    }
+  },
+  "appended": [
+    {
+      "type": "model_attempt_abandoned",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000003",
+        "provider_outcome": "unknown",
+        "reason": "crash"
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 2
+      }
+    },
+    {
+      "type": "model_attempt_abandoned",
+      "data": {
+        "provider_outcome": "failed",
+        "reason": "rate_limited",
+        "http_status": 429,
+        "retry_after_ms": 2000
+      }
+    },
+    {
+      "type": "retry_scheduled",
+      "critical": false,
+      "data": {
+        "delay_ms": 2000,
+        "basis": "retry_after"
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 3
+      }
+    },
+    {
+      "type": "model_attempt_abandoned",
+      "data": {
+        "provider_outcome": "failed",
+        "reason": "overloaded",
+        "http_status": 529
+      }
+    },
+    {
+      "type": "retry_scheduled",
+      "critical": false,
+      "data": {
+        "delay_ms": 2000,
+        "basis": "backoff"
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 4
+      }
+    },
+    {
+      "type": "model_attempt_abandoned",
+      "data": {
+        "provider_outcome": "failed",
+        "reason": "overloaded",
+        "http_status": 529
+      }
+    },
+    {
+      "type": "settings_changed",
+      "data": {
+        "reason": "fallback",
+        "settings": {
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-small"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "reasoning_carryover": "omit_prior"
+        }
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 5
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ]
+}

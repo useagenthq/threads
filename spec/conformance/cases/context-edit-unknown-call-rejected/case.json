@@ -1,0 +1,9 @@
+{
+  "name": "context-edit-unknown-call-rejected",
+  "family": "context_compaction",
+  "kind": "reduce",
+  "description": "context_edited names call_9, which has no recorded result: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

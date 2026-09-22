@@ -1,0 +1,123 @@
+{
+  "name": "permission-rule-paths-mcp-web",
+  "family": "permissions_approvals",
+  "kind": "policy",
+  "description": "Path rules are gitignore globs over the normalized path relative to the workspace; a path outside the workspace never matches a relative rule and a read there asks. Ask rules beat allow rules. MCP rules take a trailing *. web_fetch domain rules match the host exactly.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "workspace": "/workspace",
+    "permissions": {
+      "mode": "default",
+      "allow": [
+        "edit(src/**)",
+        "read(**)",
+        "mcp__github__*",
+        "web_fetch(domain:docs.example.com)"
+      ],
+      "ask": [
+        "edit(src/secrets/**)"
+      ],
+      "deny": [
+        "read(**/.env)",
+        "mcp__github__delete_repo"
+      ],
+      "protected_paths": [
+        ".git/**",
+        ".threads/**",
+        ".claude/**",
+        ".mcp.json",
+        "**/.bashrc",
+        "**/.zshrc",
+        "**/.profile",
+        "**/.gitconfig",
+        "**/.ssh/**"
+      ],
+      "allow_bypass": false,
+      "plan_exit_mode": "default"
+    },
+    "calls": [
+      {
+        "mode": "default",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": "src/app/main.ts"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": "src/../config/app.json"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "read",
+        "category": "read_only",
+        "input": {
+          "path": "config/.env"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "read",
+        "category": "read_only",
+        "input": {
+          "path": "/workspace/README.md"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "read",
+        "category": "read_only",
+        "input": {
+          "path": "/etc/passwd"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": "src/secrets/key.pem"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "mcp__github__create_issue",
+        "category": "other",
+        "input": {
+          "title": "x"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "mcp__github__delete_repo",
+        "category": "other",
+        "input": {
+          "repo": "x"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "web_fetch",
+        "category": "other",
+        "input": {
+          "url": "https://docs.example.com/guide"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "web_fetch",
+        "category": "other",
+        "input": {
+          "url": "https://docs.example.com.evil.test/"
+        }
+      }
+    ]
+  }
+}

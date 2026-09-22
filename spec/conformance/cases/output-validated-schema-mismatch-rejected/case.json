@@ -1,0 +1,9 @@
+{
+  "name": "output-validated-schema-mismatch-rejected",
+  "family": "tools_streaming",
+  "kind": "reduce",
+  "description": "output_validated{accepted} whose value fails the pinned output schema: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

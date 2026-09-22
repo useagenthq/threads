@@ -1,0 +1,9 @@
+{
+  "name": "render-tool-results-cleared",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "Two context_edited events: a threshold clear of an old result and a guardrail redaction of a secret (UTF-8 byte span). The results stay in the log; the next request shows the fixed placeholder and [redacted], pairs intact.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

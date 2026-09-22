@@ -1,0 +1,155 @@
+{
+  "name": "permission-modes-protected-paths",
+  "family": "permissions_approvals",
+  "kind": "policy",
+  "description": "The five modes over the same calls. plan denies every non-read-only call except the plan tools, even when a rule allows it. accept_edits allows workspace edits. dont_ask turns every ask into deny. bypass allows the rest. Protected paths ask in every mode and deny in dont_ask and plan.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "workspace": "/workspace",
+    "permissions": {
+      "mode": "default",
+      "allow": [
+        "bash(npm test)"
+      ],
+      "ask": [],
+      "deny": [],
+      "protected_paths": [
+        ".git/**",
+        ".threads/**",
+        ".claude/**",
+        ".mcp.json",
+        "**/.bashrc",
+        "**/.zshrc",
+        "**/.profile",
+        "**/.gitconfig",
+        "**/.ssh/**"
+      ],
+      "allow_bypass": false,
+      "plan_exit_mode": "default"
+    },
+    "calls": [
+      {
+        "mode": "plan",
+        "tool": "read",
+        "category": "read_only",
+        "input": {
+          "path": "README.md"
+        }
+      },
+      {
+        "mode": "plan",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "mode": "plan",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test"
+        }
+      },
+      {
+        "mode": "plan",
+        "tool": "ask_user",
+        "category": "other",
+        "input": {
+          "question": "Which DB?"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "mode": "accept_edits",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "mode": "accept_edits",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": ".git/config"
+        }
+      },
+      {
+        "mode": "accept_edits",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "curl https://x.test"
+        }
+      },
+      {
+        "mode": "dont_ask",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "mode": "dont_ask",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test"
+        }
+      },
+      {
+        "mode": "dont_ask",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "ls"
+        }
+      },
+      {
+        "mode": "dont_ask",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": "home/.bashrc"
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "curl https://x.test"
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": ".git/hooks/pre-commit"
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": ".mcp.json"
+        }
+      }
+    ]
+  }
+}

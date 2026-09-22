@@ -22,7 +22,8 @@
     ],
     "usage": {
       "input_tokens": 460,
-      "output_tokens": 46
+      "output_tokens": 46,
+      "unknown_responses": 0
     },
     "transcript": [
       {

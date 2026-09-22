@@ -130,9 +130,10 @@ def build(root: pathlib.Path) -> None:
     )
     negative(
         root,
-        "compaction-splits-turn",
-        "compacted ends in the middle of a turn (between a tool_call and its result): "
-        "invalid_transition.",
+        "compaction-splits-tool-pair",
+        "compacted ends between a tool_call and its result, so to_seq is not a step boundary "
+        "and the pair would be split: invalid_transition. Mid-turn compaction at a step "
+        "boundary is allowed.",
         log,
         ("invalid_transition", num(e["seq"])),
     )

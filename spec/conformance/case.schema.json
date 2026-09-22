@@ -47,7 +47,8 @@
             "stub",
             "intake",
             "security",
-            "parity"
+            "parity",
+            "policy"
           ]
         },
         "description": {
@@ -90,6 +91,21 @@
               "type": "array",
               "items": {
                 "$ref": "#/$defs/Webhook"
+              }
+            },
+            "workspace": {
+              "description": "policy: the sandbox workspace root that relative path rules resolve against.",
+              "type": "string"
+            },
+            "permissions": {
+              "description": "policy: the rule set.",
+              "$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"
+            },
+            "calls": {
+              "description": "policy: calls to decide, each under its own mode.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PolicyCall"
               }
             }
           }
@@ -254,6 +270,43 @@
               }
             }
           }
+        },
+        "decisions": {
+          "description": "policy: one decision per input call, in order.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "decision",
+              "source"
+            ],
+            "properties": {
+              "decision": {
+                "enum": [
+                  "allow",
+                  "ask",
+                  "deny"
+                ]
+              },
+              "source": {
+                "enum": [
+                  "policy",
+                  "mode",
+                  "protected_path",
+                  "self_config_guard",
+                  "thread_rule"
+                ]
+              },
+              "rule": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "projections": {
+          "description": "Named projections beyond ReducedState, compared by deep equality only for the keys listed (ADRs 0019-0023).",
+          "$ref": "#/$defs/Projections"
         }
       },
       "allOf": [
@@ -429,7 +482,25 @@
           }
         },
         "usage": {
-          "$ref": "urn:threads:schema:events:v1#/$defs/Usage"
+          "description": "Sums of KNOWN input_tokens and output_tokens over model responses; unknown_responses counts responses where either is null. Unknown is never summed as zero.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "input_tokens",
+            "output_tokens",
+            "unknown_responses"
+          ],
+          "properties": {
+            "input_tokens": {
+              "type": "integer"
+            },
+            "output_tokens": {
+              "type": "integer"
+            },
+            "unknown_responses": {
+              "type": "integer"
+            }
+          }
         },
         "transcript": {
           "type": "array",
@@ -459,7 +530,7 @@
       }
     },
     "ModelScript": {
-      "description": "Responses consumed in order. An extra model call, or leftover responses at the end, fails the case. lookup answers adapter response recovery per model_request event_id.",
+      "description": "Entries consumed in order: a response, or a provider error the adapter reports before any content. An extra model call, or leftover entries at the end, fails the case. lookup answers adapter response recovery per model_request event_id.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -469,27 +540,64 @@
         "responses": {
           "type": "array",
           "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "content",
-              "stop_reason",
-              "usage"
-            ],
-            "properties": {
-              "content": {
-                "type": "array",
-                "items": {
-                  "$ref": "urn:threads:schema:events:v1#/$defs/ContentPart"
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "content",
+                  "stop_reason",
+                  "usage"
+                ],
+                "properties": {
+                  "content": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "urn:threads:schema:events:v1#/$defs/OutputPart"
+                    }
+                  },
+                  "stop_reason": {
+                    "type": "string"
+                  },
+                  "usage": {
+                    "$ref": "urn:threads:schema:events:v1#/$defs/Usage"
+                  }
                 }
               },
-              "stop_reason": {
-                "type": "string"
-              },
-              "usage": {
-                "$ref": "urn:threads:schema:events:v1#/$defs/Usage"
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "error"
+                ],
+                "properties": {
+                  "error": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "reason",
+                      "http_status"
+                    ],
+                    "properties": {
+                      "reason": {
+                        "enum": [
+                          "rate_limited",
+                          "overloaded",
+                          "server_error",
+                          "prompt_too_long"
+                        ]
+                      },
+                      "http_status": {
+                        "type": "integer"
+                      },
+                      "retry_after_ms": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
               }
-            }
+            ]
           }
         },
         "lookup": {
@@ -515,7 +623,7 @@
                 "type": "string"
               },
               "response": {
-                "$ref": "#/$defs/ModelScript/properties/responses/items"
+                "$ref": "#/$defs/ModelScript/properties/responses/items/oneOf/0"
               }
             }
           }
@@ -686,6 +794,172 @@
               },
               "is_error": {
                 "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "PolicyCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "tool",
+        "category",
+        "input"
+      ],
+      "properties": {
+        "mode": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/PermissionMode"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "category": {
+          "description": "read_only, edit (write, edit, apply_patch, notebook_edit inside the workspace) or other.",
+          "enum": [
+            "read_only",
+            "edit",
+            "other"
+          ]
+        },
+        "input": {
+          "type": "object"
+        }
+      }
+    },
+    "Projections": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "todos": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "child_thread_id",
+              "status"
+            ],
+            "properties": {
+              "child_thread_id": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "running",
+                  "completed",
+                  "failed",
+                  "cancelled",
+                  "budget_exhausted"
+                ]
+              }
+            }
+          }
+        },
+        "team_tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "task_id",
+              "status"
+            ],
+            "properties": {
+              "task_id": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "open",
+                  "claimed",
+                  "completed",
+                  "failed"
+                ]
+              },
+              "owner": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mode": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/PermissionMode"
+        },
+        "model": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/ModelRef"
+        },
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "currency",
+            "known_nanos",
+            "upper_bound_nanos",
+            "complete"
+          ],
+          "properties": {
+            "currency": {
+              "type": "string"
+            },
+            "known_nanos": {
+              "type": "integer"
+            },
+            "upper_bound_nanos": {
+              "type": "integer"
+            },
+            "complete": {
+              "type": "boolean"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcome"
+          ],
+          "properties": {
+            "outcome": {
+              "enum": [
+                "none",
+                "accepted",
+                "rejected"
+              ]
+            },
+            "value": {}
+          }
+        },
+        "cache_breaks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "request_event_id",
+              "likely_cause"
+            ],
+            "properties": {
+              "request_event_id": {
+                "type": "string"
+              },
+              "likely_cause": {
+                "enum": [
+                  "settings_changed",
+                  "compacted",
+                  "context_edited",
+                  "tools_changed",
+                  "ttl_expired",
+                  "unknown"
+                ]
               }
             }
           }

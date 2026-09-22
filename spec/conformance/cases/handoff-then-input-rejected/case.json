@@ -1,0 +1,9 @@
+{
+  "name": "handoff-then-input-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "After a handoff the thread is inactive; a new user_input: invalid_transition. The host routes it to to_thread_id instead.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

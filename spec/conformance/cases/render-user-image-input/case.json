@@ -1,0 +1,9 @@
+{
+  "name": "render-user-image-input",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "A user input with a text part and an image part. The image bytes are an artifact (image/png, width, height); Render v1 carries the part as recorded, in order, and the adapter sends the verified bytes.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

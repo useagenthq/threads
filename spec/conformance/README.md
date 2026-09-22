@@ -18,7 +18,7 @@ cases/<name>/
   artifacts/<sha256>  optional: content-addressed bytes referenced by the log
 ```
 
-`log.jsonl` is absent only for the `intake` kind. `case.schema.json` defines `case.json` (`$defs/Case`), `expected.json` (`$defs/Expected`), `model.json` (`$defs/ModelScript`), `sandbox.json` (`$defs/SandboxScript`) and `stubs.json` (`$defs/StubScript`). Line shapes come from `../schema/events.v1.schema.json`. Every line of every `log.jsonl` validates, except the torn line in `torn-tail-truncated` and the lines a negative case breaks on purpose.
+`log.jsonl` is absent only for the `intake` and `policy` kinds. `case.schema.json` defines `case.json` (`$defs/Case`), `expected.json` (`$defs/Expected`), `model.json` (`$defs/ModelScript`), `sandbox.json` (`$defs/SandboxScript`) and `stubs.json` (`$defs/StubScript`). Line shapes come from `../schema/events.v1.schema.json`. Every line of every `log.jsonl` validates, except the torn line in `torn-tail-truncated` and the lines a negative case breaks on purpose.
 
 ### log.jsonl is an export
 
@@ -30,10 +30,10 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 |---|---|
 | `name` | Equals the directory name |
 | `family` | The v0.1 feature family it evidences (`log`, `cancellation_resume`, `log_fork_test`, ...) |
-| `kind` | `reduce`, `render`, `recover`, `fork`, `stub`, `intake`, `security` or `parity` |
+| `kind` | `reduce`, `render`, `recover`, `fork`, `stub`, `intake`, `policy`, `security` or `parity` |
 | `clock.now` | The injected clock. Runners never read wall time |
 | `model_script`, `sandbox_script`, `stub_script` | Present when the case needs them |
-| `input` | Kind-specific input: `fork_at_event_id` and `new_branch_id` (fork), `webhooks` (intake) |
+| `input` | Kind-specific input: `fork_at_event_id` and `new_branch_id` (fork), `webhooks` (intake), `workspace`, `permissions` and `calls` (policy) |
 
 ### expected.json
 
@@ -50,6 +50,8 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 | `render` | `next_request_sha256` and `declared_prefix` |
 | `stubs` | `consumed` and `unmatched` counts |
 | `responses`, `inbox` | intake: HTTP status per webhook, and the inbox rows in insertion order |
+| `decisions` | policy: one `{decision, source, rule?}` per input call, in order |
+| `projections` | Named projections of the input log beyond `ReducedState` (below). Only the listed keys are compared |
 
 **Matching `appended`:**
 - The count and order must match exactly.
@@ -72,10 +74,23 @@ This is the cross-language comparison target. It is deliberately small.
 | `effects` | One entry per derived effect key, in order of first `effect_begin`. Status is `begun`, `committed`, `unknown` or `resolved`, whichever effect event came last |
 | `parked` | Addresses opened by `parked` and not yet closed by `resumed` |
 | `fork_points` | Every `snapshot` at which no turn is open, nothing is pending or parked, every effect is `committed` or `resolved`, and `expires_at` is null or greater than `clock.now`. This is the quiescence predicate (C4) |
-| `usage` | Sums of `input_tokens` and `output_tokens` over `model_response` and `model_response_recovered` |
-| `transcript` | `{role, event_id}` for each model-visible conversational event, in render order: `user` (`user_input`, `steer`), `context` (`injected`, `heartbeat`), `assistant` (`model_response`, `model_response_recovered`), `tool` (`tool_result`, `tool_result_late`), `summary`. `tools_changed` renders but is not a transcript entry |
+| `usage` | `{input_tokens, output_tokens, unknown_responses}`: sums of the **known** values over `model_response` and `model_response_recovered`, plus the count of responses where either field is `null`. Unknown is never summed as zero |
+| `transcript` | `{role, event_id}` for each conversational line the next request renders, in render order: `user` (`user_input`, `steer`), `context` (`injected`, `heartbeat`), `assistant` (`model_response`, `model_response_recovered`), `tool` (`tool_result`, `tool_result_late`), `summary` (the `compacted` event, in place of its range). Events that render nothing are left out: dropped by compaction, denied inputs, compaction side responses, assistant responses with no parts left. `tools_changed` renders but is not a transcript entry |
 
 Unknown non-critical events are skipped by every rule except `head`.
+
+## Projections (named, compared only when listed)
+
+| Key | Rule |
+|---|---|
+| `cost` | `{currency, known_nanos, upper_bound_nanos, complete}` over model responses: each usage field times the price (`policy.models[].price`) of its request's epoch model. A `null` field is charged at its bound (request bytes for input and cache fields, the epoch's `max_tokens` for output) in the upper bound only, and makes `complete` false |
+| `cache_breaks` | `{request_event_id, likely_cause}` per turn response whose `cache_read_tokens` fell below 95% of the previous turn response's (`20·now < 19·prev`) by at least 2000. The cause is the first `settings_changed`, `compacted`, `context_edited` or `tools_changed` between them, else `ttl_expired` or `unknown` |
+| `todos` | The latest `todos_updated.todos`, else `[]` |
+| `children` | `{child_thread_id, status}` per `agent_spawned` in order: `running` until its `agent_finished` |
+| `team_tasks` | `{task_id, status, owner?}` per created task: `open`, `claimed` (with owner), `completed`, `failed`; `released` returns it to `open` without owner |
+| `mode` | `policy.permissions.mode`, then the latest `mode_changed.to` |
+| `model` | The model of the latest settings epoch |
+| `output` | The latest `output_validated`: `{outcome, value?}`, else `{outcome: none}` |
 
 ## What a runner does per kind
 
@@ -88,17 +103,18 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 
 **`render`**
 1. Import and reduce.
-2. Check C7: every recorded `declared_prefix` is equal (`prefix_changed` otherwise).
-3. For every `model_request`, re-render from the events before it. The bytes must equal the `request_ref` artifact (`request_hash_mismatch` otherwise), and line 0 must match `declared_prefix`.
+2. Check C7 per settings epoch: every recorded `declared_prefix` equals the line 0 of its epoch (`prefix_changed` otherwise).
+3. For every `model_request`, re-render from the events before it (adding the instruction line for `purpose: compaction`). The bytes must equal the `request_ref` artifact (`request_hash_mismatch` otherwise), and line 0 must match `declared_prefix`. Every artifact a rendered part references must exist and verify (`artifact_missing`, `artifact_corrupt`, with the seq of the event carrying the part).
 4. Render the next request. It must equal `request.bytes` byte for byte, and its line 0 must equal `render.declared_prefix`.
-5. History prefix: each recorded request is a byte prefix of the next one unless a `compacted` event lies between. This is the cache-reuse property, checked separately from C7.
+5. History prefix: each recorded turn request is a byte prefix of the next turn request unless a `compacted`, `context_edited`, `settings_changed` or denying `before_input` decision lies between. Compaction requests are skipped. This is the cache-reuse property, checked separately from C7.
 
 **`recover`**
 1. Compute `state`, `committed_bytes` and `head_verified` as a reader would.
 2. Acquire the branch lease. This takes the next epoch and runs semantic recovery before anything else.
 3. Resume the loop against the scripts until the branch is idle or parked.
 4. Compare `appended` and the `sandbox` counters. For the scripted sandbox: a dispatch whose effect key is in `executed_keys` returns that output without a new execution (provider dedup); `lookup` answers reconciliation with its `final` flag; `process` answers "is the call's process group terminated?". The fake adapter declares `skew_margin_ms = 1000` and uses `clock.now` as provider time.
-5. Leftover scripted model responses, or an unexpected model call, fail the case. `model.json` `lookup` answers adapter response recovery for an open `model_request` (by its `event_id`): a final `found` is recorded as `model_response_recovered` with no new call.
+5. Leftover scripted model responses, or an unexpected model call, fail the case. `model.json` `lookup` answers adapter response recovery for an open `model_request` (by its `event_id`): a final `found` is recorded as `model_response_recovered` with no new call. Without a `lookup` entry the adapter can't look up, so an open request is abandoned as `unknown` and re-sent under `crash_resends`.
+6. A `model.json` entry `{error: {reason, http_status, retry_after_ms?}}` is a provider rejection before any content, handled per (and for `prompt_too_long`). The fake adapter uses no jitter. A `retry_scheduled` wait advances the injected clock to `not_before`; runners never sleep. The loop's policy comes from `thread_started.policy` (absent sections take the ADR defaults).
 
 **`fork`**
 1. Call `fork(fork_at_event_id, new_branch_id)`.
@@ -114,6 +130,11 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 **`intake`**
 1. Deliver `input.webhooks` in order to the host intake pipeline with a fake verifying adapter. A repeated delivery simulates provider redelivery after a crash that followed the inbox insert.
 2. Compare the HTTP `responses` and the `inbox` rows. Each item has its own row, keyed by the provider's item id or `<delivery_id>#<index>`, and the whole parsed batch is inserted in one transaction before the response.
+
+**`policy`**
+1. Build the permission engine from `input.permissions` with `input.workspace` as the workspace root.
+2. Decide each call in `input.calls` under its own `mode`, with the call's `category` (`read_only`, `edit`, `other`) standing in for the tool's class. No hooks, no principal limits, no thread rules.
+3. Compare `decisions` in order: `decision`, `source`, and `rule` (the matched rule string) when listed.
 
 **`security`** and **`parity`** are reserved kinds. `security` covers trust-boundary and fail-closed cases. `parity` covers the cross-language round trip below.
 

@@ -1,0 +1,66 @@
+{
+  "outcome": "ok",
+  "decisions": [
+    {
+      "decision": "allow",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "mode"
+    },
+    {
+      "decision": "allow",
+      "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "allow",
+      "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "protected_path"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "mode"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(npm test)"
+    },
+    {
+      "decision": "deny",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "protected_path"
+    },
+    {
+      "decision": "allow",
+      "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "protected_path"
+    },
+    {
+      "decision": "ask",
+      "source": "protected_path"
+    }
+  ]
+}

@@ -20,7 +20,8 @@ from .common import (
     tool,
 )
 from .jcs import JsonValue, Obj, canonical
-from .log import Log
+from .log import Log, reduce
+from .render import render
 
 if TYPE_CHECKING:
     import pathlib
@@ -137,16 +138,22 @@ NO_MODEL: Obj = {"responses": []}
 
 
 def started(
-    log: Log, tools: list[JsonValue], instructions: str = "You are a helpful agent."
+    log: Log,
+    tools: list[JsonValue],
+    instructions: str = "You are a helpful agent.",
+    policy: Obj | None = None,
+    adapter: Obj = ADAPTER,
 ) -> Obj:
     cfg: Obj = {
         "agent_name": "demo",
         "instructions": instructions,
         "model": MODEL,
         "model_params": PARAMS,
-        "adapter": ADAPTER,
+        "adapter": adapter,
         "tools": tools,
     }
+    if policy is not None:
+        cfg["policy"] = policy
     return log.add(
         "thread_started",
         {**cfg, "config_hash": sha(canonical(cfg)), "sandbox_provider": "fake"},
@@ -258,3 +265,74 @@ def negative(
     }
     extra: dict[str, JsonValue | bytes] = {"log.jsonl": error[2]} if len(error) == RAW_ARITY else {}
     write_case(root, case(name, "log", "reduce", desc), log, expected, extra=extra)
+
+
+# ---------- helpers for the cases ----------
+type Meta = tuple[str, str, str]  # (name, family, description)
+
+
+def render_case(root: pathlib.Path, meta: Meta, log: Log) -> None:
+    """A render case whose next request is the log's Render v1."""
+    body, line0 = render(log.events, log.artifacts)
+    write_case(
+        root,
+        case(meta[0], meta[1], "render", meta[2]),
+        log,
+        {
+            "outcome": "ok",
+            "state": reduce(log, NOW),
+            "render": {
+                "next_request_sha256": sha(body),
+                "declared_prefix": {"bytes": len(line0), "sha256": sha(line0)},
+            },
+        },
+        extra={"request.bytes": body},
+    )
+
+
+def reduce_case(root: pathlib.Path, meta: Meta, log: Log, projections: Obj) -> None:
+    """A reduce case that also checks named projections."""
+    write_case(
+        root,
+        case(meta[0], meta[1], "reduce", meta[2]),
+        log,
+        {"outcome": "ok", "state": reduce(log, NOW), "projections": projections},
+    )
+
+
+def reject(root: pathlib.Path, meta: Meta, log: Log, code: str = "invalid_transition") -> None:
+    """A reduce case whose last event breaks a rule."""
+    write_case(
+        root,
+        case(meta[0], meta[1], "reduce", meta[2]),
+        log,
+        {"outcome": "error", "error": {"code": code, "seq": log.seq}, "appended": []},
+    )
+
+
+def result(log: Log, call_id: str, preview: str, **more: JsonValue) -> Obj:
+    data: Obj = {
+        "call_id": call_id,
+        "is_error": False,
+        "completeness": "complete",
+        "preview": preview,
+        "origin": "executed",
+        **more,
+    }
+    return log.add("tool_result", data, actor="tool")
+
+
+def call(log: Log, name: str, inp: Obj, call_id: str = "call_1") -> Obj:
+    """model_request, tool_use response, tool_call and allow. Returns the tool_call."""
+    r = log.model_request()
+    use: Obj = {"type": "tool_use", "call_id": call_id, "name": name, "input": inp}
+    log.model_response(r, [use], "tool_use", tokens(80, 20))
+    c = log.tool_call(r, call_id, name, inp)
+    log.add("permission_decision", {"call_id": call_id, **ALLOW})
+    return c
+
+
+def answer(log: Log, t: str) -> None:
+    r = log.model_request()
+    log.model_response(r, [{"type": "text", "text": t}], "end_turn", tokens(90, 10))
+    log.add("turn_completed", {"reason": "end_turn"})

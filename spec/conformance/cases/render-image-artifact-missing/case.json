@@ -1,0 +1,9 @@
+{
+  "name": "render-image-artifact-missing",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "An image part references an artifact that is not in the store. Rendering verifies every artifact a rendered part references, so the request is never sent: artifact_missing at the event that carries the part.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

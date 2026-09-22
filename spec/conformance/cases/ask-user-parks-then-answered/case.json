@@ -1,0 +1,9 @@
+{
+  "name": "ask-user-parks-then-answered",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "ask_user parks on {input, call_id}; the thread's principal answers with a tool_result{origin: answered}; resumed names it. The turn is open again.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

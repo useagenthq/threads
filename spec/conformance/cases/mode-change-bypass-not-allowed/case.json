@@ -1,0 +1,9 @@
+{
+  "name": "mode-change-bypass-not-allowed",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "mode_changed to bypass when policy.permissions.allow_bypass is false: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

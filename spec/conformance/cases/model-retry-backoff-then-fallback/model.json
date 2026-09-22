@@ -1,0 +1,36 @@
+{
+  "responses": [
+    {
+      "error": {
+        "reason": "rate_limited",
+        "http_status": 429,
+        "retry_after_ms": 2000
+      }
+    },
+    {
+      "error": {
+        "reason": "overloaded",
+        "http_status": 529
+      }
+    },
+    {
+      "error": {
+        "reason": "overloaded",
+        "http_status": 529
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Done."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 200,
+        "output_tokens": 3
+      }
+    }
+  ]
+}

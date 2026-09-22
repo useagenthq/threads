@@ -1,0 +1,10 @@
+{
+  "name": "model-retry-backoff-then-fallback",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "After a crash re-send, the provider answers 429 with retry-after 2 s (waited as recorded), then 529 twice (backoff base x 2^(k-1) = 2 s). With fallback_after 2 a settings_changed{fallback} switches to the configured model, which answers. Every attempt and wait is an event; the SDK's own retries are off.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

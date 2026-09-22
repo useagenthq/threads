@@ -6,8 +6,9 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, TypedDict, Unpack
 
-from .common import BRANCH, T0, THREAD, aref, eid, num, obj, render, sha, text
+from .common import BRANCH, T0, THREAD, aref, eid, num, obj, sha, text
 from .jcs import JsonValue, Obj, canonical
+from .render import COMPACT_INSTRUCTION, GUIDE_PREFIX, render, transcript
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -106,16 +107,30 @@ class Log:
         )
         return c
 
-    def model_request(self, attempt: int = 1) -> Obj:
-        body, line0 = render(self.events)
-        return self.add(
-            "model_request",
-            {
-                "attempt": attempt,
-                "request_ref": self.art(body, "application/x-ndjson"),
-                "declared_prefix": {"bytes": len(line0), "sha256": sha(line0)},
-            },
-        )
+    def model_request(self, attempt: int = 1, *, compaction: bool = False) -> Obj:
+        """A turn request, or (compaction=True) the summarizer side request of ."""
+        instruction = self._compact_instruction() if compaction else None
+        body, line0 = render(self.events, self.artifacts, instruction)
+        data: Obj = {
+            "attempt": attempt,
+            "request_ref": self.art(body, "application/x-ndjson"),
+            "declared_prefix": {"bytes": len(line0), "sha256": sha(line0)},
+        }
+        if compaction:
+            data["purpose"] = "compaction"
+        return self.add("model_request", data)
+
+    def _compact_instruction(self) -> str:
+        """The fixed instruction plus before_compact guide text since the last model_request."""
+        guides: list[str] = []
+        for e in reversed(self.events):
+            if e["type"] == "model_request":
+                break
+            d = obj(e["data"])
+            guide = d.get("hook") == "before_compact" and d.get("decision") == "guide"
+            if e["type"] == "hook_decision" and guide:
+                guides.insert(0, text(d["reason"]))
+        return COMPACT_INSTRUCTION + (GUIDE_PREFIX + "\n".join(guides) if guides else "")
 
     def model_response(self, req: Obj, content: list[JsonValue], stop: str, usage: Obj) -> Obj:
         return self.add(
@@ -160,16 +175,6 @@ class Log:
 
 
 # ---------- reference reduce (ReducedState, spec/conformance/README.md) ----------
-ROLES = {
-    "user_input": "user",
-    "steer": "user",
-    "injected": "context",
-    "heartbeat": "context",
-    "model_response": "assistant",
-    "model_response_recovered": "assistant",
-    "tool_result": "tool",
-    "tool_result_late": "tool",
-}
 EFFECT_STATUS = {
     "effect_begin": "begun",
     "effect_commit": "committed",
@@ -183,12 +188,11 @@ class _Reducer:
 
     def __init__(self, now: int) -> None:
         self.now = now
-        self.epoch = self.turns = self.input_tokens = self.output_tokens = 0
+        self.epoch = self.turns = self.input_tokens = self.output_tokens = self.unknown = 0
         self.in_turn = self.cancelled = False
         self.pending: list[str] = []
         self.parked: list[JsonValue] = []
         self.fork_points: list[JsonValue] = []
-        self.transcript: list[JsonValue] = []
         self.effects: dict[str, Obj] = {}
         self.call_branch: dict[str, str] = {}
         self.scopes: dict[str, str] = {}
@@ -196,8 +200,6 @@ class _Reducer:
     def event(self, e: Obj) -> None:
         t = text(e["type"])
         self.epoch = num(e["epoch"])
-        if t in ROLES:
-            self.transcript.append({"role": ROLES[t], "event_id": e["event_id"]})
         if t in EFFECT_STATUS:
             self.effect(e, EFFECT_STATUS[t])
             return
@@ -218,8 +220,10 @@ class _Reducer:
 
     def model_response(self, _e: Obj, d: Obj) -> None:
         usage = obj(d["usage"])
-        self.input_tokens += num(usage["input_tokens"])
-        self.output_tokens += num(usage["output_tokens"])
+        i, o = usage["input_tokens"], usage["output_tokens"]
+        self.input_tokens += 0 if i is None else num(i)
+        self.output_tokens += 0 if o is None else num(o)
+        self.unknown += i is None or o is None
 
     def tool_call(self, e: Obj, d: Obj) -> None:
         self.pending.append(text(d["call_id"]))
@@ -284,8 +288,12 @@ def reduce(log: Log, now: int) -> Obj:
         "effects": list[JsonValue](r.effects.values()),
         "parked": r.parked,
         "fork_points": r.fork_points,
-        "usage": {"input_tokens": r.input_tokens, "output_tokens": r.output_tokens},
-        "transcript": r.transcript,
+        "usage": {
+            "input_tokens": r.input_tokens,
+            "output_tokens": r.output_tokens,
+            "unknown_responses": r.unknown,
+        },
+        "transcript": transcript(log.events, log.artifacts),
         "status": r.status(),
         "head": {"seq": log.seq, "hash": sha(log.lines[-1])},
     }

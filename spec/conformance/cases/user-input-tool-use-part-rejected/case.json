@@ -1,0 +1,9 @@
+{
+  "name": "user-input-tool-use-part-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A user_input carries a tool_use part. InputPart excludes tool_use, so user content can never enter dispatch: the line fails its data schema (invalid_line).",
+  "clock": {
+    "now": 1790000060000
+  }
+}

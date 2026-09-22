@@ -5,10 +5,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import NOW, render, sha, tokens, tool
+from .common import NOW, sha, tokens, tool
 from .jcs import JsonValue, canonical
 from .log import Log, reduce
 from .pieces import FINAL, READ_FILE, case, negative, started, user, write_case
+from .render import render
 
 if TYPE_CHECKING:
     import pathlib
@@ -38,7 +39,7 @@ def build(root: pathlib.Path) -> None:
     log.add("turn_completed", {"reason": "end_turn"})
     tools_changed(log, [READ_FILE, MCP_SEARCH])
     user(log, "Search the docs for fork.")
-    body, line0 = render(log.events)
+    body, line0 = render(log.events, log.artifacts)
     write_case(
         root,
         case(

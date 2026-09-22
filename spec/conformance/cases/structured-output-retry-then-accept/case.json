@@ -1,0 +1,10 @@
+{
+  "name": "structured-output-retry-then-accept",
+  "family": "tools_streaming",
+  "kind": "recover",
+  "description": "Structured output in tool mode. The first final_output candidate fails the pinned schema: output_validated{rejected} (the raw candidate is the tool_call) and an error result, so the model retries. The second is accepted with its typed value, and final_output ends the turn with no further model call.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

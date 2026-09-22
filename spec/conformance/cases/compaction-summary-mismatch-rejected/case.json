@@ -1,0 +1,9 @@
+{
+  "name": "compaction-summary-mismatch-rejected",
+  "family": "context_compaction",
+  "kind": "reduce",
+  "description": "compacted names a summary request, but summary_ref is not the text of that request's response: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

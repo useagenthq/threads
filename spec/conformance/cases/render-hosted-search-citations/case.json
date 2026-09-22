@@ -1,0 +1,9 @@
+{
+  "name": "render-hosted-search-citations",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "A provider-hosted web search declared in line 0 adapter settings. Its call and results are one hosted_tool part (execution owner: provider, never a tool_call) followed by text and a citation part whose span is in UTF-8 bytes of the cited artifact. The next request carries all parts as recorded.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

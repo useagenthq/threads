@@ -1,0 +1,9 @@
+{
+  "name": "settings-change-new-prefix-epoch",
+  "family": "cancellation_resume",
+  "kind": "render",
+  "description": "A settings_changed starts a new settings epoch: the next request's line 0 names the new model, and C7 holds within each epoch. reasoning_carryover omit_prior omits the earlier thinking part as a recorded decision, never silently.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

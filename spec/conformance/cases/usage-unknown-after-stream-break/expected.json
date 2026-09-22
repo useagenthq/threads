@@ -1,0 +1,49 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 1,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 160,
+      "output_tokens": 12,
+      "unknown_responses": 1
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000006"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000007"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000009"
+      }
+    ],
+    "status": "idle",
+    "head": {
+      "seq": 10,
+      "hash": "4ae32e80e7c61a2103b5debf2de3f1d7b9c389bbd424ae52b45eccc1342fae52"
+    }
+  },
+  "projections": {
+    "cost": {
+      "currency": "USD",
+      "known_nanos": 660000,
+      "upper_bound_nanos": 17403000,
+      "complete": false
+    }
+  }
+}

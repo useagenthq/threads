@@ -1,0 +1,38 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "call_1",
+          "name": "final_output",
+          "input": {
+            "fixed": "yes"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 60,
+        "output_tokens": 8
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "call_2",
+          "name": "final_output",
+          "input": {
+            "fixed": true
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 60,
+        "output_tokens": 8
+      }
+    }
+  ]
+}

@@ -11,7 +11,8 @@
     "fork_points": [],
     "usage": {
       "input_tokens": 70,
-      "output_tokens": 9
+      "output_tokens": 9,
+      "unknown_responses": 0
     },
     "transcript": [
       {

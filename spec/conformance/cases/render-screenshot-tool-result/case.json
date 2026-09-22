@@ -1,0 +1,9 @@
+{
+  "name": "render-screenshot-tool-result",
+  "family": "sandboxes",
+  "kind": "render",
+  "description": "A computer-use screenshot result mixes text and an image. With content present the model sees exactly those ordered parts; preview is the plain-text rendering for logs and channels and is not rendered.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

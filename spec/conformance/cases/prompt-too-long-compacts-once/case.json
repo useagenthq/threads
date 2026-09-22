@@ -1,0 +1,10 @@
+{
+  "name": "prompt-too-long-compacts-once",
+  "family": "context_compaction",
+  "kind": "recover",
+  "description": "After a crash the re-sent request is rejected as too long. Nothing is clearable (one result, keep_recent 5), so one reactive compaction runs: the summary side request, then compacted{trigger: reactive} over the completed first turn, keeping the open turn as the tail. The request is retried once and succeeds.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

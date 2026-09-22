@@ -73,7 +73,16 @@
         "approval_duplicate",
         "unmatched_external_op",
         "egress_policy_unsupported",
-        "case_missing_dependency"
+        "case_missing_dependency",
+        "content_unsupported",
+        "continuation_unsupported",
+        "hosted_tool_unsupported",
+        "context_edit_unreported",
+        "context_exhausted",
+        "model_unavailable",
+        "output_invalid",
+        "tool_not_loaded",
+        "permission_rule_invalid"
       ]
     },
 
@@ -139,43 +148,353 @@
         "description": { "type": "string" },
         "input_schema": { "$ref": "#/$defs/JsonObject" },
         "effect_class": { "$ref": "#/$defs/EffectClass" },
-        "dedup_window_ms": { "description": "The provider's declared dedup window for this tool's effect key.", "$ref": "#/$defs/PosInt" }
+        "dedup_window_ms": { "description": "The provider's declared dedup window for this tool's effect key.", "$ref": "#/$defs/PosInt" },
+        "defer_loading": { "description": "true: deferred. Render v1 shows only {name, description, deferred: true} until a tools_changed with cause tool_search loads it (the loaded spec omits this flag). A call to a deferred tool fails pre-effect with tool_not_loaded.", "type": "boolean" },
+        "output_schema": { "description": "Optional JSON Schema for the tool's result value. A result that fails it is recorded as an error result; the effect still happened.", "$ref": "#/$defs/JsonObject" },
+        "ends_turn": { "description": "A successful result ends the turn without another model call (the final_output tool, ).", "type": "boolean" }
       },
       "if": { "properties": { "effect_class": { "const": "idempotent" } } },
       "then": { "required": ["dedup_window_ms"] },
       "else": { "not": { "required": ["dedup_window_ms"] } }
     },
+    "Tokens": {
+      "description": "A measured token count, or null when the provider did not report it (unknown, never zero). .",
+      "oneOf": [{ "$ref": "#/$defs/Int" }, { "type": "null" }]
+    },
     "Usage": {
+      "description": "Per-field measured-or-unknown usage. input_tokens and output_tokens are always present and null when unknown (a stream that broke before its usage report). input_tokens excludes cache reads and writes; output_tokens includes reasoning tokens. A cache field is absent when the adapter's usage profile has no such billing category, and null when it has one but the value did not arrive.",
       "type": "object",
       "additionalProperties": false,
       "required": ["input_tokens", "output_tokens"],
       "properties": {
-        "input_tokens": { "$ref": "#/$defs/Int" },
-        "output_tokens": { "$ref": "#/$defs/Int" },
-        "cache_read_tokens": { "$ref": "#/$defs/Int" },
-        "cache_write_tokens": { "$ref": "#/$defs/Int" }
+        "input_tokens": { "$ref": "#/$defs/Tokens" },
+        "output_tokens": { "$ref": "#/$defs/Tokens" },
+        "cache_read_tokens": { "$ref": "#/$defs/Tokens" },
+        "cache_write_tokens": { "$ref": "#/$defs/Tokens" },
+        "reasoning_tokens": { "$ref": "#/$defs/Tokens" }
+      }
+    },
+    "ImageRef": {
+      "allOf": [{ "$ref": "#/$defs/ArtifactRef" }, { "properties": { "media_type": { "enum": ["image/png", "image/jpeg", "image/gif", "image/webp"] } } }]
+    },
+    "DocumentRef": {
+      "allOf": [{ "$ref": "#/$defs/ArtifactRef" }, { "properties": { "media_type": { "enum": ["application/pdf", "text/plain", "text/markdown", "text/html", "text/csv", "application/json"] } } }]
+    },
+    "AudioRef": {
+      "allOf": [{ "$ref": "#/$defs/ArtifactRef" }, { "properties": { "media_type": { "enum": ["audio/wav", "audio/mpeg", "audio/ogg", "audio/webm", "audio/mp4"] } } }]
+    },
+    "Span": {
+      "description": "Half-open range [start, end) in UTF-8 BYTE offsets of the referenced text or artifact bytes. Both ends fall on character boundaries. Python and TypeScript convert from their native string indices; a span never means code units.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": { "start": { "$ref": "#/$defs/Int" }, "end": { "$ref": "#/$defs/Int" } }
+    },
+    "TextPart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "text"],
+      "properties": { "type": { "const": "text" }, "text": { "type": "string" } }
+    },
+    "ToolUsePart": {
+      "description": "A locally dispatchable call proposed by the model. Only model_response and model_response_recovered may carry it; a tool_call must match one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "call_id", "name", "input"],
+      "properties": {
+        "type": { "const": "tool_use" },
+        "call_id": { "$ref": "#/$defs/CallId" },
+        "name": { "$ref": "#/$defs/Name" },
+        "input": { "$ref": "#/$defs/JsonObject" }
+      }
+    },
+    "ImagePart": {
+      "description": "An image the model sees. Bytes are always an artifact; width and height are what the adapter needs for scaling (computer use coordinates).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ref", "width", "height"],
+      "properties": {
+        "type": { "const": "image_ref" },
+        "ref": { "$ref": "#/$defs/ImageRef" },
+        "width": { "$ref": "#/$defs/PosInt" },
+        "height": { "$ref": "#/$defs/PosInt" },
+        "alt": { "type": "string" }
+      }
+    },
+    "DocumentPart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ref"],
+      "properties": {
+        "type": { "const": "document_ref" },
+        "ref": { "$ref": "#/$defs/DocumentRef" },
+        "title": { "type": "string" },
+        "pages": { "$ref": "#/$defs/PosInt" }
+      }
+    },
+    "AudioPart": {
+      "description": "Recorded (non-realtime) audio, e.g. a channel voice note. Only adapters that declare audio input accept it; others fail pre-dispatch with content_unsupported. Realtime sessions are out of scope.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ref", "duration_ms"],
+      "properties": {
+        "type": { "const": "audio_ref" },
+        "ref": { "$ref": "#/$defs/AudioRef" },
+        "duration_ms": { "$ref": "#/$defs/PosInt" },
+        "transcript": { "description": "Host-produced transcript, shown only to adapters without audio input when the agent opts in.", "type": "string" }
+      }
+    },
+    "ReasoningPart": {
+      "description": "Opaque provider continuation material (Anthropic thinking or redacted_thinking with its signature, OpenAI reasoning items with encrypted content). ref holds the exact provider bytes/JSON. Never rendered as text and never required in a UI. Render v1 emits the part as recorded; an adapter that cannot send it back fails with continuation_unsupported, never drops it silently. Only settings_changed{reasoning_carryover: omit_prior} omits earlier parts.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "provider", "model", "format", "ref"],
+      "properties": {
+        "type": { "const": "reasoning" },
+        "provider": { "$ref": "#/$defs/Name" },
+        "model": { "$ref": "#/$defs/NonEmpty" },
+        "format": { "$ref": "#/$defs/Name" },
+        "ref": { "$ref": "#/$defs/ArtifactRef" },
+        "summary": { "description": "Provider-supplied readable summary, for display only.", "type": "string" }
+      }
+    },
+    "HostedToolPart": {
+      "description": "A provider-executed tool use and its result, inside one model attempt. The execution owner is the provider: it is never turned into a tool_call or dispatched locally. ref holds the exact provider blocks; readable citations follow as citation parts.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "provider", "model", "format", "name", "ref"],
+      "properties": {
+        "type": { "const": "hosted_tool" },
+        "provider": { "$ref": "#/$defs/Name" },
+        "model": { "$ref": "#/$defs/NonEmpty" },
+        "format": { "$ref": "#/$defs/Name" },
+        "name": { "$ref": "#/$defs/Name" },
+        "ref": { "$ref": "#/$defs/ArtifactRef" }
+      }
+    },
+    "CitationPart": {
+      "description": "Annotates the text part immediately before it. source_id is a URL (web), doc_id (knowledge, with version), document artifact sha256 (document) or call_id (tool_result). ref and span name the exact cited bytes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "source_kind", "source_id"],
+      "properties": {
+        "type": { "const": "citation" },
+        "source_kind": { "enum": ["web", "knowledge", "document", "tool_result"] },
+        "source_id": { "$ref": "#/$defs/NonEmpty" },
+        "version": { "type": "string" },
+        "ref": { "$ref": "#/$defs/ArtifactRef" },
+        "span": { "$ref": "#/$defs/Span" },
+        "title": { "type": "string" },
+        "cited_text": { "type": "string" }
       }
     },
     "ContentPart": {
+      "description": "Every content part. Each position allows a subset: InputPart (user_input, steer), OutputPart (model responses), ResultPart (tool results).",
       "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "text"],
-          "properties": { "type": { "const": "text" }, "text": { "type": "string" } }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "call_id", "name", "input"],
-          "properties": {
-            "type": { "const": "tool_use" },
-            "call_id": { "$ref": "#/$defs/CallId" },
-            "name": { "$ref": "#/$defs/Name" },
-            "input": { "$ref": "#/$defs/JsonObject" }
-          }
-        }
+        { "$ref": "#/$defs/TextPart" },
+        { "$ref": "#/$defs/ToolUsePart" },
+        { "$ref": "#/$defs/ImagePart" },
+        { "$ref": "#/$defs/DocumentPart" },
+        { "$ref": "#/$defs/AudioPart" },
+        { "$ref": "#/$defs/ReasoningPart" },
+        { "$ref": "#/$defs/HostedToolPart" },
+        { "$ref": "#/$defs/CitationPart" }
       ]
+    },
+    "InputPart": {
+      "description": "What a user or channel may send. No tool_use: user content never enters dispatch.",
+      "oneOf": [{ "$ref": "#/$defs/TextPart" }, { "$ref": "#/$defs/ImagePart" }, { "$ref": "#/$defs/DocumentPart" }, { "$ref": "#/$defs/AudioPart" }]
+    },
+    "OutputPart": {
+      "oneOf": [
+        { "$ref": "#/$defs/TextPart" },
+        { "$ref": "#/$defs/ToolUsePart" },
+        { "$ref": "#/$defs/ReasoningPart" },
+        { "$ref": "#/$defs/HostedToolPart" },
+        { "$ref": "#/$defs/CitationPart" },
+        { "$ref": "#/$defs/ImagePart" }
+      ]
+    },
+    "ResultPart": {
+      "description": "Ordered, mixed text and media of a tool result. No tool_use.",
+      "oneOf": [{ "$ref": "#/$defs/TextPart" }, { "$ref": "#/$defs/ImagePart" }, { "$ref": "#/$defs/DocumentPart" }, { "$ref": "#/$defs/CitationPart" }]
+    },
+    "TextOrContent": {
+      "description": "Exactly one of plain text or ordered input parts.",
+      "oneOf": [{ "required": ["text"] }, { "required": ["content"] }]
+    },
+    "PermissionMode": { "enum": ["plan", "dont_ask", "default", "accept_edits", "bypass"] },
+    "PermissionRule": {
+      "description": "Tool(specifier) grammar, . The tool part may end in * (mcp__github__*).",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,127}\\*?(\\(.+\\))?$"
+    },
+    "Threshold": {
+      "description": "Absolute tokens, or a fraction of the effective context window in permille (850 = 85%). Integers only.",
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["tokens"], "properties": { "tokens": { "$ref": "#/$defs/PosInt" } } },
+        { "type": "object", "additionalProperties": false, "required": ["permille"], "properties": { "permille": { "type": "integer", "minimum": 1, "maximum": 1000 } } }
+      ]
+    },
+    "Budget": {
+      "description": "Limits checked before every model_request. Unknown usage counts at its conservative upper bound.",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "max_cost_nanos": { "$ref": "#/$defs/PosInt" },
+        "max_input_tokens": { "$ref": "#/$defs/PosInt" },
+        "max_output_tokens": { "$ref": "#/$defs/PosInt" },
+        "max_model_requests": { "$ref": "#/$defs/PosInt" },
+        "max_turns": { "$ref": "#/$defs/PosInt" },
+        "max_wall_ms": { "$ref": "#/$defs/PosInt" }
+      }
+    },
+    "ModelSettings": {
+      "description": "One settings epoch: everything in Render v1 line 0 except system and tools.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "model_params", "adapter", "reasoning_carryover"],
+      "properties": {
+        "model": { "$ref": "#/$defs/ModelRef" },
+        "model_params": { "$ref": "#/$defs/JsonObject" },
+        "adapter": { "$ref": "#/$defs/AdapterRef" },
+        "reasoning_carryover": { "description": "keep: earlier reasoning and hosted_tool parts render as recorded. omit_prior: parts recorded before this epoch are omitted from later renders (a recorded decision, not a silent drop).", "enum": ["keep", "omit_prior"] }
+      }
+    },
+    "Policy": {
+      "description": "The resolved, secret-free runtime policy pinned at thread start (covered by config_hash, not model-visible). Each section is absent (the ADR defaults apply) or complete. ADRs 0019-0023.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "models": {
+          "description": "Every model this thread may use (primary and fallbacks), with its window, output cap and price. settings_changed may only name a listed model.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["provider", "name", "context_window", "max_output_tokens"],
+            "properties": {
+              "provider": { "$ref": "#/$defs/Name" },
+              "name": { "$ref": "#/$defs/NonEmpty" },
+              "context_window": { "$ref": "#/$defs/PosInt" },
+              "max_output_tokens": { "$ref": "#/$defs/PosInt" },
+              "price": {
+                "description": "Nano-currency units per token (USD 3 per million tokens = 3000).",
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["input", "output"],
+                "properties": { "input": { "$ref": "#/$defs/Int" }, "output": { "$ref": "#/$defs/Int" }, "cache_read": { "$ref": "#/$defs/Int" }, "cache_write": { "$ref": "#/$defs/Int" } }
+              }
+            }
+          }
+        },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "retry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_retries", "base_delay_ms", "max_delay_ms", "max_retry_after_ms", "max_total_wait_ms", "crash_resends", "fallback_after", "fallback_scope", "heartbeat_ms"],
+          "properties": {
+            "max_retries": { "$ref": "#/$defs/Int" },
+            "base_delay_ms": { "$ref": "#/$defs/PosInt" },
+            "max_delay_ms": { "$ref": "#/$defs/PosInt" },
+            "max_retry_after_ms": { "$ref": "#/$defs/PosInt" },
+            "max_total_wait_ms": { "$ref": "#/$defs/PosInt" },
+            "crash_resends": { "$ref": "#/$defs/Int" },
+            "fallback_after": { "$ref": "#/$defs/PosInt" },
+            "fallback_scope": { "enum": ["turn", "thread"] },
+            "heartbeat_ms": { "$ref": "#/$defs/PosInt" }
+          }
+        },
+        "fallback": { "type": "array", "items": { "$ref": "#/$defs/ModelSettings" } },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reserve_tokens", "cache_ttl_ms", "clear_results", "spill", "compact", "restore", "max_output_continuations", "defer_tools", "defer_threshold", "server_edits"],
+          "properties": {
+            "reserve_tokens": { "$ref": "#/$defs/Int" },
+            "cache_ttl_ms": { "$ref": "#/$defs/PosInt" },
+            "clear_results": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["trigger", "keep_recent", "exclude_tools"],
+              "properties": {
+                "trigger": { "$ref": "#/$defs/Threshold" },
+                "keep_recent": { "$ref": "#/$defs/Int" },
+                "idle_ms": { "$ref": "#/$defs/PosInt" },
+                "exclude_tools": { "type": "array", "items": { "$ref": "#/$defs/Name" } }
+              }
+            },
+            "spill": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["threshold_bytes", "head_bytes", "tail_bytes", "request_budget_bytes"],
+              "properties": {
+                "threshold_bytes": { "$ref": "#/$defs/PosInt" },
+                "head_bytes": { "$ref": "#/$defs/Int" },
+                "tail_bytes": { "$ref": "#/$defs/Int" },
+                "request_budget_bytes": { "$ref": "#/$defs/PosInt" }
+              }
+            },
+            "compact": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["trigger", "keep_tail", "max_failures"],
+              "properties": {
+                "trigger": { "$ref": "#/$defs/Threshold" },
+                "keep_tail": { "$ref": "#/$defs/Threshold" },
+                "max_failures": { "$ref": "#/$defs/PosInt" }
+              }
+            },
+            "restore": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["max_files", "file_tokens", "skill_tokens", "skills_total_tokens"],
+              "properties": {
+                "max_files": { "$ref": "#/$defs/Int" },
+                "file_tokens": { "$ref": "#/$defs/Int" },
+                "skill_tokens": { "$ref": "#/$defs/Int" },
+                "skills_total_tokens": { "$ref": "#/$defs/Int" }
+              }
+            },
+            "max_output_continuations": { "$ref": "#/$defs/Int" },
+            "max_output_escalation_tokens": { "$ref": "#/$defs/PosInt" },
+            "defer_tools": { "enum": ["auto", "always", "never"] },
+            "defer_threshold": { "$ref": "#/$defs/Threshold" },
+            "server_edits": { "enum": ["disabled", "exact_report"] }
+          }
+        },
+        "budget": { "description": "Thread-level budget. A run budget rides on the user_input that starts the run.", "$ref": "#/$defs/Budget" },
+        "on_unknown_usage": { "enum": ["upper_bound", "stop"] },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "allow", "ask", "deny", "protected_paths", "allow_bypass", "plan_exit_mode"],
+          "properties": {
+            "mode": { "$ref": "#/$defs/PermissionMode" },
+            "allow": { "type": "array", "items": { "$ref": "#/$defs/PermissionRule" } },
+            "ask": { "type": "array", "items": { "$ref": "#/$defs/PermissionRule" } },
+            "deny": { "type": "array", "items": { "$ref": "#/$defs/PermissionRule" } },
+            "protected_paths": { "type": "array", "items": { "$ref": "#/$defs/NonEmpty" } },
+            "allow_bypass": { "type": "boolean" },
+            "plan_exit_mode": { "$ref": "#/$defs/PermissionMode" }
+          }
+        },
+        "output": {
+          "description": "Structured final output. schema_sha256 is the RFC 8785 hash of schema.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema", "schema_sha256", "mode", "max_retries"],
+          "properties": {
+            "schema": { "$ref": "#/$defs/JsonObject" },
+            "schema_sha256": { "$ref": "#/$defs/Sha256" },
+            "mode": { "enum": ["tool", "native"] },
+            "max_retries": { "$ref": "#/$defs/Int" }
+          }
+        },
+        "handoffs": { "description": "Agent names this agent may hand the conversation to.", "type": "array", "items": { "$ref": "#/$defs/NonEmpty" } }
+      }
     },
     "ParkAddress": {
       "description": "What a parked branch waits on; resumed must name the same address. For kind effect, id is the derived effect key.",
@@ -263,7 +582,11 @@
             "effect_begin", "effect_commit", "effect_unknown", "effect_resolved", "tool_result", "tool_result_late",
             "snapshot", "fork", "parked", "park_escalated", "resumed", "compacted",
             "cancel_requested", "cancelled", "stop_when_idle", "turn_completed",
-            "schedule_fired", "schedule_skipped", "channel_delivery", "log_repaired"
+            "schedule_fired", "schedule_skipped", "channel_delivery", "log_repaired",
+            "settings_changed", "retry_scheduled", "budget_exceeded", "output_validated",
+            "context_edited", "compaction_failed", "mode_changed", "permission_rule_added",
+            "agent_spawned", "agent_finished", "handoff", "todos_updated",
+            "team_task_created", "team_task_claimed", "team_task_updated", "team_message"
           ]
         },
         "type_version": { "const": 1 }
@@ -314,7 +637,23 @@
             { "$ref": "#/$defs/ev_schedule_fired" },
             { "$ref": "#/$defs/ev_schedule_skipped" },
             { "$ref": "#/$defs/ev_channel_delivery" },
-            { "$ref": "#/$defs/ev_log_repaired" }
+            { "$ref": "#/$defs/ev_log_repaired" },
+            { "$ref": "#/$defs/ev_settings_changed" },
+            { "$ref": "#/$defs/ev_retry_scheduled" },
+            { "$ref": "#/$defs/ev_budget_exceeded" },
+            { "$ref": "#/$defs/ev_output_validated" },
+            { "$ref": "#/$defs/ev_context_edited" },
+            { "$ref": "#/$defs/ev_compaction_failed" },
+            { "$ref": "#/$defs/ev_mode_changed" },
+            { "$ref": "#/$defs/ev_permission_rule_added" },
+            { "$ref": "#/$defs/ev_agent_spawned" },
+            { "$ref": "#/$defs/ev_agent_finished" },
+            { "$ref": "#/$defs/ev_handoff" },
+            { "$ref": "#/$defs/ev_todos_updated" },
+            { "$ref": "#/$defs/ev_team_task_created" },
+            { "$ref": "#/$defs/ev_team_task_claimed" },
+            { "$ref": "#/$defs/ev_team_task_updated" },
+            { "$ref": "#/$defs/ev_team_message" }
           ]
         }
       ]
@@ -336,7 +675,20 @@
             "adapter": { "$ref": "#/$defs/AdapterRef" },
             "instructions": { "description": "The full pinned system text: base instructions, extension instructions in order, skill listing, memory guidance.", "type": "string" },
             "tools": { "type": "array", "items": { "$ref": "#/$defs/ToolSpec" } },
-            "sandbox_provider": { "$ref": "#/$defs/Name" }
+            "sandbox_provider": { "$ref": "#/$defs/Name" },
+            "policy": { "$ref": "#/$defs/Policy" },
+            "parent": {
+              "description": "Set on a child thread: the parent event that created it (agent_spawned or handoff).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["thread_id", "branch_id", "event_id", "relation"],
+              "properties": {
+                "thread_id": { "$ref": "#/$defs/ThreadId" },
+                "branch_id": { "$ref": "#/$defs/BranchId" },
+                "event_id": { "$ref": "#/$defs/EventId" },
+                "relation": { "enum": ["subagent", "handoff"] }
+              }
+            }
           }
         }
       }
@@ -351,7 +703,18 @@
           "required": ["tools", "tools_hash"],
           "properties": {
             "tools": { "type": "array", "items": { "$ref": "#/$defs/ToolSpec" } },
-            "tools_hash": { "$ref": "#/$defs/Sha256" }
+            "tools_hash": { "$ref": "#/$defs/Sha256" },
+            "cause": {
+              "description": "Provenance. tool_search: the call whose result loaded deferred tools (those specs lose defer_loading). mcp_list_changed: a server's list changed. Absent means host.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": {
+                "kind": { "enum": ["tool_search", "mcp_list_changed", "host"] },
+                "call_id": { "$ref": "#/$defs/CallId" },
+                "server": { "$ref": "#/$defs/Name" }
+              }
+            }
           }
         }
       }
@@ -364,12 +727,15 @@
         "data": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["source", "text"],
+          "required": ["source"],
           "properties": {
-            "source": { "enum": ["api", "cli", "channel", "schedule", "parent_agent"] },
+            "source": { "enum": ["api", "cli", "channel", "schedule", "parent_agent", "handoff"] },
             "text": { "type": "string" },
-            "delivery_event_id": { "description": "The channel_delivery or schedule_fired event this input came from.", "$ref": "#/$defs/EventId" }
-          }
+            "content": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/InputPart" } },
+            "delivery_event_id": { "description": "The channel_delivery or schedule_fired event this input came from.", "$ref": "#/$defs/EventId" },
+            "budget": { "description": "The budget of the run this input starts.", "$ref": "#/$defs/Budget" }
+          },
+          "allOf": [{ "$ref": "#/$defs/TextOrContent" }]
         }
       }
     },
@@ -381,17 +747,19 @@
         "data": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["source", "text"],
+          "required": ["source"],
           "properties": {
             "source": { "enum": ["api", "cli", "channel", "parent_agent"] },
             "text": { "type": "string" },
+            "content": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/InputPart" } },
             "delivery_event_id": { "$ref": "#/$defs/EventId" }
-          }
+          },
+          "allOf": [{ "$ref": "#/$defs/TextOrContent" }]
         }
       }
     },
     "ev_injected": {
-      "description": "Model-visible context not typed by the user. memory, knowledge and attachment are always untrusted_reference.",
+      "description": "Model-visible context not typed by the user. memory, knowledge, attachment, todo (the agent's own list), agent (child or teammate output) and handoff (forwarded history) are always untrusted_reference.",
       "properties": {
         "type": { "const": "injected" }, "type_version": { "const": 1 }, "critical": { "const": true },
         "data": {
@@ -399,7 +767,7 @@
           "additionalProperties": false,
           "required": ["source", "trust", "origin"],
           "properties": {
-            "source": { "enum": ["memory", "knowledge", "skill", "hook", "attachment", "recovery"] },
+            "source": { "enum": ["memory", "knowledge", "skill", "hook", "attachment", "recovery", "todo", "mode", "output_style", "agent", "handoff"] },
             "trust": { "enum": ["untrusted_reference", "trusted_instruction"] },
             "origin": {
               "type": "object",
@@ -417,7 +785,7 @@
           "allOf": [
             { "$ref": "#/$defs/TextOrRef" },
             {
-              "if": { "properties": { "source": { "enum": ["memory", "knowledge", "attachment"] } } },
+              "if": { "properties": { "source": { "enum": ["memory", "knowledge", "attachment", "todo", "agent", "handoff"] } } },
               "then": { "properties": { "trust": { "const": "untrusted_reference" } } }
             }
           ]
@@ -447,6 +815,7 @@
           "additionalProperties": false,
           "required": ["attempt", "request_ref", "declared_prefix"],
           "properties": {
+            "purpose": { "description": "turn (absent means turn) or compaction: the summarizer side request. A compaction request and its response render nothing into later requests.", "enum": ["turn", "compaction"] },
             "attempt": { "description": "1 for a fresh request; n+1 when re-sending after model_attempt_abandoned.", "$ref": "#/$defs/PosInt" },
             "request_ref": { "$ref": "#/$defs/ArtifactRef" },
             "declared_prefix": {
@@ -469,7 +838,7 @@
           "required": ["request_event_id", "content", "stop_reason", "usage", "completeness"],
           "properties": {
             "request_event_id": { "$ref": "#/$defs/EventId" },
-            "content": { "type": "array", "items": { "$ref": "#/$defs/ContentPart" } },
+            "content": { "type": "array", "items": { "$ref": "#/$defs/OutputPart" } },
             "stop_reason": { "enum": ["end_turn", "tool_use", "max_tokens", "stop_sequence", "refusal", "other"] },
             "usage": { "$ref": "#/$defs/Usage" },
             "completeness": { "enum": ["complete", "partial"] }
@@ -488,7 +857,7 @@
           "properties": {
             "request_event_id": { "$ref": "#/$defs/EventId" },
             "provider_request_id": { "$ref": "#/$defs/NonEmpty" },
-            "content": { "type": "array", "items": { "$ref": "#/$defs/ContentPart" } },
+            "content": { "type": "array", "items": { "$ref": "#/$defs/OutputPart" } },
             "stop_reason": { "enum": ["end_turn", "tool_use", "max_tokens", "stop_sequence", "refusal", "other"] },
             "usage": { "$ref": "#/$defs/Usage" },
             "completeness": { "enum": ["complete", "partial"] }
@@ -507,7 +876,9 @@
           "properties": {
             "request_event_id": { "$ref": "#/$defs/EventId" },
             "provider_outcome": { "enum": ["not_sent", "unknown", "failed"] },
-            "reason": { "enum": ["crash", "timeout", "provider_error", "stream_broken", "cancelled", "steered"] }
+            "reason": { "description": "rate_limited (429), overloaded (529), server_error (5xx or connection reset) and prompt_too_long are provider rejections: provider_outcome failed. guardrail: a parallel input guardrail denied.", "enum": ["crash", "timeout", "provider_error", "stream_broken", "cancelled", "steered", "rate_limited", "overloaded", "server_error", "prompt_too_long", "guardrail"] },
+            "http_status": { "$ref": "#/$defs/Int" },
+            "retry_after_ms": { "$ref": "#/$defs/Int" }
           }
         }
       }
@@ -540,8 +911,9 @@
           "properties": {
             "call_id": { "$ref": "#/$defs/CallId" },
             "decision": { "enum": ["allow", "deny", "ask"] },
-            "source": { "enum": ["policy", "hook", "default", "self_config_guard"] },
+            "source": { "enum": ["policy", "hook", "default", "self_config_guard", "mode", "protected_path", "thread_rule"] },
             "rule_id": { "type": "string" },
+            "mode": { "$ref": "#/$defs/PermissionMode" },
             "reason": { "type": "string" }
           }
         }
@@ -557,11 +929,12 @@
           "required": ["extension", "hook", "decision"],
           "properties": {
             "extension": { "$ref": "#/$defs/Name" },
-            "hook": { "enum": ["before_model", "after_model", "before_tool", "after_tool", "on_stop"] },
-            "decision": { "enum": ["proceed", "deny", "guide", "retry", "allow", "ask", "annotate", "stop", "continue", "failed"] },
+            "hook": { "enum": ["before_model", "after_model", "before_tool", "after_tool", "on_stop", "before_input", "after_tool_batch", "before_tool_result", "permission_request", "permission_denied", "before_compact", "after_compact", "stop_failure", "session_start", "session_end", "subagent_start", "subagent_stop", "before_model_switch", "after_model_switch", "notification"] },
+            "decision": { "enum": ["proceed", "deny", "guide", "retry", "allow", "ask", "annotate", "stop", "continue", "failed", "redact"] },
             "reason": { "type": "string" },
             "request_event_id": { "$ref": "#/$defs/EventId" },
-            "call_id": { "$ref": "#/$defs/CallId" }
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "input_event_id": { "description": "before_input: the user_input or steer decided on. A deny or failed decision means that input renders nothing.", "$ref": "#/$defs/EventId" }
           }
         }
       }
@@ -679,9 +1052,10 @@
       }
     },
     "ev_tool_result": {
-      "description": "preview is exactly what the model sees. ref holds the full output when it exceeds the preview. origin deferred is a placeholder for a non-blocking call whose real result arrives later as tool_result_late.",
+      "description": "Without content, preview is exactly what the model sees (one text part). With content, the model sees exactly those ordered parts and preview is a plain-text rendering for logs and channels. ref holds the full output when it exceeds the spill threshold. origin deferred is a placeholder for a non-blocking call whose real result arrives later as tool_result_late. origin answered is an ask_user answer and carries the answering principal.",
       "properties": {
         "type": { "const": "tool_result" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "actor": { "$ref": "#/$defs/Actor" },
         "data": {
           "type": "object",
           "additionalProperties": false,
@@ -691,11 +1065,14 @@
             "is_error": { "type": "boolean" },
             "completeness": { "enum": ["complete", "partial"] },
             "preview": { "type": "string" },
+            "content": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ResultPart" } },
             "ref": { "$ref": "#/$defs/ArtifactRef" },
-            "origin": { "enum": ["executed", "materialized_from_commit", "denied", "not_executed", "interrupted", "deferred"] }
+            "origin": { "enum": ["executed", "materialized_from_commit", "denied", "not_executed", "interrupted", "deferred", "answered"] }
           }
         }
-      }
+      },
+      "if": { "properties": { "data": { "properties": { "origin": { "const": "answered" } } } } },
+      "then": { "properties": { "actor": { "$ref": "#/$defs/ActorWithPrincipal" } } }
     },
     "ev_tool_result_late": {
       "description": "Reserved: the real result of a non-blocking call, appended after its deferred placeholder and possibly after later turns. History is never rewritten; the placeholder stays.",
@@ -710,6 +1087,7 @@
             "is_error": { "type": "boolean" },
             "completeness": { "enum": ["complete", "partial"] },
             "preview": { "type": "string" },
+            "content": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ResultPart" } },
             "ref": { "$ref": "#/$defs/ArtifactRef" }
           }
         }
@@ -774,7 +1152,7 @@
           "required": ["address", "reason"],
           "properties": {
             "address": { "$ref": "#/$defs/ParkAddress" },
-            "reason": { "enum": ["awaiting_approval", "effect_unknown", "awaiting_input", "awaiting_resource"] },
+            "reason": { "description": "awaiting_input: an ask_user question; the address is {kind: input, id: <call_id>}.", "enum": ["awaiting_approval", "effect_unknown", "awaiting_input", "awaiting_resource"] },
             "expires_at": { "$ref": "#/$defs/TimeMs" }
           }
         }
@@ -807,7 +1185,7 @@
       }
     },
     "ev_compacted": {
-      "description": "Render replaces events from..to (whole completed turns) with the summary as untrusted reference. The log is untouched, and the declared prefix (line 0) is never compacted.",
+      "description": "Render replaces events from..to with the summary as untrusted reference. Both ends are step boundaries (no pending call, no open model attempt), so a tool pair is never split (semantic rule 10). The log is untouched, and the declared prefix (line 0) is never compacted. When summary_request_event_id is set, summary_ref is the UTF-8 text of that compaction request's response.",
       "properties": {
         "type": { "const": "compacted" }, "type_version": { "const": 1 }, "critical": { "const": true },
         "data": {
@@ -819,7 +1197,9 @@
             "to_seq": { "$ref": "#/$defs/PosInt" },
             "from_event_id": { "$ref": "#/$defs/EventId" },
             "to_event_id": { "$ref": "#/$defs/EventId" },
-            "summary_ref": { "$ref": "#/$defs/ArtifactRef" }
+            "summary_ref": { "$ref": "#/$defs/ArtifactRef" },
+            "summary_request_event_id": { "$ref": "#/$defs/EventId" },
+            "trigger": { "enum": ["threshold", "reactive", "manual"] }
           }
         }
       }
@@ -872,7 +1252,7 @@
           "additionalProperties": false,
           "required": ["reason"],
           "properties": {
-            "reason": { "enum": ["end_turn", "max_turns", "budget_exhausted", "cancelled", "error", "interrupted", "stop_hook_limit"] }
+            "reason": { "enum": ["end_turn", "max_turns", "budget_exhausted", "cancelled", "error", "interrupted", "stop_hook_limit", "max_output", "context_exhausted", "output_invalid", "input_denied", "model_unavailable", "handoff"] }
           }
         }
       }
@@ -947,6 +1327,305 @@
             "at_offset": { "$ref": "#/$defs/Int" },
             "dropped_ref": { "$ref": "#/$defs/ArtifactRef" }
           }
+        }
+      }
+    },
+
+    "ev_settings_changed": {
+      "description": "Starts a new settings epoch: Render v1 line 0 takes model, params and adapter from here, system and tools stay pinned. C7 holds within each epoch. Never while a model attempt awaits its response. model must be listed in policy.models when policy is present.",
+      "properties": {
+        "type": { "const": "settings_changed" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason", "settings"],
+          "properties": {
+            "reason": { "enum": ["user", "fallback", "escalation", "revert"] },
+            "settings": { "$ref": "#/$defs/ModelSettings" },
+            "cause_event_id": { "$ref": "#/$defs/EventId" }
+          }
+        }
+      }
+    },
+    "ev_retry_scheduled": {
+      "description": "A recorded wait before re-sending after a retryable rejection. Recovery after a crash waits only until not_before. Skipping it cannot change reduce or render.",
+      "properties": {
+        "type": { "const": "retry_scheduled" }, "type_version": { "const": 1 }, "critical": { "const": false },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["request_event_id", "delay_ms", "not_before", "basis"],
+          "properties": {
+            "request_event_id": { "$ref": "#/$defs/EventId" },
+            "delay_ms": { "$ref": "#/$defs/Int" },
+            "not_before": { "$ref": "#/$defs/TimeMs" },
+            "basis": { "enum": ["retry_after", "backoff"] }
+          }
+        }
+      }
+    },
+    "ev_budget_exceeded": {
+      "description": "A budget check before a model_request failed. The run ends: pending calls close, then turn_completed{budget_exhausted}; no model_request follows until a new user_input.",
+      "properties": {
+        "type": { "const": "budget_exceeded" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope", "limit", "limit_value", "observed", "observed_is_upper_bound"],
+          "properties": {
+            "scope": { "enum": ["run", "thread"] },
+            "limit": { "enum": ["max_cost_nanos", "max_input_tokens", "max_output_tokens", "max_model_requests", "max_turns", "max_wall_ms"] },
+            "limit_value": { "$ref": "#/$defs/Int" },
+            "observed": { "$ref": "#/$defs/Int" },
+            "observed_is_upper_bound": { "description": "true when unknown usage was counted at its conservative upper bound.", "type": "boolean" }
+          }
+        }
+      }
+    },
+    "ev_output_validated": {
+      "description": "Structured-output check of one candidate. source_event_id is the raw candidate: the final_output tool_call, or the model_response (native mode). accepted carries the validated value; rejected carries the errors shown to the model. schema_sha256 must equal policy.output.schema_sha256, and an accepted value must validate against that schema.",
+      "properties": {
+        "type": { "const": "output_validated" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_event_id", "schema_sha256", "outcome"],
+          "properties": {
+            "source_event_id": { "$ref": "#/$defs/EventId" },
+            "schema_sha256": { "$ref": "#/$defs/Sha256" },
+            "outcome": { "enum": ["accepted", "rejected"] },
+            "value": { "$ref": "#/$defs/JsonValue" },
+            "errors": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["path", "message"], "properties": { "path": { "type": "string" }, "message": { "type": "string" } } } }
+          },
+          "if": { "properties": { "outcome": { "const": "accepted" } } },
+          "then": { "required": ["value"], "not": { "required": ["errors"] } },
+          "else": { "required": ["errors"], "not": { "required": ["value"] } }
+        }
+      }
+    },
+    "ev_context_edited": {
+      "description": "Changes how earlier tool results render, never the results themselves. clear replaces the call's result lines with the fixed placeholder; redact replaces spans of one text part (part 0 is the preview when there is no content) with [redacted]. Every call_id must have a recorded result.",
+      "properties": {
+        "type": { "const": "context_edited" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason", "edits"],
+          "properties": {
+            "reason": { "enum": ["threshold", "idle", "provider", "guardrail", "manual", "compaction_fallback"] },
+            "edits": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["call_id", "action"],
+                "properties": {
+                  "call_id": { "$ref": "#/$defs/CallId" },
+                  "action": { "enum": ["clear", "redact"] },
+                  "part": { "$ref": "#/$defs/Int" },
+                  "spans": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Span" } }
+                },
+                "if": { "properties": { "action": { "const": "redact" } } },
+                "then": { "required": ["part", "spans"] },
+                "else": { "not": { "anyOf": [{ "required": ["part"] }, { "required": ["spans"] }] } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ev_compaction_failed": {
+      "description": "A compaction attempt failed. Consecutive failures since the last compacted open the circuit breaker (derived, ).",
+      "properties": {
+        "type": { "const": "compaction_failed" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stage", "reason"],
+          "properties": {
+            "stage": { "enum": ["hook", "summary", "restore"] },
+            "reason": { "enum": ["hook_denied", "model_error", "prompt_too_long", "empty_summary", "artifact_error", "still_over_threshold"] },
+            "request_event_id": { "$ref": "#/$defs/EventId" }
+          }
+        }
+      }
+    },
+    "ev_mode_changed": {
+      "description": "Permission mode change. from must be the current mode; to bypass needs policy.permissions.allow_bypass. Never caused by the agent alone: an operator via the host API, or an approved exit_plan_mode call (cause_event_id).",
+      "properties": {
+        "type": { "const": "mode_changed" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": { "$ref": "#/$defs/PermissionMode" },
+            "to": { "$ref": "#/$defs/PermissionMode" },
+            "cause_event_id": { "$ref": "#/$defs/EventId" }
+          }
+        }
+      }
+    },
+    "ev_permission_rule_added": {
+      "description": "A thread-scoped rule an approver chose while answering a challenge ('allow for this thread'). Checked after self-config, deny rules and protected paths, so it can never open those.",
+      "properties": {
+        "type": { "const": "permission_rule_added" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "actor": { "$ref": "#/$defs/ActorWithPrincipal" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rule", "decision", "challenge_id"],
+          "properties": {
+            "rule": { "$ref": "#/$defs/PermissionRule" },
+            "decision": { "enum": ["allow", "deny"] },
+            "challenge_id": { "$ref": "#/$defs/Uuid" }
+          }
+        }
+      }
+    },
+    "ev_agent_spawned": {
+      "description": "A child thread was created for a spawn call. Durable before the child's thread_started, so cancellation and recovery can find it.",
+      "properties": {
+        "type": { "const": "agent_spawned" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "child_thread_id", "agent_name", "mode", "isolation"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "child_thread_id": { "$ref": "#/$defs/ThreadId" },
+            "agent_name": { "$ref": "#/$defs/NonEmpty" },
+            "mode": { "enum": ["foreground", "background"] },
+            "isolation": { "enum": ["none", "shared_sandbox", "worktree", "forked_sandbox"] },
+            "budget": { "$ref": "#/$defs/Budget" }
+          }
+        }
+      }
+    },
+    "ev_agent_finished": {
+      "description": "The child's one terminal result (F7.5). Exactly once per agent_spawned.",
+      "properties": {
+        "type": { "const": "agent_finished" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["child_thread_id", "status", "usage"],
+          "properties": {
+            "child_thread_id": { "$ref": "#/$defs/ThreadId" },
+            "status": { "enum": ["completed", "failed", "cancelled", "budget_exhausted"] },
+            "output_ref": { "$ref": "#/$defs/ArtifactRef" },
+            "usage": { "description": "The child's aggregate usage; null fields are unknown.", "$ref": "#/$defs/Usage" }
+          }
+        }
+      }
+    },
+    "ev_handoff": {
+      "description": "The conversation moves to another agent's new thread. After it this thread takes no new input and no model_request; the host routes the conversation to to_thread_id.",
+      "properties": {
+        "type": { "const": "handoff" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "to_agent", "to_thread_id", "forwarded"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "to_agent": { "$ref": "#/$defs/NonEmpty" },
+            "to_thread_id": { "$ref": "#/$defs/ThreadId" },
+            "forwarded": { "enum": ["none", "summary", "transcript"] },
+            "forwarded_ref": { "$ref": "#/$defs/ArtifactRef" }
+          },
+          "if": { "properties": { "forwarded": { "const": "none" } } },
+          "then": { "not": { "required": ["forwarded_ref"] } },
+          "else": { "required": ["forwarded_ref"] }
+        }
+      }
+    },
+    "ev_todos_updated": {
+      "description": "The agent's complete todo list after a todo_write call (F8). reduce keeps the latest. ids are unique.",
+      "properties": {
+        "type": { "const": "todos_updated" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_id", "todos"],
+          "properties": {
+            "call_id": { "$ref": "#/$defs/CallId" },
+            "todos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "content", "status"],
+                "properties": {
+                  "id": { "$ref": "#/$defs/NonEmpty" },
+                  "content": { "$ref": "#/$defs/NonEmpty" },
+                  "status": { "enum": ["pending", "in_progress", "completed"] },
+                  "active_form": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ev_team_task_created": {
+      "description": "A shared team task, in the team lead's log (the one writer for team state).",
+      "properties": {
+        "type": { "const": "team_task_created" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["task_id", "subject", "blocked_by"],
+          "properties": {
+            "task_id": { "$ref": "#/$defs/NonEmpty" },
+            "subject": { "$ref": "#/$defs/NonEmpty" },
+            "description": { "type": "string" },
+            "blocked_by": { "type": "array", "items": { "$ref": "#/$defs/NonEmpty" } }
+          }
+        }
+      }
+    },
+    "ev_team_task_claimed": {
+      "description": "Atomic claim: the task exists, is open and unclaimed, and every blocker is completed.",
+      "properties": {
+        "type": { "const": "team_task_claimed" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["task_id", "member"],
+          "properties": { "task_id": { "$ref": "#/$defs/NonEmpty" }, "member": { "$ref": "#/$defs/NonEmpty" } }
+        }
+      }
+    },
+    "ev_team_task_updated": {
+      "description": "completed and failed close a claimed task; released returns it to the open pool.",
+      "properties": {
+        "type": { "const": "team_task_updated" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["task_id", "status"],
+          "properties": { "task_id": { "$ref": "#/$defs/NonEmpty" }, "status": { "enum": ["completed", "failed", "released"] } }
+        }
+      }
+    },
+    "ev_team_message": {
+      "description": "An addressed message between members. message_id is unique; delivery into a member's thread is injected{source: agent, origin.id: message_id}, deduplicated by that id.",
+      "properties": {
+        "type": { "const": "team_message" }, "type_version": { "const": 1 }, "critical": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["message_id", "from", "to"],
+          "properties": {
+            "message_id": { "$ref": "#/$defs/NonEmpty" },
+            "from": { "$ref": "#/$defs/NonEmpty" },
+            "to": { "description": "A member id, or * for every member.", "$ref": "#/$defs/NonEmpty" },
+            "text": { "type": "string" },
+            "ref": { "$ref": "#/$defs/ArtifactRef" }
+          },
+          "allOf": [{ "$ref": "#/$defs/TextOrRef" }]
         }
       }
     }

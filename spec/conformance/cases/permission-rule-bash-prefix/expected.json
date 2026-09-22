@@ -1,0 +1,65 @@
+{
+  "outcome": "ok",
+  "decisions": [
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(git status:*)"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(git status:*)"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(git status:*)"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(git status:*)"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(git status:*)"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(npm test)"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    }
+  ]
+}

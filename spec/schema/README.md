@@ -45,7 +45,7 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
    | `ArtifactRef.sha256` | the artifact's bytes, full 64 hex digits | raw |
    | `config_hash`, `args_hash`, `manifest_hash`, `tools_changed.tools_hash` | RFC 8785 bytes of the structured value | canonical |
 
-4. **Numbers.** Envelope fields and framework-authored integer fields are integers in `0 … 2^53−1`. Floats appear only in `JsonValue` positions (tool `input`, `model_params`, adapter `settings`), spelled per .
+4. **Numbers.** Envelope fields and framework-authored integer fields are integers in `0 … 2^53−1`. Floats appear only in `JsonValue` positions (tool `input`, `model_params`, adapter `settings`), spelled per . Fractions in policy are integer permille; prices are integer nano-units per token. Token counts are an integer or `null` (unknown, never zero; ).
 5. **Identifiers.** `thread_id`, `branch_id` and `event_id` are lowercase UUIDv7 strings, branded per kind in both languages. `call_id` is opaque and may come from the provider.
 6. **Pinned names.** Event `type` names, every enum literal and every `ErrorCode` are frozen by a golden test in both languages. Add only. Never update the pins in a rename PR.
 7. **Header** (a branch's first line): `{format: "threads.log", format_version: 1, thread_id, branch_id, created_at, writer: {impl, version}}`. It is not an event: no `seq`, no `prev_hash`. Every branch, root or child, has its own header. `writer` pins the only implementation and major version that may append.
@@ -60,7 +60,7 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
    | `epoch` | The writer's lease epoch. Non-decreasing along the resolved chain |
    | `type`, `type_version` | Discriminant plus per-type schema version |
    | `time` | Epoch ms. Informational only, never used for ordering |
-   | `actor` | `{kind, principal?}`. `principal` is required on `user_input`, `steer`, `channel_delivery`, `cancel_requested`, `stop_when_idle`, `approval_granted` and `approval_denied` |
+   | `actor` | `{kind, principal?}`. `principal` is required on `user_input`, `steer`, `channel_delivery`, `cancel_requested`, `stop_when_idle`, `approval_granted`, `approval_denied`, `permission_rule_added` and `tool_result{origin: answered}` |
    | `prev_hash` | See the hashes table |
    | `critical` | Always present. See below |
    | `data` | Strict per-`(type, type_version)` payload. Unknown keys are rejected |
@@ -87,6 +87,12 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
     | a snapshot's captured position | Everything before the snapshot event. The snapshot event is the fork point |
     | `fork` at_seq and thread | `at_seq` = the fork event's `seq − 1`. The thread is the envelope `thread_id` (forks never cross threads) |
     | an approval's branch | The envelope `branch_id` |
+    | a request's settings epoch and line 0 | The latest `thread_started` or `settings_changed` before it |
+    | the loaded tool set | The latest `tools_changed` (specs without `defer_loading`), else `thread_started.tools` |
+    | the compaction circuit breaker | `compaction_failed` events since the last `compacted` ≥ `compact.max_failures` |
+    | cost, usage totals, cache breaks | Projections over `model_response` usage and `policy.models` prices |
+    | the permission mode | `policy.permissions.mode`, then the latest `mode_changed` |
+    | todo list, children, team tasks | The latest `todos_updated`; `agent_spawned` / `agent_finished`; the `team_task_*` events |
 
 14. **Integrity scope.**
     - The chain detects any change to a line before the last one: the next line's `prev_hash` stops matching.
@@ -97,27 +103,33 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
 
 ## Render v1
 
-The one normative representation of a model request. `req_hash` covers these bytes, and the adapter guard re-renders and re-hashes before every dispatch (`request_hash_mismatch` on any difference). It is JSONL: each line is JCS followed by `\n`.
+The one normative representation of a model request. `req_hash` covers these bytes, and the adapter guard re-renders and re-hashes before every dispatch (`request_hash_mismatch` on any difference). It is JSONL: each line is JCS followed by `\n`. The generator's reference implementation is `spec/tools/fixtures/render.py`.
 
-- **Line 0 is the declared immutable prefix:** `{adapter, model, params, system, tools}`, taken from `thread_started`. `params` is `model_params` (every adapter-visible generation parameter). `adapter` is the model adapter's name, version and every provider-conversion setting. `system` is the pinned instruction text. `tools` is `[{name, description, input_schema}]` in declared order (`effect_class` and `dedup_window_ms` aren't model-visible and are omitted).
+- **Line 0 is the declared prefix of the current settings epoch:** `{adapter, model, params, system, tools}`.
+  - `system` and `tools` come from `thread_started` and never change.
+  - `model`, `params` (`model_params`) and `adapter` come from the latest `thread_started` or `settings_changed` before the request.
+  - `adapter` is the model adapter's name, version and every provider-conversion setting, including declared hosted tools.
+  - `tools` is `[{name, description, input_schema}]` in declared order. A spec with `defer_loading: true` renders as `{name, description, deferred: true}`. `effect_class`, `dedup_window_ms`, `output_schema` and `ends_turn` aren't model-visible and are omitted.
 - **Then one line per model-visible event, in log order:**
 
   | Event | Line |
   |---|---|
-  | `user_input`, `steer` | `{"role":"user","content":[{"type":"text","text":<text>}]}` |
+  | `user_input`, `steer` | `{"role":"user","content":[{"type":"text","text":<text>}]}`, or `{"role":"user","content":<content>}` when the event has `content` (ordered input parts, as recorded). **Nothing** if a later `hook_decision{hook: before_input, decision: deny \| failed, input_event_id}` before the request names it |
   | `injected`, trust `untrusted_reference` | A user line whose text is `<reference source="S" id="ID" untrusted="true">\nTEXT\n</reference>` |
   | `injected`, trust `trusted_instruction` | A user line whose text is `<context source="S" id="ID">\nTEXT\n</context>` |
   | `heartbeat` | A user line whose text is `<heartbeat>\nrunning: ID, ID\n</heartbeat>` |
-  | `model_response`, `model_response_recovered` | `{"role":"assistant","content":<content>}` |
-  | `tools_changed` | `{"role":"tools","tools":[{name, description, input_schema}]}`: the complete new set. Line 0 is unchanged; the adapter sends the latest set as the provider's tool parameter, so this is the one event that knowingly ends provider cache reuse |
-  | `tool_result` | `{"role":"tool","call_id":…,"is_error":…,"content":[{"type":"text","text":<preview>}]}` |
+  | `model_response`, `model_response_recovered` | `{"role":"assistant","content":<content>}`, parts as recorded. `reasoning` and `hosted_tool` parts of a response recorded before a `settings_changed{reasoning_carryover: omit_prior}` are omitted. If nothing is left, no line. **Nothing** when the response answers a `model_request{purpose: compaction}` |
+  | `tools_changed` | `{"role":"tools","tools":[…]}`: the complete new set, rendered as in line 0 (deferred specs as stubs). Line 0 is unchanged |
+  | `tool_result` | `{"role":"tool","call_id":…,"is_error":…,"content":<parts>}`. `<parts>` is `[{"type":"text","text":<preview>}]` when the event has no `content`, else `content` as recorded (the preview is then not rendered). A `context_edited` before the request changes it: `clear` makes `<parts>` exactly `[{"type":"text","text":"[tool result cleared: call_id=<id>; read it with read_tool_result]"}]`; `redact` replaces each span (UTF-8 bytes) of text part `part` with `[redacted]` |
   | `tool_result_late` | The same, plus `"late":true`. The earlier placeholder line stays |
-  | `compacted` | The lines for `from_seq..to_seq` are dropped. In their place goes one user line: the summary artifact's text, wrapped as a reference with `source="summary"` and `id=<summary sha256>`. Line 0 is never compacted |
+  | `compacted` | The lines of events `from_seq..to_seq` are dropped (a compacted event inside a later range is dropped too). In place of the range's first event go: one user line, the summary artifact's text wrapped as a reference with `source="summary"` and `id=<summary sha256>`, then the line of the **last** `tools_changed` inside the range, if any, so loaded and changed tools survive. The compacted event itself renders nothing. Line 0 is never compacted |
 
-  All other events render nothing. An event whose text is in an artifact renders the verified artifact bytes decoded as UTF-8. A missing or corrupt artifact is a typed error, never substituted text.
-- **Provider wire bytes** are derived deterministically from these bytes by the adapter that line 0 names, using only the settings line 0 records. So every adapter-visible setting is inside the hashed bytes.
-- **C7, the declared prefix.** `model_request.declared_prefix` describes line 0 (bytes including its `\n`, and SHA-256). On a branch, every recorded `declared_prefix` must be **equal** to every other and to line 0 as re-rendered. A prefix that grows while keeping its old bytes as a start is a C7 failure (`prefix_changed`). Config changes don't happen in place: a new config pin is a new thread.
-- **History prefix (cache reuse, not C7).** Each recorded request's bytes are a byte prefix of the next request's bytes, unless a `compacted` event lies between them. The render runner checks this as a separate property. It never stands in for C7.
+  All other events render nothing (`model_request`, `settings_changed`, `context_edited`, `hook_decision`, …).
+- **Artifacts.** Parts carry artifact refs, not bytes. An event whose text is in an artifact renders the verified bytes decoded as UTF-8. Before dispatch every artifact referenced by a rendered part is read and hash-verified. A missing or corrupt artifact is `artifact_missing` / `artifact_corrupt`, never substituted, and the request isn't sent (`render-image-artifact-missing`).
+- **Compaction side request** (`model_request{purpose: compaction}`, ): the normal render of the events before it, then one user line whose text is the fixed instruction `Summarize the conversation so far for your own continuation. Keep the user's goals and constraints, decisions made, files and identifiers touched, open tasks with their status, and the next step. Reply with the summary only.` followed, when `before_compact` hooks returned `guide` decisions since the previous `model_request`, by `\n\nAdditional instructions:\n` and their reasons joined by `\n`. Its line 0 is the epoch's line 0, so C7 holds.
+- **Provider wire bytes** are derived deterministically from these bytes and the verified artifacts by the adapter that line 0 names, using only the settings line 0 records. So every adapter-visible setting is inside the hashed bytes. An adapter that can't encode a rendered part fails before dispatch with `content_unsupported` or `continuation_unsupported`.
+- **C7, the declared prefix, per settings epoch.** `model_request.declared_prefix` describes line 0 (bytes including its `\n`, and SHA-256). Within one settings epoch every recorded `declared_prefix` must be **equal** to every other and to that epoch's line 0 as re-rendered. A prefix that changes without a `settings_changed`, including one that grows while keeping its old bytes as a start, is a C7 failure (`prefix_changed`). `system` and `tools` never change in place: a new config pin is a new thread.
+- **History prefix (cache reuse, not C7).** Each recorded turn request's bytes are a byte prefix of the next turn request's bytes, unless a `compacted`, `context_edited`, `settings_changed` or denying `before_input` decision lies between them. Compaction side requests are excluded. The render runner checks this as a separate property. It never stands in for C7.
 
 ## Semantic rules
 
@@ -134,14 +146,26 @@ Checked by readers and writers (`validate_next`) on top of the schema. This is t
 | 7 | `tool_result` needs a pending `tool_call` with that `call_id`. `tool_result_late` needs an earlier `tool_result{origin: deferred}` for it | `invalid_transition` | `tool-result-without-call`, `late-result-without-placeholder` |
 | 8 | `effect_begin` needs `permission_decision: allow` or a consumed matching approval, and no `cancel_requested` barrier after the call. `read_only` calls write no effect events | `invalid_transition` | `effect-begin-without-permission` |
 | 9 | `call_id`, `channel_delivery.item_key`, `schedule_fired.occurrence_id` and approval consumption per `challenge_id` are each unique within a branch | `invalid_transition` | `duplicate-call-id` |
-| 10 | `compacted` covers whole completed turns only | `invalid_transition` | `compaction-splits-turn` |
+| 10 | `compacted`: both edges are step boundaries (no pending tool call and no model attempt awaiting a response just before `from_seq` and at `to_seq`), so a tool pair is never split; ranges never partly overlap; when `summary_request_event_id` is set, `summary_ref` is the UTF-8 text of that compaction request's response | `invalid_transition` | `compaction-splits-tool-pair`, `compaction-summary-mismatch-rejected` |
 | 11 | `cancelled` is never written while an effect is `begun` or `unknown` | `invalid_transition` | `cancelled-with-unsettled-effect` |
 | 12 | `user_input` opens a turn only when none is open; input during a turn is `steer`. A turn ends at `turn_completed` | `invalid_transition` | `user-input-inside-open-turn` |
 | 13 | `approval_granted` / `approval_denied` match the open challenge's `call_id` and `args_hash` | `approval_mismatch` | `approval-args-mismatch` |
-| 14 | Every `declared_prefix` on a branch is equal (C7) | `prefix_changed` | `prefix-declared-changed-fails`, `prefix-stable-across-turns` |
-| 15 | `request_ref` bytes equal Render v1 of the events before the request | `request_hash_mismatch` | `render-req-hash-mismatch` |
+| 14 | Every `declared_prefix` equals the line 0 of its settings epoch (C7 per epoch) | `prefix_changed` | `prefix-declared-changed-fails`, `prefix-stable-across-turns`, `settings-change-new-prefix-epoch` |
+| 15 | `request_ref` bytes equal Render v1 of the events before the request (plus the instruction line for a compaction request) | `request_hash_mismatch` | `render-req-hash-mismatch`, `compaction-summarizer-recorded` |
 | 16 | A `fork{reason: snapshot}` is at an eligible snapshot: quiescent and not expired | `no_snapshot_boundary`, `snapshot_expired` | `fork-not-at-snapshot-error`, `fork-snapshot-expired` |
 | 17 | `tools_changed.tools_hash` is the SHA-256 of the RFC 8785 bytes of its `tools` | `invalid_transition` | `tools-changed-hash-mismatch` |
+| 18 | `settings_changed` is not written while a model attempt awaits its response, and its model is listed in `policy.models` when a policy is present | `invalid_transition` | `settings-change-during-attempt-rejected` |
+| 19 | `context_edited` names only calls with a recorded result; a redaction's `part` is a text part and its spans lie inside it on character boundaries | `invalid_transition` | `context-edit-unknown-call-rejected` |
+| 20 | `output_validated.schema_sha256` equals `policy.output.schema_sha256`, and an `accepted` value validates against `policy.output.schema` | `invalid_transition` | `output-validated-schema-mismatch-rejected` |
+| 21 | After `budget_exceeded`, no `model_request` until a new `user_input` | `invalid_transition` | `model-request-after-budget-exceeded-rejected` |
+| 22 | `agent_finished` appears exactly once per `agent_spawned` child | `invalid_transition` | `agent-finished-twice-rejected` |
+| 23 | `team_task_claimed` needs an existing open, unclaimed task whose blockers are completed; `team_task_updated` needs a claimed task; `team_message.message_id` is unique | `invalid_transition` | `team-task-claim-blocked-rejected` |
+| 24 | `todos_updated` item ids are unique | `invalid_transition` | `todos-duplicate-id-rejected` |
+| 25 | `tool_result{origin: answered}` needs an open `parked{address: {kind: input, id: <call_id>}}` | `invalid_transition` | `answer-without-open-question-rejected` |
+| 26 | After `handoff`, the thread takes no `user_input`, `steer` or `model_request` | `invalid_transition` | `handoff-then-input-rejected` |
+| 27 | `mode_changed.from` is the current mode; `to: bypass` needs `policy.permissions.allow_bypass` | `invalid_transition` | `mode-change-bypass-not-allowed` |
+
+A line that fails its `data` schema (for example a `tool_use` part inside `user_input`) is `invalid_line` (`user-input-tool-use-part-rejected`).
 
 ## Versioning policy
 
@@ -149,6 +173,7 @@ Checked by readers and writers (`validate_next`) on top of the schema. This is t
   - Old versions stay readable forever, through pure upcasters (`v → v+1`) implemented identically in both languages. Each upcaster is golden-tested against shared fixtures.
   - Writers always emit the latest version. Logs are never rewritten, and `seq`, `event_id` and `prev_hash` never change. The chain is verified over stored bytes before upcasting.
 - **`format_version` in the header** covers only framing changes that a type version can't express. Bumping it needs a new ADR and a migration plan. It is not expected before 1.0.
+- **Pre-freeze additions.** Until the v0.1 release freezes wire v1, additive changes (new event types, new optional fields, new enum values, new content part variants) land in `type_version` 1 in place. Every earlier fixture stays valid. ADRs 0019-0024 were added this way. After the freeze, every `data` change bumps its `type_version`.
 - **This file is additive.** New types and new type versions are added to `events.v1.schema.json` in place, and the golden pins catch any removal or rename. `v2` of the file exists only alongside `format_version: 2`.
 - **Reserved in v1** so that adding the loop mode later doesn't change the log format: `tool_result{origin: deferred}` plus `tool_result_late` (non-blocking tool calls, never rewriting history), and the control events `heartbeat`, `steer` and `stop_when_idle`. A hard stop is `cancel_requested`, so there is one stop barrier, not two.
 - **One version table for both languages.** TS and Python release in lockstep from this file. A reader that meets a newer `(type, type_version)` follows the critical rule. It never guesses.

@@ -1,0 +1,64 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 1,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 250,
+      "output_tokens": 50,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000008"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-00000000000a"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-00000000000e"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000010"
+      }
+    ],
+    "status": "idle",
+    "head": {
+      "seq": 17,
+      "hash": "f9c0a0a632bb27444ec625c23c9f5f4500d1abde12ff7aa4cf4b5db6f24b8c86"
+    }
+  },
+  "projections": {
+    "todos": [
+      {
+        "id": "1",
+        "content": "Read the docs",
+        "status": "completed"
+      },
+      {
+        "id": "2",
+        "content": "Fix the build",
+        "status": "in_progress",
+        "active_form": "Fixing the build"
+      }
+    ]
+  }
+}

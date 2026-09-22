@@ -1,0 +1,9 @@
+{
+  "name": "hook-before-input-denied-not-rendered",
+  "family": "hooks",
+  "kind": "render",
+  "description": "A before_input guardrail denies an input. It stays in the log for audit, the turn ends input_denied, and no later request renders it.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

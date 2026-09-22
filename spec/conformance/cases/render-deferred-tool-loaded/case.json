@@ -1,0 +1,9 @@
+{
+  "name": "render-deferred-tool-loaded",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "A deferred MCP tool shows in line 0 as {name, description, deferred: true}. A tool_search call/result is followed by tools_changed{cause: tool_search} with the loaded spec. Line 0 stays byte-equal; the loaded schema renders after the prefix.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

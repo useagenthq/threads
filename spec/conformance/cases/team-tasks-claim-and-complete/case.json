@@ -1,0 +1,9 @@
+{
+  "name": "team-tasks-claim-and-complete",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Tasks, claims, a broadcast message and a completion in the lead's log; t2 is claimable once t1 completes.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

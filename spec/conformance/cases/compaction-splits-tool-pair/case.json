@@ -1,0 +1,9 @@
+{
+  "name": "compaction-splits-tool-pair",
+  "family": "log",
+  "kind": "reduce",
+  "description": "compacted ends between a tool_call and its result, so to_seq is not a step boundary and the pair would be split: invalid_transition. Mid-turn compaction at a step boundary is allowed.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -10,11 +10,39 @@ import shutil
 import sys
 import tempfile
 
-from . import changes, effects, forks, host, integrity, recovery, renders, rules
+from . import (
+    agents,
+    changes,
+    content,
+    context,
+    effects,
+    forks,
+    host,
+    integrity,
+    models,
+    policy,
+    recovery,
+    renders,
+    rules,
+)
 from .common import CASES, sha
 from .jcs import selftest
 
-FAMILIES = (integrity, effects, recovery, forks, rules, renders, host, changes)
+FAMILIES = (
+    integrity,
+    effects,
+    recovery,
+    forks,
+    rules,
+    renders,
+    host,
+    changes,
+    content,
+    context,
+    models,
+    agents,
+    policy,
+)
 
 
 def _diff(generated: pathlib.Path, committed: pathlib.Path) -> list[str]:

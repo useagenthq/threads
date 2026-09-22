@@ -1,0 +1,9 @@
+{
+  "name": "render-thinking-block-replay",
+  "family": "log_fork_test",
+  "kind": "render",
+  "description": "A response with a signed thinking block and a tool_use. The block's exact provider JSON (with signature) is an artifact; the next request carries the reasoning part unchanged, by ref, and never as text. Replay re-renders byte for byte.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

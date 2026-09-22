@@ -1,0 +1,9 @@
+{
+  "name": "answer-without-open-question-rejected",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "An answered tool_result with no open parked input address for the call: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "agent-finished-twice-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "A second agent_finished for one child: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

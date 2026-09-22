@@ -1,0 +1,9 @@
+{
+  "name": "subagent-child-lifecycle",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "A foreground child reaches its one terminal result (agent_finished, usage included) before the parent's tool_result; a background child gets a deferred placeholder and stays running. Children reduce from wire events alone.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

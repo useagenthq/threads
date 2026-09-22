@@ -1,0 +1,9 @@
+{
+  "name": "budget-exceeded-terminal",
+  "family": "cancellation_resume",
+  "kind": "reduce",
+  "description": "A run budget of 5,000,000 nanos rides on the user_input. Before the second request the known cost is 6,000,000, so budget_exceeded is recorded and the turn ends budget_exhausted (RunResult budget_exhausted). One response may overshoot.",
+  "clock": {
+    "now": 1790000060000
+  }
+}
