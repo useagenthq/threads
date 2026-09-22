@@ -63,7 +63,24 @@ describe("a store is bound to one tenant", () => {
         }),
       })
       .parse(JSON.parse(readFileSync(path, "utf8")));
-    const code: StoreApiCode = "branch_not_found";
-    expect(schema.$defs.ApiErrorCode.enum).toContain(code);
+    const codes: readonly StoreApiCode[] = [
+      "branch_not_found",
+      "branch_exists",
+    ];
+    for (const c of codes) expect(schema.$defs.ApiErrorCode.enum).toContain(c);
+  });
+
+  test("importing a thread another tenant owns is branch_exists, owner unnamed", () => {
+    const db = openBunSqlite(":memory:");
+    unwrap(fixture("acme", db).store.createBranch(THREAD, ROOT));
+    const elsewhere = fixture();
+    unwrap(elsewhere.store.createBranch(THREAD, CHILD));
+    const local = fixture(undefined, db).store;
+    const refused = local.importLog(
+      unwrap(elsewhere.store.exportBranch(CHILD)),
+    );
+    expect(code(refused)).toBe("branch_exists");
+    expect(refused.ok ? "" : refused.error.message).not.toContain("acme");
+    expect(code(local.read(CHILD))).toBe("branch_not_found");
   });
 });

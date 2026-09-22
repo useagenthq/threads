@@ -109,6 +109,22 @@ export function getBranch(
   return rows.ok ? ok(rows.value[0]) : rows;
 }
 
+const TenantRow: Strict<{ tenant_id: z.ZodString }> = z.strictObject({
+  tenant_id: z.string(),
+});
+
+/** The tenant that owns a thread, if the thread is stored. */
+export function threadOwner(
+  db: SqliteDriver,
+  threadId: string,
+): Result<string | undefined, LogError> {
+  const rows = parseRows(
+    TenantRow,
+    db.all("SELECT tenant_id FROM threads WHERE thread_id = ?", [threadId]),
+  );
+  return rows.ok ? ok(rows.value[0]?.tenant_id) : rows;
+}
+
 /** The branch, if it exists and belongs to `tenantId`; any other is `branch_not_found`. */
 export function ownedBranch(
   db: SqliteDriver,

@@ -4,7 +4,7 @@ import type { ErrorCode } from "../log";
  * Codes the store returns that the log never records: a subset of `ApiErrorCode` in
  * spec/schema/api.schema.json (a test pins it there).
  */
-export type StoreApiCode = "branch_not_found";
+export type StoreApiCode = "branch_not_found" | "branch_exists";
 
 /** A typed log failure. Runners compare `code` and `seq`, never `message`. */
 export type LogError = {

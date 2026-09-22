@@ -85,6 +85,28 @@ describe("an import without a verified head keeps its evidence", () => {
   });
 });
 
+describe("re-importing onto a stored leaf compares its head evidence", () => {
+  const tail = (text: string): Uint8Array => new TextEncoder().encode(text);
+  for (const [what, first, second, expected] of [
+    ["the same torn tail", "AAA", "AAA", "ok"],
+    ["the same verified head", "head", "head", "ok"],
+    ["the same missing head", "", "", "ok"],
+    ["another torn tail", "AAA", "BBB", "seq_conflict"],
+    ["verified, then unverified", "head", "", "seq_conflict"],
+    ["no tail, then a torn tail", "", "AAA", "seq_conflict"],
+  ] as const) {
+    test(`${what}: ${expected}`, () => {
+      const prefix = headerOnly("threads-ts", "0.0.0");
+      const body = prefix.subarray(0, prefix.indexOf(0x0a) + 1);
+      const build = (t: string): Uint8Array =>
+        t === "head" ? prefix : join2(body, tail(t));
+      const { store } = fixture();
+      unwrap(store.importLog(build(first)));
+      expect(code(store.importLog(build(second)))).toBe(expected);
+    });
+  }
+});
+
 describe("only the branch's own writer appends", () => {
   for (const [what, impl, version] of [
     ["another implementation", "threads-py", "0.0.0"],
@@ -109,6 +131,20 @@ describe("an in-doubt branch requires recovery", () => {
     const path = join(
       import.meta.dir,
       "../../../../../spec/conformance/cases/effect-crash-after-begin-idempotent/log.threads-ts.jsonl",
+    );
+    const { store } = fixture();
+    const log = unwrap(store.importLog(new Uint8Array(readFileSync(path))));
+    const branch = log.segments.at(-1)?.header.branch_id;
+    if (branch === undefined) throw new Error("a verified log has a header");
+    expect(unwrap(store.acquire(branch, "holder-a")).requiresRecovery).toBe(
+      true,
+    );
+  });
+
+  test("a model request awaiting its response flags the writer", () => {
+    const path = join(
+      import.meta.dir,
+      "../../../../../spec/conformance/cases/model-response-recovered-by-lookup/log.threads-ts.jsonl",
     );
     const { store } = fixture();
     const log = unwrap(store.importLog(new Uint8Array(readFileSync(path))));

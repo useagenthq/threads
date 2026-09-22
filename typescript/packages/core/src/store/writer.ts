@@ -73,8 +73,8 @@ export class Writer {
   readonly #now: () => number;
   readonly lease: Lease;
   /**
-   * The chain had a pending tool call or an effect `begun` or `unknown` when this lease was
-   * taken. Such a branch is in doubt: normal dispatch must refuse this writer, and only
+   * The chain had a pending tool call, a model request awaiting its response, or an effect
+   * `begun` or `unknown` when this lease was taken. Such a branch is in doubt: normal dispatch must refuse this writer, and only
    * recovery may settle and continue it.
    */
   readonly requiresRecovery: boolean;
@@ -86,9 +86,10 @@ export class Writer {
     this.#now = now;
     this.lease = lease;
     this.#chain = chain;
-    const { pending, effects } = chain.fold;
+    const { pending, awaiting, effects } = chain.fold;
     this.requiresRecovery =
       pending.size > 0 ||
+      awaiting.size > 0 ||
       effects
         .values()
         .some((e) => e.status === "begun" || e.status === "unknown");
