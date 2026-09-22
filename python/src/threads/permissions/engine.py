@@ -156,12 +156,13 @@ def _first_any(candidates: Sequence[Rule], call: _Call) -> str | None:
 
 
 def _allowed(candidates: Sequence[Rule], call: _Call) -> str | None:
-    """Allow: for bash, every simple command must match some allow rule, and an unparseable
-    command or a dangerous leading assignment never matches."""
+    """Allow: for bash, only a plain single simple command can match (fail closed: separators,
+    escapes, expansions and redirections never do), and never one with a dangerous leading
+    assignment."""
     parsed = call.command
     if parsed is None:
         return next((r.text for r in candidates if _hit(r, call)), None)
-    if parsed.unparseable or not parsed.commands:
+    if parsed.unparseable or not parsed.plain:
         return None
     first: str | None = None
     for command in parsed.commands:
@@ -230,5 +231,5 @@ def _prepare(workspace: str, call: Call) -> _Call:
     host = None if url is None else rules.host_of(url)
     parsed = None
     if family(tool) == "bash":
-        parsed = shell.parse(command) if command is not None else shell.Shell((), True, ())
+        parsed = shell.parse(command) if command is not None else shell.Shell((), True, False, ())
     return _Call(tool, call.category, rel, path is not None and rel is None, host, agent, parsed)

@@ -13,6 +13,8 @@ _SEPARATORS = ("&&", "||", ";", "|", "&", "\n")
 _DANGEROUS_ENV = frozenset({"PATH", "BASH_ENV", "ENV", "IFS", "PYTHONPATH", "NODE_OPTIONS", "PS4"})
 _ASSIGNMENT = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=")
 _UNPARSEABLE_WORDS = frozenset({"eval", "exec", "function"})
+# Unquoted characters that expand, redirect or group: a command holding one never matches allow.
+_META = frozenset("$<>(){}`")
 _RAW_WORD = re.compile(r"[^\s;&|()`$<>{}\"'\\]+")
 
 
@@ -29,16 +31,20 @@ class Simple:
 class Shell:
     commands: tuple[Simple, ...]
     unparseable: bool
+    plain: bool
+    """One simple command with no unquoted metacharacter: no separator, escape, expansion or
+    redirection. Only a plain command can match an allow rule (it fails closed)."""
     raw_words: tuple[str, ...]
     """The raw text split on whitespace and shell punctuation, for denying unparseable input."""
 
 
 def parse(text: str) -> Shell:
     lexer = _Lexer(text)
-    tokens, unparseable = lexer.run()
+    tokens, unparseable, meta = lexer.run()
     commands = tuple(simple(t) for t in tokens if t)
     unparseable = unparseable or any(_unreadable(c.words) for c in commands)
-    return Shell(commands, unparseable, tuple(_RAW_WORD.findall(text)))
+    plain = not meta and len(commands) == 1
+    return Shell(commands, unparseable, plain, tuple(_RAW_WORD.findall(text)))
 
 
 def _unreadable(words: tuple[str, ...]) -> bool:
@@ -91,12 +97,13 @@ class _Lexer:
         self._tokens: list[str] = []
         self._commands: list[tuple[str, ...]] = []
         self._unparseable = False
+        self._meta = False
 
-    def run(self) -> tuple[list[tuple[str, ...]], bool]:
+    def run(self) -> tuple[list[tuple[str, ...]], bool, bool]:
         while self._i < len(self._text):
             self._step(self._text[self._i])
         self._end_command()
-        return self._commands, self._unparseable
+        return self._commands, self._unparseable, self._meta
 
     def _step(self, c: str) -> None:
         if c in " \t":
@@ -107,18 +114,21 @@ class _Lexer:
         elif c == '"':
             self._double()
         elif c == "\\":
+            self._meta = True
             self._take(self._text[self._i + 1 : self._i + 2].replace("\n", ""))
             self._i += 2
         elif not self._separator():
             # Subshells, function definitions, command and process substitution, here-docs.
             if c in "()`" or self._text.startswith("<<", self._i):
                 self._unparseable = True
+            self._meta = self._meta or c in _META
             self._take(c)
             self._i += 1
 
     def _separator(self) -> bool:
         for sep in _SEPARATORS:
             if self._text.startswith(sep, self._i):
+                self._meta = True
                 self._end_command()
                 self._i += len(sep)
                 return True
@@ -139,6 +149,7 @@ class _Lexer:
             c = self._text[self._i]
             if c == "`" or self._text.startswith("$(", self._i):
                 self._unparseable = True
+            self._meta = self._meta or c in "\\$`"
             if c == "\\" and self._text[self._i + 1 : self._i + 2] in ('"', "\\", "$", "`"):
                 self._i += 1
                 c = self._text[self._i]

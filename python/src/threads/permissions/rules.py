@@ -95,15 +95,15 @@ def relative(workspace: str, path: str) -> str | None:
 
 
 def glob_matches(pattern: str, path: str) -> bool:
-    """gitignore(5) semantics: a pattern without an inner `/` matches at any depth, and a
-    pattern that matches a directory matches everything under it."""
-    dir_only = pattern.endswith("/")
+    """gitignore(5) semantics: a leading or inner `/` anchors to the workspace root, a pattern
+    without one matches at any depth, and a pattern that matches a directory (a trailing `/`
+    names one) matches it and everything under it. A path isn't known to be a file, so a
+    trailing `/` also matches the path itself: a deny is never narrower than an allow."""
     body = pattern.rstrip("/")
     anchored = "/" in body
     regex = re.compile(("" if anchored else "(?:.*/)?") + _translate(body.removeprefix("/")))
     parts = path.split("/")
-    parents = ["/".join(parts[:n]) for n in range(1, len(parts))]
-    candidates = parents if dir_only else [*parents, path]
+    candidates = ["/".join(parts[:n]) for n in range(1, len(parts) + 1)]
     return any(regex.fullmatch(c) for c in candidates)
 
 

@@ -107,3 +107,46 @@ def test_unparseable_is_never_allowed_by_a_rule(before: str, construct: str, aft
     call = Call("bash", "other", {"command": command})
     got = decide(perms(ALLOW_ALL), WORKSPACE, "default", call)
     assert not (got.decision == "allow" and got.source in ("policy", "thread_rule")), command
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'git status \\"; printf marker; echo \\"',
+        "git status `printf marker`",
+        "git status $(printf marker)",
+        "git status ${HOME}",
+        "git status\nprintf marker",
+        "git status && git status",
+        "git status | cat",
+        "git status > out",
+        "git status \\; printf marker",
+    ],
+)
+def test_a_prefix_allow_fails_closed_on_any_metacharacter(command: str) -> None:
+    call = Call("bash", "other", {"command": command})
+    assert decide(perms(["bash(git status:*)"]), WORKSPACE, "default", call).decision == "ask"
+
+
+@pytest.mark.parametrize(
+    ("rule", "path", "hit"),
+    [
+        ("edit(/src/**)", "src/a.ts", True),
+        ("edit(/src/**)", "lib/src/a.ts", False),
+        ("edit(docs/)", "docs", True),
+        ("edit(docs/)", "docs/a/b.md", True),
+        ("edit(docs/)", "api/docs/a.md", True),
+    ],
+)
+def test_path_rules_follow_gitignore_anchoring_and_directories(
+    rule: str, path: str, *, hit: bool
+) -> None:
+    got = decide(perms([rule]), WORKSPACE, "default", Call("edit", "edit", {"path": path}))
+    assert (got.decision == "allow") is hit
+
+
+@pytest.mark.parametrize("path", ["secret", "secret/key.pem"])
+def test_a_directory_deny_covers_what_the_same_allow_covers(path: str) -> None:
+    call = Call("edit", "edit", {"path": path})
+    got = decide(perms(["edit(secret/)"], ["edit(secret/)"]), WORKSPACE, "default", call)
+    assert got.decision == "deny"
