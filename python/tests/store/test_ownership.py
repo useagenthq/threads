@@ -87,3 +87,30 @@ def test_another_tenants_branch_is_not_found(tmp_path: Path) -> None:
             await store.close()
 
     asyncio.run(main())
+
+
+def test_importing_another_tenants_thread_is_branch_exists(tmp_path: Path) -> None:
+    """A thread belongs to one tenant: a new branch of it from another tenant is refused as a
+    value, without naming the owner."""
+    path = tmp_path / "threads.db"
+    header = header_line(THREAD, CHILD, T0)
+    verified = verify_export(header + b"\n" + head_line(CHILD, 0, sha256_hex(header)) + b"\n", T0)
+    assert isinstance(verified, Ok)
+
+    async def main() -> None:
+        acme = await SqliteStore.open(path, tenant_id="acme")
+        assert isinstance(acme, Ok)
+        assert await acme.value.create(THREAD, ROOT, T0) == Ok(None)
+        await acme.value.close()
+        local = await SqliteStore.open(path)
+        assert isinstance(local, Ok)
+        try:
+            refused = await local.value.import_log(verified.value)
+            assert isinstance(refused, Err)
+            assert refused.error.code == "branch_exists"
+            assert "acme" not in refused.error.message
+            assert isinstance(await local.value.read(CHILD, T0), Err)
+        finally:
+            await local.value.close()
+
+    asyncio.run(main())

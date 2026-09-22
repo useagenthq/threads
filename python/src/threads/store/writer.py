@@ -32,7 +32,8 @@ class Writer:
         self._poisoned = False
         self._lock = asyncio.Lock()
         effects = fold.effects.values()
-        self._requires_recovery = bool(fold.pending) or any(s == "unknown" for _, s in effects)
+        in_doubt = any(s == "unknown" for _, s in effects)
+        self._requires_recovery = bool(fold.pending or fold.open_requests) or in_doubt
 
     @property
     def branch_id(self) -> BranchId:
@@ -44,9 +45,10 @@ class Writer:
 
     @property
     def requires_recovery(self) -> bool:
-        """True when the branch had a call without a result or an effect in doubt when this
-        writer took it. Normal dispatch must refuse such a writer: only recovery
-        may dispatch on it, after re-checking approval, cancellation and policy."""
+        """True when the branch had a call without a result, a model request without a response,
+        or an effect in doubt when this writer took it. Normal dispatch must refuse such a
+        writer: only recovery may dispatch on it, after re-checking approval,
+        cancellation and policy."""
         return self._requires_recovery
 
     async def append(

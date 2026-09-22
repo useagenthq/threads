@@ -197,8 +197,12 @@ def import_segments(
                 new.append(segment)
             elif existing.tenant_id != tenant_id:
                 return ParseError("branch_not_found", f"no branch {existing.branch_id}")
-            elif not _holds(conn, existing, segment):
+            elif not _holds(conn, existing, segment, _evidence(log, segment, dropped_ref)):
                 return ParseError("seq_conflict", f"branch {existing.branch_id} has other lines")
+        if new and _owner(conn, log.segments[0].header.thread_id) not in (None, tenant_id):
+            # The owner stays unnamed: a tenant learns only that the thread id is taken.
+            thread = log.segments[0].header.thread_id
+            return ParseError("branch_exists", f"thread {thread} already exists")
         parents = {s.header.branch_id: p.header.branch_id for p, s in pairwise(log.segments)}
         for segment in new:
             row = _row(segment, tenant_id, parents.get(segment.header.branch_id))
@@ -210,10 +214,36 @@ def import_segments(
     return None
 
 
-def _holds(conn: sqlite3.Connection, existing: Branch, segment: Segment) -> bool:
+def _evidence(
+    log: VerifiedLog, segment: Segment, dropped_ref: str | None
+) -> tuple[bool, str | None] | None:
+    """What the import says about the leaf's head: verified, and the torn bytes' artifact. An
+    ancestor segment is only a prefix and says nothing."""
+    return (log.head_verified, dropped_ref) if segment is log.segments[-1] else None
+
+
+def _holds(
+    conn: sqlite3.Connection,
+    existing: Branch,
+    segment: Segment,
+    evidence: tuple[bool, str | None] | None,
+) -> bool:
     last = segment.events[-1][0].seq if segment.events else 0
+    if evidence is not None and (existing.head_seq, *evidence) != (
+        last,
+        existing.head_verified,
+        existing.dropped_ref,
+    ):
+        return False
     stored = segments(conn, existing, last)
     return existing.head_seq >= last and stored.endswith(_lines(segment))
+
+
+def _owner(conn: sqlite3.Connection, thread_id: ThreadId) -> str | None:
+    row: tuple[object] | None = conn.execute(
+        "SELECT tenant_id FROM threads WHERE thread_id = ?", (thread_id,)
+    ).fetchone()
+    return None if row is None else _text(row[0])
 
 
 def _row(segment: Segment, tenant_id: str, parent: BranchId | None) -> Branch:
