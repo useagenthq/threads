@@ -56,6 +56,12 @@ function readSeq(value: Record<string, unknown>): number | undefined {
   return typeof seq === "number" ? seq : undefined;
 }
 
+/** The seq an error names: 0 for a header, else the line's own seq (wire rule 8). */
+function lineSeq(value: Record<string, unknown>): number | undefined {
+  const { format } = value;
+  return "format" in value && format !== "threads.head" ? 0 : readSeq(value);
+}
+
 // Wire rule 8: a known format at a newer integer version is a newer writer, not corruption.
 // Any other bad version or format is invalid. The error seq is 0 for a header, the head's own seq.
 function parseFramingLine(
@@ -63,7 +69,7 @@ function parseFramingLine(
 ): Result<ParsedLine, ParseError> {
   const { format, format_version: version } = value;
   const isHead = format === "threads.head";
-  const seq = isHead ? readSeq(value) : 0;
+  const seq = lineSeq(value);
   const newer =
     typeof version === "number" && Number.isInteger(version) && version > 1;
   if (typeof format === "string" && FORMATS.has(format) && newer) {
@@ -121,11 +127,12 @@ export function parseLogLine(line: string): Result<ParsedLine, ParseError> {
   if (!json.ok)
     return invalid(`${json.error.message} at offset ${json.error.offset}`);
   // Stored bytes are hashed as written, so a line is admitted only in its canonical form.
+  if (!isRecord(json.value)) return invalid("a line is a JSON object");
   const canonical = canonicalize(json.value);
   if (!canonical.ok || canonical.value !== line) {
-    return invalid("line is not in RFC 8785 canonical form");
+    const message = "line is not in RFC 8785 canonical form";
+    return invalid(message, lineSeq(json.value));
   }
-  if (!isRecord(json.value)) return invalid("a line is a JSON object");
   return "format" in json.value
     ? parseFramingLine(json.value)
     : parseEventLine(json.value);
