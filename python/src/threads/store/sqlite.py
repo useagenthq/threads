@@ -77,8 +77,7 @@ class SqliteStore:
             return Err(ParseError("branch_not_runnable", message, found.head_seq))
         read = await self.read(branch_id, clock())
         if isinstance(read, Err):
-            # Corruption refuses writable opens; readers still get the error and its seq.
-            return Err(ParseError("log_corrupt", read.error.message, read.error.seq))
+            return Err(_corrupt(read.error))
         log = read.value
         if log.segments[-1].header.writer.impl != "threads-py":
             message = "another implementation writes this branch; continue on a fork"
@@ -104,7 +103,7 @@ class SqliteStore:
         prefix = await self._worker.call(lambda c: sql.prefix(c, request.parent, request.at_seq))
         read = verify_export(prefix, now)
         if isinstance(read, Err):
-            return Err(ParseError("log_corrupt", read.error.message, read.error.seq))
+            return Err(_corrupt(read.error))
         if read.value.fold.seq != request.at_seq:
             message = f"the parent has no line {request.at_seq}"
             return Err(ParseError("seq_mismatch", message, request.at_seq))
@@ -123,3 +122,9 @@ class SqliteStore:
 
 def _result(error: ParseError | None) -> Ok[None] | Err[ParseError]:
     return Ok(None) if error is None else Err(error)
+
+
+def _corrupt(cause: ParseError) -> ParseError:
+    # A stored branch that fails verification refuses writable opens; the precise code is the
+    # cause (spec/schema/README.md wire rule 14). Readers still get the precise error.
+    return ParseError("log_corrupt", f"{cause.code}: {cause.message}", cause.seq)
