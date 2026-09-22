@@ -1,0 +1,9 @@
+{
+  "name": "torn-tail-head-unterminated",
+  "family": "log",
+  "kind": "recover",
+  "description": "A healthy export with only its final newline missing. Newline is the commit marker, so the unterminated head is a torn tail even though it parses and verifies: served prefix without it, head unverified, head bytes kept as the dropped artifact.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

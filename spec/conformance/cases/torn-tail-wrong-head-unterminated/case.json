@@ -1,0 +1,9 @@
+{
+  "name": "torn-tail-wrong-head-unterminated",
+  "family": "log",
+  "kind": "recover",
+  "description": "The last event was removed and the head (seq 10) has no final newline. An unterminated final chunk is torn whatever it says, so this is a torn tail, not head_mismatch (compare head-checkpoint-suffix-removed, where the head is terminated).",
+  "clock": {
+    "now": 1790000060000
+  }
+}

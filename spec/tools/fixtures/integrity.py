@@ -143,6 +143,35 @@ def _admission(root: pathlib.Path) -> None:
     )
 
 
+def _torn(root: pathlib.Path, name: str, desc: str, served: Log, dropped: bytes) -> None:
+    """An export of `served` plus an unterminated final chunk: import drops only that chunk."""
+    good = served.body()
+    write_case(
+        root,
+        case(name, "log", "recover", desc),
+        served,
+        {
+            "outcome": "ok",
+            "state": reduce(served, NOW),
+            "committed_bytes": len(good),
+            "head_verified": False,
+            "appended": [
+                {
+                    "type": "log_repaired",
+                    "critical": False,
+                    "epoch": 2,
+                    "data": {
+                        "truncated_bytes": len(dropped),
+                        "at_offset": len(good),
+                        "dropped_ref": aref(dropped, "application/octet-stream"),
+                    },
+                }
+            ],
+        },
+        extra={"log.jsonl": good + dropped},
+    )
+
+
 def build(root: pathlib.Path) -> None:
     _admission(root)
     # reduce-simple-run
@@ -157,49 +186,51 @@ def build(root: pathlib.Path) -> None:
             "state; read-only tools write no effect events.",
         ),
         log,
-        {"outcome": "ok", "state": reduce(log, NOW)},
-    )
-
-    # torn-tail-truncated (JSONL import only; the SQLite store cannot tear)
-    log = base_simple()
-    good = log.body()
-    state = reduce(log, NOW)
-    nxt = user(log, "A second question that never finished writing.")
-    torn = canonical(nxt)[:57]
-    log.lines.pop()
-    log.events.pop()
-    write_case(
-        root,
-        case(
-            "torn-tail-truncated",
-            "log",
-            "recover",
-            "An export whose last line is a partial write with no newline and no head "
-            "checkpoint. Import serves the valid prefix, never edits the source file, flags the "
-            "head as unverified, keeps the dropped bytes as an artifact, and the imported "
-            "branch records log_repaired (critical: false). Nothing else is appended because "
-            "the prefix is balanced.",
-        ),
-        log,
         {
             "outcome": "ok",
-            "state": state,
-            "committed_bytes": len(good),
-            "head_verified": False,
-            "appended": [
-                {
-                    "type": "log_repaired",
-                    "critical": False,
-                    "epoch": 2,
-                    "data": {
-                        "truncated_bytes": len(torn),
-                        "at_offset": len(good),
-                        "dropped_ref": aref(torn, "application/octet-stream"),
-                    },
-                }
-            ],
+            "state": reduce(log, NOW),
+            "committed_bytes": len(log.body()),
+            "head_verified": True,
         },
-        extra={"log.jsonl": good + torn},
+    )
+
+    # torn tails (JSONL import only; the SQLite store cannot tear). "\n" is the commit marker.
+    log = base_simple()
+    nxt = canonical(user(log, "A second question that never finished writing."))
+    log.lines.pop()
+    log.events.pop()
+    _torn(
+        root,
+        "torn-tail-truncated",
+        "An export whose last line is a partial write with no newline and no head "
+        "checkpoint. Import serves the valid prefix, never edits the source file, flags the "
+        "head as unverified, keeps the dropped bytes as an artifact, and the imported "
+        "branch records log_repaired (critical: false). Nothing else is appended because "
+        "the prefix is balanced.",
+        log,
+        nxt[:57],
+    )
+    log = base_simple()
+    _torn(
+        root,
+        "torn-tail-head-unterminated",
+        "A healthy export with only its final newline missing. Newline is the commit marker, "
+        "so the unterminated head is a torn tail even though it parses and verifies: served "
+        "prefix without it, head unverified, head bytes kept as the dropped artifact.",
+        log,
+        log.head(),
+    )
+    log = base_simple()
+    cut = log.copy()
+    cut.lines, cut.events = log.lines[:-1], log.events[:-1]
+    _torn(
+        root,
+        "torn-tail-wrong-head-unterminated",
+        "The last event was removed and the head (seq 10) has no final newline. An "
+        "unterminated final chunk is torn whatever it says, so this is a torn tail, not "
+        "head_mismatch (compare head-checkpoint-suffix-removed, where the head is terminated).",
+        cut,
+        log.head(),
     )
 
     # unknown-critical-event-refuses

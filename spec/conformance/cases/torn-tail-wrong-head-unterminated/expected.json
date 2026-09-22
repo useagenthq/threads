@@ -4,7 +4,7 @@
     "thread_id": "0192a000-0000-7000-8000-000000000001",
     "branch_id": "0192b000-0000-7000-8000-000000000001",
     "epoch": 1,
-    "turns_completed": 1,
+    "turns_completed": 0,
     "pending_calls": [],
     "effects": [],
     "parked": [],
@@ -32,12 +32,28 @@
         "event_id": "0192e000-0000-7000-8000-000000000009"
       }
     ],
-    "status": "idle",
+    "status": "in_turn",
     "head": {
-      "seq": 10,
-      "hash": "10af3332fb0e2765bfce66a53f2e569a020534971c05a7cb98242b087dd9b4c7"
+      "seq": 9,
+      "hash": "75181a26c944bba07de37e139dba90428c05c11871ef35516915e4ce031b47a2"
     }
   },
-  "committed_bytes": 5837,
-  "head_verified": true
+  "committed_bytes": 5454,
+  "head_verified": false,
+  "appended": [
+    {
+      "type": "log_repaired",
+      "critical": false,
+      "epoch": 2,
+      "data": {
+        "truncated_bytes": 178,
+        "at_offset": 5454,
+        "dropped_ref": {
+          "sha256": "793d1c6fba1da5c0fb240eff2563715b6f08b676ae7c1c3a00610ca476612c1a",
+          "bytes": 178,
+          "media_type": "application/octet-stream"
+        }
+      }
+    }
+  ]
 }

@@ -983,6 +983,16 @@
         },
         {
           "kind": "case",
+          "ref": "torn-tail-head-unterminated",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "torn-tail-wrong-head-unterminated",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
           "ref": "repair-child-inspection-only",
           "status": "implemented"
         },

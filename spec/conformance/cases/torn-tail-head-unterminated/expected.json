@@ -39,5 +39,21 @@
     }
   },
   "committed_bytes": 5837,
-  "head_verified": true
+  "head_verified": false,
+  "appended": [
+    {
+      "type": "log_repaired",
+      "critical": false,
+      "epoch": 2,
+      "data": {
+        "truncated_bytes": 178,
+        "at_offset": 5837,
+        "dropped_ref": {
+          "sha256": "793d1c6fba1da5c0fb240eff2563715b6f08b676ae7c1c3a00610ca476612c1a",
+          "bytes": 178,
+          "media_type": "application/octet-stream"
+        }
+      }
+    }
+  ]
 }
