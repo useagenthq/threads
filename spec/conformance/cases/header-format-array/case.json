@@ -1,0 +1,9 @@
+{
+  "name": "header-format-array",
+  "family": "log",
+  "kind": "reduce",
+  "description": "The header's format is a JSON array, not a string: invalid_line. A reader must not crash on a non-string format.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1123,6 +1123,57 @@
       ]
     },
     {
+      "id": "F9.12",
+      "step1": true,
+      "evidence": [
+        {
+          "kind": "case",
+          "ref": "line-noncanonical-exponent",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "line-noncanonical-fraction",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "line-noncanonical-negative-zero",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "line-noncanonical-key-order",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "line-noncanonical-whitespace",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "line-noncanonical-escape-nonminimal",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "line-noncanonical-escape-uppercase",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "line-noncanonical-escape-slash",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "header-format-array",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
       "id": "F10.1",
       "step1": false,
       "evidence": [

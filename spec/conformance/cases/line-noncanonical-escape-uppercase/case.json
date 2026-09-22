@@ -1,0 +1,9 @@
+{
+  "name": "line-noncanonical-escape-uppercase",
+  "family": "log",
+  "kind": "reduce",
+  "description": "The last line holds the same JSON value in a non-canonical spelling (escape-uppercase). A reader admits a line only if its bytes equal the RFC 8785 form of its parsed value: invalid_line, before the schema and before the chain. The chain and head hash the stored bytes, so they still verify.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

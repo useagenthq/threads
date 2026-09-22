@@ -33,7 +33,8 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
 1. **snake_case on the wire,** in both languages. Language APIs may re-case accessors (`forkPoints` ↔ `fork_points`), but stored and hashed bytes never change.
 2. **Lines.** Each line is one JSON object in **RFC 8785 (JCS) canonical form**. The maximum line is 1 MiB; anything larger goes in an artifact.
    - Writers emit JCS, so a Python writer and a TS writer produce identical bytes for the same event.
-   - Readers hash the **raw bytes as stored** and never re-serialize to verify anything.
+   - **Admission:** a reader admits a line only if its bytes equal the RFC 8785 serialization of its parsed value. Anything else (`1e3`, `1000.0`, `-0`, keys out of order, whitespace, a non-minimal or uppercase `\u` escape, `\/`) is `invalid_line`. This runs after strict JSON parsing and before format admission (the header and head rule below) and the schema (`line-noncanonical-*`).
+   - Readers hash the **raw bytes as stored** and never re-serialize to compute or verify a hash. The admission check compares bytes; it never replaces them.
 3. **Hashes.** All are lowercase hex SHA-256.
 
    | Field | Input bytes | Domain |
@@ -50,7 +51,7 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
 6. **Pinned names.** Event `type` names, every enum literal and every `ErrorCode` are frozen by a golden test in both languages. Add only. Never update the pins in a rename PR.
 7. **Header** (a branch's first line): `{format: "threads.log", format_version: 1, thread_id, branch_id, created_at, writer: {impl, version}}`. It is not an event: no `seq`, no `prev_hash`. Every branch, root or child, has its own header. `writer` pins the only implementation and major version that may append.
 8. **Head checkpoint** (the last line of every export): `{format: "threads.head", format_version: 1, branch_id, seq, hash}`.
-   - **Format admission** (header and head lines), checked before the line's schema: if `format` is `threads.log` or `threads.head` and `format_version` is an integer greater than 1, the error is `unsupported_format`: a newer writer, not corruption. A missing `format_version`, a non-integer (`"1"`, `1.5`), zero or a negative number, or an unknown `format` string is `invalid_line`. The error `seq` is 0 for the header and the checkpoint's `seq` for the head (`header-format-version-*`, `head-format-version-*`, `header-format-unknown`).
+   - **Format admission** (header and head lines), checked before the line's schema: if `format` is `threads.log` or `threads.head` and `format_version` is an integer greater than 1, the error is `unsupported_format`: a newer writer, not corruption. A missing `format_version`, a non-integer (`"1"`, `1.5`), zero or a negative number, or a `format` that is not one of those two strings is `invalid_line` (`header-format-array`). The error `seq` is 0 for the header and the checkpoint's `seq` for the head (`header-format-version-*`, `head-format-version-*`, `header-format-unknown`).
 9. **Envelope** (every event):
 
    | Field | Rule |

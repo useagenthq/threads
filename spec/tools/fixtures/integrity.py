@@ -36,7 +36,43 @@ VERSIONS = (
 )
 
 
+# (name suffix, canonical bytes, replacement). Each turns the last line into a non-canonical
+# spelling of the same value; admission compares a line with its RFC 8785 form before the schema.
+NONCANONICAL = (
+    ("exponent", b'"n":1000', b'"n":1e3'),
+    ("fraction", b'"n":1000', b'"n":1000.0'),
+    ("negative-zero", b'"z":0', b'"z":-0'),
+    ("key-order", b'"n":1000,"s":"a/b\\u001fA","z":0', b'"z":0,"s":"a/b\\u001fA","n":1000'),
+    ("whitespace", b'"n":1000', b'"n": 1000'),
+    ("escape-nonminimal", b'fA"', b'f\\u0041"'),
+    ("escape-uppercase", b"\\u001f", b"\\u001F"),
+    ("escape-slash", b"a/b", b"a\\/b"),
+)
+
+
+def _noncanonical(root: pathlib.Path) -> None:
+    for suffix, good, bad in NONCANONICAL:
+        log = Log()
+        started(log, [READ_FILE])
+        read_turn(log)
+        log.add("telemetry_ping", {"n": 1000, "s": "a/b\u001fA", "z": 0}, critical=False)
+        if good not in log.lines[-1]:
+            raise AssertionError(f"{suffix}: {good!r} not in the canonical line")
+        log.lines[-1] = log.lines[-1].replace(good, bad)
+        negative(
+            root,
+            f"line-noncanonical-{suffix}",
+            f"The last line holds the same JSON value in a non-canonical spelling ({suffix}). A "
+            "reader admits a line only if its bytes equal the RFC 8785 form of its parsed value: "
+            "invalid_line, before the schema and before the chain. The chain and head hash the "
+            "stored bytes, so they still verify.",
+            log,
+            ("invalid_line", log.seq),
+        )
+
+
 def _admission(root: pathlib.Path) -> None:
+    _noncanonical(root)
     for suffix, version, code in VERSIONS:
         for line in ("header", "head"):
             log = Log()
@@ -66,6 +102,18 @@ def _admission(root: pathlib.Path) -> None:
         root,
         "header-format-unknown",
         "The header's format is not threads.log: invalid_line, not unsupported_format.",
+        log,
+        ("invalid_line", 0),
+    )
+    log = Log()
+    log.lines[0] = log.lines[0].replace(b'"format":"threads.log"', b'"format":["threads.log"]')
+    started(log, [READ_FILE])
+    read_turn(log)
+    negative(
+        root,
+        "header-format-array",
+        "The header's format is a JSON array, not a string: invalid_line. A reader must not "
+        "crash on a non-string format.",
         log,
         ("invalid_line", 0),
     )
