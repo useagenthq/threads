@@ -58,18 +58,21 @@ def _prices(model: Model) -> Mapping[str, int]:
 
 
 def _bound(attempt: _Attempt) -> int | None:
-    """The per-attempt reservation, or None when no bound is declared."""
-    model, max_tokens = attempt.model, attempt.max_tokens
+    return bound(attempt.model, attempt.max_tokens, attempt.request.data.input_bound_tokens)
+
+
+def bound(model: Model | None, max_tokens: JsonValue, input_tokens: int | MISSING) -> int | None:
+    """An attempt's reservation: its input bound at the highest input-side
+    price plus max_tokens at the output price. None when the model declares no bound."""
     if model is None or not isinstance(max_tokens, int):
         return None
-    tokens = attempt.request.data.input_bound_tokens
-    if tokens is MISSING:
+    if input_tokens is MISSING:
         if model.input_billing_bound != "context_window":
             return None
-        tokens = model.context_window
+        input_tokens = model.context_window
     prices = _prices(model)
     top = max(prices.get(k, 0) for k in ("input", "cache_read", "cache_write"))
-    return tokens * top + max_tokens * prices.get("output", 0)
+    return input_tokens * top + max_tokens * prices.get("output", 0)
 
 
 def _response_cost(usage: Usage, model: Model | None, bound: int | None) -> tuple[int, int | None]:
@@ -132,21 +135,32 @@ def _not_billed(abandoned: ModelAttemptAbandonedData | None) -> bool:
     return abandoned.provider_outcome == "not_sent" or abandoned.billing == "not_billed"
 
 
+def dispositions(fold: Fold) -> list[tuple[int, int, int | None]]:
+    """One disposition per billable model_request: its seq, its known nanos,
+    and its upper bound (None when unbounded). An attempt proven not billed has none."""
+    pinned = policy(fold)
+    if pinned is None or pinned.models is MISSING:
+        return []
+    models = {(m.provider, m.name): m for m in pinned.models}
+    out: list[tuple[int, int, int | None]] = []
+    for attempt in _attempts(fold, models):
+        if attempt.usage is None and _not_billed(attempt.abandoned):
+            continue
+        cap = _bound(attempt)
+        k, u = (
+            (0, cap) if attempt.usage is None else _response_cost(attempt.usage, attempt.model, cap)
+        )
+        out.append((attempt.request.seq, k, u))
+    return out
+
+
 def cost(fold: Fold) -> JsonValue:
     pinned = policy(fold)
     if pinned is None or pinned.models is MISSING or pinned.currency is MISSING:
         return None
-    models = {(m.provider, m.name): m for m in pinned.models}
     known = upper = 0
     complete = bounded = True
-    for attempt in _attempts(fold, models):
-        if attempt.usage is None and _not_billed(attempt.abandoned):
-            continue
-        bound = _bound(attempt)
-        if attempt.usage is None:
-            k, u = 0, bound
-        else:
-            k, u = _response_cost(attempt.usage, attempt.model, bound)
+    for _, k, u in dispositions(fold):
         known += k
         complete = complete and u == k
         bounded = bounded and u is not None
