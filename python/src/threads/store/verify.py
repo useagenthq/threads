@@ -129,7 +129,7 @@ class _Reader:
 
     def _event(self, event: StoredEvent, raw: bytes) -> ParseError | None:
         if not self.segments:
-            return ParseError("invalid_line", "an event before any header", event.seq)
+            return ParseError("invalid_transition", "an event before any header", event.seq)
         if event.seq != self.fold.seq + 1:
             message = f"seq {event.seq} does not follow {self.fold.seq}"
             return ParseError("seq_mismatch", message, event.seq)

@@ -51,8 +51,8 @@ def test_a_line_that_is_not_utf8_is_invalid() -> None:
     assert error_of(join(parts)) == ("invalid_line", 3)
 
 
-def test_an_event_before_any_header_is_invalid() -> None:
-    assert error_of(join(lines(SIMPLE)[1:])) == ("invalid_line", 1)
+def test_an_event_before_any_header_is_invalid_transition() -> None:
+    assert error_of(join(lines(SIMPLE)[1:])) == ("invalid_transition", 1)
 
 
 def test_a_head_before_the_last_line_is_invalid() -> None:
@@ -104,7 +104,7 @@ def test_any_changed_byte_is_detected(data: st.DataObject) -> None:
     assert isinstance(result, Err) or not result.value.head_verified
 
 
-def test_another_implementations_branch_is_not_runnable() -> None:
+def test_another_implementations_branch_is_writer_mismatch() -> None:
     header = canonicalize(
         {
             "branch_id": OTHER,
@@ -126,7 +126,7 @@ def test_another_implementations_branch_is_not_runnable() -> None:
             assert await store.import_log(log.value) == Ok(None)
             refused = await store.acquire(OTHER, "py", lambda: NOW)
             assert isinstance(refused, Err)
-            assert refused.error.code == "branch_not_runnable"
+            assert (refused.error.code, refused.error.seq) == ("writer_mismatch", 0)
         finally:
             await store.close()
 

@@ -68,7 +68,8 @@ class SqliteStore:
     ) -> Ok[Writer] | Err[ParseError]:
         """Takes the branch lease at the next epoch. Fails with branch_busy while
         another holder's lease is live, and with branch_not_runnable for an inspection-only
-        branch or one that another implementation writes."""
+        branch, and with writer_mismatch at the header for one that another implementation writes
+       ."""
         found = await self._worker.call(lambda c: sql.branch(c, branch_id))
         if found is None:
             raise LookupError(f"no branch {branch_id}")
@@ -81,7 +82,7 @@ class SqliteStore:
         log = read.value
         if log.segments[-1].header.writer.impl != "threads-py":
             message = "another implementation writes this branch; continue on a fork"
-            return Err(ParseError("branch_not_runnable", message, log.head.seq))
+            return Err(ParseError("writer_mismatch", message, 0))
         chain_epoch = log.fold.epoch
         taken = await self._worker.call(
             lambda c: lease.take(c, branch_id, holder_id, chain_epoch, clock())

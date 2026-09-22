@@ -14,9 +14,10 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue, TypeAdapter
 
+from threads.log import ParseError
 from threads.reduce import PROJECTIONS
 from threads.result import Err, Ok
-from threads.store import SqliteStore, VerifiedLog, verify_export
+from threads.store import SqliteStore, VerifiedLog, Writer, verify_export
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 _JSON: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
@@ -28,6 +29,7 @@ EXPECTED_KEYS = frozenset(
     {"outcome", "error", "state", "committed_bytes", "appended", "sandbox", "fork", "resources"}
     | {"render", "head_verified", "stubs", "responses", "inbox", "decisions", "projections"}
 )
+IMPL = "threads-py"
 LATER = {
     "render": "Render v1 re-rendering, C7 and the request hash checks are not built yet",
     "recover": "leases exist, but semantic recovery and the loop are not built yet",
@@ -36,16 +38,17 @@ LATER = {
     "intake": "the host intake pipeline is not built yet",
     "policy": "the permission engine is not built yet",
 }
-SPEC_BUGS = {
-    "render-reference-framing-escaped": (
-        "its compacted.summary_ref is not the text of the compaction response it names, which "
-        "semantic rule 10 rejects (as compaction-summary-mismatch-rejected pins)"
-    ),
-}
+
+
+def own(case: Path, name: str) -> Path:
+    """A recover case ships one file per writer; this runner uses its own."""
+    stem, dot, ext = name.partition(".")
+    mine = case / f"{stem}.{IMPL}{dot}{ext}"
+    return mine if mine.exists() else case / name
 
 
 def load(case: Path, name: str) -> dict[str, JsonValue]:
-    return _JSON.validate_json((case / name).read_bytes())
+    return _JSON.validate_json(own(case, name).read_bytes())
 
 
 def cases(*kinds: str) -> list[str]:
@@ -92,9 +95,9 @@ def test_corpus_kinds_and_keys_are_known() -> None:
 def test_reduce_case(name: str) -> None:
     case = CASES / name
     meta, expected = load(case, "case.json"), load(case, "expected.json")
-    log = (case / "log.jsonl").read_bytes()
+    log = own(case, "log.jsonl").read_bytes()
     result = asyncio.run(import_and_read(log, now_of(meta)))
-    assert (case / "log.jsonl").read_bytes() == log
+    assert own(case, "log.jsonl").read_bytes() == log
     if expected["outcome"] == "error":
         assert isinstance(result, Err)
         assert json.loads(result.error) == expected["error"]
@@ -114,11 +117,7 @@ def test_reduce_case(name: str) -> None:
         assert PROJECTIONS[key](result.value.fold) == value, key
 
 
-READER_VIEW = [
-    pytest.param(n, marks=pytest.mark.xfail(reason=SPEC_BUGS[n])) if n in SPEC_BUGS else n
-    for n in cases(*LATER)
-    if (CASES / n / "log.jsonl").exists()
-]
+READER_VIEW = [n for n in cases(*LATER) if own(CASES / n, "log.jsonl").exists()]
 
 
 @pytest.mark.parametrize("name", READER_VIEW)
@@ -126,7 +125,7 @@ def test_reader_view(name: str) -> None:
     """Every later-kind log imports; its pinned reader state and valid prefix match."""
     case = CASES / name
     meta, expected = load(case, "case.json"), load(case, "expected.json")
-    log = (case / "log.jsonl").read_bytes()
+    log = own(case, "log.jsonl").read_bytes()
     verified = verify_export(log, now_of(meta))
     assert isinstance(verified, Ok), verified
     if "state" in expected:
@@ -144,3 +143,24 @@ def test_later_kind_steps(name: str) -> None:
     kind = load(CASES / name, "case.json")["kind"]
     assert isinstance(kind, str)
     pytest.skip(f"{kind}: {LATER[kind]}")
+
+
+def test_foreign_writer_branch_refuses_to_append() -> None:
+    """recover-foreign-writer-refused: the branch reads fine, but this runner may not append."""
+    case = CASES / "recover-foreign-writer-refused"
+    meta, expected = load(case, "case.json"), load(case, "expected.json")
+    verified = verify_export(own(case, "log.jsonl").read_bytes(), now_of(meta))
+    assert isinstance(verified, Ok)
+
+    async def refused() -> Err[ParseError] | Ok[Writer]:
+        store = await SqliteStore.open()
+        try:
+            assert await store.import_log(verified.value) == Ok(None)
+            branch = verified.value.segments[-1].header.branch_id
+            return await store.acquire(branch, "runner", lambda: now_of(meta))
+        finally:
+            await store.close()
+
+    result = asyncio.run(refused())
+    assert isinstance(result, Err)
+    assert {"code": result.error.code, "seq": result.error.seq} == expected["error"]
