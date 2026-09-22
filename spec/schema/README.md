@@ -5,6 +5,8 @@ The wire contract for the threads log. Both implementations read and write exact
 | File | What it is |
 |---|---|
 | `events.v1.schema.json` | JSON Schema (draft 2020-12) for one canonical line of a branch: the `Header`, an event (envelope plus per-type `data`), or the `Head` checkpoint |
+| `host-api/` | The host HTTP API: `openapi.json` (routes) and `host-api.v1.schema.json` (bodies and projections, `$id` `urn:threads:schema:host-api:v1`) |
+| `api.schema.json` | The shape of `../api.json`, the public API contract |
 
 ## Ownership
 
