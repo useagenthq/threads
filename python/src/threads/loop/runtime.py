@@ -8,6 +8,8 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
+from pydantic import JsonValue
+
 from threads.log import Event, ParkAddress, ParseError, ToolCallData, ToolSpec
 from threads.loop.model import Model
 from threads.loop.tools import ToolRunner
@@ -71,6 +73,9 @@ class Runtime:
     clock: Clock
     wait_until: Callable[[int], Awaitable[None]]
     """Waits until the given epoch ms: a real sleep, or a test clock advanced at once."""
+    output: Callable[[JsonValue], str | None] | None = None
+    """The structured-output binding: why a final_output candidate fails, or None. Absent:
+    every candidate is rejected (fail closed)."""
     observe: Callable[[Sequence[StoredEvent]], None] = lambda _events: None
     """Receives each committed batch: the stream's subscription to the log."""
 

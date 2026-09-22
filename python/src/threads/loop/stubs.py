@@ -17,7 +17,8 @@ from threads.loop.tools import (
     NotSent,
     Output,
     Termination,
-    schema_error,
+    Validate,
+    unbound,
 )
 from threads.result import Ok
 
@@ -58,14 +59,15 @@ def parse_stubs(script: Mapping[str, JsonValue]) -> tuple[Stub, ...]:
 class StubGateway:
     """A tool runner that never reaches a live provider."""
 
-    def __init__(self, stubs: Sequence[Stub]) -> None:
+    def __init__(self, stubs: Sequence[Stub], validate: Validate = unbound) -> None:
         self._stubs = list(stubs)
+        self._validate = validate
         self._seen: Counter[tuple[str, str]] = Counter()
         self.consumed = 0
         self.unmatched = 0
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
-        return schema_error(spec, input)
+        return self._validate(spec, input)
 
     async def dispatch(self, call: Invocation) -> Dispatched:
         hashed = canonical_sha256(dict(call.input))

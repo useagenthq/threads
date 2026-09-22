@@ -9,12 +9,26 @@ exports and imports cleanly.
 
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from corpus import CASES, Clock, ScriptedTools, cases, load, now_of, obj, own, stored_artifacts
+from corpus import (
+    CASES,
+    Clock,
+    ScriptedTools,
+    cases,
+    json_schema_holds,
+    load,
+    now_of,
+    obj,
+    own,
+    schema_error,
+    stored_artifacts,
+)
 from pydantic import JsonValue
+from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import ToolCallData, ToolSpec
 from threads.loop.drive import drive
@@ -26,6 +40,7 @@ from threads.loop.stubs import StubGateway, parse_stubs
 from threads.loop.tools import ToolRunner
 from threads.permissions import Decision
 from threads.reduce import Fold
+from threads.reduce.fold import policy
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import SqliteStore, StoredEvent, verify_export
@@ -54,7 +69,7 @@ def _script(case: Path, meta: dict[str, JsonValue], key: str) -> dict[str, JsonV
 
 def _runner(case: Path, meta: dict[str, JsonValue], clock: Clock) -> ScriptedTools | StubGateway:
     if meta["kind"] == "stub":
-        return StubGateway(parse_stubs(_script(case, meta, "stub_script")))
+        return StubGateway(parse_stubs(_script(case, meta, "stub_script")), schema_error)
     return ScriptedTools(_script(case, meta, "sandbox_script"), clock)
 
 
@@ -79,8 +94,16 @@ async def run_case(case: Path) -> Outcome:
             return Outcome(refused, [], model, tools, b"")
         writer = acquired.value
         before = verified.value.fold.seq
+        output = _output_binding(verified.value.fold)
         rt = Runtime(
-            store, writer, _model(model), _tools(tools), conformance_allow, clock, clock.wait_until
+            store,
+            writer,
+            _model(model),
+            _tools(tools),
+            conformance_allow,
+            clock,
+            clock.wait_until,
+            output,
         )
         halt = await _resume(rt, meta)
         exported = await store.export(branch)
@@ -94,6 +117,15 @@ async def run_case(case: Path) -> Outcome:
         return Outcome(error, appended, model, tools, exported.value)
     finally:
         await store.close()
+
+
+def _output_binding(fold: Fold) -> Callable[[JsonValue], str | None] | None:
+    """Test-only: the corpus pins its output schema in the log; core binds a Pydantic type."""
+    pinned = policy(fold)
+    if pinned is None or pinned.output is MISSING:
+        return None
+    schema: JsonValue = dict(pinned.output.schema_)
+    return lambda value: None if json_schema_holds(schema, value) else "does not match the schema"
 
 
 def _model(model: ScriptedModel) -> Model:

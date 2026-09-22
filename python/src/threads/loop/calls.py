@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads._strict_model import holds
 from threads.log import CallId, EventId, ToolSpec, ToolUsePart
 from threads.log.digest import canonical_sha256
 from threads.loop import effects
@@ -200,28 +199,26 @@ async def _read_only(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | No
 
 
 async def _final_output(rt: Runtime, state: CallState) -> Halt | None:
-    """The candidate is checked once against the pinned schema and the outcome recorded next to
-    the raw call. Rejected: an error result, and the model tries again."""
+    """The candidate is checked once through the agent's output binding and the outcome
+    recorded next to the raw call. Rejected: an error result, and the model
+    tries again. Without a binding in this process the candidate is rejected (fail closed)."""
     pinned = policy(rt.fold)
     if pinned is None or pinned.output is MISSING:
         raise AssertionError("final_output without policy.output")
     value: JsonValue = dict(state.call.data.input)
-    try:
-        accepted = holds(dict(pinned.output.schema_), value)
-    except TypeError:
-        accepted = False  # a keyword this reader can't check fails closed
+    why = "unsupported: no output binding" if rt.output is None else rt.output(value)
     data: dict[str, JsonValue] = {
         "source_event_id": state.call.event_id,
         "schema_sha256": pinned.output.schema_sha256,
-        "outcome": "accepted" if accepted else "rejected",
+        "outcome": "accepted" if why is None else "rejected",
     }
     call_id = state.call.data.call_id
-    if accepted:
+    if why is None:
         data["value"] = value
         result = await result_draft(rt, call_id, "accepted", As("executed"))
     else:
-        data["errors"] = [{"path": "", "message": "the value does not match the output schema"}]
-        text = "rejected: the value does not match the output schema; call final_output again"
+        data["errors"] = [{"path": "", "message": why}]
+        text = f"rejected: {why}; call final_output again"
         result = await result_draft(rt, call_id, text, As("not_executed", True))
     done = await rt.append(draft("output_validated", data), result)
     return lost(done.error) if isinstance(done, Err) else None

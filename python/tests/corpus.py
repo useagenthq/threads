@@ -8,9 +8,10 @@ from pathlib import Path
 
 from pydantic import JsonValue, TypeAdapter
 
+from threads._strict_model import holds
 from threads.log import JsonObject, ToolSpec
 from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound, NotFoundNonfinal
-from threads.loop.tools import Dispatched, Invocation, Output, Termination, schema_error
+from threads.loop.tools import Dispatched, Invocation, Output, Termination
 from threads.store import MemoryArtifacts
 
 CASES = Path(__file__).resolve().parents[2] / "spec" / "conformance" / "cases"
@@ -47,6 +48,19 @@ def stored_artifacts(case: Path) -> MemoryArtifacts:
     for path in sorted((case / "artifacts").glob("*")):
         store.put(path.read_bytes())
     return store
+
+
+def schema_error(spec: ToolSpec, input: JsonObject) -> str | None:
+    """Test-only: the corpus pins its tool and output schemas in the log, so the runner checks
+    them with the generated models' keyword subset. Core binds schemas to Pydantic models."""
+    return None if json_schema_holds(dict(spec.input_schema), dict(input)) else "invalid input"
+
+
+def json_schema_holds(schema: JsonValue, value: JsonValue) -> bool:
+    try:
+        return holds(schema, value)
+    except TypeError:
+        return False
 
 
 def obj(value: JsonValue) -> dict[str, JsonValue]:

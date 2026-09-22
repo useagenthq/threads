@@ -1,10 +1,10 @@
 """What the loop needs from whatever executes tool bodies: app tools on the host, a sandbox, or a
 test kit. Every answer about an operation that may have happened is a value."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-from threads._strict_model import holds
 from threads.log import CallId, JsonObject, ToolSpec
 from threads.loop.model import LookupResult
 
@@ -46,14 +46,14 @@ class NotSent:
 type Dispatched = Output | Uncertain | NotSent
 
 
-def schema_error(spec: ToolSpec, input: JsonObject) -> str | None:
-    """Why arguments fail a tool's pinned input schema, or None. A keyword this reader can't
-    check fails closed."""
-    try:
-        ok = holds(dict(spec.input_schema), dict(input))
-    except TypeError:
-        ok = False
-    return None if ok else f"the arguments do not match {spec.name}'s input schema"
+type Validate = Callable[[ToolSpec, JsonObject], str | None]
+"""Why arguments fail a tool's schema binding, or None when they parse."""
+
+
+def unbound(spec: ToolSpec, _input: JsonObject) -> str | None:
+    """A tool with no schema binding in this process (an MCP or log-only tool) fails closed:
+    core never validates against an arbitrary JSON Schema."""
+    return f"unsupported: no schema binding for {spec.name}"
 
 
 class ToolRunner(Protocol):
