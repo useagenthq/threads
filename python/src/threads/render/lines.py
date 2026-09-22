@@ -138,9 +138,20 @@ def _parts_line(head: dict[str, JsonValue], parts: Sequence[Part]) -> Line:
 
 
 def _redact(text: str, spans: Sequence[Span]) -> str:
-    # Spans are UTF-8 byte offsets into the original text; replacing from the end keeps the
-    # earlier offsets valid.
+    # Spans are UTF-8 byte offsets into the original text. Merged into their disjoint union
+    # and replaced from the end, every offset stays valid and on a character boundary.
     raw = text.encode("utf-8")
-    for span in sorted(spans, key=lambda s: s.start, reverse=True):
-        raw = raw[: span.start] + REDACTED + raw[span.end :]
+    for start, end in reversed(_union(spans)):
+        raw = raw[:start] + REDACTED + raw[end:]
     return raw.decode("utf-8")
+
+
+def _union(spans: Sequence[Span]) -> list[tuple[int, int]]:
+    """Overlapping and adjacent spans merged, in order."""
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted((s.start, s.end) for s in spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
