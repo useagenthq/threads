@@ -67,9 +67,12 @@ FORK: dict[str, JsonValue] = {
     "at_hash": HASH,
     "reason": "snapshot",
     "sandbox_id": "sb",
+    "knowledge_policy": "pinned",
 }
 RESULT_REF: dict[str, JsonValue] = {"sha256": HASH, "bytes": 1, "media_type": "text/plain"}
-NO_SANDBOX: dict[str, JsonValue] = {k: v for k, v in FORK.items() if k != "sandbox_id"}
+NO_SANDBOX: dict[str, JsonValue] = {
+    k: v for k, v in FORK.items() if k not in ("sandbox_id", "knowledge_policy")
+}
 RESOLVED: dict[str, JsonValue] = {
     "call_id": "c1",
     "outcome": "confirmed_success",
@@ -140,6 +143,9 @@ def test_oversized_line_is_invalid() -> None:
         pytest.param(USER_INPUT | {"seq": 0}, id="seq below minimum"),
         pytest.param(USER_INPUT | {"event_id": "not-a-uuid"}, id="id pattern"),
         pytest.param(USER_INPUT | {"critical": False}, id="pinned critical"),
+        pytest.param(USER_INPUT | {"critical": 1}, id="1 for literal true"),
+        pytest.param(USER_INPUT | {"type_version": True}, id="true for literal 1"),
+        pytest.param(USER_INPUT | {"type_version": 1.0}, id="1.0 for literal 1"),
         pytest.param(USER_INPUT | {"actor": {"kind": "user"}}, id="user_input needs principal"),
         pytest.param(USER_INPUT | {"extra": 1}, id="unknown envelope key"),
         pytest.param(
@@ -235,3 +241,49 @@ def test_unknown_non_critical_event_is_kept_with_its_data() -> None:
     assert isinstance(result, Ok)
     assert isinstance(result.value, UnknownEvent)
     assert result.value.data == {"cpu": 0.5, "tags": ["a"]}
+
+
+HEADER: dict[str, JsonValue] = {
+    "format": "threads.log",
+    "format_version": 1,
+    "thread_id": THREAD,
+    "branch_id": BRANCH,
+    "created_at": 0,
+    "writer": {"impl": "threads-py", "version": "0.0.0"},
+}
+HEAD: dict[str, JsonValue] = {
+    "format": "threads.head",
+    "format_version": 1,
+    "branch_id": BRANCH,
+    "seq": 0,
+    "hash": HASH,
+}
+
+
+@pytest.mark.parametrize(
+    ("value", "code"),
+    [
+        pytest.param(HEADER | {"format_version": 2}, "unsupported_format", id="header v2"),
+        pytest.param(HEAD | {"format_version": 7}, "unsupported_format", id="head v7"),
+        pytest.param(HEADER | {"format_version": 1.5}, "invalid_line", id="fraction"),
+        pytest.param(HEADER | {"format_version": 2.0}, "invalid_line", id="float two"),
+        pytest.param(HEADER | {"format_version": "2"}, "invalid_line", id="string"),
+        pytest.param(HEADER | {"format_version": True}, "invalid_line", id="bool"),
+        pytest.param(HEADER | {"format_version": 1.0}, "invalid_line", id="float one"),
+        pytest.param(HEADER | {"format_version": 0}, "invalid_line", id="zero"),
+        pytest.param(HEADER | {"format_version": -1}, "invalid_line", id="negative"),
+        pytest.param(
+            {k: v for k, v in HEADER.items() if k != "format_version"}, "invalid_line", id="missing"
+        ),
+        pytest.param(
+            HEADER | {"format": "threads.lag", "format_version": 2},
+            "invalid_line",
+            id="unknown format",
+        ),
+        pytest.param(
+            HEADER | {"format": 1, "format_version": 2}, "invalid_line", id="format not a string"
+        ),
+    ],
+)
+def test_format_admission(value: JsonValue, code: str) -> None:
+    assert error_code(value) == code

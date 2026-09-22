@@ -1,8 +1,8 @@
 """Schema-level conformance: every line of every case log parses, except the ones a case breaks.
 
 A case breaks a line on purpose in two ways (spec/conformance/README.md):
-- its expected error is a schema-level code (`invalid_line`, `unsupported_critical_event`) at
-  `error.seq`: exactly that line fails, with that code;
+- its expected error is a line-level code (`invalid_line`, `unsupported_format`,
+  `unsupported_critical_event`) at `error.seq`: exactly that line fails, with that code;
 - its log ends without a newline: the last chunk is a torn write and fails as `invalid_line`.
 Semantic errors (`invalid_transition`, `prev_hash_mismatch`, ...) are later stages, so those logs
 must parse in full here.
@@ -18,7 +18,7 @@ from threads.result import Err, Ok
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 MIN_CASES = 70
-SCHEMA_LEVEL_CODES = frozenset({"invalid_line", "unsupported_critical_event"})
+SCHEMA_LEVEL_CODES = frozenset({"invalid_line", "unsupported_critical_event", "unsupported_format"})
 CASES_WITH_LOGS = sorted(d.name for d in CASES.iterdir() if (d / "log.jsonl").exists())
 
 
@@ -62,7 +62,8 @@ def test_case_log_parses(name: str) -> None:
     raw, error = failures[0]
     assert error.code == code
     if seq is not None:
-        assert json.loads(raw)["seq"] == seq
+        # A header line has no seq; its errors carry seq 0 (schema README wire rule 8).
+        assert json.loads(raw).get("seq", 0) == seq
     else:
         assert log.endswith(raw)
 

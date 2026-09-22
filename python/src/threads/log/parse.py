@@ -1,7 +1,7 @@
 """Parses one stored log line: the storage trust boundary (spec/schema/README.md, wire rules)."""
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, get_args
 
 from pydantic import Field, JsonValue, TypeAdapter, ValidationError
 
@@ -26,13 +26,18 @@ _FRAMING: TypeAdapter[Header | Head] = TypeAdapter(
     Annotated[Header | Head, Field(discriminator="format")]
 )
 _EVENT: TypeAdapter[Event] = TypeAdapter(Event)
+# Taken from the models so the format names stay in the schema.
+_FORMATS = frozenset(
+    name for model in (Header, Head) for name in get_args(model.model_fields["format"].annotation)
+)
 
 
 def parse_log_line(line: str) -> Ok[LogLine] | Err[ParseError]:
     """Parses a line without its trailing newline.
 
     Admission (duplicate keys, non-finite numbers, lone surrogates, unsafe integers, the 1 MiB
-    cap) and schema failures are `invalid_line`. An event whose `(type, type_version)` this
+    cap) and schema failures are `invalid_line`. A header or head of a known format with a newer
+    integer `format_version` is `unsupported_format`. An event whose `(type, type_version)` this
     version doesn't know is kept when `critical` is false and is `unsupported_critical_event`
     otherwise.
     """
@@ -50,7 +55,7 @@ def _parse_value(value: JsonValue) -> Ok[LogLine] | Err[ParseError]:
         return _invalid("a log line is a JSON object")
     try:
         if "format" in value:
-            return Ok(_FRAMING.validate_python(value))
+            return _parse_framing(value)
         if _is_known(value):
             return Ok(_EVENT.validate_python(value))
         unknown = UnknownEvent.model_validate(value)
@@ -64,6 +69,17 @@ def _parse_value(value: JsonValue) -> Ok[LogLine] | Err[ParseError]:
             )
         )
     return Ok(unknown)
+
+
+def _parse_framing(value: dict[str, JsonValue]) -> Ok[LogLine] | Err[ParseError]:
+    # Format admission runs before the schema (schema README wire rule 8): a known format with a
+    # newer integer version is a newer writer, not corruption. Any other bad version fails the
+    # schema below as invalid_line.
+    version = value.get("format_version")
+    newer = isinstance(version, int) and not isinstance(version, bool) and version > 1
+    if value["format"] in _FORMATS and newer:
+        return Err(ParseError("unsupported_format", f"format_version {version} is newer"))
+    return Ok(_FRAMING.validate_python(value))
 
 
 def _is_known(value: dict[str, JsonValue]) -> bool:
