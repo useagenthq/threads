@@ -1,14 +1,15 @@
 import { z } from "zod";
-import { withRule } from "./rules";
+import { type Ruled, withRule } from "./rules";
 
 // Integers are 0 … 2^53−1 on the wire (spec/schema/README.md, wire rule 4).
 export const Int: z.ZodInt = z.int().min(0).max(Number.MAX_SAFE_INTEGER).meta({
   id: "Int",
   description: "JSON integer in the cross-language safe range.",
 });
-export const PosInt: z.ZodInt = withRule(
+const POS_INT_RULE = { allOf: [{ minimum: 1 }] } as const;
+export const PosInt: Ruled<z.ZodInt, typeof POS_INT_RULE> = withRule(
   Int,
-  { allOf: [{ minimum: 1 }] },
+  POS_INT_RULE,
   { id: "PosInt" },
 );
 export const TimeMs: z.ZodInt = Int.meta({

@@ -3,7 +3,7 @@ import { ActorWithPrincipal, ParkAddress } from "../common";
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { EventId, ThreadId } from "../ids";
 import { Int, TimeMs } from "../primitives";
-import { withRule } from "../rules";
+import { type Ruled, withRule } from "../rules";
 import type { EnumOf, Opt, Strict } from "../zod-types";
 
 // Parking, cancellation, turn ends and budget stops.
@@ -145,14 +145,22 @@ export const TurnCompleted: EventDef<
   true
 > = event({ type: "turn_completed", critical: true, data: TurnCompletedData });
 
-export const BudgetExceededData: Strict<{
-  scope: EnumOf<typeof BUDGET_SCOPES>;
-  owner_thread_id: Opt<typeof ThreadId>;
-  limit: EnumOf<typeof BUDGET_LIMITS>;
-  limit_value: typeof Int;
-  observed: typeof Int;
-  observed_is_upper_bound: z.ZodBoolean;
-}> = withRule(
+const BUDGET_EXCEEDED_DATA_RULE = {
+  if: { properties: { scope: { const: "ancestor" } } },
+  then: { required: ["owner_thread_id"] },
+  else: { not: { required: ["owner_thread_id"] } },
+} as const;
+export const BudgetExceededData: Ruled<
+  Strict<{
+    scope: EnumOf<typeof BUDGET_SCOPES>;
+    owner_thread_id: Opt<typeof ThreadId>;
+    limit: EnumOf<typeof BUDGET_LIMITS>;
+    limit_value: typeof Int;
+    observed: typeof Int;
+    observed_is_upper_bound: z.ZodBoolean;
+  }>,
+  typeof BUDGET_EXCEEDED_DATA_RULE
+> = withRule(
   z.strictObject({
     scope: z
       .enum(BUDGET_SCOPES)
@@ -171,11 +179,7 @@ export const BudgetExceededData: Strict<{
         "true when unknown usage was counted at its conservative upper bound.",
       ),
   }),
-  {
-    if: { properties: { scope: { const: "ancestor" } } },
-    then: { required: ["owner_thread_id"] },
-    else: { not: { required: ["owner_thread_id"] } },
-  },
+  BUDGET_EXCEEDED_DATA_RULE,
 );
 export const BudgetExceeded: EventDef<
   "budget_exceeded",

@@ -4,9 +4,9 @@ import { InputPart } from "../content";
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { CallId, EventId, OccurrenceId } from "../ids";
 import { Name, NonEmpty, TimeMs } from "../primitives";
-import { withRule } from "../rules";
+import { type Ruled, withRule } from "../rules";
 import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
-import { TextOrContent, TextOrRef } from "./one-of";
+import { HAS_TEXT_OR_CONTENT, HAS_TEXT_OR_REF, TextOrRef } from "./one-of";
 
 // Everything that enters a thread from outside the model: user input, context, channels, schedules.
 
@@ -35,13 +35,16 @@ const INJECTED_SOURCES = [
 const TRUST_LEVELS = ["untrusted_reference", "trusted_instruction"] as const;
 const SKIP_REASONS = ["missed", "overlap"] as const;
 
-export const UserInputData: Strict<{
-  source: EnumOf<typeof INPUT_SOURCES>;
-  text: Opt<z.ZodString>;
-  content: Opt<Arr<typeof InputPart>>;
-  delivery_event_id: Opt<typeof EventId>;
-  budget: Opt<typeof Budget>;
-}> = withRule(
+export const UserInputData: Ruled<
+  Strict<{
+    source: EnumOf<typeof INPUT_SOURCES>;
+    text: Opt<z.ZodString>;
+    content: Opt<Arr<typeof InputPart>>;
+    delivery_event_id: Opt<typeof EventId>;
+    budget: Opt<typeof Budget>;
+  }>,
+  typeof HAS_TEXT_OR_CONTENT
+> = withRule(
   z.strictObject({
     source: z.enum(INPUT_SOURCES),
     text: z.string().optional(),
@@ -53,7 +56,7 @@ export const UserInputData: Strict<{
       "The budget of the run this input starts.",
     ).optional(),
   }),
-  { allOf: [{ $ref: TextOrContent }] },
+  HAS_TEXT_OR_CONTENT,
 );
 export const UserInput: EventDef<
   "user_input",
@@ -68,19 +71,22 @@ export const UserInput: EventDef<
   actor: ActorWithPrincipal,
 });
 
-export const SteerData: Strict<{
-  source: EnumOf<typeof STEER_SOURCES>;
-  text: Opt<z.ZodString>;
-  content: Opt<Arr<typeof InputPart>>;
-  delivery_event_id: Opt<typeof EventId>;
-}> = withRule(
+export const SteerData: Ruled<
+  Strict<{
+    source: EnumOf<typeof STEER_SOURCES>;
+    text: Opt<z.ZodString>;
+    content: Opt<Arr<typeof InputPart>>;
+    delivery_event_id: Opt<typeof EventId>;
+  }>,
+  typeof HAS_TEXT_OR_CONTENT
+> = withRule(
   z.strictObject({
     source: z.enum(STEER_SOURCES),
     text: z.string().optional(),
     content: z.array(InputPart).min(1).optional(),
     delivery_event_id: EventId.optional(),
   }),
-  { allOf: [{ $ref: TextOrContent }] },
+  HAS_TEXT_OR_CONTENT,
 );
 export const Steer: EventDef<
   "steer",
@@ -97,17 +103,36 @@ export const Steer: EventDef<
 });
 
 // Recalled context is always untrusted reference, never instructions (framework invariant 6).
-export const InjectedData: Strict<{
-  source: EnumOf<typeof INJECTED_SOURCES>;
-  trust: EnumOf<typeof TRUST_LEVELS>;
-  origin: Strict<{
-    id: typeof NonEmpty;
-    version: Opt<z.ZodString>;
-    location: Opt<z.ZodString>;
-  }>;
-  text: Opt<z.ZodString>;
-  ref: Opt<typeof ArtifactRef>;
-}> = withRule(
+const UNTRUSTED_SOURCES = {
+  if: {
+    properties: {
+      source: {
+        enum: ["memory", "knowledge", "attachment", "todo", "agent", "handoff"],
+      },
+    },
+  },
+  then: { properties: { trust: { const: "untrusted_reference" } } },
+} as const;
+const INJECTED_DATA_RULE: {
+  readonly allOf: readonly [
+    { readonly $ref: typeof TextOrRef },
+    typeof UNTRUSTED_SOURCES,
+  ];
+} = { allOf: [{ $ref: TextOrRef }, UNTRUSTED_SOURCES] };
+export const InjectedData: Ruled<
+  Strict<{
+    source: EnumOf<typeof INJECTED_SOURCES>;
+    trust: EnumOf<typeof TRUST_LEVELS>;
+    origin: Strict<{
+      id: typeof NonEmpty;
+      version: Opt<z.ZodString>;
+      location: Opt<z.ZodString>;
+    }>;
+    text: Opt<z.ZodString>;
+    ref: Opt<typeof ArtifactRef>;
+  }>,
+  typeof INJECTED_DATA_RULE
+> = withRule(
   z.strictObject({
     source: z.enum(INJECTED_SOURCES),
     trust: z.enum(TRUST_LEVELS),
@@ -119,28 +144,7 @@ export const InjectedData: Strict<{
     text: z.string().optional(),
     ref: ArtifactRef.optional(),
   }),
-  {
-    allOf: [
-      { $ref: TextOrRef },
-      {
-        if: {
-          properties: {
-            source: {
-              enum: [
-                "memory",
-                "knowledge",
-                "attachment",
-                "todo",
-                "agent",
-                "handoff",
-              ],
-            },
-          },
-        },
-        then: { properties: { trust: { const: "untrusted_reference" } } },
-      },
-    ],
-  },
+  INJECTED_DATA_RULE,
 );
 export const Injected: EventDef<"injected", typeof InjectedData, true> = event({
   type: "injected",
@@ -161,15 +165,18 @@ export const Heartbeat: EventDef<"heartbeat", typeof HeartbeatData, true> =
     data: HeartbeatData,
   });
 
-export const ChannelDeliveryData: Strict<{
-  channel: typeof Name;
-  installation: typeof NonEmpty;
-  conversation: typeof NonEmpty;
-  delivery_id: typeof NonEmpty;
-  item_key: typeof NonEmpty;
-  text: Opt<z.ZodString>;
-  ref: Opt<typeof ArtifactRef>;
-}> = withRule(
+export const ChannelDeliveryData: Ruled<
+  Strict<{
+    channel: typeof Name;
+    installation: typeof NonEmpty;
+    conversation: typeof NonEmpty;
+    delivery_id: typeof NonEmpty;
+    item_key: typeof NonEmpty;
+    text: Opt<z.ZodString>;
+    ref: Opt<typeof ArtifactRef>;
+  }>,
+  typeof HAS_TEXT_OR_REF
+> = withRule(
   z.strictObject({
     channel: Name,
     installation: NonEmpty,
@@ -179,7 +186,7 @@ export const ChannelDeliveryData: Strict<{
     text: z.string().optional(),
     ref: ArtifactRef.optional(),
   }),
-  { allOf: [{ $ref: TextOrRef }] },
+  HAS_TEXT_OR_REF,
 );
 export const ChannelDelivery: EventDef<
   "channel_delivery",

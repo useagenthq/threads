@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { Envelope, Head, Header } from "./envelope";
 import { EVENT_FRAGMENTS, EVENT_TYPES } from "./events";
-import { withRule } from "./rules";
+import { type Ruled, withRule } from "./rules";
 import type { EnumOf, Lit } from "./zod-types";
 
 /** A `(type, type_version)` this schema version knows. */
@@ -13,15 +13,17 @@ export const KnownTag: z.ZodObject<{
   .meta({ id: "KnownTag" });
 
 /** An envelope whose `(type, type_version)` this schema version does not know. */
-export const UnknownEvent: typeof Envelope = withRule(
-  Envelope,
-  { allOf: [{ not: { $ref: KnownTag } }] },
-  {
+const UNKNOWN_EVENT_RULE: {
+  readonly allOf: readonly [
+    { readonly not: { readonly $ref: typeof KnownTag } },
+  ];
+} = { allOf: [{ not: { $ref: KnownTag } }] };
+export const UnknownEvent: Ruled<typeof Envelope, typeof UNKNOWN_EVENT_RULE> =
+  withRule(Envelope, UNKNOWN_EVENT_RULE, {
     id: "UnknownEvent",
     description:
       "An envelope whose (type, type_version) this schema version does not know.",
-  },
-);
+  });
 export type UnknownEvent = z.infer<typeof UnknownEvent>;
 
 // The export's view of a known event: the Envelope plus exactly one `ev_<type>` def. It accepts

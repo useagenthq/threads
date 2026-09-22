@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Int, JsonObject, Name, NonEmpty, PosInt, Sha256 } from "./primitives";
-import { withRule } from "./rules";
+import { type Ruled, withRule } from "./rules";
 import type { EnumOf, Opt, Strict } from "./zod-types";
 
 export const ArtifactRef: Strict<{
@@ -81,11 +81,11 @@ export const Actor: Strict<{
   .strictObject({ kind: z.enum(ACTOR_KINDS), principal: Principal.optional() })
   .meta({ id: "Actor" });
 export type Actor = z.infer<typeof Actor>;
-export const ActorWithPrincipal: typeof Actor = withRule(
-  Actor,
-  { required: ["kind", "principal"] },
-  { id: "ActorWithPrincipal" },
-);
+const ACTOR_WITH_PRINCIPAL_RULE = { required: ["kind", "principal"] } as const;
+export const ActorWithPrincipal: Ruled<
+  typeof Actor,
+  typeof ACTOR_WITH_PRINCIPAL_RULE
+> = withRule(Actor, ACTOR_WITH_PRINCIPAL_RULE, { id: "ActorWithPrincipal" });
 
 export const ModelRef: Strict<{
   provider: typeof Name;
@@ -121,16 +121,24 @@ export const EffectClass: EnumOf<typeof EFFECT_CLASSES> = z
       "read_only: no state change anywhere; no effect events. sandbox_local: changes only sandbox state; valid only under deny-all egress or enforced operation mediation. idempotent: the provider dedups on the effect key within dedup_window_ms. reconcilable: the adapter can look up the outcome with finality. unguarded: no contract; uncertainty always parks. Undeclared tools are unguarded.",
   });
 
-export const ToolSpec: Strict<{
-  name: typeof Name;
-  description: z.ZodString;
-  input_schema: typeof JsonObject;
-  effect_class: typeof EffectClass;
-  dedup_window_ms: Opt<typeof PosInt>;
-  defer_loading: Opt<z.ZodBoolean>;
-  output_schema: Opt<typeof JsonObject>;
-  ends_turn: Opt<z.ZodBoolean>;
-}> = withRule(
+const TOOL_SPEC_RULE = {
+  if: { properties: { effect_class: { const: "idempotent" } } },
+  then: { required: ["dedup_window_ms"] },
+  else: { not: { required: ["dedup_window_ms"] } },
+} as const;
+export const ToolSpec: Ruled<
+  Strict<{
+    name: typeof Name;
+    description: z.ZodString;
+    input_schema: typeof JsonObject;
+    effect_class: typeof EffectClass;
+    dedup_window_ms: Opt<typeof PosInt>;
+    defer_loading: Opt<z.ZodBoolean>;
+    output_schema: Opt<typeof JsonObject>;
+    ends_turn: Opt<z.ZodBoolean>;
+  }>,
+  typeof TOOL_SPEC_RULE
+> = withRule(
   z.strictObject({
     name: Name,
     description: z.string(),
@@ -155,11 +163,7 @@ export const ToolSpec: Strict<{
       )
       .optional(),
   }),
-  {
-    if: { properties: { effect_class: { const: "idempotent" } } },
-    then: { required: ["dedup_window_ms"] },
-    else: { not: { required: ["dedup_window_ms"] } },
-  },
+  TOOL_SPEC_RULE,
   { id: "ToolSpec" },
 );
 export type ToolSpec = z.infer<typeof ToolSpec>;
@@ -230,14 +234,18 @@ export const PermissionRule: z.ZodString = z
       "Tool(specifier) grammar, . The tool part may end in * (mcp__github__*).",
   });
 
-export const Budget: Strict<{
-  max_cost_nanos: Opt<typeof PosInt>;
-  max_input_tokens: Opt<typeof PosInt>;
-  max_output_tokens: Opt<typeof PosInt>;
-  max_model_requests: Opt<typeof PosInt>;
-  max_turns: Opt<typeof PosInt>;
-  max_wall_ms: Opt<typeof PosInt>;
-}> = withRule(
+const BUDGET_RULE = { minProperties: 1 } as const;
+export const Budget: Ruled<
+  Strict<{
+    max_cost_nanos: Opt<typeof PosInt>;
+    max_input_tokens: Opt<typeof PosInt>;
+    max_output_tokens: Opt<typeof PosInt>;
+    max_model_requests: Opt<typeof PosInt>;
+    max_turns: Opt<typeof PosInt>;
+    max_wall_ms: Opt<typeof PosInt>;
+  }>,
+  typeof BUDGET_RULE
+> = withRule(
   z.strictObject({
     max_cost_nanos: PosInt.optional(),
     max_input_tokens: PosInt.optional(),
@@ -246,7 +254,7 @@ export const Budget: Strict<{
     max_turns: PosInt.optional(),
     max_wall_ms: PosInt.optional(),
   }),
-  { minProperties: 1 },
+  BUDGET_RULE,
   {
     id: "Budget",
     description:

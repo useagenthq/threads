@@ -9,7 +9,7 @@ import {
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { CallId, ChallengeId, EventId } from "../ids";
 import { Int, JsonValue, PosInt, Sha256 } from "../primitives";
-import { withRule } from "../rules";
+import { type Ruled, withRule } from "../rules";
 import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
 
 // Context management, structured output and permission modes.
@@ -63,13 +63,21 @@ export const Compacted: EventDef<"compacted", typeof CompactedData, true> =
     data: CompactedData,
   });
 
-export const OutputValidatedData: Strict<{
-  source_event_id: typeof EventId;
-  schema_sha256: typeof Sha256;
-  outcome: EnumOf<typeof OUTPUT_OUTCOMES>;
-  value: Opt<typeof JsonValue>;
-  errors: Opt<Arr<Strict<{ path: z.ZodString; message: z.ZodString }>>>;
-}> = withRule(
+const OUTPUT_VALIDATED_DATA_RULE = {
+  if: { properties: { outcome: { const: "accepted" } } },
+  then: { required: ["value"], not: { required: ["errors"] } },
+  else: { required: ["errors"], not: { required: ["value"] } },
+} as const;
+export const OutputValidatedData: Ruled<
+  Strict<{
+    source_event_id: typeof EventId;
+    schema_sha256: typeof Sha256;
+    outcome: EnumOf<typeof OUTPUT_OUTCOMES>;
+    value: Opt<typeof JsonValue>;
+    errors: Opt<Arr<Strict<{ path: z.ZodString; message: z.ZodString }>>>;
+  }>,
+  typeof OUTPUT_VALIDATED_DATA_RULE
+> = withRule(
   z.strictObject({
     source_event_id: EventId,
     schema_sha256: Sha256,
@@ -79,11 +87,7 @@ export const OutputValidatedData: Strict<{
       .array(z.strictObject({ path: z.string(), message: z.string() }))
       .optional(),
   }),
-  {
-    if: { properties: { outcome: { const: "accepted" } } },
-    then: { required: ["value"], not: { required: ["errors"] } },
-    else: { required: ["errors"], not: { required: ["value"] } },
-  },
+  OUTPUT_VALIDATED_DATA_RULE,
 );
 export const OutputValidated: EventDef<
   "output_validated",
@@ -97,48 +101,53 @@ export const OutputValidated: EventDef<
   data: OutputValidatedData,
 });
 
-export const ContextEditedData: Strict<{
-  reason: EnumOf<typeof EDIT_REASONS>;
-  request_event_id: Opt<typeof EventId>;
-  edits: Arr<
-    Strict<{
-      call_id: typeof CallId;
-      action: EnumOf<typeof EDIT_ACTIONS>;
-      part: Opt<typeof Int>;
-      spans: Opt<Arr<typeof Span>>;
-    }>
-  >;
-}> = withRule(
+const REDACTION_RULE = {
+  if: { properties: { action: { const: "redact" } } },
+  then: { required: ["part", "spans"] },
+  else: {
+    not: { anyOf: [{ required: ["part"] }, { required: ["spans"] }] },
+  },
+} as const;
+// part and spans are present exactly on a redaction.
+export const ContextEdit: Ruled<
+  Strict<{
+    call_id: typeof CallId;
+    action: EnumOf<typeof EDIT_ACTIONS>;
+    part: Opt<typeof Int>;
+    spans: Opt<Arr<typeof Span>>;
+  }>,
+  typeof REDACTION_RULE
+> = withRule(
+  z.strictObject({
+    call_id: CallId,
+    action: z.enum(EDIT_ACTIONS),
+    part: Int.optional(),
+    spans: z.array(Span).min(1).optional(),
+  }),
+  REDACTION_RULE,
+);
+
+const CONTEXT_EDITED_DATA_RULE = {
+  if: { properties: { reason: { const: "provider" } } },
+  then: { required: ["request_event_id"] },
+  else: { not: { required: ["request_event_id"] } },
+} as const;
+export const ContextEditedData: Ruled<
+  Strict<{
+    reason: EnumOf<typeof EDIT_REASONS>;
+    request_event_id: Opt<typeof EventId>;
+    edits: Arr<typeof ContextEdit>;
+  }>,
+  typeof CONTEXT_EDITED_DATA_RULE
+> = withRule(
   z.strictObject({
     reason: z.enum(EDIT_REASONS),
     request_event_id: EventId.describe(
       "reason provider only: the attempt whose effective context the provider edited, as the adapter reported it. That attempt's effective context is non-exact for replay.",
     ).optional(),
-    edits: z
-      .array(
-        withRule(
-          z.strictObject({
-            call_id: CallId,
-            action: z.enum(EDIT_ACTIONS),
-            part: Int.optional(),
-            spans: z.array(Span).min(1).optional(),
-          }),
-          {
-            if: { properties: { action: { const: "redact" } } },
-            then: { required: ["part", "spans"] },
-            else: {
-              not: { anyOf: [{ required: ["part"] }, { required: ["spans"] }] },
-            },
-          },
-        ),
-      )
-      .min(1),
+    edits: z.array(ContextEdit).min(1),
   }),
-  {
-    if: { properties: { reason: { const: "provider" } } },
-    then: { required: ["request_event_id"] },
-    else: { not: { required: ["request_event_id"] } },
-  },
+  CONTEXT_EDITED_DATA_RULE,
 );
 export const ContextEdited: EventDef<
   "context_edited",

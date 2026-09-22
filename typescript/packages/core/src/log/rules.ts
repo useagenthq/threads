@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Narrow } from "./narrow";
 
 // Cross-field rules (if/then/else, not, oneOf over required, ...) have no Zod form. A rule is
 // written once, as JSON Schema data: the export copies it into the schema verbatim and `holds`
@@ -104,16 +105,20 @@ function jsonValue(value: unknown): unknown {
   return isObject(value) ? toJson(value) : value;
 }
 
-/** `schema` narrowed by `rule`, which is enforced on parse and exported as written. */
-export function withRule<T extends z.ZodType>(
+/** A schema whose parsed type is narrowed by the rule `R` (see narrow.ts). */
+export type Ruled<T extends z.ZodType, R> = T &
+  z.ZodType<z.output<T> & Narrow<z.output<T>, R>, z.input<T>>;
+
+/** `schema` narrowed by `rule`, which is enforced on parse, typed and exported as written. */
+export function withRule<T extends z.ZodType, const R extends Rule>(
   schema: T,
-  rule: Rule,
+  rule: R,
   meta: Meta = {},
-): T {
-  const narrowed = schema.refine(
-    (value) => holds(rule, value),
-    "violates a schema rule",
-  );
+): Ruled<T, R> {
+  const proves = (
+    value: z.output<T>,
+  ): value is z.output<T> & Narrow<z.output<T>, R> => holds(rule, value);
+  const narrowed = schema.refine(proves, "violates a schema rule");
   // Registered on the refined schema itself: a second clone would hide the parent's $ref.
   const registered: z.ZodType = narrowed;
   z.globalRegistry.add(registered, { ...meta, ...toJson(rule) });

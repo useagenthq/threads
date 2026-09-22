@@ -3,9 +3,9 @@ import { ArtifactRef, Budget, Usage } from "../common";
 import { type EventDef, event } from "../envelope";
 import { CallId, ThreadId } from "../ids";
 import { NonEmpty } from "../primitives";
-import { withRule } from "../rules";
+import { type Ruled, withRule } from "../rules";
 import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
-import { TextOrRef } from "./one-of";
+import { HAS_TEXT_OR_REF } from "./one-of";
 
 // Subagents, handoffs, todos and teams.
 
@@ -78,13 +78,21 @@ export const AgentFinished: EventDef<
   data: AgentFinishedData,
 });
 
-export const HandoffData: Strict<{
-  call_id: typeof CallId;
-  to_agent: typeof NonEmpty;
-  to_thread_id: typeof ThreadId;
-  forwarded: EnumOf<typeof FORWARDED>;
-  forwarded_ref: Opt<typeof ArtifactRef>;
-}> = withRule(
+const HANDOFF_DATA_RULE = {
+  if: { properties: { forwarded: { const: "none" } } },
+  then: { not: { required: ["forwarded_ref"] } },
+  else: { required: ["forwarded_ref"] },
+} as const;
+export const HandoffData: Ruled<
+  Strict<{
+    call_id: typeof CallId;
+    to_agent: typeof NonEmpty;
+    to_thread_id: typeof ThreadId;
+    forwarded: EnumOf<typeof FORWARDED>;
+    forwarded_ref: Opt<typeof ArtifactRef>;
+  }>,
+  typeof HANDOFF_DATA_RULE
+> = withRule(
   z.strictObject({
     call_id: CallId,
     to_agent: NonEmpty,
@@ -92,11 +100,7 @@ export const HandoffData: Strict<{
     forwarded: z.enum(FORWARDED),
     forwarded_ref: ArtifactRef.optional(),
   }),
-  {
-    if: { properties: { forwarded: { const: "none" } } },
-    then: { not: { required: ["forwarded_ref"] } },
-    else: { required: ["forwarded_ref"] },
-  },
+  HANDOFF_DATA_RULE,
 );
 export const Handoff: EventDef<"handoff", typeof HandoffData, true> = event({
   type: "handoff",
@@ -197,13 +201,16 @@ export const TeamTaskUpdated: EventDef<
   data: TeamTaskUpdatedData,
 });
 
-export const TeamMessageData: Strict<{
-  message_id: typeof NonEmpty;
-  from: typeof NonEmpty;
-  to: typeof NonEmpty;
-  text: Opt<z.ZodString>;
-  ref: Opt<typeof ArtifactRef>;
-}> = withRule(
+export const TeamMessageData: Ruled<
+  Strict<{
+    message_id: typeof NonEmpty;
+    from: typeof NonEmpty;
+    to: typeof NonEmpty;
+    text: Opt<z.ZodString>;
+    ref: Opt<typeof ArtifactRef>;
+  }>,
+  typeof HAS_TEXT_OR_REF
+> = withRule(
   z.strictObject({
     message_id: NonEmpty,
     from: NonEmpty,
@@ -211,7 +218,7 @@ export const TeamMessageData: Strict<{
     text: z.string().optional(),
     ref: ArtifactRef.optional(),
   }),
-  { allOf: [{ $ref: TextOrRef }] },
+  HAS_TEXT_OR_REF,
 );
 export const TeamMessage: EventDef<
   "team_message",

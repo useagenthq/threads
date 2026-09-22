@@ -27,7 +27,7 @@ import {
   Sha256,
   TimeMs,
 } from "../primitives";
-import { withRule } from "../rules";
+import { type Ruled, withRule } from "../rules";
 import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
 
 // Thread lifecycle, settings epochs, tool sets, snapshots and branches.
@@ -238,13 +238,26 @@ export const Snapshot: EventDef<"snapshot", typeof SnapshotData, true> = event({
   data: SnapshotData,
 });
 
-export const ForkData: Strict<{
-  parent_branch_id: typeof BranchId;
-  at_hash: typeof Sha256;
-  reason: EnumOf<typeof FORK_REASONS>;
-  sandbox_id: Opt<typeof SandboxId>;
-  knowledge_policy: Opt<EnumOf<typeof KNOWLEDGE_POLICIES>>;
-}> = withRule(
+const FORK_DATA_RULE = {
+  if: { properties: { reason: { const: "snapshot" } } },
+  then: { required: ["sandbox_id", "knowledge_policy"] },
+  else: {
+    allOf: [
+      { not: { required: ["sandbox_id"] } },
+      { not: { required: ["knowledge_policy"] } },
+    ],
+  },
+} as const;
+export const ForkData: Ruled<
+  Strict<{
+    parent_branch_id: typeof BranchId;
+    at_hash: typeof Sha256;
+    reason: EnumOf<typeof FORK_REASONS>;
+    sandbox_id: Opt<typeof SandboxId>;
+    knowledge_policy: Opt<EnumOf<typeof KNOWLEDGE_POLICIES>>;
+  }>,
+  typeof FORK_DATA_RULE
+> = withRule(
   z.strictObject({
     parent_branch_id: BranchId,
     at_hash: Sha256.describe(
@@ -265,16 +278,7 @@ export const ForkData: Strict<{
       )
       .optional(),
   }),
-  {
-    if: { properties: { reason: { const: "snapshot" } } },
-    then: { required: ["sandbox_id", "knowledge_policy"] },
-    else: {
-      allOf: [
-        { not: { required: ["sandbox_id"] } },
-        { not: { required: ["knowledge_policy"] } },
-      ],
-    },
-  },
+  FORK_DATA_RULE,
 );
 export const Fork: EventDef<"fork", typeof ForkData, true> = event({
   type: "fork",

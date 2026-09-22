@@ -51,14 +51,14 @@ export type SnapshotPoint = {
   readonly expiresAt: number | null;
 };
 
-type AcceptedValue = Exclude<
-  EventOf<"output_validated">["data"]["value"],
-  undefined
+type Accepted = Extract<
+  EventOf<"output_validated">["data"],
+  { outcome: "accepted" }
 >;
 export type Output =
   | { readonly outcome: "none" }
   | { readonly outcome: "rejected" }
-  | { readonly outcome: "accepted"; readonly value: AcceptedValue };
+  | { readonly outcome: "accepted"; readonly value: Accepted["value"] };
 
 /**
  * Everything the semantic rules and reduce read, folded over the resolved chain.

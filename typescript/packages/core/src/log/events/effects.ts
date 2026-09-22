@@ -4,7 +4,7 @@ import { ResultPart } from "../content";
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { CallId } from "../ids";
 import { PosInt } from "../primitives";
-import { withRule } from "../rules";
+import { type Ruled, withRule } from "../rules";
 import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
 
 // Side effects (begin, commit, unknown, resolved) and tool results.
@@ -87,47 +87,51 @@ export const EffectUnknown: EventDef<
   data: EffectUnknownData,
 });
 
-export const EffectResolvedData: Strict<{
-  call_id: typeof CallId;
-  outcome: EnumOf<typeof RESOLVED_OUTCOMES>;
-  by: EnumOf<typeof RESOLVERS>;
-  result_ref: Opt<typeof ArtifactRef>;
-}> = withRule(
+const EFFECT_RESOLVED_DATA_RULE = {
+  allOf: [
+    {
+      if: { properties: { outcome: { const: "confirmed_success" } } },
+      then: {
+        required: ["result_ref"],
+        properties: { by: { enum: ["reconcile", "adapter"] } },
+      },
+    },
+    {
+      if: { properties: { outcome: { const: "safe_to_retry" } } },
+      then: { properties: { by: { enum: ["provider_dedup", "reconcile"] } } },
+    },
+    {
+      if: { properties: { outcome: { const: "not_sent" } } },
+      then: { properties: { by: { const: "adapter" } } },
+    },
+    {
+      if: { properties: { outcome: { const: "interrupted" } } },
+      then: { properties: { by: { const: "sandbox_terminated" } } },
+    },
+    {
+      if: {
+        properties: { outcome: { enum: ["assume_done", "assume_not_done"] } },
+      },
+      then: { properties: { by: { const: "human" } } },
+    },
+  ],
+} as const;
+export const EffectResolvedData: Ruled<
+  Strict<{
+    call_id: typeof CallId;
+    outcome: EnumOf<typeof RESOLVED_OUTCOMES>;
+    by: EnumOf<typeof RESOLVERS>;
+    result_ref: Opt<typeof ArtifactRef>;
+  }>,
+  typeof EFFECT_RESOLVED_DATA_RULE
+> = withRule(
   z.strictObject({
     call_id: CallId,
     outcome: z.enum(RESOLVED_OUTCOMES),
     by: z.enum(RESOLVERS),
     result_ref: ArtifactRef.optional(),
   }),
-  {
-    allOf: [
-      {
-        if: { properties: { outcome: { const: "confirmed_success" } } },
-        then: {
-          required: ["result_ref"],
-          properties: { by: { enum: ["reconcile", "adapter"] } },
-        },
-      },
-      {
-        if: { properties: { outcome: { const: "safe_to_retry" } } },
-        then: { properties: { by: { enum: ["provider_dedup", "reconcile"] } } },
-      },
-      {
-        if: { properties: { outcome: { const: "not_sent" } } },
-        then: { properties: { by: { const: "adapter" } } },
-      },
-      {
-        if: { properties: { outcome: { const: "interrupted" } } },
-        then: { properties: { by: { const: "sandbox_terminated" } } },
-      },
-      {
-        if: {
-          properties: { outcome: { enum: ["assume_done", "assume_not_done"] } },
-        },
-        then: { properties: { by: { const: "human" } } },
-      },
-    ],
-  },
+  EFFECT_RESOLVED_DATA_RULE,
 );
 export const EffectResolved: EventDef<
   "effect_resolved",
