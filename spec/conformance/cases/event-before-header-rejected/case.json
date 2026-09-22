@@ -1,0 +1,9 @@
+{
+  "name": "event-before-header-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "The export starts with an event line; the branch header is missing. Every line is valid on its own, and a segment must start with its header: invalid_transition at the first line (invalid_line is only for a line that fails on its own).",
+  "clock": {
+    "now": 1790000060000
+  }
+}

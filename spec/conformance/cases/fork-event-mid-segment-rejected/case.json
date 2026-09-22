@@ -1,0 +1,9 @@
+{
+  "name": "fork-event-mid-segment-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A schema-valid fork event in the middle of a segment. fork is only valid as the first event after a child header: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

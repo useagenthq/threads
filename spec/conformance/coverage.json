@@ -1000,6 +1000,31 @@
           "kind": "case",
           "ref": "event-id-duplicate-across-fork-rejected",
           "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "event-before-header-rejected",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "child-header-without-fork-rejected",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "fork-event-mid-segment-rejected",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "line-schema-error-before-chain",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "import-existing-branch-conflict",
+          "status": "planned"
         }
       ]
     },
@@ -1044,6 +1069,11 @@
           "kind": "job",
           "ref": "two-writers-fenced",
           "status": "planned"
+        },
+        {
+          "kind": "case",
+          "ref": "recover-foreign-writer-refused",
+          "status": "implemented"
         }
       ]
     },

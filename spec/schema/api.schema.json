@@ -81,7 +81,9 @@
         "mcp_unreachable",
         "release_failed",
         "idempotency_key_reused",
-        "idempotency_key_principal_mismatch"
+        "idempotency_key_principal_mismatch",
+        "branch_not_found",
+        "branch_exists"
       ]
     },
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },

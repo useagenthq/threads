@@ -1,0 +1,9 @@
+{
+  "name": "line-schema-error-before-chain",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Line seq 3 has an extra data field and a wrong prev_hash. Each line's own checks (schema included) run before chain checks, so the result is invalid_line, not prev_hash_mismatch.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

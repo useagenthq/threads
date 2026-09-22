@@ -156,7 +156,7 @@ Checked by readers and writers (`validate_next`) on top of the schema. This is t
 | 6 | `epoch` is non-decreasing | `invalid_transition` | `epoch-decrease-rejected` |
 | 7 | `tool_result` needs a pending `tool_call` with that `call_id`. `tool_result_late` needs an earlier `tool_result{origin: deferred}` for it | `invalid_transition` | `tool-result-without-call`, `late-result-without-placeholder` |
 | 8 | `effect_begin` needs `permission_decision: allow` or a consumed matching approval, and no `cancel_requested` barrier after the call. `read_only` calls write no effect events | `invalid_transition` | `effect-begin-without-permission` |
-| 9 | `call_id`, `channel_delivery.item_key`, `schedule_fired.occurrence_id` and approval consumption per `challenge_id` are each unique within a branch | `invalid_transition` | `duplicate-call-id` |
+| 9 | `call_id`, `channel_delivery.item_key`, `schedule_fired.occurrence_id` and approval consumption per `challenge_id` are each unique along the resolved chain (ancestor segments through their fork points plus the branch), as in rule 28 | `invalid_transition` | `duplicate-call-id` |
 | 10 | `compacted`: both edges are step boundaries (no pending tool call and no model attempt awaiting a response just before `from_seq` and at `to_seq`), so a tool pair is never split; ranges never partly overlap; when `summary_request_event_id` is set, `summary_ref` is the UTF-8 text of that compaction request's response | `invalid_transition` | `compaction-splits-tool-pair`, `compaction-summary-mismatch-rejected` |
 | 11 | `cancelled` is never written while an effect is `begun` or `unknown` | `invalid_transition` | `cancelled-with-unsettled-effect` |
 | 12 | `user_input` opens a turn only when none is open; input during a turn is `steer`. A turn ends at `turn_completed` | `invalid_transition` | `user-input-inside-open-turn` |
@@ -176,6 +176,19 @@ Checked by readers and writers (`validate_next`) on top of the schema. This is t
 | 26 | After `handoff`, the thread takes no `user_input`, `steer` or `model_request` | `invalid_transition` | `handoff-then-input-rejected` |
 | 27 | `mode_changed.from` is the current mode; `to: bypass` needs `policy.permissions.allow_bypass` | `invalid_transition` | `mode-change-bypass-not-allowed` |
 | 28 | `event_id` is unique along the resolved chain, checked on append and on import. SQLite's `(branch_id, event_id)` index is physical only; the writer and importer also check every ancestor segment through its fork point | `invalid_transition` | `event-id-duplicate-across-fork-rejected` |
+
+
+**Structural errors** (import stage 2, checked on each line before `seq`, `prev_hash` and `validate_next`):
+
+| Structure | Error | Case |
+|---|---|---|
+| The first line is not a header (an event before any header) | `invalid_transition` at that line | `event-before-header-rejected` |
+| A child segment header is not immediately followed by its `fork` event | `invalid_transition` at the event after the header | `child-header-without-fork-rejected` |
+| A `fork` event anywhere other than right after a child header | `invalid_transition` | `fork-event-mid-segment-rejected` |
+| A fork link that doesn't match the parent's line at `at_seq` | `prev_hash_mismatch` at the fork | `fork-at-hash-mismatch` |
+| Importing a branch whose rows already exist: identical bytes are an idempotent no-op; any different byte is `seq_conflict` at the first differing seq | `seq_conflict` | planned: `import-existing-branch-conflict` |
+
+`invalid_line` means the line fails on its own (import stage 1). A line that is valid alone but misplaced is `invalid_transition`.
 
 A line that fails its schema is `invalid_line`. Examples: a `tool_use` part inside `user_input`; a `settings_changed` by the model; a `settings_changed` with an automatic reason (`fallback`, `escalation`, `revert`) whose actor is not `host` or `recovery`; a `budget_exceeded` with scope `ancestor` and no `owner_thread_id` (`user-input-tool-use-part-rejected`, `settings-change-by-model-rejected`, `settings-change-auto-reason-by-user-rejected`, `budget-exceeded-ancestor-without-owner-rejected`). These are schema conditionals (`if`/`then`), not semantic rules.
 

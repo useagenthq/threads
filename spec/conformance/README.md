@@ -11,6 +11,8 @@ cases/<name>/
   case.json        name, family, kind, description, clock, script refs, input
   log.jsonl        the input: a branch export (bytes as exported; may be deliberately torn or invalid)
   expected.json    what must come out
+  log.<impl>.jsonl, expected.<impl>.json
+                   recover kind only: one pair per implementation (threads-py, threads-ts)
   model.json       optional: scripted model responses
   sandbox.json     optional: scripted sandbox/provider behaviour
   stubs.json       optional: recorded stubs (stub kind)
@@ -18,7 +20,7 @@ cases/<name>/
   artifacts/<sha256>  optional: content-addressed bytes referenced by the log
 ```
 
-`log.jsonl` is absent only for the `intake` and `policy` kinds. `case.schema.json` defines `case.json` (`$defs/Case`), `expected.json` (`$defs/Expected`), `model.json` (`$defs/ModelScript`), `sandbox.json` (`$defs/SandboxScript`) and `stubs.json` (`$defs/StubScript`). Line shapes come from `../schema/events.v1.schema.json`. Every line of every `log.jsonl` validates, except the torn line in `torn-tail-truncated` and the lines a negative case breaks on purpose.
+`log.jsonl` is absent only for the `intake` and `policy` kinds, and for `recover`, which appends. Only the implementation named in a header's `writer.impl` may append to that branch, so each `recover` case has `log.threads-py.jsonl` and `log.threads-ts.jsonl` from the same script, differing only in the header's writer and the hashes that follow, with the matching `expected.<impl>.json` (only `state.head.hash` differs). A runner uses the pair named for itself. Reading and forking are portable, so every other kind has one `log.jsonl`. In `recover-foreign-writer-refused` each runner gets the other implementation's log: it opens it read-only and refuses to append (`writer_mismatch` at seq 0). `case.schema.json` defines `case.json` (`$defs/Case`), `expected.json` (`$defs/Expected`), `model.json` (`$defs/ModelScript`), `sandbox.json` (`$defs/SandboxScript`) and `stubs.json` (`$defs/StubScript`). Line shapes come from `../schema/events.v1.schema.json`. Every line of every `log.jsonl` validates, except the torn line in `torn-tail-truncated` and the lines a negative case breaks on purpose.
 
 ### log.jsonl is an export
 
@@ -62,13 +64,13 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 
 ## ReducedState (normative v1 projection)
 
-This is the cross-language comparison target. It is deliberately small.
+This is the cross-language comparison target. It is deliberately small. `$defs/ReducedState` in `case.schema.json` is its type: implementations generate their state types from it (Zod in TypeScript, the Pydantic generator in Python) and never hand-write them.
 
 | Field | Rule |
 |---|---|
 | `head` | `{seq, hash}` of the branch's last event line. `hash` is the SHA-256 of its raw bytes |
 | `branch_id` | The branch of the last segment (the one the export is of) |
-| `epoch` | The epoch of the last event |
+| `epoch` | The envelope epoch of the last event line, unknown events included: they were appended under that lease too |
 | `status` | `inspection_only` when the branch's own `fork` has reason `repair`; else `cancelled` after a `cancelled` whose request had scope `thread` or `tree`; else `parked` while any park address is open; else `in_turn` while a turn is open; else `idle` |
 | `turns_completed` | Count of `turn_completed` events |
 | `pending_calls` | `call_id`s that have a `tool_call` and no `tool_result` (a deferred placeholder counts as a result), in call order |
@@ -99,7 +101,11 @@ Unknown non-critical events are skipped by every rule except `head`.
 Each runner gets a fresh temp directory with a copy of the case, a fresh store, the injected clock, a `ScriptedModel`, a `ScriptedSandbox` and, for `stub`, the stub gateway. Tool calls the runner creates are authorized by a fixed conformance policy: `permission_decision{decision: allow, source: policy, rule_id: conformance_allow}`.
 
 **`reduce`**
-1. Import the log **read-only**: UTF-8 and JSON per line, format admission of the header and head lines (`unsupported_format` or `invalid_line`, schema README wire rule 8), header, envelope, `seq`, `prev_hash`, fork links, the critical rule, the data schema, `validate_next`, then the head checkpoint.
+1. Import the log **read-only**, in this order. The first failure is the result.
+   1. **Each line on its own:** UTF-8, JSON admission (wire rule 2, nesting included), canonical form, format admission of header and head lines (`unsupported_format` or `invalid_line`, wire rule 8), then the full line schema: envelope, data and the critical rule. A line that fails here is `invalid_line` (or its admission code) even if it would also break the chain (`line-schema-error-before-chain`).
+   2. **Across lines:** segment structure (the structural errors in the schema README), `seq`, `prev_hash`, fork links, then `validate_next`.
+   3. **The head checkpoint.**
+   Import streams: line k passes both stages before line k+1 is read, so the earliest failing line wins.
 2. Reduce.
 3. Compare `state`, or `error`. The input file is byte-unchanged.
 

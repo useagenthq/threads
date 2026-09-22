@@ -1,0 +1,9 @@
+{
+  "name": "child-header-without-fork-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A child segment header is followed by a user_input instead of its fork event. A child header must be immediately followed by the fork that links it: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}
