@@ -4,6 +4,7 @@ export { type EnvelopeShape, type EventSchema, Head, Header } from "./envelope";
 export * from "./errors";
 export * from "./events";
 export * from "./ids";
+export { canonicalize, type JcsError } from "./jcs";
 export { type JsonParseError, parseStrictJson } from "./json";
 export { LogLine, UnknownEvent } from "./line";
 export {

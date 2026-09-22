@@ -1,4 +1,7 @@
+import type { z } from "zod";
 import { err, ok, type Result } from "../result";
+
+type Json = z.core.util.JSONType;
 
 // Strict JSON for log lines. JSON.parse silently keeps
 // the last duplicate key and turns 1e400 into Infinity, so lines are parsed here instead.
@@ -38,7 +41,7 @@ class Parser {
     this.pos = WHITESPACE.lastIndex;
   }
 
-  value(depth: number): unknown {
+  value(depth: number): Json | Fail {
     if (depth > MAX_DEPTH) return this.fail("nesting too deep");
     this.skipWhitespace();
     const c = this.text[this.pos];
@@ -68,10 +71,6 @@ class Parser {
     // An integral value the other language can't represent exactly is rejected, never rounded.
     if (Number.isInteger(n) && !Number.isSafeInteger(n))
       return this.fail("integer outside ±(2^53−1)");
-    // v1 has no float-typed fields, and JCS spells every integral double as an integer, so
-    // `1.0` or `1e3` is never valid: it would slip past an integer field.
-    if (Number.isInteger(n) && /[.eE]/.test(match[0]))
-      return this.fail("integral value not spelled as an integer");
     return n;
   }
 
@@ -87,9 +86,9 @@ class Parser {
     return decoded;
   }
 
-  array(depth: number): unknown[] | Fail {
+  array(depth: number): Json[] | Fail {
     this.pos++;
-    const items: unknown[] = [];
+    const items: Json[] = [];
     this.skipWhitespace();
     if (this.text[this.pos] === "]") {
       this.pos++;
@@ -106,9 +105,9 @@ class Parser {
     }
   }
 
-  object(depth: number): Record<string, unknown> | Fail {
+  object(depth: number): { [key: string]: Json } | Fail {
     this.pos++;
-    const entries: [string, unknown][] = [];
+    const entries: [string, Json][] = [];
     const keys = new Set<string>();
     this.skipWhitespace();
     if (this.text[this.pos] === "}") {
@@ -127,7 +126,7 @@ class Parser {
     }
   }
 
-  member(depth: number, keys: Set<string>): [string, unknown] | Fail {
+  member(depth: number, keys: Set<string>): [string, Json] | Fail {
     this.skipWhitespace();
     if (this.text[this.pos] !== '"') return this.fail("expected a key");
     const key = this.string();
@@ -143,7 +142,7 @@ class Parser {
 }
 
 /** Parses one JSON text. Rejects duplicate keys, non-finite numbers, unsafe integers and lone surrogates. */
-export function parseStrictJson(text: string): Result<unknown, JsonParseError> {
+export function parseStrictJson(text: string): Result<Json, JsonParseError> {
   if (!text.isWellFormed())
     return err({ offset: 0, message: "lone surrogate in text" });
   const parser = new Parser(text);

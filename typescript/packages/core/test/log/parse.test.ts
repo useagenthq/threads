@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseLogLine } from "../../src/log";
-import { envelope, HASH, header, kind, parse } from "./fixtures";
+import { envelope, HASH, header, jcs, kind, parse } from "./fixtures";
 
 describe("framing lines", () => {
   test("header and head parse", () => {
@@ -32,7 +32,7 @@ describe("framing lines", () => {
 });
 
 describe("strict JSON admission", () => {
-  const good = JSON.stringify(header);
+  const good = jcs(header);
   test.each([
     [
       "duplicate key",
@@ -77,7 +77,7 @@ describe("strict JSON admission", () => {
   });
 
   function injected(text: string): string {
-    return JSON.stringify(
+    return jcs(
       envelope("injected", {
         source: "hook",
         trust: "trusted_instruction",
@@ -94,6 +94,34 @@ describe("strict JSON admission", () => {
   test("a line over 1 MiB is invalid", () => {
     const result = parseLogLine(injected("é".repeat(530_000)));
     expect(result.ok ? "ok" : result.error.message).toBe("line exceeds 1 MiB");
+  });
+});
+
+describe("canonical form (RFC 8785)", () => {
+  const head = jcs({
+    format: "threads.head",
+    format_version: 1,
+    branch_id: header.branch_id,
+    seq: 3,
+    hash: HASH,
+  });
+  test("the canonical line is admitted", () => {
+    expect(parseLogLine(head).ok).toBe(true);
+  });
+  test.each([
+    ["-0", head.replace('"seq":3', '"seq":-0')],
+    ["2.0", head.replace('"seq":3', '"seq":3.0')],
+    ["1e3", head.replace('"seq":3', '"seq":3e0')],
+    ["unsorted keys", `{"seq":3,${head.slice(1).replace(',"seq":3', "")}`],
+    ["whitespace", head.replace(",", ", ")],
+    ["escaped solidus", head.replace('"threads.head"', '"threads\\/head"')],
+    ["needless escape", head.replace('"threads.head"', '"\\u0074hreads.head"')],
+    ["trailing newline", `${head}\n`],
+  ])("%s is invalid_line", (_name, line) => {
+    const result = parseLogLine(line);
+    expect(result.ok ? "ok" : result.error.message).toBe(
+      "line is not in RFC 8785 canonical form",
+    );
   });
 });
 

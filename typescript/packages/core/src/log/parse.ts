@@ -3,6 +3,7 @@ import { err, ok, type Result } from "../result";
 import { Head, Header } from "./envelope";
 import type { ErrorCode } from "./errors";
 import { KnownEvent } from "./events";
+import { canonicalize } from "./jcs";
 import { parseStrictJson } from "./json";
 import { UnknownEvent } from "./line";
 
@@ -119,6 +120,11 @@ export function parseLogLine(line: string): Result<ParsedLine, ParseError> {
   const json = parseStrictJson(line);
   if (!json.ok)
     return invalid(`${json.error.message} at offset ${json.error.offset}`);
+  // Stored bytes are hashed as written, so a line is admitted only in its canonical form.
+  const canonical = canonicalize(json.value);
+  if (!canonical.ok || canonical.value !== line) {
+    return invalid("line is not in RFC 8785 canonical form");
+  }
   if (!isRecord(json.value)) return invalid("a line is a JSON object");
   return "format" in json.value
     ? parseFramingLine(json.value)

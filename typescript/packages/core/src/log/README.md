@@ -10,6 +10,7 @@ The wire schema of a threads log line, authored in Zod 4. It must accept and rej
 | `events/*.ts` | Per-type `data`, grouped by area; `events/index.ts` is the `KnownEvent` union and the pinned `EVENT_TYPES` |
 | `line.ts` | `UnknownEvent` and the `LogLine` union that `bun run schema:export` writes |
 | `json.ts` | Strict JSON (duplicate keys, non-finite numbers, unsafe integers, lone surrogates) |
+| `jcs.ts` | RFC 8785 serializer; writers use it, and readers admit a line only if its bytes equal it (so `-0`, `2.0`, `1e3` are rejected) |
 | `parse.ts` | `parseLogLine`: one stored line in, a tagged line or a typed error out |
 
 `parseLogLine` checks one line. It does not check anything that needs other lines.
@@ -45,8 +46,3 @@ These rules are in `spec/schema/README.md` under "Semantic rules". JSON Schema c
 - [ ] 25 `tool_result{origin: answered}` needs an open input park
 - [ ] 26 no input or `model_request` after `handoff`
 - [ ] 27 `mode_changed.from` is current; `bypass` needs `allow_bypass`
-
-Other limits:
-
-- Integer fields reject fraction or exponent spellings (`1.0`, `1e3`, ). `json.ts` rejects them everywhere, which is exact only while v1 has no float-typed field. A float field would need field-aware parsing.
-- Not checked: whether the line is in JCS canonical form. Readers hash stored bytes and never re-serialize, so this belongs to writers and the export check.

@@ -1,4 +1,9 @@
-import { type ParsedLine, parseLogLine } from "../../src/log";
+import {
+  canonicalize,
+  type ParsedLine,
+  parseLogLine,
+  parseStrictJson,
+} from "../../src/log";
 
 export const HASH: string = "a".repeat(64);
 export const alice = { issuer: "api", tenant: "acme", subject: "alice" };
@@ -26,7 +31,7 @@ export function envelope(
 }
 
 export function parse(value: unknown): ReturnType<typeof parseLogLine> {
-  return parseLogLine(JSON.stringify(value));
+  return parseLogLine(jcs(value));
 }
 
 export function kind(value: unknown): ParsedLine["kind"] | string {
@@ -42,3 +47,11 @@ export const header = {
   created_at: 1790000000000,
   writer: { impl: "threads-ts", version: "0.1.0" },
 };
+
+/** The canonical line for a test value; tests build values, lines must be JCS. */
+export function jcs(value: unknown): string {
+  const json = parseStrictJson(JSON.stringify(value));
+  const text = json.ok ? canonicalize(json.value) : json;
+  if (!text.ok) throw new Error("test value is not JSON");
+  return text.value;
+}
