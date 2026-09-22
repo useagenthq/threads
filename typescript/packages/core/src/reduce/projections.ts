@@ -1,0 +1,126 @@
+import type { Fold, Todo } from "../fold/state";
+import type { KnownEvent } from "../log";
+import type { Chain } from "../verify/chain";
+import { type Cost, cost } from "./cost";
+import { knownEvents } from "./reduce";
+
+type CacheBreak = {
+  readonly request_event_id: string;
+  readonly likely_cause: string;
+};
+
+/** Named projections beyond ReducedState (spec/conformance/README.md, "Projections"). */
+export type Projections = {
+  readonly cost: Cost | undefined;
+  readonly cache_breaks: readonly CacheBreak[] | undefined;
+  readonly compaction:
+    | { readonly consecutive_failures: number; readonly breaker_open: boolean }
+    | undefined;
+  readonly todos: readonly Todo[];
+  readonly children: readonly {
+    readonly child_thread_id: string;
+    readonly status: string;
+  }[];
+  readonly team_tasks: readonly {
+    readonly task_id: string;
+    readonly status: string;
+    readonly owner?: string;
+  }[];
+  readonly mode: Fold["mode"];
+  readonly model: Fold["model"];
+  readonly output: Fold["output"];
+};
+
+export function projections(chain: Chain): Projections {
+  const { fold } = chain;
+  const events = knownEvents(chain);
+  const maxFailures = fold.policy?.context?.compact.max_failures;
+  return {
+    cost: cost(events, fold.policy),
+    cache_breaks: cacheBreaks(events, fold.policy?.context?.cache_ttl_ms),
+    compaction:
+      maxFailures === undefined
+        ? undefined
+        : {
+            consecutive_failures: fold.compactionFailures,
+            breaker_open: fold.compactionFailures >= maxFailures,
+          },
+    todos: fold.todos,
+    children: [...fold.children].map(([id, status]) => ({
+      child_thread_id: id,
+      status,
+    })),
+    team_tasks: [...fold.tasks].map(([id, task]) =>
+      task.owner === undefined
+        ? { task_id: id, status: task.status }
+        : { task_id: id, status: task.status, owner: task.owner },
+    ),
+    mode: fold.mode,
+    model: fold.model,
+    output: fold.output,
+  };
+}
+
+const CAUSES = new Set([
+  "settings_changed",
+  "compacted",
+  "context_edited",
+  "tools_changed",
+]);
+const DROP_MIN = 2000;
+
+/**
+ * A turn response whose cache reads fell below 95% of the previous turn response's, by at
+ * least 2000 tokens, attributed to the first cause between them.
+ */
+function cacheBreaks(
+  events: readonly KnownEvent[],
+  ttl: number | undefined,
+): readonly CacheBreak[] | undefined {
+  if (ttl === undefined) return undefined;
+  const turnRequests = new Map(
+    events.flatMap((e) =>
+      e.type === "model_request" && e.data.purpose !== "compaction"
+        ? [[e.event_id, e.time] as const]
+        : [],
+    ),
+  );
+  const out: CacheBreak[] = [];
+  let previous: { reads: number; time: number } | undefined;
+  let seen: string[] = [];
+  for (const e of events) {
+    if (CAUSES.has(e.type)) seen.push(e.type);
+    if (e.type !== "model_response") continue;
+    const requestId = e.data.request_event_id;
+    const requestTime = turnRequests.get(requestId);
+    const reads = e.data.usage.cache_read_tokens;
+    if (requestTime === undefined || typeof reads !== "number") continue;
+    const current = { reads, time: e.time };
+    const cause = breakCause(previous, current, requestTime, seen, ttl);
+    if (cause !== undefined)
+      out.push({ request_event_id: requestId, likely_cause: cause });
+    previous = current;
+    seen = [];
+  }
+  return out;
+}
+
+type Reads = { readonly reads: number; readonly time: number };
+
+/** Why cache reads dropped since the previous turn response, or undefined if they didn't. */
+function breakCause(
+  previous: Reads | undefined,
+  current: Reads,
+  requestTime: number,
+  seen: readonly string[],
+  ttl: number,
+): string | undefined {
+  if (previous === undefined) return undefined;
+  const dropped =
+    20 * current.reads < 19 * previous.reads &&
+    previous.reads - current.reads >= DROP_MIN;
+  if (!dropped) return undefined;
+  return (
+    seen[0] ?? (requestTime - previous.time > ttl ? "ttl_expired" : "unknown")
+  );
+}
