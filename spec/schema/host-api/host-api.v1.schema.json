@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:threads:schema:host-api:v1",
+  "title": "threads host API data shapes",
+  "description": "Request, response and projection shapes of the host HTTP API (openapi.json) and of the matching library methods (spec/api.json). snake_case in both languages: this is data that crosses a trust boundary. Parse it at the boundary like any wire value.",
+  "$defs": {
+    "ApiErrorCode": {
+      "description": "Typed failure codes used by the public API that are not log-level ErrorCode values. The full closed set any API failure may carry is ErrorCode (events schema) plus this list. Add only.",
+      "enum": [
+        "unauthenticated",
+        "forbidden",
+        "not_found",
+        "invalid_request",
+        "not_quiescent",
+        "model_error",
+        "max_output",
+        "max_turns",
+        "input_denied",
+        "stop_hook_limit",
+        "no_open_question",
+        "not_parked",
+        "unavailable",
+        "timeout",
+        "invalid",
+        "scope_violation",
+        "permission_denied",
+        "is_directory",
+        "invalid_path",
+        "too_large",
+        "unverified",
+        "invalid_config",
+        "missing_secret",
+        "unknown_preset",
+        "duplicate_name",
+        "capability_missing",
+        "mcp_unreachable"
+      ]
+    },
+    "Failure": {
+      "description": "The error half of every expected-failure result.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "anyOf": [{ "$ref": "urn:threads:schema:events:v1#/$defs/ErrorCode" }, { "$ref": "#/$defs/ApiErrorCode" }] },
+        "message": { "type": "string" }
+      }
+    },
+    "ErrorBody": {
+      "description": "Every non-2xx JSON response of the host API.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error"],
+      "properties": { "error": { "$ref": "#/$defs/Failure" } }
+    },
+    "RunErrorCode": {
+      "description": "RunResult failed.error.code, closed. stop_hook_limit is the pinned turn_completed reason. model_error is turn_completed{error}.",
+      "enum": [
+        "model_unavailable",
+        "context_exhausted",
+        "max_output",
+        "max_turns",
+        "output_invalid",
+        "input_denied",
+        "stop_hook_limit",
+        "model_error",
+        "content_unsupported",
+        "continuation_unsupported",
+        "artifact_missing",
+        "artifact_corrupt",
+        "unmatched_external_op",
+        "branch_busy",
+        "branch_not_runnable"
+      ]
+    },
+    "Input": {
+      "description": "What a run starts with: plain text or ordered input parts.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "minItems": 1, "items": { "$ref": "urn:threads:schema:events:v1#/$defs/InputPart" } }
+      ]
+    },
+    "BranchRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thread_id", "branch_id"],
+      "properties": {
+        "thread_id": { "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" },
+        "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" }
+      }
+    },
+    "StartRunRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "input"],
+      "properties": {
+        "agent": { "description": "A key of host({agents}).", "$ref": "urn:threads:schema:events:v1#/$defs/NonEmpty" },
+        "input": { "$ref": "#/$defs/Input" },
+        "thread_id": { "description": "Continue this thread. Absent: a new thread.", "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" },
+        "branch_id": { "description": "With thread_id: the branch to continue. Absent: the thread's main branch.", "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+        "budget": { "description": "Run budget, recorded on the user_input; covers the whole agent tree.", "$ref": "urn:threads:schema:events:v1#/$defs/Budget" }
+      }
+    },
+    "RunOutcome": {
+      "description": "RunResult as data (the HTTP form). The library RunResult carries a Thread handle where this carries ids.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "thread_id", "branch_id", "output"],
+          "properties": {
+            "status": { "const": "completed" },
+            "thread_id": { "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" },
+            "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+            "output": { "description": "The accepted structured output, or the final text when the agent has no output schema.", "$ref": "urn:threads:schema:events:v1#/$defs/JsonValue" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "thread_id", "branch_id", "reason", "pending"],
+          "properties": {
+            "status": { "const": "parked" },
+            "thread_id": { "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" },
+            "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+            "reason": { "$ref": "urn:threads:schema:events:v1#/$defs/ev_parked/properties/data/properties/reason" },
+            "pending": { "type": "array", "minItems": 1, "items": { "$ref": "urn:threads:schema:events:v1#/$defs/ParkAddress" } }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "thread_id", "branch_id"],
+          "properties": {
+            "status": { "const": "cancelled" },
+            "thread_id": { "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" },
+            "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "thread_id", "branch_id", "error"],
+          "properties": {
+            "status": { "const": "failed" },
+            "thread_id": { "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" },
+            "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+            "error": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "message"],
+              "properties": { "code": { "$ref": "#/$defs/RunErrorCode" }, "message": { "type": "string" } }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "thread_id", "branch_id", "budget"],
+          "properties": {
+            "status": { "const": "budget_exhausted" },
+            "thread_id": { "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" },
+            "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+            "budget": { "$ref": "urn:threads:schema:events:v1#/$defs/ev_budget_exceeded/properties/data" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "thread_id", "branch_id", "to_thread_id"],
+          "properties": {
+            "status": { "const": "handed_off" },
+            "thread_id": { "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" },
+            "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+            "to_thread_id": { "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" }
+          }
+        }
+      ]
+    },
+    "StreamEvent": {
+      "description": "One item of stream() and of the SSE stream. event: a committed log event (durable). delta and status are transient and never logged.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "event"],
+          "properties": { "kind": { "const": "event" }, "event": { "$ref": "urn:threads:schema:events:v1#/$defs/Event" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "request_event_id", "text"],
+          "properties": {
+            "kind": { "const": "delta" },
+            "request_event_id": { "$ref": "urn:threads:schema:events:v1#/$defs/EventId" },
+            "text": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "status", "until"],
+          "properties": {
+            "kind": { "const": "status" },
+            "status": { "const": "retry_wait" },
+            "until": { "$ref": "urn:threads:schema:events:v1#/$defs/TimeMs" }
+          }
+        }
+      ]
+    },
+    "SseMessage": {
+      "description": "The data of one SSE message: a StreamEvent, then one final result message when the run ends.",
+      "oneOf": [
+        { "$ref": "#/$defs/StreamEvent" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "result"],
+          "properties": { "kind": { "const": "result" }, "result": { "$ref": "#/$defs/RunOutcome" } }
+        }
+      ]
+    },
+    "TimelineEntry": {
+      "description": "One step of timeline() (F13.1). model_request events carry request_ref, the exact bytes the model saw.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "fork_point"],
+      "properties": {
+        "event": { "$ref": "urn:threads:schema:events:v1#/$defs/Event" },
+        "fork_point": { "description": "true for an eligible snapshot event.", "type": "boolean" }
+      }
+    },
+    "Timeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thread_id", "branch_id", "entries"],
+      "properties": {
+        "thread_id": { "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId" },
+        "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+        "entries": { "description": "The resolved chain, oldest first (ancestor segments, then this branch).", "type": "array", "items": { "$ref": "#/$defs/TimelineEntry" } }
+      }
+    },
+    "ForkPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["branch_id", "seq", "event_id", "snapshot"],
+      "properties": {
+        "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+        "seq": { "$ref": "urn:threads:schema:events:v1#/$defs/PosInt" },
+        "event_id": { "description": "The snapshot event: the value fork() takes.", "$ref": "urn:threads:schema:events:v1#/$defs/EventId" },
+        "snapshot": { "$ref": "urn:threads:schema:events:v1#/$defs/ev_snapshot/properties/data" }
+      }
+    },
+    "ForkRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id"],
+      "properties": {
+        "event_id": { "$ref": "urn:threads:schema:events:v1#/$defs/EventId" },
+        "mode": { "description": "stub: no mediated operation goes live. Default live.", "enum": ["live", "stub"] },
+        "knowledge": { "description": "Default pinned.", "enum": ["pinned", "current"] }
+      }
+    },
+    "BranchInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["branch_id", "mode", "runnable"],
+      "properties": {
+        "branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+        "parent_branch_id": { "$ref": "urn:threads:schema:events:v1#/$defs/BranchId" },
+        "fork_at_seq": { "$ref": "urn:threads:schema:events:v1#/$defs/PosInt" },
+        "mode": { "enum": ["live", "stub"] },
+        "runnable": { "description": "false for an inspection-only repair branch.", "type": "boolean" }
+      }
+    },
+    "PendingApproval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["challenge_id", "call_id", "tool", "input", "args_hash", "expires_at", "suggested_rules"],
+      "properties": {
+        "challenge_id": { "$ref": "urn:threads:schema:events:v1#/$defs/Uuid" },
+        "call_id": { "$ref": "urn:threads:schema:events:v1#/$defs/CallId" },
+        "tool": { "$ref": "urn:threads:schema:events:v1#/$defs/Name" },
+        "input": { "$ref": "urn:threads:schema:events:v1#/$defs/JsonObject" },
+        "args_hash": { "$ref": "urn:threads:schema:events:v1#/$defs/Sha256" },
+        "expires_at": { "$ref": "urn:threads:schema:events:v1#/$defs/TimeMs" },
+        "suggested_rules": { "description": "Rules the approver may keep for this thread.", "type": "array", "items": { "$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule" } }
+      }
+    },
+    "ApprovalDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision"],
+      "properties": {
+        "decision": { "enum": ["grant", "deny"] },
+        "remember_rule": { "description": "grant only: appended as permission_rule_added. Must be one of the challenge's suggested_rules.", "$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule" },
+        "reason": { "type": "string" }
+      }
+    },
+    "Answer": {
+      "description": "The answer to an ask_user question: text, or the chosen options.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["answer"],
+      "properties": {
+        "answer": { "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "array", "minItems": 1, "items": { "type": "string" } }] }
+      }
+    },
+    "ParkedResolution": {
+      "description": "A human settling an unknown effect. Recorded as effect_resolved{by: human}.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resolution"],
+      "properties": { "resolution": { "enum": ["assume_done", "assume_not_done"] } }
+    },
+    "SettingsChange": {
+      "description": "An operator settings change. The host resolves model to the model factory named in the agent's model or fallback list; adapter settings come from that factory.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model"],
+      "properties": {
+        "model": { "$ref": "urn:threads:schema:events:v1#/$defs/ModelRef" },
+        "model_params": { "description": "Default: the factory's params.", "$ref": "urn:threads:schema:events:v1#/$defs/JsonObject" },
+        "reasoning_carryover": { "description": "Default keep.", "enum": ["keep", "omit_prior"] }
+      }
+    },
+    "ModeChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": { "mode": { "$ref": "urn:threads:schema:events:v1#/$defs/PermissionMode" } }
+    },
+    "Appended": {
+      "description": "A control operation's durable record.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id"],
+      "properties": { "event_id": { "$ref": "urn:threads:schema:events:v1#/$defs/EventId" } }
+    },
+    "UsageTotals": {
+      "$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState/properties/usage"
+    },
+    "Cost": {
+      "$ref": "urn:threads:schema:conformance:v1#/$defs/Projections/properties/cost"
+    },
+    "CacheBreak": {
+      "$ref": "urn:threads:schema:conformance:v1#/$defs/Projections/properties/cache_breaks/items"
+    },
+    "Todo": {
+      "$ref": "urn:threads:schema:events:v1#/$defs/ev_todos_updated/properties/data/properties/todos/items"
+    },
+    "Child": {
+      "$ref": "urn:threads:schema:conformance:v1#/$defs/Projections/properties/children/items"
+    }
+  }
+}
