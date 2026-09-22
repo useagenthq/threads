@@ -1,43 +1,65 @@
 # threads
 
-An agent harness where every run is an append-only event log.
+**Stop rebuilding the same agent plumbing, and turn every run into a replayable, forkable test.**
 
-The log is the only source of truth. Four things fall out of it:
+Teams building agents keep rebuilding the same pieces: a sandbox, a Slack bot, a WhatsApp bot, hooks, a knowledge base, memory, evals. threads brings those pieces into one framework for **TypeScript and Python**. You write what your agent does and connect your accounts.
 
-- **Durability** — replay the log; completed steps return recorded results.
-- **Timeline** — render the log; every context injection is an event.
-- **Fork** — copy the log up to a completed snapshot boundary and restore that snapshot; any other boundary is rejected.
-- **Evals** — fork at N, run live, assert on the new events.
+> **Status:** pre-alpha. The design is done; the code is being written. Nothing to install yet.
 
-## Kernel
+## What you get
+
+- **Sandboxes:** your agent's code and tools run in E2B, Daytona or Modal.
+- **Channels:** the same agent in Slack, WhatsApp and GitHub, through an optional host.
+- **Knowledge base and memory:** search your docs; remember per user or repo, never mixed between customers.
+- **Hooks and approvals:** allow, block or ask a human before risky actions.
+- **Tools, MCP and subagents.**
+- **Timeline, fork and tests:** every step is recorded. Go back to a saved step, restore the sandbox, try again, and keep the case as a CI test.
+
+## What it looks like (planned API)
 
 ```ts
-type Event =
-  | { t: "user"; text: string }
-  | { t: "model"; reqHash: string; res: ModelResponse }
-  | { t: "tool_call"; id: string; name: string; input: unknown }
-  | { t: "tool_result"; id: string; ref: ArtifactRef }
-  | { t: "effect"; key: string; status: "begin" | "commit" }
-  | { t: "injected"; source: string; text: string }
-  | { t: "snapshot"; sandboxId: string }
-  | { t: "approval"; callId: string; granted: boolean }
-  | { t: "compacted"; summaryRef: ArtifactRef };
+import { agent } from "@threads/core";
+import { anthropic } from "@threads/anthropic";
+import { e2b } from "@threads/e2b";
 
-reduce(log)               // -> messages, todos, memory refs
-fork(log, n)              // log prefix, only at a completed snapshot boundary
-replay(log, { from: n })  // recorded before n, live after
+const fixer = agent({
+  instructions: "Fix failing CI and open a pull request.",
+  model: anthropic("your-model"),
+  sandbox: e2b({ template: "node" }),
+  tools: [openPullRequest],
+});
+
+const result = await fixer.run("CI is failing on main");
 ```
 
-Tools, memory, skills, and sandboxes only ever append events.
+```python
+from threads import agent
+from threads.anthropic import anthropic
+from threads.e2b import e2b
 
-## Invariants
+fixer = agent(
+    instructions="Fix failing CI and open a pull request.",
+    model=anthropic("your-model"),
+    sandbox=e2b(template="python"),
+    tools=[open_pull_request],
+)
 
-1. Side effects never silently repeat (`effect` begin/commit with an idempotency key). Exactly-once where the effect class allows it; otherwise the outcome is recorded as `unknown` and parked.
-2. Credentials never enter the sandbox.
-3. The prompt prefix stays byte-identical across turns (cache stability).
-4. Memory recalled into context is labeled untrusted reference, never instructions.
-5. The agent cannot write its own config or skills.
+result = await fixer.run("CI is failing on main")
+```
 
-## Status
+The core is a plain library: no server needed. Channels and schedules run in the optional host (`threads dev`).
 
-Pre-alpha. Nothing to install yet.
+## Three rules it's built on
+
+1. **Every step is recorded** in an append-only log: what the agent saw, decided and did.
+2. **No blind retries.** If an action's outcome is uncertain after a crash, threads checks before retrying, or pauses and asks you.
+3. **Isolated test runs.** Forks and saved tests run in a separate sandbox, with outside actions blocked or simulated.
+
+## Repository layout
+
+| Folder | What's in it |
+|---|---|
+| `spec/` | The shared contract both languages follow: the event log schema and conformance tests |
+| `typescript/` | The TypeScript framework (npm) |
+| `python/` | The Python framework (PyPI) |
+| `AGENTS.md` | Coding rules for contributors and coding agents |
