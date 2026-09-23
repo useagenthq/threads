@@ -9,6 +9,7 @@ from sandbox_kit import OPEN, KitContext
 from threads.loop.model import Found, LookupUnknown, NotFound
 from threads.result import Err, Ok
 from threads.sandbox import FakeSandbox, SandboxSession, fake_sandbox
+from threads.store.context import CleanupAuthority
 
 NOT_FOUND_EXIT = 127
 
@@ -88,6 +89,19 @@ def test_every_provider_operation_is_fenced() -> None:
         assert all(isinstance(r, Err) and r.error.code == "stale_epoch" for r in refused)
         assert isinstance(await sandbox.lookup("k1", stale), LookupUnknown)
         assert (sandbox.creates, sandbox.releases, stale.fences) == (1, 0, 10)
+
+    asyncio.run(main())
+
+
+def test_a_lost_cleanup_claim_is_its_own_refusal() -> None:
+    async def main() -> None:
+        sandbox = fake_sandbox()
+        s = await session(sandbox)
+        lost = KitContext(live=False, authority=CleanupAuthority("res", "claim"))
+        for refused in [await sandbox.release("snap", lost), await s.close(lost)]:
+            assert isinstance(refused, Err)
+            assert refused.error.code == "cleanup_claim_lost"
+        assert sandbox.releases == 0
 
     asyncio.run(main())
 

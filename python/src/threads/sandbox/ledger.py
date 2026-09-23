@@ -16,7 +16,13 @@ from threads.loop.model import (
     NotFoundNonfinal,
 )
 from threads.result import Err, Ok
-from threads.sandbox.protocol import Sandbox, SandboxContext, SandboxError, SandboxSession
+from threads.sandbox.protocol import (
+    Sandbox,
+    SandboxContext,
+    SandboxError,
+    SandboxSession,
+    is_refusal,
+)
 from threads.store import SqliteStore
 from threads.store.lease import Owner
 from threads.store.resources import Answer, Kind, Ledger, ReleaseOutcome, Resource
@@ -180,7 +186,7 @@ async def _release_ref(
         released = await sandbox.release(ref, context)
         if isinstance(released, Ok):
             return "released" if released.value == "released" else "not_found"
-        return None if released.error.code == "stale_epoch" else "release_error"
+        return None if is_refusal(released.error) else "release_error"
     return await _release_sandbox(sandbox, ref, context)
 
 
@@ -191,7 +197,7 @@ async def _release_sandbox(
     if isinstance(attached, Ok):
         return _closed(await attached.value.close(context))
     match attached.error.code:
-        case "stale_epoch":
+        case "stale_epoch" | "cleanup_claim_lost":
             return None
         case "not_found" if sandbox.info.lookup.create == "final":
             return "not_found"
@@ -205,7 +211,7 @@ def _closed(closed: Ok[None] | Err[SandboxError]) -> ReleaseOutcome | None:
     # An error is never dropped: release_failed, retried by the next gc.
     if isinstance(closed, Ok):
         return "released"
-    return None if closed.error.code == "stale_epoch" else "release_error"
+    return None if is_refusal(closed.error) else "release_error"
 
 
 async def _settled(

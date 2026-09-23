@@ -12,8 +12,8 @@ from pydantic import JsonValue
 from threads.log import BranchId, ThreadId
 from threads.result import Err, Ok
 from threads.sandbox import FakeSandbox, SandboxSession, fake_sandbox
-from threads.sandbox.fake_session import manifest_hash
 from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, gc, release_session
+from threads.sandbox.manifest import manifest_hash
 from threads.store import SqliteStore, Writer
 from threads.store.lease import TTL_MS
 from threads.store.resources import Resource

@@ -11,14 +11,9 @@ from pydantic import ConfigDict, JsonValue, TypeAdapter, with_config
 from threads.log import SnapshotData
 from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound
 from threads.result import Err, Ok
-from threads.sandbox.fake_session import (
-    FakeSession,
-    ManifestEntry,
-    ToolScript,
-    fenced,
-    manifest_of,
-)
-from threads.sandbox.fake_session import manifest_hash as tree_hash
+from threads.sandbox.fake_session import FakeSession, ToolScript
+from threads.sandbox.manifest import ManifestEntry, manifest_of
+from threads.sandbox.manifest import manifest_hash as tree_hash
 from threads.sandbox.protocol import (
     LookupSupport,
     SandboxContext,
@@ -26,6 +21,7 @@ from threads.sandbox.protocol import (
     SandboxId,
     SandboxInfo,
     SandboxSession,
+    refused,
 )
 
 
@@ -98,7 +94,7 @@ class FakeSandbox:
     async def create(
         self, operation_key: str, context: SandboxContext
     ) -> Ok[SandboxSession] | Err[SandboxError]:
-        stale = await fenced(context)
+        stale = await refused(context)
         if stale is not None:
             return stale
         self.creates += 1
@@ -110,7 +106,7 @@ class FakeSandbox:
         snap = self._snapshots.get(snapshot_id)
         if snap is None:
             return Err(SandboxError("snapshot_missing", f"no snapshot {snapshot_id}"))
-        stale = await fenced(context)
+        stale = await refused(context)
         if stale is not None:
             return stale
         self.creates += 1
@@ -132,7 +128,7 @@ class FakeSandbox:
     async def lookup(
         self, operation_key: str, context: SandboxContext
     ) -> LookupResult[SandboxSession]:
-        if await fenced(context) is not None:
+        if await refused(context) is not None:
             return LookupUnknown("stale_epoch: the owner lost its lease")
         found = self._by_key.get(operation_key)
         return NotFound() if isinstance(found, SnapshotData | None) else Found(found)
@@ -140,7 +136,7 @@ class FakeSandbox:
     async def lookup_snapshot(
         self, operation_key: str, context: SandboxContext
     ) -> LookupResult[SnapshotData]:
-        if await fenced(context) is not None:
+        if await refused(context) is not None:
             return LookupUnknown("stale_epoch: the owner lost its lease")
         found = self._by_key.get(operation_key)
         return Found(found) if isinstance(found, SnapshotData) else NotFound()
@@ -148,7 +144,7 @@ class FakeSandbox:
     async def attach(
         self, ref: str, context: SandboxContext
     ) -> Ok[SandboxSession] | Err[SandboxError]:
-        stale = await fenced(context)
+        stale = await refused(context)
         if stale is not None:
             return stale
         session = self._live.get(ref)
@@ -159,7 +155,7 @@ class FakeSandbox:
     async def release(
         self, ref: str, context: SandboxContext
     ) -> Ok[Literal["released", "already_gone"]] | Err[SandboxError]:
-        stale = await fenced(context)
+        stale = await refused(context)
         if stale is not None:
             return stale
         self.releases += 1

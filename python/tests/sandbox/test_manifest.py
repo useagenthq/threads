@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from threads.sandbox.fake_session import manifest_hash, manifest_of
+from threads.sandbox.manifest import manifest_hash, manifest_of
 
 VECTOR = (
     Path(__file__).resolve().parents[3] / "spec" / "conformance" / "vectors" / "manifest-order.json"

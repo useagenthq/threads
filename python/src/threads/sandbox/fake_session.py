@@ -9,8 +9,6 @@ from typing import Literal, NotRequired, TypedDict
 from pydantic import ConfigDict, JsonValue, with_config
 
 from threads.log import SnapshotData
-from threads.log.digest import sha256_hex
-from threads.log.jcs import canonicalize, utf16_key
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
 from threads.sandbox.protocol import (
@@ -19,6 +17,7 @@ from threads.sandbox.protocol import (
     SandboxContext,
     SandboxError,
     SandboxId,
+    refused,
 )
 
 CHUNK = 64 * 1024
@@ -32,50 +31,6 @@ class ToolScript(TypedDict):
     executed_keys: NotRequired[dict[str, str]]
     lookup: NotRequired[dict[str, JsonValue]]
     process: NotRequired[Literal["running", "terminated", "unknown"]]
-
-
-@with_config(ConfigDict(extra="forbid", strict=True))
-class ManifestEntry(TypedDict):
-    path: str
-    mode: int
-    size: int
-    sha256: str
-
-
-async def fenced(context: SandboxContext) -> Err[SandboxError] | None:
-    """The fake's provider dispatch point: a stale owner calls nothing."""
-    passed = await context.fence()
-    return (
-        Err(SandboxError("stale_epoch", passed.error.message)) if isinstance(passed, Err) else None
-    )
-
-
-WORKSPACE = "/workspace/"
-
-
-def manifest_of(files: Mapping[str, bytes]) -> list[ManifestEntry]:
-    """The captured file tree: path relative to /workspace, mode, size and sha256 per file,
-    ordered by path in UTF-16 code units (spec/schema/README.md, Snapshot manifest)."""
-    entries = [
-        ManifestEntry(
-            path=path.removeprefix(WORKSPACE), mode=0o644, size=len(data), sha256=sha256_hex(data)
-        )
-        for path, data in files.items()
-    ]
-    return sorted(entries, key=lambda e: utf16_key(e["path"]))
-
-
-def manifest_hash(manifest: list[ManifestEntry]) -> str:
-    """The manifest's canonical hash."""
-    value: list[JsonValue] = [
-        {"path": e["path"], "mode": e["mode"], "size": e["size"], "sha256": e["sha256"]}
-        for e in manifest
-    ]
-    match canonicalize(value):
-        case Ok(value=text):
-            return sha256_hex(text.encode("utf-8"))
-        case Err(error=reason):
-            raise ValueError(reason)
 
 
 class FakeSession:
@@ -112,7 +67,7 @@ class FakeSession:
     ) -> Ok[ExecOutput] | Err[SandboxError]:
         if not command:
             raise ValueError("exec needs a command")
-        bad = _invalid(cwd) or await fenced(context)
+        bad = _invalid(cwd) or await refused(context)
         if bad is not None:
             return bad
         tool = self._tools.get(command[0])
@@ -127,7 +82,7 @@ class FakeSession:
     async def terminate(
         self, process_key: str, context: SandboxContext
     ) -> Ok[Termination] | Err[SandboxError]:
-        stale = await fenced(context)
+        stale = await refused(context)
         if stale is not None:
             return stale
         name = self._processes.get(process_key)
@@ -142,14 +97,14 @@ class FakeSession:
     async def upload(
         self, path: str, data: bytes, context: SandboxContext
     ) -> Ok[None] | Err[SandboxError]:
-        bad = _invalid(path) or self._directory(path) or await fenced(context)
+        bad = _invalid(path) or self._directory(path) or await refused(context)
         if bad is not None:
             return bad
         self.files[path] = data
         return Ok(None)
 
     async def download(self, path: str, context: SandboxContext) -> Ok[bytes] | Err[SandboxError]:
-        bad = _invalid(path) or self._directory(path) or await fenced(context)
+        bad = _invalid(path) or self._directory(path) or await refused(context)
         if bad is not None:
             return bad
         data = self.files.get(path)
@@ -158,11 +113,11 @@ class FakeSession:
     async def snapshot(
         self, operation_key: str, context: SandboxContext
     ) -> Ok[SnapshotData] | Err[SandboxError]:
-        stale = await fenced(context)
+        stale = await refused(context)
         return stale or Ok(self._capture(self, operation_key))
 
     async def close(self, context: SandboxContext) -> Ok[None] | Err[SandboxError]:
-        stale = await fenced(context)
+        stale = await refused(context)
         return stale or self._close(self)
 
     def _directory(self, path: str) -> Err[SandboxError] | None:

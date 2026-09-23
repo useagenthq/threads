@@ -8,13 +8,13 @@ Every create and restore carries an operation key that the resource ledger recor
 from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Final, Literal, NewType, Protocol
+from typing import Final, Literal, NewType, Protocol, assert_never
 
 from threads.log import ArtifactRef, ParseError, SnapshotData
 from threads.loop.model import LookupCapability, LookupResult
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
-from threads.store.context import SandboxAuthority
+from threads.store.context import CleanupAuthority, OwnerAuthority, SandboxAuthority
 
 SandboxId = NewType("SandboxId", str)
 
@@ -34,8 +34,12 @@ type SandboxErrorCode = Literal[
     "snapshot_restore_failed",
     "snapshot_manifest_mismatch",
     "stale_epoch",
+    "cleanup_claim_lost",
 ]
 """The codes spec/api.json lists for the sandbox methods."""
+
+type Refusal = Literal["stale_epoch", "cleanup_claim_lost"]
+"""A failed fence: nothing reached the provider, and the caller lost its authority."""
 
 NO_ENV: Final[Mapping[str, str]] = MappingProxyType({})
 
@@ -43,7 +47,8 @@ NO_ENV: Final[Mapping[str, str]] = MappingProxyType({})
 class SandboxContext(Protocol):
     """What the runtime hands an adapter for every provider operation: who
     dispatches it (an owner's lease, or gc's claim on the row), and `fence`, which the adapter
-    awaits at its real dispatch point; a failure means call nothing and answer stale_epoch."""
+    awaits at its real dispatch point; a failure means call nothing and answer the `Refusal`
+    its authority names."""
 
     @property
     def authority(self) -> SandboxAuthority: ...
@@ -55,6 +60,30 @@ class SandboxContext(Protocol):
 class SandboxError:
     code: SandboxErrorCode
     message: str
+
+
+def refusal(authority: SandboxAuthority) -> Refusal:
+    """stale_epoch under an owner's lease, cleanup_claim_lost under gc's claim."""
+    match authority:
+        case OwnerAuthority():
+            return "stale_epoch"
+        case CleanupAuthority():
+            return "cleanup_claim_lost"
+        case _:
+            assert_never(authority)
+
+
+def is_refusal(error: SandboxError) -> bool:
+    return error.code in ("stale_epoch", "cleanup_claim_lost")
+
+
+async def refused(context: SandboxContext) -> Err[SandboxError] | None:
+    """Checks the fence: None when it passed, else the typed refusal. An adapter calls it only at
+    its real provider dispatch point."""
+    passed = await context.fence()
+    if isinstance(passed, Ok):
+        return None
+    return Err(SandboxError(refusal(context.authority), passed.error.message))
 
 
 @dataclass(frozen=True, slots=True)
