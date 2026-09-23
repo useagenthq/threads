@@ -10,48 +10,92 @@ A union discriminated by `status`.
 
 ### completed
 
-<Field name="status" type={"\"completed\""} required />
+<Field name="status" type={"\"completed\""} required>
+  "completed": the run finished, and output holds its final answer.
+</Field>
 
-<Field name="output" type={"Output"} required />
+<Field name="output" type={"Output"} required>
+  The final answer: the last reply's text, or in TypeScript the value parsed by the agent's output schema when it has one.
+</Field>
 
-<Field name="thread" type={"Thread"} required />
+<Field name="thread" type={"Thread"} required>
+  A thread positioned at one branch.
+</Field>
 
 ### parked
 
-<Field name="status" type={"\"parked\""} required />
+<Field name="status" type={"\"parked\""} required>
+  "parked": the run is waiting on a person, such as an approval or an effect whose outcome is unknown; pending lists what it waits on. Answer them with the Thread methods to let it continue.
+</Field>
 
-<Field name="reason" type={"ParkedEvent.data.reason"} required />
+<Field name="reason" type={"ParkedEvent.data.reason"} required>
+  awaiting_input: an ask_user question; the address is &#123;kind: input, id: &lt;call_id>&#125;.
+</Field>
 
-<Field name="pending" type={"readonly ParkAddress[]"} required />
+<Field name="pending" type={"readonly ParkAddress[]"} required>
+  What a parked branch waits on; resumed must name the same address.
+</Field>
 
-<Field name="thread" type={"Thread"} required />
+<Field name="thread" type={"Thread"} required>
+  A thread positioned at one branch.
+</Field>
 
 ### cancelled
 
-<Field name="status" type={"\"cancelled\""} required />
+<Field name="status" type={"\"cancelled\""} required>
+  "cancelled": the thread was cancelled before the run finished.
+</Field>
 
-<Field name="thread" type={"Thread"} required />
+<Field name="thread" type={"Thread"} required>
+  A thread positioned at one branch.
+</Field>
 
 ### failed
 
-<Field name="status" type={"\"failed\""} required />
+<Field name="status" type={"\"failed\""} required>
+  "failed": the run ended with an error; error says which.
+</Field>
 
-<Field name="error" type={"{ code: RunErrorCode; message: string }"} required />
+<Field name="error" type={"{ code: RunErrorCode; message: string }"} required>
+  Why the run failed: a code and a readable message.
+</Field>
 
-<Field name="thread" type={"Thread"} required />
+<Field name="error.code" type={"RunErrorCode"} required>
+  What went wrong, for example model_unavailable, max_turns, output_invalid or branch_busy.
+</Field>
+
+<Field name="error.message" type={"string"} required>
+  A readable explanation of the failure, for logs and people.
+</Field>
+
+<Field name="thread" type={"Thread"} required>
+  A thread positioned at one branch.
+</Field>
 
 ### budget_exhausted
 
-<Field name="status" type={"\"budget_exhausted\""} required />
+<Field name="status" type={"\"budget_exhausted\""} required>
+  "budget_exhausted": a budget limit was reached before the next model request; budget says which.
+</Field>
 
-<Field name="budget" type={"BudgetExceededEvent.data"} required />
+<Field name="budget" type={"BudgetExceededEvent.data"} required>
+  Which limit was hit and its value, how much was used, and whether the budget was this thread's own or an ancestor's.
+</Field>
 
-<Field name="thread" type={"Thread"} required />
+<Field name="thread" type={"Thread"} required>
+  A thread positioned at one branch.
+</Field>
 
 ### handed_off
 
-<Field name="status" type={"\"handed_off\""} required />
+<Field name="status" type={"\"handed_off\""} required>
+  "handed_off": the agent handed the conversation to another agent; to_thread is that agent's thread.
+</Field>
 
-<Field name="thread" type={"Thread"} required />
+<Field name="thread" type={"Thread"} required>
+  A thread positioned at one branch.
+</Field>
 
-<Field name="toThread / to_thread" type={"Thread"} required />
+<Field name="toThread / to_thread" type={"Thread"} required>
+  A thread positioned at one branch.
+</Field>

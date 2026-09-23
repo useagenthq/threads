@@ -8,8 +8,14 @@ Files in the sandbox are never skills, and no agent path writes config: the self
 
 ## Fields
 
-<Field name="name" type={"Name"} required />
+<Field name="name" type={"Name"} required>
+  The name the model passes to load_skill: lowercase letters, digits and underscores, up to 64 characters, unique among the agent's skills.
+</Field>
 
-<Field name="description" type={"string"} required />
+<Field name="description" type={"string"} required>
+  One non-empty line, listed with the name in the system prompt so the model knows when to load the skill.
+</Field>
 
-<Field name="body" type={"string"} required />
+<Field name="body" type={"string"} required>
+  The skill's instructions. load_skill adds them to the conversation as trusted instructions; their SHA-256 is pinned in the agent's config.
+</Field>

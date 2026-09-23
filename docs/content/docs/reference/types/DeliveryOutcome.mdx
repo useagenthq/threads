@@ -1,6 +1,6 @@
 ---
 title: "DeliveryOutcome"
-description: "The DeliveryOutcome type."
+description: "What perform knows about a send: sent, or a delivery error that says whether anything may have reached the provider."
 icon: "Braces"
 ---
 
@@ -8,14 +8,24 @@ A union discriminated by `status`.
 
 ### sent
 
-<Field name="status" type={"\"sent\""} required />
+<Field name="status" type={"\"sent\""} required>
+  "sent": the provider accepted the message.
+</Field>
 
-<Field name="platform_ref" type={"string"} required />
+<Field name="platform_ref" type={"string"} required>
+  The provider's id for the sent message, a non-empty string. The host records it as the send's receipt.
+</Field>
 
 ### delivery_error
 
-<Field name="status" type={"\"delivery_error\""} required />
+<Field name="status" type={"\"delivery_error\""} required>
+  "delivery_error": the send failed or its outcome is unknown.
+</Field>
 
-<Field name="kind" type={"\"rate_limited\" | \"transient\" | \"permanent\""} required />
+<Field name="kind" type={"\"rate_limited\" | \"transient\" | \"permanent\""} required>
+  rate_limited, transient or permanent. When nothing was sent, the TypeScript host retries rate_limited and transient up to 3 attempts in total; the Python host, and either host on permanent, records the reply as not sent.
+</Field>
 
-<Field name="sent" type={"\"definite_not_sent\" | \"outcome_unknown\""} required />
+<Field name="sent" type={"\"definite_not_sent\" | \"outcome_unknown\""} required>
+  definite_not_sent when you can prove nothing reached the provider; outcome_unknown otherwise. An unknown outcome is never re-sent: the host reconciles it by dedup window or lookup, else parks it.
+</Field>

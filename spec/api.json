@@ -183,7 +183,7 @@
       "async": false,
       "generics": [{"name": "Deps", "default": {"prim": "null"}}, {"name": "Output", "default": {"prim": "string"}}],
       "params": [
-        {"name": "model", "kind": "option", "type": {"$ref": "#/types/Model"}, "required": true},
+        {"name": "model", "kind": "option", "type": {"$ref": "#/types/Model"}, "required": true, "doc": "The model every turn is sent to: a model adapter such as anthropic() or openai(), or scriptedModel() in tests. Fallback models are tried after it."},
         {
           "name": "instructions",
           "kind": "option",
@@ -221,9 +221,9 @@
           "kind": "option",
           "type": {"$ref": "#/types/Sandbox"},
           "required": false,
-          "doc": "Absent: no sandbox tools (bash, files, browser, computer)."
+          "doc": "The sandbox the sandbox tools run in: bash and the file tools (read, write, edit, ls, glob, grep). The git, lsp and computer options also need one. Omitted: no sandbox tools."
         },
-        {"name": "memory", "kind": "option", "type": {"$ref": "#/types/MemoryProvider"}, "required": false},
+        {"name": "memory", "kind": "option", "type": {"$ref": "#/types/MemoryProvider"}, "required": false, "doc": "Saved cross-run memory: localMemory() or a memory adapter. It pins save_memory, search_memory and forget_memory. Omitted: the agent has no memory tools."},
         {
           "name": "memory_write",
           "kind": "option",
@@ -232,7 +232,7 @@
           "default": "ask",
           "doc": "Write authority for save_memory."
         },
-        {"name": "knowledge", "kind": "option", "type": {"$ref": "#/types/KnowledgeProvider"}, "required": false},
+        {"name": "knowledge", "kind": "option", "type": {"$ref": "#/types/KnowledgeProvider"}, "required": false, "doc": "Retrieval over sources the host admits: localKnowledge(paths) or a knowledge adapter. It pins search_knowledge. Omitted: the agent has no knowledge tool."},
         {
           "name": "skills",
           "kind": "option",
@@ -246,7 +246,7 @@
           "kind": "option",
           "type": {"schema": {"generic": "Output"}},
           "required": false,
-          "doc": "Structured final output. Absent: completed.output is the final text."
+          "doc": "Structured final output: a schema the final answer must parse with. Omitted: completed.output is the final text."
         },
         {
           "name": "output_retries",
@@ -285,7 +285,8 @@
           "kind": "option",
           "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}},
           "required": false,
-          "default_doc": "mode default, no rules, the protected paths, allow_bypass false, plan_exit_mode default"
+          "default_doc": "mode default, no rules, the protected paths, allow_bypass false, plan_exit_mode default",
+          "doc": "The permission policy every tool call is decided under: mode, allow, ask and deny rules, protected_paths, allow_bypass and plan_exit_mode. In TypeScript the fields you give override the defaults; Python takes a complete Permissions. Omitted: mode default, no rules, the built-in protected paths, allow_bypass false and plan_exit_mode default."
         },
         {
           "name": "approvers",
@@ -293,33 +294,36 @@
           "type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}},
           "required": false,
           "default_doc": "the root run's originating principal (the root thread's latest user_input principal), for run() and channel threads alike (spec/schema/README.md, Approval authority)",
-          "doc": "Who may answer approval challenges and resolve parked effects for runs this agent roots, its subagents and handoff targets included."
+          "doc": "Who may answer approval challenges and resolve parked effects for runs this agent roots, its subagents and handoff targets included. Omitted: only the root run's originating principal (the principal of the root thread's latest user_input)."
         },
         {
           "name": "budget",
           "kind": "option",
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Budget"},
           "required": false,
-          "doc": "Thread budget (policy.budget)."
+          "doc": "Thread budget: limits such as max_turns, max_model_requests, max_input_tokens, max_output_tokens, max_cost_nanos and max_wall_ms, checked before every model request. It covers the thread and every descendant. Omitted: no thread budget."
         },
         {
           "name": "on_unknown_usage",
           "kind": "option",
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/on_unknown_usage"},
           "required": false,
-          "default": "upper_bound"
+          "default": "upper_bound",
+          "doc": "How a budget counts a model attempt the provider reports no usage for. upper_bound counts it at its conservative upper bound; stop lets a limit the model can't bound per attempt pass setup and refuses it at run time instead of failing setup with budget_unenforceable."
         },
         {
           "name": "retry",
           "kind": "option",
           "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/retry"}},
-          "required": false
+          "required": false,
+          "doc": "Model retry settings: max_retries, base_delay_ms, max_delay_ms, max_retry_after_ms, max_total_wait_ms, crash_resends, fallback_after, fallback_scope and heartbeat_ms. In TypeScript the fields you give override the defaults; Python takes a complete Retry. Omitted: the default policy (8 retries, 1000 ms base delay doubling up to 32000 ms, fallback after 3 failures in a turn)."
         },
         {
           "name": "context",
           "kind": "option",
           "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/context"}},
-          "required": false
+          "required": false,
+          "doc": "Context-window settings: reserve_tokens, clearing old tool results, spilling large results, compaction and what is restored after it, output continuations and tool deferral. In TypeScript the fields you give override the defaults; Python takes a complete Context. Omitted: the default context policy."
         },
         {
           "name": "egress",
@@ -334,26 +338,26 @@
           "kind": "option",
           "type": {
             "object": {
-              "fetch": {"type": {"prim": "boolean"}, "required": false, "default": false},
-              "search": {"type": {"$ref": "#/types/SearchBackend"}, "required": false}
+              "fetch": {"type": {"prim": "boolean"}, "required": false, "default": false, "doc": "true pins web_fetch, which fetches a URL from the host. false (the default) leaves it out."},
+              "search": {"type": {"$ref": "#/types/SearchBackend"}, "required": false, "doc": "The search backend web_search uses (an adapter such as exa, brave or tavily). Omitted: no web_search tool."}
             }
           },
           "required": false,
           "default_doc": "{fetch: false}: no web tools",
-          "doc": "Host-side web_fetch and web_search."
+          "doc": "Host-side web tools: web_fetch and web_search run on the host, not in the sandbox. Omitted: no web tools."
         },
         {
           "name": "git",
           "kind": "option",
           "type": {
             "object": {
-              "credential": {"type": {"$ref": "#/types/Secret"}, "required": true},
+              "credential": {"type": {"$ref": "#/types/Secret"}, "required": true, "doc": "The forge token, as a secret(). It is revealed only on the host when a git tool talks to the forge, never in the sandbox."},
               "forge_url": {"type": {"prim": "string"}, "required": false, "default": "https://github.com", "doc": "A repo owner/name lives at <forge_url>/<owner>/<name>.git."},
               "api_url": {"type": {"prim": "string"}, "required": false, "default": "https://api.github.com", "doc": "The forge REST API open_pull_request uses."}
             }
           },
           "required": false,
-          "doc": "Enables the git gateway tools git_clone, git_fetch, git_push and open_pull_request. The forge is GitHub; the credential is revealed only on the host and never enters the sandbox."
+          "doc": "Enables the git gateway tools git_clone, git_fetch, git_push and open_pull_request. The forge is GitHub; the credential is revealed only on the host and never enters the sandbox. Needs a sandbox. Omitted: no git tools."
         },
         {
           "name": "computer",
@@ -366,9 +370,9 @@
         {
           "name": "lsp",
           "kind": "option",
-          "type": {"object": {"languages": {"type": {"array": {"prim": "string"}}, "required": true}}},
+          "type": {"object": {"languages": {"type": {"array": {"prim": "string"}}, "required": true, "doc": "The languages lsp serves: typescript, python, go or rust. Any other name is a setup error unknown_preset."}}},
           "required": false,
-          "doc": "Pins lsp for these languages (typescript, python, go, rust), run in the sandbox image's language servers. Needs a sandbox; an unknown language is unknown_preset. A server that isn't installed or ready answers unavailable at run time."
+          "doc": "Pins lsp for these languages (typescript, python, go, rust), run in the sandbox image's language servers. Needs a sandbox; an unknown language is unknown_preset. A server that isn't installed or ready answers unavailable at run time. Omitted: no lsp tool."
         },
         {
           "name": "browser",
@@ -379,18 +383,19 @@
                 "type": {
                   "array": {
                     "object": {
-                      "origin": {"type": {"prim": "string"}, "required": true},
-                      "profile": {"type": {"prim": "string"}, "required": true}
+                      "origin": {"type": {"prim": "string"}, "required": true, "doc": "The site origin, scheme and host with an optional port, such as https://example.com."},
+                      "profile": {"type": {"prim": "string"}, "required": true, "doc": "The name of the host browser profile whose signed-in session is used for this origin."}
                     },
                     "casing": "wire"
                   }
                 },
-                "required": true
+                "required": true,
+                "doc": "The sites the browser may use while signed in, each with the host browser profile that holds the session."
               }
             }
           },
           "required": false,
-          "doc": "Delegated browser sessions."
+          "doc": "Delegated browser sessions. Not built yet in either language. Omitted: no browser tools."
         },
         {
           "name": "output_styles",
@@ -423,9 +428,10 @@
           "name": "name",
           "kind": "option",
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"},
-          "required": true
+          "required": true,
+          "doc": "The name the model calls the tool by: lowercase letters, digits and underscores, starting with a letter, at most 64 characters. It must be unique within the agent."
         },
-        {"name": "description", "kind": "option", "type": {"prim": "string"}, "required": true},
+        {"name": "description", "kind": "option", "type": {"prim": "string"}, "required": true, "doc": "What the tool does, shown to the model in its tool list. Write it for the model: when to call the tool and what it returns."},
         {
           "name": "input",
           "kind": "option",
@@ -438,7 +444,7 @@
           "kind": "option",
           "type": {"schema": {"generic": "Output"}},
           "required": false,
-          "doc": "Pinned output_schema. A result that fails it is an error result; the effect still happened."
+          "doc": "Pinned output_schema. A result that fails it is an error result; the effect still happened. Omitted: the result isn't checked; a string is shown as is and any other value as canonical JSON."
         },
         {
           "name": "runs",
@@ -455,26 +461,27 @@
             "fn": {
               "async": true,
               "params": [
-                {"name": "input", "kind": "positional", "type": {"generic": "Input"}, "required": true},
+                {"name": "input", "kind": "positional", "type": {"generic": "Input"}, "required": true, "doc": "The model's arguments, already parsed by the tool's input schema: the parsed Zod value in TypeScript, an instance of the input model in Python."},
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run this call belongs to: deps, thread_id, branch_id, principal, call_id and effect_key (send effect_key to providers that dedup). In TypeScript it also carries an abort signal."
                 }
               ],
               "returns": {"generic": "Output"}
             }
           },
           "required": false,
-          "doc": "runs host: required. The value is the result; a thrown error becomes an error tool_result the model sees."
+          "doc": "The tool body for runs host, the only kind built today. Its return value is the result; a thrown error becomes an error tool_result the model sees. Omitting it is a setup error capability_missing."
         },
         {
           "name": "module",
           "kind": "option",
           "type": {"prim": "string"},
           "required": false,
-          "doc": "runs sandbox: required. Path of the module uploaded into the sandbox; JSON on stdin and stdout."
+          "doc": "runs sandbox: required. Path of the module uploaded into the sandbox; JSON on stdin and stdout. Not built yet: runs sandbox is a setup error today. Omit it for a host tool."
         },
         {
           "name": "entrypoint",
@@ -497,7 +504,7 @@
           "kind": "option",
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
           "required": false,
-          "doc": "Required exactly when effect is idempotent."
+          "doc": "Milliseconds within which the provider dedups a repeated request that carries the same effect key. Required exactly when effect is idempotent; omit it for any other effect, where giving it is a setup error invalid_config."
         },
         {
           "name": "reconcile",
@@ -509,24 +516,26 @@
                   "fn": {
                     "async": true,
                     "params": [
-                      {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
+                      {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The effect key of the call being checked, <branch_id>:<call_id>: the same key execute saw as ctx.effect_key."},
                       {
                         "name": "ctx",
                         "kind": "positional",
                         "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                        "required": true
+                        "required": true,
+                        "doc": "The run the call belongs to: deps, thread_id, branch_id, principal and effect_key."
                       }
                     ],
                     "returns": {"$ref": "#/types/LookupResult", "args": [{"generic": "Output"}]}
                   }
                 },
-                "required": true
+                "required": true,
+                "doc": "Asks the provider whether the call with this effect key took effect, after a crash or lost response. Returns a LookupResult: found with the value, not_found, or unknown."
               },
-              "finality": {"type": {"enum": ["final", "nonfinal"]}, "required": true}
+              "finality": {"type": {"enum": ["final", "nonfinal"]}, "required": true, "doc": "Whether a not_found from lookup is trustworthy. final: not_found means the effect never happened. nonfinal: not_found may just not be visible yet, so the call parks for a person to settle."}
             }
           },
           "required": false,
-          "doc": "Required exactly when effect is reconcilable. finality is the tool's declared LookupCapability: the runtime accepts a not_found answer as final only when it is final; under nonfinal a not_found is treated as not_found_nonfinal and the call parks."
+          "doc": "Required exactly when effect is reconcilable; omit it for any other effect. finality is the tool's declared LookupCapability: the runtime accepts a not_found answer as final only when it is final; under nonfinal a not_found is treated as not_found_nonfinal and the call parks."
         },
         {
           "name": "concurrent",
@@ -536,7 +545,7 @@
           "default": false,
           "doc": "May run in parallel with other concurrent calls of one response (F1.1)."
         },
-        {"name": "ends_turn", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false}
+        {"name": "ends_turn", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "true: a successful result from this tool ends the turn with no further model call; an error result doesn't. Default false."}
       ],
       "returns": {"$ref": "#/types/Tool", "args": [{"generic": "Input"}, {"generic": "Output"}, {"generic": "Deps"}]}
     },
@@ -560,7 +569,8 @@
           "kind": "option",
           "type": {"array": {"union": [{"$ref": "#/types/Tool"}, {"$ref": "#/types/McpServer"}]}},
           "required": false,
-          "default": []
+          "default": [],
+          "doc": "App tools this extension adds, named <name>__<tool>. In Python they see no deps. Default [] adds none."
         },
         {
           "name": "instructions",
@@ -575,7 +585,8 @@
           "kind": "option",
           "type": {"$ref": "#/types/Hooks", "args": [{"generic": "Deps"}]},
           "required": false,
-          "default": {}
+          "default": {},
+          "doc": "Lifecycle hooks that can block or change what a run does (see Hooks). In Python they see no deps. Default {} adds none."
         },
         {
           "name": "on",
@@ -589,7 +600,8 @@
                     "name": "event",
                     "kind": "positional",
                     "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Event"},
-                    "required": true
+                    "required": true,
+                    "doc": "One committed event of the type the key names (any type for \"*\"), delivered after it was appended to the log."
                   }
                 ],
                 "returns": {"prim": "void"}
@@ -605,14 +617,15 @@
           "kind": "option",
           "type": {"fn": {"async": true, "params": [], "returns": {"prim": "void"}}},
           "required": false,
-          "doc": "Runs once at check() or first run. Throwing is a ConfigError."
+          "doc": "Runs once at check() or first run. Throwing is a ConfigError. Omitted: nothing runs at setup."
         },
         {
           "name": "hook_timeout_ms",
           "kind": "option",
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
           "required": false,
-          "default": 5000
+          "default": 5000,
+          "doc": "The time limit, in milliseconds, for each hook call. A hook that runs longer counts as a failed call, the same as one that throws. A positive whole number; default 5000."
         }
       ],
       "returns": {"$ref": "#/types/Extension", "args": [{"generic": "Deps"}]}
@@ -636,23 +649,25 @@
           "kind": "option",
           "type": {"prim": "string"},
           "required": false,
-          "doc": "Streamable HTTP (SSE fallback). Exactly one of url or command."
+          "doc": "The server's URL, for a server reached over HTTP: Streamable HTTP, with an SSE fallback in TypeScript. Exactly one of url or command; omit it for a stdio server."
         },
         {
           "name": "headers",
           "kind": "option",
           "type": {"map": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}},
           "required": false,
-          "default": {}
+          "default": {},
+          "doc": "HTTP headers sent with every request to a url server, such as an Authorization header. A value can be a secret(), revealed only on the host. Default {} sends none."
         },
-        {"name": "command", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "stdio transport."},
-        {"name": "args", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false, "default": []},
+        {"name": "command", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The command that starts a stdio server, run on the host with args. Exactly one of url or command; omit it for a url server."},
+        {"name": "args", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false, "default": [], "doc": "Arguments passed to command. Default [] passes none."},
         {
           "name": "env",
           "kind": "option",
           "type": {"map": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}},
           "required": false,
-          "default": {}
+          "default": {},
+          "doc": "Environment variables for the command's process. Only PATH and HOME come from the host; everything else must be given here. A value can be a secret(), revealed only on the host. Default {}."
         },
         {
           "name": "runs",
@@ -667,19 +682,20 @@
           "kind": "option",
           "type": {
             "object": {
-              "allow": {"type": {"array": {"prim": "string"}}, "required": false},
-              "deny": {"type": {"array": {"prim": "string"}}, "required": false}
+              "allow": {"type": {"array": {"prim": "string"}}, "required": false, "doc": "Only tools with these names are kept. Omitted: every name is allowed."},
+              "deny": {"type": {"array": {"prim": "string"}}, "required": false, "doc": "Tools with these names are dropped, even when allow lists them. Omitted: none are dropped."}
             }
           },
           "required": false,
-          "doc": "Filter before pinning."
+          "doc": "Filters the server's tools, by the server's own tool names, before they are pinned. Omitted: every tool the server lists is pinned."
         },
         {
           "name": "effect",
           "kind": "option",
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EffectClass"},
           "required": false,
-          "default": "unguarded"
+          "default": "unguarded",
+          "doc": "The effect class every tool from this server is pinned with. Use read_only for a server whose tools change nothing; the default unguarded means an uncertain call parks and is never retried. idempotent is refused in Python and needs a dedup window in TypeScript."
         }
       ],
       "returns": {"$ref": "#/types/McpServer"}
@@ -690,7 +706,7 @@
       "package": "core",
       "doc": "A reference to a host secret, resolved only in the host. Values never reach the log, prompts or the sandbox.",
       "async": false,
-      "params": [{"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+      "params": [{"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The name of the host environment variable that holds the value. It is read only when host code needs it; an unset or empty variable is a setup error missing_secret."}],
       "returns": {"$ref": "#/types/Secret"}
     },
     "openThread": {
@@ -700,26 +716,28 @@
       "doc": "A handle for inspection and control, independent of any in-memory run.",
       "async": true,
       "params": [
-        {"name": "store", "kind": "positional", "type": {"$ref": "#/types/Store"}, "required": true},
+        {"name": "store", "kind": "positional", "type": {"$ref": "#/types/Store"}, "required": true, "doc": "The store the thread's log lives in, usually the same sqlite() the agent ran with."},
         {
           "name": "thread_id",
           "kind": "positional",
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"},
-          "required": true
+          "required": true,
+          "doc": "The id of the thread to open, such as the thread id in a RunResult."
         },
         {
           "name": "branch_id",
           "kind": "option",
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"},
           "required": false,
-          "default_doc": "Default: the thread's main branch."
+          "default_doc": "Default: the thread's main branch.",
+          "doc": "The branch to open. Omitted: the thread's main branch."
         },
         {
           "name": "sandbox",
           "kind": "option",
           "type": {"$ref": "#/types/Sandbox"},
           "required": false,
-          "doc": "The sandbox provider that restores snapshots for fork(). Inspection (timeline, branches, forkPoints, saveCase) doesn't need it; fork() on a handle without one fails with sandbox_required."
+          "doc": "The sandbox provider that restores snapshots for fork(). Inspection (timeline, branches, forkPoints, saveCase) doesn't need it; fork() on a handle without one fails with sandbox_required. Omit it when you only inspect."
         }
       ],
       "returns": {
@@ -759,7 +777,7 @@
       "package": "core",
       "doc": "Built-in knowledge: SQLite FTS5 over admitted versions stored as artifacts.",
       "async": false,
-      "params": [{"name": "paths", "kind": "option", "type": {"array": {"prim": "string"}}, "required": true}],
+      "params": [{"name": "paths", "kind": "option", "type": {"array": {"prim": "string"}}, "required": true, "doc": "Host file paths to admit as knowledge sources. The host reads each file on every run: the same bytes are a no-op, changed bytes a new version, and a file that can't be read is a setup error invalid_config."}],
       "returns": {"$ref": "#/types/KnowledgeProvider"}
     },
     "scriptedModel": {
@@ -773,7 +791,8 @@
           "name": "script",
           "kind": "positional",
           "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ModelScript"},
-          "required": true
+          "required": true,
+          "doc": "The answers the model gives, in order: each entry is a response (content, stop_reason, usage) or a provider error. A call past the end fails the run."
         }
       ],
       "returns": {"$ref": "#/types/Model"}
@@ -790,7 +809,8 @@
           "kind": "positional",
           "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/SandboxScript"},
           "required": false,
-          "default": {}
+          "default": {},
+          "doc": "What the fake sandbox answers: output per scripted tool, effect keys it already executed, lookup answers for reconciliation, process state for recovery, and snapshots. Default {}: an in-memory sandbox with no scripted tools."
         }
       ],
       "returns": {"$ref": "#/types/Sandbox"}
@@ -802,7 +822,7 @@
       "doc": "Bind agents to a store, channels and schedules. Starts nothing until ready().",
       "async": false,
       "params": [
-        {"name": "store", "kind": "option", "type": {"$ref": "#/types/Store"}, "required": true},
+        {"name": "store", "kind": "option", "type": {"$ref": "#/types/Store"}, "required": true, "doc": "The store every bound agent's threads, runs and host records live in."},
         {
           "name": "agents",
           "kind": "option",
@@ -823,14 +843,15 @@
           "kind": "option",
           "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}},
           "required": false,
-          "doc": "The host ceiling every run this host starts or resumes is also decided under (Agent.run ceiling). Absent: no ceiling."
+          "doc": "The host ceiling every run this host starts or resumes is also decided under (Agent.run ceiling). Omitted: no ceiling."
         },
         {
           "name": "schedules",
           "kind": "option",
           "type": {"array": {"$ref": "#/types/Schedule"}},
           "required": false,
-          "default": []
+          "default": [],
+          "doc": "The schedules the host fires once ready() has run. Default [] fires none."
         },
         {
           "name": "authenticate",
@@ -843,14 +864,15 @@
                   "name": "request",
                   "kind": "positional",
                   "type": {"native": {"ts": "Request", "py": "starlette.requests.Request"}},
-                  "required": true
+                  "required": true,
+                  "doc": "The incoming HTTP request, to read its headers or cookies: a fetch Request in TypeScript, a Starlette Request in Python."
                 }
               ],
               "returns": {"union": [{"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, {"prim": "null"}]}
             }
           },
           "required": false,
-          "doc": "Maps an HTTP API request to a principal, or null for 401. Absent: every /v1 route answers 401; channel webhooks still work."
+          "doc": "Maps an HTTP API request to a principal, or null for 401. Omitted: every /v1 route answers 401; channel webhooks still work."
         }
       ],
       "returns": {"$ref": "#/types/Host"}
@@ -861,7 +883,7 @@
       "kind": "interface",
       "role": "handle",
       "generics": [{"name": "Deps", "default": {"prim": "null"}}, {"name": "Output", "default": {"prim": "string"}}],
-      "properties": {"name": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true}},
+      "properties": {"name": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true, "doc": "The agent's name as given to agent(): lowercase letters, digits and underscores, up to 64 characters."}},
       "methods": {
         "run": {
           "ts": "run",
@@ -881,28 +903,29 @@
               "kind": "option",
               "type": {"union": [{"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, {"$ref": "#/types/Thread"}]},
               "required": false,
-              "doc": "Continue this thread (a handle continues its branch). Absent: a new thread."
+              "doc": "The thread to continue: a Thread handle continues its branch; in TypeScript a thread id also works (Python takes a handle only). Omitted: a new thread."
             },
             {
               "name": "store",
               "kind": "option",
               "type": {"$ref": "#/types/Store"},
               "required": false,
-              "default_doc": "the handle's store when thread is a Thread, else sqlite(\".threads\")"
+              "default_doc": "the handle's store when thread is a Thread, else sqlite(\".threads\")",
+              "doc": "Where the thread's log lives. Omitted: the handle's store when thread is a Thread handle, else sqlite(\".threads\") in the working directory."
             },
             {
               "name": "deps",
               "kind": "option",
               "type": {"generic": "Deps"},
               "required": false,
-              "doc": "Host-only dependencies for tools and hooks (RunContext.deps). Never serialized. Required when Deps is not null."
+              "doc": "Host-only dependencies your tools and hooks read as RunContext.deps; never serialized or logged. Required when the agent's Deps type is not null; omitted, tools see null (None in Python)."
             },
             {
               "name": "budget",
               "kind": "option",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Budget"},
               "required": false,
-              "doc": "Run budget, recorded on the user_input. Covers the thread and every descendant."
+              "doc": "Run budget, recorded on the user_input; it covers this thread and every subagent it starts. Omitted: only the agent's own budget option applies."
             },
             {
               "name": "principal",
@@ -910,14 +933,14 @@
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
               "required": false,
               "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
-              "doc": "The verified sender of this input."
+              "doc": "The verified sender of this input, recorded on the user_input. Omitted: the local operator (issuer \"api\", tenant \"local\", subject \"operator\")."
             },
             {
               "name": "ceiling",
               "kind": "option",
               "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}},
               "required": false,
-              "doc": "The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Absent: no ceiling."
+              "doc": "The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Omitted: no ceiling, so only the agent's own permissions apply."
             },
             {
               "name": "signal",
@@ -925,7 +948,7 @@
               "type": {"native": {"ts": "AbortSignal"}},
               "required": false,
               "lang": "ts",
-              "doc": "Local cancellation. Python uses task cancellation. Durable cancellation is Thread.cancel()."
+              "doc": "Local cancellation: aborting it stops the run in this process, and tools see it as RunContext.signal. Python uses task cancellation instead. Omitted: the run stops only through the durable Thread.cancel()."
             }
           ],
           "returns": {"$ref": "#/types/RunResult", "args": [{"generic": "Output"}]},
@@ -949,28 +972,29 @@
               "kind": "option",
               "type": {"union": [{"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, {"$ref": "#/types/Thread"}]},
               "required": false,
-              "doc": "Continue this thread (a handle continues its branch). Absent: a new thread."
+              "doc": "The thread to continue: a Thread handle continues its branch; in TypeScript a thread id also works (Python takes a handle only). Omitted: a new thread."
             },
             {
               "name": "store",
               "kind": "option",
               "type": {"$ref": "#/types/Store"},
               "required": false,
-              "default_doc": "the handle's store when thread is a Thread, else sqlite(\".threads\")"
+              "default_doc": "the handle's store when thread is a Thread, else sqlite(\".threads\")",
+              "doc": "Where the thread's log lives. Omitted: the handle's store when thread is a Thread handle, else sqlite(\".threads\") in the working directory."
             },
             {
               "name": "deps",
               "kind": "option",
               "type": {"generic": "Deps"},
               "required": false,
-              "doc": "Host-only dependencies for tools and hooks (RunContext.deps). Never serialized. Required when Deps is not null."
+              "doc": "Host-only dependencies your tools and hooks read as RunContext.deps; never serialized or logged. Required when the agent's Deps type is not null; omitted, tools see null (None in Python)."
             },
             {
               "name": "budget",
               "kind": "option",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Budget"},
               "required": false,
-              "doc": "Run budget, recorded on the user_input. Covers the thread and every descendant."
+              "doc": "Run budget, recorded on the user_input; it covers this thread and every subagent it starts. Omitted: only the agent's own budget option applies."
             },
             {
               "name": "principal",
@@ -978,14 +1002,14 @@
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
               "required": false,
               "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
-              "doc": "The verified sender of this input."
+              "doc": "The verified sender of this input, recorded on the user_input. Omitted: the local operator (issuer \"api\", tenant \"local\", subject \"operator\")."
             },
             {
               "name": "ceiling",
               "kind": "option",
               "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}},
               "required": false,
-              "doc": "The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Absent: no ceiling."
+              "doc": "The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Omitted: no ceiling, so only the agent's own permissions apply."
             },
             {
               "name": "signal",
@@ -993,7 +1017,7 @@
               "type": {"native": {"ts": "AbortSignal"}},
               "required": false,
               "lang": "ts",
-              "doc": "Local cancellation. Python uses task cancellation. Durable cancellation is Thread.cancel()."
+              "doc": "Local cancellation: aborting it stops the run in this process, and tools see it as RunContext.signal. Python uses task cancellation instead. Omitted: the run stops only through the durable Thread.cancel()."
             }
           ],
           "returns": {"$ref": "#/types/RunStream", "args": [{"generic": "Output"}]},
@@ -1021,7 +1045,8 @@
             ]
           }
         }
-      }
+      },
+      "doc": "An agent made by agent(): its name and config, ready to run. Building one does no I/O; run() or stream() starts a run."
     },
     "RunResult": {
       "kind": "union",
@@ -1031,15 +1056,15 @@
       "variants": [
         {
           "object": {
-            "status": {"type": {"literal": "completed"}, "required": true},
-            "output": {"type": {"generic": "Output"}, "required": true},
+            "status": {"type": {"literal": "completed"}, "required": true, "doc": "\"completed\": the run finished, and output holds its final answer."},
+            "output": {"type": {"generic": "Output"}, "required": true, "doc": "The final answer: the last reply's text, or in TypeScript the value parsed by the agent's output schema when it has one."},
             "thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
           },
           "casing": "api"
         },
         {
           "object": {
-            "status": {"type": {"literal": "parked"}, "required": true},
+            "status": {"type": {"literal": "parked"}, "required": true, "doc": "\"parked\": the run is waiting on a person, such as an approval or an effect whose outcome is unknown; pending lists what it waits on. Answer them with the Thread methods to let it continue."},
             "reason": {
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_parked/properties/data/properties/reason"},
               "required": true
@@ -1051,23 +1076,24 @@
         },
         {
           "object": {
-            "status": {"type": {"literal": "cancelled"}, "required": true},
+            "status": {"type": {"literal": "cancelled"}, "required": true, "doc": "\"cancelled\": the thread was cancelled before the run finished."},
             "thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
           },
           "casing": "api"
         },
         {
           "object": {
-            "status": {"type": {"literal": "failed"}, "required": true},
+            "status": {"type": {"literal": "failed"}, "required": true, "doc": "\"failed\": the run ended with an error; error says which."},
             "error": {
               "type": {
                 "object": {
-                  "code": {"type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/RunErrorCode"}, "required": true},
-                  "message": {"type": {"prim": "string"}, "required": true}
+                  "code": {"type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/RunErrorCode"}, "required": true, "doc": "What went wrong, for example model_unavailable, max_turns, output_invalid or branch_busy."},
+                  "message": {"type": {"prim": "string"}, "required": true, "doc": "A readable explanation of the failure, for logs and people."}
                 },
                 "casing": "wire"
               },
-              "required": true
+              "required": true,
+              "doc": "Why the run failed: a code and a readable message."
             },
             "thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
           },
@@ -1075,10 +1101,11 @@
         },
         {
           "object": {
-            "status": {"type": {"literal": "budget_exhausted"}, "required": true},
+            "status": {"type": {"literal": "budget_exhausted"}, "required": true, "doc": "\"budget_exhausted\": a budget limit was reached before the next model request; budget says which."},
             "budget": {
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_budget_exceeded/properties/data"},
-              "required": true
+              "required": true,
+              "doc": "Which limit was hit and its value, how much was used, and whether the budget was this thread's own or an ancestor's."
             },
             "thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
           },
@@ -1086,7 +1113,7 @@
         },
         {
           "object": {
-            "status": {"type": {"literal": "handed_off"}, "required": true},
+            "status": {"type": {"literal": "handed_off"}, "required": true, "doc": "\"handed_off\": the agent handed the conversation to another agent; to_thread is that agent's thread."},
             "thread": {"type": {"$ref": "#/types/Thread"}, "required": true},
             "to_thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
           },
@@ -1102,16 +1129,17 @@
       "properties": {
         "result": {"type": {"promise": {"$ref": "#/types/RunResult", "args": [{"generic": "Output"}]}}, "required": true}
       },
-      "iterates": {"$ref": "urn:threads:schema:host-api:v1#/$defs/StreamEvent"}
+      "iterates": {"$ref": "urn:threads:schema:host-api:v1#/$defs/StreamEvent"},
+      "doc": "What agent.stream() returns. Iterate it for the run's events as they are appended to the log, plus transient text deltas and status items; await result for the RunResult."
     },
     "RunContext": {
       "kind": "object",
       "casing": "api",
       "generics": [{"name": "Deps", "default": {"prim": "null"}}],
       "fields": {
-        "deps": {"type": {"generic": "Deps"}, "required": true},
-        "thread_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true},
-        "branch_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true},
+        "deps": {"type": {"generic": "Deps"}, "required": true, "doc": "The deps passed to run() or stream(): host-only values such as clients. Never serialized; undefined (TypeScript) or None (Python) when none were passed."},
+        "thread_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true, "doc": "The thread this run appends to."},
+        "branch_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true, "doc": "The branch of that thread this run appends to."},
         "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
         "call_id": {
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/CallId"},
@@ -1123,15 +1151,16 @@
           "required": false,
           "doc": "<branch_id>:<call_id>; send it to providers that dedup."
         },
-        "signal": {"type": {"native": {"ts": "AbortSignal"}}, "required": true, "lang": "ts"}
-      }
+        "signal": {"type": {"native": {"ts": "AbortSignal"}}, "required": true, "lang": "ts", "doc": "Aborts when the run's signal option aborts; pass it on to fetch or other cancellable work. It never aborts when run() had no signal."}
+      },
+      "doc": "What your tool or hook receives about the run it is part of."
     },
     "Thread": {
       "kind": "interface",
       "role": "handle",
       "properties": {
-        "id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true},
-        "branch": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true},
+        "id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true, "doc": "The thread's id: pass it to openThread to get a handle again later."},
+        "branch": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true, "doc": "The branch this handle reads and appends to."},
         "store": {"type": {"$ref": "#/types/Store"}, "required": true}
       },
       "methods": {
@@ -1148,7 +1177,8 @@
           "py": "branches",
           "async": true,
           "params": [],
-          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/BranchInfo"}}
+          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/BranchInfo"}},
+          "doc": "Every visible branch of this thread, with its parent branch and fork seq. A branch still being forked, or whose fork failed, is not listed."
         },
         "forkPoints": {
           "ts": "forkPoints",
@@ -1173,7 +1203,8 @@
                   {"$ref": "urn:threads:schema:host-api:v1#/$defs/ForkPoint"}
                 ]
               },
-              "required": true
+              "required": true,
+              "doc": "Where to fork: the event_id of an eligible snapshot, or a ForkPoint from forkPoints(). Any other event is no_snapshot_boundary."
             },
             {
               "name": "mode",
@@ -1188,7 +1219,8 @@
               "kind": "option",
               "type": {"enum": ["pinned", "current"]},
               "required": false,
-              "default": "pinned"
+              "default": "pinned",
+              "doc": "\"pinned\": the new branch searches knowledge as it was at the snapshot. \"current\": it searches the live knowledge base."
             }
           ],
           "returns": {
@@ -1211,8 +1243,8 @@
           "doc": "Writes a conformance case directory in exactly the spec/conformance layout, so the same runners replay it: case.json (with expect and input.text), log.threads-ts.jsonl and log.threads-py.jsonl with matching expected.<impl>.json, artifacts/, model.json and stubs.json. The kind is stub: external effects replay from stubs.json and unmatched invocations fail closed. The case is built from typed values, so it is valid against case.schema.json by construction; core carries no JSON Schema evaluator, and both languages' tests validate every saved case against case.schema.json.",
           "async": true,
           "params": [
-            {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "expect", "kind": "option", "type": {"$ref": "#/types/CaseExpectation"}, "required": true},
+            {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The case's directory name under dir: lowercase letters, digits and hyphens, starting with a letter or digit. Anything else is invalid_request."},
+            {"name": "expect", "kind": "option", "type": {"$ref": "#/types/CaseExpectation"}, "required": true, "doc": "What a replay of the case must show; a case needs at least one must assertion, else invalid_request."},
             {
               "name": "external_effects",
               "kind": "option",
@@ -1226,7 +1258,7 @@
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EventId"},
               "required": false,
               "default_doc": "the latest fork point of the branch",
-              "doc": "The snapshot event the case restores."
+              "doc": "The snapshot event the case restores. Omitted: the branch's latest fork point; a branch without one is no_snapshot_boundary."
             },
             {
               "name": "dir",
@@ -1258,7 +1290,8 @@
           "py": "pending_approvals",
           "async": true,
           "params": [],
-          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/PendingApproval"}}
+          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/PendingApproval"}},
+          "doc": "Open approval challenges on this branch, each with the tool call it guards and the suggested_rules an approver may keep. Python returns Ok or Err."
         },
         "approve": {
           "ts": "approve",
@@ -1269,26 +1302,29 @@
               "name": "challenge_id",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Uuid"},
-              "required": true
+              "required": true,
+              "doc": "The challenge_id of an open approval, from pendingApprovals() or the approval_requested event."
             },
             {
               "name": "principal",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
-              "required": true
+              "required": true,
+              "doc": "The approver answering, recorded as the event's actor. It must be one of the agent's approvers, else forbidden."
             },
             {
               "name": "remember_rule",
               "kind": "option",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"},
               "required": false,
-              "doc": "One of the challenge's suggested_rules."
+              "doc": "One of the challenge's suggested_rules, also recorded as an allow rule so matching calls later in the thread need no approval. Any other rule is invalid_request. Omitted: the approval covers this one call."
             }
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
             "errors": ["forbidden", "not_found", "approval_mismatch", "approval_expired", "approval_duplicate", "branch_busy"]
-          }
+          },
+          "doc": "Grants an open approval challenge: appends approval_granted and resumes the branch if it was parked on it. Each challenge takes one answer: a second is approval_duplicate, and one after it expires is approval_expired."
         },
         "deny": {
           "ts": "deny",
@@ -1299,20 +1335,23 @@
               "name": "challenge_id",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Uuid"},
-              "required": true
+              "required": true,
+              "doc": "The challenge_id of an open approval, from pendingApprovals() or the approval_requested event."
             },
             {
               "name": "principal",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
-              "required": true
+              "required": true,
+              "doc": "The approver answering, recorded as the event's actor. It must be one of the agent's approvers, else forbidden."
             },
-            {"name": "reason", "kind": "option", "type": {"prim": "string"}, "required": false}
+            {"name": "reason", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "Free text recorded on approval_denied, for example why the call was refused. Omitted: no reason is recorded."}
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
             "errors": ["forbidden", "not_found", "approval_mismatch", "approval_expired", "approval_duplicate", "branch_busy"]
-          }
+          },
+          "doc": "Refuses an open approval challenge: appends approval_denied, so the tool call does not run, and resumes the branch if it was parked on it. Each challenge takes one answer."
         },
         "answer": {
           "ts": "answer",
@@ -1323,46 +1362,53 @@
               "name": "call_id",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/CallId"},
-              "required": true
+              "required": true,
+              "doc": "The call_id of the open ask_user call. A call that isn't waiting for an answer is no_open_question."
             },
             {
               "name": "answer",
               "kind": "positional",
               "type": {"union": [{"prim": "string"}, {"array": {"prim": "string"}}]},
-              "required": true
+              "required": true,
+              "doc": "The answer text, or the chosen options as a list (joined with newlines)."
             },
             {
               "name": "principal",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
-              "required": true
+              "required": true,
+              "doc": "Who answers; it must be the principal whose input started the turn, else forbidden."
             }
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
             "errors": ["forbidden", "no_open_question", "branch_busy"]
-          }
+          },
+          "doc": "Answers an open ask_user question, recorded as that call's result, then resumes the branch. No built-in tool asks questions yet."
         },
         "resolveParked": {
           "ts": "resolveParked",
           "py": "resolve_parked",
           "async": true,
           "params": [
-            {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The parked effect's key, <branch_id>:<call_id>, as listed in the parked result's pending. A key that isn't parked is not_parked."},
             {
               "name": "resolution",
               "kind": "positional",
               "type": {"enum": ["assume_done", "assume_not_done"]},
-              "required": true
+              "required": true,
+              "doc": "\"assume_done\": record that the effect happened, so it never runs again. \"assume_not_done\": let it run again, accepting the risk that it happens twice."
             },
             {
               "name": "principal",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
-              "required": true
+              "required": true,
+              "doc": "The person settling it, recorded as the event's actor. It must be one of the agent's approvers, else forbidden."
             }
           ],
-          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "not_parked", "branch_busy"]}
+          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "not_parked", "branch_busy"]},
+          "doc": "A person settles a side effect whose outcome is unknown and that parked the branch, then the branch resumes. Use it when the effect can't be checked automatically."
         },
         "cancel": {
           "ts": "cancel",
@@ -1392,24 +1438,26 @@
               "required": true,
               "doc": "Who takes this action; recorded as the event's actor and authorized by the host."
             },
-            {"name": "instructions", "kind": "option", "type": {"prim": "string"}, "required": false}
+            {"name": "instructions", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "Extra guidance for the summary, for example what to keep. Omitted: the default summary instructions."}
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
             "errors": ["forbidden", "branch_busy", "model_unavailable"]
-          }
+          },
+          "doc": "Not built yet. Summarizes the branch's history so later requests carry the summary instead of every message."
         },
         "setModel": {
           "ts": "setModel",
           "py": "set_model",
-          "doc": "settings_changed{reason: user}. forbidden also covers a before_model_switch deny.",
+          "doc": "Changes the model for this thread's next requests, recorded as settings_changed{reason: user}. before_model_switch doesn't run for it: that hook gates only automatic switches (a fallback and its revert). forbidden: the principal can't act on this thread, such as another tenant's.",
           "async": true,
           "params": [
             {
               "name": "settings",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/SettingsChange"},
-              "required": true
+              "required": true,
+              "doc": "The model to switch to, with optional model_params and settings. The host resolves it to the model of that name in the agent's model or fallback list."
             },
             {
               "name": "principal",
@@ -1429,7 +1477,7 @@
           "py": "set_output_style",
           "async": true,
           "params": [
-            {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "A key of the agent's output_styles. An unknown name is not_found."},
             {
               "name": "principal",
               "kind": "positional",
@@ -1438,7 +1486,8 @@
               "doc": "Who takes this action; recorded as the event's actor and authorized by the host."
             }
           ],
-          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "not_found"]}
+          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "not_found"]},
+          "doc": "Not built yet. Switches later replies to one of the agent's output_styles, recorded on the branch."
         },
         "setMode": {
           "ts": "setMode",
@@ -1449,7 +1498,8 @@
               "name": "mode",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionMode"},
-              "required": true
+              "required": true,
+              "doc": "The new mode: plan, dont_ask, default, accept_edits or bypass."
             },
             {
               "name": "principal",
@@ -1462,7 +1512,8 @@
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
             "errors": ["forbidden", "invalid_transition", "branch_busy"]
-          }
+          },
+          "doc": "Changes the branch's permission mode, recorded as mode_changed and used by later permission decisions. Switching to bypass is invalid_transition unless the agent's permissions set allow_bypass."
         },
         "usage": {
           "ts": "usage",
@@ -1502,14 +1553,16 @@
           "py": "todos",
           "async": true,
           "params": [],
-          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Todo"}}
+          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Todo"}},
+          "doc": "The agent's current todo list: the latest one it wrote on this branch, or empty."
         },
         "children": {
           "ts": "children",
           "py": "children",
           "async": true,
           "params": [],
-          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Child"}}
+          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Child"}},
+          "doc": "Every subagent this thread started, in start order, with its final status or running."
         }
       },
       "doc": "A thread positioned at one branch. Every method reads or appends through the store; none needs the agent in memory."
@@ -1536,13 +1589,14 @@
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "path": {"type": {"prim": "string"}, "required": true},
+        "path": {"type": {"prim": "string"}, "required": true, "doc": "The case directory that was written, <dir>/<name>."},
         "portable": {
           "type": {"prim": "boolean"},
           "required": true,
           "doc": "false when the case depends on a named provider."
         }
-      }
+      },
+      "doc": "What saveCase returns: where the case was written and whether it replays anywhere."
     },
     "Hooks": {
       "kind": "object",
@@ -1558,19 +1612,22 @@
                   "name": "source",
                   "kind": "positional",
                   "type": {"enum": ["startup", "resume", "fork", "compact"]},
-                  "required": true
+                  "required": true,
+                  "doc": "Why the session started: \"startup\" for a thread's first run, \"resume\" for a later run on a thread that already has input, \"compact\" after the context was compacted. \"fork\" is in the contract but is not passed today."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {"array": {"prim": "string"}}
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Runs when a run starts (source startup or resume) and again after a compaction (source compact); return strings to add them to the model's context as untrusted reference. A throw or timeout refuses the run with input_denied. Omit it and nothing runs at session start."
         },
         "session_end": {
           "type": {
@@ -1581,13 +1638,15 @@
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {"prim": "void"}
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Observes the end of a run that finished without halting. It can't change anything; a failure is recorded and ignored. Omit it and nothing runs at session end."
         },
         "before_input": {
           "type": {
@@ -1598,20 +1657,22 @@
                   "name": "input",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_user_input/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "The user input the turn starts with, as recorded in the log."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
                   {
                     "object": {
-                      "decision": {"type": {"literal": "allow"}, "required": true},
+                      "decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: the input goes on to the model, with this hook's injections (if any) added before the request."},
                       "injections": {
                         "type": {"array": {"prim": "string"}},
                         "required": false,
@@ -1623,8 +1684,8 @@
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the input stays in the log for audit but is never sent to the model, and the turn ends input_denied."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model never sees it."}
                     },
                     "casing": "wire"
                   }
@@ -1632,7 +1693,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Gates each turn's user input before the first model request. Return allow (optionally with injections) or deny with a reason; a deny, throw or timeout ends the turn input_denied. Omit it and every input is let through."
         },
         "before_model": {
           "type": {
@@ -1643,20 +1705,22 @@
                   "name": "state",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
-                  "required": true
+                  "required": true,
+                  "doc": "The thread's reduced state at this point, the same value reduce(log) returns."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
                   {
                     "object": {
-                      "decision": {"type": {"literal": "proceed"}, "required": true},
+                      "decision": {"type": {"literal": "proceed"}, "required": true, "doc": "proceed: the request is sent, with this hook's injections (if any) added first."},
                       "injections": {
                         "type": {"array": {"prim": "string"}},
                         "required": false,
@@ -1668,8 +1732,8 @@
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: this attempt is never sent to the model, and the turn ends error."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model never sees it."}
                     },
                     "casing": "wire"
                   }
@@ -1677,7 +1741,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Runs before every model request. Return proceed (optionally with injections) or deny with a reason; a deny, throw or timeout means the request isn't sent. Omit it and every request is sent."
         },
         "after_model": {
           "type": {
@@ -1688,42 +1753,45 @@
                   "name": "state",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
-                  "required": true
+                  "required": true,
+                  "doc": "The thread's reduced state at this point, the same value reduce(log) returns."
                 },
                 {
                   "name": "response",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_model_response/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "The model's response: its content parts (text and tool_use), usage and the request it answers."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true, "doc": "proceed: the response stands; its tool calls go on to be authorized and run, or the turn ends as the response says."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the response's output is withheld and each of its tool calls is closed as denied without running. The turn ends error; in TypeScript, a response that had tool calls instead goes back to the model with each call shown as denied."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision. TypeScript shows it to the model on each closed call (denied: reason); Python shows a fixed text."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "guide"}, "required": true},
-                      "text": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "guide"}, "required": true, "doc": "guide: the response is withheld, its tool calls are closed without running, and the model is asked again with text as a trusted instruction."},
+                      "text": {"type": {"prim": "string"}, "required": true, "doc": "The instruction the model is re-asked with, as any text. It is recorded on the hook_decision and added to the next request as a trusted hook instruction."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "retry"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "retry"}, "required": true, "doc": "retry: like guide, with reason as the instruction. After 2 retries in one turn, a further retry counts as a deny."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "What to do differently, as any text. It is recorded on the hook_decision and sent to the model as a trusted hook instruction."}
                     },
                     "casing": "wire"
                   }
@@ -1731,7 +1799,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Reviews each model response before its tool calls run and its output is released. Return proceed, deny (the output is withheld and its calls are closed unrun), guide (the model is asked again with your text) or retry (asked again with the reason, at most twice per turn). Omit it and every response proceeds."
         },
         "before_tool": {
           "type": {
@@ -1742,29 +1811,31 @@
                   "name": "call",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "The tool call: its call_id, tool name, parsed input and the request it came from."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: this hook doesn't object. The policy's decision stands; a hook can never loosen a policy ask or deny."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the call is refused and never runs. It closes as a denied tool_result the model sees, and permission_denied observers are told."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. TypeScript shows it to the model in the denied tool_result (denied: reason); Python shows the fixed text denied by policy."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "ask"}, "required": true},
-                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false}
+                      "decision": {"type": {"literal": "ask"}, "required": true, "doc": "ask: the call needs approval. permission_request hooks may answer it; otherwise it opens an approval challenge and parks until an approver decides. In dont_ask mode an ask is a deny."},
+                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "A permission rule to show with the ask, such as bash(git push *). It is recorded as the reason on the hook_decision and on the permission_decision. Omitted: the ask carries no reason."}
                     },
                     "casing": "wire"
                   }
@@ -1772,7 +1843,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Runs before the permission decision on every tool call, even one the policy denies (the deny stands). Return allow, deny with a reason, or ask to require approval; when several extensions answer, the strictest wins, and a throw or timeout denies. TypeScript stops at the first extension that denies, so later ones aren't called; Python calls every extension. Omit it and the agent's permission rules decide alone."
         },
         "permission_request": {
           "type": {
@@ -1783,29 +1855,31 @@
                   "name": "call",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "The tool call: its call_id, tool name, parsed input and the request it came from."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: the programmatic approver grants the call, so it runs without asking a person."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the programmatic approver refuses the call; it closes as a denied tool_result the model sees."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. TypeScript shows it to the model in the denied tool_result (denied: reason); Python shows the fixed text denied by policy."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "ask"}, "required": true},
-                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false}
+                      "decision": {"type": {"literal": "ask"}, "required": true, "doc": "ask: the hook doesn't answer, so the call opens an approval challenge and parks until a person decides."},
+                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "Recorded as the hook_decision's reason only: an ask answers nothing, so the earlier decision and its reason stand. Omitted: no reason is recorded."}
                     },
                     "casing": "wire"
                   }
@@ -1813,7 +1887,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Answers a tool call the permission rules would send for approval. Return allow or deny to decide it, or ask to leave it to a human; a throw or timeout denies. Omit it and the call waits for a human approval."
         },
         "permission_denied": {
           "type": {
@@ -1824,19 +1899,22 @@
                   "name": "call",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "The tool call that was denied: its call_id, tool name, parsed input and the request it came from."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {"prim": "void"}
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Observes a tool call after it was denied. It can't change anything; a failure is recorded and ignored. Omit it and denials are only recorded in the log."
         },
         "after_tool": {
           "type": {
@@ -1847,25 +1925,29 @@
                   "name": "call",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "The tool call: its call_id, tool name, parsed input and the request it came from."
                 },
                 {
                   "name": "result",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_result/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "The tool's recorded result for that call."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {"array": {"prim": "string"}}
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Observes each tool result after it is recorded. Return strings to record them as an annotation on the call; it can't change the result, and a failure is recorded and ignored. Omit it and results are recorded with no annotation."
         },
         "before_tool_result": {
           "type": {
@@ -1876,35 +1958,38 @@
                   "name": "call",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "The tool call: its call_id, tool name, parsed input and the request it came from."
                 },
                 {
                   "name": "result",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_result/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "The tool's recorded result for that call, as later requests render it unless a hook changes it."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true, "doc": "proceed: later requests render the result as it is."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "redact"}, "required": true},
-                      "spans": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}}, "required": true}
+                      "decision": {"type": {"literal": "redact"}, "required": true, "doc": "redact: the listed spans are hidden from every later request, recorded as context_edited guardrail. The raw result stays in the log."},
+                      "spans": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}}, "required": true, "doc": "The byte ranges to hide, as UTF-8 offsets into the result's first text part (the preview when it has no content), start inclusive and end exclusive; give at least one, each non-empty. An empty list, an empty span, a span outside that text or a span that splits a character counts as a failed hook, so the whole result is cleared instead."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the whole result is cleared from every later request (context_edited guardrail). The call already ran; the raw result stays in the log."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model sees the cleared result, not the reason."}
                     },
                     "casing": "wire"
                   }
@@ -1912,7 +1997,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Guards each executed tool result before later requests render it. Return proceed, redact with byte spans of the result's text to hide, or deny to clear it; the raw result stays in the log either way, and a throw, a timeout, an empty span list or a span outside the text clears it. Omit it and results are rendered as recorded."
         },
         "after_tool_batch": {
           "type": {
@@ -1923,19 +2009,22 @@
                   "name": "state",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
-                  "required": true
+                  "required": true,
+                  "doc": "The thread's reduced state at this point, the same value reduce(log) returns."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {"array": {"prim": "string"}}
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Runs once every tool result of a model response is recorded, before the next request. Return strings to add them to the model's context as untrusted reference; a throw or timeout ends the turn with an error. Omit it and the next request is sent with nothing added."
         },
         "before_compact": {
           "type": {
@@ -1946,29 +2035,31 @@
                   "name": "state",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
-                  "required": true
+                  "required": true,
+                  "doc": "The thread's reduced state at this point, the same value reduce(log) returns."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true, "doc": "proceed: compaction goes ahead: older turns are summarized by a side request."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: no summary is made this time, recorded as compaction_failed at stage hook."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model never sees it."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "guide"}, "required": true},
-                      "text": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "guide"}, "required": true, "doc": "guide: compaction goes ahead, and text is added to the summary request's instructions."},
+                      "text": {"type": {"prim": "string"}, "required": true, "doc": "Extra instructions for the summary, such as what to keep, as any text. They follow the fixed summary instruction under Additional instructions."}
                     },
                     "casing": "wire"
                   }
@@ -1976,7 +2067,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Runs before the context is compacted. Return proceed, guide with text the summary request should follow, or deny with a reason, which fails this compaction; a throw or timeout also fails it. Omit it and compaction proceeds with the default instructions."
         },
         "after_compact": {
           "type": {
@@ -1987,19 +2079,22 @@
                   "name": "state",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
-                  "required": true
+                  "required": true,
+                  "doc": "The thread's reduced state right after compaction."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {"array": {"prim": "string"}}
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Runs after a compaction, before the next request. Return strings to add them to the model's context as untrusted reference; a failure is recorded and adds nothing. Omit it and only the framework's own restored context is added."
         },
         "on_stop": {
           "type": {
@@ -2010,22 +2105,24 @@
                   "name": "state",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState"},
-                  "required": true
+                  "required": true,
+                  "doc": "The thread's reduced state at this point, the same value reduce(log) returns."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "stop"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "stop"}, "required": true, "doc": "stop: the turn ends end_turn as the model intended."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "continue"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "continue"}, "required": true, "doc": "continue: the turn doesn't end. The model is asked again with reason as a trusted instruction. After 3 continues in one turn it ends stop_hook_limit."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "What the model should still do, as any text. It is recorded on the hook_decision and sent to the model as a trusted hook instruction."}
                     },
                     "casing": "wire"
                   }
@@ -2033,7 +2130,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Runs when a turn is about to end normally. Return stop to let it end, or continue with a reason that is sent to the model as an instruction for one more request; after 3 continues in a turn it ends stop_hook_limit, and a throw or timeout stops. Omit it and turns end when the model stops."
         },
         "on_stop_failure": {
           "type": {
@@ -2044,19 +2142,22 @@
                   "name": "code",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/RunErrorCode"},
-                  "required": true
+                  "required": true,
+                  "doc": "The run error code the turn ended with: context_exhausted, model_unavailable, max_output, max_turns, output_invalid, input_denied or model_error."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {"prim": "void"}
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Observes a turn that ended in a failure, such as max_turns, max_output or a model error; on_stop doesn't run then. It can't change anything, and a failure is recorded and ignored. Omit it and failures are only recorded in the log."
         },
         "subagent_start": {
           "type": {
@@ -2067,22 +2168,24 @@
                   "name": "call",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_tool_call/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "The spawn tool call: its call_id, tool name, parsed input (which agent and what task) and the request it came from."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: the subagent starts (agent_spawned)."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the subagent never starts. The spawn call closes as a denied tool_result the parent's model sees."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision. TypeScript shows it to the parent's model as the denied result; Python shows a fixed text."}
                     },
                     "casing": "wire"
                   }
@@ -2090,7 +2193,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Gates each spawn of a child agent before it starts. Return allow, or deny with a reason and the child isn't started; a throw or timeout denies. Omit it and every spawn the permission rules allow starts."
         },
         "subagent_stop": {
           "type": {
@@ -2101,22 +2205,24 @@
                   "name": "finished",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_agent_finished/properties/data"},
-                  "required": true
+                  "required": true,
+                  "doc": "How the child finished: its status and its final output or error."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "stop"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "stop"}, "required": true, "doc": "stop: the subagent's result stands and goes back to the parent."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "continue"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "continue"}, "required": true, "doc": "continue: the subagent runs again with reason as its next input. After 3 continues, or when the subagent was cancelled, its result stands."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "The subagent's next input, as any text. It is recorded on the hook_decision. When the continue can't take effect, TypeScript records a stop instead (reason cancelled, or continuation limit after 3 continues); Python records this continue and its reason even when the subagent was cancelled, and after 3 continues doesn't call the hook at all."}
                     },
                     "casing": "wire"
                   }
@@ -2124,7 +2230,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Runs when a child agent finishes. Return stop to let its result stand, or continue with a reason that is sent to the child as new input; after 3 continues, or if the child was cancelled, the result stands, and a throw or timeout stops. Omit it and each child's result stands as it finished."
         },
         "before_model_switch": {
           "type": {
@@ -2135,22 +2242,24 @@
                   "name": "settings",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ModelSettings"},
-                  "required": true
+                  "required": true,
+                  "doc": "The model settings the thread would switch to."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: the switch to the fallback model goes ahead (settings_changed with reason fallback)."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: no switch to the fallback model. TypeScript keeps retrying the current model; Python ends the turn model_unavailable."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model never sees it."}
                     },
                     "casing": "wire"
                   }
@@ -2158,7 +2267,8 @@
               }
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Gates an automatic model switch: the switch to a fallback model after repeated overloaded rejections (retry.fallback_after) and, with fallback_scope turn, the revert at the next input. Return allow, or deny with a reason to stay on the current model; a throw or timeout denies. Thread.setModel doesn't run it. Omit it and every automatic switch is allowed."
         },
         "after_model_switch": {
           "type": {
@@ -2169,19 +2279,22 @@
                   "name": "settings",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ModelSettings"},
-                  "required": true
+                  "required": true,
+                  "doc": "The model settings the thread switched to."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {"prim": "void"}
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Observes a model switch after it is recorded. It can't change anything; a failure is recorded and ignored. Omit it and switches are only recorded in the log."
         },
         "notification": {
           "type": {
@@ -2192,19 +2305,22 @@
                   "name": "event",
                   "kind": "positional",
                   "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Event"},
-                  "required": true
+                  "required": true,
+                  "doc": "The event that was just recorded, exactly as it is in the log."
                 },
                 {
                   "name": "ctx",
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
-                  "required": true
+                  "required": true,
+                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
                 }
               ],
               "returns": {"prim": "void"}
             }
           },
-          "required": false
+          "required": false,
+          "doc": "Observes notable events as they are recorded: the branch parked or a retry wait began, and in TypeScript also a budget was exceeded or a child agent finished. It can't change anything; a failure is recorded and ignored. Omit it and those events are only in the log."
         }
       },
       "doc": "Every hook is optional, awaited and bounded by hook_timeout_ms. Decisions are {decision: <hook_decision.decision>, ...} objects. Injections are strings rendered as injected{source: hook}. A gating hook that throws or times out denies."
@@ -2230,15 +2346,16 @@
     "Secret": {
       "kind": "interface",
       "role": "opaque",
-      "properties": {"name": {"type": {"prim": "string"}, "required": true}}
+      "properties": {"name": {"type": {"prim": "string"}, "required": true, "doc": "The host environment variable the value is read from. Unset or empty when used is a ConfigError missing_secret."}},
+      "doc": "A reference to a host secret, made by secret(name). It holds only the name: host code reads the value from the environment when it uses it, and the value never enters the sandbox, a prompt or the log."
     },
     "Skill": {
       "kind": "object",
       "casing": "api",
       "fields": {
-        "name": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true},
-        "description": {"type": {"prim": "string"}, "required": true},
-        "body": {"type": {"prim": "string"}, "required": true}
+        "name": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true, "doc": "The name the model passes to load_skill: lowercase letters, digits and underscores, up to 64 characters, unique among the agent's skills."},
+        "description": {"type": {"prim": "string"}, "required": true, "doc": "One non-empty line, listed with the name in the system prompt so the model knows when to load the skill."},
+        "body": {"type": {"prim": "string"}, "required": true, "doc": "The skill's instructions. load_skill adds them to the conversation as trusted instructions; their SHA-256 is pinned in the agent's config."}
       },
       "doc": "Loaded from the host config store, pinned by hash. Files in the sandbox are never skills (F4.3), and no agent path writes config: the self-config guard denies every non-read-only call with an argument word holding a .threads path segment (F4.2 step 1)."
     },
@@ -2246,19 +2363,20 @@
       "kind": "object",
       "casing": "api",
       "fields": {
-        "id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true},
+        "id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true, "doc": "The schedule's name: lowercase letters, digits and underscores, up to 64 characters. Each firing records it, and the run's principal is issuer \"schedule\" with this as subject."},
         "agent": {"type": {"prim": "string"}, "required": true, "doc": "A key of host({agents})."},
-        "cron": {"type": {"prim": "string"}, "required": true},
+        "cron": {"type": {"prim": "string"}, "required": true, "doc": "A five-field cron expression (minute, hour, day of month, month, day of week, where 0 or 7 is Sunday) of numbers, *, lists, ranges and steps, read in timezone. Anything else is a ConfigError invalid_config."},
         "timezone": {"type": {"prim": "string"}, "required": false, "default": "UTC", "doc": "IANA name."},
         "input": {"type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Input"}, "required": true}
-      }
+      },
+      "doc": "A cron schedule on a host: each time it is due, it starts a run of one of the host's agents on a new thread."
     },
     "ConfigError": {
       "kind": "object",
       "casing": "api",
       "fields": {
-        "code": {"type": {"$ref": "#/types/ConfigErrorCode"}, "required": true},
-        "message": {"type": {"prim": "string"}, "required": true}
+        "code": {"type": {"$ref": "#/types/ConfigErrorCode"}, "required": true, "doc": "Which kind of setup problem it is, one of ConfigErrorCode."},
+        "message": {"type": {"prim": "string"}, "required": true, "doc": "What is wrong, naming the option or environment variable to fix."}
       },
       "doc": "Thrown at setup only: TS class ConfigError extends Error, Python exception ConfigError. Every other expected failure is a value."
     },
@@ -2278,7 +2396,8 @@
           "egress_policy_unsupported",
           "transport_fence_unsupported"
         ]
-      }
+      },
+      "doc": "Why setup failed. For example: missing_secret is an unset secret, duplicate_name two tools or agents with one name, capability_missing an option the sandbox or model can't support."
     },
     "LookupResult": {
       "kind": "union",
@@ -2288,17 +2407,17 @@
       "variants": [
         {
           "object": {
-            "status": {"type": {"literal": "found"}, "required": true},
-            "value": {"type": {"generic": "T"}, "required": true}
+            "status": {"type": {"literal": "found"}, "required": true, "doc": "\"found\": the operation happened, and value is what it produced."},
+            "value": {"type": {"generic": "T"}, "required": true, "doc": "What the found operation produced: the recovered model response, the sandbox session or the snapshot data."}
           },
           "casing": "wire"
         },
-        {"object": {"status": {"type": {"literal": "not_found"}, "required": true}}, "casing": "wire"},
-        {"object": {"status": {"type": {"literal": "not_found_nonfinal"}, "required": true}}, "casing": "wire"},
+        {"object": {"status": {"type": {"literal": "not_found"}, "required": true, "doc": "\"not_found\": the provider proves nothing was created or sent. Accepted only from an operation whose LookupCapability is final."}}, "casing": "wire"},
+        {"object": {"status": {"type": {"literal": "not_found_nonfinal"}, "required": true, "doc": "\"not_found_nonfinal\": not seen yet, but it may still appear. Settles nothing."}}, "casing": "wire"},
         {
           "object": {
-            "status": {"type": {"literal": "unknown"}, "required": true},
-            "reason": {"type": {"prim": "string"}, "required": true}
+            "status": {"type": {"literal": "unknown"}, "required": true, "doc": "\"unknown\": the lookup failed or can't answer. Settles nothing."},
+            "reason": {"type": {"prim": "string"}, "required": true, "doc": "Free text saying why the lookup couldn't answer, for logs and people (for example transport_error)."}
           },
           "casing": "wire"
         }
@@ -2313,7 +2432,7 @@
     "Model": {
       "kind": "interface",
       "role": "protocol",
-      "properties": {"info": {"type": {"$ref": "#/types/ModelInfo"}, "required": true}},
+      "properties": {"info": {"type": {"$ref": "#/types/ModelInfo"}, "required": true, "doc": "What this model is and can do: its name, adapter, params, limits, accepted inputs, hosted tools and lookup capability. Read when the agent is pinned."}},
       "methods": {
         "send": {
           "ts": "send",
@@ -2321,14 +2440,15 @@
           "doc": "Stream one attempt. Every failure before content is the one terminal rejected chunk, never a thrown error, and its reason is one of returns.errors: a provider rejection class; stale_epoch when context.fence() refused at the real network send point, after any SDK queueing, so nothing left; content_unsupported or continuation_unsupported when the adapter can't encode a rendered part, so nothing left and nothing is re-sent. transport_fence_unsupported when a bridge model already detected that its sends bypass the fenced transport, so nothing left and nothing is re-sent. A throw after dispatch is a broken stream (unknown outcome).",
           "async": false,
           "params": [
-            {"name": "request", "kind": "positional", "type": {"$ref": "#/types/ModelRequest"}, "required": true},
-            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/ModelContext"}, "required": true},
+            {"name": "request", "kind": "positional", "type": {"$ref": "#/types/ModelRequest"}, "required": true, "doc": "The attempt to send: its client request id and the exact rendered request bytes."},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/ModelContext"}, "required": true, "doc": "The fencing context for this attempt. Await context.fence() at the real network send point and send nothing if it fails; use read and put for artifact bytes."},
             {
               "name": "signal",
               "kind": "option",
               "type": {"native": {"ts": "AbortSignal"}},
               "required": false,
-              "lang": "ts"
+              "lang": "ts",
+              "doc": "TypeScript only. The run's signal option, passed through when the caller gave one; hand it to the provider SDK so an abort stops the request. Omitted when the run has no signal."
             }
           ],
           "returns": {
@@ -2353,8 +2473,8 @@
           "async": true,
           "optional": true,
           "params": [
-            {"name": "request_id", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/ModelContext"}, "required": true}
+            {"name": "request_id", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The client request id of the lost attempt, the same one ModelRequest.request_id carried when it was sent."},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/ModelContext"}, "required": true, "doc": "The fencing context: await context.fence() before the lookup call, and put() any reasoning or hosted tool bytes of a found response before its parts name them."}
           ],
           "returns": {"result": {"$ref": "#/types/LookupResult", "args": [{"$ref": "#/types/ModelResponse"}]}, "errors": ["stale_epoch"]}
         },
@@ -2364,7 +2484,7 @@
           "doc": "Pre-dispatch input_bound_tokens.",
           "async": true,
           "optional": true,
-          "params": [{"name": "request", "kind": "positional", "type": {"$ref": "#/types/ModelRequest"}, "required": true}],
+          "params": [{"name": "request", "kind": "positional", "type": {"$ref": "#/types/ModelRequest"}, "required": true, "doc": "The request to count, as send would receive it. Neither language's loop calls count_tokens today, and the Python model protocol has no such method yet."}],
           "returns": {"result": {"prim": "integer"}, "errors": ["unavailable", "timeout"]}
         }
       },
@@ -2374,7 +2494,7 @@
       "kind": "interface",
       "role": "protocol",
       "properties": {
-        "branch_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true},
+        "branch_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true, "doc": "The branch this attempt is dispatched for. fence, read and put always act for this branch."},
         "epoch": {"type": {"prim": "integer"}, "required": true, "doc": "The lease epoch this attempt is dispatched under."}
       },
       "methods": {
@@ -2391,7 +2511,7 @@
           "py": "read",
           "doc": "The verified bytes (sha256 and length checked) of an artifact a Render v1 line references.",
           "async": true,
-          "params": [{"name": "ref", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"}, "required": true}],
+          "params": [{"name": "ref", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"}, "required": true, "doc": "An artifact ref named in the rendered request (an image, a document or an earlier reasoning block)."}],
           "returns": {"result": {"prim": "bytes"}, "errors": ["artifact_missing", "artifact_corrupt"]}
         },
         "put": {
@@ -2400,8 +2520,8 @@
           "doc": "Stores exact provider bytes (reasoning, hosted tool blocks) and returns their ref once durable, so a part may name it.",
           "async": true,
           "params": [
-            {"name": "data", "kind": "positional", "type": {"prim": "bytes"}, "required": true},
-            {"name": "media_type", "kind": "positional", "type": {"prim": "string"}, "required": true}
+            {"name": "data", "kind": "positional", "type": {"prim": "bytes"}, "required": true, "doc": "The exact bytes the provider returned, stored unchanged."},
+            {"name": "media_type", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The MIME type of data, for example application/json or image/png."}
           ],
           "returns": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"}
         }
@@ -2412,9 +2532,9 @@
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "model": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ModelRef"}, "required": true},
+        "model": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ModelRef"}, "required": true, "doc": "The provider and model name. Recorded when the thread starts."},
         "adapter": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/AdapterRef"}, "required": true},
-        "params": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"}, "required": true},
+        "params": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"}, "required": true, "doc": "The model parameters the adapter sends (temperature, output limits and the like), recorded when the thread starts. Changing them changes the agent's config hash."},
         "limits": {
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/models/items"},
           "required": true,
@@ -2425,9 +2545,10 @@
           "required": true,
           "doc": "Input parts it accepts; others fail pre-dispatch with content_unsupported."
         },
-        "hosted_tools": {"type": {"array": {"prim": "string"}}, "required": false, "default": []},
+        "hosted_tools": {"type": {"array": {"prim": "string"}}, "required": false, "default": [], "doc": "Names of provider-hosted tools this model can call (for example web search run by the provider). A live model that declares any is refused in stub-mode runs, since hosted calls can't be stubbed."},
         "lookup": {"type": {"$ref": "#/types/LookupCapability"}, "required": true, "doc": "Response lookup by client request id."}
-      }
+      },
+      "doc": "What a model adapter declares about itself: which model and adapter it is, its parameters and limits, the inputs it accepts, its hosted tools and whether a lost response can be looked up."
     },
     "ModelRequest": {
       "kind": "object",
@@ -2439,13 +2560,14 @@
           "doc": "Client request id, derived from the model_request event."
         },
         "body": {"type": {"prim": "bytes"}, "required": true, "doc": "Render v1 bytes."}
-      }
+      },
+      "doc": "One send attempt: the client request id and the exact rendered request bytes the adapter encodes for its provider."
     },
     "ModelResponse": {
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "content": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/OutputPart"}}, "required": true},
+        "content": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/OutputPart"}}, "required": true, "doc": "The output parts in order: text, tool calls, reasoning and hosted tool results."},
         "stop_reason": {
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_model_response/properties/data/properties/stop_reason"},
           "required": true
@@ -2456,7 +2578,8 @@
           "required": true,
           "doc": "The provider's id for this request, or null when it gives none. A found model lookup must carry it, since model_response_recovered records it."
         }
-      }
+      },
+      "doc": "A complete model response, as a found lookup returns it: the output parts, why it stopped, token usage and the provider's request id."
     },
     "ModelChunk": {
       "kind": "union",
@@ -2465,21 +2588,21 @@
       "variants": [
         {
           "object": {
-            "kind": {"type": {"literal": "delta"}, "required": true},
-            "text": {"type": {"prim": "string"}, "required": true}
+            "kind": {"type": {"literal": "delta"}, "required": true, "doc": "\"delta\": a piece of streamed text, shown live and not recorded on its own."},
+            "text": {"type": {"prim": "string"}, "required": true, "doc": "The new text since the last delta."}
           },
           "casing": "wire"
         },
         {
           "object": {
-            "kind": {"type": {"literal": "part"}, "required": true},
-            "part": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/OutputPart"}, "required": true}
+            "kind": {"type": {"literal": "part"}, "required": true, "doc": "\"part\": one finished output part."},
+            "part": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/OutputPart"}, "required": true, "doc": "The finished part (text, tool call, reasoning or hosted tool result). Parts are recorded in the order they arrive."}
           },
           "casing": "wire"
         },
         {
           "object": {
-            "kind": {"type": {"literal": "done"}, "required": true},
+            "kind": {"type": {"literal": "done"}, "required": true, "doc": "\"done\": the last chunk of a successful send, with its stop reason and usage."},
             "stop_reason": {
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_model_response/properties/data/properties/stop_reason"},
               "required": true
@@ -2490,7 +2613,7 @@
         },
         {
           "object": {
-            "kind": {"type": {"literal": "rejected"}, "required": true},
+            "kind": {"type": {"literal": "rejected"}, "required": true, "doc": "\"rejected\": the send failed before any content; always the stream's only and last chunk."},
             "reason": {
               "type": {
                 "enum": [
@@ -2508,8 +2631,8 @@
               "required": true,
               "doc": "The terminal error of a send: exactly Model.send returns.errors. Provider classes are recorded as model_attempt_abandoned{provider_outcome: failed}; stale_epoch appends nothing (the writer lost its lease); content_unsupported, continuation_unsupported and transport_fence_unsupported are recorded as not_sent and end the turn with that code, never retried."
             },
-            "http_status": {"type": {"prim": "integer"}, "required": false},
-            "retry_after_ms": {"type": {"prim": "integer"}, "required": false},
+            "http_status": {"type": {"prim": "integer"}, "required": false, "doc": "The provider's HTTP status code (for example 429 or 529), recorded with the abandoned attempt. Omitted when there was no HTTP response."},
+            "retry_after_ms": {"type": {"prim": "integer"}, "required": false, "doc": "The provider's retry-after hint in milliseconds. When present the retry waits this long instead of backing off, and a hint longer than the retry policy's max_retry_after_ms ends the turn. Omitted when the provider gave none."},
             "billing": {
               "type": {
                 "$ref": "urn:threads:schema:events:v1#/$defs/ev_model_attempt_abandoned/properties/data/properties/billing"
@@ -2519,19 +2642,21 @@
           },
           "casing": "wire"
         }
-      ]
+      ],
+      "doc": "One item of a Model.send stream: a text delta, a finished output part, the final done chunk, or one terminal rejected chunk when the send failed before any content."
     },
     "Sandbox": {
       "kind": "interface",
       "role": "protocol",
-      "properties": {"info": {"type": {"$ref": "#/types/SandboxInfo"}, "required": true}},
+      "properties": {"info": {"type": {"$ref": "#/types/SandboxInfo"}, "required": true, "doc": "What this sandbox provider is and can do: its provider name, egress enforcement, snapshot capture classes, browser and desktop support, lookup capabilities and termination. Read when the agent is pinned."}},
       "methods": {
         "create": {
           "ts": "create",
           "py": "create",
           "async": true,
-          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
-          "returns": {"result": {"$ref": "#/types/SandboxSession"}, "errors": ["stale_epoch", "cleanup_claim_lost", "unavailable", "timeout"]}
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The key the runtime wrote to the resource ledger before this call. Tag the provider resource with it so lookup can find the sandbox if the response is lost."}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() at the provider call."}],
+          "returns": {"result": {"$ref": "#/types/SandboxSession"}, "errors": ["stale_epoch", "cleanup_claim_lost", "unavailable", "timeout"]},
+          "doc": "Create a new isolated sandbox and return its session. Await context.fence() at the provider call; a failed fence returns its code and creates nothing."
         },
         "restore": {
           "ts": "restore",
@@ -2539,7 +2664,7 @@
           "doc": "Restore a snapshot into a new isolated sandbox and verify it: a restored file tree whose canonical manifest hash isn't manifest_hash is snapshot_manifest_mismatch, and the adapter releases the sandbox it created before returning that error.",
           "async": true,
           "params": [
-            {"name": "snapshot_id", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "snapshot_id", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The provider's id of the snapshot to restore, from the snapshot event."},
             {
               "name": "manifest_hash",
               "kind": "positional",
@@ -2547,8 +2672,8 @@
               "required": true,
               "doc": "The snapshot event's manifest_hash."
             },
-            {"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}
+            {"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The key the runtime wrote to the resource ledger before this call. Tag the new sandbox with it, as create does."},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() at the provider call."}
           ],
           "returns": {
             "result": {"$ref": "#/types/SandboxSession"},
@@ -2567,7 +2692,7 @@
           "doc": "Find a sandbox whose create or restore response was lost, by that call's operation key. Resolves the pending ledger row (LookupResult doc). Present when info.lookup.create is not none. A final not_found retires a pending row only when no older local dispatch for that operation_key can still reach the provider; every create and restore fences its SandboxContext at the provider boundary, so once the lease has moved a stale creator can't pass that fence.",
           "async": true,
           "optional": true,
-          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The operation key of the create or restore call whose response was lost."}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before asking the provider."}],
           "returns": {"result": {"$ref": "#/types/LookupResult", "args": [{"$ref": "#/types/SandboxSession"}]}, "errors": ["stale_epoch", "cleanup_claim_lost"]}
         },
         "lookupSnapshot": {
@@ -2576,7 +2701,7 @@
           "doc": "Find a snapshot whose capture response was lost, by the snapshot call's operation key. Resolves the pending ledger row. Present when info.lookup.snapshot is not none.",
           "async": true,
           "optional": true,
-          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The operation key of the snapshot call whose response was lost."}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before asking the provider."}],
           "returns": {"result": {
             "$ref": "#/types/LookupResult",
             "args": [{"$ref": "urn:threads:schema:events:v1#/$defs/ev_snapshot/properties/data"}]
@@ -2587,7 +2712,7 @@
           "py": "attach",
           "doc": "Reattach to a live ledger row's sandbox by its recorded ref, so a restarted host can terminate its processes and close it. not_found is final only when info.lookup.create is final; otherwise the answer is resource_unknown and the row becomes unknown.",
           "async": true,
-          "params": [{"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
+          "params": [{"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The provider's id of the sandbox, as the resource ledger recorded it."}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before reaching the provider."}],
           "returns": {"result": {"$ref": "#/types/SandboxSession"}, "errors": ["stale_epoch", "cleanup_claim_lost", "not_found", "resource_unknown", "unavailable"]}
         },
         "release": {
@@ -2595,7 +2720,7 @@
           "py": "release",
           "doc": "Release a snapshot by its durable ref (ledger row releasing). released or already_gone (the provider proves it no longer exists) → released. An error → release_failed, retried by the next gc, never dropped. Sandboxes are released with SandboxSession.close. v0.1 has no retention holds: a snapshot lives until the provider's declared expiry, and restoring an expired one is snapshot_expired.",
           "async": true,
-          "params": [{"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
+          "params": [{"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The snapshot's provider id, as the resource ledger recorded it."}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before the release call: the owner's lease, or gc's cleanup claim."}],
           "returns": {"result": {"enum": ["released", "already_gone"]}, "errors": ["stale_epoch", "cleanup_claim_lost", "release_failed", "unavailable"]}
         }
       },
@@ -2608,7 +2733,7 @@
       "variants": [
         {
           "object": {
-            "kind": {"type": {"literal": "owner"}, "required": true},
+            "kind": {"type": {"literal": "owner"}, "required": true, "doc": "\"owner\": the owning branch's lease holder dispatches this operation."},
             "branch_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true, "doc": "The branch that owns the resource (its resource-ledger owner)."},
             "epoch": {"type": {"prim": "integer"}, "required": true, "doc": "The owner's lease epoch this operation is dispatched under."}
           },
@@ -2616,8 +2741,8 @@
         },
         {
           "object": {
-            "kind": {"type": {"literal": "cleanup"}, "required": true},
-            "resource_id": {"type": {"prim": "string"}, "required": true},
+            "kind": {"type": {"literal": "cleanup"}, "required": true, "doc": "\"cleanup\": gc dispatches this operation under a cleanup claim, with no branch lease."},
+            "resource_id": {"type": {"prim": "string"}, "required": true, "doc": "The id of the resource ledger row gc is cleaning up."},
             "claim": {"type": {"prim": "string"}, "required": true, "doc": "The cleanup claim token gc wrote on the resources row (cleanup_claim) by compare-and-set."}
           },
           "casing": "wire"
@@ -2647,21 +2772,22 @@
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "provider": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true},
-        "egress": {"type": {"enum": ["enforced", "unenforced"]}, "required": true},
+        "provider": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true, "doc": "The provider's name: lowercase letters, digits and underscores (for example e2b, daytona, modal). Recovery and gc resolve a ledger row only with the adapter of the same provider."},
+        "egress": {"type": {"enum": ["enforced", "unenforced"]}, "required": true, "doc": "\"enforced\": the sandbox can deny all outbound network. \"unenforced\": it can't, so the agent must opt in with egress \"unenforced\", and stub-mode forks and saved cases refuse it."},
         "capture_classes": {
           "type": {
             "array": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_snapshot/properties/data/properties/capture_class"}
           },
-          "required": true
+          "required": true,
+          "doc": "What a snapshot can capture: filesystem, filesystem_and_processes or full_vm. Recorded when the thread starts."
         },
-        "browser": {"type": {"enum": ["none", "headless"]}, "required": true},
-        "desktop": {"type": {"enum": ["none", "native", "image"]}, "required": true},
+        "browser": {"type": {"enum": ["none", "headless"]}, "required": true, "doc": "\"headless\" when the sandbox image can run a headless browser, \"none\" otherwise."},
+        "desktop": {"type": {"enum": ["none", "native", "image"]}, "required": true, "doc": "\"native\" or \"image\" when the sandbox has a desktop the computer tools can drive, \"none\" otherwise. The agent's computer option needs one of the first two."},
         "lookup": {
           "type": {
             "object": {
-              "create": {"type": {"$ref": "#/types/LookupCapability"}, "required": true},
-              "snapshot": {"type": {"$ref": "#/types/LookupCapability"}, "required": true}
+              "create": {"type": {"$ref": "#/types/LookupCapability"}, "required": true, "doc": "Whether Sandbox.lookup can find a sandbox whose create or restore response was lost: none, nonfinal or final."},
+              "snapshot": {"type": {"$ref": "#/types/LookupCapability"}, "required": true, "doc": "Whether Sandbox.lookupSnapshot can find a snapshot whose capture response was lost: none, nonfinal or final."}
             }
           },
           "required": true,
@@ -2672,7 +2798,8 @@
           "required": true,
           "doc": "Whether terminate can confirm a process group is gone. unconfirmed: every sandbox_local timeout or crash parks."
         }
-      }
+      },
+      "doc": "What a sandbox adapter declares about itself: its provider name, whether it enforces egress, what its snapshots capture, browser and desktop support, which lost operations it can look up, and whether terminate can confirm a process is gone."
     },
     "SandboxSession": {
       "kind": "interface",
@@ -2685,9 +2812,9 @@
           "doc": "A timeout kills the whole process group.",
           "async": true,
           "params": [
-            {"name": "command", "kind": "positional", "type": {"array": {"prim": "string"}}, "required": true},
-            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true},
-            {"name": "cwd", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "/workspace"},
+            {"name": "command", "kind": "positional", "type": {"array": {"prim": "string"}}, "required": true, "doc": "The program and its arguments, run directly as argv, not as a shell string. Pass [\"/bin/sh\", \"-c\", script] to use a shell."},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before starting the process."},
+            {"name": "cwd", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "/workspace", "doc": "The absolute working directory inside the sandbox. A path outside the sandbox tree is invalid_path."},
             {
               "name": "env",
               "kind": "option",
@@ -2700,9 +2827,10 @@
               "name": "timeout_ms",
               "kind": "option",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
-              "required": false
+              "required": false,
+              "doc": "Deadline in milliseconds. The framework's sandbox layer enforces it: once it passes, the call ends as timeout and the process group is terminated. When omitted, the command has no time limit."
             },
-            {"name": "stdin", "kind": "option", "type": {"prim": "bytes"}, "required": false},
+            {"name": "stdin", "kind": "option", "type": {"prim": "bytes"}, "required": false, "doc": "Bytes fed to the process's standard input. When omitted, standard input is empty (/dev/null)."},
             {
               "name": "process_key",
               "kind": "option",
@@ -2718,7 +2846,7 @@
           "py": "terminate",
           "doc": "Kill the process group started with this process_key and confirm it is gone. terminated or already_exited → tool_result{origin: interrupted}. unknown or an error → the effect parks. Always unknown when info.termination is unconfirmed.",
           "async": true,
-          "params": [{"name": "process_key", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
+          "params": [{"name": "process_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The process_key the process group was started with in exec."}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before the kill."}],
           "returns": {"result": {"enum": ["terminated", "already_exited", "unknown"]}, "errors": ["stale_epoch", "cleanup_claim_lost", "unavailable"]}
         },
         "upload": {
@@ -2726,31 +2854,33 @@
           "py": "upload",
           "async": true,
           "params": [
-            {"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "data", "kind": "positional", "type": {"prim": "bytes"}, "required": true},
-            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}
+            {"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The absolute file path inside the sandbox. A path outside the sandbox tree is invalid_path."},
+            {"name": "data", "kind": "positional", "type": {"prim": "bytes"}, "required": true, "doc": "The file's complete contents."},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before writing."}
           ],
           "returns": {
             "result": {"prim": "void"},
             "errors": ["stale_epoch", "cleanup_claim_lost", "invalid_path", "permission_denied", "is_directory", "too_large", "unavailable"]
-          }
+          },
+          "doc": "Write bytes to a file in the sandbox, creating or replacing it."
         },
         "download": {
           "ts": "download",
           "py": "download",
           "async": true,
-          "params": [{"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
+          "params": [{"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The absolute file path inside the sandbox. A missing file is not_found; a path outside the sandbox tree is invalid_path."}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before reading."}],
           "returns": {
             "result": {"prim": "bytes"},
             "errors": ["stale_epoch", "cleanup_claim_lost", "not_found", "invalid_path", "permission_denied", "is_directory", "too_large", "unavailable"]
-          }
+          },
+          "doc": "Read a file's bytes from the sandbox."
         },
         "snapshot": {
           "ts": "snapshot",
           "py": "snapshot",
           "doc": "Freeze or stop tracked processes, capture, thaw. Returns only once durable and restorable.",
           "async": true,
-          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The key the runtime wrote to the resource ledger before this call. Tag the snapshot with it so lookupSnapshot can find it if the response is lost."}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before capturing."}],
           "returns": {
             "result": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_snapshot/properties/data"},
             "errors": ["stale_epoch", "cleanup_claim_lost", "not_quiescent", "unavailable", "timeout"]
@@ -2761,10 +2891,11 @@
           "py": "close",
           "doc": "Release the sandbox (ledger row releasing). ok → released. An error → release_failed, retried by the next gc, never dropped.",
           "async": true,
-          "params": [{"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
+          "params": [{"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before releasing: the owner's lease, or gc's cleanup claim."}],
           "returns": {"result": {"prim": "void"}, "errors": ["stale_epoch", "cleanup_claim_lost", "release_failed", "unavailable"]}
         }
-      }
+      },
+      "doc": "One live sandbox, as an adapter returns it from create, restore or attach: run commands, move files, snapshot and close it. Every method takes the SandboxContext to fence at the provider call."
     },
     "ExecOutput": {
       "kind": "object",
@@ -2780,10 +2911,10 @@
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "exit_code": {"type": {"prim": "integer"}, "required": true},
+        "exit_code": {"type": {"prim": "integer"}, "required": true, "doc": "The process's exit code: 0 for success, anything else for failure."},
         "stdout": {"type": {"prim": "string"}, "required": true, "doc": "Head and tail preview."},
         "stderr": {"type": {"prim": "string"}, "required": true, "doc": "Head and tail preview."},
-        "truncated": {"type": {"prim": "boolean"}, "required": true},
+        "truncated": {"type": {"prim": "boolean"}, "required": true, "doc": "true when stdout or stderr was longer than its preview; the complete output is then in full_output."},
         "full_output": {
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"},
           "required": false,
@@ -2796,9 +2927,9 @@
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "tenant_id": {"type": {"prim": "string"}, "required": true},
-        "agent": {"type": {"prim": "string"}, "required": true},
-        "scope": {"type": {"prim": "string"}, "required": true}
+        "tenant_id": {"type": {"prim": "string"}, "required": true, "doc": "The tenant of the verified principal the run acts for. A provider must never return or change records from another tenant."},
+        "agent": {"type": {"prim": "string"}, "required": true, "doc": "The agent's name. Memory and knowledge are kept apart per agent within a tenant."},
+        "scope": {"type": {"prim": "string"}, "required": true, "doc": "Whose records these are within the agent: for memory, the principal as issuer/subject (a / inside either part is escaped); for knowledge, the fixed value knowledge, shared by all of the agent's users."}
       },
       "doc": "From host config and the verified principal. Never a tool argument."
     },
@@ -2806,8 +2937,8 @@
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "namespace": {"type": {"prim": "string"}, "required": true},
-        "record_id": {"type": {"prim": "string"}, "required": true}
+        "namespace": {"type": {"prim": "string"}, "required": true, "doc": "The host's namespace for the record (memory or knowledge). Store it as given and return it unchanged on every hit."},
+        "record_id": {"type": {"prim": "string"}, "required": true, "doc": "The id the host issued for this record within its scope. Store it as given and return it unchanged; a hit whose binding the host didn't issue to the calling scope is dropped and audited."}
       },
       "doc": "Issued by the host; the provider stores it opaquely."
     },
@@ -2815,37 +2946,41 @@
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "text": {"type": {"prim": "string"}, "required": true},
-        "origin": {"type": {"enum": ["user", "tool_output", "model", "host"]}, "required": true},
+        "text": {"type": {"prim": "string"}, "required": true, "doc": "The fact to remember, as the model wrote it in save_memory. Non-empty."},
+        "origin": {"type": {"enum": ["user", "tool_output", "model", "host"]}, "required": true, "doc": "Who the fact comes from, decided by the host from the log, never by the model: user when a verified principal started the turn and nothing untrusted is in context, tool_output when untrusted content is in context, model otherwise. host is for records the host writes itself."},
         "provenance": {
           "type": {
             "object": {
-              "thread_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true},
-              "event_ids": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/EventId"}}, "required": true}
+              "thread_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true, "doc": "The thread whose run saved the fact."},
+              "event_ids": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/EventId"}}, "required": true, "doc": "The log events the save was based on. May be empty."}
             },
             "casing": "wire"
           },
-          "required": true
+          "required": true,
+          "doc": "Where in the log the fact came from: the thread and the events behind the save."
         },
         "binding": {"type": {"$ref": "#/types/Binding"}, "required": true}
-      }
+      },
+      "doc": "One fact to store, as the framework hands it to MemoryProvider.remember: the text, where it came from, the log events behind it, and the host-issued binding."
     },
     "RecordRef": {
       "kind": "object",
       "casing": "wire",
-      "fields": {"id": {"type": {"prim": "string"}, "required": true}, "version": {"type": {"prim": "string"}, "required": true}}
+      "fields": {"id": {"type": {"prim": "string"}, "required": true, "doc": "The provider's id for the record, non-empty. The model passes it to forget_memory; local_memory derives it from the write's key, so a retried save returns the same id."}, "version": {"type": {"prim": "string"}, "required": true, "doc": "The provider's version of the record, non-empty. local_memory always returns \"1\" (records never change)."}},
+      "doc": "What MemoryProvider.remember returns: the stored record's id and version."
     },
     "MemoryHit": {
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "id": {"type": {"prim": "string"}, "required": true},
-        "version": {"type": {"prim": "string"}, "required": true},
-        "text": {"type": {"prim": "string"}, "required": true},
-        "score": {"type": {"prim": "number"}, "required": true},
-        "origin": {"type": {"enum": ["user", "tool_output", "model", "host"]}, "required": true},
+        "id": {"type": {"prim": "string"}, "required": true, "doc": "The record's id, the same one remember returned. The model can pass it to forget_memory."},
+        "version": {"type": {"prim": "string"}, "required": true, "doc": "The record's version, the same one remember returned."},
+        "text": {"type": {"prim": "string"}, "required": true, "doc": "The stored fact."},
+        "score": {"type": {"prim": "number"}, "required": true, "doc": "How well the record matches the query; higher is better. The scale is the provider's own (local_memory uses the negated FTS5 bm25 rank)."},
+        "origin": {"type": {"enum": ["user", "tool_output", "model", "host"]}, "required": true, "doc": "The origin the record was saved with (user, tool_output, model or host), returned unchanged."},
         "binding": {"type": {"$ref": "#/types/Binding"}, "required": true}
-      }
+      },
+      "doc": "One recalled memory, as a provider returns it from recall. The framework parses it, keeps it only if its binding belongs to the calling scope, and shows it to the model as untrusted reference."
     },
     "MemoryProvider": {
       "kind": "interface",
@@ -2856,42 +2991,46 @@
           "py": "remember",
           "async": true,
           "params": [
-            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
-            {"name": "record", "kind": "positional", "type": {"$ref": "#/types/MemoryRecord"}, "required": true},
-            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true}
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true, "doc": "The scope to store the record in, issued by the host."},
+            {"name": "record", "kind": "positional", "type": {"$ref": "#/types/MemoryRecord"}, "required": true, "doc": "The record to store, binding included. Store the binding as given."},
+            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The write's idempotency key (the save_memory call's effect key). Dedup on it: a retry after a crash sends the same key."}
           ],
-          "returns": {"result": {"$ref": "#/types/RecordRef"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]}
+          "returns": {"result": {"$ref": "#/types/RecordRef"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]},
+          "doc": "Store one record in the scope and return its id and version. The same key with the same record is a no-op that returns the same reference; the same key with a different record is invalid."
         },
         "recall": {
           "ts": "recall",
           "py": "recall",
           "async": true,
           "params": [
-            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
-            {"name": "query", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true, "doc": "The scope to search, issued by the host."},
+            {"name": "query", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The search text, as the model wrote it in search_memory."},
             {
               "name": "k",
               "kind": "option",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
               "required": false,
-              "default": 5
+              "default": 5,
+              "doc": "The most hits to return, a positive integer. search_memory passes the model's k (1 to 20, 5 when it gives none), and the framework also caps the total hit text at 16 KB."
             }
           ],
           "returns": {
             "result": {"array": {"$ref": "#/types/MemoryHit"}},
             "errors": ["unavailable", "timeout", "invalid", "scope_violation"]
-          }
+          },
+          "doc": "Return the records in the scope that best match a query, best first. Return only records from this scope; the framework drops and audits any other."
         },
         "forget": {
           "ts": "forget",
           "py": "forget",
           "async": true,
           "params": [
-            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
-            {"name": "id", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true}
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true, "doc": "The scope the record is in, issued by the host."},
+            {"name": "id", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The record's id, as remember or recall returned it."},
+            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The delete's idempotency key (the forget_memory call's effect key). A retry sends the same key."}
           ],
-          "returns": {"result": {"prim": "void"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]}
+          "returns": {"result": {"prim": "void"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]},
+          "doc": "Delete one record from the scope. Forgetting a record twice succeeds; a record that isn't in the scope is invalid."
         }
       },
       "properties": {
@@ -2900,52 +3039,57 @@
           "required": false,
           "doc": "The effect class of save_memory and forget_memory with this provider. Absent: unguarded. idempotent requires dedup_window_ms: the provider dedups on the key within it."
         },
-        "dedup_window_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false}
-      }
+        "dedup_window_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false, "doc": "How long, in milliseconds, the provider dedups a write on its key. Required when write_effect is idempotent; otherwise leave it out. local_memory keeps keys forever."}
+      },
+      "doc": "Long-term memory storage behind save_memory, search_memory and forget_memory. A provider only stores and searches: the framework issues bindings, checks scope, bounds and logs every call, and presents hits as untrusted reference. Build one with local_memory() or an adapter factory."
     },
     "KnowledgeSource": {
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "source_id": {"type": {"prim": "string"}, "required": true},
-        "media_type": {"type": {"prim": "string"}, "required": true},
-        "content": {"type": {"prim": "bytes"}, "required": true},
-        "location": {"type": {"prim": "string"}, "required": false},
+        "source_id": {"type": {"prim": "string"}, "required": true, "doc": "The document's id, non-empty; it becomes the doc_id. For local_knowledge it is the file path."},
+        "media_type": {"type": {"prim": "string"}, "required": true, "doc": "The content's media type, non-empty, such as text/markdown. The host guesses it from the file name and falls back to text/plain; local_knowledge accepts only text/* and application/json."},
+        "content": {"type": {"prim": "bytes"}, "required": true, "doc": "The document's bytes."},
+        "location": {"type": {"prim": "string"}, "required": false, "doc": "Where the document came from, such as its file path, kept for reference. Omitted when there is none."},
         "binding": {"type": {"$ref": "#/types/Binding"}, "required": true}
-      }
+      },
+      "doc": "One document to admit into a knowledge base, as the framework hands it to KnowledgeProvider.ingest."
     },
     "DocVersion": {
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "doc_id": {"type": {"prim": "string"}, "required": true},
-        "version": {"type": {"prim": "string"}, "required": true},
-        "content_sha256": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Sha256"}, "required": true},
+        "doc_id": {"type": {"prim": "string"}, "required": true, "doc": "The document's id (the source's source_id)."},
+        "version": {"type": {"prim": "string"}, "required": true, "doc": "The admitted version's id, non-empty. local_knowledge uses the first 16 hex characters of the content's sha256, so the same bytes are the same version."},
+        "content_sha256": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Sha256"}, "required": true, "doc": "The sha256 of the admitted bytes, lowercase hex."},
         "revision": {"type": {"prim": "integer"}, "required": true, "doc": "The store's monotonic revision after this ingest."}
-      }
+      },
+      "doc": "What KnowledgeProvider.ingest returns: the admitted version of a document and the store revision after the ingest."
     },
     "KnowledgeHit": {
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "doc_id": {"type": {"prim": "string"}, "required": true},
-        "version": {"type": {"prim": "string"}, "required": true},
+        "doc_id": {"type": {"prim": "string"}, "required": true, "doc": "The document the passage is from."},
+        "version": {"type": {"prim": "string"}, "required": true, "doc": "The document version the passage is from."},
         "span": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}, "required": true},
-        "text": {"type": {"prim": "string"}, "required": true},
-        "score": {"type": {"prim": "number"}, "required": true},
+        "text": {"type": {"prim": "string"}, "required": true, "doc": "The passage's text."},
+        "score": {"type": {"prim": "number"}, "required": true, "doc": "How well the passage matches the query; higher is better. The scale is the provider's own (local_knowledge uses the negated FTS5 bm25 rank)."},
         "binding": {"type": {"$ref": "#/types/Binding"}, "required": true}
-      }
+      },
+      "doc": "One matching passage, as a provider returns it from search. The framework parses it, keeps it only if its binding belongs to the calling scope, and shows it to the model as an untrusted excerpt it can cite."
     },
     "Doc": {
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "doc_id": {"type": {"prim": "string"}, "required": true},
-        "version": {"type": {"prim": "string"}, "required": true},
-        "media_type": {"type": {"prim": "string"}, "required": true},
+        "doc_id": {"type": {"prim": "string"}, "required": true, "doc": "The document's id."},
+        "version": {"type": {"prim": "string"}, "required": true, "doc": "The version asked for."},
+        "media_type": {"type": {"prim": "string"}, "required": true, "doc": "The document's media type, as it was ingested."},
         "content_ref": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"}, "required": true},
         "binding": {"type": {"$ref": "#/types/Binding"}, "required": true}
-      }
+      },
+      "doc": "One admitted document version, as KnowledgeProvider.get returns it. Its bytes are an artifact in the store, named by content_ref."
     },
     "KnowledgeProvider": {
       "kind": "interface",
@@ -2956,64 +3100,69 @@
           "py": "ingest",
           "async": true,
           "params": [
-            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
-            {"name": "source", "kind": "positional", "type": {"$ref": "#/types/KnowledgeSource"}, "required": true},
-            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true}
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true, "doc": "The scope to admit the document into, issued by the host."},
+            {"name": "source", "kind": "positional", "type": {"$ref": "#/types/KnowledgeSource"}, "required": true, "doc": "The document, binding included. Store the binding as given."},
+            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The ingest's idempotency key, unique to this scope and content. Dedup on it."}
           ],
-          "returns": {"result": {"$ref": "#/types/DocVersion"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]}
+          "returns": {"result": {"$ref": "#/types/DocVersion"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]},
+          "doc": "Admit one document version into the scope and return it with the new store revision. The same key with the same content returns the earlier version; the same key with other content is invalid."
         },
         "remove": {
           "ts": "remove",
           "py": "remove",
           "async": true,
           "params": [
-            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
-            {"name": "doc_id", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true}
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true, "doc": "The scope the document is in, issued by the host."},
+            {"name": "doc_id", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The document to remove."},
+            {"name": "key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The remove's idempotency key. A retry sends the same key."}
           ],
-          "returns": {"result": {"prim": "void"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]}
+          "returns": {"result": {"prim": "void"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]},
+          "doc": "Remove a document from the scope from the next revision on; searches as of an earlier revision still see it. A retried key is a no-op. No built-in tool calls it today."
         },
         "search": {
           "ts": "search",
           "py": "search",
           "async": true,
           "params": [
-            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
-            {"name": "query", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true, "doc": "The scope to search, issued by the host."},
+            {"name": "query", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The search text, as the model wrote it in search_knowledge."},
             {
               "name": "k",
               "kind": "option",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"},
               "required": false,
-              "default": 5
+              "default": 5,
+              "doc": "The most hits to return, a positive integer. search_knowledge passes the model's k (1 to 20, 5 when it gives none), and the framework also caps the total hit text at 16 KB."
             },
-            {"name": "sources", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false},
+            {"name": "sources", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false, "doc": "Search only these documents, by doc_id (the source_id). Omitted or empty: search every document in the scope."},
             {
               "name": "as_of",
               "kind": "option",
               "type": {"prim": "integer"},
               "required": false,
-              "doc": "Search as of this revision (a pinned fork)."
+              "doc": "Search as of this store revision, a non-negative integer: a pinned fork passes the revision its snapshot recorded, so it sees the corpus its original run saw. Omitted: search the current revision."
             }
           ],
           "returns": {
             "result": {"array": {"$ref": "#/types/KnowledgeHit"}},
             "errors": ["unavailable", "timeout", "invalid", "scope_violation"]
-          }
+          },
+          "doc": "Return the passages in the scope that best match a query, best first. Return only passages from this scope; the framework drops and audits any other."
         },
         "get": {
           "ts": "get",
           "py": "get",
           "async": true,
           "params": [
-            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true},
-            {"name": "doc_id", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "version", "kind": "positional", "type": {"prim": "string"}, "required": true}
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true, "doc": "The scope the document is in, issued by the host."},
+            {"name": "doc_id", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The document to get."},
+            {"name": "version", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The version to get, as ingest or a hit returned it."}
           ],
           "returns": {
             "result": {"$ref": "#/types/Doc"},
             "errors": ["not_found", "unavailable", "timeout", "invalid", "scope_violation"]
-          }
+          },
+          "doc": "Return one admitted document version, or not_found when the scope has no such version."
         },
         "revision": {
           "ts": "revision",
@@ -3021,11 +3170,12 @@
           "doc": "The store's current monotonic revision, recorded as snapshot.knowledge_revision at capture.",
           "async": true,
           "params": [
-            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true}
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true, "doc": "The scope asking, issued by the host. local_knowledge keeps one revision for the whole store and ignores it."}
           ],
           "returns": {"result": {"prim": "integer"}, "errors": ["unavailable", "timeout"]}
         }
-      }
+      },
+      "doc": "Knowledge-base storage behind search_knowledge. A provider only stores and searches: the host ingests documents at run setup, and the framework checks scope, bounds and logs every call, and presents hits as untrusted reference. Build one with local_knowledge() or an adapter factory."
     },
     "SearchBackend": {
       "kind": "interface",
@@ -3036,11 +3186,12 @@
           "py": "search",
           "async": true,
           "params": [
-            {"name": "query", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "allowed_domains", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false},
-            {"name": "blocked_domains", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false}
+            {"name": "query", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The search text, as the model wrote it in web_search."},
+            {"name": "allowed_domains", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false, "doc": "Return only hits on these hosts or their subdomains (a leading *. and case are ignored). Omitted or empty: no restriction."},
+            {"name": "blocked_domains", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false, "doc": "Drop hits on these hosts or their subdomains (a leading *. and case are ignored). Omitted or empty: block nothing."}
           ],
-          "returns": {"result": {"array": {"$ref": "#/types/SearchHit"}}, "errors": ["unavailable", "timeout"]}
+          "returns": {"result": {"array": {"$ref": "#/types/SearchHit"}}, "errors": ["unavailable", "timeout"]},
+          "doc": "Search the web for a query and return hits. The framework applies the domain filters again to what you return, parses every hit, and shows them to the model as untrusted reference."
         }
       },
       "doc": "A web_search backend adapter (Exa, Brave, Tavily)."
@@ -3049,17 +3200,18 @@
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "url": {"type": {"prim": "string"}, "required": true},
-        "title": {"type": {"prim": "string"}, "required": true},
-        "snippet": {"type": {"prim": "string"}, "required": true}
-      }
+        "url": {"type": {"prim": "string"}, "required": true, "doc": "The result's URL, non-empty. A hit whose URL has no host is dropped."},
+        "title": {"type": {"prim": "string"}, "required": true, "doc": "The page title, possibly empty."},
+        "snippet": {"type": {"prim": "string"}, "required": true, "doc": "A short excerpt from the page, possibly empty."}
+      },
+      "doc": "One web search result, as a SearchBackend returns it."
     },
     "ChannelAdapter": {
       "kind": "interface",
       "role": "protocol",
       "properties": {
         "agent": {"type": {"prim": "string"}, "required": true, "doc": "The host agent key this channel routes to."},
-        "capabilities": {"type": {"$ref": "#/types/ChannelCapabilities"}, "required": true},
+        "capabilities": {"type": {"$ref": "#/types/ChannelCapabilities"}, "required": true, "doc": "What the provider can do for delivery. The host reads lookup and dedup_window_ms to decide how an uncertain send is settled; the other flags are declarative."},
         "limits": {"type": {"map": {"prim": "integer"}}, "required": true, "doc": "Provider limits (message bytes, rate)."},
         "secrets": {
           "type": {"map": {"$ref": "#/types/Secret"}},
@@ -3072,22 +3224,25 @@
           "ts": "verify",
           "py": "verify",
           "async": false,
-          "params": [{"name": "raw", "kind": "positional", "type": {"$ref": "#/types/RawRequest"}, "required": true}],
-          "returns": {"result": {"$ref": "#/types/VerifiedDelivery"}, "errors": ["unverified"]}
+          "params": [{"name": "raw", "kind": "positional", "type": {"$ref": "#/types/RawRequest"}, "required": true, "doc": "The webhook exactly as received: lowercased header names and the body's exact bytes, which the signature covers."}],
+          "returns": {"result": {"$ref": "#/types/VerifiedDelivery"}, "errors": ["unverified"]},
+          "doc": "Checks the provider's signature over the raw webhook bytes and returns who sent it. Return unverified for anything that doesn't check out: the host answers 401 and stores nothing."
         },
         "parse": {
           "ts": "parse",
           "py": "parse",
           "async": false,
-          "params": [{"name": "raw", "kind": "positional", "type": {"$ref": "#/types/RawRequest"}, "required": true}],
-          "returns": {"result": {"array": {"$ref": "#/types/Inbound"}}, "errors": ["invalid"]}
+          "params": [{"name": "raw", "kind": "positional", "type": {"$ref": "#/types/RawRequest"}, "required": true, "doc": "The same webhook verify just accepted."}],
+          "returns": {"result": {"array": {"$ref": "#/types/Inbound"}}, "errors": ["invalid"]},
+          "doc": "Turns a verified webhook into its batch of inbound items, in order. Return invalid for a body you can't read: the host answers 400 and stores nothing."
         },
         "ack": {
           "ts": "ack",
           "py": "ack",
           "async": false,
-          "params": [{"name": "raw", "kind": "positional", "type": {"$ref": "#/types/RawRequest"}, "required": true}],
-          "returns": {"$ref": "#/types/RawResponse"}
+          "params": [{"name": "raw", "kind": "positional", "type": {"$ref": "#/types/RawRequest"}, "required": true, "doc": "The webhook being answered."}],
+          "returns": {"$ref": "#/types/RawResponse"},
+          "doc": "The synchronous reply to the provider (usually a 200, or the provider's URL challenge). The host sends it only after every item of the batch is stored."
         },
         "challenge": {
           "ts": "challenge",
@@ -3095,7 +3250,7 @@
           "doc": "A provider's GET subscription check on the webhook URL (WhatsApp hub.mode/hub.verify_token/hub.challenge). Pure: compares the token with the adapter's secret in constant time. unverified answers 401 and nothing is stored.",
           "async": false,
           "optional": true,
-          "params": [{"name": "query", "kind": "positional", "type": {"map": {"prim": "string"}}, "required": true}],
+          "params": [{"name": "query", "kind": "positional", "type": {"map": {"prim": "string"}}, "required": true, "doc": "The GET request's query parameters by name, for example hub.mode, hub.verify_token and hub.challenge."}],
           "returns": {"result": {"$ref": "#/types/RawResponse"}, "errors": ["unverified"]}
         },
         "render": {
@@ -3108,7 +3263,8 @@
               "name": "event",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Event"},
-              "required": true
+              "required": true,
+              "doc": "A log event to reply with: a turn's final model_response or an open approval card. Return one op per message to send, or none."
             }
           ],
           "returns": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"}}
@@ -3122,12 +3278,14 @@
               "name": "op",
               "kind": "positional",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"},
-              "required": true
+              "required": true,
+              "doc": "One op from render, with the conversation's address, installation_id and last_inbound_at added by the host. It is the channel_send tool call's recorded input."
             },
-            {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "credentials", "kind": "positional", "type": {"map": {"prim": "string"}}, "required": true}
+            {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The send's effect key, <branch_id>:<call_id>. Embed it where the platform allows, so lookup and provider dedup can find this send again."},
+            {"name": "credentials", "kind": "positional", "type": {"map": {"prim": "string"}}, "required": true, "doc": "The values of the adapter's secrets, by the same names, resolved by the host on the host side."}
           ],
-          "returns": {"$ref": "#/types/DeliveryOutcome"}
+          "returns": {"$ref": "#/types/DeliveryOutcome"},
+          "doc": "Sends one op to the provider and says what is known about delivery. Answer definite_not_sent only when you can prove nothing reached the provider; any doubt is outcome_unknown, which the host reconciles instead of re-sending."
         },
         "lookup": {
           "ts": "lookup",
@@ -3135,8 +3293,8 @@
           "doc": "found carries the platform_ref. op is the op perform was given for this key (from its recorded tool_call), since a platform lookup is scoped to its conversation.",
           "async": true,
           "params": [
-            {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "op", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"}, "required": true}
+            {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The effect key perform was given for the send being reconciled."},
+            {"name": "op", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"}, "required": true, "doc": "The op perform was given for this key, read back from its recorded tool_call, so the lookup can search the right conversation."}
           ],
           "returns": {"$ref": "#/types/LookupResult", "args": [{"prim": "string"}]}
         }
@@ -3148,39 +3306,43 @@
       "casing": "wire",
       "fields": {
         "lookup": {"type": {"$ref": "#/types/LookupCapability"}, "required": true, "doc": "Delivery lookup by effect key."},
-        "buttons": {"type": {"prim": "boolean"}, "required": true},
-        "edits": {"type": {"prim": "boolean"}, "required": true},
-        "files": {"type": {"prim": "boolean"}, "required": true},
-        "direct_messages": {"type": {"prim": "boolean"}, "required": true},
-        "dedup_window_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false},
-        "delivery": {"type": {"enum": ["reliable", "best_effort"]}, "required": false, "default": "reliable"}
-      }
+        "buttons": {"type": {"prim": "boolean"}, "required": true, "doc": "true when the provider can show interactive buttons (for example approval cards). Declarative: the host doesn't read it today."},
+        "edits": {"type": {"prim": "boolean"}, "required": true, "doc": "true when a sent message can be edited later. Declarative: the host doesn't read it today."},
+        "files": {"type": {"prim": "boolean"}, "required": true, "doc": "true when the provider accepts file uploads. Declarative: the host doesn't read it today."},
+        "direct_messages": {"type": {"prim": "boolean"}, "required": true, "doc": "true when the provider supports one-to-one conversations. Declarative: the host doesn't read it today."},
+        "dedup_window_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false, "doc": "Milliseconds during which the provider drops a re-send under the same effect key. Inside it, an uncertain send is re-sent safely; omitted means the provider doesn't deduplicate, so the host looks the send up or parks it."},
+        "delivery": {"type": {"enum": ["reliable", "best_effort"]}, "required": false, "default": "reliable", "doc": "reliable or best_effort: whether the provider promises delivery once it accepts a message. Declarative: the host doesn't read it today."}
+      },
+      "doc": "What a channel adapter declares about its provider."
     },
     "RawRequest": {
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "headers": {"type": {"map": {"prim": "string"}}, "required": true},
-        "body": {"type": {"prim": "bytes"}, "required": true}
-      }
+        "headers": {"type": {"map": {"prim": "string"}}, "required": true, "doc": "Request headers by name, names lowercased."},
+        "body": {"type": {"prim": "bytes"}, "required": true, "doc": "The body's exact bytes, unparsed, so a signature over them can be checked."}
+      },
+      "doc": "A webhook as the host received it."
     },
     "RawResponse": {
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "status": {"type": {"prim": "integer"}, "required": true},
-        "headers": {"type": {"map": {"prim": "string"}}, "required": true},
-        "body": {"type": {"prim": "bytes"}, "required": true}
-      }
+        "status": {"type": {"prim": "integer"}, "required": true, "doc": "The HTTP status code, for example 200."},
+        "headers": {"type": {"map": {"prim": "string"}}, "required": true, "doc": "Response headers by name."},
+        "body": {"type": {"prim": "bytes"}, "required": true, "doc": "The response body's bytes (may be empty)."}
+      },
+      "doc": "An HTTP reply an adapter hands back to the host to send."
     },
     "VerifiedDelivery": {
       "kind": "object",
       "casing": "wire",
       "fields": {
-        "tenant": {"type": {"prim": "string"}, "required": true},
-        "installation_id": {"type": {"prim": "string"}, "required": true},
-        "delivery_id": {"type": {"prim": "string"}, "required": true}
-      }
+        "tenant": {"type": {"prim": "string"}, "required": true, "doc": "The tenant the webhook belongs to, a non-empty string. The host stores the batch in this tenant and refuses an item whose sender is in another tenant."},
+        "installation_id": {"type": {"prim": "string"}, "required": true, "doc": "The app installation that received the webhook, a non-empty string. It scopes the inbox dedup keys and the replies."},
+        "delivery_id": {"type": {"prim": "string"}, "required": true, "doc": "The provider's id for this delivery, a non-empty string, recorded with each item."}
+      },
+      "doc": "What a provider's signature proves about a webhook: whose workspace or installation sent it."
     },
     "Inbound": {
       "kind": "union",
@@ -3189,7 +3351,7 @@
       "variants": [
         {
           "object": {
-            "kind": {"type": {"literal": "message"}, "required": true},
+            "kind": {"type": {"literal": "message"}, "required": true, "doc": "\"message\": user input that starts a run on the conversation's thread."},
             "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
             "address": {"type": {"prim": "string"}, "required": true, "doc": "Conversation key; the host maps it to a thread."},
             "item_key": {"type": {"prim": "string"}, "required": true, "doc": "Inbox dedup key, derived only from signed content (spec/schema/README.md, Channel replies)."},
@@ -3199,27 +3361,28 @@
         },
         {
           "object": {
-            "kind": {"type": {"literal": "decision"}, "required": true},
+            "kind": {"type": {"literal": "decision"}, "required": true, "doc": "\"decision\": an answer to an approval card."},
             "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
             "address": {"type": {"prim": "string"}, "required": true, "doc": "Conversation key; the host maps it to a thread."},
             "item_key": {"type": {"prim": "string"}, "required": true, "doc": "Inbox dedup key, derived only from signed content (spec/schema/README.md, Channel replies)."},
             "challenge_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Uuid"}, "required": true},
-            "decision": {"type": {"enum": ["grant", "deny"]}, "required": true}
+            "decision": {"type": {"enum": ["grant", "deny"]}, "required": true, "doc": "grant approves the challenged action; deny refuses it. It applies only if the sender may approve on that thread."}
           },
           "casing": "wire"
         },
         {
           "object": {
-            "kind": {"type": {"literal": "control"}, "required": true},
+            "kind": {"type": {"literal": "control"}, "required": true, "doc": "\"control\": a command that stops the conversation's run."},
             "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
             "address": {"type": {"prim": "string"}, "required": true, "doc": "Conversation key; the host maps it to a thread."},
             "item_key": {"type": {"prim": "string"}, "required": true, "doc": "Inbox dedup key, derived only from signed content (spec/schema/README.md, Channel replies)."},
-            "command": {"type": {"enum": ["cancel", "stop_when_idle"]}, "required": true}
+            "command": {"type": {"enum": ["cancel", "stop_when_idle"]}, "required": true, "doc": "cancel stops the run and its children now; stop_when_idle stops it once the current work finishes. The TypeScript host consumes stop_when_idle without acting on it today."}
           },
           "casing": "wire"
         },
-        {"object": {"kind": {"type": {"literal": "ignore"}, "required": true}}, "casing": "wire"}
-      ]
+        {"object": {"kind": {"type": {"literal": "ignore"}, "required": true, "doc": "\"ignore\": delivered but not for the agent (the bot's own message, a reaction, a status update). The host drops it."}}, "casing": "wire"}
+      ],
+      "doc": "One item of a verified webhook batch: a message, an approval decision, a control command, or something to ignore."
     },
     "DeliveryOutcome": {
       "kind": "union",
@@ -3228,20 +3391,21 @@
       "variants": [
         {
           "object": {
-            "status": {"type": {"literal": "sent"}, "required": true},
-            "platform_ref": {"type": {"prim": "string"}, "required": true}
+            "status": {"type": {"literal": "sent"}, "required": true, "doc": "\"sent\": the provider accepted the message."},
+            "platform_ref": {"type": {"prim": "string"}, "required": true, "doc": "The provider's id for the sent message, a non-empty string. The host records it as the send's receipt."}
           },
           "casing": "wire"
         },
         {
           "object": {
-            "status": {"type": {"literal": "delivery_error"}, "required": true},
-            "kind": {"type": {"enum": ["rate_limited", "transient", "permanent"]}, "required": true},
-            "sent": {"type": {"enum": ["definite_not_sent", "outcome_unknown"]}, "required": true}
+            "status": {"type": {"literal": "delivery_error"}, "required": true, "doc": "\"delivery_error\": the send failed or its outcome is unknown."},
+            "kind": {"type": {"enum": ["rate_limited", "transient", "permanent"]}, "required": true, "doc": "rate_limited, transient or permanent. When nothing was sent, the TypeScript host retries rate_limited and transient up to 3 attempts in total; the Python host, and either host on permanent, records the reply as not sent."},
+            "sent": {"type": {"enum": ["definite_not_sent", "outcome_unknown"]}, "required": true, "doc": "definite_not_sent when you can prove nothing reached the provider; outcome_unknown otherwise. An unknown outcome is never re-sent: the host reconciles it by dedup window or lookup, else parks it."}
           },
           "casing": "wire"
         }
-      ]
+      ],
+      "doc": "What perform knows about a send: sent, or a delivery error that says whether anything may have reached the provider."
     },
     "Host": {
       "kind": "interface",
@@ -3272,7 +3436,7 @@
           "doc": "POST /v1/runs. Makes the user_input durable together with the idempotency key and returns; the run proceeds in the host. The key binds tenant, the full principal (issuer, tenant, subject), the operation and the request hash: the same key, principal and request replays the same receipt and starts nothing; a different request is idempotency_key_reused; a different principal in the same tenant is idempotency_key_principal_mismatch, and never sees the other principal's receipt.",
           "async": true,
           "params": [
-            {"name": "request", "kind": "positional", "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/StartRunRequest"}, "required": true},
+            {"name": "request", "kind": "positional", "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/StartRunRequest"}, "required": true, "doc": "What to run: the host agent's key and the input, and optionally the thread and branch to continue and a run budget."},
             {
               "name": "principal",
               "kind": "option",
@@ -3280,7 +3444,7 @@
               "required": true,
               "doc": "The authenticated caller, never the local-operator default."
             },
-            {"name": "idempotency_key", "kind": "option", "type": {"prim": "string"}, "required": true}
+            {"name": "idempotency_key", "kind": "option", "type": {"prim": "string"}, "required": true, "doc": "The client's key for this request, 1 to 255 characters (the Idempotency-Key header over HTTP). Retrying with the same key, principal and request returns the first receipt and starts nothing new."}
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/RunAccepted"},
@@ -3293,9 +3457,9 @@
           "doc": "GET /v1/threads/{thread_id}/runs/{run_id}/events. Follows one run from the log: its stream events, then one result message naming run_id. Takes no input and starts nothing.",
           "async": true,
           "params": [
-            {"name": "thread_id", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true},
-            {"name": "run_id", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EventId"}, "required": true},
-            {"name": "principal", "kind": "option", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
+            {"name": "thread_id", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"}, "required": true, "doc": "The thread the run belongs to."},
+            {"name": "run_id", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EventId"}, "required": true, "doc": "The run to follow: run_id from startRun's receipt (its user_input event id). A run not found in this tenant's thread is not_found."},
+            {"name": "principal", "kind": "option", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true, "doc": "The authenticated caller. It must belong to the thread's tenant; another tenant's thread is not_found."},
             {
               "name": "after_seq",
               "kind": "option",

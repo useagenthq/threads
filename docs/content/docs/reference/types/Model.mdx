@@ -10,7 +10,9 @@ One transport attempt per send; SDK retries off. Every send and lookup awaits co
 
 ## Properties
 
-<Field name="info" type={"ModelInfo"} required />
+<Field name="info" type={"ModelInfo"} required>
+  What this model is and can do: its name, adapter, params, limits, accepted inputs, hosted tools and lookup capability. Read when the agent is pinned.
+</Field>
 
 ## Methods
 
@@ -41,15 +43,15 @@ def send(
 </Tabs>
 
 <Field name="request" type={"ModelRequest"} required>
-  See [ModelRequest](/docs/reference/types/ModelRequest).
+  The attempt to send: its client request id and the exact rendered request bytes. See [ModelRequest](/docs/reference/types/ModelRequest).
 </Field>
 
 <Field name="context" type={"ModelContext"} required>
-  See [ModelContext](/docs/reference/types/ModelContext).
+  The fencing context for this attempt. Await context.fence() at the real network send point and send nothing if it fails; use read and put for artifact bytes. See [ModelContext](/docs/reference/types/ModelContext).
 </Field>
 
 <Field name="signal" type={"AbortSignal"}>
-  TypeScript only.
+  TypeScript only. TypeScript only. The run's signal option, passed through when the caller gave one; hand it to the provider SDK so an abort stops the request. Omitted when the run has no signal.
 </Field>
 
 **Returns an error value** with one of these codes: `rate_limited`, `overloaded`, `server_error`, `prompt_too_long`, `provider_error`, `stale_epoch`, `content_unsupported`, `continuation_unsupported`, `transport_fence_unsupported`.
@@ -78,10 +80,12 @@ async def lookup(
 </Tab>
 </Tabs>
 
-<Field name="requestId / request_id" type={"string"} required />
+<Field name="requestId / request_id" type={"string"} required>
+  The client request id of the lost attempt, the same one ModelRequest.request_id carried when it was sent.
+</Field>
 
 <Field name="context" type={"ModelContext"} required>
-  See [ModelContext](/docs/reference/types/ModelContext).
+  The fencing context: await context.fence() before the lookup call, and put() any reasoning or hosted tool bytes of a found response before its parts name them. See [ModelContext](/docs/reference/types/ModelContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`.
@@ -110,7 +114,7 @@ async def count_tokens(
 </Tabs>
 
 <Field name="request" type={"ModelRequest"} required>
-  See [ModelRequest](/docs/reference/types/ModelRequest).
+  The request to count, as send would receive it. Neither language's loop calls count_tokens today, and the Python model protocol has no such method yet. See [ModelRequest](/docs/reference/types/ModelRequest).
 </Field>
 
 **Returns an error value** with one of these codes: `unavailable`, `timeout`.

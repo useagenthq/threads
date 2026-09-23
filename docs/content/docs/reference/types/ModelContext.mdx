@@ -10,7 +10,9 @@ Bound to the writer that created it: fence, read and put always act for that bra
 
 ## Properties
 
-<Field name="branchId / branch_id" type={"BranchId"} required />
+<Field name="branchId / branch_id" type={"BranchId"} required>
+  The branch this attempt is dispatched for. fence, read and put always act for this branch.
+</Field>
 
 <Field name="epoch" type={"number"} required>
   The lease epoch this attempt is dispatched under.
@@ -64,7 +66,9 @@ async def read(
 </Tab>
 </Tabs>
 
-<Field name="ref" type={"ArtifactRef"} required />
+<Field name="ref" type={"ArtifactRef"} required>
+  An artifact ref named in the rendered request (an image, a document or an earlier reasoning block).
+</Field>
 
 **Returns an error value** with one of these codes: `artifact_missing`, `artifact_corrupt`.
 
@@ -92,6 +96,10 @@ async def put(
 </Tab>
 </Tabs>
 
-<Field name="data" type={"Uint8Array"} required />
+<Field name="data" type={"Uint8Array"} required>
+  The exact bytes the provider returned, stored unchanged.
+</Field>
 
-<Field name="mediaType / media_type" type={"string"} required />
+<Field name="mediaType / media_type" type={"string"} required>
+  The MIME type of data, for example application/json or image/png.
+</Field>

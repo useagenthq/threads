@@ -1,16 +1,22 @@
 ---
 title: "DocVersion"
-description: "The DocVersion type."
+description: "What KnowledgeProvider.ingest returns: the admitted version of a document and the store revision after the ingest."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="doc_id" type={"string"} required />
+<Field name="doc_id" type={"string"} required>
+  The document's id (the source's source_id).
+</Field>
 
-<Field name="version" type={"string"} required />
+<Field name="version" type={"string"} required>
+  The admitted version's id, non-empty. local_knowledge uses the first 16 hex characters of the content's sha256, so the same bytes are the same version.
+</Field>
 
-<Field name="content_sha256" type={"Sha256"} required />
+<Field name="content_sha256" type={"Sha256"} required>
+  The sha256 of the admitted bytes, lowercase hex.
+</Field>
 
 <Field name="revision" type={"number"} required>
   The store's monotonic revision after this ingest.

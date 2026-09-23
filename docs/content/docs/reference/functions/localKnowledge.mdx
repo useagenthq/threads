@@ -32,7 +32,9 @@ def local_knowledge(
 
 ## Parameters
 
-<Field name="paths" type={"readonly string[]"} required />
+<Field name="paths" type={"readonly string[]"} required>
+  Host file paths to admit as knowledge sources. The host reads each file on every run: the same bytes are a no-op, changed bytes a new version, and a file that can't be read is a setup error invalid_config.
+</Field>
 
 ## Returns
 

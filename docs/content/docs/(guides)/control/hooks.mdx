@@ -116,11 +116,11 @@ Every hook is optional, awaited and time-limited. Each gets the run context last
 | `beforeInput` | `before_input` | Before new user input is accepted | `allow` (optional `injections`) or `deny` |
 | `beforeModel` | `before_model` | Before each model request | `proceed` (optional `injections`) or `deny` |
 | `afterModel` | `after_model` | After each model response | `proceed`, `deny`, `guide` (with `text`) or `retry` (with `reason`) |
-| `beforeTool` | `before_tool` | Before a tool call runs | `allow`, `deny` or `ask` (optional `rule`) |
+| `beforeTool` | `before_tool` | Before every tool call is decided, even one the policy denies | `allow`, `deny` or `ask` (optional `rule`) |
 | `permissionRequest` | `permission_request` | A call would need approval | `allow`, `deny` or `ask` |
 | `permissionDenied` | `permission_denied` | A call was denied | Nothing |
 | `afterTool` | `after_tool` | After a tool call ran | Notes to record in the log |
-| `beforeToolResult` | `before_tool_result` | Before the model sees a tool result | `proceed`, `redact` (with `spans`) or `deny` |
+| `beforeToolResult` | `before_tool_result` | Before the model sees the result of a call that ran | `proceed`, `redact` (with `spans`) or `deny` |
 | `afterToolBatch` | `after_tool_batch` | After all calls of one response ran | Text to add as context |
 | `beforeCompact` | `before_compact` | Before older history is summarized | `proceed`, `deny` or `guide` |
 | `afterCompact` | `after_compact` | After history was summarized | Text to add as context |
@@ -128,11 +128,11 @@ Every hook is optional, awaited and time-limited. Each gets the run context last
 | `onStopFailure` | `on_stop_failure` | A run ended with an error | Nothing |
 | `subagentStart` | `subagent_start` | Before a subagent starts | `allow` or `deny` |
 | `subagentStop` | `subagent_stop` | A subagent finished | `stop`, or `continue` with a `reason` to send it back |
-| `beforeModelSwitch` | `before_model_switch` | Before the thread's model changes: a fallback, or the revert at the next input | `allow` or `deny` |
+| `beforeModelSwitch` | `before_model_switch` | Before an automatic model switch: a fallback, or the revert at the next input. `setModel` doesn't run it | `allow` or `deny` |
 | `afterModelSwitch` | `after_model_switch` | After the model changed | Nothing |
 | `notification` | `notification` | The run parked or scheduled a retry (TypeScript also: a budget ran out, a subagent finished) | Nothing |
 
-A `deny` always carries a `reason`, recorded in the log. For a denied tool call, TypeScript shows the reason to the model as the result; Python currently shows `denied by policy`. Text a hook adds is shown to the model as context from the hook.
+A `deny` always carries a `reason`, recorded in the log. When several extensions define `beforeTool`, the strictest answer wins; TypeScript stops at the first `deny`, while Python calls every extension. `redact` spans are UTF-8 byte offsets into the result's first text part (the preview when it has no content); an empty list, an empty span, or a span outside that text or splitting a character fails the hook and clears the whole result. For a denied tool call, TypeScript shows the reason to the model as the result; Python currently shows `denied by policy`. Text a hook adds is shown to the model as context from the hook.
 
 ### When a hook fails
 

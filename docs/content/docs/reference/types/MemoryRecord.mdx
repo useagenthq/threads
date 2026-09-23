@@ -1,15 +1,31 @@
 ---
 title: "MemoryRecord"
-description: "The MemoryRecord type."
+description: "One fact to store, as the framework hands it to MemoryProvider.remember: the text, where it came from, the log events behind it, and the host-issued binding."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="text" type={"string"} required />
+<Field name="text" type={"string"} required>
+  The fact to remember, as the model wrote it in save_memory. Non-empty.
+</Field>
 
-<Field name="origin" type={"\"user\" | \"tool_output\" | \"model\" | \"host\""} required />
+<Field name="origin" type={"\"user\" | \"tool_output\" | \"model\" | \"host\""} required>
+  Who the fact comes from, decided by the host from the log, never by the model: user when a verified principal started the turn and nothing untrusted is in context, tool_output when untrusted content is in context, model otherwise. host is for records the host writes itself.
+</Field>
 
-<Field name="provenance" type={"{ thread_id: ThreadId; event_ids: readonly EventId[] }"} required />
+<Field name="provenance" type={"{ thread_id: ThreadId; event_ids: readonly EventId[] }"} required>
+  Where in the log the fact came from: the thread and the events behind the save.
+</Field>
 
-<Field name="binding" type={"Binding"} required />
+<Field name="provenance.thread_id" type={"ThreadId"} required>
+  The thread whose run saved the fact.
+</Field>
+
+<Field name="provenance.event_ids" type={"readonly EventId[]"} required>
+  The log events the save was based on. May be empty.
+</Field>
+
+<Field name="binding" type={"Binding"} required>
+  Issued by the host; the provider stores it opaquely.
+</Field>

@@ -48,25 +48,33 @@ def extension(
   Unique; tools are namespaced &lt;ext>__&lt;tool>.
 </Field>
 
-<Field name="tools" type={"readonly (Tool | McpServer)[]"} />
+<Field name="tools" type={"readonly (Tool | McpServer)[]"} default={"[]"}>
+  App tools this extension adds, named &lt;name>__&lt;tool>. In Python they see no deps. Default [] adds none.
+</Field>
 
 <Field name="instructions" type={"string"} default={""}>
   Static; goes into the system prompt after the base instructions.
 </Field>
 
-<Field name="hooks" type={"Hooks<Deps>"}>
-  See [Hooks](/docs/reference/types/Hooks).
+<Field name="hooks" type={"Hooks<Deps>"} default={"{}"}>
+  Lifecycle hooks that can block or change what a run does (see Hooks). In Python they see no deps. Default &#123;&#125; adds none. See [Hooks](/docs/reference/types/Hooks).
 </Field>
 
-<Field name="on" type={"Record<string, (event: Event) => Promise<void>>"}>
+<Field name="on" type={"Record<string, (event: Event) => Promise<void>>"} default={"{}"}>
   Observers keyed by event type, or "*". Committed events, delivered after append; can't block or change execution.
 </Field>
 
-<Field name="setup" type={"() => Promise<void>"}>
-  Runs once at check() or first run. Throwing is a ConfigError.
+<Field name="on(event)" type={"Event"} required>
+  One committed event of the type the key names (any type for "*"), delivered after it was appended to the log.
 </Field>
 
-<Field name="hookTimeoutMs / hook_timeout_ms" type={"PosInt"} default={"5000"} />
+<Field name="setup" type={"() => Promise<void>"}>
+  Runs once at check() or first run. Throwing is a ConfigError. Omitted: nothing runs at setup.
+</Field>
+
+<Field name="hookTimeoutMs / hook_timeout_ms" type={"PosInt"} default={"5000"}>
+  The time limit, in milliseconds, for each hook call. A hook that runs longer counts as a failed call, the same as one that throws. A positive whole number; default 5000.
+</Field>
 
 ## Returns
 

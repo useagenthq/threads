@@ -10,20 +10,32 @@ A union discriminated by `status`.
 
 ### found
 
-<Field name="status" type={"\"found\""} required />
+<Field name="status" type={"\"found\""} required>
+  "found": the operation happened, and value is what it produced.
+</Field>
 
-<Field name="value" type={"T"} required />
+<Field name="value" type={"T"} required>
+  What the found operation produced: the recovered model response, the sandbox session or the snapshot data.
+</Field>
 
 ### not_found
 
-<Field name="status" type={"\"not_found\""} required />
+<Field name="status" type={"\"not_found\""} required>
+  "not_found": the provider proves nothing was created or sent. Accepted only from an operation whose LookupCapability is final.
+</Field>
 
 ### not_found_nonfinal
 
-<Field name="status" type={"\"not_found_nonfinal\""} required />
+<Field name="status" type={"\"not_found_nonfinal\""} required>
+  "not_found_nonfinal": not seen yet, but it may still appear. Settles nothing.
+</Field>
 
 ### unknown
 
-<Field name="status" type={"\"unknown\""} required />
+<Field name="status" type={"\"unknown\""} required>
+  "unknown": the lookup failed or can't answer. Settles nothing.
+</Field>
 
-<Field name="reason" type={"string"} required />
+<Field name="reason" type={"string"} required>
+  Free text saying why the lookup couldn't answer, for logs and people (for example transport_error).
+</Field>

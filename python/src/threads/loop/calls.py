@@ -143,6 +143,8 @@ async def _authorize(
     }
     if decision.rule is not None:
         data["rule_id"] = decision.rule
+    if decision.reason is not None:
+        data["reason"] = decision.reason
     drafts = [*hooked, draft("permission_decision", data, actor)]
     if decision.decision == "ask":
         drafts.append(_challenge(rt, state, actor))

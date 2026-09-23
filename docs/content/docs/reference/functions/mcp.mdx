@@ -53,28 +53,44 @@ def mcp(
 </Field>
 
 <Field name="url" type={"string"}>
-  Streamable HTTP (SSE fallback). Exactly one of url or command.
+  The server's URL, for a server reached over HTTP: Streamable HTTP, with an SSE fallback in TypeScript. Exactly one of url or command; omit it for a stdio server.
 </Field>
 
-<Field name="headers" type={"Record<string, string | Secret>"} />
+<Field name="headers" type={"Record<string, string | Secret>"} default={"{}"}>
+  HTTP headers sent with every request to a url server, such as an Authorization header. A value can be a secret(), revealed only on the host. Default &#123;&#125; sends none.
+</Field>
 
 <Field name="command" type={"string"}>
-  stdio transport.
+  The command that starts a stdio server, run on the host with args. Exactly one of url or command; omit it for a url server.
 </Field>
 
-<Field name="args" type={"readonly string[]"} />
+<Field name="args" type={"readonly string[]"} default={"[]"}>
+  Arguments passed to command. Default [] passes none.
+</Field>
 
-<Field name="env" type={"Record<string, string | Secret>"} />
+<Field name="env" type={"Record<string, string | Secret>"} default={"{}"}>
+  Environment variables for the command's process. Only PATH and HOME come from the host; everything else must be given here. A value can be a secret(), revealed only on the host. Default &#123;&#125;.
+</Field>
 
 <Field name="runs" type={"\"host\" | \"sandbox\""} default={"host"}>
   sandbox: stdio server inside the sandbox, with no host credentials. Only "host" is supported today; "sandbox" is a setup error.
 </Field>
 
 <Field name="tools" type={"{ allow?: readonly string[]; deny?: readonly string[] }"}>
-  Filter before pinning.
+  Filters the server's tools, by the server's own tool names, before they are pinned. Omitted: every tool the server lists is pinned.
 </Field>
 
-<Field name="effect" type={"EffectClass"} default={"unguarded"} />
+<Field name="tools.allow" type={"readonly string[]"}>
+  Only tools with these names are kept. Omitted: every name is allowed.
+</Field>
+
+<Field name="tools.deny" type={"readonly string[]"}>
+  Tools with these names are dropped, even when allow lists them. Omitted: none are dropped.
+</Field>
+
+<Field name="effect" type={"EffectClass"} default={"unguarded"}>
+  The effect class every tool from this server is pinned with. Use read_only for a server whose tools change nothing; the default unguarded means an uncertain call parks and is never retried. idempotent is refused in Python and needs a dedup window in TypeScript.
+</Field>
 
 ## Returns
 

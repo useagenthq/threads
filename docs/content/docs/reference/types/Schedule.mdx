@@ -1,21 +1,27 @@
 ---
 title: "Schedule"
-description: "The Schedule type."
+description: "A cron schedule on a host: each time it is due, it starts a run of one of the host's agents on a new thread."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="id" type={"Name"} required />
+<Field name="id" type={"Name"} required>
+  The schedule's name: lowercase letters, digits and underscores, up to 64 characters. Each firing records it, and the run's principal is issuer "schedule" with this as subject.
+</Field>
 
 <Field name="agent" type={"string"} required>
   A key of host(&#123;agents&#125;).
 </Field>
 
-<Field name="cron" type={"string"} required />
+<Field name="cron" type={"string"} required>
+  A five-field cron expression (minute, hour, day of month, month, day of week, where 0 or 7 is Sunday) of numbers, *, lists, ranges and steps, read in timezone. Anything else is a ConfigError invalid_config.
+</Field>
 
-<Field name="timezone" type={"string"}>
+<Field name="timezone" type={"string"} default={"UTC"}>
   IANA name.
 </Field>
 
-<Field name="input" type={"Input"} required />
+<Field name="input" type={"Input"} required>
+  What a run starts with: plain text or ordered input parts.
+</Field>

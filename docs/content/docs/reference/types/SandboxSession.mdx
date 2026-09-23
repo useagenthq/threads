@@ -1,8 +1,10 @@
 ---
 title: "SandboxSession"
-description: "The SandboxSession type."
+description: "One live sandbox, as an adapter returns it from create, restore or attach: run commands, move files, snapshot and close it."
 icon: "Plug"
 ---
+
+Every method takes the SandboxContext to fence at the provider call.
 
 <Callout>A protocol: adapters implement it.</Callout>
 
@@ -50,21 +52,29 @@ async def exec(
 </Tab>
 </Tabs>
 
-<Field name="command" type={"readonly string[]"} required />
-
-<Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+<Field name="command" type={"readonly string[]"} required>
+  The program and its arguments, run directly as argv, not as a shell string. Pass ["/bin/sh", "-c", script] to use a shell.
 </Field>
 
-<Field name="cwd" type={"string"} default={"/workspace"} />
+<Field name="context" type={"SandboxContext"} required>
+  The authority to re-check with context.fence() before starting the process. See [SandboxContext](/docs/reference/types/SandboxContext).
+</Field>
 
-<Field name="env" type={"Record<string, string>"}>
+<Field name="cwd" type={"string"} default={"/workspace"}>
+  The absolute working directory inside the sandbox. A path outside the sandbox tree is invalid_path.
+</Field>
+
+<Field name="env" type={"Record<string, string>"} default={"{}"}>
   Exactly this env; nothing inherited.
 </Field>
 
-<Field name="timeoutMs / timeout_ms" type={"PosInt"} />
+<Field name="timeoutMs / timeout_ms" type={"PosInt"}>
+  Deadline in milliseconds. The framework's sandbox layer enforces it: once it passes, the call ends as timeout and the process group is terminated. When omitted, the command has no time limit.
+</Field>
 
-<Field name="stdin" type={"Uint8Array"} />
+<Field name="stdin" type={"Uint8Array"}>
+  Bytes fed to the process's standard input. When omitted, standard input is empty (/dev/null).
+</Field>
 
 <Field name="processKey / process_key" type={"string"} required>
   Durable identity of the process group: the call's effect key, recorded by effect_begin before dispatch, so recovery can terminate it after a crash.
@@ -96,15 +106,19 @@ async def terminate(
 </Tab>
 </Tabs>
 
-<Field name="processKey / process_key" type={"string"} required />
+<Field name="processKey / process_key" type={"string"} required>
+  The process_key the process group was started with in exec.
+</Field>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() before the kill. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `unavailable`.
 
 ### upload
+
+Write bytes to a file in the sandbox, creating or replacing it.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -127,17 +141,23 @@ async def upload(
 </Tab>
 </Tabs>
 
-<Field name="path" type={"string"} required />
+<Field name="path" type={"string"} required>
+  The absolute file path inside the sandbox. A path outside the sandbox tree is invalid_path.
+</Field>
 
-<Field name="data" type={"Uint8Array"} required />
+<Field name="data" type={"Uint8Array"} required>
+  The file's complete contents.
+</Field>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() before writing. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `invalid_path`, `permission_denied`, `is_directory`, `too_large`, `unavailable`.
 
 ### download
+
+Read a file's bytes from the sandbox.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -159,10 +179,12 @@ async def download(
 </Tab>
 </Tabs>
 
-<Field name="path" type={"string"} required />
+<Field name="path" type={"string"} required>
+  The absolute file path inside the sandbox. A missing file is not_found; a path outside the sandbox tree is invalid_path.
+</Field>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() before reading. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `not_found`, `invalid_path`, `permission_denied`, `is_directory`, `too_large`, `unavailable`.
@@ -191,10 +213,12 @@ async def snapshot(
 </Tab>
 </Tabs>
 
-<Field name="operationKey / operation_key" type={"string"} required />
+<Field name="operationKey / operation_key" type={"string"} required>
+  The key the runtime wrote to the resource ledger before this call. Tag the snapshot with it so lookupSnapshot can find it if the response is lost.
+</Field>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() before capturing. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `not_quiescent`, `unavailable`, `timeout`.
@@ -223,7 +247,7 @@ async def close(
 </Tabs>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() before releasing: the owner's lease, or gc's cleanup claim. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `release_failed`, `unavailable`.

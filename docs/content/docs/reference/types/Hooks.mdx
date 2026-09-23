@@ -8,42 +8,438 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 
 ## Fields
 
-<Field name="sessionStart / session_start" type={"(source: \"startup\" | \"resume\" | \"fork\" | \"compact\", ctx: RunContext<Deps>) => Promise<readonly string[]>"} />
+<Field name="sessionStart / session_start" type={"(source: \"startup\" | \"resume\" | \"fork\" | \"compact\", ctx: RunContext<Deps>) => Promise<readonly string[]>"}>
+  Runs when a run starts (source startup or resume) and again after a compaction (source compact); return strings to add them to the model's context as untrusted reference. A throw or timeout refuses the run with input_denied. Omit it and nothing runs at session start.
+</Field>
 
-<Field name="sessionEnd / session_end" type={"(ctx: RunContext<Deps>) => Promise<void>"} />
+<Field name="sessionStart(source) / session_start(source)" type={"\"startup\" | \"resume\" | \"fork\" | \"compact\""} required>
+  Why the session started: "startup" for a thread's first run, "resume" for a later run on a thread that already has input, "compact" after the context was compacted. "fork" is in the contract but is not passed today.
+</Field>
 
-<Field name="beforeInput / before_input" type={"(input: UserInputEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\"; injections?: readonly string[] } | { decision: \"deny\"; reason: string }>"} />
+<Field name="sessionStart(ctx) / session_start(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
 
-<Field name="beforeModel / before_model" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<{ decision: \"proceed\"; injections?: readonly string[] } | { decision: \"deny\"; reason: string }>"} />
+<Field name="sessionEnd / session_end" type={"(ctx: RunContext<Deps>) => Promise<void>"}>
+  Observes the end of a run that finished without halting. It can't change anything; a failure is recorded and ignored. Omit it and nothing runs at session end.
+</Field>
 
-<Field name="afterModel / after_model" type={"(state: ReducedState, response: ModelResponseEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"proceed\" } | { decision: \"deny\"; reason: string } | { decision: \"guide\"; text: string } | { decision: \"retry\"; reason: string }>"} />
+<Field name="sessionEnd(ctx) / session_end(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
 
-<Field name="beforeTool / before_tool" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string } | { decision: \"ask\"; rule?: PermissionRule }>"} />
+<Field name="beforeInput / before_input" type={"(input: UserInputEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\"; injections?: readonly string[] } | { decision: \"deny\"; reason: string }>"}>
+  Gates each turn's user input before the first model request. Return allow (optionally with injections) or deny with a reason; a deny, throw or timeout ends the turn input_denied. Omit it and every input is let through.
+</Field>
 
-<Field name="permissionRequest / permission_request" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string } | { decision: \"ask\"; rule?: PermissionRule }>"} />
+<Field name="beforeInput(input) / before_input(input)" type={"UserInputEvent.data"} required>
+  The user input the turn starts with, as recorded in the log.
+</Field>
 
-<Field name="permissionDenied / permission_denied" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<void>"} />
+<Field name="beforeInput(ctx) / before_input(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
 
-<Field name="afterTool / after_tool" type={"(call: ToolCallEvent.data, result: ToolResultEvent.data, ctx: RunContext<Deps>) => Promise<readonly string[]>"} />
+<Field name="beforeInput()[allow].decision / before_input()[allow].decision" type={"\"allow\""} required>
+  allow: the input goes on to the model, with this hook's injections (if any) added before the request.
+</Field>
 
-<Field name="beforeToolResult / before_tool_result" type={"(call: ToolCallEvent.data, result: ToolResultEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"proceed\" } | { decision: \"redact\"; spans: readonly Span[] } | { decision: \"deny\"; reason: string }>"} />
+<Field name="beforeInput()[allow].injections / before_input()[allow].injections" type={"readonly string[]"} default={"[]"}>
+  Recorded as injected&#123;source: hook&#125; events; not a decision.
+</Field>
 
-<Field name="afterToolBatch / after_tool_batch" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<readonly string[]>"} />
+<Field name="beforeInput()[deny].decision / before_input()[deny].decision" type={"\"deny\""} required>
+  deny: the input stays in the log for audit but is never sent to the model, and the turn ends input_denied.
+</Field>
 
-<Field name="beforeCompact / before_compact" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<{ decision: \"proceed\" } | { decision: \"deny\"; reason: string } | { decision: \"guide\"; text: string }>"} />
+<Field name="beforeInput()[deny].reason / before_input()[deny].reason" type={"string"} required>
+  Why, as any text. It is recorded on the hook_decision; the model never sees it.
+</Field>
 
-<Field name="afterCompact / after_compact" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<readonly string[]>"} />
+<Field name="beforeModel / before_model" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<{ decision: \"proceed\"; injections?: readonly string[] } | { decision: \"deny\"; reason: string }>"}>
+  Runs before every model request. Return proceed (optionally with injections) or deny with a reason; a deny, throw or timeout means the request isn't sent. Omit it and every request is sent.
+</Field>
 
-<Field name="onStop / on_stop" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<{ decision: \"stop\" } | { decision: \"continue\"; reason: string }>"} />
+<Field name="beforeModel(state) / before_model(state)" type={"ReducedState"} required>
+  The thread's reduced state at this point, the same value reduce(log) returns.
+</Field>
 
-<Field name="onStopFailure / on_stop_failure" type={"(code: RunErrorCode, ctx: RunContext<Deps>) => Promise<void>"} />
+<Field name="beforeModel(ctx) / before_model(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
 
-<Field name="subagentStart / subagent_start" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string }>"} />
+<Field name="beforeModel()[proceed].decision / before_model()[proceed].decision" type={"\"proceed\""} required>
+  proceed: the request is sent, with this hook's injections (if any) added first.
+</Field>
 
-<Field name="subagentStop / subagent_stop" type={"(finished: AgentFinishedEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"stop\" } | { decision: \"continue\"; reason: string }>"} />
+<Field name="beforeModel()[proceed].injections / before_model()[proceed].injections" type={"readonly string[]"} default={"[]"}>
+  Recorded as injected&#123;source: hook&#125; events; not a decision.
+</Field>
 
-<Field name="beforeModelSwitch / before_model_switch" type={"(settings: ModelSettings, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string }>"} />
+<Field name="beforeModel()[deny].decision / before_model()[deny].decision" type={"\"deny\""} required>
+  deny: this attempt is never sent to the model, and the turn ends error.
+</Field>
 
-<Field name="afterModelSwitch / after_model_switch" type={"(settings: ModelSettings, ctx: RunContext<Deps>) => Promise<void>"} />
+<Field name="beforeModel()[deny].reason / before_model()[deny].reason" type={"string"} required>
+  Why, as any text. It is recorded on the hook_decision; the model never sees it.
+</Field>
 
-<Field name="notification" type={"(event: Event, ctx: RunContext<Deps>) => Promise<void>"} />
+<Field name="afterModel / after_model" type={"(state: ReducedState, response: ModelResponseEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"proceed\" } | { decision: \"deny\"; reason: string } | { decision: \"guide\"; text: string } | { decision: \"retry\"; reason: string }>"}>
+  Reviews each model response before its tool calls run and its output is released. Return proceed, deny (the output is withheld and its calls are closed unrun), guide (the model is asked again with your text) or retry (asked again with the reason, at most twice per turn). Omit it and every response proceeds.
+</Field>
+
+<Field name="afterModel(state) / after_model(state)" type={"ReducedState"} required>
+  The thread's reduced state at this point, the same value reduce(log) returns.
+</Field>
+
+<Field name="afterModel(response) / after_model(response)" type={"ModelResponseEvent.data"} required>
+  The model's response: its content parts (text and tool_use), usage and the request it answers.
+</Field>
+
+<Field name="afterModel(ctx) / after_model(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="afterModel()[proceed].decision / after_model()[proceed].decision" type={"\"proceed\""} required>
+  proceed: the response stands; its tool calls go on to be authorized and run, or the turn ends as the response says.
+</Field>
+
+<Field name="afterModel()[deny].decision / after_model()[deny].decision" type={"\"deny\""} required>
+  deny: the response's output is withheld and each of its tool calls is closed as denied without running. The turn ends error; in TypeScript, a response that had tool calls instead goes back to the model with each call shown as denied.
+</Field>
+
+<Field name="afterModel()[deny].reason / after_model()[deny].reason" type={"string"} required>
+  Why, as any text. It is recorded on the hook_decision. TypeScript shows it to the model on each closed call (denied: reason); Python shows a fixed text.
+</Field>
+
+<Field name="afterModel()[guide].decision / after_model()[guide].decision" type={"\"guide\""} required>
+  guide: the response is withheld, its tool calls are closed without running, and the model is asked again with text as a trusted instruction.
+</Field>
+
+<Field name="afterModel()[guide].text / after_model()[guide].text" type={"string"} required>
+  The instruction the model is re-asked with, as any text. It is recorded on the hook_decision and added to the next request as a trusted hook instruction.
+</Field>
+
+<Field name="afterModel()[retry].decision / after_model()[retry].decision" type={"\"retry\""} required>
+  retry: like guide, with reason as the instruction. After 2 retries in one turn, a further retry counts as a deny.
+</Field>
+
+<Field name="afterModel()[retry].reason / after_model()[retry].reason" type={"string"} required>
+  What to do differently, as any text. It is recorded on the hook_decision and sent to the model as a trusted hook instruction.
+</Field>
+
+<Field name="beforeTool / before_tool" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string } | { decision: \"ask\"; rule?: PermissionRule }>"}>
+  Runs before the permission decision on every tool call, even one the policy denies (the deny stands). Return allow, deny with a reason, or ask to require approval; when several extensions answer, the strictest wins, and a throw or timeout denies. TypeScript stops at the first extension that denies, so later ones aren't called; Python calls every extension. Omit it and the agent's permission rules decide alone.
+</Field>
+
+<Field name="beforeTool(call) / before_tool(call)" type={"ToolCallEvent.data"} required>
+  The tool call: its call_id, tool name, parsed input and the request it came from.
+</Field>
+
+<Field name="beforeTool(ctx) / before_tool(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="beforeTool()[allow].decision / before_tool()[allow].decision" type={"\"allow\""} required>
+  allow: this hook doesn't object. The policy's decision stands; a hook can never loosen a policy ask or deny.
+</Field>
+
+<Field name="beforeTool()[deny].decision / before_tool()[deny].decision" type={"\"deny\""} required>
+  deny: the call is refused and never runs. It closes as a denied tool_result the model sees, and permission_denied observers are told.
+</Field>
+
+<Field name="beforeTool()[deny].reason / before_tool()[deny].reason" type={"string"} required>
+  Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. TypeScript shows it to the model in the denied tool_result (denied: reason); Python shows the fixed text denied by policy.
+</Field>
+
+<Field name="beforeTool()[ask].decision / before_tool()[ask].decision" type={"\"ask\""} required>
+  ask: the call needs approval. permission_request hooks may answer it; otherwise it opens an approval challenge and parks until an approver decides. In dont_ask mode an ask is a deny.
+</Field>
+
+<Field name="beforeTool()[ask].rule / before_tool()[ask].rule" type={"PermissionRule"}>
+  A permission rule to show with the ask, such as bash(git push *). It is recorded as the reason on the hook_decision and on the permission_decision. Omitted: the ask carries no reason.
+</Field>
+
+<Field name="permissionRequest / permission_request" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string } | { decision: \"ask\"; rule?: PermissionRule }>"}>
+  Answers a tool call the permission rules would send for approval. Return allow or deny to decide it, or ask to leave it to a human; a throw or timeout denies. Omit it and the call waits for a human approval.
+</Field>
+
+<Field name="permissionRequest(call) / permission_request(call)" type={"ToolCallEvent.data"} required>
+  The tool call: its call_id, tool name, parsed input and the request it came from.
+</Field>
+
+<Field name="permissionRequest(ctx) / permission_request(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="permissionRequest()[allow].decision / permission_request()[allow].decision" type={"\"allow\""} required>
+  allow: the programmatic approver grants the call, so it runs without asking a person.
+</Field>
+
+<Field name="permissionRequest()[deny].decision / permission_request()[deny].decision" type={"\"deny\""} required>
+  deny: the programmatic approver refuses the call; it closes as a denied tool_result the model sees.
+</Field>
+
+<Field name="permissionRequest()[deny].reason / permission_request()[deny].reason" type={"string"} required>
+  Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. TypeScript shows it to the model in the denied tool_result (denied: reason); Python shows the fixed text denied by policy.
+</Field>
+
+<Field name="permissionRequest()[ask].decision / permission_request()[ask].decision" type={"\"ask\""} required>
+  ask: the hook doesn't answer, so the call opens an approval challenge and parks until a person decides.
+</Field>
+
+<Field name="permissionRequest()[ask].rule / permission_request()[ask].rule" type={"PermissionRule"}>
+  Recorded as the hook_decision's reason only: an ask answers nothing, so the earlier decision and its reason stand. Omitted: no reason is recorded.
+</Field>
+
+<Field name="permissionDenied / permission_denied" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<void>"}>
+  Observes a tool call after it was denied. It can't change anything; a failure is recorded and ignored. Omit it and denials are only recorded in the log.
+</Field>
+
+<Field name="permissionDenied(call) / permission_denied(call)" type={"ToolCallEvent.data"} required>
+  The tool call that was denied: its call_id, tool name, parsed input and the request it came from.
+</Field>
+
+<Field name="permissionDenied(ctx) / permission_denied(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="afterTool / after_tool" type={"(call: ToolCallEvent.data, result: ToolResultEvent.data, ctx: RunContext<Deps>) => Promise<readonly string[]>"}>
+  Observes each tool result after it is recorded. Return strings to record them as an annotation on the call; it can't change the result, and a failure is recorded and ignored. Omit it and results are recorded with no annotation.
+</Field>
+
+<Field name="afterTool(call) / after_tool(call)" type={"ToolCallEvent.data"} required>
+  The tool call: its call_id, tool name, parsed input and the request it came from.
+</Field>
+
+<Field name="afterTool(result) / after_tool(result)" type={"ToolResultEvent.data"} required>
+  The tool's recorded result for that call.
+</Field>
+
+<Field name="afterTool(ctx) / after_tool(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="beforeToolResult / before_tool_result" type={"(call: ToolCallEvent.data, result: ToolResultEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"proceed\" } | { decision: \"redact\"; spans: readonly Span[] } | { decision: \"deny\"; reason: string }>"}>
+  Guards each executed tool result before later requests render it. Return proceed, redact with byte spans of the result's text to hide, or deny to clear it; the raw result stays in the log either way, and a throw, a timeout, an empty span list or a span outside the text clears it. Omit it and results are rendered as recorded.
+</Field>
+
+<Field name="beforeToolResult(call) / before_tool_result(call)" type={"ToolCallEvent.data"} required>
+  The tool call: its call_id, tool name, parsed input and the request it came from.
+</Field>
+
+<Field name="beforeToolResult(result) / before_tool_result(result)" type={"ToolResultEvent.data"} required>
+  The tool's recorded result for that call, as later requests render it unless a hook changes it.
+</Field>
+
+<Field name="beforeToolResult(ctx) / before_tool_result(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="beforeToolResult()[proceed].decision / before_tool_result()[proceed].decision" type={"\"proceed\""} required>
+  proceed: later requests render the result as it is.
+</Field>
+
+<Field name="beforeToolResult()[redact].decision / before_tool_result()[redact].decision" type={"\"redact\""} required>
+  redact: the listed spans are hidden from every later request, recorded as context_edited guardrail. The raw result stays in the log.
+</Field>
+
+<Field name="beforeToolResult()[redact].spans / before_tool_result()[redact].spans" type={"readonly Span[]"} required>
+  The byte ranges to hide, as UTF-8 offsets into the result's first text part (the preview when it has no content), start inclusive and end exclusive; give at least one, each non-empty. An empty list, an empty span, a span outside that text or a span that splits a character counts as a failed hook, so the whole result is cleared instead.
+</Field>
+
+<Field name="beforeToolResult()[deny].decision / before_tool_result()[deny].decision" type={"\"deny\""} required>
+  deny: the whole result is cleared from every later request (context_edited guardrail). The call already ran; the raw result stays in the log.
+</Field>
+
+<Field name="beforeToolResult()[deny].reason / before_tool_result()[deny].reason" type={"string"} required>
+  Why, as any text. It is recorded on the hook_decision; the model sees the cleared result, not the reason.
+</Field>
+
+<Field name="afterToolBatch / after_tool_batch" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<readonly string[]>"}>
+  Runs once every tool result of a model response is recorded, before the next request. Return strings to add them to the model's context as untrusted reference; a throw or timeout ends the turn with an error. Omit it and the next request is sent with nothing added.
+</Field>
+
+<Field name="afterToolBatch(state) / after_tool_batch(state)" type={"ReducedState"} required>
+  The thread's reduced state at this point, the same value reduce(log) returns.
+</Field>
+
+<Field name="afterToolBatch(ctx) / after_tool_batch(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="beforeCompact / before_compact" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<{ decision: \"proceed\" } | { decision: \"deny\"; reason: string } | { decision: \"guide\"; text: string }>"}>
+  Runs before the context is compacted. Return proceed, guide with text the summary request should follow, or deny with a reason, which fails this compaction; a throw or timeout also fails it. Omit it and compaction proceeds with the default instructions.
+</Field>
+
+<Field name="beforeCompact(state) / before_compact(state)" type={"ReducedState"} required>
+  The thread's reduced state at this point, the same value reduce(log) returns.
+</Field>
+
+<Field name="beforeCompact(ctx) / before_compact(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="beforeCompact()[proceed].decision / before_compact()[proceed].decision" type={"\"proceed\""} required>
+  proceed: compaction goes ahead: older turns are summarized by a side request.
+</Field>
+
+<Field name="beforeCompact()[deny].decision / before_compact()[deny].decision" type={"\"deny\""} required>
+  deny: no summary is made this time, recorded as compaction_failed at stage hook.
+</Field>
+
+<Field name="beforeCompact()[deny].reason / before_compact()[deny].reason" type={"string"} required>
+  Why, as any text. It is recorded on the hook_decision; the model never sees it.
+</Field>
+
+<Field name="beforeCompact()[guide].decision / before_compact()[guide].decision" type={"\"guide\""} required>
+  guide: compaction goes ahead, and text is added to the summary request's instructions.
+</Field>
+
+<Field name="beforeCompact()[guide].text / before_compact()[guide].text" type={"string"} required>
+  Extra instructions for the summary, such as what to keep, as any text. They follow the fixed summary instruction under Additional instructions.
+</Field>
+
+<Field name="afterCompact / after_compact" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<readonly string[]>"}>
+  Runs after a compaction, before the next request. Return strings to add them to the model's context as untrusted reference; a failure is recorded and adds nothing. Omit it and only the framework's own restored context is added.
+</Field>
+
+<Field name="afterCompact(state) / after_compact(state)" type={"ReducedState"} required>
+  The thread's reduced state right after compaction.
+</Field>
+
+<Field name="afterCompact(ctx) / after_compact(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="onStop / on_stop" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<{ decision: \"stop\" } | { decision: \"continue\"; reason: string }>"}>
+  Runs when a turn is about to end normally. Return stop to let it end, or continue with a reason that is sent to the model as an instruction for one more request; after 3 continues in a turn it ends stop_hook_limit, and a throw or timeout stops. Omit it and turns end when the model stops.
+</Field>
+
+<Field name="onStop(state) / on_stop(state)" type={"ReducedState"} required>
+  The thread's reduced state at this point, the same value reduce(log) returns.
+</Field>
+
+<Field name="onStop(ctx) / on_stop(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="onStop()[stop].decision / on_stop()[stop].decision" type={"\"stop\""} required>
+  stop: the turn ends end_turn as the model intended.
+</Field>
+
+<Field name="onStop()[continue].decision / on_stop()[continue].decision" type={"\"continue\""} required>
+  continue: the turn doesn't end. The model is asked again with reason as a trusted instruction. After 3 continues in one turn it ends stop_hook_limit.
+</Field>
+
+<Field name="onStop()[continue].reason / on_stop()[continue].reason" type={"string"} required>
+  What the model should still do, as any text. It is recorded on the hook_decision and sent to the model as a trusted hook instruction.
+</Field>
+
+<Field name="onStopFailure / on_stop_failure" type={"(code: RunErrorCode, ctx: RunContext<Deps>) => Promise<void>"}>
+  Observes a turn that ended in a failure, such as max_turns, max_output or a model error; on_stop doesn't run then. It can't change anything, and a failure is recorded and ignored. Omit it and failures are only recorded in the log.
+</Field>
+
+<Field name="onStopFailure(code) / on_stop_failure(code)" type={"RunErrorCode"} required>
+  The run error code the turn ended with: context_exhausted, model_unavailable, max_output, max_turns, output_invalid, input_denied or model_error.
+</Field>
+
+<Field name="onStopFailure(ctx) / on_stop_failure(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="subagentStart / subagent_start" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string }>"}>
+  Gates each spawn of a child agent before it starts. Return allow, or deny with a reason and the child isn't started; a throw or timeout denies. Omit it and every spawn the permission rules allow starts.
+</Field>
+
+<Field name="subagentStart(call) / subagent_start(call)" type={"ToolCallEvent.data"} required>
+  The spawn tool call: its call_id, tool name, parsed input (which agent and what task) and the request it came from.
+</Field>
+
+<Field name="subagentStart(ctx) / subagent_start(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="subagentStart()[allow].decision / subagent_start()[allow].decision" type={"\"allow\""} required>
+  allow: the subagent starts (agent_spawned).
+</Field>
+
+<Field name="subagentStart()[deny].decision / subagent_start()[deny].decision" type={"\"deny\""} required>
+  deny: the subagent never starts. The spawn call closes as a denied tool_result the parent's model sees.
+</Field>
+
+<Field name="subagentStart()[deny].reason / subagent_start()[deny].reason" type={"string"} required>
+  Why, as any text. It is recorded on the hook_decision. TypeScript shows it to the parent's model as the denied result; Python shows a fixed text.
+</Field>
+
+<Field name="subagentStop / subagent_stop" type={"(finished: AgentFinishedEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"stop\" } | { decision: \"continue\"; reason: string }>"}>
+  Runs when a child agent finishes. Return stop to let its result stand, or continue with a reason that is sent to the child as new input; after 3 continues, or if the child was cancelled, the result stands, and a throw or timeout stops. Omit it and each child's result stands as it finished.
+</Field>
+
+<Field name="subagentStop(finished) / subagent_stop(finished)" type={"AgentFinishedEvent.data"} required>
+  How the child finished: its status and its final output or error.
+</Field>
+
+<Field name="subagentStop(ctx) / subagent_stop(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="subagentStop()[stop].decision / subagent_stop()[stop].decision" type={"\"stop\""} required>
+  stop: the subagent's result stands and goes back to the parent.
+</Field>
+
+<Field name="subagentStop()[continue].decision / subagent_stop()[continue].decision" type={"\"continue\""} required>
+  continue: the subagent runs again with reason as its next input. After 3 continues, or when the subagent was cancelled, its result stands.
+</Field>
+
+<Field name="subagentStop()[continue].reason / subagent_stop()[continue].reason" type={"string"} required>
+  The subagent's next input, as any text. It is recorded on the hook_decision. When the continue can't take effect, TypeScript records a stop instead (reason cancelled, or continuation limit after 3 continues); Python records this continue and its reason even when the subagent was cancelled, and after 3 continues doesn't call the hook at all.
+</Field>
+
+<Field name="beforeModelSwitch / before_model_switch" type={"(settings: ModelSettings, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string }>"}>
+  Gates an automatic model switch: the switch to a fallback model after repeated overloaded rejections (retry.fallback_after) and, with fallback_scope turn, the revert at the next input. Return allow, or deny with a reason to stay on the current model; a throw or timeout denies. Thread.setModel doesn't run it. Omit it and every automatic switch is allowed.
+</Field>
+
+<Field name="beforeModelSwitch(settings) / before_model_switch(settings)" type={"ModelSettings"} required>
+  The model settings the thread would switch to.
+</Field>
+
+<Field name="beforeModelSwitch(ctx) / before_model_switch(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="beforeModelSwitch()[allow].decision / before_model_switch()[allow].decision" type={"\"allow\""} required>
+  allow: the switch to the fallback model goes ahead (settings_changed with reason fallback).
+</Field>
+
+<Field name="beforeModelSwitch()[deny].decision / before_model_switch()[deny].decision" type={"\"deny\""} required>
+  deny: no switch to the fallback model. TypeScript keeps retrying the current model; Python ends the turn model_unavailable.
+</Field>
+
+<Field name="beforeModelSwitch()[deny].reason / before_model_switch()[deny].reason" type={"string"} required>
+  Why, as any text. It is recorded on the hook_decision; the model never sees it.
+</Field>
+
+<Field name="afterModelSwitch / after_model_switch" type={"(settings: ModelSettings, ctx: RunContext<Deps>) => Promise<void>"}>
+  Observes a model switch after it is recorded. It can't change anything; a failure is recorded and ignored. Omit it and switches are only recorded in the log.
+</Field>
+
+<Field name="afterModelSwitch(settings) / after_model_switch(settings)" type={"ModelSettings"} required>
+  The model settings the thread switched to.
+</Field>
+
+<Field name="afterModelSwitch(ctx) / after_model_switch(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>
+
+<Field name="notification" type={"(event: Event, ctx: RunContext<Deps>) => Promise<void>"}>
+  Observes notable events as they are recorded: the branch parked or a retry wait began, and in TypeScript also a budget was exceeded or a child agent finished. It can't change anything; a failure is recorded and ignored. Omit it and those events are only in the log.
+</Field>
+
+<Field name="notification(event)" type={"Event"} required>
+  The event that was just recorded, exactly as it is in the log.
+</Field>
+
+<Field name="notification(ctx)" type={"RunContext<Deps>"} required>
+  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+</Field>

@@ -1,19 +1,33 @@
 ---
 title: "MemoryHit"
-description: "The MemoryHit type."
+description: "One recalled memory, as a provider returns it from recall."
 icon: "Braces"
 ---
 
+The framework parses it, keeps it only if its binding belongs to the calling scope, and shows it to the model as untrusted reference.
+
 ## Fields
 
-<Field name="id" type={"string"} required />
+<Field name="id" type={"string"} required>
+  The record's id, the same one remember returned. The model can pass it to forget_memory.
+</Field>
 
-<Field name="version" type={"string"} required />
+<Field name="version" type={"string"} required>
+  The record's version, the same one remember returned.
+</Field>
 
-<Field name="text" type={"string"} required />
+<Field name="text" type={"string"} required>
+  The stored fact.
+</Field>
 
-<Field name="score" type={"number"} required />
+<Field name="score" type={"number"} required>
+  How well the record matches the query; higher is better. The scale is the provider's own (local_memory uses the negated FTS5 bm25 rank).
+</Field>
 
-<Field name="origin" type={"\"user\" | \"tool_output\" | \"model\" | \"host\""} required />
+<Field name="origin" type={"\"user\" | \"tool_output\" | \"model\" | \"host\""} required>
+  The origin the record was saved with (user, tool_output, model or host), returned unchanged.
+</Field>
 
-<Field name="binding" type={"Binding"} required />
+<Field name="binding" type={"Binding"} required>
+  Issued by the host; the provider stores it opaquely.
+</Field>

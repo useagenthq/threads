@@ -1,19 +1,33 @@
 ---
 title: "KnowledgeHit"
-description: "The KnowledgeHit type."
+description: "One matching passage, as a provider returns it from search."
 icon: "Braces"
 ---
 
+The framework parses it, keeps it only if its binding belongs to the calling scope, and shows it to the model as an untrusted excerpt it can cite.
+
 ## Fields
 
-<Field name="doc_id" type={"string"} required />
+<Field name="doc_id" type={"string"} required>
+  The document the passage is from.
+</Field>
 
-<Field name="version" type={"string"} required />
+<Field name="version" type={"string"} required>
+  The document version the passage is from.
+</Field>
 
-<Field name="span" type={"Span"} required />
+<Field name="span" type={"Span"} required>
+  Half-open range [start, end) in UTF-8 BYTE offsets of the referenced text or artifact bytes.
+</Field>
 
-<Field name="text" type={"string"} required />
+<Field name="text" type={"string"} required>
+  The passage's text.
+</Field>
 
-<Field name="score" type={"number"} required />
+<Field name="score" type={"number"} required>
+  How well the passage matches the query; higher is better. The scale is the provider's own (local_knowledge uses the negated FTS5 bm25 rank).
+</Field>
 
-<Field name="binding" type={"Binding"} required />
+<Field name="binding" type={"Binding"} required>
+  Issued by the host; the provider stores it opaquely.
+</Field>

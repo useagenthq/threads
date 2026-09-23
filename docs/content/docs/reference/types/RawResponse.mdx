@@ -1,13 +1,19 @@
 ---
 title: "RawResponse"
-description: "The RawResponse type."
+description: "An HTTP reply an adapter hands back to the host to send."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="status" type={"number"} required />
+<Field name="status" type={"number"} required>
+  The HTTP status code, for example 200.
+</Field>
 
-<Field name="headers" type={"Record<string, string>"} required />
+<Field name="headers" type={"Record<string, string>"} required>
+  Response headers by name.
+</Field>
 
-<Field name="body" type={"Uint8Array"} required />
+<Field name="body" type={"Uint8Array"} required>
+  The response body's bytes (may be empty).
+</Field>

@@ -1,6 +1,6 @@
 ---
 title: "ModelChunk"
-description: "The ModelChunk type."
+description: "One item of a Model.send stream: a text delta, a finished output part, the final done chunk, or one terminal rejected chunk when the send failed before any content."
 icon: "Braces"
 ---
 
@@ -8,34 +8,56 @@ A union discriminated by `kind`.
 
 ### delta
 
-<Field name="kind" type={"\"delta\""} required />
+<Field name="kind" type={"\"delta\""} required>
+  "delta": a piece of streamed text, shown live and not recorded on its own.
+</Field>
 
-<Field name="text" type={"string"} required />
+<Field name="text" type={"string"} required>
+  The new text since the last delta.
+</Field>
 
 ### part
 
-<Field name="kind" type={"\"part\""} required />
+<Field name="kind" type={"\"part\""} required>
+  "part": one finished output part.
+</Field>
 
-<Field name="part" type={"OutputPart"} required />
+<Field name="part" type={"OutputPart"} required>
+  The finished part (text, tool call, reasoning or hosted tool result). Parts are recorded in the order they arrive.
+</Field>
 
 ### done
 
-<Field name="kind" type={"\"done\""} required />
+<Field name="kind" type={"\"done\""} required>
+  "done": the last chunk of a successful send, with its stop reason and usage.
+</Field>
 
-<Field name="stop_reason" type={"ModelResponseEvent.data.stop_reason"} required />
+<Field name="stop_reason" type={"ModelResponseEvent.data.stop_reason"} required>
+  Only end_turn, stop_sequence and refusal complete a turn; tool_use dispatches; max_tokens continues; pause_turn re-requests with the paused content as-is, up to context.max_pause_continuations; context_window_exceeded ends the turn context_exhausted; other (a reason the adapter can't name) ends it error.
+</Field>
 
-<Field name="usage" type={"Usage"} required />
+<Field name="usage" type={"Usage"} required>
+  Per-field measured-or-unknown usage.
+</Field>
 
 ### rejected
 
-<Field name="kind" type={"\"rejected\""} required />
+<Field name="kind" type={"\"rejected\""} required>
+  "rejected": the send failed before any content; always the stream's only and last chunk.
+</Field>
 
 <Field name="reason" type={"\"rate_limited\" | \"overloaded\" | \"server_error\" | \"prompt_too_long\" | \"provider_error\" | \"stale_epoch\" | \"content_unsupported\" | \"continuation_unsupported\" | \"transport_fence_unsupported\""} required>
   The terminal error of a send: exactly Model.send returns.errors. Provider classes are recorded as model_attempt_abandoned&#123;provider_outcome: failed&#125;; stale_epoch appends nothing (the writer lost its lease); content_unsupported, continuation_unsupported and transport_fence_unsupported are recorded as not_sent and end the turn with that code, never retried.
 </Field>
 
-<Field name="http_status" type={"number"} />
+<Field name="http_status" type={"number"}>
+  The provider's HTTP status code (for example 429 or 529), recorded with the abandoned attempt. Omitted when there was no HTTP response.
+</Field>
 
-<Field name="retry_after_ms" type={"number"} />
+<Field name="retry_after_ms" type={"number"}>
+  The provider's retry-after hint in milliseconds. When present the retry waits this long instead of backing off, and a hint longer than the retry policy's max_retry_after_ms ends the turn. Omitted when the provider gave none.
+</Field>
 
-<Field name="billing" type={"ModelAttemptAbandonedEvent.data.billing"} />
+<Field name="billing" type={"ModelAttemptAbandonedEvent.data.billing"}>
+  not_billed only when provider_outcome is not_sent or the adapter's declared billing contract (in the system prompt adapter settings) states this rejection class is not billed; a status code alone is not proof.
+</Field>

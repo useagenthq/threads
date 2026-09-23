@@ -1,13 +1,19 @@
 ---
 title: "VerifiedDelivery"
-description: "The VerifiedDelivery type."
+description: "What a provider's signature proves about a webhook: whose workspace or installation sent it."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="tenant" type={"string"} required />
+<Field name="tenant" type={"string"} required>
+  The tenant the webhook belongs to, a non-empty string. The host stores the batch in this tenant and refuses an item whose sender is in another tenant.
+</Field>
 
-<Field name="installation_id" type={"string"} required />
+<Field name="installation_id" type={"string"} required>
+  The app installation that received the webhook, a non-empty string. It scopes the inbox dedup keys and the replies.
+</Field>
 
-<Field name="delivery_id" type={"string"} required />
+<Field name="delivery_id" type={"string"} required>
+  The provider's id for this delivery, a non-empty string, recorded with each item.
+</Field>

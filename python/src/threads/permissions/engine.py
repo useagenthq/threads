@@ -43,6 +43,8 @@ class Decision:
     source: Source
     rule: str | None = None
     """The matched rule string, when a rule decided."""
+    reason: str | None = None
+    """A hook's why: the reason of its deny, the rule of its ask."""
 
 
 @dataclass(frozen=True, slots=True)

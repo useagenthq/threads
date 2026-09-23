@@ -1,11 +1,15 @@
 ---
 title: "RunStream"
-description: "The RunStream type."
+description: "What agent.stream() returns."
 icon: "Box"
 ---
+
+Iterate it for the run's events as they are appended to the log, plus transient text deltas and status items; await result for the RunResult.
 
 <Callout>A handle returned by the library.</Callout>
 
 ## Properties
 
-<Field name="result" type={"Promise<RunResult<Output>>"} required />
+<Field name="result" type={"Promise<RunResult<Output>>"} required>
+  The HTTP form is host-api RunOutcome (ids instead of handles).
+</Field>

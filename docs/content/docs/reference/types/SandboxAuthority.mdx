@@ -10,7 +10,9 @@ A union discriminated by `kind`.
 
 ### owner
 
-<Field name="kind" type={"\"owner\""} required />
+<Field name="kind" type={"\"owner\""} required>
+  "owner": the owning branch's lease holder dispatches this operation.
+</Field>
 
 <Field name="branch_id" type={"BranchId"} required>
   The branch that owns the resource (its resource-ledger owner).
@@ -22,9 +24,13 @@ A union discriminated by `kind`.
 
 ### cleanup
 
-<Field name="kind" type={"\"cleanup\""} required />
+<Field name="kind" type={"\"cleanup\""} required>
+  "cleanup": gc dispatches this operation under a cleanup claim, with no branch lease.
+</Field>
 
-<Field name="resource_id" type={"string"} required />
+<Field name="resource_id" type={"string"} required>
+  The id of the resource ledger row gc is cleaning up.
+</Field>
 
 <Field name="claim" type={"string"} required>
   The cleanup claim token gc wrote on the resources row (cleanup_claim) by compare-and-set.

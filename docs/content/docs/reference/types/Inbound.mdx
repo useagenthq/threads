@@ -1,6 +1,6 @@
 ---
 title: "Inbound"
-description: "The Inbound type."
+description: "One item of a verified webhook batch: a message, an approval decision, a control command, or something to ignore."
 icon: "Braces"
 ---
 
@@ -8,9 +8,13 @@ A union discriminated by `kind`.
 
 ### message
 
-<Field name="kind" type={"\"message\""} required />
+<Field name="kind" type={"\"message\""} required>
+  "message": user input that starts a run on the conversation's thread.
+</Field>
 
-<Field name="principal" type={"Principal"} required />
+<Field name="principal" type={"Principal"} required>
+  A verified identity, normalized by the host.
+</Field>
 
 <Field name="address" type={"string"} required>
   Conversation key; the host maps it to a thread.
@@ -20,13 +24,19 @@ A union discriminated by `kind`.
   Inbox dedup key, derived only from signed content.
 </Field>
 
-<Field name="content" type={"Input"} required />
+<Field name="content" type={"Input"} required>
+  What a run starts with: plain text or ordered input parts.
+</Field>
 
 ### decision
 
-<Field name="kind" type={"\"decision\""} required />
+<Field name="kind" type={"\"decision\""} required>
+  "decision": an answer to an approval card.
+</Field>
 
-<Field name="principal" type={"Principal"} required />
+<Field name="principal" type={"Principal"} required>
+  A verified identity, normalized by the host.
+</Field>
 
 <Field name="address" type={"string"} required>
   Conversation key; the host maps it to a thread.
@@ -36,15 +46,23 @@ A union discriminated by `kind`.
   Inbox dedup key, derived only from signed content.
 </Field>
 
-<Field name="challenge_id" type={"Uuid"} required />
+<Field name="challenge_id" type={"Uuid"} required>
+  Lowercase UUID string.
+</Field>
 
-<Field name="decision" type={"\"grant\" | \"deny\""} required />
+<Field name="decision" type={"\"grant\" | \"deny\""} required>
+  grant approves the challenged action; deny refuses it. It applies only if the sender may approve on that thread.
+</Field>
 
 ### control
 
-<Field name="kind" type={"\"control\""} required />
+<Field name="kind" type={"\"control\""} required>
+  "control": a command that stops the conversation's run.
+</Field>
 
-<Field name="principal" type={"Principal"} required />
+<Field name="principal" type={"Principal"} required>
+  A verified identity, normalized by the host.
+</Field>
 
 <Field name="address" type={"string"} required>
   Conversation key; the host maps it to a thread.
@@ -54,8 +72,12 @@ A union discriminated by `kind`.
   Inbox dedup key, derived only from signed content.
 </Field>
 
-<Field name="command" type={"\"cancel\" | \"stop_when_idle\""} required />
+<Field name="command" type={"\"cancel\" | \"stop_when_idle\""} required>
+  cancel stops the run and its children now; stop_when_idle stops it once the current work finishes. The TypeScript host consumes stop_when_idle without acting on it today.
+</Field>
 
 ### ignore
 
-<Field name="kind" type={"\"ignore\""} required />
+<Field name="kind" type={"\"ignore\""} required>
+  "ignore": delivered but not for the agent (the bot's own message, a reaction, a status update). The host drops it.
+</Field>
