@@ -1,4 +1,5 @@
-import { SandboxScript } from "../../../src/sandbox";
+import { manifestHash, SandboxScript } from "../../../src/sandbox";
+import { WORKSPACE } from "../../../src/sandbox/remote/scripts";
 import { type FileRec, Machine, seeded } from "./machine";
 
 // A provider's state behind a mocked transport: live sandboxes (emulated machines) found by
@@ -69,6 +70,21 @@ export class World {
     const machine = this.machine(id);
     this.snapshots.set(name, { files: new Map(machine.files) });
     return name;
+  }
+
+  /** The manifest hash of a snapshot's /workspace tree, as the kit computes it. */
+  hashOf(ref: string): string {
+    const files = this.snapshots.get(ref)?.files ?? new Map();
+    const entries = [...files]
+      .filter(([p]) => p.startsWith(`${WORKSPACE}/`))
+      .map(([p, f]) => ({
+        path: p.slice(WORKSPACE.length + 1),
+        mode: f.mode,
+        size: f.size,
+        sha256: f.sha256,
+      }))
+      .toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    return manifestHash(entries);
   }
 
   deleteSnapshot(ref: string): boolean {

@@ -19,6 +19,11 @@ export type Contract = {
   readonly sandboxTraffic: () => string;
 };
 
+/** Whether the adapter declares a snapshot boundary it can confirm. */
+function capturing(sandbox: Sandbox): boolean {
+  return sandbox.info.capture_classes.length > 0;
+}
+
 async function lookup(sandbox: Sandbox, key: string) {
   if (sandbox.lookup === undefined) throw new Error("the adapter can look up");
   return unwrap(await sandbox.lookup(key, CTX));
@@ -86,47 +91,57 @@ export function contractSuite(name: string, make: () => Contract): void {
       expect(code(await box.download("/../../x", CTX))).toBe("invalid_path");
     });
 
-    test("snapshot and restore: the file is there, verified, and isolated", async () => {
+    test("a snapshot is taken only behind a confirmed whole-sandbox boundary", async () => {
       const { sandbox, world } = make();
       const box = await created(sandbox);
       unwrap(await box.upload("a.txt", new TextEncoder().encode("one"), CTX));
-      const snap = unwrap(await box.snapshot("op-snap", CTX));
-      expect(snap.capture_class).toBe("filesystem");
+      const snap = await box.snapshot("op-snap", CTX);
+      if (!capturing(sandbox)) {
+        expect(sandbox.info.capture_classes).toEqual([]);
+        expect(code(snap)).toBe("unavailable");
+        expect(world.snapshots.size).toBe(0);
+        return;
+      }
+      const data = unwrap(snap);
+      expect(data.capture_class).toBe("filesystem");
+      expect(data.manifest_hash).toBe(world.hashOf(data.snapshot_id));
+      expect(unwrap(await sandbox.release(data.snapshot_id, CTX))).toBe(
+        "released",
+      );
+      expect(world.snapshots.has(data.snapshot_id)).toBe(false);
+    });
+
+    test("a writer running around the capture refuses the snapshot (not_quiescent)", async () => {
+      const { sandbox, world } = make();
+      if (!capturing(sandbox)) return;
+      const box = await created(sandbox);
+      unwrap(await box.exec(["writer"], CTX, { processKey: "w" }));
+      expect(code(await box.snapshot("op-snap", CTX))).toBe("not_quiescent");
+      expect(world.snapshots.size).toBe(0);
+    });
+
+    test("restore: the tree is verified, and the child is isolated", async () => {
+      const { sandbox, world } = make();
+      const box = await created(sandbox);
+      unwrap(await box.upload("a.txt", new TextEncoder().encode("one"), CTX));
+      const ref = world.snapshot(box.id, "seed");
       const child = unwrap(
-        await sandbox.restore(
-          snap.snapshot_id,
-          snap.manifest_hash,
-          "op-2",
-          CTX,
-        ),
+        await sandbox.restore(ref, world.hashOf(ref), "op-2", CTX),
       );
       expect(child.id).not.toBe(box.id);
       unwrap(await child.upload("a.txt", new TextEncoder().encode("two"), CTX));
       expect(
         new TextDecoder().decode(unwrap(await box.download("a.txt", CTX))),
       ).toBe("one");
-      expect(unwrap(await sandbox.release(snap.snapshot_id, CTX))).toBe(
-        "released",
-      );
-      expect(world.snapshots.has(snap.snapshot_id)).toBe(false);
-    });
-
-    test("a writer running around the capture refuses the snapshot (not_quiescent)", async () => {
-      const { sandbox, world } = make();
-      const box = await created(sandbox);
-      unwrap(await box.exec(["writer"], CTX, { processKey: "w" }));
-      const before = world.snapshots.size;
-      expect(code(await box.snapshot("op-snap", CTX))).toBe("not_quiescent");
-      expect(world.snapshots.size).toBe(before);
     });
 
     test("a restored tree that fails the manifest is released", async () => {
       const { sandbox, world } = make();
       const box = await created(sandbox);
-      const snap = unwrap(await box.snapshot("op-snap", CTX));
+      const ref = world.snapshot(box.id, "seed");
       const before = world.machines.size;
       const restored = await sandbox.restore(
-        snap.snapshot_id,
+        ref,
         manifestHash([
           { path: "x", mode: 0o644, size: 1, sha256: "0".repeat(64) },
         ]),
@@ -180,7 +195,8 @@ export function contractSuite(name: string, make: () => Contract): void {
       const box = await created(sandbox);
       await run(box, ["printenv"], { env: { PATH: "/usr/bin" } });
       unwrap(await box.upload("f", new TextEncoder().encode("x"), CTX));
-      unwrap(await box.snapshot("op-snap", CTX));
+      await box.snapshot("op-snap", CTX);
+      unwrap(await box.terminate("b:call-1", CTX));
       for (const machine of world.machines.values())
         expect(machine.everything()).not.toContain(CANARY);
       expect(sandboxTraffic()).not.toContain(CANARY);
