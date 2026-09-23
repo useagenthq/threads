@@ -1,4 +1,5 @@
-import type { ArtifactRef } from "../log";
+import type { z } from "zod";
+import { type ArtifactRef, InjectedData, ResultPart } from "../log";
 import { contextPolicy } from "./policy";
 import type { Session } from "./session";
 
@@ -22,6 +23,35 @@ function boundary(bytes: Uint8Array, at: number): number {
   while (end > 0 && end < bytes.length && ((bytes[end] ?? 0) & 0xc0) === 0x80)
     end -= 1;
   return end;
+}
+
+/** `value` with `redact` applied to every string value in it. */
+function redactStrings(
+  value: unknown,
+  redact: (text: string) => string,
+): unknown {
+  if (typeof value === "string") return redact(value);
+  if (Array.isArray(value)) return value.map((v) => redactStrings(v, redact));
+  if (typeof value === "object" && value !== null)
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, redactStrings(v, redact)]),
+    );
+  return value;
+}
+
+/** A result part as recorded: every string redacted, a citation's title and ids included. */
+export function recordPart(s: Session, part: ResultPart): ResultPart {
+  const redact = s.config.redact ?? ((text: string) => text);
+  return ResultPart.parse(redactStrings(part, redact));
+}
+
+/** Recalled context as recorded: redacted like the result that brings it (C5). */
+export function recordInjection(
+  s: Session,
+  injected: z.infer<typeof InjectedData>,
+): z.infer<typeof InjectedData> {
+  const redact = s.config.redact ?? ((text: string) => text);
+  return InjectedData.parse(redactStrings(injected, redact));
 }
 
 export function recordOutput(

@@ -138,6 +138,4 @@ Running a stdio server inside the sandbox (`runs: "sandbox"`) is not supported y
 
 ## When servers connect
 
-The tool list is fetched when a run starts (or on `check()` in TypeScript), filtered, and fixed for the life of the thread. A server that can't be reached is a setup error, `ConfigError("mcp_unreachable")`, naming the server. The agent never runs with tools silently missing.
-
-In TypeScript, `mcp()` returns a handle with `close()` to end the connection and stop a stdio server.
+Each `check()` and each run opens its own connection to every server, in both languages. The tool list is fetched then, filtered, and fixed for the life of the thread. The connection closes when the `check()` or the run ends, however it ends, which also stops a stdio server. There is nothing for you to close. A server that can't be reached is a setup error, `mcp_unreachable`, naming the server: `check()` returns it and a run throws it as `ConfigError`. The agent never runs with tools silently missing.

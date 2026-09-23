@@ -11,7 +11,12 @@ import { frameworkTool } from "./framework";
 import { observe } from "./hooks";
 import type { Session } from "./session";
 import { settleUnknown } from "./settle";
-import { type Recorded, recordOutput } from "./spill";
+import {
+  type Recorded,
+  recordInjection,
+  recordOutput,
+  recordPart,
+} from "./spill";
 import { toolSpec } from "./turn";
 import type { Halt, ToolRun } from "./types";
 
@@ -159,7 +164,7 @@ export function recordRead(
     run.kind === "done"
       ? run
       : { kind: "done", output: `failed: ${run.kind}`, isError: true };
-  return s.append(result(s, callId, done), ...injections(done));
+  return s.append(result(s, callId, done), ...injections(s, done));
 }
 
 /** The body of a mediated operation, or its stub in stub mode. */
@@ -245,7 +250,7 @@ function settle(
             : { provider_receipt: run.receipt }),
         }),
         resultOf(callId, run.isError, shown, contentOf(s, run)),
-        ...injections(run),
+        ...injections(s, run),
       );
     }
     case "unknown":
@@ -292,20 +297,20 @@ function result(
   );
 }
 
-/** A result's own ordered parts, text redacted like the output (C5). */
+/** A result's own ordered parts, redacted like the output (C5). */
 function contentOf(
   s: Session,
   run: Extract<ToolRun, { kind: "done" }>,
 ): readonly ResultPart[] | undefined {
-  const redact = s.config.redact ?? ((text: string) => text);
-  return run.content?.map((part) =>
-    part.type === "text" ? { ...part, text: redact(part.text) } : part,
-  );
+  return run.content?.map((part) => recordPart(s, part));
 }
 
 /** The context a result brings, after it and before the next request (C6). */
-function injections(run: Extract<ToolRun, { kind: "done" }>): EventDraft[] {
-  return (run.inject ?? []).map((d) => draft.injected(d));
+function injections(
+  s: Session,
+  run: Extract<ToolRun, { kind: "done" }>,
+): EventDraft[] {
+  return (run.inject ?? []).map((d) => draft.injected(recordInjection(s, d)));
 }
 
 function resultOf(

@@ -1,3 +1,4 @@
+import { redactingSink } from "../agent/secret";
 import { assertNever } from "../assert-never";
 import type { ArtifactRef } from "../log";
 import type { ToolRun } from "../loop/types";
@@ -148,7 +149,8 @@ async function collect(
   artifacts: ArtifactStore,
   keep: number,
 ): Promise<Result<ExecResult, ExecFailure>> {
-  const sink = artifacts.sink();
+  // The full output is recorded, so it is redacted as it streams in (C5).
+  const sink = redactingSink(artifacts.sink());
   const out = new Preview(keep);
   const errs = new Preview(keep);
   try {

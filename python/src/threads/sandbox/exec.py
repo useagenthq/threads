@@ -103,10 +103,8 @@ async def run_exec(
     truncated = out.truncated or err.truncated
     full = None
     if truncated:
-        size = out.total + err.total
-        full = ArtifactRef(
-            sha256=await spill.commit(), bytes=size, media_type="application/octet-stream"
-        )
+        sha = await spill.commit()
+        full = ArtifactRef(sha256=sha, bytes=spill.written, media_type="application/octet-stream")
     else:
         await spill.discard()
     return Ok(ExecResult(code, out.text(), err.text(), truncated, full))
