@@ -145,6 +145,19 @@ def build(root: pathlib.Path) -> None:
     _suite(root, ESTIMATE, GOOD, BROKEN, "constraints")
     _suite(root, MEETING, MEETING_GOOD, MEETING_BROKEN, "formats")
     _suite(root, OWN, {"toString": "x"}, OWN_BROKEN, "own-keys")
+    # A schema no setup would pin, as an imported log may carry it: a reader fails closed.
+    looped: Obj = {"$defs": {"A": {"anyOf": [{"$ref": "#"}]}}, "allOf": [{"$ref": "#/$defs/A"}]}
+    reject(
+        root,
+        (
+            "output-schema-ref-cycle-rejected",
+            FAM,
+            "An imported log pins an output schema whose $refs loop without reaching into the "
+            "value (# to A to #). No value can be checked against it, so an accepted one is "
+            "invalid_transition: the reader fails closed, never loops or crashes.",
+        ),
+        _accepted(looped, {}),
+    )
 
 
 def _suite(

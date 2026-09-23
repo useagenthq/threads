@@ -1,0 +1,9 @@
+{
+  "name": "output-schema-ref-cycle-rejected",
+  "family": "tools_streaming",
+  "kind": "reduce",
+  "description": "An imported log pins an output schema whose $refs loop without reaching into the value (# to A to #). No value can be checked against it, so an accepted one is invalid_transition: the reader fails closed, never loops or crashes.",
+  "clock": {
+    "now": 1790000060000
+  }
+}
