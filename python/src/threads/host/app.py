@@ -25,6 +25,7 @@ from threads.host.schedules import Schedule, Scheduler
 from threads.host.stream import Message
 from threads.log import BranchId, EventId, ParseError, Principal, ThreadId
 from threads.result import Err, Ok
+from threads.sandbox.protocol import Sandbox
 from threads.store import LOCAL_TENANT
 from threads.thread.handle import Thread, open_thread
 
@@ -61,6 +62,15 @@ class Host:
     @property
     def channels(self) -> Mapping[str, ChannelAdapter]:
         return self._channels
+
+    def sandboxes(self) -> tuple[Sandbox, ...]:
+        """One sandbox adapter per provider the agents use: what `threads gc` releases with."""
+        by_provider = {
+            a.definition.sandbox.info.provider: a.definition.sandbox
+            for a in self._agents.values()
+            if a.definition.sandbox is not None
+        }
+        return tuple(by_provider.values())
 
     @property
     def asgi(self) -> "ASGIApp":

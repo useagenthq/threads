@@ -158,5 +158,7 @@ class Scheduler:
         bound = self._runner.bound_to(schedule.agent)
         thread = Thread(thread_id, branch_id, store, approvers=bound.approvers)
         who = Principal(issuer="schedule", tenant=LOCAL_TENANT, subject=schedule.id)
-        self._runner.launch(bound, schedule.input, thread, who, intake=intake)
+        task = self._runner.launch(bound, schedule.input, thread, who, intake=intake)
+        # Returns once the occurrence's input is durable (or its run ended without one).
+        await asyncio.wait({recorded, task}, return_when=asyncio.FIRST_COMPLETED)
         return True
