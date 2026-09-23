@@ -40,6 +40,7 @@ const CONFIG_ERROR_CODES = [
   "permission_rule_invalid",
   "hosted_tool_unsupported",
   "egress_policy_unsupported",
+  "transport_fence_unsupported",
 ] as const satisfies readonly ConfigErrorCode[];
 
 test("RunErrorCode is host-api RunErrorCode", () => {

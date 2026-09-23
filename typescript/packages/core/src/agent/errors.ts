@@ -9,7 +9,8 @@ export type ConfigErrorCode =
   | "budget_unenforceable"
   | "permission_rule_invalid"
   | "hosted_tool_unsupported"
-  | "egress_policy_unsupported";
+  | "egress_policy_unsupported"
+  | "transport_fence_unsupported";
 
 /** Thrown at setup only. Every other expected failure is a value. */
 export class ConfigError extends Error {
