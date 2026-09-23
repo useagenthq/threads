@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import MAX_SAFE, PARAMS, obj, tokens
+from .common import ADAPTER, MAX_SAFE, MODEL, PARAMS, obj, sha, tokens
+from .jcs import canonical
 from .log import Log
 from .pieces import reduce_case, started, user
 from .policies import CONTEXT, MODELS, policy
@@ -182,7 +183,17 @@ def _cache_break_exact(root: pathlib.Path) -> None:
 
 def _max_tokens_not_integer(root: pathlib.Path) -> None:
     log = Log()
-    started(log, [], policy=policy(), params={**PARAMS, "max_tokens": True})
+    cfg: Obj = {
+        "agent_name": "demo",
+        "instructions": "You are a helpful agent.",
+        "model": MODEL,
+        "model_params": {**PARAMS, "max_tokens": True},
+        "adapter": ADAPTER,
+        "tools": [],
+        "policy": policy(),
+    }
+    config_hash = sha(canonical(cfg))
+    log.add("thread_started", {**cfg, "config_hash": config_hash, "sandbox_provider": "fake"})
     user(log, "Question.")
     log.model_request()
     reduce_case(

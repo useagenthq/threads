@@ -173,4 +173,3 @@ def _hooks(root: pathlib.Path) -> None:
         log,
         {},
     )
-

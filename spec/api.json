@@ -1469,7 +1469,7 @@
         "cost": {
           "ts": "cost",
           "py": "cost",
-          "doc": "What this thread spent, in nano-units of its pinned currency (USD for agent()), with a conservative upper bound; null when it pins no prices. With tree: true it adds every subagent at any depth, each read from its own log, in the root's currency (else the first priced descendant's; null when none is priced). complete and bounded turn false when some spend can't be added: a thread in another currency, or an unpriced thread that made a model request. A child that never started (spawned, no thread, no agent_finished) adds nothing. The call fails with the read error of a descendant it can't read; with log_corrupt when a finished child's log is missing, a child doesn't name the agent_spawned that started it, or the tree has a cycle; and with cost_overflow when an amount passes 2^53-1 nanos (never a rounded amount). Error messages name the path of child thread ids.",
+          "doc": "What this thread spent, in nano-units of its pinned currency (USD for agent()), with a conservative upper bound; null when it pins no prices. With tree: true it also counts every subagent at any depth, each from its own log, in the root's currency (else the first priced subagent's). complete and bounded become false when some spend can't be counted: a thread priced in another currency, or an unpriced thread that called a model. A subagent that never started counts nothing. Errors: a subagent's read error; log_corrupt when a finished subagent's log is missing, a subagent doesn't name the spawn that started it, or the tree loops; cost_overflow past 2^53-1 nanos. Messages name the path of child thread ids.",
           "async": true,
           "params": [
             {
