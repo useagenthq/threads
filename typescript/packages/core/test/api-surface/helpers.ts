@@ -35,28 +35,28 @@ export type Req<T, K extends PropertyKey> = K extends keyof T
   : false;
 
 /**
- * A function's last eight overloads, each as its whole signature. With fewer than eight, tsc
+ * A function's last eight overloads, each as its whole signature (`this`, parameters, return). With fewer than eight, tsc
  * fills the leading slots with copies of the first overload, so every overload is in the window.
  */
 type Signatures<F> = F extends {
-  (...args: infer A1): infer R1;
-  (...args: infer A2): infer R2;
-  (...args: infer A3): infer R3;
-  (...args: infer A4): infer R4;
-  (...args: infer A5): infer R5;
-  (...args: infer A6): infer R6;
-  (...args: infer A7): infer R7;
-  (...args: infer A8): infer R8;
+  (this: infer T1, ...args: infer A1): infer R1;
+  (this: infer T2, ...args: infer A2): infer R2;
+  (this: infer T3, ...args: infer A3): infer R3;
+  (this: infer T4, ...args: infer A4): infer R4;
+  (this: infer T5, ...args: infer A5): infer R5;
+  (this: infer T6, ...args: infer A6): infer R6;
+  (this: infer T7, ...args: infer A7): infer R7;
+  (this: infer T8, ...args: infer A8): infer R8;
 }
   ? [
-      (...args: A1) => R1,
-      (...args: A2) => R2,
-      (...args: A3) => R3,
-      (...args: A4) => R4,
-      (...args: A5) => R5,
-      (...args: A6) => R6,
-      (...args: A7) => R7,
-      (...args: A8) => R8,
+      (this: T1, ...args: A1) => R1,
+      (this: T2, ...args: A2) => R2,
+      (this: T3, ...args: A3) => R3,
+      (this: T4, ...args: A4) => R4,
+      (this: T5, ...args: A5) => R5,
+      (this: T6, ...args: A6) => R6,
+      (this: T7, ...args: A7) => R7,
+      (this: T8, ...args: A8) => R8,
     ]
   : never;
 
@@ -65,7 +65,7 @@ type Signatures<F> = F extends {
  * system can't count overloads; what it shows is the window: when its first four slots are the
  * same signature, they are tsc's padding (so F has at most five overloads) or overloads F
  * declares identically, which the window shows too. Only four consecutive identical overload
- * signatures (parameters and return type) followed by more overloads can hide one; that case is
+ * signatures (`this`, parameters, return type) followed by more overloads can hide one; that is
  * out of scope (spec/schema/README.md, "What it doesn't check"). Otherwise the leading slots
  * differ and this fails.
  */

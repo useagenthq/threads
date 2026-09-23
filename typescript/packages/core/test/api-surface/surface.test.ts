@@ -45,13 +45,19 @@ const A_REQUIRED =
  * means each entry already ends with its own return type.
  */
 function withFour(options: readonly string[], returns = "): void"): string {
+  return replaceFour(
+    options
+      .map((o) => `export declare function four(options: ${o}${returns};\n`)
+      .join(""),
+  );
+}
+
+/** The fixture package with four's overload declarations replaced by the given text. */
+function replaceFour(overloads: string): string {
   const start = pkg.indexOf("export declare function four(");
   const end = pkg.indexOf("export type Model");
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
-  const overloads = options
-    .map((o) => `export declare function four(options: ${o}${returns};\n`)
-    .join("");
   return `${pkg.slice(0, start)}${overloads}\n${pkg.slice(end)}`;
 }
 
@@ -153,6 +159,24 @@ describe("options over overloads", () => {
     });
     expect(verdict.failed).toContain(SEEN_FOUR);
   });
+
+  test.each([
+    [8, false],
+    [9, true],
+  ])(
+    "an oldest overload behind %i that differ only in `this` is red (by its option, or by the window)",
+    (n, hidden) => {
+      const later = Array.from(
+        { length: n - 1 },
+        (_, i) => `this: { readonly t${i}: 1 }, options: ${NEEDS_A}): void`,
+      );
+      const overloads = [`options: ${OMITS_A}): void`, ...later]
+        .map((o) => `export declare function four(${o};\n`)
+        .join("");
+      const verdict = compile({ pkg: replaceFour(overloads) });
+      expect(verdict.failed).toContain(hidden ? SEEN_FOUR : A_REQUIRED);
+    },
+  );
 
   test.each([
     ["six, the oldest two identical", 2, 4],

@@ -42,7 +42,7 @@ Both packages are checked against `../api.json` in CI. TypeScript: `tools/gen_ap
 
 - signatures: parameter and return types, positional parameters and option value types are left to each language's type checker and the tests;
 - that a Python constructor stores its inputs as attributes;
-- **overloads:** TypeScript's type system can't count overloads, so the gate reads a window of a function's last eight signatures and fails unless it can see all of them. Four consecutive overloads with identical signatures (parameters and return type), followed by more, can hide an earlier one; that case is out of scope.
+- **overloads:** TypeScript's type system can't count overloads, so the gate reads a window of a function's last eight signatures and fails unless it can see all of them. Four consecutive overloads with identical signatures (`this`, parameters and return type), followed by more, can hide an earlier one; that case is out of scope.
 
 **The gaps registry.** Anything either language lacks is listed in `../api-surface-gaps.json`, the one registry of what isn't built (the docs reference reads it too), one gap per member and language, each with its owning lane. It only shrinks: a listed gap that is fixed fails until its entry is deleted, and a PR may add an entry only for a member its own contract change introduces (compared against the base commit's `api.json`). It must be empty at the release gate (`--release`).
 
