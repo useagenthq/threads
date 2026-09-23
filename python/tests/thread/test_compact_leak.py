@@ -16,13 +16,13 @@ from threads.secrets import credential
 from threads.thread.control import LOCAL_OPERATOR
 
 USAGE = Usage(input_tokens=10, output_tokens=2)
-KEY = credential("fake", "api_key", "sk-l17-leak-5e6f", "U")()
 
 
 class LeakyOnSecondSend(ScriptedModel):
     """Plays the script, but the second send stores provider material holding a secret."""
 
-    def __init__(self) -> None:
+    def __init__(self, key: str) -> None:
+        self.key = key
         hi = ModelResponse((TextPart(type="text", text="Hi."),), "end_turn", USAGE, None)
         super().__init__([hi, hi], {})
         self.sends = 0
@@ -30,15 +30,17 @@ class LeakyOnSecondSend(ScriptedModel):
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         self.sends += 1
         if self.sends == 2:  # noqa: PLR2004 - the summary request is the second send
-            await context.put(json.dumps({"encrypted": KEY}).encode(), "application/json")
+            await context.put(json.dumps({"encrypted": self.key}).encode(), "application/json")
         async for chunk in super().send(request, context):
             yield chunk
 
 
 def test_a_leaked_summary_answers_the_request_once_and_ends_the_turn() -> None:
     async def main() -> None:
+        # Registered in the test: the suite resets the secret registry between tests.
+        key = credential("fake", "api_key", "sk-l17-leak-5e6f", "U")()
         store = sqlite(":memory:")
-        bot = agent(model=LeakyOnSecondSend())
+        bot = agent(model=LeakyOnSecondSend(key))
         first = await bot.run("hi", store=store)
         assert isinstance(await first.thread.compact(LOCAL_OPERATOR), Ok)
         await bot.run("next", store=store, thread=first.thread)

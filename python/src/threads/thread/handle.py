@@ -3,6 +3,7 @@ one branch. Every method reads or appends through the store; none needs the agen
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Literal
 
 from threads._generated.host_api_v1 import (
@@ -35,6 +36,7 @@ from threads.loop import defaults
 from threads.loop.stubs import Stub, parse_stubs
 from threads.reduce.projections import cache_breaks, cost
 from threads.reduce.state import usage_totals
+from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import VerifiedLog
@@ -323,7 +325,8 @@ class Thread:
         read = await read_log(self.store, self.branch)
         if isinstance(read, Err):
             return read
-        return await (await open_store(self.store)).verify_requests(read.value.fold.events)
+        sq = await open_store(self.store)
+        return await sq.reading(partial(verify_requests, read.value.fold.events))
 
     async def compact(self, principal: Principal, *, instructions: str | None = None) -> Controlled:
         """Records a compaction request while the thread is idle; its next run summarizes
