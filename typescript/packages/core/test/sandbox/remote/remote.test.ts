@@ -148,6 +148,48 @@ describe("snapshot capability by the provider's declared boundary", () => {
     );
   };
 
+  test("A→B just before the capture, B→A right after: never Ok with A's hash", async () => {
+    const world = new World();
+    const base = memoryDriver(world);
+    const capture = base.snapshot;
+    if (capture === undefined) throw new Error("the memory driver captures");
+    const utf8 = new TextEncoder();
+    const file = "/workspace/value.txt";
+    const sandbox = remoteSandbox(
+      {
+        ...base,
+        snapshot: {
+          ...capture,
+          take: async (id, key) => {
+            world.machine(id).write(file, utf8.encode("B"));
+            const made = await capture.take(id, key);
+            world.machine(id).write(file, utf8.encode("A"));
+            return made;
+          },
+        },
+      },
+      INFO,
+      EXPIRY,
+    );
+    const box = unwrap(await sandbox.create("op", CTX));
+    unwrap(await box.upload(file, utf8.encode("A"), CTX));
+    // The image (B) is hashed from itself, so it can't pass as A: the capture is refused, the
+    // snapshot released, and the scratch sandbox that read the image is gone.
+    expect(code(await box.snapshot("s", CTX))).toBe("not_quiescent");
+    expect(world.snapshots.size).toBe(0);
+    expect([...world.machines.keys()]).toEqual([box.id]);
+  });
+
+  test("the declared manifest is the captured image's own tree", async () => {
+    const world = new World();
+    const sandbox = adapter(world);
+    const box = unwrap(await sandbox.create("op", CTX));
+    unwrap(await box.upload("a.txt", new TextEncoder().encode("x"), CTX));
+    const snap = unwrap(await box.snapshot("s", CTX));
+    expect(snap.manifest_hash).toBe(world.hashOf(snap.snapshot_id));
+    expect([...world.machines.keys()]).toEqual([box.id]);
+  });
+
   test("a whole-sandbox pause records every process frozen", async () => {
     const sandbox = withQuiescence(new World(), "paused");
     const box = unwrap(await sandbox.create("op", CTX));
