@@ -42,35 +42,48 @@ def origin(url: str) -> tuple[str, str, int] | None:
     return scheme, parts.hostname.lower().rstrip("."), port or (443 if scheme == "https" else 80)
 
 
-_NAT64: Final = ipaddress.ip_network("64:ff9b::/96")
-_DENIED: Final = (
-    ipaddress.ip_network("192.88.99.0/24"),  # deprecated 6to4 relay anycast
-    ipaddress.ip_network("fec0::/10"),  # deprecated site-local
-    ipaddress.ip_network("5f00::/16"),  # SRv6 SIDs
+def _nets(*cidrs: str) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    return tuple(ipaddress.ip_network(c) for c in cidrs)
+
+
+# spec/schema/README.md, SSRF guard: the shared lists, pinned by conformance/vectors/ssrf.json.
+_V4_DENIED: Final = _nets(
+    "0.0.0.0/8",
+    "10.0.0.0/8",
+    "100.64.0.0/10",
+    "127.0.0.0/8",
+    "169.254.0.0/16",
+    "172.16.0.0/12",
+    "192.0.0.0/24",
+    "192.0.2.0/24",
+    "192.88.99.0/24",
+    "192.168.0.0/16",
+    "198.18.0.0/15",
+    "198.51.100.0/24",
+    "203.0.113.0/24",
+    "224.0.0.0/3",
 )
-
-
-def _carried(ip: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
-    """The IPv4 address an IPv6 one carries: mapped, compatible, NAT64 or 6to4."""
-    if ip.ipv4_mapped is not None:
-        return ip.ipv4_mapped
-    if ip.sixtofour is not None:
-        return ip.sixtofour
-    low = int(ip) & 0xFFFFFFFF
-    if (int(ip) >> 32 == 0 and low > 1) or ip in _NAT64:
-        return ipaddress.IPv4Address(low)
-    return None
+_V6_GLOBAL: Final = ipaddress.ip_network("2000::/3")
+_V6_DENIED: Final = _nets("2001::/23", "2001:db8::/32", "2002::/16", "3fff::/20")
+_NAT64: Final = ipaddress.ip_network("64:ff9b::/96")
 
 
 def blocked(address: str) -> bool:
-    """Private, loopback, link-local (the metadata address among them), ULA, reserved,
-    multicast and unspecified addresses are all not global. An IPv6 address carrying IPv4
-    (mapped, compatible, NAT64, 6to4) is judged as that IPv4 address; Teredo and the other
-    special IPv6 prefixes are not global."""
-    ip = ipaddress.ip_address(address.split("%", 1)[0])
-    if isinstance(ip, ipaddress.IPv6Address) and (inner := _carried(ip)) is not None:
-        ip = inner
-    return not ip.is_global or ip.is_multicast or any(ip in net for net in _DENIED)
+    """IPv4 outside the denied ranges is public. IPv6 is public only inside 2000::/3 minus
+    Teredo and the IETF assignments, documentation, 6to4 and 3fff::/20; IPv4-mapped and NAT64
+    addresses are judged as the IPv4 they carry. Anything unparseable is blocked."""
+    try:
+        ip = ipaddress.ip_address(address.split("%", 1)[0])
+    except ValueError:
+        return True
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        elif ip in _NAT64:
+            ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+        else:
+            return ip not in _V6_GLOBAL or any(ip in net for net in _V6_DENIED)
+    return any(ip in net for net in _V4_DENIED)
 
 
 async def system_resolve(host: str, port: int) -> Sequence[str]:

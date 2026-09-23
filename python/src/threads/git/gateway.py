@@ -6,7 +6,7 @@ forge's branch is at the pushed commit, a pull request by its head branch."""
 
 import re
 import tempfile
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
@@ -20,7 +20,7 @@ from threads._generated.tools_v1 import (
     GitPushInput,
     OpenPullRequestInput,
 )
-from threads.git.forge import GitHub, PullRequest, Refused
+from threads.git.forge import GitHub, Refused
 from threads.git.host import credential_env, git
 from threads.log import JsonObject, ToolSpec
 from threads.log.digest import sha256_hex
@@ -245,8 +245,8 @@ class GitGateway:
         found = await api.find(args.repo, args.head, args.base, self._token, self._fence)
         if isinstance(found, Err):
             return _failed(found.error)
-        if (pull := _open_one(found.value)) is not None:
-            return Output(f"{pull.text()} (already open for {args.head})")
+        if found.value is not None:
+            return Output(found.value.text())
         body = "" if args.body is MISSING else args.body
         made = await api.open(
             args.repo,
@@ -269,17 +269,13 @@ class GitGateway:
                 return LookupUnknown(f"{call.spec.name} has no lookup")
 
     async def _pull_found(self, args: OpenPullRequestInput) -> LookupResult[str]:
-        """Found for an open pull request from the head into the base. None at all means the
-        create never landed (final). Only a closed one is not proof either way: the lost
-        create may have been closed since, or it is an older one; it parks for a human
-        rather than risk a second pull request (invariant 3)."""
+        """Found for any pull request from the head into the base, in any state, so a lost
+        create that was closed since is never opened twice. None means it never landed."""
         api = self._forge.api
         found = await api.find(args.repo, args.head, args.base, self._token, self._fence)
         if isinstance(found, Err):
             return LookupUnknown("the forge did not answer")
-        if (pull := _open_one(found.value)) is not None:
-            return Found(pull.text())
-        return NotFoundNonfinal() if found.value else NotFound()
+        return NotFound() if found.value is None else Found(found.value.text())
 
     async def _pushed(self, args: GitPushInput, key: str) -> LookupResult[str]:
         """Found when the forge's branch is at the local branch's commit. Anything else is a
@@ -311,10 +307,6 @@ class GitGateway:
 
 def _pushed(args: GitPushInput, sha: str) -> str:
     return f"pushed {sha} to {args.repo} {args.branch}"
-
-
-def _open_one(pulls: Sequence[PullRequest]) -> PullRequest | None:
-    return next((p for p in pulls if p.open), None)
 
 
 def _failed(error: WebError | Refused) -> Dispatched:

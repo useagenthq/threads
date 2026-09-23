@@ -195,9 +195,7 @@ def test_open_pull_request_returns_an_existing_one_and_reconciles_by_head(tmp_pa
     for api, want in (
         (
             existing,
-            Output(
-                "pull request #7: https://github.com/acme/app/pull/7 (already open for feature)"
-            ),
+            Output("pull request #7 (open): https://github.com/acme/app/pull/7"),
         ),
         (fresh, Output("pull request #7: https://github.com/acme/app/pull/7")),
         (lost, Uncertain("transport_error")),
@@ -217,22 +215,59 @@ def test_open_pull_request_returns_an_existing_one_and_reconciles_by_head(tmp_pa
         run(tmp_path / str(id(api)), body, GitHub("https://api.github.com", api, _public))
 
 
-def test_a_lost_create_later_closed_parks_and_is_never_opened_twice(tmp_path: Path) -> None:
-    """A create landed but its answer was lost, then the pull request was closed: its head
-    still names it, so recovery parks (a human decides) rather than reading "never created"
-    and opening a second one (invariant 3). A closed one for the head is no answer to a new
-    call, which opens a fresh pull request."""
+def test_a_lost_create_later_closed_is_found_and_never_opened_twice(tmp_path: Path) -> None:
+    """A create landed but its answer was lost, then the pull request was closed: the lookup
+    in every state names it, and nothing is created (invariant 3)."""
     closed = b'{"number": 7, "html_url": "https://github.com/acme/app/pull/7", "state": "closed"}'
-    fresh = b'{"number": 8, "html_url": "https://github.com/acme/app/pull/8", "state": "open"}'
-    api = _Api(b"[" + closed + b"]", Response(201, {}, fresh))
+    older = b'{"number": 3, "html_url": "https://github.com/acme/app/pull/3", "state": "open"}'
+    api = _Api(b"[" + closed + b"," + older + b"]", Response(201, {}, b"{}"))
     args: JsonObject = {"repo": "acme/app", "head": "feature", "base": "main", "title": "T"}
+    want = "pull request #7 (closed): https://github.com/acme/app/pull/7"
 
     async def body(gw: GitGateway, *_rest: object) -> None:
-        assert await gw.lookup(call("open_pull_request", args)) == NotFoundNonfinal()
-        got = await gw.dispatch(call("open_pull_request", args))
-        assert got == Output("pull request #8: https://github.com/acme/app/pull/8")
+        assert await gw.lookup(call("open_pull_request", args)) == Found(want)
+        assert await gw.dispatch(call("open_pull_request", args)) == Output(want)
+        assert all(r.method == "GET" for _, r in api.requests)
 
     run(tmp_path, body, GitHub("https://api.github.com", api, _public))
+
+
+class _Then(_Api):
+    """Lists nothing until the create is refused, then `after`."""
+
+    def __init__(self, created: Response, after: bytes) -> None:
+        super().__init__(b"[]", created)
+        self.after = after
+
+    async def send(
+        self, target: Target, request: Request, fence: Fence, max_bytes: int
+    ) -> Ok[Response] | Err[WebError]:
+        got = await super().send(target, request, fence, max_bytes)
+        if request.method == "POST":
+            self.listed = self.after
+        return got
+
+
+def test_a_422_is_already_exists_only_when_the_forge_says_so(tmp_path: Path) -> None:
+    pr = b'{"number": 9, "html_url": "https://github.com/acme/app/pull/9", "state": "open"}'
+    exists = b'{"errors": [{"message": "A pull request already exists for acme:feature."}]}'
+    other = b'{"errors": [{"message": "No commits between main and feature"}]}'
+    args: JsonObject = {"repo": "acme/app", "head": "feature", "base": "main", "title": "T"}
+    for answer, want in (
+        (exists, Output("pull request #9 (open): https://github.com/acme/app/pull/9")),
+        (other, None),
+    ):
+        api = _Then(Response(422, {}, answer), b"[" + pr + b"]")
+
+        async def body(gw: GitGateway, *_rest: object, want: Output | None = want) -> None:
+            got = await gw.dispatch(call("open_pull_request", args))
+            if want is None:
+                assert isinstance(got, Output)
+                assert got.is_error
+            else:
+                assert got == want
+
+        run(tmp_path / str(id(api)), body, GitHub("https://api.github.com", api, _public))
 
 
 @pytest.mark.parametrize(

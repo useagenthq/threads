@@ -1,9 +1,11 @@
 """The forge API behind open_pull_request: GitHub's REST API over the host's
 fenced transport, with the credential in a header on the host only. A pull request is looked up
-by its head and base branches, open or closed, which is also how a lost create is reconciled."""
+by its head and base branches in every state, which is also how a lost create is reconciled
+(spec/schema/README.md, Git gateway: open_pull_request)."""
 
 import json
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from typing import ClassVar, Final
 from urllib.parse import urlencode
 
@@ -33,10 +35,12 @@ _PULLS: Final = TypeAdapter(list[_Pull])
 class PullRequest:
     number: int
     url: str
-    open: bool = True
+    state: str | None = None
+    """The forge's state for one that already existed; None for one this call created."""
 
     def text(self) -> str:
-        return f"pull request #{self.number}: {self.url}"
+        state = "" if self.state is None else f" ({self.state})"
+        return f"pull request #{self.number}{state}: {self.url}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +48,8 @@ class Refused:
     """The forge answered and did not act (a 4xx): a definite failure the model sees."""
 
     message: str
+    status: int = 0
+    body: bytes = b""
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,14 +79,15 @@ class GitHub:
         if status >= 500:  # noqa: PLR2004 - a server error may follow a create
             return Err(WebError("unavailable", f"the forge answered {status}", sent=True))
         if status >= 400:  # noqa: PLR2004 - the forge refused
-            return Err(Refused(f"the forge answered {status}: {sent.value.body[:500]!r}"))
+            body = sent.value.body
+            return Err(Refused(f"the forge answered {status}: {body[:500]!r}", status, body))
         return sent
 
     async def find(
         self, repo: str, head: str, base: str, token: str, fence: Fence
-    ) -> Ok[tuple[PullRequest, ...]] | Err[WebError | Refused]:
-        """Every pull request, open or closed, from `head` in the repo's own owner into
-        `base`, newest first."""
+    ) -> Ok[PullRequest | None] | Err[WebError | Refused]:
+        """The newest pull request in any state from `head` in the repo's own owner into
+        `base` (the forge lists newest first)."""
         owner = repo.split("/", 1)[0]
         query = urlencode({"state": "all", "head": f"{owner}:{head}", "base": base})
         got = await self._call(f"/repos/{repo}/pulls?{query}", token, fence)
@@ -90,7 +97,9 @@ class GitHub:
             pulls = _PULLS.validate_json(got.value.body)
         except ValidationError as error:
             return Err(WebError("unavailable", f"unreadable forge answer: {error}", sent=True))
-        return Ok(tuple(PullRequest(p.number, p.html_url, p.state == "open") for p in pulls))
+        return Ok(
+            PullRequest(pulls[0].number, pulls[0].html_url, pulls[0].state) if pulls else None
+        )
 
     async def open(  # noqa: PLR0913 - the pull request's fields
         self, repo: str, *, head: str, base: str, title: str, body: str, token: str, fence: Fence
@@ -98,9 +107,25 @@ class GitHub:
         data = json.dumps({"head": head, "base": base, "title": title, "body": body}).encode()
         got = await self._call(f"/repos/{repo}/pulls", token, fence, data)
         if isinstance(got, Err):
-            return got
+            if not _exists(got.error):
+                return got
+            # The forge says one exists for the head: the lookup names it.
+            found = await self.find(repo, head, base, token, fence)
+            if isinstance(found, Err) or found.value is None:
+                return got
+            return Ok(found.value)
         try:
             pull = _Pull.model_validate_json(got.value.body)
         except ValidationError as error:
             return Err(WebError("unavailable", f"unreadable forge answer: {error}", sent=True))
         return Ok(PullRequest(pull.number, pull.html_url))
+
+
+def _exists(error: WebError | Refused) -> bool:
+    """A 422 is "already exists" only when the forge says a pull request for the head exists;
+    any other 422 is an error result."""
+    return (
+        isinstance(error, Refused)
+        and error.status == HTTPStatus.UNPROCESSABLE_ENTITY
+        and b"pull request already exists" in error.body.lower()
+    )
