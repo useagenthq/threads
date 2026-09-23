@@ -64,7 +64,7 @@ const VersionRow: Strict<{ user_version: typeof Int }> = z.strictObject({
 const LineRow: Strict<{ line: typeof Bytes }> = z.strictObject({ line: Bytes });
 
 /** A row that fails its schema is corruption, reported, never trusted. */
-function parseRows<T>(
+export function parseRows<T>(
   schema: z.ZodType<T>,
   rows: readonly unknown[],
 ): Result<readonly T[], LogError> {
@@ -183,6 +183,17 @@ export function insertBranch(db: SqliteDriver, row: BranchRow): void {
       row.dropped_ref,
     ],
   );
+}
+
+export function setBranchState(
+  db: SqliteDriver,
+  branchId: string,
+  state: BranchRow["state"],
+): void {
+  db.run("UPDATE branches SET state = ? WHERE branch_id = ?", [
+    state,
+    branchId,
+  ]);
 }
 
 /** Inserts a branch's own event rows and advances its head checkpoint. */

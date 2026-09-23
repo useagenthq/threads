@@ -143,6 +143,23 @@ export class Writer {
     return live;
   }
 
+  /**
+   * Runs `fn` in one transaction that first checks this lease, so a store write outside the log
+   * (a resource ledger row) is fenced like an append. A stale writer is poisoned.
+   */
+  fenced<T>(fn: () => Result<T, LogError>): Result<T, LogError> {
+    if (this.#poisoned)
+      return err(
+        logError("writer_poisoned", "this writer lost its lease or head"),
+      );
+    const done = atomically(this.#db, () => {
+      const live = this.#checkLease();
+      return live.ok ? fn() : live;
+    });
+    if (!done.ok && done.error.code === "stale_epoch") this.#poisoned = true;
+    return done;
+  }
+
   /** Extends the lease; fails (and poisons) if another holder or epoch took it. */
   renew(ttlMs: number): Result<void, LogError> {
     const renewed = atomically(this.#db, () => {

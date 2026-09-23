@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { SandboxId } from "../../src/log";
 import { reduce } from "../../src/reduce";
-import type { ForkRequest } from "../../src/store";
+import type { ForkRequest, LogStore, Writer } from "../../src/store";
 import {
   CHILD,
+  code,
   count,
   fixture,
   ROOT,
@@ -33,21 +34,25 @@ function parentWithSnapshot(expiresAt: number | null = null) {
 }
 
 function request(atSeq: number): ForkRequest {
-  return {
-    parent: ROOT,
-    atSeq,
-    branch: CHILD,
-    holderId: "holder-c",
+  return { parent: ROOT, atSeq, branch: CHILD, holderId: "holder-c" };
+}
+
+/** Both fork steps with no sandbox in between: begin, then the fork event. */
+function fork(store: LogStore, atSeq: number) {
+  const writer = store.beginFork(request(atSeq));
+  if (!writer.ok) return writer;
+  const done = store.finishFork(writer.value, {
     sandboxId: SandboxId.parse("sbx_child_01"),
     knowledgePolicy: "pinned",
-  };
+  });
+  return done.ok ? writer : done;
 }
 
 describe("fork", () => {
   test("a child references its parent's rows and continues its epochs", () => {
     const { db, store, clock } = parentWithSnapshot();
     const parentBefore = unwrap(store.exportBranch(ROOT));
-    const child = unwrap(store.fork(request(4)));
+    const child = unwrap(fork(store, 4));
     unwrap(child.append([userInput("again")]));
 
     expect(count(db, CHILD)).toEqual({ n: 2 }); // fork + user_input, no parent row copied
@@ -65,7 +70,7 @@ describe("fork", () => {
 
   test("the child's export starts with the parent's bytes and imports cleanly", () => {
     const { store } = parentWithSnapshot();
-    unwrap(store.fork(request(4)));
+    unwrap(fork(store, 4));
     const parent = unwrap(store.exportBranch(ROOT));
     const child = unwrap(store.exportBranch(CHILD));
     const parentBody = parent.subarray(
@@ -85,15 +90,23 @@ describe("fork", () => {
 
   test("forking off a snapshot boundary fails and leaves nothing", () => {
     const { db, store } = parentWithSnapshot();
-    const bad = store.fork(request(3));
+    const bad = fork(store, 3);
     expect(bad.ok ? "ok" : bad.error.code).toBe("no_snapshot_boundary");
     expect(db.all("SELECT branch_id FROM branches", [])).toHaveLength(1);
+  });
+
+  test("a forking branch is neither readable as ready nor runnable; a failed one stays so", () => {
+    const { store } = parentWithSnapshot();
+    const writer: Writer = unwrap(store.beginFork(request(4)));
+    expect(code(store.acquire(CHILD, "holder-x"))).toBe("branch_not_runnable");
+    unwrap(store.failFork(writer));
+    expect(code(store.acquire(CHILD, "holder-x"))).toBe("branch_not_runnable");
   });
 
   test("an expired snapshot can't be forked", () => {
     const { store, clock } = parentWithSnapshot(T0 + 1000);
     clock.now = T0 + 1000;
-    const bad = store.fork(request(4));
+    const bad = fork(store, 4);
     expect(bad.ok ? "ok" : bad.error.code).toBe("snapshot_expired");
   });
 });

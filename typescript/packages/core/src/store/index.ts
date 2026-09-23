@@ -6,6 +6,11 @@ export {
   memoryArtifacts,
 } from "./artifacts";
 export type { SqliteDriver, SqlValue } from "./driver";
+export {
+  ResourceLedger,
+  ResourceRow,
+  type ResourceState,
+} from "./ledger";
 export { type ForkRequest, LEASE_TTL_MS, LogStore } from "./store";
 export { LOCAL_TENANT } from "./tables";
 export { type EventDraft, type Lease, Writer } from "./writer";

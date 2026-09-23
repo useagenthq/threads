@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { SandboxId } from "../../src/log";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import type { StoreApiCode } from "../../src/verify/error";
 import {
@@ -32,13 +31,11 @@ describe("a store is bound to one tenant", () => {
     expect(code(local.read(ROOT))).toBe("branch_not_found");
     expect(code(local.exportBranch(ROOT))).toBe("branch_not_found");
     expect(code(local.acquire(ROOT, "holder-b"))).toBe("branch_not_found");
-    const fork = local.fork({
+    const fork = local.beginFork({
       parent: ROOT,
       atSeq: 4,
       branch: CHILD,
       holderId: "holder-b",
-      sandboxId: SandboxId.parse("sbx_child_01"),
-      knowledgePolicy: "pinned",
     });
     expect(code(fork)).toBe("branch_not_found");
     expect(code(local.importLog(exported))).toBe("branch_not_found");
@@ -66,6 +63,7 @@ describe("a store is bound to one tenant", () => {
     const codes: readonly StoreApiCode[] = [
       "branch_not_found",
       "branch_exists",
+      "not_found",
     ];
     for (const c of codes) expect(schema.$defs.ApiErrorCode.enum).toContain(c);
   });

@@ -16,7 +16,9 @@ import { VERSION } from "../version";
 import type { ArtifactStore } from "./artifacts";
 import type { SqliteDriver } from "./driver";
 import { canonicalLine } from "./encode";
+import { forkEligible } from "./forking";
 import { importSegments } from "./import";
+import { ResourceLedger } from "./ledger";
 import { branchLines, exportBytes } from "./lines";
 import { isTorn, markRepaired, recordRepair } from "./repair";
 import {
@@ -30,6 +32,7 @@ import {
   ownedBranch,
   putLease,
   rootBranch,
+  setBranchState,
 } from "./tables";
 import { IMPL, Writer, writerMismatch } from "./writer";
 
@@ -41,8 +44,6 @@ export type ForkRequest = {
   readonly atSeq: number;
   readonly branch: BranchId;
   readonly holderId: string;
-  readonly sandboxId: SandboxId;
-  readonly knowledgePolicy: "pinned" | "current";
 };
 
 /**
@@ -226,11 +227,12 @@ export class LogStore {
   }
 
   /**
-   * Creates a child branch at an eligible snapshot: its own header,
-   * then its fork event bound to the parent's line. The sandbox restore and resource ledger
-   * belong to the caller. Returns the child's writer.
+   * Starts a child branch at an eligible snapshot: its row in
+   * state `forking` with its own header, and its lease, one epoch above the parent's chain. A
+   * forking branch is neither listed nor runnable until `finishFork`. Returns the child's writer,
+   * which fences the child's resource ledger rows.
    */
-  fork(
+  beginFork(
     request: ForkRequest,
     ttlMs: number = LEASE_TTL_MS,
   ): Result<Writer, LogError> {
@@ -239,18 +241,37 @@ export class LogStore {
       if (!owned.ok) return owned;
       const parent = this.read(request.parent);
       if (!parent.ok) return parent;
-      const eligible = this.#eligible(parent.value, request.atSeq);
+      const eligible = forkEligible(
+        parent.value.fold,
+        request.atSeq,
+        this.#now(),
+      );
       if (!eligible.ok) return eligible;
       const opened = this.#openChild(parent.value, request);
       if (!opened.ok) return opened;
-      const epoch = opened.value.fold.epoch + 1;
-      const writer = this.#lease(
-        request.branch,
-        request.holderId,
-        epoch,
-        this.#now() + ttlMs,
-        opened.value,
+      return ok(
+        this.#lease(
+          request.branch,
+          request.holderId,
+          opened.value.fold.epoch + 1,
+          this.#now() + ttlMs,
+          opened.value,
+        ),
       );
+    });
+  }
+
+  /** Step 4, in one transaction: the child's fork event bound to the parent's line, then ready. */
+  finishFork(
+    writer: Writer,
+    restored: {
+      readonly sandboxId: SandboxId;
+      readonly knowledgePolicy: "pinned" | "current";
+    },
+  ): Result<void, LogError> {
+    const parent = writer.chain.segments.at(-2)?.header.branch_id;
+    if (parent === undefined) throw new Error("a forking chain has a parent");
+    return atomically(this.#db, () => {
       const forked = writer.append([
         {
           type: "fork",
@@ -258,39 +279,31 @@ export class LogStore {
           critical: true,
           actor: { kind: "host" },
           data: {
-            parent_branch_id: request.parent,
-            at_hash: tipHash(opened.value) ?? "",
+            parent_branch_id: parent,
+            at_hash: tipHash(writer.chain) ?? "",
             reason: "snapshot",
-            sandbox_id: request.sandboxId,
-            knowledge_policy: request.knowledgePolicy,
+            sandbox_id: restored.sandboxId,
+            knowledge_policy: restored.knowledgePolicy,
           },
         },
       ]);
-      return forked.ok ? ok(writer) : forked;
+      if (!forked.ok) return forked;
+      setBranchState(this.#db, writer.lease.branchId, "ready");
+      return ok(undefined);
     });
   }
 
-  #eligible(parent: Chain, atSeq: number): Result<void, LogError> {
-    const snapshot = parent.fold.snapshots.find((s) => s.seq === atSeq);
-    if (snapshot === undefined || !snapshot.quiescent)
-      return err(
-        logError(
-          "no_snapshot_boundary",
-          `seq ${atSeq} is not a quiescent snapshot`,
-          atSeq,
-        ),
-      );
-    const expired =
-      snapshot.expiresAt !== null && snapshot.expiresAt <= this.#now();
-    return expired
-      ? err(
-          logError(
-            "snapshot_expired",
-            `the snapshot at seq ${atSeq} has expired`,
-            atSeq,
-          ),
-        )
-      : ok(undefined);
+  /** A fork that can't finish: the branch becomes `fork_failed`, never listed or runnable. */
+  failFork(writer: Writer): Result<void, LogError> {
+    return writer.fenced(() => {
+      setBranchState(this.#db, writer.lease.branchId, "fork_failed");
+      return ok(undefined);
+    });
+  }
+
+  /** The resource ledger, fenced by the owner's writer. */
+  get ledger(): ResourceLedger {
+    return new ResourceLedger(this.#db, this.#now, this.#tenant);
   }
 
   /** Stores the child's row and header, and loads its chain: the parent's through at_seq. */
@@ -311,7 +324,7 @@ export class LogStore {
       parent_branch_id: request.parent,
       fork_at_seq: request.atSeq,
       header_line: header.value,
-      state: "ready",
+      state: "forking",
       head_seq: request.atSeq,
       head_hash: sha256Hex(header.value),
       head_verified: 1,
