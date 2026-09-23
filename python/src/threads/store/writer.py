@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from threads.log import BranchId, ParseError
 from threads.log.digest import sha256_hex
 from threads.reduce import Fold, apply
+from threads.reduce.state import HeadRef, ReducedState, reduced_state
 from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.lines import Draft, Position, event_line
@@ -52,6 +53,10 @@ class Writer:
     def fold(self) -> Fold:
         """The committed branch folded through its last append. Read it; never mutate it."""
         return self._fold
+
+    def state(self) -> ReducedState:
+        """ReducedState at the committed head: what hooks are shown."""
+        return reduced_state(self._fold, HeadRef(self._fold.seq, sha256_hex(self._last_line)))
 
     @property
     def requires_recovery(self) -> bool:

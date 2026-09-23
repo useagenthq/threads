@@ -11,7 +11,9 @@ from threads.log import (
     CancelledEvent,
     CancelRequestedEvent,
     CompactionFailedEvent,
+    ContextEditedEvent,
     Event,
+    HookDecisionEvent,
     LogRepairedEvent,
     ModelAttemptAbandonedEvent,
     ModelResponseEvent,
@@ -25,7 +27,7 @@ from threads.log import (
     ToolResultEvent,
     TurnCompletedEvent,
 )
-from threads.loop import calls, retries
+from threads.loop import calls, gates, retries, tool_gates
 from threads.loop.defaults import context, max_pauses
 from threads.loop.drafts import draft
 from threads.loop.history import CONTINUE_TEXT, continuations, pauses, step, turn_events
@@ -37,8 +39,16 @@ from threads.result import Err
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-_NEUTRAL = (LogRepairedEvent, ParkedEvent, ParkEscalatedEvent, ResumedEvent, OutputValidatedEvent)
-"""Events that never decide what comes next."""
+_NEUTRAL = (
+    LogRepairedEvent,
+    ParkedEvent,
+    ParkEscalatedEvent,
+    ResumedEvent,
+    OutputValidatedEvent,
+    HookDecisionEvent,
+    ContextEditedEvent,
+)
+"""Events that never decide what comes next: a gate re-reads its own decisions from the log."""
 
 
 async def drive(rt: Runtime) -> Halt:
@@ -47,6 +57,8 @@ async def drive(rt: Runtime) -> Halt:
     while True:
         halt = await _step(rt)
         if halt is not None:
+            if isinstance(halt, Parked):
+                await _notify_parked(rt)
             return halt
 
 
@@ -60,8 +72,20 @@ async def _step(rt: Runtime) -> Halt | None:
     if cancel is not None:
         return await _cancel(rt, cancel)
     if fold.pending:
-        return await calls.run_call(rt, fold.pending[0])
+        gated = await gates.after_model(rt)
+        if gated is not None:
+            return None if gated == gates.AGAIN else gated
+        call_id = fold.pending[0]
+        halt = await calls.run_call(rt, call_id)
+        return halt or await tool_gates.after_tool(rt, call_id)
     return await _next(rt)
+
+
+async def _notify_parked(rt: Runtime) -> None:
+    """notification observers: the branch parked."""
+    last = next((e for e in reversed(rt.events) if isinstance(e, ParkedEvent)), None)
+    if last is not None:
+        await gates.observe(rt, "notification", last)
 
 
 def parked(events: Sequence[Event], open_addresses: Sequence[ParkAddress]) -> Parked:
@@ -129,11 +153,14 @@ async def _next(rt: Runtime) -> Halt | None:
 async def _after_response(
     rt: Runtime, response: ModelResponseEvent | ModelResponseRecoveredEvent
 ) -> Halt | None:
-    """spec/schema/README.md, "Turn endings by stop_reason"."""
+    """spec/schema/README.md, "Turn endings by stop_reason", once after_model released it."""
+    gated = await gates.after_model(rt)
+    if gated is not None:
+        return None if gated == gates.AGAIN else gated
     stop = response.data.stop_reason
     match stop:
         case "end_turn" | "stop_sequence" | "refusal" | "tool_use":
-            return await complete(rt, "end_turn")
+            return await gates.end_turn(rt)
         case "max_tokens":
             return await _continue_output(rt)
         case "context_window_exceeded":
@@ -163,7 +190,11 @@ async def _continue_output(rt: Runtime) -> Halt | None:
 
 async def _after_results(rt: Runtime) -> Halt | None:
     """A successful `ends_turn` result ends the turn with no further model call; too many
-    rejected output candidates end it output_invalid."""
+    rejected output candidates end it output_invalid. Results pass their
+    guardrail first (before_tool_result)."""
+    gated = await tool_gates.before_results(rt)
+    if gated is not None:
+        return None if gated == gates.AGAIN else gated
     turn = turn_events(rt.events)
     names = {c.data.call_id: c.data.name for c in rt.fold.calls.values()}
     for event in reversed(turn):
@@ -171,11 +202,14 @@ async def _after_results(rt: Runtime) -> Halt | None:
             break
         spec = rt.fold.tools.get(names.get(event.data.call_id, ""))
         if spec is not None and spec.ends_turn is True and not event.data.is_error:
-            return await complete(rt, "end_turn")
+            return await gates.end_turn(rt)
     pinned = policy(rt.fold)
     rejected = sum(
         1 for e in turn if isinstance(e, OutputValidatedEvent) and e.data.outcome == "rejected"
     )
     if pinned is not None and pinned.output is not MISSING and rejected > pinned.output.max_retries:
         return await complete(rt, "output_invalid")
+    gated = await tool_gates.after_batch(rt)
+    if gated is not None:
+        return None if gated == gates.AGAIN else gated
     return await request(rt, 1)

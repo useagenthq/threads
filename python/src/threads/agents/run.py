@@ -25,6 +25,7 @@ from threads.agents.results import (
     Thread,
 )
 from threads.agents.store import Store, now_ms, open_store, sqlite
+from threads.hooks.extension import bind
 from threads.log import (
     BranchId,
     Budget,
@@ -34,6 +35,7 @@ from threads.log import (
     ThreadId,
     ThreadStartedEvent,
 )
+from threads.loop import gates
 from threads.loop.drafts import draft
 from threads.loop.drive import drive
 from threads.loop.recovery import recover
@@ -113,6 +115,9 @@ async def execute[D](
             now_ms,
             stream.wait_until,
             observe=stream.observe,
+            hooks=bind(
+                definition.extensions, RunContext(None, handle.id, handle.branch, principal)
+            ),
         )
         halt = await _prepare(rt, definition, fresh=fresh)
         if halt is None:
@@ -120,6 +125,7 @@ async def execute[D](
         halt = halt or await drive(rt)
         if isinstance(halt, Idle) and box is not None and builtins is not None:
             await snapshot_turn_end(sq, writer, box, builtins, now_ms)
+        await gates.observe(rt, "session_end")
         return result(rt, halt, handle)
 
 
@@ -170,16 +176,23 @@ def _refusal(error: ParseError) -> RunErrorCode:
 
 async def _prepare[D](rt: Runtime, definition: Definition[D], *, fresh: bool) -> Halt | None:
     """A new thread pins its config; a continued one first recovers and finishes an open turn."""
-    started = definition.thread_started()
+    started, config = definition.pin()
     if fresh:
+        # The resolved config, hooks included, is durable in the content-addressed store under
+        # its config_hash before the pin that names it.
+        await rt.store.put_artifact(config)
         done = await rt.append(draft("thread_started", started))
-        return lost(done.error) if isinstance(done, Err) else None
+        return (
+            lost(done.error) if isinstance(done, Err) else await gates.session_start(rt, "startup")
+        )
     _check_pin(rt, started["config_hash"])
     halt = await recover(rt)
     if halt is None and rt.fold.in_turn:
         halt = await drive(rt)
     # A turn that ended is out of the way; a park or a failure is this run's result.
-    return None if halt is None or isinstance(halt, Idle) else halt
+    if halt is None or isinstance(halt, Idle):
+        return await gates.session_start(rt, "resume")
+    return halt
 
 
 def _check_pin(rt: Runtime, config_hash: object) -> None:

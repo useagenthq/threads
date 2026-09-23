@@ -1,7 +1,7 @@
 """A run's `RunResult`, read off the log it wrote: the turn's end reason decides the variant."""
 
 from collections.abc import Sequence
-from typing import Final, assert_never
+from typing import assert_never
 
 from threads.agents.results import (
     BudgetExhausted,
@@ -21,19 +21,7 @@ from threads.log import (
     TextPart,
 )
 from threads.loop import runtime
-from threads.loop.runtime import Halt, RunErrorCode
-
-_FAILED: Final[dict[str, RunErrorCode]] = {
-    "error": "model_error",
-    "interrupted": "model_error",
-    "model_unavailable": "model_unavailable",
-    "context_exhausted": "context_exhausted",
-    "max_output": "max_output",
-    "max_turns": "max_turns",
-    "output_invalid": "output_invalid",
-    "input_denied": "input_denied",
-    "stop_hook_limit": "stop_hook_limit",
-}
+from threads.loop.runtime import FAILED_CODES, Halt
 
 
 def result(rt: runtime.Runtime, halt: Halt, thread: Thread) -> RunResult[str]:
@@ -54,7 +42,7 @@ def _ended(events: Sequence[Event], reason: str, thread: Thread) -> RunResult[st
     if reason == "budget_exhausted":
         exceeded = next(e for e in reversed(events) if isinstance(e, BudgetExceededEvent))
         return BudgetExhausted(exceeded.data, thread)
-    code = _FAILED.get(reason)
+    code = FAILED_CODES.get(reason)
     if code is not None:
         return Failed(RunError(code, f"the turn ended {reason}"), thread)
     return Completed(final_text(events), thread)

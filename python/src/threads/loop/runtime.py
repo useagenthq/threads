@@ -4,12 +4,13 @@ The loop appends only through its branch's `Writer`, so every append is fenced b
 epoch: a stale owner's append fails before it can dispatch anything.
 """
 
-from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
-from typing import Literal
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import Final, Literal
 
 from pydantic import JsonValue
 
+from threads.hooks.runner import HookRunner
 from threads.log import (
     ArtifactRef,
     BranchId,
@@ -50,6 +51,19 @@ type RunErrorCode = Literal[
 ]
 """spec/schema/host-api RunErrorCode."""
 
+FAILED_CODES: Final[Mapping[str, RunErrorCode]] = {
+    "error": "model_error",
+    "interrupted": "model_error",
+    "model_unavailable": "model_unavailable",
+    "context_exhausted": "context_exhausted",
+    "max_output": "max_output",
+    "max_turns": "max_turns",
+    "output_invalid": "output_invalid",
+    "input_denied": "input_denied",
+    "stop_hook_limit": "stop_hook_limit",
+}
+"""The turn_completed reasons that end a run failed, and their RunErrorCode."""
+
 
 @dataclass(frozen=True, slots=True)
 class Idle:
@@ -88,6 +102,8 @@ class Runtime:
     every candidate is rejected (fail closed)."""
     observe: Callable[[Sequence[StoredEvent]], None] = lambda _events: None
     """Receives each committed batch: the stream's subscription to the log."""
+    hooks: HookRunner = field(default_factory=HookRunner)
+    """The run's extension hooks; none by default."""
 
     @property
     def fold(self) -> Fold:

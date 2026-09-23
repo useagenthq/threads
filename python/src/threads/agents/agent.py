@@ -14,6 +14,7 @@ from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
 from threads.agents.results import RunResult, StreamEvent
 from threads.agents.run import Input, RunOptions, execute
+from threads.hooks.extension import Extension
 from threads.log import Budget, Permissions, Retry
 from threads.loop.model import Model
 from threads.sandbox.protocol import Sandbox
@@ -30,6 +31,8 @@ class AgentOptions(TypedDict, total=False):
     """Absent: no sandbox tools. Present: bash, read, write, edit, ls, glob and grep."""
     egress: Egress
     """Sandbox egress allowlist; [] (the default) is deny-all."""
+    extensions: Sequence[Extension]
+    """Instructions and hooks, run in this order."""
 
 
 class ToolAgentOptions[D](AgentOptions, total=False):
@@ -135,8 +138,12 @@ def _definition[T](options: AgentOptions, tools: tuple[AppTool[T], ...]) -> Defi
         options.get("retry"),
         sandbox,
         egress,
+        tuple(options.get("extensions", ())),
     )
-    names = [s.name for s in definition.specs()]
-    if len(set(names)) != len(names):
-        raise ConfigError("duplicate_name", f"tool names repeat: {names}")
+    for kind, names in (
+        ("tool", [s.name for s in definition.specs()]),
+        ("extension", [e.name for e in definition.extensions]),
+    ):
+        if len(set(names)) != len(names):
+            raise ConfigError("duplicate_name", f"{kind} names repeat: {names}")
     return definition

@@ -11,7 +11,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import CallId, EventId, ToolSpec, ToolUsePart
 from threads.log.digest import canonical_sha256
-from threads.loop import effects
+from threads.loop import effects, gates, tool_gates
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state
 from threads.loop.results import As, result_draft
@@ -133,7 +133,8 @@ async def recheck(rt: Runtime, state: CallState) -> Halt | None:
 async def _authorize(
     rt: Runtime, state: CallState, spec: ToolSpec, actor: ActorKind = "host"
 ) -> Halt | None:
-    decision = rt.authorize(rt.fold, state.call.data, spec)
+    policy = rt.authorize(rt.fold, state.call.data, spec)
+    decision, hooked = await tool_gates.authorize(rt, state.call, policy)
     data: dict[str, JsonValue] = {
         "call_id": state.call.data.call_id,
         "decision": decision.decision,
@@ -142,11 +143,16 @@ async def _authorize(
     }
     if decision.rule is not None:
         data["rule_id"] = decision.rule
-    drafts = [draft("permission_decision", data, actor)]
+    drafts = [*hooked, draft("permission_decision", data, actor)]
     if decision.decision == "ask":
         drafts.append(_challenge(rt, state, actor))
     done = await rt.append(*drafts)
-    return lost(done.error) if isinstance(done, Err) else None
+    if isinstance(done, Err):
+        return lost(done.error)
+    if decision.decision == "deny":
+        ids = {"call_id": state.call.data.call_id}
+        return await gates.observe(rt, "permission_denied", state.call.data, **ids)
+    return None
 
 
 def _challenge(rt: Runtime, state: CallState, actor: ActorKind) -> Draft:

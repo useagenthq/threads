@@ -6,8 +6,10 @@ from pydantic import JsonValue
 
 from threads.agents.bindings import AppTool
 from threads.agents.builtins import Egress, egress_denied
+from threads.hooks.extension import Extension
 from threads.log import Budget, Permissions, Retry, ToolSpec
-from threads.log.digest import canonical_sha256
+from threads.log.digest import sha256_hex
+from threads.log.jcs import canonicalize
 from threads.loop.model import Model
 from threads.reduce.handlers import to_json
 from threads.result import Ok
@@ -26,6 +28,7 @@ class Definition[D]:
     retry: Retry | None = None
     sandbox: Sandbox | None = None
     egress: Egress = ()
+    extensions: tuple[Extension, ...] = ()
 
     def policy(self) -> dict[str, JsonValue]:
         """The resolved runtime policy: each section absent (ADR defaults) or complete."""
@@ -43,12 +46,20 @@ class Definition[D]:
         builtins = () if self.sandbox is None else specs(egress_denied=egress_denied(self.egress))
         return (*builtins, *(t.spec() for t in self.tools))
 
-    def thread_started(self) -> dict[str, JsonValue]:
-        """The pinned, secret-free config. Everything model-visible in it is line 0."""
+    @property
+    def full_instructions(self) -> str:
+        """Base instructions, then each extension's, in declaration order: all line 0."""
+        parts = [self.instructions, *(e.instructions for e in self.extensions)]
+        return "\n\n".join(p for p in parts if p)
+
+    def pin(self) -> tuple[dict[str, JsonValue], bytes]:
+        """`thread_started` and the canonical bytes of the resolved, secret-free config its
+        `config_hash` names. The config adds each extension's hook and observer manifest, so the
+        host content-addressed store holds exactly which hooks a thread runs."""
         info = self.model.info
         data: dict[str, JsonValue] = {
             "agent_name": self.name,
-            "instructions": self.instructions,
+            "instructions": self.full_instructions,
             "model": to_json(info.model),
             "model_params": dict(info.params),
             "adapter": to_json(info.adapter),
@@ -57,7 +68,18 @@ class Definition[D]:
         }
         if self.sandbox is not None:
             data["sandbox_provider"] = self.sandbox.info.provider
-        digest = canonical_sha256(data)
-        if not isinstance(digest, Ok):
+        config: dict[str, JsonValue] = dict(data)
+        if self.extensions:
+            config["extensions"] = self.manifests()
+        text = canonicalize(config)
+        if not isinstance(text, Ok):
             raise AssertionError("a definition built from parsed models always canonicalizes")
-        return {**data, "config_hash": digest.value}
+        raw = text.value.encode("utf-8")
+        return {**data, "config_hash": sha256_hex(raw)}, raw
+
+    def manifests(self) -> list[JsonValue]:
+        return [e.manifest() for e in self.extensions]
+
+    def thread_started(self) -> dict[str, JsonValue]:
+        """The pinned, secret-free config. Everything model-visible in it is line 0."""
+        return self.pin()[0]
