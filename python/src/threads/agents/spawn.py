@@ -191,7 +191,8 @@ async def _run[D](
     scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, child: Definition[None], prompt: str
 ) -> Ended | Parked:
     """The child to its terminal result, or its park; subagent_stop may send it on, at most
-    MAX_STOP_CONTINUES times, counted from the parent's log."""
+    MAX_STOP_CONTINUES times, counted from the parent's log. A cancel is final: a cancelled
+    child, or one whose parent is under a barrier, is never sent on."""
     call_id = spawned.data.call_id
     while True:
         reasons = _continues(rt, call_id)
@@ -201,7 +202,8 @@ async def _run[D](
             return result
         data, output = await finished(scope.sq, spawned.data.child_thread_id, result)
         data["output_ref"] = await text_ref(rt, output)
-        if not rt.hooks.has("subagent_stop") or len(reasons) >= MAX_STOP_CONTINUES:
+        final = data["status"] == "cancelled" or len(reasons) >= MAX_STOP_CONTINUES
+        if final or not rt.hooks.has("subagent_stop"):
             return data, shown(str(data["status"]), output)
         ran = await rt.hooks.run("subagent_stop", STOP, AgentFinishedData.model_validate(data))
         ids = {"call_id": call_id}
@@ -210,7 +212,9 @@ async def _run[D](
             for r in ran
         ]
         await rt.append(*drafts)
-        if all(verdict(r, "stop") != "continue" for r in ran):
+        # The append (or its refusal's reload) brought the parent's log up to date.
+        barred = open_cancel(rt.events) is not None
+        if barred or all(verdict(r, "stop") != "continue" for r in ran):
             return data, shown(str(data["status"]), output)
 
 

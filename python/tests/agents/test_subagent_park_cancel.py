@@ -18,17 +18,21 @@ from threads import (
     RunContext,
     Thread,
     agent,
+    extension,
     scripted_model,
     sqlite,
     tool,
 )
 from threads.agents.run import execute
+from threads.hooks.types import StopGate
 from threads.log import (
+    AgentFinishedData,
     AgentFinishedEvent,
     AgentSpawnedEvent,
     CancelledEvent,
     CancelRequestedEvent,
     Event,
+    ModelRequestEvent,
     ParkAddress,
     ParkedEvent,
     ResumedEvent,
@@ -36,6 +40,7 @@ from threads.log import (
     ThreadStartedEvent,
     ToolResultEvent,
     TurnCompletedEvent,
+    UserInputEvent,
 )
 from threads.result import Err, Ok
 from threads.thread.control import LOCAL_OPERATOR
@@ -126,7 +131,16 @@ def test_a_child_that_parks_parks_its_parent_and_resumes_it_once_settled() -> No
     assert sent == ["x"]
 
 
-def test_cancelling_a_parent_cancels_its_running_child_before_its_own_stop() -> None:
+async def _keep_going(_finished: AgentFinishedData, _ctx: RunContext[None]) -> StopGate:
+    return {"decision": "continue", "reason": "Keep going."}
+
+
+@pytest.mark.parametrize("keep_going", [False, True])
+def test_cancelling_a_parent_cancels_its_running_child_before_its_own_stop(
+    keep_going: bool,
+) -> None:
+    """A tree cancel is final: a subagent_stop "continue" never runs a cancelled child on."""
+
     async def stop(_args: Note, ctx: RunContext[None]) -> str:
         # The parent is cancelled while its foreground child runs.
         parent = await _parent_of(ctx.thread_id, store)
@@ -139,13 +153,15 @@ def test_cancelling_a_parent_cancels_its_running_child_before_its_own_stop() -> 
     )
     worker = agent(
         name="worker",
-        model=scripted_model({"responses": [use("stop", {"text": "x"}), text("never")]}),
+        model=scripted_model({"responses": [use("stop", {"text": "x"}), *[text("never")] * 4]}),
         tools=[stop_tool],
     )
+    hooks = [extension(name="ops", hooks={"subagent_stop": _keep_going})] if keep_going else []
     lead = agent(
         model=scripted_model({"responses": [SPAWN, text("never")]}),
         tools=[stop_tool],
         subagents=[worker],
+        extensions=hooks,
     )
 
     async def main() -> None:
@@ -172,7 +188,10 @@ def test_cancelling_a_parent_cancels_its_running_child_before_its_own_stop() -> 
         )
         assert (barrier.data.scope, barrier.data.reason) == ("tree", "ancestor cancelled")
         assert (barrier.actor.kind, barrier.actor.principal) == ("host", LOCAL_OPERATOR)
-        assert any(isinstance(e, CancelledEvent) for e in await events_of(child.value))
+        kids = await events_of(child.value)
+        assert any(isinstance(e, CancelledEvent) for e in kids)
+        after = kids[kids.index(barrier) :]
+        assert not any(isinstance(e, (ModelRequestEvent, UserInputEvent)) for e in after)
 
     asyncio.run(main())
 
