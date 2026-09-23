@@ -16,6 +16,7 @@ import {
 import { breakerOpen, ladder } from "./ladder";
 import { switchGate } from "./lifecycle";
 import { retryPolicy } from "./policy";
+import { revert } from "./revert";
 import type { Session } from "./session";
 import { todoReminder } from "./todos";
 import { nextAttempt, stepEvents } from "./turn";
@@ -49,6 +50,10 @@ const abandons = (step: readonly KnownEvent[]): readonly Abandon[] =>
   step.filter((e): e is Abandon => e.type === "model_attempt_abandoned");
 
 export async function requestTurn(s: Session): Promise<Halt | undefined> {
+  // Every path to a turn's model call runs through here once its input is durable, fresh or
+  // recovered: a turn-scoped fallback owed a revert gets it before anything renders.
+  const reverted = await revert(s);
+  if (reverted !== undefined) return reverted;
   const step = stepEvents(s.events, s.fold);
   const crashes = abandons(step).filter((a) => CRASH.has(a.data.reason));
   if (crashes.length > retryPolicy(s.fold.policy).crash_resends)
@@ -126,16 +131,21 @@ async function rejected(
     overloadedInEpoch(step) >= retry.fallback_after
   ) {
     const next = fallbackSettings(s);
-    const allowed = next === undefined ? false : await switchGate(s, next);
-    if (typeof allowed !== "boolean") return allowed;
-    if (next !== undefined && allowed)
-      return s.append(
-        draft.settingsChanged({
-          reason: "fallback",
-          settings: next,
-          cause_event_id: last.event_id,
-        }),
-      );
+    if (next !== undefined) {
+      const gate = await switchGate(s, next);
+      if (gate.allowed)
+        return s.append(
+          ...gate.decisions,
+          draft.settingsChanged({
+            reason: "fallback",
+            settings: next,
+            cause_event_id: last.event_id,
+          }),
+        );
+      // A deny keeps the old epoch: the attempt is retried on it.
+      const stopped = s.append(...gate.decisions);
+      if (stopped !== undefined) return stopped;
+    }
   }
   return schedule(s, step, last, rejections.length);
 }

@@ -95,6 +95,7 @@ export function pin(
   // A child runs without a sandbox and within its parent's tools, which were checked already.
   if (within === undefined) requireCapabilities(o.capabilities, o.sandbox);
   checkSkills(o.skills);
+  checkRetries(o.outputRetries);
   // Built-ins (the framework and provider tools among them) sorted by name, then app tools,
   // then extension and MCP tools sorted by namespaced name.
   const all = [
@@ -298,6 +299,15 @@ function policy(o: PinOptions): Policy {
       ? {}
       : { output: outputPolicy(o.output, o.outputRetries) }),
   };
+}
+
+/** outputRetries counts failed candidates: a non-negative integer. */
+function checkRetries(n: number): void {
+  if (!Number.isSafeInteger(n) || n < 0)
+    throw new ConfigError(
+      "invalid_config",
+      `outputRetries must be a non-negative integer, got ${n}`,
+    );
 }
 
 function outputPolicy(

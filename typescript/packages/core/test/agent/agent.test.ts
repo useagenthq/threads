@@ -11,12 +11,7 @@ import {
   type ThreadRef,
   tool,
 } from "../../src";
-import { openStore } from "../../src/agent/sqlite";
-import type { KnownEvent } from "../../src/log";
-import { markTestKit } from "../../src/model/guard";
-import { knownEvents } from "../../src/reduce";
-import { refReader, verifyRequests } from "../../src/render";
-import { unwrap } from "../store/helpers";
+import { logOf, scriptedSmall } from "./kit";
 
 const usage = { input_tokens: 10, output_tokens: 2 };
 const say = (text: string) => ({
@@ -32,14 +27,6 @@ const use = (name: string, input: Record<string, unknown>, id: string) => ({
 
 function threadOf<T>(result: RunResult<T>): ThreadRef {
   return result.thread;
-}
-
-/** The branch's events, with every recorded request re-verified (C7 and request_ref). */
-async function logOf(thread: ThreadRef): Promise<readonly KnownEvent[]> {
-  const { log, artifacts } = await openStore(thread.store);
-  const events = knownEvents(unwrap(log.read(thread.branch)));
-  unwrap(verifyRequests(events, refReader(artifacts)));
-  return events;
 }
 
 const echo = tool({
@@ -197,22 +184,6 @@ describe("the declared prefix is byte-equal within a settings epoch (invariant 5
     expect(prefixes[3]).not.toBe(prefixes[0]);
   });
 });
-
-/** A scripted model under another name, so policy.models lists two models. */
-function scriptedSmall(responses: readonly unknown[]): Model {
-  const inner = scriptedModel({ responses });
-  const ref = { provider: "scripted", name: "scripted-small" };
-  const small: Model = {
-    ...inner,
-    info: {
-      ...inner.info,
-      model: ref,
-      limits: { ...inner.info.limits, ...ref },
-    },
-  };
-  markTestKit(small);
-  return small;
-}
 
 describe("permissions, parking and setup errors", () => {
   test("an undeclared tool is unguarded: in default mode it asks and the run parks", async () => {
