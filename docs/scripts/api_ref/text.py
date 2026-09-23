@@ -6,11 +6,6 @@ import re
 from .tables import LANG_LABEL
 
 
-def camel(name: str) -> str:
-    head, *rest = name.split("_")
-    return head + "".join(p[:1].upper() + p[1:] for p in rest)
-
-
 def clean(text: str) -> str:
     """Contract prose without spec cross-references and internal vocabulary."""
     text = re.sub(r"\s*\([^()]*(?:\bF\d|\bC\d|spec/|AGENTS|ADR|conformance)[^()]*\)", "", text)

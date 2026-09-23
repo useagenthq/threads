@@ -16,14 +16,11 @@
       "additionalProperties": { "type": "string", "minLength": 1 }
     },
     "packages": {
+      "description": "Every public package, keyed by name: the core packages and one adapter package per provider family.",
       "type": "object",
-      "additionalProperties": false,
       "required": ["core", "host", "mcp"],
-      "properties": {
-        "core": { "$ref": "#/$defs/Package" },
-        "host": { "$ref": "#/$defs/Package" },
-        "mcp": { "$ref": "#/$defs/Package" }
-      }
+      "propertyNames": { "$ref": "#/$defs/PackageName" },
+      "additionalProperties": { "$ref": "#/$defs/Package" }
     },
     "choices": {
       "description": "Where the ADRs left a choice open, the option this contract takes and why.",
@@ -97,14 +94,44 @@
     "TypeName": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
     "TypePackage": { "description": "The package entry that exports the type in each language; other public entries may re-export it. Absent: core.", "enum": ["core", "host", "mcp"] },
     "Doc": { "type": "string", "minLength": 1 },
+    "PackageName": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
     "Package": {
+      "description": "Where a package's exports live in each language. A package absent from one language omits that key (check_api.py requires at least one), and its functions carry lang.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["ts", "py"],
+      "required": ["kind", "doc"],
       "properties": {
         "ts": { "type": "string", "minLength": 1 },
         "py": { "type": "string", "minLength": 1 },
+        "kind": { "description": "core: the framework itself. adapter: provider factories that return a protocol type.", "enum": ["core", "adapter"] },
+        "provider": { "description": "The provider's name as users know it, when the package wraps one (E2B, Slack).", "$ref": "#/$defs/Doc" },
         "doc": { "$ref": "#/$defs/Doc" }
+      }
+    },
+    "ConfigErrorCode": {
+      "description": "Mirror of api.json types.ConfigErrorCode (check_api.py keeps the two equal), so config_errors codes are checked by this schema.",
+      "enum": [
+        "invalid_config",
+        "missing_secret",
+        "unknown_preset",
+        "duplicate_name",
+        "capability_missing",
+        "mcp_unreachable",
+        "budget_unenforceable",
+        "permission_rule_invalid",
+        "hosted_tool_unsupported",
+        "egress_policy_unsupported",
+        "transport_fence_unsupported"
+      ]
+    },
+    "ConfigErrorEntry": {
+      "description": "A ConfigError code a factory can raise (itself, at setup, or when a caller validates its configuration). No lang: every language the callable exists in.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": { "$ref": "#/$defs/ConfigErrorCode" },
+        "lang": { "enum": ["ts", "py"] }
       }
     },
     "Choice": {
@@ -136,7 +163,13 @@
       "properties": {
         "ts": { "$ref": "#/$defs/TsName" },
         "py": { "$ref": "#/$defs/PyName" },
-        "package": { "enum": ["core", "host", "mcp"] },
+        "package": { "description": "A key of packages. Absent: core.", "$ref": "#/$defs/PackageName" },
+        "lang": { "description": "Present only when the callable exists in one language.", "enum": ["ts", "py"] },
+        "config_errors": {
+          "description": "Factories: the ConfigError codes it can raise, per language. Each applicable language has a passing <factory>!<code>@<lang> test.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/ConfigErrorEntry" }
+        },
         "doc": { "$ref": "#/$defs/Doc" },
         "async": { "description": "true: TS returns Promise<returns>, Python is async def.", "type": "boolean" },
         "optional": { "description": "Protocol methods only: an implementation may omit it; the flag named in doc says so.", "type": "boolean" },
@@ -350,6 +383,20 @@
                 "params": { "type": "array", "items": { "$ref": "#/$defs/Param" } },
                 "returns": { "$ref": "#/$defs/TypeExpr" }
               }
+            }
+          }
+        },
+        {
+          "description": "The exact type per language where the contract can't spell it structurally (typeof globalThis.fetch, httpx.AsyncBaseTransport). A bare TS name is exported from the callable's package; a Python spelling is module-qualified (its module is imported to check it). Checked exactly, like every other type.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["platform"],
+          "properties": {
+            "platform": {
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "properties": { "ts": { "type": "string", "minLength": 1 }, "py": { "type": "string", "minLength": 1 } }
             }
           }
         },

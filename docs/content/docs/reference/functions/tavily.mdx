@@ -1,0 +1,42 @@
+---
+title: "tavily"
+description: "A web_search backend that searches with Tavily (tavily.com)."
+icon: "Plug"
+---
+
+Pass it as agent(&#123;web: &#123;search: tavily(secret("TAVILY_API_KEY"))&#125;&#125;). It returns at most 10 hits per search.
+
+Import from `@threads/core` (TypeScript) or `threads.search` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function tavily(apiKey: Secret, transport?: WebTransport): SearchBackend
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def tavily(
+    api_key: Secret,
+) -> SearchBackend
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="apiKey / api_key" type={"Secret"} required>
+  A secret() naming the host environment variable that holds the Tavily API key. It is read on the host each time a search is sent; while the variable is unset, each search fails as unavailable, naming it. See [Secret](/docs/reference/types/Secret).
+</Field>
+
+<Field name="transport" type={"WebTransport"}>
+  TypeScript only. Seam: where the request is sent, for tests. Omitted: the host's live web transport, which vets each address before it connects.
+</Field>
+
+## Returns
+
+[`SearchBackend`](/docs/reference/types/SearchBackend)

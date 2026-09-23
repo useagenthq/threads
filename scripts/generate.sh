@@ -12,6 +12,8 @@ python3 spec/tools/gen_store_sql.py
 if [ "$target" != "py" ]; then
   python3 spec/tools/gen_api_surface.py
 fi
+# Factory signature checks: TS files compiled by each package's tsc, a Python file for pyright.
+python3 spec/tools/gen_api_surface_factories.py
 if [ "$target" != "ts" ]; then
   (cd python && uv run --quiet python tools/regen_models.py)
 fi

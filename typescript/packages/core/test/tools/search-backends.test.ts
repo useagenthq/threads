@@ -130,6 +130,29 @@ describe("search backends", () => {
   });
 });
 
+describe("an unset key", () => {
+  // The same in Python: each search answers unavailable, naming the variable, and sends
+  // nothing. (A setup-time missing_secret check needs a SearchBackend setup step.)
+  for (const [name, make] of [
+    ["exa", exa],
+    ["tavily", tavily],
+    ["brave", brave],
+  ] as const) {
+    test(`${name}: each search is unavailable, names the variable and sends nothing`, async () => {
+      const t = scripted(Response.json({}));
+      const got = await make(secret("THREADS_TEST_UNSET_KEY"), t).search(
+        "q",
+        {},
+      );
+      expect(got).toMatchObject({ ok: false, error: { code: "unavailable" } });
+      expect(got.ok ? "" : got.error.message).toContain(
+        "THREADS_TEST_UNSET_KEY",
+      );
+      expect(t.sent).toEqual([]);
+    });
+  }
+});
+
 describe("the live transport", () => {
   test("connects to the checked address, keeping the URL's host", async () => {
     const server = Bun.serve({

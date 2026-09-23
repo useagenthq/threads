@@ -1,13 +1,49 @@
-"""One language's spelling of the type expressions in spec/api.json."""
+# pyright: strict
+"""One language's spelling of the type expressions in spec/api.json.
+
+One implementation, shared by the docs generator (docs/scripts/api_ref) and the factory surface
+checks (gen_api_surface_factories.py), so a page and a checked signature can't disagree. Stdlib
+only.
+"""
+
+from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING
 
-from .json_access import Json, Obj, array, obj, objs, text
-from .text import camel
-
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+type Json = str | int | float | bool | list[Json] | dict[str, Json] | None
+type Obj = dict[str, Json]
+
+
+def obj(value: Json) -> Obj:
+    if isinstance(value, dict):
+        return value
+    raise TypeError(f"expected an object, got {value!r}")
+
+
+def array(value: Json) -> list[Json]:
+    if isinstance(value, list):
+        return value
+    raise TypeError(f"expected an array, got {value!r}")
+
+
+def objs(value: Json) -> list[Obj]:
+    return [obj(v) for v in array(value)]
+
+
+def text(value: Json) -> str:
+    if isinstance(value, str):
+        return value
+    raise TypeError(f"expected a string, got {value!r}")
+
+
+def camel(name: str) -> str:
+    head, *rest = name.split("_")
+    return head + "".join(p[:1].upper() + p[1:] for p in rest)
+
 
 # Type-expression keys, in the order they are recognized when a node has several.
 KINDS = (
@@ -24,6 +60,7 @@ KINDS = (
     "promise",
     "stream",
     "native",
+    "platform",
     "object",
     "fn",
     "result",
@@ -107,6 +144,7 @@ class Render:
             "array": self._array,
             "union": self._union,
             "native": self._native,
+            "platform": self._platform,
             "object": self._object,
             "fn": self._fn,
             "type": self._type,
@@ -181,6 +219,9 @@ class Render:
 
     def _native(self, t: Obj, casing: str) -> str:
         return text(obj(t["native"]).get(self.lang, ""))
+
+    def _platform(self, t: Obj, casing: str) -> str:
+        return text(obj(t["platform"]).get(self.lang, ""))
 
     def _object(self, t: Obj, casing: str) -> str:
         inner = text(t.get("casing", casing))

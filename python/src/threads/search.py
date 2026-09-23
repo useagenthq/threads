@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 
 from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
 
+from threads.agents.config import ConfigError
 from threads.result import Err, Ok
 from threads.secrets import Secret, resolve
 from threads.web.guard import Resolve, system_resolve, vet
@@ -62,7 +63,14 @@ class HttpSearch:
         allowed_domains: Sequence[str] = (),
         blocked_domains: Sequence[str] = (),
     ) -> Ok[Sequence[SearchHit]] | Err[SearchError]:
-        url, request = self.build(query, resolve(self.key), allowed_domains, blocked_domains)
+        try:
+            key = resolve(self.key)
+        except ConfigError as error:
+            # As in TypeScript: an unset key fails this search, naming the variable, and the
+            # run goes on. Only setup may raise ConfigError; resolving the key at setup
+            # (missing_secret from check()) is lane 09's.
+            return Err(SearchError("unavailable", str(error)))
+        url, request = self.build(query, key, allowed_domains, blocked_domains)
         target = await vet(url, self.resolver)
         if isinstance(target, Err):
             return Err(SearchError("unavailable", target.error))

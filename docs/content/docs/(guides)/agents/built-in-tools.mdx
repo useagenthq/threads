@@ -37,7 +37,7 @@ coder = agent(
 </Tab>
 </Tabs>
 
-`exa` comes from `@threads/core` in TypeScript and `threads.search` in Python.
+`exa` comes from `@threads/core` in TypeScript and `threads.search` in Python. `tavily` and `brave` work the same way; see the [search providers](/docs/reference/functions/exa) in the reference. The key is read on the host when a search is sent; while the variable is unset, each search fails as `unavailable` and the error names the variable.
 
 ## What turns on each tool
 
@@ -47,7 +47,7 @@ coder = agent(
 | `todo_write` | Always | The agent's own task list. Read it with the thread's `todos()` |
 | `bash`, `read`, `write`, `edit`, `ls`, `glob`, `grep`, `notebook_edit` | `sandbox` | Run inside the [sandbox](/docs/sandboxes/overview), never on your machine |
 | `web_fetch` | `web: { fetch: true }` | Runs on the host. Private and internal addresses are blocked |
-| `web_search` | `web: { search: exa(key) }` | Backends: `exa`, `brave`, `tavily`. Each takes a `secret()` |
+| `web_search` | `web: { search: exa(key) }` | Backends: [`exa`](/docs/reference/functions/exa), [`brave`](/docs/reference/functions/brave), [`tavily`](/docs/reference/functions/tavily). Each takes a `secret()` |
 | `git_clone`, `git_fetch`, `git_push`, `open_pull_request` | `git: { credential }` plus a `sandbox` | The token stays on the host; the sandbox never sees it |
 | `lsp` | `lsp: { languages }` plus a `sandbox` | `typescript`, `python`, `go`, `rust`. The sandbox image needs `python3` on its `PATH` and each language server in `/usr/local/sbin`, `/usr/local/bin`, `/usr/sbin`, `/usr/bin`, `/sbin` or `/bin`. Only those six directories are searched, and they are the server's whole `PATH`, so a server's interpreter (`node` for `typescript-language-server` and `pyright-langserver`) must be there too. For a server or interpreter installed elsewhere (`/workspace/node_modules/.bin`, `/opt/...`), link it into `/usr/local/bin` in the image |
 | `computer`, `computer_screenshot` | `computer: true` plus a sandbox with a desktop | None of the bundled sandbox providers has a desktop yet |
