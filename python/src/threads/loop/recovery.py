@@ -12,7 +12,7 @@ Recovery is idempotent: a second pass over its own output finds nothing to decid
 
 from typing import TYPE_CHECKING
 
-from threads.log import EventId, ModelRequestEvent
+from threads.log import EventId, LogRepairedEvent, ModelRequestEvent
 from threads.loop import calls, effects
 from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
@@ -28,6 +28,10 @@ if TYPE_CHECKING:
 async def recover(rt: Runtime) -> Halt | None:
     """Decides every in-doubt item; returns the first halt (a park or a failure), if any. A torn
     import's `log_repaired` comes before this, when the store hands the branch over."""
+    if _torn_mid_turn(rt):
+        # What followed the served prefix is lost: the turn can't be resumed, only closed.
+        done = await rt.append(draft("turn_completed", {"reason": "interrupted"}, "recovery"))
+        return lost(done.error) if isinstance(done, Err) else None
     requests = [e for e in rt.events if isinstance(e, ModelRequestEvent)]
     for request in requests:
         if request.event_id in rt.fold.open_requests:
@@ -41,6 +45,14 @@ async def recover(rt: Runtime) -> Halt | None:
     return None
 
 
+def _torn_mid_turn(rt: Runtime) -> bool:
+    """The branch was just repaired after a torn import, and its served prefix ends inside a
+    turn with nothing pending."""
+    fold = rt.fold
+    repaired = bool(fold.events) and isinstance(fold.events[-1], LogRepairedEvent)
+    return repaired and fold.in_turn and not fold.pending and not fold.open_requests
+
+
 async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
     """a final `found` is recorded without a new call; a final `not_found` is
     not_sent; anything else is unknown, and the loop's crash re-send budget decides."""
@@ -50,8 +62,9 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
         if stale is not None:
             return stale
         match await rt.model.lookup(f"{rt.writer.branch_id}:{request_id}"):
-            case Found(value=response, provider_request_id=provider_id):
-                found = response_drafts(rt, request_id, response, provider_id or str(request_id))
+            case Found(value=response) if response.provider_request_id is not None:
+                # A found response without the provider's id can't be recorded: it stays unknown.
+                found = response_drafts(rt, request_id, response, response.provider_request_id)
                 done = await rt.append(*found)
                 return lost(done.error) if isinstance(done, Err) else None
             case NotFound():

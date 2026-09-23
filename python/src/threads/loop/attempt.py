@@ -69,7 +69,7 @@ async def _collect(rt: Runtime, req: ModelRequest) -> Outcome:
                 case PartChunk(part=part):
                     parts.append(part)
                 case Done(stop_reason=stop, usage=usage):
-                    return ModelResponse(tuple(parts), stop, usage)
+                    return ModelResponse(tuple(parts), stop, usage, None)
                 case Rejected():
                     return chunk
                 case _:

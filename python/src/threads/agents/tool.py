@@ -101,7 +101,7 @@ class Tool[I: BaseModel, O, D]:
             raise AssertionError("only a reconcilable tool is looked up")
         answer = await self.reconcile.lookup(effect_key, ctx)
         if isinstance(answer, Found):
-            return Found(render_value(answer.value), answer.provider_request_id)
+            return Found(render_value(answer.value))
         if isinstance(answer, NotFound) and self.reconcile.finality == "nonfinal":
             # Finality is the tool's declared capability, never inferred from an answer.
             return NotFoundNonfinal()

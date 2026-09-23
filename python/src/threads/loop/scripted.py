@@ -4,6 +4,7 @@ The script is parsed at this boundary: its parts and usage are the event schema'
 """
 
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from dataclasses import replace
 from typing import Final
 
 from pydantic import JsonValue, TypeAdapter
@@ -103,9 +104,8 @@ class ScriptedModel:
                 if isinstance(found, Rejected):
                     raise ValueError("a lookup answer must be a response")
                 provider_id = answer.get("provider_request_id")
-                return Found(
-                    found, None if provider_id is None else _STR.validate_python(provider_id)
-                )
+                ident = None if provider_id is None else _STR.validate_python(provider_id)
+                return Found(replace(found, provider_request_id=ident))
             case "not_found" if final:
                 return NotFound()
             case "not_found":
@@ -133,6 +133,7 @@ def _response(entry: dict[str, JsonValue]) -> Entry:
         _PARTS.validate_python(entry.get("content")),
         _STOP.validate_python(entry.get("stop_reason")),
         Usage.model_validate(entry.get("usage")),
+        None,
     )
 
 

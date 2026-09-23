@@ -48,6 +48,9 @@ class ModelResponse:
     content: Sequence[OutputPart]
     stop_reason: StopReason
     usage: Usage
+    provider_request_id: str | None
+    """The provider's id for the request, or None when it gives none. A found lookup carries it:
+    model_response_recovered records it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +87,6 @@ type ModelChunk = Delta | PartChunk | Done | Rejected
 @dataclass(frozen=True, slots=True)
 class Found[T]:
     value: T
-    provider_request_id: str | None = None
     status: Literal["found"] = "found"
 
 
