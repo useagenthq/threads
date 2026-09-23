@@ -3,7 +3,7 @@
 The script is parsed at this boundary: its parts and usage are the event schema's own types.
 """
 
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from typing import Final
 
 from pydantic import JsonValue, TypeAdapter
@@ -64,6 +64,8 @@ class ScriptedModel:
         self._lookups = lookups
         self._info = SCRIPTED_INFO if not lookups else _with_lookup()
         self.sent: list[ModelRequest] = []
+        self.before_send: Callable[[ModelRequest], None] = lambda _request: None
+        """A test hook run as each request reaches the model, before anything is played."""
 
     @property
     def info(self) -> ModelInfo:
@@ -77,6 +79,7 @@ class ScriptedModel:
     async def send(self, request: ModelRequest) -> AsyncIterator[ModelChunk]:
         if not self._entries:
             raise ScriptExhaustedError(f"no scripted response left for {request.request_id}")
+        self.before_send(request)
         self.sent.append(request)
         entry = self._entries.pop(0)
         if isinstance(entry, Rejected):

@@ -42,6 +42,7 @@ from threads.permissions import Decision
 from threads.reduce import Fold
 from threads.reduce.fold import policy
 from threads.reduce.handlers import to_json
+from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.store import SqliteStore, StoredEvent, verify_export
 
@@ -80,7 +81,8 @@ async def run_case(case: Path) -> Outcome:
     tools = _runner(case, meta, clock)
     verified = verify_export(own(case, "log.jsonl").read_bytes(), clock())
     assert isinstance(verified, Ok), verified
-    opened = await SqliteStore.open(artifacts=stored_artifacts(case))
+    artifacts = stored_artifacts(case)
+    opened = await SqliteStore.open(artifacts=artifacts)
     assert isinstance(opened, Ok)
     store = opened.value
     try:
@@ -110,6 +112,8 @@ async def run_case(case: Path) -> Outcome:
         assert isinstance(exported, Ok)
         read = verify_export(exported.value, clock())
         assert isinstance(read, Ok), read
+        # Every request the run made replays byte for byte: C7 per settings epoch (invariant 5).
+        assert verify_requests(read.value.fold.events, artifacts.get) == Ok(None)
         appended = [e for e in _events(read.value.segments[-1].events) if e.seq > before]
         error: dict[str, JsonValue] | None = None
         if isinstance(halt, Failed):
