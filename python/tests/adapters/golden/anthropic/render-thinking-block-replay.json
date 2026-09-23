@@ -1,0 +1,69 @@
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is in README.md?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "signature": "sig_0123",
+          "thinking": "Read the file first.",
+          "type": "thinking"
+        },
+        {
+          "id": "call_1",
+          "input": {
+            "path": "README.md"
+          },
+          "name": "read_file",
+          "type": "tool_use"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": [
+            {
+              "text": "# demo\n",
+              "type": "text"
+            }
+          ],
+          "is_error": false,
+          "tool_use_id": "call_1",
+          "type": "tool_result"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "scripted-1",
+  "stream": true,
+  "system": "You are a helpful agent.",
+  "tools": [
+    {
+      "description": "Read a file from the sandbox workspace.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "name": "read_file"
+    }
+  ]
+}

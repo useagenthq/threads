@@ -1,0 +1,68 @@
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Take a screenshot of the login page.",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "id": "call_1",
+          "input": {},
+          "name": "screenshot",
+          "type": "tool_use"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": [
+            {
+              "text": "Login page loaded.",
+              "type": "text"
+            },
+            {
+              "source": {
+                "data": "iVBORw0KGgpmaXh0dXJlOiBsb2dpbiBwYWdlIHNjcmVlbnNob3Q=",
+                "media_type": "image/png",
+                "type": "base64"
+              },
+              "type": "image"
+            },
+            {
+              "text": "Cursor at (640, 400).",
+              "type": "text"
+            }
+          ],
+          "is_error": false,
+          "tool_use_id": "call_1",
+          "type": "tool_result"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "scripted-1",
+  "stream": true,
+  "system": "You are a helpful agent.",
+  "tools": [
+    {
+      "description": "Capture the sandbox desktop.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "screenshot"
+    }
+  ]
+}

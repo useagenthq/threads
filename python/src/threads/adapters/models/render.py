@@ -1,0 +1,134 @@
+"""Render v1 bytes parsed back into typed lines: the one input every model adapter maps from.
+
+The request an adapter sends is a function of these lines and the artifact bytes they name, so a
+recorded request always maps to the same provider request (spec/schema/README.md, "Render v1").
+"""
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Annotated, Literal
+
+from pydantic import Field, JsonValue, TypeAdapter
+from pydantic.experimental.missing_sentinel import MISSING
+
+from threads._strict_model import StrictModel
+from threads.log import (
+    AdapterRef,
+    ArtifactRef,
+    CallId,
+    InputPart,
+    ModelRef,
+    OutputPart,
+    ParseError,
+    ResultPart,
+)
+from threads.loop.model import ModelContext
+from threads.render.artifacts import AnyRef
+from threads.result import Err
+
+
+class ToolLine(StrictModel):
+    """A tool as Render v1 shows it. A deferred tool is a stub without a schema."""
+
+    name: str
+    description: str
+    input_schema: dict[str, JsonValue] | MISSING = MISSING
+    deferred: Literal[True] | MISSING = MISSING
+
+
+class Head(StrictModel):
+    """Line 0: the declared prefix of the request's settings epoch."""
+
+    adapter: AdapterRef
+    model: ModelRef
+    params: dict[str, JsonValue]
+    system: str
+    tools: Sequence[ToolLine]
+
+
+class UserLine(StrictModel):
+    role: Literal["user"]
+    content: Sequence[InputPart]
+
+
+class ToolsLine(StrictModel):
+    role: Literal["tools"]
+    tools: Sequence[ToolLine]
+
+
+class AssistantLine(StrictModel):
+    role: Literal["assistant"]
+    content: Sequence[OutputPart]
+
+
+class ResultLine(StrictModel):
+    role: Literal["tool"]
+    call_id: CallId
+    is_error: bool
+    late: Literal[True] | MISSING = MISSING
+    content: Sequence[ResultPart]
+
+
+type Message = UserLine | AssistantLine | ResultLine
+
+_LINE: TypeAdapter[UserLine | ToolsLine | AssistantLine | ResultLine] = TypeAdapter(
+    Annotated[UserLine | ToolsLine | AssistantLine | ResultLine, Field(discriminator="role")]
+)
+
+
+@dataclass(frozen=True, slots=True)
+class Request:
+    head: Head
+    tools: Sequence[ToolLine]
+    """The tool set the model sees now: the last `tools` line, else line 0's."""
+    messages: Sequence[Message]
+
+
+class UnsupportedContentError(Exception):
+    """A part this adapter can't send. Raised before any byte leaves:
+    a part is never converted or dropped silently."""
+
+    def __init__(
+        self, code: Literal["content_unsupported", "continuation_unsupported"], what: str
+    ) -> None:
+        super().__init__(f"{code}: {what}")
+        self.code = code
+
+
+def parse(body: bytes) -> Request:
+    """Raises on bytes that are not Render v1: the loop rendered them, so that is a bug."""
+    first, *rest = body.decode("utf-8").splitlines()
+    head = Head.model_validate_json(first)
+    tools: Sequence[ToolLine] = head.tools
+    messages: list[Message] = []
+    for text in rest:
+        line = _LINE.validate_json(text)
+        if isinstance(line, ToolsLine):
+            tools = line.tools
+        else:
+            messages.append(line)
+    return Request(head, tools, tuple(messages))
+
+
+def check_adapter(head: Head, name: str) -> None:
+    """A request pinned to another adapter (a fallback epoch this model can't serve) is refused
+    before dispatch, never re-mapped."""
+    if head.adapter.name != name:
+        raise UnsupportedContentError(
+            "continuation_unsupported", f"the epoch pins adapter {head.adapter.name!r}"
+        )
+
+
+async def read(context: ModelContext, ref: AnyRef) -> bytes:
+    """Artifact bytes Render v1 already verified before the request: a failure now is a broken
+    invariant, never a reason to send without them."""
+    plain = ArtifactRef(sha256=ref.sha256, bytes=ref.bytes, media_type=ref.media_type)
+    got = await context.read(plain)
+    if isinstance(got, Err):
+        raise _UnreadableError(got.error)
+    return got.value
+
+
+class _UnreadableError(Exception):
+    def __init__(self, error: ParseError) -> None:
+        super().__init__(f"{error.code}: {error.message}")
