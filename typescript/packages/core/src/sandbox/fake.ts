@@ -2,6 +2,7 @@ import { sha256Hex } from "../hash";
 import { canonicalize, SandboxId, SnapshotId } from "../log";
 import type { LookupResult } from "../model/protocol";
 import { err, ok, type Result } from "../result";
+import { builtin, type Ran, toolName } from "./fake-shell";
 import type {
   ExecOutput,
   FileFailure,
@@ -27,8 +28,21 @@ type Operation =
   | { readonly kind: "snapshot"; readonly id: string }
   | { readonly kind: "unsupported" };
 
-/** The fake plus what it saw: `creates` counts provider create and restore calls. */
-export type FakeSandbox = Sandbox & { readonly creates: () => number };
+/** One exec as the provider received it. */
+export type FakeExec = {
+  readonly command: readonly string[];
+  readonly env: Readonly<Record<string, string>>;
+};
+
+/**
+ * The fake plus what it saw: `creates` counts provider create and restore calls, `execs` every
+ * exec's argv and env, `files` every file of every sandbox it made (canary checks, F11.2).
+ */
+export type FakeSandbox = Sandbox & {
+  readonly creates: () => number;
+  readonly execs: () => readonly FakeExec[];
+  readonly files: () => readonly Uint8Array[];
+};
 
 const INFO: SandboxInfo = {
   provider: "fake",
@@ -83,24 +97,36 @@ async function* chunks(bytes: Uint8Array): AsyncIterable<Uint8Array> {
     yield bytes.subarray(at, at + CHUNK);
 }
 
-/** A scripted tool's run: a key in executed_keys is provider dedup; no tool exits 127. */
-function scripted(
-  tool: NonNullable<SandboxScript["tools"]>[string] | undefined,
-  name: string,
-  processKey: string,
-): ExecOutput {
-  if (tool === undefined)
-    return {
-      exit_code: Promise.resolve(127),
-      stdout: chunks(new Uint8Array()),
-      stderr: chunks(utf8.encode(`${name}: command not found\n`)),
-    };
-  const out = tool.executed_keys?.[processKey] ?? tool.output;
+function output(ran: Ran): ExecOutput {
   return {
-    exit_code: Promise.resolve(tool.is_error ? 1 : 0),
-    stdout: chunks(utf8.encode(out)),
-    stderr: chunks(new Uint8Array()),
+    exit_code: Promise.resolve(ran.code),
+    stdout: chunks(utf8.encode(ran.stdout)),
+    stderr: chunks(utf8.encode(ran.stderr)),
   };
+}
+
+/**
+ * A scripted tool's run: a key in executed_keys is provider dedup. Unscripted, the fake's few
+ * POSIX builtins answer from the tree; anything else exits 127.
+ */
+function scripted(
+  tools: NonNullable<SandboxScript["tools"]>,
+  command: readonly string[],
+  processKey: string,
+  tree: Tree,
+): ExecOutput {
+  const name = toolName(command);
+  const tool = tools[name];
+  if (tool === undefined)
+    return output(
+      builtin(tree, command) ?? {
+        code: 127,
+        stdout: "",
+        stderr: `${name}: command not found\n`,
+      },
+    );
+  const out = tool.executed_keys?.[processKey] ?? tool.output;
+  return output({ code: tool.is_error ? 1 : 0, stdout: out, stderr: "" });
 }
 
 export function fakeSandbox(script: unknown = {}): FakeSandbox {
@@ -109,6 +135,8 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
   const live = new Map<string, SandboxSession>();
   const captured = new Map<string, Captured>();
   const operations = new Map<string, Operation>();
+  const execs: FakeExec[] = [];
+  const trees: Tree[] = [];
   let creates = 0;
   let serial = 0;
 
@@ -117,14 +145,15 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
 
   const session = (id: string, tree: Tree): SandboxSession => {
     const ran = new Map<string, string>();
+    trees.push(tree);
     const self: SandboxSession = {
       id: SandboxId.parse(id),
       exec: async (command, context, options) => {
         const fenced = await context.fence();
         if (!fenced.ok) return fenced;
-        const name = command[0] ?? "";
-        ran.set(options.processKey, name);
-        return ok(scripted(tools[name], name, options.processKey));
+        execs.push({ command: [...command], env: { ...options.env } });
+        ran.set(options.processKey, toolName(command));
+        return ok(scripted(tools, command, options.processKey, tree));
       },
       terminate: async (processKey, context) => {
         const fenced = await context.fence();
@@ -261,6 +290,8 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
   return {
     info: INFO,
     creates: () => creates,
+    execs: () => execs,
+    files: () => trees.flatMap((t) => [...t.values()]),
     create: async (operationKey, context) => {
       const fenced = await context.fence();
       if (!fenced.ok) return fenced;

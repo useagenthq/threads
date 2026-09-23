@@ -209,3 +209,47 @@ describe("scripted exec", () => {
     expect(() => fakeSandbox({ tools: {}, extra: true })).toThrow();
   });
 });
+
+describe("the fake's POSIX commands the built-in file tools use", () => {
+  const run = async (s: SandboxSession, command: readonly string[]) =>
+    unwrap(
+      await execute(s, command, CTX, { processKey: "k" }, memoryArtifacts()),
+    );
+
+  test("find lists files; grep -rnIE prints path:line:text and exits 1 on no match", async () => {
+    const s = await session();
+    unwrap(
+      await s.upload("src/a.ts", bytes("const a = 1;\nexport {a};\n"), CTX),
+    );
+    unwrap(await s.upload("src/b.md", bytes("# b\n"), CTX));
+    unwrap(await s.upload("top.txt", bytes("a = 2\n"), CTX));
+    const found = await run(s, ["find", "/workspace/src", "-type", "f"]);
+    expect(found.stdout).toBe("/workspace/src/a.ts\n/workspace/src/b.md\n");
+    const grep = ["grep", "-rnIE", "-e"];
+    const hit = await run(s, [...grep, "a = [0-9]", "--", "/workspace"]);
+    expect([hit.exit_code, hit.stdout]).toEqual([
+      0,
+      "/workspace/src/a.ts:1:const a = 1;\n/workspace/top.txt:1:a = 2\n",
+    ]);
+    const none = await run(s, [...grep, "zzz", "--", "/workspace"]);
+    expect(none.exit_code).toBe(1);
+  });
+
+  test("sh -c runs the scripted tool its command names; exec sees exactly the env given", async () => {
+    const sandbox = fakeSandbox({ tools: { df: { output: "/ 40%" } } });
+    const s = unwrap(await sandbox.create("op-1", CTX));
+    const r = unwrap(
+      await execute(
+        s,
+        ["sh", "-c", "df -h"],
+        CTX,
+        { processKey: "k", env: {} },
+        memoryArtifacts(),
+      ),
+    );
+    expect(r.stdout).toBe("/ 40%");
+    expect(sandbox.execs()).toEqual([
+      { command: ["sh", "-c", "df -h"], env: {} },
+    ]);
+  });
+});
