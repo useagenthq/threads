@@ -63,6 +63,12 @@ def context(fold: Fold) -> Context:
     return CONTEXT if pinned is None or pinned.context is MISSING else pinned.context
 
 
+def max_pauses(fold: Fold) -> int:
+    """pause_turn re-requests per turn; absent means 3 (spec/schema/README.md, turn endings)."""
+    cap = context(fold).max_pause_continuations
+    return 3 if cap is MISSING else cap
+
+
 def fallbacks(fold: Fold) -> tuple[ModelSettings, ...]:
     pinned = policy(fold)
     return () if pinned is None or pinned.fallback is MISSING else tuple(pinned.fallback)

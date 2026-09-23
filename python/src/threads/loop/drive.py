@@ -3,7 +3,7 @@ the run must stop. No decision reads memory the log doesn't hold, so resuming af
 the same loop over the same log (invariant 1)."""
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, assert_never
 
 from pydantic.experimental.missing_sentinel import MISSING
 
@@ -26,9 +26,9 @@ from threads.log import (
     TurnCompletedEvent,
 )
 from threads.loop import calls, retries
-from threads.loop.defaults import context
+from threads.loop.defaults import context, max_pauses
 from threads.loop.drafts import draft
-from threads.loop.history import CONTINUE_TEXT, continuations, step, turn_events
+from threads.loop.history import CONTINUE_TEXT, continuations, pauses, step, turn_events
 from threads.loop.runtime import Halt, Idle, Parked, Runtime, lost
 from threads.loop.turn import complete, request
 from threads.reduce.fold import policy
@@ -136,8 +136,26 @@ async def _next(rt: Runtime) -> Halt | None:
 async def _after_response(
     rt: Runtime, response: ModelResponseEvent | ModelResponseRecoveredEvent
 ) -> Halt | None:
-    if response.data.stop_reason != "max_tokens":
-        return await complete(rt, "end_turn")
+    """spec/schema/README.md, "Turn endings by stop_reason"."""
+    stop = response.data.stop_reason
+    match stop:
+        case "end_turn" | "stop_sequence" | "refusal" | "tool_use":
+            return await complete(rt, "end_turn")
+        case "max_tokens":
+            return await _continue_output(rt)
+        case "context_window_exceeded":
+            return await complete(rt, "context_exhausted")
+        case "pause_turn" if pauses(rt.events) <= max_pauses(rt.fold):
+            # Ask again with nothing added, so the paused content goes back as-is.
+            return await request(rt, 1)
+        case "pause_turn" | "other":
+            return await complete(rt, "error")
+        case _:
+            assert_never(stop)
+
+
+async def _continue_output(rt: Runtime) -> Halt | None:
+    """ask to continue, up to max_output_continuations per turn."""
     if continuations(rt.events) >= context(rt.fold).max_output_continuations:
         return await complete(rt, "max_output")
     data: dict[str, JsonValue] = {

@@ -15,7 +15,16 @@ from pydantic import JsonValue
 from threads.log import AdapterRef, ModelRef, OutputPart, Usage
 from threads.log import Model as ModelLimits
 
-type StopReason = Literal["end_turn", "tool_use", "max_tokens", "stop_sequence", "refusal", "other"]
+type StopReason = Literal[
+    "end_turn",
+    "tool_use",
+    "max_tokens",
+    "stop_sequence",
+    "refusal",
+    "pause_turn",
+    "context_window_exceeded",
+    "other",
+]
 type RejectReason = Literal[
     "rate_limited", "overloaded", "server_error", "prompt_too_long", "provider_error"
 ]

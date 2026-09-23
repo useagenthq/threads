@@ -121,6 +121,18 @@ def continuations(events: Sequence[Event]) -> int:
     )
 
 
+def pauses(events: Sequence[Event]) -> int:
+    """Turn responses in the open turn that stopped with pause_turn."""
+    side = _side(events)
+    return sum(
+        1
+        for e in turn_events(events)
+        if isinstance(e, ModelResponseEvent | ModelResponseRecoveredEvent)
+        and e.data.request_event_id not in side
+        and e.data.stop_reason == "pause_turn"
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class CallState:
     """Where one call stands: its authorization, its challenge and its effect attempts."""
