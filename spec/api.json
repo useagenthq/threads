@@ -3402,7 +3402,7 @@
     {
       "usage": "threads delete <thread_id> | --tenant <tenant_id>",
       "via": "the store's thread deletion",
-      "doc": "Writes a tombstone, removes log rows and projections, and moves live resources to releasing."
+      "doc": "Writes a tombstone, removes log rows and projections, and moves live resources to releasing; subagent threads spawned under it are deleted the same way, recursively, handoff targets are not (spec/schema/README.md, Deleting a thread)."
     },
     {
       "usage": "threads gc [--grace-days <n>]",

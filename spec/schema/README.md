@@ -162,6 +162,9 @@ A team tool call changes the lead's log through the lead's writer. `<member>` is
 | `team_task_claim{task_id}` | `team_task_claimed{task_id, member}` when rule 23 allows; else nothing: `can't claim: <reason>` (error) | `claimed <task_id>` | already claimed by this member: `claimed <task_id>` |
 | `team_task_update{task_id, status}` | `team_task_updated` when this member holds the claim; else `<task_id> is not claimed by <member>` (error) | `<task_id> <status>` | the task already has that status: `<task_id> <status>` |
 | `send_message{to, text}` | `team_message{message_id: "<member>/<call_id>", from: <member>, to, text}` | `sent` | the message_id exists: `sent` |
+| `spawn_agent{agent, ...}` while this lead already has an unfinished member of that name | nothing (no `agent_spawned`, no child thread) | `member_active: <agent> is still running` (error) | the same refusal, nothing appended |
+
+**A member is its agent name, so names are unique within a team.** A lead's children are its team. `spawn_agent` for an agent name whose earlier child of this lead has `agent_spawned` and no `agent_finished` (foreground or background) is refused with the `member_active` result above. There is never a second concurrent instance of a name. Once that child has finished, the name can be spawned again, and it is the same member (its tasks and messages keep `<member>/<call_id>` ids).
 
 A member receives each `team_message` addressed to it or to `*` (and not from itself) once, before its next turn request, as `injected{source: agent, trust: untrusted_reference, origin: {id: message_id}, text: "<from>: <text>"}`; one already injected with that `origin.id` is never injected again.
 
@@ -238,6 +241,10 @@ Text a tool server or provider chose reaches the model only inside the untrusted
 
 - **Lookup before create.** Before creating, and when recovery reconciles a begun call, the gateway lists the repository's pull requests for `(head, base)` in **every state**. If one exists, the newest is the result and nothing is created, and its state is in the preview (`pull request #<n> (<state>)`). A pull request is created only when none exists. So a create whose response was lost, followed by a close, never leads to a second pull request.
 - A create refused with 422 means "already exists" only when the forge says a pull request for the head already exists; the lookup then names it. Any other 422 is an error result.
+
+## Deleting a thread
+
+Deleting a thread (`threads delete`, the host's thread deletion) also deletes every **subagent** thread spawned under it, recursively: each thread whose `thread_started.parent` has relation `subagent` and names a deleted thread. The same rules apply to each: same tenant only, a tombstone per thread, log rows and projections removed, live resources moved to `releasing`, and ledger rows released. **Handoff targets are independent threads** (relation `handoff`) and are not deleted, and neither are their own subagents.
 
 ## Semantic rules
 
