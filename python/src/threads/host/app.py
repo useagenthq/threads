@@ -156,19 +156,20 @@ class Host:
         while still_open:
             await asyncio.sleep(REOPEN_S)
             for row, run in tuple(still_open.items()):
-                again = None if _gave_up(row, run) else await self._reopen_logged(row)
+                again = None if _gave_up(row, run) else await self._reopen_logged(row, run)
                 if again is None:
                     del still_open[row]
                 else:
                     still_open[row] = again
 
-    async def _reopen_logged(self, row: OpenRun) -> RunTask | None:
+    async def _reopen_logged(self, row: OpenRun, last: RunTask) -> RunTask | None:
+        """The run carrying the row, or None once closed or parked. A store error is logged and
+        the row kept: the next pass tries again, and nothing else is stopped by it."""
         try:
             return await self._reopen(row)
-        # One branch's store error must not stop the host's pass.
         except Exception:
-            _log.exception("threads host: reopening %s failed", row[2])
-            return None
+            _log.exception("threads host: reopening %s failed; trying again", row[2])
+            return last
 
     async def stop(self) -> None:
         """Aborts first: every run and follow-on resume is cancelled and none starts, so no
