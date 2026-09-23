@@ -176,7 +176,8 @@ CREATE TABLE IF NOT EXISTS inbox (
 
 -- A channel conversation's thread: the verified (tenant, channel,
 -- installation, address) maps to one thread by an atomic create-or-get. Message text or metadata
--- never selects the thread or tenant. A handoff moves the row to the target thread (-- item 2) with one conditional update.
+-- never selects the thread or tenant. A handoff moves the row to the target thread (
+-- item 2) with one conditional update.
 CREATE TABLE IF NOT EXISTS channel_threads (
   tenant_id TEXT NOT NULL,
   channel TEXT NOT NULL,
@@ -224,7 +225,7 @@ CREATE TABLE IF NOT EXISTS schedule_occurrences (
   UNIQUE (schedule_id, occurrence_at)
 ) STRICT;
 
--- POST /v1/runs idempotency. The receipt is
+-- POST /v1/runs idempotency (openapi.json Idempotency-Key). The receipt is
 -- inserted in the transaction that appends the run's user_input, so a lost response replays
 -- it. The key is unique per tenant and operation; principal_key (the full normalized
 -- issuer/tenant/subject PrincipalKey) and body_hash (sha256 of the request's canonical JSON) are
@@ -244,7 +245,7 @@ CREATE TABLE IF NOT EXISTS run_receipts (
   PRIMARY KEY (tenant_id, operation, idempotency_key)
 ) STRICT;
 
--- Deleted threads: one transaction removes a thread's log rows
+-- Deleted threads (threads delete): one transaction removes a thread's log rows
 -- and projections, moves its live resources to releasing, and writes this tombstone, which
 -- outlives them as the audit of the deletion.
 CREATE TABLE IF NOT EXISTS tombstones (

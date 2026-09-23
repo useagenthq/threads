@@ -1,33 +1,34 @@
 # pyright: strict
-"""Checks spec/conformance/coverage.json against the corpus and, when present, the brief."""
+"""Checks spec/conformance/coverage.json against the corpus and, when given, a scenario list."""
 
 from __future__ import annotations
 
 import json
+import os
+import pathlib
 import re
 from typing import TYPE_CHECKING
 
 from .common import CASES, arr, obj, text
 
 if TYPE_CHECKING:
-    import pathlib
-
     from .jcs import JsonValue
 
 COVERAGE = CASES.parent / "coverage.json"
 ROOT = CASES.parents[2]
-# The brief is local-only by design (.gitignore); CI checks the corpus side alone.
-BRIEF = ROOT / "plans" / "specs" / ""
+# An optional maintainer scenario list (THREADS_SCENARIO_LIST); CI checks the corpus side alone.
+_LIST = os.environ.get("THREADS_SCENARIO_LIST")
+BRIEF = pathlib.Path(_LIST) if _LIST else None
 SCENARIO = re.compile(r"\s*- \*\*[✓✗] (F\d+\.\d+)(?: \[step 1[^\]]*\])?\*\* → (.*)")
 EVIDENCE = re.compile(r"(integration test \([^)]*\) )?`([a-z0-9-]+)`")
 KINDS = frozenset({"case", "test", "job", "live_gate"})
 STATUSES = frozenset({"planned", "implemented"})
 
 
-def _brief() -> dict[str, list[tuple[bool, str]]]:
-    """Scenario id -> [(is_live_gate, ref)] in brief order."""
+def _brief(path: pathlib.Path) -> dict[str, list[tuple[bool, str]]]:
+    """Scenario id -> [(is_live_gate, ref)] in list order."""
     found: dict[str, list[tuple[bool, str]]] = {}
-    for line in BRIEF.read_text().splitlines():
+    for line in path.read_text().splitlines():
         m = SCENARIO.match(line)
         if m:
             found[m[1]] = [(r[1] is not None, r[2]) for r in EVIDENCE.finditer(m[2])]
@@ -44,7 +45,7 @@ def _job_tests(where: str, tests: JsonValue) -> list[str]:
 
 def check(cases: pathlib.Path) -> list[str]:
     """Returns problems: bad kinds or statuses, case status out of step with the corpus, and
-    (when the brief is present) scenarios or evidence that differ from the brief."""
+    (when a scenario list is given) scenarios or evidence that differ from the brief."""
     problems: list[str] = []
     mapped: dict[str, list[tuple[bool, str]]] = {}
     for s in arr(obj(json.loads(COVERAGE.read_text()))["scenarios"]):
@@ -60,12 +61,16 @@ def check(cases: pathlib.Path) -> list[str]:
                 problems.append(f"{sid} {ref}: status {status} disagrees with the corpus")
             elif kind == "job" and status == "implemented":
                 problems += _job_tests(f"{sid} {ref}", ev.get("tests", []))
-    if BRIEF.exists():
-        brief = _brief()
-        problems += [f"{sid}: in the brief, not in coverage.json" for sid in brief.keys() - mapped]
-        problems += [f"{sid}: in coverage.json, not in the brief" for sid in mapped.keys() - brief]
+    if BRIEF is not None and BRIEF.is_file():
+        brief = _brief(BRIEF)
         problems += [
-            f"{sid}: evidence differs from the brief"
+            f"{sid}: in the scenario list, not in coverage.json" for sid in brief.keys() - mapped
+        ]
+        problems += [
+            f"{sid}: in coverage.json, not in the scenario list" for sid in mapped.keys() - brief
+        ]
+        problems += [
+            f"{sid}: evidence differs from the scenario list"
             for sid in brief.keys() & mapped.keys()
             if brief[sid] != mapped[sid]
         ]

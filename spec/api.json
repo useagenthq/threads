@@ -31,7 +31,7 @@
   "choices": [
     {
       "id": "run-as-method",
-      "open": "lists run() and stream() as core functions; README and Consequences write bot.run(task).",
+      "open": "The draft design lists run() and stream() as core functions; the README writes bot.run(task).",
       "choice": "Methods on the agent only: agent.run(input, opts), agent.stream(input, opts). No top-level run().",
       "why": "One way to run, as the README shows. (OpenAI Agents SDK uses run(agent, input); a method reads the same and needs no extra import.)"
     },
@@ -49,37 +49,37 @@
     },
     {
       "id": "fork-then-run",
-      "open": "gives fork(point, {input?, ...}); a thread handle has no agent to run with.",
+      "open": "The draft design gives fork(point, {input?, ...}); a thread handle has no agent to run with.",
       "choice": "fork() returns a Thread handle on the new branch; continue it with agent.run(input, {thread: child}).",
       "why": "Keeps the thread handle pure data and control; one run path."
     },
     {
       "id": "deny-method",
-      "open": "lists approve() but no way to refuse a challenge.",
+      "open": "The draft design lists approve() but no way to refuse a challenge.",
       "choice": "Thread.deny(challengeId, principal, {reason}).",
       "why": "Approvals need both outcomes (approval_denied)."
     },
     {
       "id": "control-principal",
-      "open": "gives resolveParked(key, resolution) and cancel() without a principal, yet effect_resolved{by: human} and cancel_requested require one.",
+      "open": "The draft design gives resolveParked(key, resolution) and cancel() without a principal, yet effect_resolved{by: human} and cancel_requested require one.",
       "choice": "Every Thread method that appends an event takes a required positional principal: approve, deny, answer, resolveParked, cancel, compact, setModel, setOutputStyle, setMode. Only agent.run()/stream() default it, to the local operator {api, local, operator}, so the two-line example stays two lines.",
       "why": "The events they write carry the actor's principal; a control action must name who took it."
     },
     {
       "id": "mcp-one-function",
-      "open": "spells mcp({url}) and mcp.stdio({command}).",
+      "open": "The draft design spells mcp({url}) and mcp.stdio({command}).",
       "choice": "One mcp({name, url | command, ...}); exactly one of url or command. It lives in the mcp package; core only knows the opaque McpServer it returns.",
       "why": "mcp.stdio has no plain Python equivalent; one function is smaller. The MCP SDK and a JSON Schema validator would break core's single-dependency rule."
     },
     {
       "id": "local-provider-names",
-      "open": "names both built-ins local() (memory item 6, knowledge item 8).",
+      "open": "The draft design names both built-ins local().",
       "choice": "localMemory() and localKnowledge({paths}).",
       "why": "One exported name can't be both."
     },
     {
       "id": "test-kit-factories",
-      "open": "names ScriptedModel (a class) and a fake sandbox.",
+      "open": "The draft design names ScriptedModel (a class) and a fake sandbox.",
       "choice": "scriptedModel(script) and fakeSandbox(script) factories taking the conformance ModelScript and SandboxScript.",
       "why": "Same factory shape as every other provider; the scripts are already specified."
     },
@@ -91,7 +91,7 @@
     },
     {
       "id": "observers",
-      "open": "spells on(filter, handler) without saying where it lives.",
+      "open": "The draft design spells on(filter, handler) without saying where it lives.",
       "choice": "extension({on: {<event type> | \"*\": handler}}).",
       "why": "Observers are extension code; no new top-level name."
     },
@@ -103,37 +103,37 @@
     },
     {
       "id": "builtin-tool-config",
-      "open": "says web, git and browser tools need configuration but not where.",
+      "open": "The draft design says web, git and browser tools need configuration but not where.",
       "choice": "agent({web: {fetch, search}, git: {credential}, browser: {auth}}); sandbox tools come with sandbox.",
       "why": "Config-first; no extra factory names."
     },
     {
       "id": "approvers",
-      "open": "allows roles or principals per tool or effect class.",
+      "open": "The draft design allows roles or principals per tool or effect class.",
       "choice": "agent({approvers: Principal[]}) covering every ask; per-tool approvers deferred.",
       "why": "Smallest form that meets the default (the root run's originating principal; see approver-default)."
     },
     {
       "id": "api-casing",
-      "open": "writes saveCase(name, {expect, external_effects}) in TS.",
+      "open": "The draft design writes saveCase(name, {expect, external_effects}) in TS.",
       "choice": "API options are camelCase in TS (externalEffects); wire data types (Budget, Principal, the host-api shapes) keep snake_case in both languages.",
       "why": "AGENTS.md: TS accessors may be camelCase, wire bytes are snake_case."
     },
     {
       "id": "run-error-codes",
-      "open": "names stop_hook_exhausted, continuation_limit, the pinned turn_completed reason is stop_hook_limit; max_turns has no RunResult mapping.",
+      "open": "The draft design names stop_hook_exhausted, continuation_limit, the pinned turn_completed reason is stop_hook_limit; max_turns has no RunResult mapping.",
       "choice": "stop_hook_limit everywhere (RunResult, the onStop limit, ADRs 0012 and 0014 corrected); failed.error.code also adds max_turns and the pre-dispatch codes that end a run (host-api RunErrorCode).",
       "why": "Pinned wire names win."
     },
     {
       "id": "hook-decision-names",
-      "open": "gives before_tool_result pass | redact | block and before_input inject; hook_decision.decision has no pass, block or inject.",
+      "open": "The draft design gives before_tool_result pass | redact | block and before_input inject; hook_decision.decision has no pass, block or inject.",
       "choice": "One vocabulary, the wire hook_decision.decision enum: beforeToolResult proceed | redact(spans) | deny, beforeInput allow | deny(reason), beforeModel proceed | deny(reason). Injections are a separate list on allow/proceed, recorded as injected{source: hook}. corrected to match.",
       "why": "Docs, api.json and the wire agree."
     },
     {
       "id": "host-auth",
-      "open": "says callers are authenticated as principals, not how.",
+      "open": "The draft design says callers are authenticated as principals, not how.",
       "choice": "host({authenticate: (request) => Principal | null}); without it every /v1 route is 401.",
       "why": "Secure by default; the app owns its auth."
     },
@@ -151,19 +151,19 @@
     },
     {
       "id": "store-sealed",
-      "open": "lists store among provider interfaces; allows only SQLite in v0.1.",
+      "open": "The draft design lists store among provider interfaces; allows only SQLite in v0.1.",
       "choice": "Store is opaque in v0.1: sqlite() is the only implementation and no methods are public.",
       "why": "Don't freeze an interface nobody implements yet."
     },
     {
       "id": "approver-default",
-      "open": "defaults run() to the local operator and channels to nobody; the implementations disagreed (TS let any tenant principal approve, Python refused every channel approval).",
+      "open": "The draft design defaults run() to the local operator and channels to nobody; the implementations disagreed (TS let any tenant principal approve, Python refused every channel approval).",
       "choice": "With no approvers configured, the root run's originating principal (the root thread's latest user_input principal) may approve its own calls, over the API and a channel alike. Authority is always the ROOT run's set, also through a descendant's route; resolveParked and every duplicate-risk decision need it and record the accepting principal (spec/schema/README.md, Approval authority).",
       "why": "Channel approvals work out of the box without letting other tenant principals approve; hosts wanting stricter control configure approvers."
     },
     {
       "id": "budget-unbounded-limit",
-      "open": "reserves each attempt's bound, but says nothing of a token limit when max_tokens (or an input bound) is unknown; TS skipped the limit, Python reserved 0.",
+      "open": "The draft design reserves each attempt's bound, but says nothing of a token limit when max_tokens (or an input bound) is unknown; TS skipped the limit, Python reserved 0.",
       "choice": "Setup refuses such a limit with budget_unenforceable unless on_unknown_usage is stop; at run time an attempt with no bound for a covering limit is refused as exceeding (spec/schema/README.md, Budget enforcement).",
       "why": "A budget must never overspend; refusing at setup surfaces the misconfiguration before any spend."
     }
@@ -174,7 +174,6 @@
       "py": "agent",
       "package": "core",
       "doc": "Describe an agent. Pure: no I/O, no env reads, no sockets. Checked by Agent.check() or on the first run.",
-      "source": "",
       "async": false,
       "generics": [{"name": "Deps", "default": {"prim": "null"}}, {"name": "Output", "default": {"prim": "string"}}],
       "params": [
@@ -308,15 +307,13 @@
           "name": "retry",
           "kind": "option",
           "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/retry"}},
-          "required": false,
-          "default_doc": ""
+          "required": false
         },
         {
           "name": "context",
           "kind": "option",
           "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/context"}},
-          "required": false,
-          "default_doc": ""
+          "required": false
         },
         {
           "name": "egress",
@@ -403,7 +400,7 @@
           "type": {"enum": ["immediate", "after_guardrails"]},
           "required": false,
           "default": "immediate",
-          "doc": "."
+          "doc": "When streamed output is released: immediately, or only after the output guardrails pass."
         }
       ],
       "returns": {"$ref": "#/types/Agent", "args": [{"generic": "Deps"}, {"generic": "Output"}]}
@@ -413,7 +410,6 @@
       "py": "tool",
       "package": "core",
       "doc": "Define an app tool. Input and output types are inferred from the schemas.",
-      "source": "",
       "async": false,
       "generics": [{"name": "Input"}, {"name": "Output"}, {"name": "Deps", "default": {"prim": "null"}}],
       "params": [
@@ -542,7 +538,6 @@
       "py": "extension",
       "package": "core",
       "doc": "The one extension primitive: tools, trusted instructions and hooks. Trusted host code, not a security boundary.",
-      "source": "",
       "async": false,
       "generics": [{"name": "Deps", "default": {"prim": "null"}}],
       "params": [
@@ -620,7 +615,6 @@
       "py": "mcp",
       "package": "mcp",
       "doc": "An MCP server in one line. The host owns the connection and credentials; an unreachable server is a ConfigError naming it.",
-      "source": "",
       "async": false,
       "params": [
         {
@@ -688,7 +682,6 @@
       "py": "secret",
       "package": "core",
       "doc": "A reference to a host secret, resolved only in the host. Values never reach the log, prompts or the sandbox.",
-      "source": "",
       "async": false,
       "params": [{"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true}],
       "returns": {"$ref": "#/types/Secret"}
@@ -698,7 +691,6 @@
       "py": "open_thread",
       "package": "core",
       "doc": "A handle for inspection and control, independent of any in-memory run.",
-      "source": "",
       "async": true,
       "params": [
         {"name": "store", "kind": "positional", "type": {"$ref": "#/types/Store"}, "required": true},
@@ -733,7 +725,6 @@
       "py": "sqlite",
       "package": "core",
       "doc": "The one log and artifact store. Opens lazily: no I/O until first use.",
-      "source": "",
       "async": false,
       "params": [
         {
@@ -751,7 +742,6 @@
       "py": "local_memory",
       "package": "core",
       "doc": "Built-in memory: SQLite FTS5 in the run's store.",
-      "source": "",
       "async": false,
       "params": [],
       "returns": {"$ref": "#/types/MemoryProvider"}
@@ -761,7 +751,6 @@
       "py": "local_knowledge",
       "package": "core",
       "doc": "Built-in knowledge: SQLite FTS5 over admitted versions stored as artifacts.",
-      "source": "",
       "async": false,
       "params": [{"name": "paths", "kind": "option", "type": {"array": {"prim": "string"}}, "required": true}],
       "returns": {"$ref": "#/types/KnowledgeProvider"}
@@ -771,7 +760,6 @@
       "py": "scripted_model",
       "package": "core",
       "doc": "Test kit. Consumes the script in order, deterministic ids; a call past the end fails the run. The exact requests are in the log.",
-      "source": " §5 test kit",
       "async": false,
       "params": [
         {
@@ -788,7 +776,6 @@
       "py": "fake_sandbox",
       "package": "core",
       "doc": "Test kit. Runs the shared sandbox suite on every PR.",
-      "source": "",
       "async": false,
       "params": [
         {
@@ -806,7 +793,6 @@
       "py": "host",
       "package": "host",
       "doc": "Bind agents to a store, channels and schedules. Starts nothing until ready().",
-      "source": "",
       "async": false,
       "params": [
         {"name": "store", "kind": "option", "type": {"$ref": "#/types/Store"}, "required": true},
@@ -1028,8 +1014,7 @@
             ]
           }
         }
-      },
-      "source": ""
+      }
     },
     "RunResult": {
       "kind": "union",
@@ -1101,8 +1086,7 @@
           "casing": "api"
         }
       ],
-      "doc": "The HTTP form is host-api RunOutcome (ids instead of handles).",
-      "source": ""
+      "doc": "The HTTP form is host-api RunOutcome (ids instead of handles)."
     },
     "RunStream": {
       "kind": "interface",
@@ -1111,8 +1095,7 @@
       "properties": {
         "result": {"type": {"promise": {"$ref": "#/types/RunResult", "args": [{"generic": "Output"}]}}, "required": true}
       },
-      "iterates": {"$ref": "urn:threads:schema:host-api:v1#/$defs/StreamEvent"},
-      "source": ""
+      "iterates": {"$ref": "urn:threads:schema:host-api:v1#/$defs/StreamEvent"}
     },
     "RunContext": {
       "kind": "object",
@@ -1134,8 +1117,7 @@
           "doc": "<branch_id>:<call_id>; send it to providers that dedup."
         },
         "signal": {"type": {"native": {"ts": "AbortSignal"}}, "required": true, "lang": "ts"}
-      },
-      "source": ""
+      }
     },
     "Thread": {
       "kind": "interface",
@@ -1192,7 +1174,7 @@
               "type": {"enum": ["live", "stub"]},
               "required": false,
               "default": "live",
-              "doc": "stub runs the branch under . A stub-mode run whose settings epoch model is a live model (not a test kit) declaring hosted tools is refused before recovery or any dispatch with ConfigError hosted_tool_unsupported, because hosted calls can't be stubbed."
+              "doc": "stub runs the branch per the spec. A stub-mode run whose settings epoch model is a live model (not a test kit) declaring hosted tools is refused before recovery or any dispatch with ConfigError hosted_tool_unsupported, because hosted calls can't be stubbed."
             },
             {
               "name": "knowledge",
@@ -1220,7 +1202,6 @@
           "ts": "saveCase",
           "py": "save_case",
           "doc": "Writes a conformance case directory in exactly the spec/conformance layout, so the same runners replay it: case.json (with expect and input.text), log.threads-ts.jsonl and log.threads-py.jsonl with matching expected.<impl>.json, artifacts/, model.json and stubs.json. The kind is stub: external effects replay from stubs.json and unmatched invocations fail closed. The case is built from typed values, so it is valid against case.schema.json by construction; core carries no JSON Schema evaluator, and both languages' tests validate every saved case against case.schema.json.",
-          "source": "",
           "async": true,
           "params": [
             {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true},
@@ -1329,7 +1310,6 @@
         "answer": {
           "ts": "answer",
           "py": "answer",
-          "source": "",
           "async": true,
           "params": [
             {
@@ -1359,7 +1339,6 @@
         "resolveParked": {
           "ts": "resolveParked",
           "py": "resolve_parked",
-          "source": "C3",
           "async": true,
           "params": [
             {"name": "effect_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
@@ -1397,7 +1376,6 @@
         "compact": {
           "ts": "compact",
           "py": "compact",
-          "source": "",
           "async": true,
           "params": [
             {
@@ -1418,7 +1396,6 @@
           "ts": "setModel",
           "py": "set_model",
           "doc": "settings_changed{reason: user}. forbidden also covers a before_model_switch deny.",
-          "source": "",
           "async": true,
           "params": [
             {
@@ -1443,7 +1420,6 @@
         "setOutputStyle": {
           "ts": "setOutputStyle",
           "py": "set_output_style",
-          "source": "",
           "async": true,
           "params": [
             {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true},
@@ -1460,7 +1436,6 @@
         "setMode": {
           "ts": "setMode",
           "py": "set_mode",
-          "source": "",
           "async": true,
           "params": [
             {
@@ -1492,7 +1467,6 @@
         "cost": {
           "ts": "cost",
           "py": "cost",
-          "source": "",
           "async": true,
           "params": [
             {
@@ -1509,7 +1483,6 @@
         "cacheBreaks": {
           "ts": "cacheBreaks",
           "py": "cache_breaks",
-          "source": "",
           "async": true,
           "params": [],
           "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/CacheBreak"}}
@@ -1517,7 +1490,6 @@
         "todos": {
           "ts": "todos",
           "py": "todos",
-          "source": "",
           "async": true,
           "params": [],
           "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Todo"}}
@@ -1525,14 +1497,12 @@
         "children": {
           "ts": "children",
           "py": "children",
-          "source": "",
           "async": true,
           "params": [],
           "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Child"}}
         }
       },
-      "doc": "A thread positioned at one branch. Every method reads or appends through the store; none needs the agent in memory.",
-      "source": ""
+      "doc": "A thread positioned at one branch. Every method reads or appends through the store; none needs the agent in memory."
     },
     "CaseExpectation": {
       "kind": "object",
@@ -1550,8 +1520,7 @@
           "doc": "Only recorded."
         }
       },
-      "doc": "Written into case.json.",
-      "source": ""
+      "doc": "Written into case.json."
     },
     "SavedCase": {
       "kind": "object",
@@ -2228,35 +2197,30 @@
           "required": false
         }
       },
-      "doc": "Every hook is optional, awaited and bounded by hook_timeout_ms. Decisions are {decision: <hook_decision.decision>, ...} objects. Injections are strings rendered as injected{source: hook}. A gating hook that throws or times out denies.",
-      "source": ""
+      "doc": "Every hook is optional, awaited and bounded by hook_timeout_ms. Decisions are {decision: <hook_decision.decision>, ...} objects. Injections are strings rendered as injected{source: hook}. A gating hook that throws or times out denies."
     },
     "Tool": {
       "kind": "interface",
       "role": "opaque",
       "generics": [{"name": "Input"}, {"name": "Output"}, {"name": "Deps", "default": {"prim": "null"}}],
-      "doc": "An app tool (tool()). Carries Input, Output and Deps for inference.",
-      "source": ""
+      "doc": "An app tool (tool()). Carries Input, Output and Deps for inference."
     },
-    "McpServer": {"kind": "interface", "role": "opaque", "doc": "An MCP server binding (mcp()).", "source": ""},
+    "McpServer": {"kind": "interface", "role": "opaque", "doc": "An MCP server binding (mcp())."},
     "Extension": {
       "kind": "interface",
       "role": "opaque",
       "generics": [{"name": "Deps", "default": {"prim": "null"}}],
-      "doc": "An extension (extension()).",
-      "source": ""
+      "doc": "An extension (extension())."
     },
     "Store": {
       "kind": "interface",
       "role": "opaque",
-      "doc": "The SQLite log and artifact store (sqlite()). Sealed in v0.1: no public methods.",
-      "source": ""
+      "doc": "The SQLite log and artifact store (sqlite()). Sealed in v0.1: no public methods."
     },
     "Secret": {
       "kind": "interface",
       "role": "opaque",
-      "properties": {"name": {"type": {"prim": "string"}, "required": true}},
-      "source": ""
+      "properties": {"name": {"type": {"prim": "string"}, "required": true}}
     },
     "Skill": {
       "kind": "object",
@@ -2266,8 +2230,7 @@
         "description": {"type": {"prim": "string"}, "required": true},
         "body": {"type": {"prim": "string"}, "required": true}
       },
-      "doc": "Loaded from the host config store, pinned by hash. Files in the sandbox are never skills (F4.3), and no agent path writes config: the self-config guard denies every non-read-only call with an argument word holding a .threads path segment (F4.2, step 1).",
-      "source": ""
+      "doc": "Loaded from the host config store, pinned by hash. Files in the sandbox are never skills (F4.3), and no agent path writes config: the self-config guard denies every non-read-only call with an argument word holding a .threads path segment (F4.2 step 1)."
     },
     "Schedule": {
       "kind": "object",
@@ -2278,8 +2241,7 @@
         "cron": {"type": {"prim": "string"}, "required": true},
         "timezone": {"type": {"prim": "string"}, "required": false, "default": "UTC", "doc": "IANA name."},
         "input": {"type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Input"}, "required": true}
-      },
-      "source": ""
+      }
     },
     "ConfigError": {
       "kind": "object",
@@ -2288,8 +2250,7 @@
         "code": {"type": {"$ref": "#/types/ConfigErrorCode"}, "required": true},
         "message": {"type": {"prim": "string"}, "required": true}
       },
-      "doc": "Thrown at setup only: TS class ConfigError extends Error, Python exception ConfigError. Every other expected failure is a value.",
-      "source": ""
+      "doc": "Thrown at setup only: TS class ConfigError extends Error, Python exception ConfigError. Every other expected failure is a value."
     },
     "ConfigErrorCode": {
       "kind": "alias",
@@ -2332,14 +2293,12 @@
           "casing": "wire"
         }
       ],
-      "doc": "An adapter's answer about an operation it may have performed; each answer carries its own finality. found: it happened (effect confirmed_success, model_response_recovered, ledger row live). not_found: final, the provider's contract proves nothing was created or sent (effect safe_to_retry, model attempt not_sent, ledger row released). not_found_nonfinal (not seen yet, may still appear) and unknown (lookup failed or can't answer) settle nothing: the effect parks, the model attempt is abandoned as unknown, the ledger row becomes unknown (resource_unknown). The runtime accepts not_found only from an operation whose declared LookupCapability is final and treats it as not_found_nonfinal otherwise; finality is never inferred from lookup being available.",
-      "source": ""
+      "doc": "An adapter's answer about an operation it may have performed; each answer carries its own finality. found: it happened (effect confirmed_success, model_response_recovered, ledger row live). not_found: final, the provider's contract proves nothing was created or sent (effect safe_to_retry, model attempt not_sent, ledger row released). not_found_nonfinal (not seen yet, may still appear) and unknown (lookup failed or can't answer) settle nothing: the effect parks, the model attempt is abandoned as unknown, the ledger row becomes unknown (resource_unknown). The runtime accepts not_found only from an operation whose declared LookupCapability is final and treats it as not_found_nonfinal otherwise; finality is never inferred from lookup being available."
     },
     "LookupCapability": {
       "kind": "alias",
       "type": {"enum": ["none", "nonfinal", "final"]},
-      "doc": "Declared per lookup operation and verified by the provider conformance suite. none: no lookup for this operation. nonfinal: lookup can find it but never proves absence. final: lookup may answer not_found as final.",
-      "source": ""
+      "doc": "Declared per lookup operation and verified by the provider conformance suite. none: no lookup for this operation. nonfinal: lookup can find it but never proves absence. final: lookup may answer not_found as final."
     },
     "Model": {
       "kind": "interface",
@@ -2399,8 +2358,7 @@
           "returns": {"result": {"prim": "integer"}, "errors": ["unavailable", "timeout"]}
         }
       },
-      "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off. Every send and lookup awaits context.fence() at its real network send, after any SDK or bridge queueing (AGENTS invariant 2: a send can carry provider-hosted tools, so a stale send is never treated as harmless). An adapter or bridge route whose real transport it cannot wrap is refused when the model is constructed: ConfigError transport_fence_unsupported; it is never shipped with a weaker fence. A bridge that takes a caller's model factory (the TypeScript AI SDK bridge) qualifies only providers whose implementation sends through the fenced fetch it hands over on every path; that qualification comes from the provider implementation and its conformance tests, under the trusted-host-code boundary. The bridge also counts fenced fetches per send as misuse detection and containment, not proof of qualification: a send whose stream arrives with zero requests through that fetch ends as a broken stream (unknown outcome: it may have left unfenced, and its output is not kept), and that model refuses every later send before anything leaves with the rejected reason transport_fence_unsupported, recorded as not_sent (not billed, never retried).",
-      "source": ""
+      "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off. Every send and lookup awaits context.fence() at its real network send, after any SDK or bridge queueing (AGENTS invariant 2: a send can carry provider-hosted tools, so a stale send is never treated as harmless). An adapter or bridge route whose real transport it cannot wrap is refused when the model is constructed: ConfigError transport_fence_unsupported; it is never shipped with a weaker fence. A bridge that takes a caller's model factory (the TypeScript AI SDK bridge) qualifies only providers whose implementation sends through the fenced fetch it hands over on every path; that qualification comes from the provider implementation and its conformance tests, under the trusted-host-code boundary. The bridge also counts fenced fetches per send as misuse detection and containment, not proof of qualification: a send whose stream arrives with zero requests through that fetch ends as a broken stream (unknown outcome: it may have left unfenced, and its output is not kept), and that model refuses every later send before anything leaves with the rejected reason transport_fence_unsupported, recorded as not_sent (not billed, never retried)."
     },
     "ModelContext": {
       "kind": "interface",
@@ -2438,8 +2396,7 @@
           "returns": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"}
         }
       },
-      "doc": "What the loop hands an adapter for one send or lookup: the fencing pair it re-checks at its real send point, and artifact access, since Render v1 carries refs, not bytes. Bound to the writer that created it: fence, read and put always act for that branch_id and epoch, and nothing on it selects another.",
-      "source": ""
+      "doc": "What the loop hands an adapter for one send or lookup: the fencing pair it re-checks at its real send point, and artifact access, since Render v1 carries refs, not bytes. Bound to the writer that created it: fence, read and put always act for that branch_id and epoch, and nothing on it selects another."
     },
     "ModelInfo": {
       "kind": "object",
@@ -2552,8 +2509,7 @@
           },
           "casing": "wire"
         }
-      ],
-      "source": ""
+      ]
     },
     "Sandbox": {
       "kind": "interface",
@@ -2633,8 +2589,7 @@
           "returns": {"result": {"enum": ["released", "already_gone"]}, "errors": ["stale_epoch", "cleanup_claim_lost", "release_failed", "unavailable"]}
         }
       },
-      "doc": "What a sandbox adapter (e2b(), daytona(), modal(), fakeSandbox()) returns. Every create and restore carries an operation key written to the resource ledger first. Recovery and gc resolve a ledger row only with the adapter whose info.provider is the row's provider; any other adapter is refused before lookup or release, and the row stays unresolved for the right one.",
-      "source": ""
+      "doc": "What a sandbox adapter (e2b(), daytona(), modal(), fakeSandbox()) returns. Every create and restore carries an operation key written to the resource ledger first. Recovery and gc resolve a ledger row only with the adapter whose info.provider is the row's provider; any other adapter is refused before lookup or release, and the row stays unresolved for the right one."
     },
     "SandboxAuthority": {
       "kind": "union",
@@ -2658,8 +2613,7 @@
           "casing": "wire"
         }
       ],
-      "doc": "Who may dispatch a provider operation. owner: the owning branch's current lease holder at epoch (fence checks the writer lease). cleanup: gc, which holds no branch lease and keeps working after the owning branch is deleted; fence checks that the resources row (tenant-scoped) still carries this claim and is still collectable: releasing, release_failed, or live past its provider expiry. A later claim supersedes an earlier one, so of two concurrent gc runs only the latest claim holder dispatches.",
-      "source": ""
+      "doc": "Who may dispatch a provider operation. owner: the owning branch's current lease holder at epoch (fence checks the writer lease). cleanup: gc, which holds no branch lease and keeps working after the owning branch is deleted; fence checks that the resources row (tenant-scoped) still carries this claim and is still collectable: releasing, release_failed, or live past its provider expiry. A later claim supersedes an earlier one, so of two concurrent gc runs only the latest claim holder dispatches."
     },
     "SandboxContext": {
       "kind": "interface",
@@ -2677,8 +2631,7 @@
           "returns": {"result": {"prim": "void"}, "errors": ["stale_epoch", "cleanup_claim_lost"]}
         }
       },
-      "doc": "What the runtime hands a sandbox adapter for every provider operation: the authority it re-checks at its real dispatch point. The same adapter hook serves both authorities. Bound to the writer or claim that created it; nothing on it selects another.",
-      "source": ""
+      "doc": "What the runtime hands a sandbox adapter for every provider operation: the authority it re-checks at its real dispatch point. The same adapter hook serves both authorities. Bound to the writer or claim that created it; nothing on it selects another."
     },
     "SandboxInfo": {
       "kind": "object",
@@ -2801,8 +2754,7 @@
           "params": [{"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
           "returns": {"result": {"prim": "void"}, "errors": ["stale_epoch", "cleanup_claim_lost", "release_failed", "unavailable"]}
         }
-      },
-      "source": ""
+      }
     },
     "ExecOutput": {
       "kind": "object",
@@ -2812,8 +2764,7 @@
         "stdout": {"type": {"stream": {"prim": "bytes"}}, "required": true, "doc": "Byte chunks: TS AsyncIterable<Uint8Array>, Python AsyncIterator[bytes]."},
         "stderr": {"type": {"stream": {"prim": "bytes"}}, "required": true, "doc": "Byte chunks, as stdout."}
       },
-      "doc": "What an adapter's exec returns: the complete output as byte streams, never truncated or buffered whole. The framework's sandbox layer consumes them into an ExecResult.",
-      "source": ""
+      "doc": "What an adapter's exec returns: the complete output as byte streams, never truncated or buffered whole. The framework's sandbox layer consumes them into an ExecResult."
     },
     "ExecResult": {
       "kind": "object",
@@ -2829,8 +2780,7 @@
           "doc": "Present exactly when truncated: the complete stdout and stderr, readable with read_tool_result."
         }
       },
-      "doc": "What tools and the log see. The framework's sandbox layer, not the adapter, builds it: it writes the ExecOutput streams to the artifact store incrementally while keeping head and tail previews, so full output is never held in host memory, and records full_output before the tool_result.",
-      "source": ""
+      "doc": "What tools and the log see. The framework's sandbox layer, not the adapter, builds it: it writes the ExecOutput streams to the artifact store incrementally while keeping head and tail previews, so full output is never held in host memory, and records full_output before the tool_result."
     },
     "Scope": {
       "kind": "object",
@@ -2840,8 +2790,7 @@
         "agent": {"type": {"prim": "string"}, "required": true},
         "scope": {"type": {"prim": "string"}, "required": true}
       },
-      "doc": "From host config and the verified principal. Never a tool argument.",
-      "source": ""
+      "doc": "From host config and the verified principal. Never a tool argument."
     },
     "Binding": {
       "kind": "object",
@@ -2942,8 +2891,7 @@
           "doc": "The effect class of save_memory and forget_memory with this provider. Absent: unguarded. idempotent requires dedup_window_ms: the provider dedups on the key within it."
         },
         "dedup_window_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false}
-      },
-      "source": ""
+      }
     },
     "KnowledgeSource": {
       "kind": "object",
@@ -3067,8 +3015,7 @@
           ],
           "returns": {"result": {"prim": "integer"}, "errors": ["unavailable", "timeout"]}
         }
-      },
-      "source": ""
+      }
     },
     "SearchBackend": {
       "kind": "interface",
@@ -3086,8 +3033,7 @@
           "returns": {"result": {"array": {"$ref": "#/types/SearchHit"}}, "errors": ["unavailable", "timeout"]}
         }
       },
-      "doc": "A web_search backend adapter (Exa, Brave, Tavily).",
-      "source": ""
+      "doc": "A web_search backend adapter (Exa, Brave, Tavily)."
     },
     "SearchHit": {
       "kind": "object",
@@ -3185,8 +3131,7 @@
           "returns": {"$ref": "#/types/LookupResult", "args": [{"prim": "string"}]}
         }
       },
-      "doc": "What a channel adapter (slack(), whatsapp(), github()) returns. verify, parse, ack and render are pure.",
-      "source": ""
+      "doc": "What a channel adapter (slack(), whatsapp(), github()) returns. verify, parse, ack and render are pure."
     },
     "ChannelCapabilities": {
       "kind": "object",
@@ -3264,8 +3209,7 @@
           "casing": "wire"
         },
         {"object": {"kind": {"type": {"literal": "ignore"}, "required": true}}, "casing": "wire"}
-      ],
-      "source": ""
+      ]
     },
     "DeliveryOutcome": {
       "kind": "union",
@@ -3287,8 +3231,7 @@
           },
           "casing": "wire"
         }
-      ],
-      "source": ""
+      ]
     },
     "Host": {
       "kind": "interface",
@@ -3372,8 +3315,7 @@
           "returns": {"prim": "void"}
         }
       },
-      "doc": "TS: supports await using (Symbol.asyncDispose calls stop). Python: an async context manager (__aenter__ calls ready, __aexit__ calls stop).",
-      "source": ""
+      "doc": "TS: supports await using (Symbol.asyncDispose calls stop). Python: an async context manager (__aenter__ calls ready, __aexit__ calls stop)."
     }
   },
   "cli": [
@@ -3391,7 +3333,7 @@
     {"usage": "threads export <branch_id>", "via": "the store's branch export (schema README, JSONL)"},
     {
       "usage": "threads import <file>",
-      "via": "the store's import (verify, then store the same bytes; )",
+      "via": "the store's import (verify, then store the same bytes)",
       "doc": "Prints the imported branch id. A torn tail imports inspection-only until repair."
     },
     {

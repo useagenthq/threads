@@ -135,7 +135,6 @@
         "py": { "$ref": "#/$defs/PyName" },
         "package": { "enum": ["core", "host", "mcp"] },
         "doc": { "$ref": "#/$defs/Doc" },
-        "source": { "description": "The ADR or brief item that requires it.", "$ref": "#/$defs/Doc" },
         "async": { "description": "true: TS returns Promise<returns>, Python is async def.", "type": "boolean" },
         "optional": { "description": "Protocol methods only: an implementation may omit it; the flag named in doc says so.", "type": "boolean" },
         "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
@@ -205,8 +204,7 @@
             "casing": { "enum": ["api", "wire"] },
             "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
             "fields": { "$ref": "#/$defs/Fields" },
-            "doc": { "$ref": "#/$defs/Doc" },
-            "source": { "$ref": "#/$defs/Doc" }
+            "doc": { "$ref": "#/$defs/Doc" }
           }
         },
         {
@@ -220,8 +218,7 @@
             "casing": { "enum": ["api", "wire"] },
             "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
             "variants": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/TypeExpr" } },
-            "doc": { "$ref": "#/$defs/Doc" },
-            "source": { "$ref": "#/$defs/Doc" }
+            "doc": { "$ref": "#/$defs/Doc" }
           }
         },
         {
@@ -232,8 +229,7 @@
             "kind": { "const": "alias" },
             "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
             "type": { "$ref": "#/$defs/TypeExpr" },
-            "doc": { "$ref": "#/$defs/Doc" },
-            "source": { "$ref": "#/$defs/Doc" }
+            "doc": { "$ref": "#/$defs/Doc" }
           }
         },
         {
@@ -248,8 +244,7 @@
             "properties": { "$ref": "#/$defs/Fields" },
             "methods": { "type": "object", "additionalProperties": { "$ref": "#/$defs/Callable" } },
             "iterates": { "description": "The handle is itself async-iterable of this type (TS for await, Python async for).", "$ref": "#/$defs/TypeExpr" },
-            "doc": { "$ref": "#/$defs/Doc" },
-            "source": { "$ref": "#/$defs/Doc" }
+            "doc": { "$ref": "#/$defs/Doc" }
           }
         }
       ]

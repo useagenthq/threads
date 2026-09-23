@@ -132,7 +132,7 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 4. Compare `appended` and the `sandbox` counters. For the scripted sandbox: a dispatch whose effect key is in `executed_keys` returns that output without a new execution (provider dedup); `lookup` answers reconciliation with its `final` flag; `process` answers "is the call's process group terminated?". The fake adapter declares `skew_margin_ms = 1000` and uses `clock.now` as provider time.
 5. The thread is its own team lead: the runner's member name is `thread_started.agent_name` and it lists no subagents, so a team tool acts on this branch's log under the "Team tools" rules of `../schema/README.md` (`team-tool-replay-appends-nothing`).
 6. Leftover scripted model responses, or an unexpected model call, fail the case. `model.json` `lookup` answers adapter response recovery for an open `model_request` (by its `event_id`): a final `found` is recorded as `model_response_recovered` with no new call. Without a `lookup` entry the adapter can't look up, so an open request is abandoned as `unknown` and re-sent under `crash_resends`.
-7. A `model.json` entry `{error: {reason, http_status, retry_after_ms?}}` is a provider rejection before any content, handled per (and for `prompt_too_long`). The fake adapter uses no jitter. A `retry_scheduled` wait advances the injected clock to `not_before`; runners never sleep. The loop's policy comes from `thread_started.policy` (absent sections take the ADR defaults).
+7. A `model.json` entry `{error: {reason, http_status, retry_after_ms?}}` is a provider rejection before any content, handled per the spec (and for `prompt_too_long`). The fake adapter uses no jitter. A `retry_scheduled` wait advances the injected clock to `not_before`; runners never sleep. The loop's policy comes from `thread_started.policy` (absent sections take the ADR defaults).
 
 **`fork`**
 1. Call `fork(fork_at_event_id, new_branch_id, {knowledge_policy})`. Every provider create (the child sandbox) first writes a `pending` ledger row with a fresh `operation_key`.
@@ -159,7 +159,7 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 
 **`policy`**
 1. Build the permission engine from `input.permissions` with `input.workspace` as the workspace root.
-2. Decide each call in `input.calls` under its own `mode`, with the call's `category` (`read_only`, `edit`, `other`) standing in for the tool's class. No hooks, no principal limits, no thread rules. With `input.ceiling` (a handoff target's principal and host ceiling, ), also decide the call under the ceiling, in its own mode, and keep the stricter decision (deny > ask > allow). On a tie, report the target's decision.
+2. Decide each call in `input.calls` under its own `mode`, with the call's `category` (`read_only`, `edit`, `other`) standing in for the tool's class. No hooks, no principal limits, no thread rules. With `input.ceiling` (a handoff target's principal and host ceiling), also decide the call under the ceiling, in its own mode, and keep the stricter decision (deny > ask > allow). On a tie, report the target's decision.
 3. Compare `decisions` in order: `decision`, `source`, and `rule` (the matched rule string) when listed.
 
 **`security`** and **`parity`** are reserved kinds. `security` covers trust-boundary and fail-closed cases. `parity` covers the cross-language round trip below.
@@ -177,7 +177,7 @@ For every case of kind `recover`, `fork` or `stub`, the parity job runs four che
 
 ## Scenario coverage
 
-`coverage.json` maps every  scenario to its evidence: a corpus `case`, a per-language behavior `test`, a `job` (crash injection, competing processes, cross-language parity) or a `live_gate` (readiness gate 13). Each piece has `status` `planned` or `implemented`. For a case, `implemented` means the fixture directory exists; an implemented job lists the test files that run it in `tests` (repo-relative), and they must exist. It never means either runtime passes it; the runners report that. `gen_fixtures.py --check` fails when a case's status disagrees with the corpus and, where the local brief is present, when a scenario or its evidence differs from the brief. The corpus is not complete until every entry is `implemented`.
+`coverage.json` maps every v2 scenario to its evidence: a corpus `case`, a per-language behavior `test`, a `job` (crash injection, competing processes, cross-language parity) or a `live_gate` (readiness gate 13). Each piece has `status` `planned` or `implemented`. For a case, `implemented` means the fixture directory exists; an implemented job lists the test files that run it in `tests` (repo-relative), and they must exist. It never means either runtime passes it; the runners report that. `gen_fixtures.py --check` fails when a case's status disagrees with the corpus and, where the local brief is present, when a scenario or its evidence differs from the brief. The corpus is not complete until every entry is `implemented`.
 
 ## Adding a case
 

@@ -769,7 +769,7 @@
       "type": "object"
     },
     "JsonValue": {
-      "description": "Any validated JSON value (tool input, model params, MCP payloads). Numbers follow .",
+      "description": "Any validated JSON value (tool input, model params, MCP payloads). Numbers follow.",
       "oneOf": [
         {
           "type": "null"
@@ -974,7 +974,7 @@
       ]
     },
     "PermissionRule": {
-      "description": "Tool(specifier) grammar, . The tool part may end in * (mcp__github__*).",
+      "description": "Tool(specifier) grammar. The tool part may end in * (mcp__github__*).",
       "pattern": "^[a-z][a-z0-9_]{0,127}\\*?(\\(.+\\))?$",
       "type": "string"
     },
@@ -1526,7 +1526,7 @@
       "description": "Unix epoch milliseconds. Informational; never used for ordering."
     },
     "Tokens": {
-      "description": "A measured token count, or null when the provider did not report it (unknown, never zero). .",
+      "description": "A measured token count, or null when the provider did not report it (unknown, never zero).",
       "oneOf": [
         {
           "$ref": "#/$defs/Int"
@@ -1568,7 +1568,7 @@
           "$ref": "#/$defs/EffectClass"
         },
         "ends_turn": {
-          "description": "A successful result ends the turn without another model call (the final_output tool, ).",
+          "description": "A successful result ends the turn without another model call (the final_output tool).",
           "type": "boolean"
         },
         "input_schema": {
@@ -2160,7 +2160,7 @@
       "type": "object"
     },
     "ev_compaction_failed": {
-      "description": "A compaction attempt failed. Consecutive failures since the last compacted open the circuit breaker (derived, ).",
+      "description": "A compaction attempt failed. Consecutive failures since the last compacted open the circuit breaker (derived).",
       "properties": {
         "critical": {
           "const": true
@@ -2697,7 +2697,7 @@
               "$ref": "#/$defs/BranchId"
             },
             "reason": {
-              "description": "snapshot: a user fork at an eligible snapshot event. repair: operator repair of a corrupt parent at its last valid line; no sandbox is restored and the child is inspection-only (never runnable; ).",
+              "description": "snapshot: a user fork at an eligible snapshot event. repair: operator repair of a corrupt parent at its last valid line; no sandbox is restored and the child is inspection-only (never runnable).",
               "enum": [
                 "snapshot",
                 "repair"

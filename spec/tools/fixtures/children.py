@@ -1,5 +1,5 @@
 # pyright: strict
-"""Children, teams and todos as the parent's or lead's log records them."""
+"""Children, teams and todos as the parent's or lead's log records them (F7, F8)."""
 
 from __future__ import annotations
 

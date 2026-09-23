@@ -129,7 +129,7 @@ class Log:
         return c
 
     def model_request(self, attempt: int = 1, *, compaction: bool = False) -> Obj:
-        """A turn request, or (compaction=True) the summarizer side request of ."""
+        """A turn request, or (compaction=True) the summarizer side request of."""
         instruction = self._compact_instruction() if compaction else None
         body, line0 = render(self.events, self.artifacts, instruction)
         data: Obj = {

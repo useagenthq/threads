@@ -1,5 +1,5 @@
 # pyright: strict
-"""Skill cases. Skills come only from the
+"""Skill cases (step 1). Skills come only from the
 host store pinned at thread start: line 0 lists each name and one-line description, and
 load_skill appends a body as injected{source: skill} whose origin is the skill name and the
 SHA-256 of its body. Files in the sandbox are never skills, and no agent path writes config."""
@@ -148,7 +148,7 @@ def _write_denied(root: pathlib.Path) -> None:
     write_policy_case(
         root,
         "skills-write-denied-all-paths",
-        "The self-config guard denies, before any rule or mode, every "
+        "The self-config guard (step 1) denies, before any rule or mode, every "
         "non-read-only call with any string argument word holding a .threads path segment "
         "(where config, skills, hooks and schedules would live): the file tools, bash, an MCP "
         "or GitHub edit, and a subagent's task, even in bypass with allow rules for them. A "

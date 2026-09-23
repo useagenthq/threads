@@ -874,7 +874,7 @@
                 ]
               },
               "manifest": {
-                "description": "The captured file tree: one entry per file, sorted by path. The snapshot event's manifest_hash is its canonical hash; restore verifies the restored tree against it (snapshot_manifest_mismatch otherwise).",
+                "description": "The captured file tree: one entry per file, sorted by path. The snapshot event's manifest_hash is its canonical hash (Domain A); restore verifies the restored tree against it (snapshot_manifest_mismatch otherwise).",
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -1021,7 +1021,7 @@
           "type": "string"
         },
         "category": {
-          "description": "read_only, edit (write, edit, apply_patch, notebook_edit inside the workspace) or other.",
+          "description": "read_only, edit (write, edit, apply_patch, notebook_edit inside the workspace) or other (mode table).",
           "enum": [
             "read_only",
             "edit",

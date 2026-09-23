@@ -291,7 +291,7 @@
       }
     },
     "ParkedResolution": {
-      "description": "A human settling an unknown effect. Recorded as effect_resolved{by: human}.",
+      "description": "A human settling an unknown effect (C3). Recorded as effect_resolved{by: human}.",
       "type": "object",
       "additionalProperties": false,
       "required": ["resolution"],
