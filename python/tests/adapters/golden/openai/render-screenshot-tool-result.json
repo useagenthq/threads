@@ -1,0 +1,59 @@
+{
+  "include": [
+    "reasoning.encrypted_content"
+  ],
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Take a screenshot of the login page.",
+          "type": "input_text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "arguments": "{}",
+      "call_id": "call_1",
+      "name": "screenshot",
+      "type": "function_call"
+    },
+    {
+      "call_id": "call_1",
+      "output": [
+        {
+          "text": "Login page loaded.",
+          "type": "input_text"
+        },
+        {
+          "image_url": "data:image/png;base64,iVBORw0KGgpmaXh0dXJlOiBsb2dpbiBwYWdlIHNjcmVlbnNob3Q=",
+          "type": "input_image"
+        },
+        {
+          "text": "Cursor at (640, 400).",
+          "type": "input_text"
+        }
+      ],
+      "type": "function_call_output"
+    }
+  ],
+  "instructions": "You are a helpful agent.",
+  "max_tokens": 1024,
+  "model": "scripted-1",
+  "store": false,
+  "stream": true,
+  "tools": [
+    {
+      "description": "Capture the sandbox desktop.",
+      "name": "screenshot",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+    }
+  ]
+}

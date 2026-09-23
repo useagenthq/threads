@@ -1,0 +1,38 @@
+{
+  "include": [
+    "reasoning.encrypted_content"
+  ],
+  "input": [
+    {
+      "content": [
+        {
+          "text": "hi",
+          "type": "input_text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "encrypted_content": "gAAA",
+      "id": "rs_1",
+      "summary": [],
+      "type": "reasoning"
+    },
+    {
+      "arguments": "{}",
+      "call_id": "call_1",
+      "name": "ls",
+      "type": "function_call"
+    },
+    {
+      "call_id": "call_1",
+      "output": "Error: ",
+      "type": "function_call_output"
+    }
+  ],
+  "instructions": "Be brief.",
+  "max_output_tokens": 64,
+  "model": "gpt-test",
+  "store": false,
+  "stream": true
+}

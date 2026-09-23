@@ -1,0 +1,45 @@
+{
+  "include": [
+    "reasoning.encrypted_content"
+  ],
+  "input": [
+    {
+      "content": [
+        {
+          "text": "What does this page show?",
+          "type": "input_text"
+        },
+        {
+          "image_url": "data:image/png;base64,iVBORw0KGgpmaXh0dXJlOiBsb2dpbiBwYWdlIHNjcmVlbnNob3Q=",
+          "type": "input_image"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "instructions": "You are a helpful agent.",
+  "max_tokens": 1024,
+  "model": "scripted-1",
+  "store": false,
+  "stream": true,
+  "tools": [
+    {
+      "description": "Read a file from the sandbox workspace.",
+      "name": "read_file",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+    }
+  ]
+}

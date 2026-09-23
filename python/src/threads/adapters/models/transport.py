@@ -5,7 +5,7 @@ lease can move in that time, so the fence runs where the request's first byte is
 connection's `send_request_headers` trace, after the pool handed out a connection (spec/api.json `Model.send`). A failed fence raises there and nothing is written.
 """
 
-from collections.abc import AsyncIterator, Awaitable, Callable, Generator, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -13,7 +13,7 @@ from http import HTTPStatus
 
 import httpx2
 
-from threads.loop.model import ModelContext, Rejected
+from threads.loop.model import ModelChunk, ModelContext, Rejected
 from threads.result import Err
 
 _OVERLOADED = 529
@@ -132,3 +132,34 @@ async def sse(response: httpx2.Response) -> AsyncIterator[Sse]:
             event, data = None, []
     if data:
         yield Sse(event, "\n".join(data))
+
+
+async def relay[E](
+    response: object,
+    parse: Callable[[str], E | None],
+    feed: Callable[[E], Awaitable[Sequence[ModelChunk]]],
+    rejected: Callable[[Exception], Rejected | None],
+) -> AsyncIterator[ModelChunk]:
+    """Streams a provider's events as chunks. An error event before any chunk is a rejection
+    when `rejected` names one; after content, or unnamed, it is uncertainty and raises."""
+    if not isinstance(response, httpx2.Response):
+        raise TypeError("the SDK returned no raw response")
+    started = False
+    try:
+        async for event in sse(response):
+            parsed = parse(event.data)
+            if parsed is None:
+                continue
+            try:
+                chunks = await feed(parsed)
+            except Exception as error:
+                rejection = None if started else rejected(error)
+                if rejection is None:
+                    raise
+                yield rejection
+                return
+            for chunk in chunks:
+                started = True
+                yield chunk
+    finally:
+        await response.aclose()
