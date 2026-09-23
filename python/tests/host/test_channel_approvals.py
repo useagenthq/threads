@@ -138,7 +138,7 @@ def test_only_an_approvers_button_answers_and_a_second_press_appends_nothing() -
     channel = ItemsChannel()
     store = sqlite(":memory:")
 
-    async def main() -> list[JsonValue]:
+    async def main() -> list[JsonObject]:
         async with host(store=store, agents={"bot": bot}, channels={"fake": channel}) as served:
             sq = await open_store(scoped(store, TEAM))
 
@@ -169,7 +169,7 @@ def test_only_an_approvers_button_answers_and_a_second_press_appends_nothing() -
             await served.receive("fake", webhook("d5", press("b3", challenge_id, APPROVER)))
             await until(lambda: settled(0))
             await until(lambda: _replies(channel, 3))
-        return [dict(op) for op in channel.sent]
+        return list(channel.sent)
 
     sent = asyncio.run(main())
     assert runs == ["x"]
