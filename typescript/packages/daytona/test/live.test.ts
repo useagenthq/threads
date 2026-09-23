@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { CTX } from "../../core/test/sandbox/context";
 import { run } from "../../core/test/sandbox/remote/kit";
 import { code, unwrap } from "../../core/test/store/helpers";
@@ -65,6 +66,43 @@ describe.skipIf(!live)("live gate: daytona", () => {
         unwrap(await child.close(CTX));
         unwrap(await adapter.release(snap.snapshot_id, CTX));
       }
+    } finally {
+      unwrap(await box.close(CTX));
+    }
+  });
+
+  // The qualification gate for after toolbox traffic, no process env or command
+  // line and no file in the guest holds the API key. The key never goes in to search for it:
+  // the guest's state comes out and is searched on the host. The key's hash, written as a
+  // probe file, must be found, which proves the scan reaches files.
+  test("credential canary: the API key is nowhere in the guest", async () => {
+    const adapter = sandbox();
+    const box = unwrap(await adapter.create(crypto.randomUUID(), CTX));
+    try {
+      const probe = createHash("sha256")
+        .update(key ?? "")
+        .digest("hex");
+      unwrap(await box.upload("probe.txt", utf8.encode(probe), CTX));
+      await run(box, ["/bin/sh", "-c", "echo toolbox traffic"]);
+      const dump = unwrap(
+        await box.exec(
+          [
+            "/bin/sh",
+            "-c",
+            "cat /proc/[0-9]*/environ /proc/[0-9]*/cmdline 2>/dev/null; tar -cf - /etc /home /root /tmp /workspace /var /opt /run 2>/dev/null; true",
+          ],
+          CTX,
+          { processKey: "canary", env: { PATH: "/usr/bin:/bin" } },
+        ),
+      );
+      const [out] = await Promise.all([
+        Array.fromAsync(dump.stdout),
+        Array.fromAsync(dump.stderr),
+      ]);
+      await dump.exit_code;
+      const guest = Buffer.concat(out);
+      expect(guest.includes(probe)).toBe(true);
+      expect(guest.includes(key ?? "")).toBe(false);
     } finally {
       unwrap(await box.close(CTX));
     }

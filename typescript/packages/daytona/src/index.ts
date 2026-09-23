@@ -24,8 +24,8 @@ import type { OpenSocket } from "./logs";
 // - Exec output: exact bytes. Daytona's log stream splits stdout from stderr with in-band
 //   markers it can't escape, so each stream is hex-encoded in the sandbox and decoded here.
 // - Credentials: a sandbox gets no env, and no request body or URL carries the API key. Toolbox
-//   requests authenticate to Daytona's toolbox proxy with it, as Daytona's SDK does; Daytona
-//   doesn't document that the proxy drops it before the daemon inside the sandbox.
+//   requests authenticate to Daytona's proxy with it, as Daytona's SDK does; keeping it out of
+//   the guest relies on the proxy and runner stripping it (README.md, ).
 
 export type DaytonaOptions = {
   /** Used only to authenticate the host's requests; never passed into a sandbox. */
