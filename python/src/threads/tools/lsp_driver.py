@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import shutil
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
@@ -23,6 +25,10 @@ Message: TypeAlias = "dict[str, Json]"  # noqa: UP040 - runs on Python 3.8
 Timeout: Final = asyncio.TimeoutError
 
 READY_S: Final = 30.0
+SEARCH: Final = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+"""Where a bare server command is looked up. The driver runs with the tool env, which has no
+PATH, so the default search (/bin:/usr/bin) would miss servers in /usr/local/bin, where pip and
+npm put them. Fixed system dirs, never a host PATH."""
 QUIET_S: Final = 1.0
 REQUESTS: Final = {
     "definition": "textDocument/definition",
@@ -129,6 +135,7 @@ async def main(argv: list[str]) -> Json:
     command = [a for a in parsed if isinstance(a, str)] if isinstance(parsed, list) else []
     if not command:
         return {"unavailable": "no language server command"}
+    command[0] = shutil.which(command[0], path=os.environ.get("PATH", SEARCH)) or command[0]
     try:
         proc = await asyncio.create_subprocess_exec(
             *command,

@@ -4,9 +4,14 @@
 // server answers the same way. It answers the server's own requests with empty results.
 
 export const LSP_DRIVER: string = String.raw`
-import json, os, queue, subprocess, sys, threading, time
+import json, os, queue, shutil, subprocess, sys, threading, time
 
 a = json.loads(sys.argv[1])
+# The driver runs with the tool env, which has no PATH, so the default search (/bin:/usr/bin)
+# would miss servers in /usr/local/bin, where pip and npm put them. Fixed system dirs, never a
+# host PATH.
+SEARCH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+a["command"][0] = shutil.which(a["command"][0], path=os.environ.get("PATH", SEARCH)) or a["command"][0]
 
 def out(obj):
     sys.stdout.write(json.dumps(obj) + "\n")

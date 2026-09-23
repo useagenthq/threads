@@ -3,7 +3,6 @@ server run as a real local process: every operation, 1-based positions, and a se
 missing or undeclared answers unavailable, never an empty success."""
 
 import asyncio
-import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -47,7 +46,9 @@ def ask(tmp_path: Path, input: JsonObject, servers: Mapping[str, Sequence[str]])
     return asyncio.run(main())
 
 
-SERVERS = {"python": (sys.executable, FAKE)}
+# Bare, as a declared server usually is: the driver runs with no PATH, and python3 is in
+# /usr/local/bin on python:* images, outside the default search path.
+SERVERS = {"python": ("python3", FAKE)}
 
 
 @pytest.mark.parametrize(
