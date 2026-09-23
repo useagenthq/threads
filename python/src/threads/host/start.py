@@ -36,6 +36,8 @@ type Started = Ok[RunAccepted] | Err[ParseError]
 async def start_run(
     runner: Runner, request: StartRunRequest, principal: Principal, idempotency_key: str
 ) -> Started:
+    # A request the host stops before its run starts is refused, never started after a restart.
+    since = runner.generation
     if not 0 < len(idempotency_key) <= MAX_KEY:
         return Err(ParseError("invalid_request", "Idempotency-Key must be 1 to 255 characters"))
     if runner.agent(request.agent) is None:
@@ -57,7 +59,9 @@ async def start_run(
     recorded: asyncio.Future[StoredEvent] = asyncio.get_running_loop().create_future()
     intake = Intake("api", recorded, companion=receipts.insert(key, now_ms()))
     budget = None if request.budget is MISSING else request.budget
-    task = runner.launch(bound, request.input, thread, principal, intake=intake, budget=budget)
+    task = runner.launch(
+        bound, request.input, thread, principal, intake=intake, budget=budget, since=since
+    )
     await asyncio.wait({recorded, task}, return_when=asyncio.FIRST_COMPLETED)
     if recorded.done():
         run = recorded.result()
@@ -69,7 +73,10 @@ async def start_run(
 
 async def _refused(store: Store, key: receipts.Key, task: "asyncio.Task[object]") -> Started:
     """The run recorded no input: another request took the key first, or the branch can't take
-    one now (busy, parked on something else, inspection-only, pinned to another agent)."""
+    one now (busy, parked on something else, inspection-only, pinned to another agent), or the
+    host stopped before it started (retryable, as for a busy branch)."""
+    if task.cancelled():
+        return Err(ParseError("branch_busy", "the host stopped before the run started; retry"))
     try:
         result = task.result()
     except ConfigError as error:

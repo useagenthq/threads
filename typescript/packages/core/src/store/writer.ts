@@ -41,6 +41,8 @@ export type Lease = {
   readonly branchId: string;
   readonly holderId: string;
   readonly epoch: number;
+  /** How long the lease lasts from each take or renewal. */
+  readonly ttlMs: number;
 };
 
 /** The `writer.impl` this implementation writes in every header it creates. */

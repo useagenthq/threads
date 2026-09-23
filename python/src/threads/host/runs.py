@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
+from weakref import WeakKeyDictionary
 
 from threads.agents.agent import Agent
 from threads.agents.definition import Definition
@@ -36,6 +37,9 @@ from threads.store import SqliteStore
 from threads.thread import tree
 from threads.thread.authority import Checked
 from threads.thread.handle import Thread
+
+type RunTask = asyncio.Task[RunResult[str]]
+"""One run of a branch, as a task of this host."""
 
 WAKE_S = 1.0
 """How long a subscriber waits for a wake-up before re-reading the log: runs of another process
@@ -73,10 +77,19 @@ class Runner:
         self._channels = channels
         self._stores: dict[str, Store] = {}
         self._credentials: dict[str, Mapping[str, str]] = {}
-        self._tasks: dict[BranchId, asyncio.Task[RunResult[str]]] = {}
+        self._tasks: dict[BranchId, RunTask] = {}
+        """Each branch's run in flight here."""
+        self._live: set[RunTask] = set()
+        """Every run in flight here, until it ends: what stop() ends."""
         self._wake: dict[BranchId, asyncio.Event] = {}
         self._again: set[BranchId] = set()
-        self._pending: set[asyncio.Task[None]] = set()
+        self._pending: set[asyncio.Task[RunTask | None]] = set()
+        """Every follow-on resume (a control answered while its run was ending), until it ends."""
+        self._next: WeakKeyDictionary[RunTask, asyncio.Task[RunTask | None]] = WeakKeyDictionary()
+        """A run's follow-on, for `through`; kept only while someone holds the run."""
+        self._stopping = False
+        self._generation = 0
+        """Bumped by each stop: work a caller began before it never launches a run after it."""
         self.on_end: Callable[[Store, ThreadId], None] | None = None
         """Called when a run of a thread ends here: the channel intake drains what waited."""
         self.last: dict[BranchId, Failed] = {}
@@ -160,8 +173,10 @@ class Runner:
         *,
         intake: Intake | None = None,
         budget: Budget | None = None,
-    ) -> "asyncio.Task[RunResult[str]]":
-        """Starts the run as a task of this host; the branch's subscribers wake on each append."""
+        since: int | None = None,
+    ) -> RunTask:
+        """Starts the run as a task of this host; the branch's subscribers wake on each append.
+        `since` is the `generation` the caller began in: from before a stop, nothing starts."""
         options: RunOptions[None] = {"thread": thread, "store": thread.store}
         options["principal"] = principal
         if self._ceiling is not None:
@@ -172,27 +187,50 @@ class Runner:
         branch = thread.branch
         run = execute(bound.definition, input, options, None, self._emit(branch), None, how)
         task = asyncio.get_running_loop().create_task(run)
-        self._tasks[branch] = task
+        if self._stopping or (since is not None and since != self._generation):
+            # A stopping host, or a request from before its last stop, starts nothing: cancelled
+            # before its first step and never the branch's run, so it can't stand in for one.
+            task.cancel()
+            self._live.add(task)
+            task.add_done_callback(self._live.discard)
+            return task
+        current = self._tasks.get(branch)
+        if current is None or current.done():
+            self._tasks[branch] = task
+        self._live.add(task)
         task.add_done_callback(lambda done: self._ended(thread, done))
         return task
 
-    async def resume(self, store: Store, thread_id: ThreadId, branch: BranchId) -> None:
+    @property
+    def generation(self) -> int:
+        """The lifecycle this host is in; a request passes it to `launch` or `resume`."""
+        return self._generation
+
+    async def resume(
+        self, store: Store, thread_id: ThreadId, branch: BranchId, since: int | None = None
+    ) -> RunTask | None:
         """Continues a thread a control unparked (or cancelled). It records nothing new; the
         loop takes up what the log holds. A run still in flight (unwinding from the park the
         control answered) is followed by the resume once it ends. A control on a subagent's
-        thread resumes the root of its tree, which runs the child on."""
+        thread resumes the root of its tree, which runs the child on. Returns the run that
+        carries it: the one it started, or the live run it is queued behind (whose end starts
+        it), if any."""
         root = await tree.root_of(store, thread_id)
         if root is not None and root[0] != thread_id:
             thread_id, branch = root
-        if self.running(branch):
+        # A resume a stop overtook starts nothing, and queues nothing behind a fresh run either.
+        if since is not None and since != self._generation:
+            return None
+        live = self._tasks.get(branch)
+        if live is not None and not live.done():
             self._again.add(branch)
-            return
+            return live
         bound = await self.bound(store, thread_id)
         if bound is None:
-            return
+            return None
         read = await (await open_store(store)).read(branch, 0)
         if not isinstance(read, Ok):
-            return
+            return None
         who = next(
             (
                 e.actor.principal
@@ -202,31 +240,31 @@ class Runner:
             None,
         )
         if who is None:
-            return
-        thread = Thread(thread_id, branch, store)
-        self.launch(bound, None, thread, who)
+            return None
+        return self.launch(bound, None, Thread(thread_id, branch, store), who, since=since)
 
-    async def redeliver(self, store: Store, thread_id: ThreadId) -> None:
+    async def redeliver(self, store: Store, thread_id: ThreadId) -> RunTask | None:
         """A restarted host: a channel thread whose run a crash cut short (its turn still open,
         not parked) runs on from the log, and one whose log holds a reply it never sent (a crash
         after the turn ended) runs again to send it. A thread that handed off moves its
-        conversation to the target, whose replies are sent from there."""
+        conversation to the target, whose replies are sent from there. Returns the run that
+        carries it (see `resume`), if any."""
         target = await self.follow(store, thread_id)
         if target is not None:
-            await self.redeliver(store, target)
-            return
+            return await self.redeliver(store, target)
         bound = await self.bound(store, thread_id)
         sq = await open_store(store)
         root = await sq.root(thread_id)
         if bound is None or bound.channel is None or not isinstance(root, Ok):
-            return
+            return None
         read = await sq.read(root.value, 0)
         if not isinstance(read, Ok):
-            return
+            return None
         fold = read.value.fold
         cut_short = fold.in_turn and not fold.parked
         if cut_short or undelivered(fold, bound.channel):
-            await self.resume(store, thread_id, root.value)
+            return await self.resume(store, thread_id, root.value)
+        return None
 
     def _emit(self, branch: BranchId) -> Emit:
         def emit(_item: StreamEvent) -> None:
@@ -234,8 +272,9 @@ class Runner:
 
         return emit
 
-    def _ended(self, thread: Thread, task: "asyncio.Task[RunResult[str]]") -> None:
+    def _ended(self, thread: Thread, task: RunTask) -> None:
         branch = thread.branch
+        self._live.discard(task)
         if self._tasks.get(branch) is task:
             del self._tasks[branch]
         if not task.cancelled() and task.exception() is None:
@@ -247,9 +286,12 @@ class Runner:
             return
         if branch in self._again:
             self._again.discard(branch)
-            again = self.resume(thread.store, thread.id, branch)
-            self._pending.add(asyncio.get_running_loop().create_task(again))
-            self._pending = {t for t in self._pending if not t.done()}
+            # Bound to this generation: a stop before it launches leaves it nothing to start.
+            again = self.resume(thread.store, thread.id, branch, since=self._generation)
+            follow = asyncio.get_running_loop().create_task(again)
+            self._pending.add(follow)
+            follow.add_done_callback(self._pending.discard)
+            self._next[task] = follow
         elif self.on_end is not None:
             self.on_end(thread.store, thread.id)
 
@@ -267,16 +309,41 @@ class Runner:
     async def settled(self) -> None:
         """Until no run is in flight here, including a follow-on resume a finished run queued
         (`_pending`) and the run it starts."""
-        while tasks := [t for t in (*self._tasks.values(), *self._pending) if not t.done()]:
+        while tasks := self._in_flight():
             await asyncio.wait(tasks)
 
+    async def through(self, run: RunTask) -> None:
+        """Until `run` has ended, and each follow-on resume it queued and the run that carried
+        it on: the one the follow-on started, or a later live run it was queued behind. No
+        other run is waited on."""
+        current: RunTask | None = run
+        while current is not None:
+            await asyncio.wait({current})
+            follow = self._next.get(current)
+            if follow is None:
+                return
+            await asyncio.wait({follow})
+            current = None if follow.cancelled() or follow.exception() else follow.result()
+
+    def _in_flight(self) -> list[asyncio.Task[object]]:
+        return [t for t in (*self._live, *self._pending) if not t.done()]
+
+    def open(self) -> None:
+        """Runs start again (a host started after a stop)."""
+        self._stopping = False
+
     async def stop(self) -> None:
-        """Ends every run in flight: each hands its lease back as it unwinds, and whatever it
-        left in doubt is recovered by the next run of its branch."""
-        tasks = list(self._tasks.values())
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        """Ends every run in flight and starts no new one: each hands its lease back as it
+        unwinds, and whatever it left in doubt (a send begun, its outcome unknown) is recovered
+        by the next run of its branch."""
+        self._stopping = True
+        self._generation += 1
+        self._again.clear()
+        # Follow-on resumes too: one left pending could launch a run once the host starts again.
+        while tasks := self._in_flight():
+            for task in tasks:
+                task.cancel()
+            await asyncio.wait(tasks)
 
 
 async def _agent_name(sq: SqliteStore, thread_id: ThreadId) -> str | None:

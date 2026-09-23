@@ -157,13 +157,13 @@ A host is also an ordinary request handler, so you can mount it next to your exi
 |---|---|
 | `host({...})` | Builds the host. Starts nothing. |
 | `ready()` | Checks every channel and schedule points at a host agent and every secret resolves. Starts the scheduler and resumes work a restart left behind. Sends nothing by itself. |
-| `stop()` | Finishes in-flight work and releases the threads this process owns. |
+| `stop()` | Cancels runs, starts nothing new, then waits for work in flight and releases the threads this process owns. A reply already on its way keeps its claim on the thread until it finishes, so no other process sends it again while it may still arrive. A reply whose outcome stays unknown is checked with the channel later, or held for a person, never resent blindly. `stop()` has no timeout: put deadlines on your tools and providers. |
 
 ## How channel conversations map to threads
 
 Each conversation gets its own thread: a Slack channel or Slack thread, a WhatsApp sender, a GitHub issue or pull request. A new message continues that thread. If the agent is still busy, the message waits in a durable inbox and is picked up when the current run ends.
 
-The agent's reply is sent back to the same conversation. Replies are recorded before they are sent, so a crash never sends a reply twice; if the host can't tell whether a reply went out, it checks with the provider or holds it for a person instead of guessing.
+The agent's reply is sent back to the same conversation. Each reply is recorded before it is sent, so after a crash the host knows which replies may have gone out. It never resends one of those blindly: it checks with the provider, or holds the reply for a person, when it can't tell.
 
 When a tool needs approval, the channel shows an approval card (buttons in Slack and WhatsApp, an `/approve` reply on GitHub). See [Human-in-the-loop](/docs/control/human-in-the-loop).
 

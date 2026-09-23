@@ -21,7 +21,7 @@ from threads.agents.store import Store, open_store
 from threads.host import start, stream
 from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
 from threads.host.intake import ChannelIntake
-from threads.host.runs import Runner
+from threads.host.runs import Runner, RunTask
 from threads.host.schedules import Schedule, Scheduler
 from threads.host.stream import Message
 from threads.log import BranchId, EventId, ParseError, Permissions, Principal, ThreadId
@@ -39,9 +39,11 @@ type Authenticate = Callable[["Request"], Awaitable[Principal | None]]
 """Maps an HTTP API request to its principal, or None for 401."""
 
 
-_RECOVERY: "WeakKeyDictionary[Host, tuple[asyncio.Event, Runner]]" = WeakKeyDictionary()
-"""Each host's start-up recovery pass (set once it has finished) and the runner whose runs it
-started: what the `recovered` seam waits on. The runner holds no reference to its host."""
+_RECOVERY: "WeakKeyDictionary[Host, tuple[asyncio.Event, list[RunTask], Runner]]" = (
+    WeakKeyDictionary()
+)
+"""Each host's start-up recovery pass (set once it has finished), the runs it started and the
+runner that follows them: what the `recovered` seam waits on, never an unrelated run."""
 
 
 class Host:
@@ -66,7 +68,7 @@ class Host:
         self._runner.on_end = self._intake.consume
         self._scheduler = Scheduler(self._runner, schedules)
         self._ticking: asyncio.Task[None] | None = None
-        _RECOVERY[self] = (asyncio.Event(), self._runner)
+        _RECOVERY[self] = (asyncio.Event(), [], self._runner)
         self._asgi: ASGIApp | None = None
 
     @property
@@ -101,10 +103,12 @@ class Host:
         self._scheduler.check(self._runner.agent)
         self._runner.resolve_secrets()
         await open_store(self._store)
+        self._runner.open()
         if self._ticking is None:
             # Each start has its own pass; cleared, not replaced, so a wait begun before this
             # start still sees it.
             _RECOVERY[self][0].clear()
+            _RECOVERY[self][1].clear()
             self._ticking = asyncio.get_running_loop().create_task(self._tick())
 
     async def _tick(self) -> None:
@@ -117,20 +121,27 @@ class Host:
             # in a table if hosts carry many conversations.
             for tenant, thread in await sq.tables.channel_threads():
                 if (tenant, thread) not in waiting:
-                    await self._runner.redeliver(self._runner.store(tenant), thread)
+                    run = await self._runner.redeliver(self._runner.store(tenant), thread)
+                    if run is not None:
+                        _RECOVERY[self][1].append(run)
         finally:
             _RECOVERY[self][0].set()
         await self._scheduler.run()
 
     async def stop(self) -> None:
-        """Drains intake in flight and ends the runs, which releases their leases."""
+        """Aborts first: every run and follow-on resume is cancelled and none starts, so no
+        consumer waits on its run. A send whose request never reached the fence is abandoned (in
+        doubt, for the next start to reconcile); one that passed it keeps the run's lease until
+        it settles. Then it drains intake in flight. There is no deadline: a tool that ignores
+        cancellation is waited on, since returning while it can act would break the fence.
+        Deadlines belong at the tool or provider boundary."""
         if self._ticking is not None:
             self._ticking.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._ticking
             self._ticking = None
-        await self._intake.drain()
         await self._runner.stop()
+        await self._intake.drain()
 
     async def __aenter__(self) -> Self:
         await self.ready()
@@ -176,8 +187,10 @@ class Host:
         return Ok(Thread(thread.id, thread.branch, store, sandbox=sandbox, authority=authority))
 
     async def resume(self, thread: Thread) -> None:
-        """After a control: continue the thread if it can move on."""
-        await self._runner.resume(thread.store, thread.id, thread.branch)
+        """After a control: continue the thread if it can move on. A resume a stop overtook
+        starts nothing."""
+        since = self._runner.generation
+        await self._runner.resume(thread.store, thread.id, thread.branch, since)
 
     def challenge(
         self, channel: str, query: Mapping[str, str]
@@ -210,9 +223,11 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
 
 async def recovered(served: Host) -> None:
     """After the recovery pass the latest `ready()` began has finished and the runs it started
-    to redeliver replies have ended, so a test asserts what recovery did or didn't do without
-    sleeping. Python recovers once per start (each start, including a restart of the same host),
-    not on a timer as TS does, so there is no later pass to wait for. Internal: not exported."""
-    done, runner = _RECOVERY[served]
+    to redeliver replies have ended, with each follow-on resume one of them queued, so a test
+    asserts what recovery did or didn't do without sleeping. Python recovers once per start
+    (each start, including a restart of the same host), not on a timer as TS does, so there is
+    no later pass to wait for. Internal: not exported."""
+    done, runs, runner = _RECOVERY[served]
     await done.wait()
-    await runner.settled()
+    for run in runs:
+        await runner.through(run)

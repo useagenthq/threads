@@ -7,7 +7,7 @@ import type { Writer } from "./writer";
 const live = new Map<string, Writer>();
 
 /** Registers `writer` as its branch's running writer until the returned function is called. */
-export function running(writer: Writer): () => void {
+function running(writer: Writer): () => void {
   const branch = writer.lease.branchId;
   live.set(branch, writer);
   return () => {
@@ -17,4 +17,23 @@ export function running(writer: Writer): () => void {
 
 export function liveWriter(branch: string): Writer | undefined {
   return live.get(branch);
+}
+
+/**
+ * Holds `writer`'s lease while its work is in flight: registered as its branch's running writer,
+ * renewed every third of its TTL so slow model, tool and channel calls keep it, then handed back
+ * so the next executor starts at once. A failed renewal poisons the writer, which fences every
+ * later dispatch and append.
+ */
+export function keepLease(writer: Writer): () => void {
+  const { ttlMs } = writer.lease;
+  const timer = setInterval(() => {
+    if (!writer.renew(ttlMs).ok) clearInterval(timer);
+  }, ttlMs / 3);
+  const done = running(writer);
+  return () => {
+    clearInterval(timer);
+    done();
+    writer.release();
+  };
 }

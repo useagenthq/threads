@@ -39,10 +39,13 @@ export class HostContext {
   readonly ceiling: HostCeiling | undefined;
   /** The last in-process job per branch (a run, then its replies); a new one waits for it. */
   readonly #lanes = new Map<string, Promise<unknown>>();
+  /** How many jobs each branch's lane has queued or running. */
+  readonly #pending = new Map<string, number>();
   /** A run's in-process result, by run_id, for a halt the log can't show. */
   readonly results: Map<string, RunResult<Json>> = new Map();
-  readonly #aborts = new Set<AbortController>();
-  #stopped = false;
+  readonly #stop = new AbortController();
+  /** Aborted once the host stops: every run and every send not yet settled gives up on it. */
+  readonly stopping: AbortSignal = this.#stop.signal;
 
   constructor(
     store: Store,
@@ -103,13 +106,9 @@ export class HostContext {
     thread: { readonly id: ThreadId; readonly branch: BranchId },
     runId?: string,
   ): Promise<RunResult<Json> | undefined> {
-    const prior = this.#lanes.get(thread.branch) ?? Promise.resolve(undefined);
-    const next = (async (): Promise<RunResult<Json> | undefined> => {
-      await prior;
-      if (this.#stopped) return undefined;
+    return this.#queued(thread.branch, async () => {
+      if (this.stopping.aborted) return undefined;
       const store = this.storeFor(tenant);
-      const abort = new AbortController();
-      this.#aborts.add(abort);
       try {
         // A reply begun before a crash is reconciled through the channel's lookup first: the
         // agent's recovery has no channel_send tool and would park it.
@@ -119,7 +118,7 @@ export class HostContext {
             store,
             principal,
             thread: { ...thread, store },
-            signal: abort.signal,
+            signal: this.stopping,
             ...(this.ceiling === undefined ? {} : { ceiling: this.ceiling }),
           },
           [],
@@ -131,12 +130,8 @@ export class HostContext {
       } catch (error) {
         console.error(`threads host: run on ${thread.branch} failed`, error);
         return undefined;
-      } finally {
-        this.#aborts.delete(abort);
       }
-    })();
-    this.#lanes.set(thread.branch, next);
-    return next;
+    });
   }
 
   /** The thread's missing replies, issued after any job this process has on its branch. */
@@ -144,24 +139,41 @@ export class HostContext {
     tenant: string,
     thread: { readonly id: ThreadId; readonly branch: BranchId },
   ): Promise<"done" | "busy"> {
-    const prior = this.#lanes.get(thread.branch) ?? Promise.resolve(undefined);
-    const next = (async (): Promise<"done" | "busy"> => {
-      await prior;
-      return this.#stopped ? "busy" : this.#reply(tenant, thread);
+    return this.#queued(thread.branch, async () =>
+      this.stopping.aborted ? "busy" : this.#reply(tenant, thread),
+    );
+  }
+
+  /** `job` after every job this process already has on the branch; counted until it ends. */
+  #queued<T>(branch: BranchId, job: () => Promise<T>): Promise<T> {
+    const prior = this.#lanes.get(branch) ?? Promise.resolve(undefined);
+    this.#pending.set(branch, (this.#pending.get(branch) ?? 0) + 1);
+    const next = (async (): Promise<T> => {
+      try {
+        await prior;
+        return await job();
+      } finally {
+        const left = (this.#pending.get(branch) ?? 1) - 1;
+        if (left === 0) this.#pending.delete(branch);
+        else this.#pending.set(branch, left);
+      }
     })();
-    this.#lanes.set(thread.branch, next);
+    this.#lanes.set(branch, next);
     return next;
   }
 
   /**
-   * A restarted host's pass over a channel thread: a run a crash cut short (its turn still
-   * open, not parked) runs on from the log, then the thread's missing replies are issued.
-   * "busy" when it must be looked at again on a later tick.
+   * A pass over a channel thread no job of this process is on: a turn left open with no run
+   * (a crash, or a lease lost to another host) runs on from the log, then the thread's missing
+   * replies are issued. "busy" when it must be looked at again on a later tick. It never waits
+   * on a run: a live one replies as it ends, and a slow one must not hold up other threads or
+   * stop().
    */
   async recover(
     tenant: string,
     thread: { readonly id: ThreadId; readonly branch: BranchId },
   ): Promise<"done" | "busy"> {
+    if (this.#pending.has(thread.branch)) return "busy";
     const { log } = await this.open(tenant);
     const read = log.read(thread.branch);
     if (!read.ok) return "done";
@@ -173,8 +185,8 @@ export class HostContext {
     const who = events.findLast((e) => e.type === "user_input")?.actor
       .principal;
     if (hosted === undefined || who === undefined) return "done";
-    // The run issues its replies as it ends; the next tick confirms the turn closed.
-    await this.resume(hosted, tenant, who, thread);
+    // The run issues its replies as it ends; a later tick confirms the turn closed.
+    void this.resume(hosted, tenant, who, thread);
     return "busy";
   }
 
@@ -190,10 +202,14 @@ export class HostContext {
     }
   }
 
-  /** Waits for every in-process execution; later resumes start nothing. */
+  /** Aborts every in-process run; later resumes and replies start nothing. */
+  abort(): void {
+    this.#stop.abort();
+  }
+
+  /** Aborts, then waits for every in-process execution. */
   async stop(): Promise<void> {
-    this.#stopped = true;
-    for (const abort of this.#aborts) abort.abort();
+    this.abort();
     await Promise.all(this.#lanes.values());
   }
 
@@ -241,6 +257,20 @@ export class HostContext {
   async open(tenant: string): Promise<Awaited<ReturnType<typeof openStore>>> {
     return openStore(this.storeFor(tenant));
   }
+}
+
+/** A pin never changes in place: continuing a thread needs the config it started with. */
+export async function samePin(
+  events: readonly KnownEvent[],
+  hosted: HostedAgent,
+): Promise<boolean> {
+  const started = events.find((e) => e.type === "thread_started");
+  const pinned = await hosted.runner.started();
+  return (
+    started?.type === "thread_started" &&
+    pinned.type === "thread_started" &&
+    started.data.config_hash === pinned.data.config_hash
+  );
 }
 
 /** A run's result with its Output as JSON: the host serves data, never a typed Output. */

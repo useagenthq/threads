@@ -7,7 +7,6 @@ import {
   kill,
   logged,
   oneWriterAtATime,
-  pids,
   reap,
   release,
   scratch,
@@ -37,7 +36,7 @@ async function seeded(): Promise<string> {
 }
 
 describe("two-writers-fenced", () => {
-  test("two hosts consume one message: one run, one dispatcher, one send", async () => {
+  test("two hosts consume one message: one run, one send", async () => {
     const dir = await seeded();
     const a = spawn("serve", dir, { DRILL_GO: "1" });
     const b = spawn("serve", dir, { DRILL_GO: "1" });
@@ -48,8 +47,10 @@ describe("two-writers-fenced", () => {
     expect(log.filter((e) => e.type === "user_input")).toHaveLength(1);
     expect(sends(dir)).toHaveLength(1);
     expect(rows(dir, "model.jsonl")).toHaveLength(1);
-    // The model call and the send were dispatched by the same lease holder's process.
-    expect(pids(dir, "sends.jsonl")).toEqual(pids(dir, "model.jsonl"));
+    // The send went through the effect path under a lease: one effect_begin, durable before it.
+    // Either host may issue the reply: any ready host issues a thread's missing replies
+    // (spec/schema/README.md, "Channel replies"), and the run's lease is released before it.
+    expect(log.filter((e) => e.type === "effect_begin")).toHaveLength(1);
     oneWriterAtATime(log);
     expect(logged(dir)).toBe("");
   }, 60_000);

@@ -43,6 +43,7 @@ export type { Fence } from "./sandbox/remote/fence";
 export {
   type ArtifactStore,
   type EventDraft,
+  keepLease,
   LEASE_TTL_MS,
   type LogStore,
   type SqliteDriver,
@@ -54,5 +55,5 @@ export { deleteTenant, deleteThread, sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control, decide } from "./thread/control";
-export { cancel } from "./thread/settings";
+export { cancel, stopWhenIdle } from "./thread/settings";
 export type { ChainEvent, LogError, VerifiedLog } from "./verify";
