@@ -55,7 +55,7 @@ class ModalSandbox:
         self._connect = connect
         self._channels: dict[str, grpclib.client.Channel] = {}
         self._control: Control | None = None
-        self.lifetime_ms = settings.lifetime_s * 1000
+        self.lifetime_ms: int = settings.lifetime_s * 1000
         """The declared provider expiry: Modal ends a sandbox this long after its create."""
         self._info = SandboxInfo(
             provider=name,

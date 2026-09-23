@@ -50,15 +50,15 @@ class Transports:
 class Envd:
     def __init__(self, sandbox: wire.Sandbox, url: str, transports: Transports) -> None:
         user = base64.b64encode(f"{USER}:".encode()).decode()
-        self.headers = {
+        self._headers: dict[str, str] = {
             "E2b-Sandbox-Id": sandbox.sandbox_id,
             "E2b-Sandbox-Port": str(ENVD_PORT),
             "Authorization": f"Basic {user}",
         }
         if sandbox.envd_access_token is not None:
-            self.headers["X-Access-Token"] = sandbox.envd_access_token
+            self._headers["X-Access-Token"] = sandbox.envd_access_token
         self._files = httpx.AsyncClient(
-            base_url=url, transport=FencedHttpx(transports.http), headers=self.headers
+            base_url=url, transport=FencedHttpx(transports.http), headers=self._headers
         )
         self._rpc = process_connect.ProcessClient(
             url,
@@ -76,7 +76,7 @@ class Envd:
         from then on, with backpressure."""
         config = process_pb.ProcessConfig(cmd=argv[0], args=list(argv[1:]), envs=dict(env), cwd=cwd)
         request = process_pb.StartRequest(process=config, tag=tag)
-        headers = {**self.headers, KEEPALIVE_PING_HEADER: str(KEEPALIVE_PING_INTERVAL_SEC)}
+        headers = {**self._headers, KEEPALIVE_PING_HEADER: str(KEEPALIVE_PING_INTERVAL_SEC)}
         events = aiter(self._rpc.start(request, headers=headers))
         pipe = Pipe()
         await _started(events, pipe)
@@ -90,7 +90,7 @@ class Envd:
         selector = process_pb.ProcessSelector(selector=Oneof(field="tag", value=tag))
         request = process_pb.SendSignalRequest(process=selector, signal=process_pb.Signal.SIGKILL)
         try:
-            await self._rpc.send_signal(request, headers=self.headers)
+            await self._rpc.send_signal(request, headers=self._headers)
         except ConnectError as error:
             if error.code == Code.NOT_FOUND:
                 return False
@@ -99,7 +99,7 @@ class Envd:
 
     async def tags(self) -> list[str]:
         """The tags of the processes envd started that are still running."""
-        listed = await self._rpc.list(process_pb.ListRequest(), headers=self.headers)
+        listed = await self._rpc.list(process_pb.ListRequest(), headers=self._headers)
         return [p.tag for p in listed.processes if p.has_field("tag")]
 
     async def upload(self, path: str, data: bytes) -> None:
