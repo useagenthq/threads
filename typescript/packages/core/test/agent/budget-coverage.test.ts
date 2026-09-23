@@ -67,6 +67,53 @@ describe("budget coverage", () => {
     ).rejects.toMatchObject({ code: "budget_unenforceable" });
   });
 
+  test("onUnknownUsage stop passes setup and refuses the unbounded attempt at run time", async () => {
+    const store = sqlite(":memory:");
+    const a = agent({
+      budget: { max_output_tokens: 150 },
+      onUnknownUsage: "stop",
+      model: unbounded([say("never")]),
+    });
+    expect(await a.check()).toEqual({ ok: true, value: undefined });
+    const result = await a.run("go", { store });
+    expect(result).toMatchObject({
+      status: "budget_exhausted",
+      budget: {
+        limit: "max_output_tokens",
+        observed: 0,
+        observed_is_upper_bound: true,
+      },
+    });
+    const log = await events(store, result.thread.branch);
+    expect(requests(log)).toBe(0);
+    const started = log.find((e) => e.type === "thread_started");
+    expect(started?.data.policy?.on_unknown_usage).toBe("stop");
+  });
+
+  test("onUnknownUsage stop lets a run budget the model can't bound start", async () => {
+    const a = agent({ onUnknownUsage: "stop", model: unbounded([say("x")]) });
+    const result = await a.run("go", {
+      store: sqlite(":memory:"),
+      budget: { max_output_tokens: 150 },
+    });
+    expect(result).toMatchObject({
+      status: "budget_exhausted",
+      budget: { scope: "run", limit: "max_output_tokens" },
+    });
+  });
+
+  test("onUnknownUsage upper_bound keeps the setup refusal and is pinned", async () => {
+    const a = agent({
+      budget: { max_output_tokens: 150 },
+      onUnknownUsage: "upper_bound",
+      model: unbounded([say("done")]),
+    });
+    expect(await a.check()).toMatchObject({
+      ok: false,
+      error: { code: "budget_unenforceable" },
+    });
+  });
+
   test("an inherited limit with no bound refuses the attempt instead of skipping it", async () => {
     const store = sqlite(":memory:");
     const worker = agent({

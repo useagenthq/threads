@@ -1,19 +1,20 @@
 import type { z } from "zod";
-import type { Budget } from "../log";
+import type { Budget, Policy } from "../log";
 import type { Model } from "../model";
 import { tokenBounds } from "../reduce/cost";
 import { ConfigError } from "./errors";
 
 // spec/schema/README.md, Budget enforcement: a limit is reserved per attempt at the attempt's
-// bound, so setup refuses a limit that one of the agent's models can't bound. TS pins no
-// on_unknown_usage, so there is no stop mode to allow it.
+// bound, so setup refuses a limit that one of the agent's models can't bound, unless
+// on_unknown_usage is stop: the run-time check then refuses the unbounded attempt instead.
 
 /** Throws budget_unenforceable when some model has no per-attempt bound for a set limit. */
 export function checkEnforceable(
   budget: z.infer<typeof Budget> | undefined,
   models: readonly Model[],
+  onUnknownUsage: Policy["on_unknown_usage"],
 ): void {
-  if (budget === undefined) return;
+  if (budget === undefined || onUnknownUsage === "stop") return;
   for (const { info } of models) {
     const bounds = tokenBounds(info.limits, info.params, undefined);
     const missing = [

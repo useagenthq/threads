@@ -18,7 +18,7 @@ import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
 import { target } from "./handoff";
 import { hosted } from "./hosted";
-import { type MemoryWrite, pin } from "./pin";
+import { type MemoryWrite, type PinOptions, pin } from "./pin";
 import { register } from "./registry";
 import type { RunResult } from "./result";
 import { type Resolved, type RunOptions, run } from "./run";
@@ -44,6 +44,11 @@ export type AgentOptions<Deps, Output> = {
   readonly permissions?: Partial<z.infer<typeof PermissionsPolicy>>;
   /** Thread budget: it covers the thread and every descendant. */
   readonly budget?: z.infer<typeof Budget>;
+  /**
+   * How a budget counts an attempt with no known usage. "stop" lets a limit the model can't
+   * bound per attempt pass setup; the attempt is refused at run time instead. Absent: upper_bound.
+   */
+  readonly onUnknownUsage?: PinOptions["onUnknownUsage"];
   readonly retry?: Partial<z.infer<typeof RetryPolicy>>;
   readonly context?: Partial<z.infer<typeof ContextPolicy>>;
   /** Absent: no sandbox tools (bash, files). */
@@ -148,6 +153,7 @@ function build<Deps, Output>(
     fallback: options.fallback ?? [],
     permissions: options.permissions ?? {},
     budget: options.budget,
+    onUnknownUsage: options.onUnknownUsage,
     retry: options.retry ?? {},
     context: options.context ?? {},
     sandbox: options.sandbox,

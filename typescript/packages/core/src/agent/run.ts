@@ -91,7 +91,11 @@ export async function run<Deps, Output>(
   options: RunOptions<Deps>,
   hooks: Hooks = {},
 ): Promise<RunResult<Output>> {
-  checkEnforceable(options.budget, [def.model, ...def.fallback]);
+  checkEnforceable(
+    options.budget,
+    [def.model, ...def.fallback],
+    def.onUnknownUsage,
+  );
   const principal = options.principal ?? OPERATOR;
   const draft: EventDraft = {
     type: "user_input",

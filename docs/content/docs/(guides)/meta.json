@@ -42,6 +42,7 @@
     "control/permissions",
     "control/human-in-the-loop",
     "control/budgets",
+    "control/usage-and-cost",
     "---[ShieldCheck]Production---",
     "production/durability",
     "production/deploying",
