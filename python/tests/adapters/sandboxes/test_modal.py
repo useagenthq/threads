@@ -9,6 +9,7 @@ from fork_kit import assert_expected, assert_restore_refused, reaches_restore, r
 from modal_fake import TOKEN_ID, TOKEN_SECRET, FakeModal, harness
 from sandbox_backend import FakeBackend
 from sandbox_contract import CHECKS, Check, run_check
+from sandbox_deadline_kit import DEADLINE
 from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
@@ -18,7 +19,7 @@ from threads.result import Err, Ok
 from threads.sandbox.protocol import NO_ENV
 
 
-@pytest.mark.parametrize("check", CHECKS, ids=lambda c: c.__name__)
+@pytest.mark.parametrize("check", [*CHECKS, *DEADLINE], ids=lambda c: c.__name__)
 def test_contract(check: Check) -> None:
     asyncio.run(run_check(check, harness, (TOKEN_ID, TOKEN_SECRET)))
 

@@ -12,6 +12,7 @@ from e2b_fake import API_KEY, adapter, control, make
 from fork_kit import assert_expected, assert_restore_refused, reaches_restore, run_case, script_of
 from sandbox_backend import FakeBackend
 from sandbox_contract import CHECKS, Check, run_check
+from sandbox_deadline_kit import DEADLINE
 from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
@@ -23,7 +24,7 @@ from threads.loop.model import LookupUnknown
 from threads.result import Err, Ok
 
 
-@pytest.mark.parametrize("check", CHECKS, ids=lambda c: c.__name__)
+@pytest.mark.parametrize("check", [*CHECKS, *DEADLINE], ids=lambda c: c.__name__)
 def test_contract(check: Check) -> None:
     asyncio.run(run_check(check, make, (API_KEY,)))
 
