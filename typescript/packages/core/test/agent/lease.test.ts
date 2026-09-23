@@ -11,6 +11,7 @@ import {
   tool,
 } from "../../src";
 import { storeOf } from "../../src/agent/sqlite";
+import { markTestKit } from "../../src/model/guard";
 import { knownEvents } from "../../src/reduce";
 import { memoryArtifacts } from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
@@ -22,10 +23,10 @@ import { unwrap } from "../store/helpers";
 const usage = { input_tokens: 10, output_tokens: 2 };
 const info = scriptedModel({ responses: [] }).info;
 
-/** A model that answers `text`, after `wait` resolves if one is given. */
+/** A test-kit model that answers `ok <n>`, after `wait` resolves if one is given. */
 function model(wait?: (n: number) => Promise<void>): Model {
   let sends = 0;
-  return {
+  const made: Model = {
     info,
     async *send(_request, ctx): AsyncIterable<ModelChunk> {
       sends += 1;
@@ -39,6 +40,8 @@ function model(wait?: (n: number) => Promise<void>): Model {
       yield { kind: "done", stop_reason: "end_turn", usage };
     },
   };
+  markTestKit(made);
+  return made;
 }
 
 afterEach(() => {
