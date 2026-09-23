@@ -163,13 +163,14 @@ def test_whatsapp_posts_reply_buttons_and_parses_the_press() -> None:
     assert isinstance(body, dict)
     assert body["type"] == "interactive"
     buttons = body["interactive"]["action"]["buttons"]  # type: ignore[index] - JSON
-    assert [b["reply"]["id"] for b in buttons] == [f"grant:{CHALLENGE}", f"deny:{CHALLENGE}"]  # type: ignore[index] - JSON
+    assert [b["reply"]["id"] for b in buttons] == [f"approve:{CHALLENGE}", f"deny:{CHALLENGE}"]  # type: ignore[index] - JSON
     reply: JsonValue = {"type": "button_reply", "button_reply": {"id": f"deny:{CHALLENGE}"}}
     messages: list[JsonValue] = [
         {"id": "wamid.1", "from": "1555", "type": "interactive", "interactive": reply},
         {"id": "wamid.2", "from": "1555", "type": "text", "text": {"body": "yes"}},
     ]
-    webhook: JsonValue = {"entry": [{"id": "waba", "changes": [{"value": {"messages": messages}}]}]}
+    value: JsonValue = {"metadata": {"phone_number_id": "p"}, "messages": messages}
+    webhook: JsonValue = {"entry": [{"id": "waba", "changes": [{"value": value}]}]}
     parsed = channel.parse(hub(webhook))
     assert isinstance(parsed, Ok)
     decision, words = parsed.value

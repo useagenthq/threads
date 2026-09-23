@@ -11,7 +11,7 @@ import hashlib
 import hmac
 from collections.abc import Mapping
 from http import HTTPStatus
-from typing import ClassVar, Final, Literal
+from typing import ClassVar, Final
 
 import httpx
 from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter, ValidationError
@@ -78,18 +78,6 @@ def challenge_of(op: JsonObject) -> str | None:
     """An approval card's challenge id; None for a plain message."""
     challenge = op.get("challenge_id")
     return challenge if isinstance(challenge, str) else None
-
-
-def answer_of(value: str) -> tuple[Literal["grant", "deny"], str] | None:
-    """A button's `grant:<challenge id>` or `deny:<challenge id>`: all a button carries."""
-    verdict, _, challenge = value.partition(":")
-    if not challenge:
-        return None
-    match verdict:
-        case "grant" | "deny":
-            return verdict, challenge
-        case _:
-            return None
 
 
 def client(transport: httpx.AsyncBaseTransport | None) -> httpx.AsyncClient:

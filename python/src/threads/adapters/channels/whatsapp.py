@@ -1,8 +1,9 @@
 """`whatsapp()` (extra `whatsapp`, ): the WhatsApp Cloud API.
 
 A webhook is verified by `X-Hub-Signature-256` over the raw bytes with the app secret, and the
-URL's GET subscription check by the verify token, compared in constant time. The
-WhatsApp Business Account is the tenant. One webhook may batch several messages, each keyed by
+URL's GET subscription check by the verify token, compared in constant time. The business phone
+number is the installation and the tenant is `whatsapp:<phone_number_id>` (TS's formats); a
+webhook that speaks for two phone numbers is refused rather than filed under one. One webhook may batch several messages, each keyed by
 its own `wamid`, so none is dropped as a duplicate of a neighbor. Outbound sends carry the
 effect key as `biz_opaque_callback_data`. The Cloud API has no lookup by that key, so an
 uncertain send parks. Meta publishes no official Python SDK; the REST
@@ -13,14 +14,14 @@ import hashlib
 import hmac
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Final
+from typing import Final, Literal
+from uuid import UUID
 
 import httpx
 from pydantic import Field, JsonValue, ValidationError
 
 from threads.adapters.channels.common import (
     Loose,
-    answer_of,
     body_of,
     challenge_of,
     client,
@@ -72,7 +73,12 @@ class _Message(Loose):
     interactive: _Interactive | None = None
 
 
+class _Metadata(Loose):
+    phone_number_id: str = Field(min_length=1)
+
+
 class _Value(Loose):
+    metadata: _Metadata
     messages: tuple[_Message, ...] = ()
 
 
@@ -81,8 +87,12 @@ class _Change(Loose):
 
 
 class _Entry(Loose):
-    id: str
     changes: tuple[_Change, ...] = ()
+
+
+class _Button(Loose):
+    challenge_id: UUID
+    decision: Literal["grant", "deny"]
 
 
 class _Webhook(Loose):
@@ -112,11 +122,15 @@ class WhatsAppChannel:
         if not hub_signature(resolve(self.app_secret), raw.body, header):
             return unverified("the WhatsApp signature does not match")
         hook = _webhook(raw)
-        if hook is None or not hook.entry:
+        if hook is None:
             return unverified("not a WhatsApp webhook")
-        account = hook.entry[0].id
+        phones = {c.value.metadata.phone_number_id for e in hook.entry for c in e.changes}
+        if len(phones) != 1:
+            return unverified("the webhook must speak for exactly one phone number")
+        (phone,) = phones
         # Meta sends no delivery id: the signed bytes identify the delivery.
-        return Ok(VerifiedDelivery(account, account, hashlib.sha256(raw.body).hexdigest()))
+        delivery = hashlib.sha256(raw.body).hexdigest()
+        return Ok(VerifiedDelivery(f"whatsapp:{phone}", phone, delivery))
 
     def challenge(self, query: Mapping[str, str]) -> Ok[RawResponse] | Err[ParseError]:
         """Meta's subscription check: hub.verify_token must equal the verify token (constant
@@ -135,7 +149,8 @@ class WhatsAppChannel:
         items: list[Inbound] = []
         for entry in hook.entry:
             for change in entry.changes:
-                items.extend(_item(entry.id, m) for m in change.value.messages)
+                phone = change.value.metadata.phone_number_id
+                items.extend(_item(phone, m) for m in change.value.messages)
         return Ok(items)
 
     def ack(self, raw: RawRequest) -> RawResponse:
@@ -179,8 +194,8 @@ class WhatsAppChannel:
 def _card(text: str, challenge: str) -> JsonValue:
     """Reply buttons whose ids carry only the challenge id."""
     buttons: list[JsonValue] = [
-        {"type": "reply", "reply": {"id": f"{verdict}:{challenge}", "title": title}}
-        for verdict, title in (("grant", "Approve"), ("deny", "Deny"))
+        {"type": "reply", "reply": {"id": f"{verb}:{challenge}", "title": title}}
+        for verb, title in (("approve", "Approve"), ("deny", "Deny"))
     ]
     return {"type": "button", "body": {"text": text}, "action": {"buttons": buttons}}
 
@@ -192,11 +207,24 @@ def _webhook(raw: RawRequest) -> _Webhook | None:
         return None
 
 
-def _item(account: str, message: _Message) -> Inbound:
-    who = Principal(issuer=f"whatsapp:{account}", tenant=account, subject=message.sender)
+def _answer(button: str) -> _Button | None:
+    """`approve:<challenge>` / `deny:<challenge>`, or TS's JSON form: all a button carries."""
+    verb, _, challenge = button.partition(":")
+    try:
+        if verb in ("approve", "deny"):
+            decision = "grant" if verb == "approve" else "deny"
+            return _Button.model_validate({"challenge_id": challenge, "decision": decision})
+        return _Button.model_validate_json(button)
+    except ValidationError:
+        return None
+
+
+def _item(phone: str, message: _Message) -> Inbound:
+    tenant = f"whatsapp:{phone}"
+    who = Principal(issuer=tenant, tenant=tenant, subject=message.sender)
     pressed = message.interactive
     if pressed is not None and pressed.button_reply is not None:
-        answer = answer_of(pressed.button_reply.id)
+        answer = _answer(pressed.button_reply.id)
         if answer is None:
             return Ignore(kind="ignore")
         return Decision(
@@ -204,8 +232,8 @@ def _item(account: str, message: _Message) -> Inbound:
             principal=who,
             address=message.sender,
             item_key=message.id,
-            challenge_id=answer[1],
-            decision=answer[0],
+            challenge_id=str(answer.challenge_id),
+            decision=answer.decision,
         )
     if message.type != "text" or message.text is None or not message.text.body:
         return Ignore(kind="ignore")

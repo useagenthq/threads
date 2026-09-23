@@ -99,11 +99,12 @@ def test_whatsapp_keys_each_batched_message_by_its_own_id() -> None:
     messages: list[JsonValue] = [
         {"id": f"wamid.{k}", "from": "1555", "type": "text", "text": {"body": k}} for k in "AB"
     ]
-    body: JsonValue = {"entry": [{"id": "waba_9", "changes": [{"value": {"messages": messages}}]}]}
+    value: JsonValue = {"metadata": {"phone_number_id": "p"}, "messages": messages}
+    body: JsonValue = {"entry": [{"id": "waba_9", "changes": [{"value": value}]}]}
     request = hub_request(body)
     verified = channel.verify(request)
     assert isinstance(verified, Ok)
-    assert verified.value.tenant == "waba_9"
+    assert verified.value.tenant == "whatsapp:p"
     parsed = channel.parse(request)
     assert isinstance(parsed, Ok)
     assert [i.item_key for i in parsed.value if isinstance(i, Message)] == ["wamid.A", "wamid.B"]
