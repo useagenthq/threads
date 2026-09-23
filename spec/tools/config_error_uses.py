@@ -17,30 +17,39 @@ import io
 import re
 import tokenize
 
-NAME = re.compile(r"\bConfigError\b")
-# An import that renames it is an alias: left in place, so it stays unclassified.
-RENAMED = re.compile(r"\bConfigError\s+as\s+\w+")
+# ConfigError and the core helpers that raise one for an adapter (factory_scan.HELPERS). The scan
+# counts their calls, so any other mention (an alias, an assignment, a reference passed on)
+# could hide a refusal.
+REFUSERS = {
+    "py": r"ConfigError|credential|resolve|check_hosted_tools",
+    "ts": r"ConfigError|credential|checkHostedTools|reveal",
+}
+NAMES = {lang: re.compile(rf"\b(?:{names})\b") for lang, names in REFUSERS.items()}
+# An import that renames one is an alias: left in place, so it stays unclassified.
+RENAMED = {lang: re.compile(rf"\b(?:{names})\s+as\s+\w+") for lang, names in REFUSERS.items()}
 IMPORTS = {
     "py": re.compile(r"^[ \t]*from[ \t]+[\w.]+[ \t]+import[ \t]+(?:\([^)]*\)|[^\n]*)", re.M),
     "ts": re.compile(r"\bimport\s+(?:type\s+)?\{[^}]*\}\s*from\s*[\"'][^\"']*[\"']"),
 }
 ALLOWED = {
     "py": (
-        re.compile(r"\bConfigError\("),
+        re.compile(r"\b(?:ConfigError|credential|resolve|check_hosted_tools)\("),
         # The clause up to its colon only, so code after `except E:` on one line is still seen.
         re.compile(r"^[ \t]*except\b[^\n:]*:", re.M),
         re.compile(r"\bisinstance\(\s*\w+\s*,\s*ConfigError\s*\)"),
     ),
     "ts": (
-        re.compile(r"\bConfigError\("),
+        re.compile(r"\b(?:ConfigError|credential|checkHostedTools)\("),
+        re.compile(r"\.reveal\(\)"),
         re.compile(r"\binstanceof\s+ConfigError\b"),
     ),
 }
 
 
 def _imports(text: str, lang: str) -> str:
-    """Drop imports that bring ConfigError in under its own name."""
-    return IMPORTS[lang].sub(lambda m: m.group(0) if RENAMED.search(m.group(0)) else "", text)
+    """Drop imports that bring the refusers in under their own names."""
+    renamed = RENAMED[lang]
+    return IMPORTS[lang].sub(lambda m: m.group(0) if renamed.search(m.group(0)) else "", text)
 
 
 def without_comments(source: str) -> str:
@@ -62,8 +71,9 @@ def without_comments(source: str) -> str:
 
 
 def unclassified_uses(source: str, lang: str) -> int:
-    """Mentions of ConfigError that are not a construction, a plain import or a catch."""
+    """Mentions of ConfigError or a refusing helper that are not a call, a plain import or
+    (ConfigError only) a catch."""
     text = _imports(without_comments(source) if lang == "py" else source, lang)
     for pattern in ALLOWED[lang]:
         text = pattern.sub("", text)
-    return len(NAME.findall(text))
+    return len(NAMES[lang].findall(text))

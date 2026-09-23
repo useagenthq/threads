@@ -872,7 +872,7 @@
       "ts": "zep",
       "py": "zep",
       "package": "zep",
-      "doc": "A MemoryProvider that stores records in Zep. Pass it as agent({memory: zep()}). Each scope is its own container; saves are effects that park when uncertain, since Zep documents no dedup window.",
+      "doc": "A MemoryProvider that stores records in Zep. Pass it as agent({memory: zep()}). Each scope is its own Zep graph; saves are effects that park when uncertain, since Zep documents no dedup window.",
       "async": false,
       "params": [
         {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"ZEP_API_KEY\")", "doc": "The Zep API key: a secret() or a string. Omitted: secret(\"ZEP_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. A string is redacted like a revealed secret."},

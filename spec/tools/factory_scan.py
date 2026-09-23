@@ -153,9 +153,9 @@ def scan_problems(
         for code, found in sorted(by_code.items()):
             if code == UNREADABLE:
                 errs.append(
-                    f"decisions packages.{name}: {', '.join(sorted(found))} constructs a "
-                    "ConfigError the scan can't count; only construct (code as a string "
-                    "literal), import or catch it by name"
+                    f"decisions packages.{name}: {', '.join(sorted(found))} uses ConfigError or "
+                    "a refusing helper in a way the scan can't count; only call them (ConfigError "
+                    "with its code as a string literal), import or catch them by name"
                 )
                 continue
             if code in gaps:

@@ -96,8 +96,9 @@ def test_a_construction_the_scan_cannot_read_is_red(tmp_path: pathlib.Path) -> N
     py = PY_SOURCE + "raise ConfigError(CODE, 'computed')\n"
     doc = decisions(gapped())
     assert check_decisions(api(config_errors=INVALID), doc, sources(tmp_path, py=py)) == [
-        "decisions packages.web: web.py constructs a ConfigError the scan can't count; only "
-        "construct (code as a string literal), import or catch it by name"
+        "decisions packages.web: web.py uses ConfigError or a refusing helper in a way the scan "
+        "can't count; only call them (ConfigError with its code as a string literal), import or "
+        "catch them by name"
     ]
 
 
@@ -165,6 +166,14 @@ THROW = 'throw new E("missing_secret", "m");'
         ('alias = {"#": ConfigError}["#"]\nraise alias("missing_secret", "m")\n', "py"),
         ('const E = { "https://x": ConfigError }["https://x"];\n' + THROW, "ts"),
         ("// a comment naming ConfigError\n", "ts"),
+        (
+            'import { credential as c } from "@threads/core/adapter";\nc("x", "apiKey", k, "X");',
+            "ts",
+        ),
+        ("from threads.secrets import credential as c\nkey = c('x', 'api_key', k, 'X')\n", "py"),
+        ("get = credential\nget('x', 'api_key', k, 'X')\n", "py"),
+        ("const show = key.reveal;\nshow();\n", "ts"),
+        ("from threads.secrets import resolve as r\nr(k)\n", "py"),
     ],
     ids=[
         "py-import-as",
@@ -184,9 +193,16 @@ THROW = 'throw new E("missing_secret", "m");'
         "py-hash-in-string",
         "ts-slashes-in-string",
         "ts-comment",
+        "ts-credential-alias",
+        "py-credential-alias",
+        "py-credential-assign",
+        "ts-reveal-reference",
+        "py-resolve-alias",
     ],
 )
-def test_an_alias_or_subclass_of_config_error_is_unreadable(source: str, lang: str) -> None:
+def test_an_alias_of_config_error_or_a_refusing_helper_is_unreadable(
+    source: str, lang: str
+) -> None:
     assert raised_codes(source, lang)["<unreadable>"] >= 1
 
 

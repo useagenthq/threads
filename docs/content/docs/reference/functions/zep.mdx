@@ -4,7 +4,7 @@ description: "A MemoryProvider that stores records in Zep."
 icon: "Plug"
 ---
 
-Pass it as agent(&#123;memory: zep()&#125;). Each scope is its own container; saves are effects that park when uncertain, since Zep documents no dedup window.
+Pass it as agent(&#123;memory: zep()&#125;). Each scope is its own Zep graph; saves are effects that park when uncertain, since Zep documents no dedup window.
 
 Import from `@threads/zep` (TypeScript) or `threads.zep` (Python).
 
