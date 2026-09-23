@@ -1,32 +1,21 @@
-import { sha256Hex } from "../hash";
 import type { BranchId, SandboxId, ThreadId } from "../log";
 import { knownEvents } from "../reduce";
 import { refReader, verifyRequests } from "../render";
 import { err, ok, type Result } from "../result";
-import {
-  addLine,
-  type Chain,
-  emptyChain,
-  tipHash,
-  type VerifiedLog,
-  verifyExport,
-} from "../verify";
+import { type Chain, tipHash, type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
-import { VERSION } from "../version";
 import type { ArtifactStore } from "./artifacts";
+import { newBranch } from "./branch";
 import type { SqliteDriver } from "./driver";
-import { canonicalLine } from "./encode";
-import { forkEligible } from "./forking";
+import { forkEligible, loadChain } from "./forking";
 import { importSegments } from "./import";
 import { ResourceLedger } from "./ledger";
-import { branchLines, exportBytes } from "./lines";
+import { exportBytes } from "./lines";
 import { isTorn, markRepaired, recordRepair } from "./repair";
 import {
   atomically,
   type BranchRow,
-  getBranch,
   getLease,
-  insertBranch,
   installSchema,
   LOCAL_TENANT,
   ownedBranch,
@@ -34,7 +23,7 @@ import {
   rootBranch,
   setBranchState,
 } from "./tables";
-import { IMPL, Writer, writerMismatch } from "./writer";
+import { Writer, writerMismatch } from "./writer";
 
 /** 30 s lease TTL, renewed every 10 s by the holder. */
 export const LEASE_TTL_MS = 30_000;
@@ -90,26 +79,27 @@ export class LogStore {
 
   /** Writes a new root branch: its header line, head at seq 0. */
   createBranch(threadId: ThreadId, branchId: BranchId): Result<void, LogError> {
-    return atomically(this.#db, () => {
-      const exists = this.#absent(branchId);
-      if (!exists.ok) return exists;
-      const header = this.#header(threadId, branchId);
-      if (!header.ok) return header;
-      insertBranch(this.#db, {
-        branch_id: branchId,
-        thread_id: threadId,
-        tenant_id: this.#tenant,
-        parent_branch_id: null,
-        fork_at_seq: null,
-        header_line: header.value,
+    return atomically(this.#db, () =>
+      newBranch(this.#db, {
+        tenantId: this.#tenant,
+        threadId,
+        branchId,
+        parent: null,
         state: "ready",
-        head_seq: 0,
-        head_hash: sha256Hex(header.value),
-        head_verified: 1,
-        dropped_ref: null,
-      });
-      return ok(undefined);
-    });
+        createdAt: this.#now(),
+      }),
+    );
+  }
+
+  /** A branch's state, if this tenant owns it (a forking or failed branch is never listed). */
+  branchState(branchId: BranchId): Result<BranchRow["state"], LogError> {
+    const row = ownedBranch(this.#db, branchId, this.#tenant);
+    return row.ok ? ok(row.value.state) : row;
+  }
+
+  /** The injected clock this store reads for leases, event times and snapshot expiry. */
+  now(): number {
+    return this.#now();
   }
 
   /**
@@ -178,29 +168,55 @@ export class LogStore {
       if (torn !== undefined) markRepaired(this.#db, branchId);
       const log = this.#runnable(branchId);
       if (!log.ok) return log;
-      const lease = getLease(this.#db, branchId);
-      if (!lease.ok) return lease;
-      const held = lease.value;
-      if (
-        held !== undefined &&
-        held.expires_at > now &&
-        held.holder_id !== holderId
-      )
-        return err(
-          logError("branch_busy", `branch ${branchId} has a live lease`),
-        );
-      const epoch = Math.max(held?.epoch ?? 0, log.value.fold.epoch) + 1;
-      const writer = this.#lease(
-        branchId,
-        holderId,
-        epoch,
-        now + ttlMs,
-        log.value,
-      );
-      return torn === undefined
-        ? ok(writer)
-        : recordRepair(writer, this.#artifacts, torn, log.value);
+      const writer = this.#take(branchId, holderId, now + ttlMs, log.value);
+      if (!writer.ok || torn === undefined) return writer;
+      return recordRepair(writer.value, this.#artifacts, torn, log.value);
     });
+  }
+
+  /**
+   * After a crash mid-fork the fork's creator owns cleanup: it retakes the
+   * `forking` branch's lease, like `acquire`, to finish the fork or fail it and release what
+   * the ledger recorded.
+   */
+  reclaimFork(
+    branchId: BranchId,
+    holderId: string,
+    ttlMs: number = LEASE_TTL_MS,
+  ): Result<Writer, LogError> {
+    return atomically(this.#db, () => {
+      const row = ownedBranch(this.#db, branchId, this.#tenant);
+      if (!row.ok) return row;
+      if (row.value.state !== "forking")
+        return err(
+          logError("branch_not_runnable", `branch ${branchId} is not forking`),
+        );
+      const chain = loadChain(this.#db, branchId);
+      if (!chain.ok) return chain;
+      return this.#take(branchId, holderId, this.#now() + ttlMs, chain.value);
+    });
+  }
+
+  /** The lease if it is free, expired or already this holder's, at the next epoch (rule 11). */
+  #take(
+    branchId: BranchId,
+    holderId: string,
+    expiresAt: number,
+    chain: Chain,
+  ): Result<Writer, LogError> {
+    const lease = getLease(this.#db, branchId);
+    if (!lease.ok) return lease;
+    const held = lease.value;
+    if (
+      held !== undefined &&
+      held.expires_at > this.#now() &&
+      held.holder_id !== holderId
+    )
+      return err(
+        logError("branch_busy", `branch ${branchId} has a live lease`),
+      );
+    const epoch = Math.max(held?.epoch ?? 0, chain.fold.epoch) + 1;
+    return ok(this.#lease(branchId, holderId, epoch, expiresAt, chain));
   }
 
   /**
@@ -311,33 +327,17 @@ export class LogStore {
     parent: VerifiedLog,
     request: ForkRequest,
   ): Result<Chain, LogError> {
-    const exists = this.#absent(request.branch);
-    if (!exists.ok) return exists;
     const threadId = parent.segments[0]?.header.thread_id;
     if (threadId === undefined) throw new Error("a verified log has a header");
-    const header = this.#header(threadId, request.branch);
-    if (!header.ok) return header;
-    insertBranch(this.#db, {
-      branch_id: request.branch,
-      thread_id: threadId,
-      tenant_id: this.#tenant,
-      parent_branch_id: request.parent,
-      fork_at_seq: request.atSeq,
-      header_line: header.value,
+    const stored = newBranch(this.#db, {
+      tenantId: this.#tenant,
+      threadId,
+      branchId: request.branch,
+      parent: { branchId: request.parent, atSeq: request.atSeq },
       state: "forking",
-      head_seq: request.atSeq,
-      head_hash: sha256Hex(header.value),
-      head_verified: 1,
-      dropped_ref: null,
+      createdAt: this.#now(),
     });
-    const lines = branchLines(this.#db, request.branch);
-    if (!lines.ok) return lines;
-    const chain = emptyChain();
-    for (const line of lines.value.lines) {
-      const added = addLine(chain, line);
-      if (!added.ok) return added;
-    }
-    return ok(chain);
+    return stored.ok ? loadChain(this.#db, request.branch) : stored;
   }
 
   #lease(
@@ -358,26 +358,5 @@ export class LogStore {
       { branchId, holderId, epoch },
       chain,
     );
-  }
-
-  #absent(branchId: string): Result<void, LogError> {
-    const row = getBranch(this.#db, branchId);
-    if (!row.ok) return row;
-    return row.value === undefined
-      ? ok(undefined)
-      : err(
-          logError("invalid_transition", `branch ${branchId} already exists`),
-        );
-  }
-
-  #header(threadId: string, branchId: string): Result<Uint8Array, LogError> {
-    return canonicalLine({
-      format: "threads.log",
-      format_version: 1,
-      thread_id: threadId,
-      branch_id: branchId,
-      created_at: this.#now(),
-      writer: { impl: IMPL, version: VERSION },
-    });
   }
 }
