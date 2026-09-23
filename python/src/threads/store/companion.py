@@ -10,3 +10,14 @@ from threads.log import ParseError
 from threads.store.verify import StoredEvent
 
 type Companion = Callable[[sqlite3.Connection, Sequence[StoredEvent]], ParseError | None]
+
+
+def both(first: Companion, then: Companion | None) -> Companion:
+    """Two companions in one append's transaction; the first refusal wins."""
+    if then is None:
+        return first
+
+    def run(conn: sqlite3.Connection, events: Sequence[StoredEvent]) -> ParseError | None:
+        return first(conn, events) or then(conn, events)
+
+    return run

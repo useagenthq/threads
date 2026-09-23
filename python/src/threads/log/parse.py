@@ -28,6 +28,9 @@ type ApiCode = Literal[
     "not_parked",
     "idempotency_key_reused",
     "idempotency_key_principal_mismatch",
+    "unauthenticated",
+    "unverified",
+    "invalid",
 ]
 """branch_not_found: a branch that is absent or another tenant's. branch_exists: a thread
 another tenant owns. sandbox_required: a fork with no sandbox adapter for its snapshot's

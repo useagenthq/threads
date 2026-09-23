@@ -2792,6 +2792,15 @@ wheels = [
 ]
 
 [[package]]
+name = "slack-sdk"
+version = "3.44.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6e/4e/371068dd7281139307e60cd18553b96b9c8c391a4c3040617192713a3cc4/slack_sdk-3.44.1.tar.gz", hash = "sha256:ca19505423789fa2a3189ff486f989f02e49289f008d0a5813df7255b3fb93ea", size = 256661, upload-time = "2026-09-03T14:21:13.879Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/fc/67352b742fc6fa520a550581b0284f5757e4e31a32327c2a00276747fd30/slack_sdk-3.44.1-py2.py3-none-any.whl", hash = "sha256:d6f20a0fbe3fecf9cac955c99d686301b48a645b7045472c3a0cdd186d7c42b2", size = 319865, upload-time = "2026-09-03T14:21:12.405Z" },
+]
+
+[[package]]
 name = "sniffio"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2882,6 +2891,13 @@ daytona = [
 e2b = [
     { name = "e2b" },
 ]
+github = [
+    { name = "httpx" },
+]
+host = [
+    { name = "starlette" },
+    { name = "uvicorn" },
+]
 litellm = [
     { name = "litellm" },
 ]
@@ -2895,8 +2911,15 @@ modal = [
 openai = [
     { name = "openai" },
 ]
+slack = [
+    { name = "httpx" },
+    { name = "slack-sdk" },
+]
 supermemory = [
     { name = "supermemory" },
+]
+whatsapp = [
+    { name = "httpx" },
 ]
 zep = [
     { name = "zep-cloud" },
@@ -2917,16 +2940,22 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.8.0,<2" },
     { name = "daytona", marker = "extra == 'daytona'", specifier = ">=0.216,<0.217" },
     { name = "e2b", marker = "extra == 'e2b'", specifier = ">=2.51,<3" },
+    { name = "httpx", marker = "extra == 'github'", specifier = ">=0.28,<1" },
+    { name = "httpx", marker = "extra == 'slack'", specifier = ">=0.28,<1" },
+    { name = "httpx", marker = "extra == 'whatsapp'", specifier = ">=0.28,<1" },
     { name = "jsonschema", marker = "extra == 'mcp'", specifier = ">=4.23,<5" },
     { name = "litellm", marker = "extra == 'litellm'", specifier = ">=1.83.0,<2" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.20,<2" },
     { name = "modal", marker = "extra == 'modal'", specifier = ">=1.5.5,<2" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=3.19.0,<4" },
     { name = "pydantic", specifier = ">=2,<3" },
+    { name = "slack-sdk", marker = "extra == 'slack'", specifier = ">=3.40,<4" },
+    { name = "starlette", marker = "extra == 'host'", specifier = ">=1.6,<2" },
     { name = "supermemory", marker = "extra == 'supermemory'", specifier = ">=3.62,<4" },
+    { name = "uvicorn", marker = "extra == 'host'", specifier = ">=0.53,<1" },
     { name = "zep-cloud", marker = "extra == 'zep'", specifier = ">=3.28,<4" },
 ]
-provides-extras = ["anthropic", "openai", "litellm", "e2b", "daytona", "modal", "mcp", "supermemory", "zep"]
+provides-extras = ["anthropic", "openai", "litellm", "e2b", "daytona", "modal", "mcp", "supermemory", "zep", "host", "slack", "whatsapp", "github"]
 
 [package.metadata.requires-dev]
 dev = [

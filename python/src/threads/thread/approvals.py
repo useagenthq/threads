@@ -27,6 +27,7 @@ from threads.log import (
 from threads.reduce import Fold
 from threads.result import Err, Ok
 from threads.store import Draft, approvals
+from threads.store.companion import Companion, both
 from threads.store.lines import uuid7
 from threads.thread.control import Controlled, actor, append, forbidden, principal_key, resumed
 
@@ -86,15 +87,21 @@ async def decide(  # noqa: PLR0913 - one answer and its bindings
     approvers: Sequence[Principal],
     remember_rule: PermissionRule | None = None,
     reason: str | None = None,
+    installation: str | None = None,
+    companion: Companion | None = None,
 ) -> Controlled:
     """approval_granted or approval_denied for an open challenge, consuming its row, then
-    resumed when the branch is parked on it."""
+    resumed when the branch is parked on it. Over a channel, the answer must come from the
+    installation the challenge was issued in; `companion` binds more host rows (the inbox item
+    that carried the answer) to the same append."""
     if principal.tenant != store.tenant or principal not in approvers:
         return forbidden("not an approver of this thread")
     now = now_ms()
     row = await _open_row(store, thread, challenge_id, now)
     if isinstance(row, Err):
         return row
+    if installation is not None and row.value.installation_id != installation:
+        return Err(ParseError("approval_mismatch", "the challenge belongs to another installation"))
     by = actor("approver", principal)
     binding: dict[str, JsonValue] = {
         "challenge_id": challenge_id,
@@ -116,7 +123,7 @@ async def decide(  # noqa: PLR0913 - one answer and its bindings
         return Ok((record, *(() if rule is None else (rule,)), *resumed(fold, address, cause)))
 
     consume = approvals.consume(challenge_id, decision, principal_key(principal), now)
-    return await append(store, thread[1], build, consume)
+    return await append(store, thread[1], build, both(consume, companion))
 
 
 async def _open_row(

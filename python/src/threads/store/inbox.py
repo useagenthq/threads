@@ -163,3 +163,12 @@ def consume(inbox_id: int) -> Companion:
         return ParseError("seq_conflict", f"inbox item {inbox_id} is already consumed")
 
     return mark
+
+
+def discard(conn: sqlite3.Connection, inbox_id: int) -> None:
+    """Consumes an item that appends nothing (a refused approval, a control from a stranger):
+    consumed_seq 0, the header's seq, which no event has."""
+    conn.execute(
+        "UPDATE inbox SET consumed_seq = 0 WHERE inbox_id = ? AND consumed_seq IS NULL",
+        (inbox_id,),
+    )

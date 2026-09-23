@@ -48,6 +48,9 @@ class Tables:
     async def pending(self, thread_id: ThreadId) -> tuple[inbox.Row, ...]:
         return await self._worker.call(lambda c: inbox.pending(c, self.tenant_id, thread_id))
 
+    async def discard(self, inbox_id: int) -> None:
+        await self._worker.call(lambda c: inbox.discard(c, inbox_id))
+
     async def inbox_rows(self) -> tuple[inbox.Row, ...]:
         return await self._worker.call(lambda c: inbox.all_rows(c, self.tenant_id))
 

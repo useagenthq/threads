@@ -37,6 +37,33 @@ supermemory = [
 zep = [
     "zep-cloud>=3.28,<4",
 ]
+# threads.host over HTTP. Starlette: spec/api.json types host(authenticate)
+# with starlette.requests.Request and Host.asgi as starlette.types.ASGIApp, and it is the
+# smallest routing/SSE layer that runs on any ASGI server. Uvicorn: the minimal ASGI server
+# `threads dev` and `threads start` run it on. Core stays pydantic-only; the library methods of
+# threads.host import neither.
+host = [
+    "starlette>=1.6,<2",
+    "uvicorn>=0.53,<1",
+]
+# Channel adapters. Slack: its official SDK verifies the signing secret
+# (slack_sdk.signature). Outbound sends of every channel go through httpx, the client the other
+# adapters already send through, so the run's fence is checked at the real send point (the
+# connection's send_request_headers trace); WhatsApp Cloud and GitHub publish no official
+# Python SDK, so their REST APIs are called directly.
+slack = [
+    "slack-sdk>=3.40,<4",
+    "httpx>=0.28,<1",
+]
+whatsapp = [
+    "httpx>=0.28,<1",
+]
+github = [
+    "httpx>=0.28,<1",
+]
+
+[project.scripts]
+threads = "threads.cli:main"
 
 [dependency-groups]
 dev = [

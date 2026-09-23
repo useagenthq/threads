@@ -31,12 +31,12 @@ def result(rt: runtime.Runtime, halt: Halt, thread: Thread) -> RunResult[str]:
         case runtime.Failed(code=code, message=message):
             return Failed(RunError(code, message), thread)
         case runtime.Idle(reason=reason):
-            return _ended(rt.events, reason, thread)
+            return ended(rt.events, reason, thread)
         case _:
             assert_never(halt)
 
 
-def _ended(events: Sequence[Event], reason: str, thread: Thread) -> RunResult[str]:
+def ended(events: Sequence[Event], reason: str, thread: Thread) -> RunResult[str]:
     if reason == "cancelled":
         return Cancelled(thread)
     if reason == "budget_exhausted":

@@ -95,14 +95,24 @@ def _first(kind: str, data: "dict[str, JsonValue]", by: "dict[str, JsonValue]") 
     return Draft(kind, data, by, True, uuid7(now_ms()))
 
 
-async def cancel(store: Store, branch: BranchId, principal: Principal) -> Controlled:
+async def cancel(
+    store: Store,
+    branch: BranchId,
+    principal: Principal,
+    *,
+    kind: Literal["cancel_requested", "stop_when_idle"] = "cancel_requested",
+    companion: Companion | None = None,
+) -> Controlled:
     """A durable cancel_requested: the run stops at its next step, and an effect in doubt is
-    settled or parked first, never cancelled over."""
+    settled or parked first, never cancelled over. stop_when_idle (a channel's soft stop)
+    finishes what is in flight and starts nothing new."""
     if principal.tenant != store.tenant:
         return forbidden("another tenant's thread")
-    data: dict[str, JsonValue] = {"scope": "turn", "reason": "cancelled through the API"}
-    draft = Draft("cancel_requested", data, actor("user", principal))
-    return await append(store, branch, lambda _: Ok((draft,)))
+    data: dict[str, JsonValue] = {"reason": "requested by the thread's principal"}
+    if kind == "cancel_requested":
+        data["scope"] = "turn"
+    draft = Draft(kind, data, actor("user", principal))
+    return await append(store, branch, lambda _: Ok((draft,)), companion)
 
 
 async def set_mode(
