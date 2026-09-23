@@ -58,8 +58,13 @@ def test_a_stdio_server_in_one_line_pins_sorted_namespaced_tools_and_records_cal
         got = await events(result.thread)
         started = next(e for e in got if isinstance(e, ThreadStartedEvent))
         names = [t.name for t in started.data.tools]
-        assert names == ["read_tool_result", "mcp__kit__echo", "mcp__kit__sendemail"]
-        assert {t.effect_class for t in started.data.tools[1:]} == {"unguarded"}
+        assert names == [
+            "read_tool_result",
+            "todo_write",
+            "mcp__kit__echo",
+            "mcp__kit__sendemail",
+        ]
+        assert {t.effect_class for t in started.data.tools[2:]} == {"unguarded"}
         (done,) = [e for e in got if isinstance(e, ToolResultEvent)]
         assert 'untrusted="true"' in done.data.preview
         assert "echo: hi" in done.data.preview
