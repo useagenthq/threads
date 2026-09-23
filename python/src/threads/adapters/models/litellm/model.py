@@ -3,13 +3,11 @@
 One transport attempt per send: LiteLLM's retries are off (`num_retries=0`, `max_retries=0`),
 and threads records and schedules every retry.
 
-Fencing (ModelInfo.fence_point). The `openai/` route goes through an OpenAI SDK client the
-adapter supplies, sending through the fenced transport: fenced at the real send
-(`transport`). Every other route uses LiteLLM's own per-provider HTTP stack, so it is fenced
-just before `acompletion` (`pre_call`). LiteLLM does queue there: `acompletion` prepares the
-request in the event loop's default thread executor before sending, so a lease lost while
-that executor is busy can still send once. That is cost-only: the stale owner can never
-append the response, and effects never go through a model send.
+Fencing. Only the `openai/` route is supported: LiteLLM sends it through an OpenAI SDK client
+the adapter supplies, whose transport awaits the fence at the real send. Every other route
+uses LiteLLM's own HTTP stack, which prepares the request in a thread executor before sending,
+so the fence can't sit at the real send. A send can carry provider-hosted tools, so those
+routes are refused at setup (`transport_fence_unsupported`), never run with a weaker fence.
 """
 
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable, Mapping
@@ -25,6 +23,7 @@ from threads.adapters.models.litellm.request import build
 from threads.adapters.models.litellm.stream import Assembler
 from threads.adapters.models.options import ModelOptions, info
 from threads.adapters.models.render import prepare
+from threads.agents.config import ConfigError
 from threads.log import AdapterRef, ModelRef
 from threads.loop.model import (
     LookupResult,
@@ -36,7 +35,6 @@ from threads.loop.model import (
     ModelResponse,
     Rejected,
 )
-from threads.result import Err
 
 ADAPTER = "litellm"
 VERSION = "1"
@@ -51,19 +49,14 @@ ACOMPLETION: Complete = getattr(bridge, "acompletion")  # noqa: B009
 
 
 class LiteLLMModel:
-    """spec/api.json `Model` over LiteLLM. No response lookup.
+    """spec/api.json `Model` over LiteLLM's `openai/` route. No response lookup.
 
-    ponytail: only the `openai/` route is fenced at the transport; the rest fence pre-call
-    (module docstring). Supply fenced clients for more routes when their window matters.
+    ponytail: one route. Add another when its HTTP client can be supplied and fenced.
     """
 
-    def __init__(
-        self, info: ModelInfo, complete: Complete, connection: Mapping[str, str] | None = None
-    ) -> None:
+    def __init__(self, info: ModelInfo, complete: Complete) -> None:
         self._info = info
         self._complete = complete
-        self._connection = dict(connection or {})
-        """Credentials and endpoint: passed per call, never pinned in line 0 or logged."""
 
     @property
     def info(self) -> ModelInfo:
@@ -75,16 +68,11 @@ class LiteLLMModel:
             yield prepared
             return
         _, body = prepared
-        if self._info.fence_point == "pre_call" and isinstance(await context.fence(), Err):
-            yield Rejected("stale_epoch")
-            return
         assembler = Assembler()
         started = False
         try:
             with transport.attempt(context):
-                stream = await self._complete(
-                    **body, **self._connection, num_retries=0, max_retries=0
-                )
+                stream = await self._complete(**body, num_retries=0, max_retries=0)
             if not _is_stream(stream):
                 raise TypeError("LiteLLM returned no stream")
             async for raw in stream:
@@ -123,29 +111,26 @@ def _is_stream(value: object) -> TypeGuard[AsyncIterable[object]]:
 
 
 def litellm(name: str, **options: Unpack[ModelOptions]) -> LiteLLMModel:
-    """A model behind LiteLLM. `name` is the LiteLLM route (`provider/model`); `params` are
-    completion fields; `max_tokens` defaults to `max_output_tokens`. Credentials come from
-    `api_key` or the provider's environment variable, as LiteLLM reads them."""
-    openai_route = name.startswith("openai/")
+    """A model behind LiteLLM's `openai/` route (any OpenAI-compatible endpoint via `base_url`).
+    `params` are completion fields; `max_tokens` defaults to `max_output_tokens`. Credentials
+    come from `api_key` or `OPENAI_API_KEY`. Other routes raise ConfigError
+    `transport_fence_unsupported` (module docstring)."""
+    if not name.startswith("openai/"):
+        raise ConfigError(
+            "transport_fence_unsupported",
+            f"{name}: only LiteLLM's openai/ route sends through a transport threads can fence",
+        )
     declared = info(
         ModelRef(provider=PROVIDER, name=name),
         AdapterRef(name=ADAPTER, version=VERSION, settings={}),
         options,
         {"max_tokens": options["max_output_tokens"]},
-        "transport" if openai_route else "pre_call",
     )
-    if openai_route:
-        # LiteLLM sends this route through the OpenAI SDK client it is given: ours, fenced.
-        sdk_client = sdk.AsyncOpenAI(
-            api_key=options.get("api_key"),
-            base_url=options.get("base_url"),
-            max_retries=0,
-            http_client=transport.client(),
-        )
-        return LiteLLMModel(declared, partial(ACOMPLETION, client=sdk_client))
-    connection: dict[str, str] = {}
-    if "api_key" in options:
-        connection["api_key"] = options["api_key"]
-    if "base_url" in options:
-        connection["api_base"] = options["base_url"]
-    return LiteLLMModel(declared, ACOMPLETION, connection)
+    # LiteLLM sends this route through the OpenAI SDK client it is given: ours, fenced.
+    sdk_client = sdk.AsyncOpenAI(
+        api_key=options.get("api_key"),
+        base_url=options.get("base_url"),
+        max_retries=0,
+        http_client=transport.client(),
+    )
+    return LiteLLMModel(declared, partial(ACOMPLETION, client=sdk_client))

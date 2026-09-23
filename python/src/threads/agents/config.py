@@ -13,6 +13,7 @@ type ConfigErrorCode = Literal[
     "permission_rule_invalid",
     "hosted_tool_unsupported",
     "egress_policy_unsupported",
+    "transport_fence_unsupported",
 ]
 
 

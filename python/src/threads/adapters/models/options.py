@@ -5,7 +5,7 @@ guess would silently break budgets and the context ladder.
 """
 
 from collections.abc import Mapping
-from typing import Final, Literal, NotRequired, Required, TypedDict
+from typing import Final, NotRequired, Required, TypedDict
 
 from pydantic import JsonValue
 
@@ -33,7 +33,6 @@ def info(
     adapter: AdapterRef,
     options: ModelOptions,
     defaults: Mapping[str, JsonValue],
-    fence_point: Literal["transport", "pre_call"] = "transport",
 ) -> ModelInfo:
     """No adapter here offers response lookup by client request id, so lookup is `none`."""
     limits = ModelLimits(
@@ -47,4 +46,4 @@ def info(
     if price is not None:
         limits = limits.model_copy(update={"price": price})
     params = {**defaults, **options.get("params", {})}
-    return ModelInfo(ref, adapter, params, limits, "none", ACCEPTS, fence_point=fence_point)
+    return ModelInfo(ref, adapter, params, limits, "none", ACCEPTS)

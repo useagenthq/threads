@@ -114,13 +114,6 @@ def test_a_lease_lost_while_the_request_was_prepared_sends_no_byte(adapter: str)
     assert b"".join(received) == b""
 
 
-def test_each_adapter_declares_where_it_fences() -> None:
-    assert _claude("http://x").info.fence_point == "transport"
-    assert _bridged("http://x").info.fence_point == "transport"
-    other = litellm("bedrock/some-model", context_window=1000, max_output_tokens=8)
-    assert other.info.fence_point == "pre_call"
-
-
 def test_a_request_outside_an_attempt_is_refused() -> None:
     fenced = transport.client(httpx2.MockTransport(_unreachable))
     with pytest.raises(transport.StaleOwnerError):

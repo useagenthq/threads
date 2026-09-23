@@ -14,13 +14,13 @@ from fakes import FakeContext, Script, collect, golden, line, render_case
 from pydantic import JsonValue
 
 from threads.adapters.models.litellm.model import ACOMPLETION, LiteLLMModel
+from threads.agents.config import ConfigError
 from threads.litellm import litellm
 from threads.log import CallId, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
 
 ROUTE = "openai/gpt-test"
 INFO = litellm(ROUTE, context_window=128_000, max_output_tokens=4096, api_key="k").info
-PRE_CALL = litellm("bedrock/some-model", context_window=128_000, max_output_tokens=4096).info
 
 
 @dataclass
@@ -161,11 +161,12 @@ def test_a_provider_rejection_is_a_rejected_chunk_after_one_attempt(
     assert len(script.sent) == 1
 
 
-def test_a_lost_lease_calls_nothing() -> None:
-    recorder = Recorder()
-    lost = FakeContext(owner=False)
-    assert run(LiteLLMModel(PRE_CALL, recorder), one_turn(), lost) == [Rejected("stale_epoch")]
-    assert recorder.calls == []
+def test_a_route_it_cannot_fence_at_the_transport_is_refused_at_setup() -> None:
+    # A send can carry provider-hosted tools, so a stale send is never harmless: a route whose
+    # real transport isn't ours is refused, not shipped with a weaker fence.
+    with pytest.raises(ConfigError) as refused:
+        litellm("bedrock/some-model", context_window=1000, max_output_tokens=8)
+    assert refused.value.code == "transport_fence_unsupported"
 
 
 def test_credentials_are_passed_per_call_never_pinned() -> None:
