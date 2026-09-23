@@ -102,6 +102,24 @@ async def release_session(
     return Ok(await _settled(ledger, releasing.value, _closed(closed), clock))
 
 
+async def abandon(
+    ledger: Ledger, owner: Owner, sandbox: Sandbox, row: Resource, clock: Clock
+) -> Resource:
+    """The owner gives up a row it created: a pending one is resolved by its key, a live one
+    is released. An unresolvable key stays unknown; a failed release is retried by gc."""
+    if row.state == "pending":
+        answer, ref = await _find(sandbox, row)
+        resolved = await ledger.resolve(owner, row, answer, clock(), ref)
+        row = resolved.value if isinstance(resolved, Ok) else row
+    if row.state != "live" or row.ref is None:
+        return row
+    releasing = await ledger.release(owner, row, clock())
+    if isinstance(releasing, Err):
+        return row
+    outcome = await _release_ref(sandbox, row.kind, row.ref)
+    return await _settled(ledger, releasing.value, outcome, clock)
+
+
 async def gc(ledger: Ledger, sandbox: Sandbox, clock: Clock) -> tuple[Resource, ...]:
     """Cleanup of one provider's rows, holding no branch lease: resolves pending rows whose
     creator crashed, retries failed releases, and finishes releases in progress. Returns the

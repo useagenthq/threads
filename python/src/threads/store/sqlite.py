@@ -232,7 +232,7 @@ class SqliteStore:
             return begun
         finished = await self.finish_fork(begun.value, request.data, clock)
         if isinstance(finished, Err):
-            await self.fail_fork(begun.value)
+            await self.fail_fork(request.child)
         return finished
 
     async def begin_fork(
@@ -266,9 +266,25 @@ class SqliteStore:
             return Ok(None)
         return Ok(Writer(self._worker, held, start.fold, start.fork[1], clock))
 
-    async def fail_fork(self, started: Forking) -> None:
+    async def fail_fork(self, child: BranchId) -> None:
         """The fork failed: the child becomes `fork_failed` and is never listed."""
-        await self._worker.call(lambda c: lease.fail_fork(c, started.row.branch_id))
+        await self._worker.call(lambda c: lease.fail_fork(c, child))
+
+    async def interrupted_forks(self, holder_id: str, clock: Clock) -> tuple[lease.Owner, ...]:
+        """Forks a crash left `forking`, each taken over under a new lease:
+        this holder's own, or any whose lease ran out. A fork is never resumed; the caller
+        releases what it created and marks it `fork_failed`."""
+        tenant, now = self._tenant, clock()
+
+        def take_over(conn: sqlite3.Connection) -> tuple[lease.Owner, ...]:
+            owners: list[lease.Owner] = []
+            for child in sql.forking(conn, tenant):
+                taken = lease.take(conn, child, holder_id, 0, now)
+                if isinstance(taken, lease.Lease):
+                    owners.append(lease.Owner(child, taken))
+            return tuple(owners)
+
+        return await self._worker.call(take_over)
 
     async def branch(self, branch_id: BranchId) -> Ok[sql.Branch] | Err[ParseError]:
         """The branch's row, in any state; another tenant's is branch_not_found."""

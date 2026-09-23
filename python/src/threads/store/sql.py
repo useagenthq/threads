@@ -143,6 +143,13 @@ def root(conn: sqlite3.Connection, thread_id: ThreadId, tenant_id: str) -> Branc
     return None if row is None else BranchId(text_of(row[0]))
 
 
+def forking(conn: sqlite3.Connection, tenant_id: str) -> tuple[BranchId, ...]:
+    rows: list[tuple[object]] = conn.execute(
+        "SELECT branch_id FROM branches WHERE tenant_id = ? AND state = 'forking'", (tenant_id,)
+    ).fetchall()
+    return tuple(BranchId(text_of(row[0])) for row in rows)
+
+
 def mark_repaired(conn: sqlite3.Connection, branch_id: BranchId) -> None:
     """A torn import becomes runnable once its log_repaired is committed."""
     with transaction(conn):

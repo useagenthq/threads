@@ -28,13 +28,29 @@ class ToolScript(TypedDict):
     process: NotRequired[Literal["running", "terminated", "unknown"]]
 
 
-def manifest_hash(files: Mapping[str, bytes]) -> str:
-    """The canonical hash of the file-tree manifest: path, mode, size, sha256."""
-    manifest: list[JsonValue] = [
-        {"path": path, "mode": 0o644, "size": len(data), "sha256": sha256_hex(data)}
+@with_config(ConfigDict(extra="forbid", strict=True))
+class ManifestEntry(TypedDict):
+    path: str
+    mode: int
+    size: int
+    sha256: str
+
+
+def manifest_of(files: Mapping[str, bytes]) -> list[ManifestEntry]:
+    """The captured file tree: path, mode, size and sha256 per file, sorted by path."""
+    return [
+        ManifestEntry(path=path, mode=0o644, size=len(data), sha256=sha256_hex(data))
         for path, data in sorted(files.items())
     ]
-    match canonicalize(manifest):
+
+
+def manifest_hash(manifest: list[ManifestEntry]) -> str:
+    """The manifest's canonical hash."""
+    value: list[JsonValue] = [
+        {"path": e["path"], "mode": e["mode"], "size": e["size"], "sha256": e["sha256"]}
+        for e in manifest
+    ]
+    match canonicalize(value):
         case Ok(value=text):
             return sha256_hex(text.encode("utf-8"))
         case Err(error=reason):

@@ -21,7 +21,7 @@ from threads.log import (
 )
 from threads.reduce import Fold
 from threads.result import Err, Ok
-from threads.sandbox.ledger import Tracked, acquire, release_session
+from threads.sandbox.ledger import Tracked, abandon, acquire, release_session
 from threads.sandbox.protocol import Sandbox, SandboxError
 from threads.store import SqliteStore, Writer
 from threads.store.worker import Clock
@@ -56,14 +56,14 @@ async def fork_branch(
     forking = begun.value
     restore = Tracked(
         "sandbox",
-        lambda key: sandbox.restore(snap.data.snapshot_id, key),
+        lambda key: sandbox.restore(snap.data.snapshot_id, snap.data.manifest_hash, key),
         sandbox.lookup,
         sandbox.info.lookup.create,
         lambda session: session.id,
     )
     restored = await acquire(store.ledger, forking.owner, snap.data.provider, restore, clock)
     if isinstance(restored, Err):
-        await store.fail_fork(forking)
+        await store.fail_fork(forking.row.branch_id)
         return Err(_failure(restored.error, snap.seq))
     row, session = restored.value
     data: dict[str, JsonValue] = {
@@ -75,8 +75,24 @@ async def fork_branch(
     if isinstance(finished, Ok) and finished.value is not None:
         return Ok(finished.value)
     await release_session(store.ledger, forking.owner, row, session, clock)
-    await store.fail_fork(forking)
+    await store.fail_fork(forking.row.branch_id)
     return finished if isinstance(finished, Err) else Err(_not_runnable(snap.seq))
+
+
+async def recover_forks(
+    store: SqliteStore, sandbox: Sandbox, holder_id: str, clock: Clock
+) -> tuple[BranchId, ...]:
+    """A fork is never resumed (spec/schema/README.md): each fork a crash left `forking` gives
+    up every ledger row it wrote (released, or unknown for an operator) and becomes
+    `fork_failed`. Returns the children it failed."""
+    failed: list[BranchId] = []
+    for owner in await store.interrupted_forks(holder_id, clock):
+        for row in await store.ledger.rows():
+            if row.owner_branch_id == owner.branch_id and row.provider == sandbox.info.provider:
+                await abandon(store.ledger, owner, sandbox, row, clock)
+        await store.fail_fork(owner.branch_id)
+        failed.append(owner.branch_id)
+    return tuple(failed)
 
 
 async def _restorable(

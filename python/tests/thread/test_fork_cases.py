@@ -14,9 +14,16 @@ from pydantic import JsonValue
 from threads.log import BranchId, EventId, ParseError
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
-from threads.sandbox import fake_sandbox
-from threads.store import SqliteStore, StoredEvent, verify_export
-from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch, knowledge_revision
+from threads.sandbox import FakeSandbox, fake_sandbox
+from threads.sandbox.fake import FakeCrashError
+from threads.store import SqliteStore, StoredEvent, Writer, verify_export
+from threads.thread.fork import (
+    ForkAt,
+    KnowledgePolicy,
+    fork_branch,
+    knowledge_revision,
+    recover_forks,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +32,7 @@ class Outcome:
     state: JsonValue
     parent_unchanged: bool
     child_created: bool
+    child_state: str | None
     child_events: tuple[StoredEvent, ...]
     at_seq: int | None
     knowledge_revision: int | None
@@ -58,11 +66,12 @@ async def run_case(case: Path) -> Outcome:
         sandbox = fake_sandbox(load(case, "sandbox.json") if "sandbox_script" in meta else {})
         point = EventId(str(request["fork_at_event_id"]))
         at = ForkAt(parent, point, child, knowledge(request.get("knowledge_policy")))
-        forked = await fork_branch(store, sandbox, at, "conformance", lambda: now)
+        forked = await _fork(store, sandbox, at, now)
         read = await store.read(parent, now)
         assert isinstance(read, Ok)
         row = await store.branch(child)
-        created = isinstance(row, Ok) and row.value.state in ("ready", "inspection_only")
+        state = row.value.state if isinstance(row, Ok) else None
+        created = state in ("ready", "inspection_only")
         events, at_seq, revision = (), None, None
         if created:
             events, at_seq, revision = await _child(case, store, child, now)
@@ -71,6 +80,7 @@ async def run_case(case: Path) -> Outcome:
             read.value.state.to_json(),
             await store.export(parent) == Ok(log),
             created,
+            state,
             events,
             at_seq,
             revision,
@@ -79,6 +89,17 @@ async def run_case(case: Path) -> Outcome:
         )
     finally:
         await store.close()
+
+
+async def _fork(
+    store: SqliteStore, sandbox: FakeSandbox, at: ForkAt, now: int
+) -> Ok[Writer] | Err[ParseError] | None:
+    """The fork; for restore_response crash, the host dies mid-fork, restarts and recovers."""
+    try:
+        return await fork_branch(store, sandbox, at, "conformance", lambda: now)
+    except FakeCrashError:
+        assert await recover_forks(store, sandbox, "conformance", lambda: now) == (at.child,)
+        return None
 
 
 async def _child(
@@ -123,6 +144,8 @@ def test_fork_case(name: str) -> None:
     assert got.child_created is fork["child_created"]
     if "at_seq" in fork:
         assert got.at_seq == fork["at_seq"]
+    if "child_state" in fork:
+        assert got.child_state == fork["child_state"]
     if "knowledge_revision" in fork:
         assert got.knowledge_revision == fork["knowledge_revision"]
     if "resources" in expected:

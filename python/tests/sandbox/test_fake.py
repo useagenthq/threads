@@ -75,7 +75,12 @@ def test_a_restored_snapshot_is_isolated_from_its_parent() -> None:
         snap = await parent.snapshot("snap-key")
         assert isinstance(snap, Ok)
         assert await sandbox.lookup_snapshot("snap-key") == Found(snap.value)
-        child = await sandbox.restore(snap.value.snapshot_id, "restore-key")
+        bad = await sandbox.restore(snap.value.snapshot_id, "0" * 64, "bad-key")
+        assert isinstance(bad, Err)
+        assert bad.error.code == "snapshot_manifest_mismatch"
+        assert await sandbox.lookup("bad-key") == NotFound()
+        manifest = snap.value.manifest_hash
+        child = await sandbox.restore(snap.value.snapshot_id, manifest, "restore-key")
         assert isinstance(child, Ok)
         assert await sandbox.lookup("restore-key") == Found(child.value)
         assert await child.value.download("/workspace/a.txt") == Ok(b"v1")

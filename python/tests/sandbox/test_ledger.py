@@ -9,6 +9,7 @@ from pydantic import JsonValue
 from threads.log import BranchId, ThreadId
 from threads.result import Err, Ok
 from threads.sandbox import FakeSandbox, SandboxSession, fake_sandbox
+from threads.sandbox.fake_session import manifest_hash
 from threads.sandbox.ledger import Tracked, acquire, gc, release_session
 from threads.store import SqliteStore, Writer
 from threads.store.lease import TTL_MS
@@ -16,12 +17,14 @@ from threads.store.lease import TTL_MS
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000001")
 T0 = 1_790_000_000_000
-LOST: dict[str, JsonValue] = {"snapshots": {"s": {"restore_sandbox_id": "sbx_c"}}}
+EMPTY = manifest_hash([])
+LOST: dict[str, JsonValue] = {"snapshots": {"s": {"restore_sandbox_id": "sbx_c", "manifest": []}}}
 
 
 def lost(lookup: str) -> dict[str, JsonValue]:
     snap: dict[str, JsonValue] = {
         "restore_sandbox_id": "sbx_c",
+        "manifest": [],
         "restore_response": "lost",
         "create_lookup": lookup,
     }
@@ -31,7 +34,7 @@ def lost(lookup: str) -> dict[str, JsonValue]:
 def restoring(sandbox: FakeSandbox) -> Tracked[SandboxSession]:
     return Tracked(
         "sandbox",
-        lambda key: sandbox.restore("s", key),
+        lambda key: sandbox.restore("s", EMPTY, key),
         sandbox.lookup,
         sandbox.info.lookup.create,
         lambda s: s.id,
@@ -86,7 +89,7 @@ def test_a_typed_failure_proves_nothing_was_created() -> None:
         sandbox = fake_sandbox()
         missing = Tracked(
             "sandbox",
-            lambda key: sandbox.restore("nope", key),
+            lambda key: sandbox.restore("nope", EMPTY, key),
             sandbox.lookup,
             "final",
             lambda s: s.id,
@@ -123,7 +126,7 @@ def crashed(created: bool, lookup: str) -> tuple[str, int]:
         row = await store.ledger.pending(owner.owner, "fake", "sandbox", T0)
         assert isinstance(row, Ok)
         if created:
-            await sandbox.restore("s", row.value.operation_key)
+            await sandbox.restore("s", EMPTY, row.value.operation_key)
         assert [r.state for r in await gc(store.ledger, sandbox, lambda: T0)] == ["pending"]
         (after,) = await gc(store.ledger, sandbox, lambda: T0 + TTL_MS)
         result.append((after.state, sandbox.creates))

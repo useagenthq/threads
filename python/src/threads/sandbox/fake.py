@@ -11,7 +11,13 @@ from pydantic import ConfigDict, JsonValue, TypeAdapter, with_config
 from threads.log import SnapshotData
 from threads.loop.model import Found, LookupResult, NotFound
 from threads.result import Err, Ok
-from threads.sandbox.fake_session import FakeSession, ToolScript, manifest_hash
+from threads.sandbox.fake_session import (
+    FakeSession,
+    ManifestEntry,
+    ToolScript,
+    manifest_of,
+)
+from threads.sandbox.fake_session import manifest_hash as tree_hash
 from threads.sandbox.protocol import (
     LookupSupport,
     SandboxError,
@@ -24,7 +30,8 @@ from threads.sandbox.protocol import (
 @with_config(ConfigDict(extra="forbid", strict=True))
 class SnapshotScript(TypedDict):
     restore_sandbox_id: str
-    restore_response: NotRequired[Literal["ok", "lost"]]
+    manifest: list[ManifestEntry]
+    restore_response: NotRequired[Literal["ok", "lost", "crash"]]
     create_lookup: NotRequired[Literal["found", "unsupported"]]
 
 
@@ -37,9 +44,14 @@ class SandboxScript(TypedDict):
 _SCRIPT: TypeAdapter[SandboxScript] = TypeAdapter(SandboxScript)
 
 
+class FakeCrashError(Exception):
+    """Test kit: the host dies right after a restore succeeds (restore_response: crash)."""
+
+
 @dataclass(frozen=True, slots=True)
 class _Snapshot:
     files: Mapping[str, bytes]
+    manifest: list[ManifestEntry]
     script: SnapshotScript | None = None
 
 
@@ -60,7 +72,7 @@ class FakeSandbox:
 
     def __post_init__(self) -> None:
         for name, snap in self.script.get("snapshots", {}).items():
-            self._snapshots[name] = _Snapshot({}, snap)
+            self._snapshots[name] = _Snapshot({}, snap["manifest"], snap)
 
     @property
     def info(self) -> SandboxInfo:
@@ -83,17 +95,26 @@ class FakeSandbox:
         return Ok(self._open(SandboxId(self._name("sbx")), {}, operation_key))
 
     async def restore(
-        self, snapshot_id: str, operation_key: str
+        self, snapshot_id: str, manifest_hash: str, operation_key: str
     ) -> Ok[SandboxSession] | Err[SandboxError]:
         snap = self._snapshots.get(snapshot_id)
         if snap is None:
             return Err(SandboxError("snapshot_missing", f"no snapshot {snapshot_id}"))
         self.creates += 1
-        script = snap.script or SnapshotScript(restore_sandbox_id=self._name("sbx"))
+        script = snap.script or SnapshotScript(restore_sandbox_id=self._name("sbx"), manifest=[])
         session = self._open(SandboxId(script["restore_sandbox_id"]), snap.files, operation_key)
-        if script.get("restore_response") == "lost":
-            return Err(SandboxError("unavailable", "the restore's answer was lost"))
-        return Ok(session)
+        if tree_hash(snap.manifest) != manifest_hash:
+            # The adapter releases what it created before reporting the mismatch.
+            self._live.pop(session.id, None)
+            self._by_key.pop(operation_key, None)
+            return Err(SandboxError("snapshot_manifest_mismatch", f"{snapshot_id}: manifest"))
+        match script.get("restore_response"):
+            case "lost":
+                return Err(SandboxError("unavailable", "the restore's answer was lost"))
+            case "crash":
+                raise FakeCrashError(f"the host died after restoring {snapshot_id}")
+            case "ok" | None:
+                return Ok(session)
 
     async def lookup(self, operation_key: str) -> LookupResult[SandboxSession]:
         found = self._by_key.get(operation_key)
@@ -126,14 +147,15 @@ class FakeSandbox:
 
     def _capture(self, session: FakeSession, key: str) -> SnapshotData:
         name = self._name("snap")
-        self._snapshots[name] = _Snapshot(dict(session.files))
+        manifest = manifest_of(session.files)
+        self._snapshots[name] = _Snapshot(dict(session.files), manifest)
         data: dict[str, JsonValue] = {
             "snapshot_id": name,
             "provider": "fake",
             "sandbox_id": session.id,
             "capture_class": "filesystem",
             "expires_at": None,
-            "manifest_hash": manifest_hash(session.files),
+            "manifest_hash": tree_hash(manifest),
             "quiesced": {"frozen": [], "stopped": [], "excluded": []},
         }
         snapshot = SnapshotData.model_validate(data)

@@ -129,8 +129,12 @@ class Sandbox(Protocol):
     async def create(self, operation_key: str) -> Ok[SandboxSession] | Err[SandboxError]: ...
 
     async def restore(
-        self, snapshot_id: str, operation_key: str
-    ) -> Ok[SandboxSession] | Err[SandboxError]: ...
+        self, snapshot_id: str, manifest_hash: str, operation_key: str
+    ) -> Ok[SandboxSession] | Err[SandboxError]:
+        """Restores into a new isolated sandbox and verifies it: a restored tree whose
+        canonical manifest hash isn't `manifest_hash` is snapshot_manifest_mismatch, and the
+        adapter releases the sandbox it created first."""
+        ...
 
     async def lookup(self, operation_key: str) -> LookupResult[SandboxSession]:
         """Finds a sandbox whose create or restore answer was lost. Answers only when
