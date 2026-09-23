@@ -32,6 +32,7 @@ from threads.log import (
     ToolsChangedEvent,
     Usage,
 )
+from threads.log.jcs import MAX_SAFE_INTEGER
 from threads.reduce.fold import Fold, policy
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
@@ -162,17 +163,13 @@ def dispositions(fold: Fold) -> list[tuple[int, int, int | None]]:
     return out
 
 
-MAX_NANOS = 2**53 - 1
-"""The wire's integer range (Int): a Cost's nanos never exceed it."""
-
-
 def _representable(
     currency: str, known: int, upper: int, *, complete: bool, bounded: bool
 ) -> Ok[Cost] | Err[ParseError]:
     """The Cost, or cost_overflow when its nanos exceed the wire's integers; never a saturated
     amount (it would understate the cost)."""
-    if known > MAX_NANOS or upper > MAX_NANOS:
-        return Err(ParseError("cost_overflow", f"the cost exceeds {MAX_NANOS} nanos"))
+    if known > MAX_SAFE_INTEGER or upper > MAX_SAFE_INTEGER:
+        return Err(ParseError("cost_overflow", f"the cost exceeds {MAX_SAFE_INTEGER} nanos"))
     cost = Cost(
         currency=currency,
         known_nanos=known,
@@ -235,7 +232,7 @@ def merge_tree(parts: Sequence[TreePart]) -> Ok[Cost | None] | Err[ParseError]:
 def _cost(fold: Fold) -> JsonValue:
     found = cost(fold)
     if isinstance(found, Err):
-        return found.error.code
+        return {"error": found.error.code}
     return None if found.value is None else to_json(found.value)
 
 
@@ -256,7 +253,7 @@ def cache_breaks(fold: Fold, ttl: int) -> tuple[CacheBreak, ...]:
         if isinstance(event, _CAUSES):
             seen.append(event.type)
             continue
-        if not isinstance(event, ModelResponseEvent):
+        if not isinstance(event, ModelResponseEvent | ModelResponseRecoveredEvent):
             continue
         request = requests.get(event.data.request_event_id)
         reads = event.data.usage.cache_read_tokens

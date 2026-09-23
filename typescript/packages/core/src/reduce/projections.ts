@@ -1,7 +1,7 @@
 import type { Fold, Todo } from "../fold/state";
 import type { CacheBreak, Cost, KnownEvent } from "../log";
 import type { Chain } from "../verify/chain";
-import { cost } from "./cost";
+import { type CostOverflow, cost } from "./cost";
 import { knownEvents } from "./reduce";
 
 /** The events a cache break is attributed to, checked against the schema's causes. */
@@ -15,7 +15,7 @@ type Cause = (typeof CAUSES)[number];
 
 /** Named projections beyond ReducedState (spec/conformance/README.md, "Projections"). */
 export type Projections = {
-  readonly cost: Cost | undefined;
+  readonly cost: Cost | CostOverflow | undefined;
   readonly cache_breaks: readonly CacheBreak[] | undefined;
   readonly compaction:
     | { readonly consecutive_failures: number; readonly breaker_open: boolean }
@@ -88,7 +88,8 @@ export function cacheBreaks(
   let seen: Cause[] = [];
   for (const e of events) {
     if (isCause(e.type)) seen.push(e.type);
-    if (e.type !== "model_response") continue;
+    if (e.type !== "model_response" && e.type !== "model_response_recovered")
+      continue;
     const requestId = e.data.request_event_id;
     const requestTime = turnRequests.get(requestId);
     const reads = e.data.usage.cache_read_tokens;

@@ -3,9 +3,17 @@ import { agent, openThread, scriptedModel, sqlite } from "../../src";
 import { openStore, storeConnection } from "../../src/agent/sqlite";
 import { BranchId, ThreadId } from "../../src/log";
 import { cost, knownEvents, reduce } from "../../src/reduce";
+import type { CostError, ReadError } from "../../src/thread";
 import { code, unwrap } from "../store/helpers";
-import { rewriteLog } from "./rewrite-log";
-import { configHash, corrupt, ONE, priced, run, say } from "./usage-kit";
+import { obj, rewriteLog } from "./rewrite-log";
+import { configHash, corrupt, ONE, priced, run, say, spawn } from "./usage-kit";
+
+// The error types are exactly the codes spec/api.json declares: a compile error otherwise.
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Read = "log_corrupt" | "unsupported_format" | "unsupported_critical_event";
+const readCodes: Same<ReadError["code"], Read> = true;
+const costCodes: Same<CostError["code"], Read | "cost_overflow"> = true;
+void [readCodes, costCodes];
 
 // Thread.usage(), cost() and cacheBreaks() (spec/api.json) through openThread over real runs:
 // each is the projection of one verified read, and a corrupt log is log_corrupt, never zero.
@@ -39,6 +47,34 @@ describe("Thread.usage", () => {
   });
 });
 
+describe("usage totals stay wire integers", () => {
+  test("a response that would take a total past 2^53 - 1 counts as unknown", async () => {
+    const store = sqlite(":memory:");
+    const kid = agent({
+      name: "kid",
+      model: scriptedModel({ responses: [say("Kid.")] }),
+    });
+    const lead = scriptedModel({ responses: [spawn("kid"), say("Done.")] });
+    const thread = await run(store, lead, [kid]);
+    // As a provider reporting absurd counts would have recorded them: each response over half
+    // the range, so the second would take the input total past it.
+    const half = Math.floor(Number.MAX_SAFE_INTEGER / 2) + 1;
+    const big = { input_tokens: half, output_tokens: 2 };
+    await rewriteLog(store, thread.id, (lines) =>
+      lines.map((l) =>
+        l["type"] === "model_response"
+          ? { ...l, data: { ...obj(l["data"]), usage: big } }
+          : l,
+      ),
+    );
+    expect(unwrap(await thread.usage())).toEqual({
+      input_tokens: half,
+      output_tokens: 2,
+      unknown_responses: 1,
+    });
+  });
+});
+
 describe("Thread.cost", () => {
   test("a priced agent pins USD and costs the projection", async () => {
     const store = sqlite(":memory:");
@@ -47,7 +83,7 @@ describe("Thread.cost", () => {
     const chain = unwrap(log.read(thread.branch));
     expect(chain.fold.policy?.currency).toBe("USD");
     const own = unwrap(await thread.cost());
-    expect(own).toEqual(cost(knownEvents(chain), chain.fold.policy) ?? null);
+    expect<unknown>(own).toEqual(cost(knownEvents(chain), chain.fold.policy));
     expect(own).toEqual({
       currency: "USD",
       known_nanos: ONE,

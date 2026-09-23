@@ -32,7 +32,7 @@ import {
   type PendingApproval,
   pendingApprovals,
 } from "./pending";
-import { readLog } from "./read";
+import { type ReadError, readLog } from "./read";
 import { type SaveCaseOptions, type SavedCase, saveCase } from "./save-case";
 import { cancel, setMode, setModel } from "./settings";
 import { type ThreadUsage, usageMethods } from "./usage";
@@ -65,7 +65,7 @@ export type ForkOptions = {
 
 /** spec/api.json Thread: the plain handle plus its inspection and fork methods. */
 export type Thread = ThreadRef & {
-  readonly timeline: () => Promise<Result<Timeline, LogError>>;
+  readonly timeline: () => Promise<Result<Timeline, ReadError>>;
   readonly forkPoints: () => Promise<readonly ForkPoint[]>;
   readonly fork: (
     point: EventId | ForkPoint,

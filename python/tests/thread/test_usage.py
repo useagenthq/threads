@@ -6,14 +6,14 @@ import sqlite3
 
 import pytest
 from pydantic import JsonValue
-from thread.rewrite_log import rewrite_log
-from thread.usage_kit import ONE, check, corrupt, priced, run, say, unpriced, usd
+from thread.rewrite_log import Line, obj, rewrite_log
+from thread.usage_kit import ONE, check, corrupt, priced, run, say, spawn, unpriced, usd
 
 from threads import ConfigError, Store, agent
 from threads.agents.store import now_ms, open_store
 from threads.log import BranchId, ThreadId, UsageTotals
 from threads.log.digest import sha256_hex
-from threads.log.jcs import canonicalize
+from threads.log.jcs import MAX_SAFE_INTEGER, canonicalize
 from threads.loop.drafts import draft
 from threads.reduce.projections import cost
 from threads.reduce.state import usage_totals
@@ -28,6 +28,29 @@ def totals(input_tokens: int, output_tokens: int, unknown_responses: int) -> Usa
         output_tokens=output_tokens,
         unknown_responses=unknown_responses,
     )
+
+
+def test_a_response_that_would_take_a_total_past_the_range_counts_as_unknown() -> None:
+    async def body(store: Store) -> None:
+        kid = agent(name="kid", model=unpriced(say("Kid.")))
+        thread = await run(store, unpriced(spawn("kid"), say("Done.")), [kid])
+        # As a provider reporting absurd counts would have recorded them: each response over half
+        # the range, so the second would take the input total past it.
+        half = MAX_SAFE_INTEGER // 2 + 1
+        big: JsonValue = {"input_tokens": half, "output_tokens": 2}
+
+        def absurd(lines: list[Line]) -> list[Line]:
+            return [
+                {**line, "data": {**obj(line["data"]), "usage": big}}
+                if line["type"] == "model_response"
+                else line
+                for line in lines
+            ]
+
+        await rewrite_log(store, thread.id, absurd)
+        assert await thread.usage() == Ok(totals(half, 2, 1))
+
+    check(body)
 
 
 def test_usage_is_the_reduced_usage_and_unknown_is_never_zero() -> None:

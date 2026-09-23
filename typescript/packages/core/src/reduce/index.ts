@@ -1,4 +1,4 @@
-export { cost, mergeTree, type TreePart } from "./cost";
+export { type CostOverflow, cost, mergeTree, type TreePart } from "./cost";
 export {
   cacheBreaks,
   type Projections,

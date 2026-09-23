@@ -26,6 +26,7 @@ from threads.log import (
     UserInputEvent,
 )
 from threads.log.digest import canonical_sha256
+from threads.log.jcs import MAX_SAFE_INTEGER
 from threads.reduce.fold import Fold, policy, reject
 from threads.reduce.handlers import Handler, on, to_json
 from threads.result import Ok
@@ -81,8 +82,13 @@ def _model_response(fold: Fold, event: ModelResponseEvent | ModelResponseRecover
     fold.open_requests.discard(data.request_event_id)
     fold.responses[data.request_event_id] = data
     usage = data.usage
-    fold.input_tokens += usage.input_tokens or 0
-    fold.output_tokens += usage.output_tokens or 0
+    input_total = fold.input_tokens + (usage.input_tokens or 0)
+    output_total = fold.output_tokens + (usage.output_tokens or 0)
+    if input_total > MAX_SAFE_INTEGER or output_total > MAX_SAFE_INTEGER:
+        # A total past the wire's integers can't be carried: the response counts as unknown.
+        fold.unknown_responses += 1
+        return
+    fold.input_tokens, fold.output_tokens = input_total, output_total
     fold.unknown_responses += usage.input_tokens is None or usage.output_tokens is None
 
 

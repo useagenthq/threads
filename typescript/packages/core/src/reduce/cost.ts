@@ -172,11 +172,26 @@ export function tokenBounds(
   };
 }
 
+/** The typed outcome when an amount passes the wire's integers (2^53 - 1 nanos). */
+export type CostOverflow = { readonly error: "cost_overflow" };
+
+/**
+ * The cost, or cost_overflow when an amount isn't a wire integer; never a saturated or rounded
+ * amount. Nanos are sums and products of non-negative integers, and float rounding is monotonic
+ * with 2^53 itself exact, so a true value past the range always computes past it.
+ */
+function representable(total: Cost): Cost | CostOverflow {
+  return Number.isSafeInteger(total.known_nanos) &&
+    Number.isSafeInteger(total.upper_bound_nanos)
+    ? total
+    : { error: "cost_overflow" };
+}
+
 /** Projection `cost`: known cost and a conservative bound. */
 export function cost(
   events: readonly KnownEvent[],
   policy: Policy | undefined,
-): Cost | undefined {
+): Cost | CostOverflow | undefined {
   if (policy?.currency === undefined || policy.models === undefined)
     return undefined;
   let known = 0;
@@ -197,13 +212,13 @@ export function cost(
     bounded &&= u !== undefined;
     upper += u ?? k;
   }
-  return {
+  return representable({
     currency: policy.currency,
     known_nanos: known,
     upper_bound_nanos: upper,
     complete,
     bounded,
-  };
+  });
 }
 
 /** One thread of a tree, as the tree merge sees it. */
@@ -220,9 +235,11 @@ export type TreePart = {
  * there is no total. A part in that currency adds its nanos and ANDs its flags. A part that can't
  * be added (another currency, or unpriced but it ran) adds nothing and makes the total neither
  * complete nor bounded, so the total never undercounts silently. A part that never ran changes
- * nothing.
+ * nothing. A total past the wire's integers is cost_overflow.
  */
-export function mergeTree(parts: readonly TreePart[]): Cost | undefined {
+export function mergeTree(
+  parts: readonly TreePart[],
+): Cost | CostOverflow | undefined {
   const currency = parts.find((p) => p.cost !== undefined)?.cost?.currency;
   if (currency === undefined) return undefined;
   let total: Cost = {
@@ -244,5 +261,5 @@ export function mergeTree(parts: readonly TreePart[]): Cost | undefined {
     else if (part !== undefined || ran)
       total = { ...total, complete: false, bounded: false };
   }
-  return total;
+  return representable(total);
 }

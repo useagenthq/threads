@@ -187,9 +187,20 @@ function applyResponse(
   e: EventOf<"model_response" | "model_response_recovered">,
 ): void {
   const { input_tokens: input, output_tokens: output } = e.data.usage;
-  fold.usage.input += input ?? 0;
-  fold.usage.output += output ?? 0;
-  if (input === null || output === null) fold.usage.unknown += 1;
+  const inputTotal = fold.usage.input + (input ?? 0);
+  const outputTotal = fold.usage.output + (output ?? 0);
+  // A total past the wire's integers can't be carried exactly: the response counts as unknown.
+  if (
+    !Number.isSafeInteger(inputTotal) ||
+    !Number.isSafeInteger(outputTotal) ||
+    input === null ||
+    output === null
+  )
+    fold.usage.unknown += 1;
+  if (Number.isSafeInteger(inputTotal) && Number.isSafeInteger(outputTotal)) {
+    fold.usage.input = inputTotal;
+    fold.usage.output = outputTotal;
+  }
   const requestId = e.data.request_event_id;
   fold.awaiting.delete(requestId);
   if (fold.requests.get(requestId)?.compaction === true) {
