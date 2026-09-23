@@ -124,6 +124,11 @@ export type ModelContext = {
  */
 export type Model = {
   readonly info: ModelInfo;
+  /**
+   * Resolves credentials and checks configuration on the host, at check() or the first run.
+   * Opens no connection; a throw is a ConfigError, retried on the next check() or run.
+   */
+  readonly setup?: () => Promise<void>;
   readonly send: (
     request: ModelRequest,
     context: ModelContext,

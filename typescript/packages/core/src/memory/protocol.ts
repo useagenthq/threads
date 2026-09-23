@@ -161,7 +161,10 @@ export type MemoryProvider = {
   /** Absent: unguarded. idempotent needs dedupWindowMs. */
   readonly writeEffect?: z.infer<typeof EffectClass>;
   readonly dedupWindowMs?: z.infer<typeof PosInt>;
-  /** Setup checks (credentials, a fenceable transport); a throw is a ConfigError. */
+  /**
+   * Resolves credentials and checks configuration on the host, at check() or the first run.
+   * Opens no connection; a throw is a ConfigError, retried on the next check() or run.
+   */
   readonly setup?: () => Promise<void>;
 };
 
@@ -193,5 +196,9 @@ export type KnowledgeProvider = {
   readonly revision: (
     scope: Scope,
   ) => Promise<Result<number, Failure<"unavailable" | "timeout">>>;
+  /**
+   * Resolves credentials and checks configuration on the host, at check() or the first run.
+   * Opens no connection; a throw is a ConfigError, retried on the next check() or run.
+   */
   readonly setup?: () => Promise<void>;
 };

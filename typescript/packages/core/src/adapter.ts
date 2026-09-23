@@ -1,7 +1,7 @@
 // @threads/core/adapter: what a model adapter package builds on. Core never imports adapters.
 
 export { ConfigError } from "./agent/errors";
-export { type Secret, secret } from "./agent/secret";
+export { credential, type Secret, secret } from "./agent/secret";
 export { jsonSchema } from "./agent/tool";
 export { assertNever } from "./assert-never";
 export {

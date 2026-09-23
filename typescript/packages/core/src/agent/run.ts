@@ -35,7 +35,7 @@ import {
   runResult,
   type ThreadRef,
 } from "./result";
-import type { Setup } from "./setup";
+import { connectAll, type McpServer } from "./setup";
 import { skillTools } from "./skills";
 import { snapshotTurn } from "./snapshot";
 import { openStore, type Store, sqlite } from "./sqlite";
@@ -61,7 +61,10 @@ type Permissions = z.infer<typeof PermissionsPolicy>;
 export type Resolved<Deps, Output> = Omit<PinOptions, "mcp"> & {
   readonly bindable: readonly Tool<unknown, unknown, Deps>[];
   readonly hookable: readonly Extension<Deps>[];
-  readonly setup: Setup;
+  /** Setup of this agent and those it may start (agent/setup.ts); retried after a failure. */
+  readonly setup: () => Promise<void>;
+  /** MCP servers: each check() and each run opens its own sessions. */
+  readonly servers: readonly McpServer[];
   readonly decode: Decode<Output>;
   /** The agents behind PinOptions.subagents, by name. */
   readonly agents: readonly Agent<never, unknown>[];
@@ -69,7 +72,7 @@ export type Resolved<Deps, Output> = Omit<PinOptions, "mcp"> & {
   readonly targets: readonly Agent<never, unknown>[];
 };
 
-/** An agent after setup: its MCP servers' tools are known. */
+/** An agent with its MCP servers' tools, bound to one session. */
 export type SetUp<Deps, Output> = Resolved<Deps, Output> &
   Pick<PinOptions, "mcp">;
 
@@ -154,9 +157,12 @@ export async function execute<Deps, Output>(
   hooks: Hooks = {},
 ): Promise<RunResult<Output>> {
   const { store, child, principal, target } = plan;
+  await def.setup();
+  // This run's own MCP connections, closed when it ends however it ends.
+  await using mcp = await connectAll(def.servers);
   const { log, artifacts } = await openStore(store);
   const link = linkOf(plan);
-  const set: SetUp<Deps, Output> = { ...def, mcp: await def.setup() };
+  const set: SetUp<Deps, Output> = { ...def, mcp: mcp.tools };
   const pinned = pin(set, link);
   // Each run is its own executor: a second run on a busy branch is branch_busy.
   const holder = `run-${crypto.randomUUID()}`;
@@ -251,6 +257,18 @@ export async function execute<Deps, Output>(
   } finally {
     stop();
   }
+}
+
+/**
+ * The pin of a new thread of this agent, after setup, with its MCP servers' tools listed on
+ * sessions that are closed before it returns. Throws ConfigError.
+ */
+export async function pinnedAfterSetup<Deps, Output>(
+  def: Resolved<Deps, Output>,
+): Promise<ReturnType<typeof pin>> {
+  await def.setup();
+  await using mcp = await connectAll(def.servers);
+  return pin({ ...def, mcp: mcp.tools });
 }
 
 /** Recovery first; an in-doubt turn finishes before the next input opens the next one. */

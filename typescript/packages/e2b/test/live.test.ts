@@ -43,7 +43,7 @@ describe.skipIf(!live)("live gate: e2b", () => {
     const sandbox = e2b({ ...(key === undefined ? {} : { apiKey: key }) });
     const box = unwrap(await sandbox.create(crypto.randomUUID(), CTX));
     const driver = e2bDriver({
-      connection: key === undefined ? {} : { apiKey: key },
+      connection: () => (key === undefined ? {} : { apiKey: key }),
       template: "base",
       timeoutMs: 300_000,
       internet: false,

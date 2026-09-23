@@ -1,5 +1,6 @@
 import type { MemoryHit, MemoryProvider, Scope, Secret } from "@threads/core";
 import {
+  credential,
   type Fetch,
   type ProviderError,
   sandboxFetch,
@@ -20,7 +21,8 @@ import { z } from "zod";
 // Supermemory documents no dedup window for customId, so an uncertain write parks.
 
 export type SupermemoryOptions = {
-  readonly apiKey: Secret;
+  /** Defaults to secret("SUPERMEMORY_API_KEY"), resolved at setup. */
+  readonly apiKey?: string | Secret;
   readonly baseUrl?: string;
   /** The SDK's fetch (a proxy, a test server); the fence wraps it either way. */
   readonly fetch?: Fetch;
@@ -75,11 +77,13 @@ async function attempt<T>(
   }
 }
 
-export function supermemory(options: SupermemoryOptions): MemoryProvider {
+export function supermemory(options: SupermemoryOptions = {}): MemoryProvider {
+  const apiKey = (): string =>
+    credential("supermemory", "apiKey", options.apiKey, "SUPERMEMORY_API_KEY");
   let client: Supermemory | undefined;
   const sdk = (): Supermemory => {
     client ??= new Supermemory({
-      apiKey: options.apiKey.reveal(),
+      apiKey: apiKey(),
       maxRetries: 0,
       fetch: sandboxFetch(options.fetch ?? globalThis.fetch),
       ...(options.baseUrl === undefined ? {} : { baseURL: options.baseUrl }),
@@ -87,9 +91,9 @@ export function supermemory(options: SupermemoryOptions): MemoryProvider {
     return client;
   };
   return {
-    // Resolves the secret at setup: a missing key is a ConfigError, not a failed first call.
+    // A missing key is a ConfigError at setup, not a failed first call.
     setup: async () => {
-      sdk();
+      apiKey();
     },
     remember: async (scope, record, key) =>
       attempt(async () => {

@@ -1,6 +1,7 @@
 import { ZepClient, ZepError, ZepTimeoutError } from "@getzep/zep-cloud";
 import type { MemoryHit, MemoryProvider, Scope, Secret } from "@threads/core";
 import {
+  credential,
   type Fetch,
   type ProviderError,
   sha256Hex,
@@ -15,7 +16,8 @@ import { fencedFetcher } from "./fetcher";
 // write parks rather than risk a duplicate (C3).
 
 export type ZepOptions = {
-  readonly apiKey: Secret;
+  /** Defaults to secret("ZEP_API_KEY"), resolved at setup. */
+  readonly apiKey?: string | Secret;
   readonly baseUrl?: string;
   /** The HTTP fetch (a proxy, a test server); the fence wraps it either way. */
   readonly fetch?: Fetch;
@@ -79,19 +81,22 @@ async function attempt<T>(
   }
 }
 
-export function zep(options: ZepOptions): MemoryProvider {
+export function zep(options: ZepOptions = {}): MemoryProvider {
+  const apiKey = (): string =>
+    credential("zep", "apiKey", options.apiKey, "ZEP_API_KEY");
   let client: ZepClient | undefined;
   const sdk = (): ZepClient => {
     client ??= new ZepClient({
-      apiKey: options.apiKey.reveal(),
+      apiKey: apiKey(),
       fetcher: fencedFetcher(options.fetch ?? globalThis.fetch),
       ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
     });
     return client;
   };
   return {
+    // A missing key is a ConfigError at setup, not a failed first call.
     setup: async () => {
-      sdk();
+      apiKey();
     },
     remember: async (scope, record) =>
       attempt(async () => {

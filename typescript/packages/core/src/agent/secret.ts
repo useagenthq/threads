@@ -4,8 +4,25 @@ import { ConfigError } from "./errors";
 // the name; the value is read from the host env when host code reveals it, so it never reaches
 // the pin, a prompt, the log or the sandbox (invariant 4).
 
-/** Values revealed in this host process, by value, so results can be scrubbed (C5). */
-const revealed = new Map<string, string>();
+/** Values resolved in this host process, each with the smallest label it was registered under. */
+const registered = new Map<string, string>();
+
+/** Compares by Unicode code point, as Python compares strings, so both languages agree. */
+function byCodePoints(a: string, b: string): number {
+  const x = Array.from(a);
+  const y = Array.from(b);
+  for (let i = 0; i < Math.min(x.length, y.length); i += 1) {
+    const d = (x[i]?.codePointAt(0) ?? 0) - (y[i]?.codePointAt(0) ?? 0);
+    if (d !== 0) return d;
+  }
+  return x.length - y.length;
+}
+
+function register(value: string, label: string): void {
+  const known = registered.get(value);
+  if (known === undefined || byCodePoints(label, known) < 0)
+    registered.set(value, label);
+}
 
 export class Secret {
   readonly name: string;
@@ -19,7 +36,7 @@ export class Secret {
     const value = process.env[this.name];
     if (value === undefined || value === "")
       throw new ConfigError("missing_secret", `secret ${this.name} is not set`);
-    revealed.set(value, this.name);
+    register(value, this.name);
     return value;
   }
 
@@ -36,10 +53,40 @@ export function secret(name: string): Secret {
   return new Secret(name);
 }
 
-/** Replaces every revealed secret value in `text` with its name (the gateway's redaction, C5). */
+/**
+ * A single-account adapter's credential, resolved on the host at setup: an explicit string as
+ * given, a Secret (default `secret(env)`) from the host env. Either way the value is registered
+ * for redaction as `<factory>.<option>`. Missing or empty is missing_secret naming both.
+ */
+export function credential(
+  factory: string,
+  option: string,
+  value: string | Secret | undefined,
+  env: string,
+): string {
+  const given = value ?? secret(env);
+  const resolved =
+    typeof given === "string" ? given : (process.env[given.name] ?? "");
+  if (resolved === "")
+    throw new ConfigError(
+      "missing_secret",
+      `${factory}: set ${option} or ${typeof given === "string" ? env : given.name}`,
+    );
+  register(resolved, `${factory}.${option}`);
+  return resolved;
+}
+
+/**
+ * Replaces every resolved secret value in `text` with its label (the gateway's redaction, C5):
+ * longest first, so a value never leaks the tail of a longer one, then by code point.
+ */
 export function redactSecrets(text: string): string {
+  const order = [...registered].toSorted(
+    ([a], [b]) =>
+      Array.from(b).length - Array.from(a).length || byCodePoints(a, b),
+  );
   let out = text;
-  for (const [value, name] of revealed)
-    out = out.replaceAll(value, `[secret ${name}]`);
+  for (const [value, label] of order)
+    out = out.replaceAll(value, `[secret ${label}]`);
   return out;
 }

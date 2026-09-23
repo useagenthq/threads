@@ -1,15 +1,22 @@
 import { afterEach } from "bun:test";
-import { openThread, type RunResult, type Tool, tool } from "@threads/core";
+import {
+  type McpServer,
+  type McpSession,
+  openThread,
+  type RunResult,
+  type Tool,
+  tool,
+} from "@threads/core";
 import type { ToolContext, ToolImpl } from "@threads/core/adapter";
 
 type Principal = ToolContext["principal"];
 
 import { z } from "zod";
-import { type McpHandle, type McpOptions, mcp } from "../src";
+import { type McpOptions, mcp } from "../src";
 import { type Call, httpServer } from "./server";
 
-// Shared by the MCP tests: scripted turns, a server handle per test (closed after it), the
-// public timeline, and a hand-built tool context.
+// Shared by the MCP tests: scripted turns, servers and the sessions a test opens (closed after
+// it), the public timeline, and a hand-built tool context.
 
 const usage = { input_tokens: 10, output_tokens: 2 };
 type Turn = Readonly<Record<string, unknown>>;
@@ -28,18 +35,23 @@ export const use = (
   usage,
 });
 export const URL_ = "http://mcp.test/mcp";
-export const handles: McpHandle[] = [];
+const sessions: McpSession[] = [];
 afterEach(async () => {
-  for (const h of handles.splice(0)) await h.close();
+  for (const s of sessions.splice(0)) await s.close();
 });
+
+/** A session the test itself opens, closed after the test. */
+export async function session(h: McpServer): Promise<McpSession> {
+  const s = await h.connect();
+  sessions.push(s);
+  return s;
+}
 
 export function server(
   options: Partial<McpOptions> & { readonly calls?: Call[] } = {},
-): McpHandle {
+): McpServer {
   const { calls = [], ...rest } = options;
-  const h = mcp({ name: "docs", url: URL_, fetch: httpServer(calls), ...rest });
-  handles.push(h);
-  return h;
+  return mcp({ name: "docs", url: URL_, fetch: httpServer(calls), ...rest });
 }
 
 type Seen = {
@@ -106,8 +118,8 @@ export function ctx(stale = false): ToolContext {
   };
 }
 
-export async function bound(h: McpHandle, name: string): Promise<ToolImpl> {
-  const t = (await h.connect()).find((x) => x.name === name);
+export async function bound(h: McpServer, name: string): Promise<ToolImpl> {
+  const t = (await session(h)).tools.find((x) => x.name === name);
   if (t === undefined) throw new Error(`no ${name}`);
   return t.bind({
     deps: undefined,

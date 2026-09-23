@@ -11,10 +11,12 @@ import type {
   ModelContext,
   ModelInfo,
   ModelRequest,
+  Secret,
 } from "@threads/core/adapter";
 import {
   ConfigError,
   checkHostedTools,
+  credential,
   fencedFetch,
   type JsonObject,
   parseRender,
@@ -44,8 +46,8 @@ export type AnthropicOptions = {
   readonly price?: ModelInfo["limits"]["price"];
   /** Provider-executed tools (web search, code execution), sent as recorded here. */
   readonly hostedTools?: readonly JsonObject[];
-  /** Defaults to the SDK's ANTHROPIC_API_KEY. Never pinned or logged. */
-  readonly apiKey?: string;
+  /** Defaults to secret("ANTHROPIC_API_KEY"), resolved at setup. Never pinned or logged. */
+  readonly apiKey?: string | Secret;
   readonly baseURL?: string;
   readonly fetch?: Fetch;
 };
@@ -92,15 +94,21 @@ export function anthropic(options: AnthropicOptions): Model {
     // The Messages API has no retrieval by client request id.
     lookup: "none",
   };
+  const apiKey = (): string =>
+    credential("anthropic", "apiKey", options.apiKey, "ANTHROPIC_API_KEY");
   return {
     info,
+    setup: async () => {
+      apiKey();
+    },
     send: (request, context, sendOptions) =>
-      send(options, request, context, sendOptions?.signal),
+      send(options, apiKey, request, context, sendOptions?.signal),
   };
 }
 
 async function* send(
   options: AnthropicOptions,
+  apiKey: () => string,
   request: ModelRequest,
   context: ModelContext,
   signal: AbortSignal | undefined,
@@ -113,7 +121,7 @@ async function* send(
     return;
   }
   const client = new Anthropic({
-    ...(options.apiKey === undefined ? {} : { apiKey: options.apiKey }),
+    apiKey: apiKey(),
     ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
     maxRetries: 0,
     fetch: fencedFetch(context, options.fetch ?? fetch),

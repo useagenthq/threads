@@ -68,9 +68,18 @@ export function httpServer(calls: Call[]): Fetch {
   };
 }
 
-/** stdio: each call is appended to CALLS_FILE, so the test sees what reached the process. */
+/**
+ * stdio: each call is appended to CALLS_FILE, so the test sees what reached the process, and
+ * CONNECTIONS_FILE gets "open" when the process starts and "closed" when it ends: one process
+ * is one connection.
+ */
 if (import.meta.main) {
   const file = process.env["CALLS_FILE"] ?? "/dev/null";
+  const connections = process.env["CONNECTIONS_FILE"] ?? "/dev/null";
+  appendFileSync(connections, "open\n");
+  process.on("exit", () => appendFileSync(connections, "closed\n"));
+  process.stdin.on("end", () => process.exit(0));
+  process.on("SIGTERM", () => process.exit(0));
   await server((c) => appendFileSync(file, `${c.tool}\n`)).connect(
     new StdioServerTransport(),
   );
