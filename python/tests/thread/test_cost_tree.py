@@ -142,7 +142,7 @@ def test_a_started_child_that_made_no_model_request_changes_nothing() -> None:
     check(body)
 
 
-def test_a_spawned_child_that_never_started_changes_nothing() -> None:
+def test_a_spawned_child_with_no_log_counts_nothing_and_the_total_is_incomplete() -> None:
     async def body(store: Store) -> None:
         kid = agent(name="kid", model=priced(say("Kid.")))
         thread = await run(store, priced(spawn("kid"), say("Done.")), [kid])
@@ -159,8 +159,9 @@ def test_a_spawned_child_that_never_started_changes_nothing() -> None:
             ]
 
         await rewrite_log(store, thread.id, spawn_only)
-        # Only the lead's first response (the spawn) was recorded.
-        assert await thread.cost(tree=True) == Ok(usd(ONE, exact=True))
+        # Only the lead's first response (the spawn) was recorded. Nothing proves the child
+        # never ran (its log could have been deleted), so the total is not complete.
+        assert await thread.cost(tree=True) == Ok(usd(ONE, exact=False))
 
     check(body)
 
@@ -222,6 +223,41 @@ def test_a_finished_child_whose_log_is_missing_is_log_corrupt_never_a_partial_su
         code, message = await failure(thread)
         assert code == "log_corrupt"
         assert f"child {kid_id}: its log is missing" in message
+
+    check(body)
+
+
+def test_two_spawns_naming_the_same_missing_child_are_log_corrupt() -> None:
+    async def body(store: Store) -> None:
+        one = agent(name="one", model=priced(say("One.")))
+        two = agent(name="two", model=priced(say("Two.")))
+        thread = await run(store, priced(spawn("one"), spawn("two"), say("Done.")), [one, two])
+        ids = await child_ids(thread)
+        missing = uuid7(now_ms())
+        never: Line = {
+            "status": "cancelled",
+            "usage": {"input_tokens": None, "output_tokens": None},
+        }
+
+        def same_child(lines: list[Line]) -> list[Line]:
+            spawns = [i for i, line in enumerate(lines) if line["type"] == "agent_spawned"]
+            out: list[Line] = []
+            for line in lines[: spawns[1] + 1]:
+                text = json.dumps(line)
+                for child in ids:
+                    text = text.replace(child, missing)
+                edited = obj(json.loads(text))
+                if edited["type"] == "agent_finished":
+                    data: Line = {**obj(edited["data"]), **never}
+                    edited["data"] = data
+                out.append(edited)
+            return out
+
+        await rewrite_log(store, thread.id, same_child)
+        total = await thread.cost(tree=True)
+        assert isinstance(total, Err)
+        assert total.error.code == "log_corrupt"
+        assert "appears twice" in total.error.message
 
     check(body)
 

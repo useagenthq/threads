@@ -23,49 +23,65 @@ from threads.thread.read import read_log
 async def tree_cost(
     store: Store, root: ThreadId, log: VerifiedLog
 ) -> Ok[Cost | None] | Err[ParseError]:
+    """Every thread of the tree, depth first in spawn order, with an explicit stack so a tree of
+    any depth is walked. Each child must name, as its parent, the agent_spawned that started it;
+    a child that doesn't, or a thread named twice (a cycle, or two spawns of one id), makes the
+    tree log_corrupt. A child with no log counts as an unpriced thread that ran: nothing proves
+    it spent nothing (its log may have been deleted), so the total is incomplete and unbounded,
+    never falsely complete."""
     parts: list[TreePart] = []
-    walked = await _visit(store, root, log, parts, set())
-    return walked if isinstance(walked, Err) else merge_tree(parts)
+    seen = {root}
+    stack = [(log, "")]
+    while stack:
+        at, path = stack.pop()
+        own = cost(at.fold)
+        if isinstance(own, Err):
+            return _within(path, own)
+        parts.append(
+            TreePart(own.value, any(isinstance(e, ModelRequestEvent) for e in at.fold.events))
+        )
+        children = await _children(store, at, path, seen, parts)
+        if isinstance(children, Err):
+            return children
+        stack.extend(reversed(children.value))
+    return merge_tree(parts)
 
 
-async def _visit(
-    store: Store, thread: ThreadId, log: VerifiedLog, parts: list[TreePart], seen: set[ThreadId]
-) -> Ok[None] | Err[ParseError]:
-    """Appends `thread` and its descendants, depth first in spawn order. Each child must name,
-    as its parent, the agent_spawned that started it; a child that doesn't, or a thread met twice
-    (a cycle), makes the tree log_corrupt."""
-    if thread in seen:
-        return Err(ParseError("log_corrupt", f"thread {thread} appears twice in the tree"))
-    seen.add(thread)
-    own = cost(log.fold)
-    if isinstance(own, Err):
-        return own
-    events = log.fold.events
-    parts.append(TreePart(own.value, any(isinstance(e, ModelRequestEvent) for e in events)))
+async def _children(
+    store: Store, at: VerifiedLog, path: str, seen: set[ThreadId], parts: list[TreePart]
+) -> Ok[list[tuple[VerifiedLog, str]]] | Err[ParseError]:
+    """The logs of `at`'s spawned children to walk next, in spawn order; a child with no log
+    adds its unpriced part to `parts` instead."""
+    events = at.fold.events
     finished = {e.data.child_thread_id: e for e in events if isinstance(e, AgentFinishedEvent)}
+    found: list[tuple[VerifiedLog, str]] = []
     for spawn in (e for e in events if isinstance(e, AgentSpawnedEvent)):
         child = spawn.data.child_thread_id
-        finish = finished.get(child)
-        read = await _child_log(store, spawn, finish)
-        if isinstance(read, Ok) and read.value is None and finish is not None:
+        where = f"{path}child {child}: "
+        if child in seen:
+            why = f"{where}thread {child} appears twice in the tree"
+            return Err(ParseError("log_corrupt", why))
+        seen.add(child)
+        read = await _child_log(store, spawn, finished.get(child))
+        if isinstance(read, Err):
+            return _within(where, read)
+        if read.value is None:
             parts.append(TreePart(None, ran=True))
-        below = (
-            await _visit(store, child, read.value, parts, seen)
-            if isinstance(read, Ok) and read.value is not None
-            else read
-        )
-        if isinstance(below, Err):
-            e = below.error
-            return Err(ParseError(e.code, f"child {child}: {e.message}", e.seq))
-    return Ok(None)
+        else:
+            found.append((read.value, where))
+    return Ok(found)
+
+
+def _within(path: str, failed: Err[ParseError]) -> Err[ParseError]:
+    """The error, keeping its code, with the path to the descendant that failed."""
+    e = failed.error
+    return Err(ParseError(e.code, f"{path}{e.message}", e.seq)) if path else failed
 
 
 def _never_created(finish: AgentFinishedEvent) -> bool:
     """spec/schema/README.md, Subagent cancellation: a child with no thread is recorded
     cancelled, with unknown usage, and never created. A started child cancelled with unknown
-    usage writes the same record, so a missing log under it may be lost spend: it counts as an
-    unpriced thread that ran, making the total incomplete and unbounded rather than falsely
-    complete."""
+    usage writes the same record, so it can't prove the child spent nothing."""
     usage = finish.data.usage
     return finish.data.status == "cancelled" and (usage.input_tokens, usage.output_tokens) == (
         None,
@@ -78,8 +94,7 @@ async def _child_log(
 ) -> Ok[VerifiedLog | None] | Err[ParseError]:
     """The spawned child's log; None when it has no thread and its parent's record allows that:
     no agent_finished, or the one a cancelled parent writes for a child it never created. Any
-    other finished child's missing log is log_corrupt: counting nothing for it would be a
-    partial sum."""
+    other finished child's missing log is log_corrupt."""
     root = await (await open_store(store)).root(spawn.data.child_thread_id)
     if isinstance(root, Err) and finish is not None and not _never_created(finish):
         why = f"its log is missing, though its parent recorded it {finish.data.status}"

@@ -65,18 +65,26 @@ function finishOf(
 /**
  * spec/schema/README.md, Subagent cancellation: a child with no thread is recorded cancelled,
  * with unknown usage, and never created. A started child cancelled with unknown usage writes the
- * same record, so a missing log under it may be lost spend: it counts as an unpriced thread that
- * ran, making the total incomplete and unbounded rather than falsely complete.
+ * same record, so it can't prove the child spent nothing.
  */
 const neverCreated = ({ data }: Finished): boolean =>
   data.status === "cancelled" &&
   data.usage.input_tokens === null &&
   data.usage.output_tokens === null;
 
+/** A thread to walk, and the path of child ids that leads to it, for error messages. */
+type Visit = {
+  readonly at: VerifiedLog;
+  readonly path: string;
+};
+
 /**
- * Every thread of the tree rooted at `root`, depth first in spawn order. Each child is read from
- * its own main branch and must name, as its parent, the agent_spawned that started it; a child
- * that doesn't, or a thread met twice (a cycle), makes the tree log_corrupt.
+ * Every thread of the tree rooted at `root`, depth first in spawn order, with an explicit stack
+ * so a tree of any depth is walked. Each child is read from its own main branch and must name,
+ * as its parent, the agent_spawned that started it; a child that doesn't, or a thread named
+ * twice (a cycle, or two spawns of one id), makes the tree log_corrupt. A child with no log
+ * counts as an unpriced thread that ran: nothing proves it spent nothing (its log may have been
+ * deleted), so the total is incomplete and unbounded, never falsely complete.
  */
 function treeParts(
   log: LogStore,
@@ -84,55 +92,43 @@ function treeParts(
   chain: VerifiedLog,
 ): Result<readonly TreePart[], CostError> {
   const parts: TreePart[] = [];
-  const seen = new Set<ThreadId>();
-  const visit = (id: ThreadId, at: VerifiedLog): Result<void, CostError> => {
-    if (seen.has(id))
-      return err(
-        readError("log_corrupt", `thread ${id} appears twice in the tree`),
-      );
-    seen.add(id);
+  const seen = new Set<ThreadId>([root]);
+  const stack: Visit[] = [{ at: chain, path: "" }];
+  for (let next = stack.pop(); next !== undefined; next = stack.pop()) {
+    const { at, path } = next;
     const own = ownCost(at);
-    if (!own.ok) return own;
+    if (!own.ok) return err(within(path, own.error));
     const events = knownEvents(at);
     parts.push({
       cost: own.value,
       ran: events.some((e) => e.type === "model_request"),
     });
+    const children: Visit[] = [];
     for (const spawn of events.filter((e) => e.type === "agent_spawned")) {
       const child = spawn.data.child_thread_id;
-      const read = readChild(log, spawn, events, parts);
-      const below =
-        read.ok && read.value !== undefined ? visit(child, read.value) : read;
-      if (!below.ok) return err(inChild(child, below.error));
+      const where = `${path}child ${child}: `;
+      if (seen.has(child))
+        return err(
+          readError(
+            "log_corrupt",
+            `${where}thread ${child} appears twice in the tree`,
+          ),
+        );
+      seen.add(child);
+      const read = childLog(log, spawn, finishOf(events, child));
+      if (!read.ok) return err(within(where, read.error));
+      if (read.value === undefined) parts.push({ cost: undefined, ran: true });
+      else children.push({ at: read.value, path: where });
     }
-    return ok(undefined);
-  };
-  const walked = visit(root, chain);
-  return walked.ok ? ok(parts) : walked;
-}
-
-/**
- * childLog for a spawn of `events`. A child with no log under the never-created record adds an
- * unpriced part that ran to `parts` (neverCreated says why).
- */
-function readChild(
-  log: LogStore,
-  spawn: Spawned,
-  events: readonly KnownEvent[],
-  parts: TreePart[],
-): Result<VerifiedLog | undefined, ReadError> {
-  const finish = finishOf(events, spawn.data.child_thread_id);
-  const read = childLog(log, spawn, finish);
-  if (read.ok && read.value === undefined && finish !== undefined)
-    parts.push({ cost: undefined, ran: true });
-  return read;
+    stack.push(...children.toReversed());
+  }
+  return ok(parts);
 }
 
 /**
  * The spawned child's log; undefined when it has no thread and its parent's record allows that:
  * no agent_finished, or the one a cancelled parent writes for a child it never created. Any
- * other finished child's missing log is log_corrupt: counting nothing for it would be a
- * partial sum.
+ * other finished child's missing log is log_corrupt.
  */
 function childLog(
   log: LogStore,
@@ -175,9 +171,9 @@ function childLog(
 }
 
 /** The error, keeping its code, with the path to the descendant that failed. */
-function inChild<E extends { readonly message: string }>(
-  child: string,
+function within<E extends { readonly message: string }>(
+  path: string,
   error: E,
 ): E {
-  return { ...error, message: `child ${child}: ${error.message}` };
+  return path === "" ? error : { ...error, message: `${path}${error.message}` };
 }

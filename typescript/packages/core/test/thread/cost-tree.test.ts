@@ -145,7 +145,7 @@ describe("the tree merge", () => {
     expect(unwrap(await tree(thread))).toEqual(usd(2 * ONE, true));
   });
 
-  test("a spawned child that never started changes nothing", async () => {
+  test("a spawned child with no log counts nothing, and the total is incomplete", async () => {
     const store = sqlite(":memory:");
     const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
     const thread = await run(store, priced([spawn("kid"), say("Done.")]), [
@@ -164,8 +164,9 @@ describe("the tree merge", () => {
           obj(JSON.parse(JSON.stringify(l).replaceAll(kidId, unstarted))),
         );
     });
-    // Only the lead's first response (the spawn) was recorded.
-    expect(unwrap(await tree(thread))).toEqual(usd(ONE, true));
+    // Only the lead's first response (the spawn) was recorded. Nothing proves the child never
+    // ran (its log could have been deleted), so the total is not complete.
+    expect(unwrap(await tree(thread))).toEqual(usd(ONE, false));
   });
 });
 
@@ -220,6 +221,44 @@ describe("a cancelled child that was never created", () => {
 });
 
 describe("a tree that can't be read fails the call, naming the path", () => {
+  test("two spawns naming the same missing child are log_corrupt", async () => {
+    const store = sqlite(":memory:");
+    const one = agent({ name: "one", model: priced([say("One.")]) });
+    const two = agent({ name: "two", model: priced([say("Two.")]) });
+    const thread = await run(
+      store,
+      priced([spawn("one"), spawn("two"), say("Done.")]),
+      [one, two],
+    );
+    const ids = await childIds(thread);
+    const missing = "0192a000-0000-7000-8000-0000000000ec";
+    await rewriteLog(store, thread.id, (lines) => {
+      const spawns = lines.flatMap((l, i) =>
+        l["type"] === "agent_spawned" ? [i] : [],
+      );
+      return lines.slice(0, (spawns[1] ?? 0) + 1).map((l) => {
+        const text = ids.reduce<string>(
+          (s, id) => s.replaceAll(id, missing),
+          JSON.stringify(l),
+        );
+        const line = obj(JSON.parse(text));
+        return line["type"] === "agent_finished"
+          ? {
+              ...line,
+              data: {
+                ...obj(line["data"]),
+                status: "cancelled",
+                usage: { input_tokens: null, output_tokens: null },
+              },
+            }
+          : line;
+      });
+    });
+    const total = await tree(thread);
+    expect(code(total)).toBe("log_corrupt");
+    expect(total.ok ? "" : total.error.message).toContain("appears twice");
+  });
+
   test("a corrupt child is log_corrupt", async () => {
     const store = sqlite(":memory:");
     const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
