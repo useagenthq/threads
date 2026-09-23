@@ -1,4 +1,6 @@
 import type { EventOf } from "../fold/state";
+import { spawnAgent } from "./agents/spawn";
+import { teamTool } from "./agents/team";
 import { FINAL_OUTPUT, validateCandidate } from "./output";
 import type { Session } from "./session";
 import { writeTodos } from "./todos";
@@ -15,6 +17,11 @@ type Handler = (
 const HANDLERS: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   [FINAL_OUTPUT, validateCandidate],
   ["todo_write", writeTodos],
+  ["spawn_agent", spawnAgent],
+  ["send_message", teamTool],
+  ["team_task_claim", teamTool],
+  ["team_task_create", teamTool],
+  ["team_task_update", teamTool],
 ]);
 
 export function frameworkTool(name: string): Handler | undefined {

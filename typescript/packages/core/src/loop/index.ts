@@ -1,4 +1,5 @@
 import type { ArtifactStore, EventDraft, Writer } from "../store";
+import { drainBackground, resumeBackground } from "./agents/background";
 import { observe } from "./hooks";
 import { sessionStart } from "./lifecycle";
 import { recover } from "./recover";
@@ -12,12 +13,17 @@ export type { LoopEnd } from "./run";
 export { Session } from "./session";
 export { type RecordedStubs, recordedStubs } from "./stubs";
 export type {
+  Agents,
   Authorization,
+  ChildEnd,
+  ChildRun,
   Clock,
   Halt,
   LoopConfig,
   RunErrorCode,
   StubGateway,
+  Subagent,
+  Team,
   ToolContext,
   ToolImpl,
   ToolRun,
@@ -51,6 +57,15 @@ async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
     : "startup";
   const denied = await sessionStart(s, source);
   if (denied !== undefined) return { kind: "halted", halt: denied };
+  resumeBackground(s);
+  const end = await turns(s, input);
+  if (end.kind === "halted") return end;
+  // Background children end while this writer holds the lease; their results are recorded.
+  const drained = await drainBackground(s);
+  return drained === undefined ? end : { kind: "halted", halt: drained };
+}
+
+async function turns(s: Session, input?: EventDraft): Promise<LoopEnd> {
   const earlier = await runLoop(s);
   if (earlier.kind !== "idle" || input === undefined) return earlier;
   const appended = s.append(input);

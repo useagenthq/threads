@@ -1,6 +1,7 @@
 import { assertNever } from "../assert-never";
 import type { EventOf } from "../fold/state";
 import type { KnownEvent } from "../log";
+import { deliverMessages } from "./agents/team";
 import { attempt } from "./attempt";
 import { refusal } from "./budget";
 import { compact, reactiveSpent } from "./compact";
@@ -84,6 +85,7 @@ async function gates(s: Session): Promise<Gated> {
   return (
     (await inputGate(s)) ??
     todoReminder(s) ??
+    deliverMessages(s) ??
     (await resultsGate(s)) ??
     (await batchGate(s)) ??
     (await ladder(s)) ??

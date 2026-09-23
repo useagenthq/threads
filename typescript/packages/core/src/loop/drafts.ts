@@ -169,6 +169,56 @@ export const draft = {
     actor: HOST,
     data: { running_call_ids: running.map((id) => CallId.parse(id)) },
   }),
+  agentSpawned: (d: Data<"agent_spawned">): EventDraft => ({
+    ...base,
+    type: "agent_spawned",
+    actor: HOST,
+    data: d,
+  }),
+  agentFinished: (d: Data<"agent_finished">): EventDraft => ({
+    ...base,
+    type: "agent_finished",
+    actor: HOST,
+    data: d,
+  }),
+  toolResultLate: (
+    d: Omit<Data<"tool_result_late">, "completeness">,
+  ): EventDraft => ({
+    ...base,
+    type: "tool_result_late",
+    actor: TOOL,
+    data: { completeness: "complete", ...d },
+  }),
+  todosUpdated: (d: Data<"todos_updated">): EventDraft => ({
+    ...base,
+    type: "todos_updated",
+    actor: HOST,
+    data: d,
+  }),
+  taskCreated: (d: Data<"team_task_created">): EventDraft => ({
+    ...base,
+    type: "team_task_created",
+    actor: HOST,
+    data: d,
+  }),
+  taskClaimed: (d: Data<"team_task_claimed">): EventDraft => ({
+    ...base,
+    type: "team_task_claimed",
+    actor: HOST,
+    data: d,
+  }),
+  taskUpdated: (d: Data<"team_task_updated">): EventDraft => ({
+    ...base,
+    type: "team_task_updated",
+    actor: HOST,
+    data: d,
+  }),
+  teamMessage: (d: Data<"team_message">): EventDraft => ({
+    ...base,
+    type: "team_message",
+    actor: HOST,
+    data: d,
+  }),
   budgetExceeded: (d: Data<"budget_exceeded">): EventDraft => ({
     ...base,
     type: "budget_exceeded",

@@ -1,5 +1,6 @@
 import { assertNever } from "../assert-never";
 import type { EventOf } from "../fold/state";
+import { settleBackground } from "./agents/background";
 import { runCalls } from "./dispatch";
 import { draft } from "./drafts";
 import { afterStep, finish } from "./lifecycle";
@@ -19,6 +20,8 @@ export type LoopEnd =
 
 export async function runLoop(s: Session): Promise<LoopEnd> {
   for (;;) {
+    const settled = await settleBackground(s);
+    if (settled !== undefined) return { kind: "halted", halt: settled };
     const seq = s.fold.seq;
     const step = nextStep(s.events, s.fold);
     let stopped: Halt | undefined;

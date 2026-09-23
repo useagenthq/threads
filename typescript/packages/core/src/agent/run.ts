@@ -6,26 +6,29 @@ import {
   type Principal,
   ThreadId,
 } from "../log";
-import { type LoopConfig, type LoopEnd, resume, type ToolImpl } from "../loop";
-import { toolSpec } from "../loop/turn";
-import type { Model } from "../model";
-import { category, decide } from "../permissions";
+import { type ChildRun, type LoopEnd, resume } from "../loop";
 import { knownEvents } from "../reduce";
-import { LEASE_TTL_MS, type LogStore, type Writer } from "../store";
+import {
+  type EventDraft,
+  LEASE_TTL_MS,
+  type LogStore,
+  type Writer,
+} from "../store";
 import { uuidv7 } from "../store/encode";
 import { bindBuiltins } from "../tools";
 import type { LogError } from "../verify";
+import type { Agent } from "./agent";
+import { loopConfig } from "./config";
 import { ConfigError } from "./errors";
-import { type Extension, loopExtension, observerOf } from "./extension";
+import { type Extension, observerOf } from "./extension";
 import type { PinOptions } from "./pin";
-import { extensionTools, pin } from "./pin";
+import { pin } from "./pin";
 import {
   type Decode,
   type RunResult,
   runResult,
   type ThreadRef,
 } from "./result";
-import { redactSecrets } from "./secret";
 import { snapshotTurn } from "./snapshot";
 import { openStore, type Store, sqlite } from "./sqlite";
 import type { Tool } from "./tool";
@@ -48,6 +51,8 @@ export type Resolved<Deps, Output> = PinOptions & {
   readonly hookable: readonly Extension<Deps>[];
   readonly setup: () => Promise<void>;
   readonly decode: Decode<Output>;
+  /** The agents behind PinOptions.subagents, by name. */
+  readonly agents: readonly Agent<never, unknown>[];
 };
 
 /** The local operator. */
@@ -56,7 +61,6 @@ const OPERATOR: Principal = {
   tenant: "local",
   subject: "operator",
 };
-const WORKSPACE = "/workspace";
 
 export type Hooks = {
   readonly onEvent?: (event: KnownEvent) => void;
@@ -69,14 +73,60 @@ export async function run<Deps, Output>(
   options: RunOptions<Deps>,
   hooks: Hooks = {},
 ): Promise<RunResult<Output>> {
+  const principal = options.principal ?? OPERATOR;
+  const draft: EventDraft = {
+    type: "user_input",
+    type_version: 1,
+    critical: true,
+    actor: { kind: "user", principal },
+    data: {
+      source: "api",
+      ...(typeof input === "string"
+        ? { text: input }
+        : { content: [...input] }),
+      ...(options.budget === undefined ? {} : { budget: options.budget }),
+    },
+  };
   const store =
     options.store ?? handleOf(options.thread)?.store ?? sqlite(".threads");
+  return execute(def, { ...options, store, principal }, [draft], hooks);
+}
+
+/** What one execution runs besides the agent: a thread, and for a child its parent's link. */
+export type Plan<Deps> = RunOptions<Deps> & {
+  readonly store: Store;
+  readonly principal: Principal;
+  /** A child thread, opened by its id and created on first use. */
+  readonly child?: ChildRun;
+};
+
+/**
+ * Takes the lease (recovery first), then appends `inputs` in order, each once the branch is
+ * idle. A child's inputs are its whole history of inputs: those already in its log are skipped,
+ * so a restarted parent resumes the child instead of prompting it twice.
+ */
+export async function execute<Deps, Output>(
+  def: Resolved<Deps, Output>,
+  plan: Plan<Deps>,
+  inputs: readonly EventDraft[],
+  hooks: Hooks = {},
+): Promise<RunResult<Output>> {
+  const { store, child, principal } = plan;
   const { log, artifacts } = await openStore(store);
-  const pinned = pin(def);
+  const pinned = pin(
+    def,
+    child === undefined
+      ? undefined
+      : {
+          parent: { ...child.parent, relation: "subagent" },
+          tools: child.tools,
+        },
+  );
   await def.setup();
   // Each run is its own executor: a second run on a busy branch is branch_busy.
   const holder = `run-${crypto.randomUUID()}`;
-  const opened = open(log, options.thread, pinned.started, holder);
+  const target = child?.threadId ?? plan.thread;
+  const opened = open(log, target, pinned.started, holder, child !== undefined);
   const thread: ThreadRef = {
     id: opened.threadId,
     branch: opened.branchId,
@@ -87,12 +137,15 @@ export async function run<Deps, Output>(
   const stop = keepLease(writer);
   try {
     checkPin(writer, pinned.started);
-    const principal = options.principal ?? OPERATOR;
-    const builtin = bindBuiltins(def.sandbox, def.egress, {
-      ledger: log.ledger,
-      writer,
-      artifacts,
-    });
+    const builtin = bindBuiltins(
+      child === undefined ? def.sandbox : undefined,
+      def.egress,
+      {
+        ledger: log.ledger,
+        writer,
+        artifacts,
+      },
+    );
     const observers = new ObserverPump(
       log.cursors,
       thread.branch,
@@ -100,48 +153,42 @@ export async function run<Deps, Output>(
       def.hookable.flatMap((e) => observerOf(e) ?? []),
     );
     observers.poke();
-    const config = loopConfig(
-      def,
-      options,
+    const config = loopConfig(def, {
+      options: plan,
       principal,
       thread,
-      {
+      hooks: {
         ...hooks,
         onEvent: (event) => {
           hooks.onEvent?.(event);
           observers.poke();
         },
       },
-      builtin.tools,
-      builtin.readFile,
-    );
-    const result = (end: LoopEnd): RunResult<Output> =>
-      runResult(
-        end,
-        knownEvents(writer.chain),
-        writer.chain.fold.parked,
-        thread,
-        def.decode,
-      );
-    // Recovery first; an in-doubt turn finishes before the new input opens the next one.
-    const end = await resume(writer, artifacts, config, {
-      input: {
-        type: "user_input",
-        type_version: 1,
-        critical: true,
-        actor: { kind: "user", principal },
-        data: {
-          source: "api",
-          ...(typeof input === "string"
-            ? { text: input }
-            : { content: [...input] }),
-          ...(options.budget === undefined ? {} : { budget: options.budget }),
-        },
-      },
+      builtin: builtin.tools,
+      ...(builtin.readFile === undefined ? {} : { readFile: builtin.readFile }),
+      ...(child === undefined ? {} : { child }),
     });
-    if (end.kind === "idle")
+    const given = knownEvents(writer.chain).filter(
+      (e) => e.type === "user_input",
+    ).length;
+    const pending = child === undefined ? inputs : inputs.slice(given);
+    // Recovery first; an in-doubt turn finishes before the next input opens the next one.
+    let end: LoopEnd = await resume(writer, artifacts, config, {
+      ...(pending[0] === undefined ? {} : { input: pending[0] }),
+    });
+    for (const input of pending.slice(1)) {
+      if (end.kind !== "idle") break;
+      end = await resume(writer, artifacts, config, { input });
+    }
+    if (end.kind === "idle" && child === undefined)
       await snapshotTurn(def.sandbox, builtin.session, log.ledger, writer);
-    return result(end);
+    return runResult(
+      end,
+      knownEvents(writer.chain),
+      writer.chain.fold.parked,
+      thread,
+      def.decode,
+    );
   } finally {
     stop();
   }
@@ -174,30 +221,25 @@ type Opened = {
   readonly writer: ReturnType<LogStore["acquire"]>;
 };
 
-/** A new thread (its header and thread_started), or the lease on an existing one's branch. */
+/**
+ * A new thread (its header and thread_started), or the lease on an existing one's branch. With
+ * `create`, a thread id that isn't in the store yet is created under that id (a child).
+ */
 function open(
   log: LogStore,
   thread: RunOptions<unknown>["thread"],
   started: ReturnType<typeof pin>["started"],
   holder: string,
+  create: boolean,
 ): Opened {
-  if (thread === undefined) {
-    const threadId = ThreadId.parse(uuidv7(Date.now()));
-    const branchId = BranchId.parse(uuidv7(Date.now()));
-    const created = log.createBranch(threadId, branchId);
-    if (!created.ok) return { threadId, branchId, writer: created };
-    const writer = log.acquire(branchId, holder);
-    if (writer.ok) {
-      const first = writer.value.append([started]);
-      if (!first.ok) return { threadId, branchId, writer: first };
-    }
-    return { threadId, branchId, writer };
-  }
+  if (thread === undefined)
+    return created(log, ThreadId.parse(uuidv7(Date.now())), started, holder);
   const threadId = typeof thread === "string" ? thread : thread.id;
   const branch =
     typeof thread === "string"
       ? log.mainBranch(thread)
       : { ok: true as const, value: thread.branch };
+  if (!branch.ok && create) return created(log, threadId, started, holder);
   if (!branch.ok)
     throw new ConfigError(
       "invalid_config",
@@ -208,6 +250,23 @@ function open(
     branchId: branch.value,
     writer: log.acquire(branch.value, holder),
   };
+}
+
+function created(
+  log: LogStore,
+  threadId: ThreadId,
+  started: ReturnType<typeof pin>["started"],
+  holder: string,
+): Opened {
+  const branchId = BranchId.parse(uuidv7(Date.now()));
+  const made = log.createBranch(threadId, branchId);
+  if (!made.ok) return { threadId, branchId, writer: made };
+  const writer = log.acquire(branchId, holder);
+  if (writer.ok) {
+    const first = writer.value.append([started]);
+    if (!first.ok) return { threadId, branchId, writer: first };
+  }
+  return { threadId, branchId, writer };
 }
 
 /** A pin never changes in place: continuing a thread needs the config it started with. */
@@ -243,76 +302,4 @@ function failed<Output>(error: LogError, thread: ThreadRef): RunResult<Output> {
   const code =
     error.code === "branch_busy" ? "branch_busy" : "branch_not_runnable";
   return { status: "failed", error: { code, message: error.message }, thread };
-}
-
-function loopConfig<Deps, Output>(
-  def: Resolved<Deps, Output>,
-  options: RunOptions<Deps>,
-  principal: Principal,
-  thread: ThreadRef,
-  hooks: Hooks,
-  builtin: readonly ToolImpl[],
-  readFile?: (path: string) => Promise<Uint8Array | undefined>,
-): LoopConfig {
-  const env = {
-    deps: options.deps,
-    threadId: thread.id,
-    branchId: thread.branch,
-    principal,
-  };
-  const models: readonly Model[] = [def.model, ...def.fallback];
-  return {
-    models: (ref) =>
-      models.find(
-        (m) =>
-          m.info.model.provider === ref.provider &&
-          m.info.model.name === ref.name,
-      ),
-    tools: new Map([
-      ...builtin.map((t) => [t.spec.name, t] as const),
-      ...[...def.bindable, ...extensionTools(def.hookable)].map(
-        (t) => [t.name, t.bind(env)] as const,
-      ),
-    ]),
-    extensions: def.hookable.map((e) =>
-      loopExtension(e, (hc) => ({
-        ...env,
-        signal: hc.signal,
-        ...(hc.callId === undefined ? {} : { callId: hc.callId }),
-      })),
-    ),
-    authorize: (call, fold) => {
-      const permissions = fold.policy?.permissions;
-      if (permissions === undefined)
-        return { decision: "ask", source: "default" };
-      const spec = toolSpec(fold, call.data.name);
-      const d = decide(permissions, WORKSPACE, {
-        tool: call.data.name,
-        category: category(call.data.name, spec?.effect_class),
-        input: call.data.input,
-        mode: fold.mode,
-      });
-      return {
-        decision: d.decision,
-        source: d.source,
-        ...(d.rule === undefined ? {} : { rule_id: d.rule }),
-      };
-    },
-    clock: {
-      now: Date.now,
-      sleepUntil: async (time) => {
-        const { promise, resolve } = Promise.withResolvers<void>();
-        setTimeout(resolve, Math.max(0, time - Date.now()));
-        await promise;
-      },
-    },
-    principal,
-    skewMarginMs: 1000,
-    redact: redactSecrets,
-    ...(readFile === undefined ? {} : { readFile }),
-    ...(def.output === undefined ? {} : { output: def.output }),
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ...(hooks.onEvent === undefined ? {} : { onEvent: hooks.onEvent }),
-    ...(hooks.onDelta === undefined ? {} : { onDelta: hooks.onDelta }),
-  };
 }

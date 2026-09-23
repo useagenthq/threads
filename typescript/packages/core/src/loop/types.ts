@@ -1,7 +1,16 @@
 import type { z } from "zod";
 import type { EventOf, Fold } from "../fold/state";
 import type { LoopExtension } from "../hooks/types";
-import type { KnownEvent, Principal, ToolSpec } from "../log";
+import type {
+  BranchId,
+  EventId,
+  KnownEvent,
+  Policy,
+  Principal,
+  ThreadId,
+  ToolSpec,
+  Usage,
+} from "../log";
 import type { LookupResult, Model } from "../model";
 
 /**
@@ -122,4 +131,59 @@ export type LoopConfig = {
   readonly readFile?: (path: string) => Promise<Uint8Array | undefined>;
   /** Scrubs host secrets from tool output before it is recorded (C5). */
   readonly redact?: (text: string) => string;
+  /** Subagents and the team; absent: spawn_agent and team tools have no agents. */
+  readonly agents?: Agents;
+};
+
+/** The terminal result of a child thread (agent_finished, F7.5). */
+export type ChildEnd = {
+  readonly status: EventOf<"agent_finished">["data"]["status"];
+  /** The final text, or the accepted structured value as canonical JSON. */
+  readonly output: string;
+  readonly usage: Usage;
+};
+
+/** What a parent hands one child run. */
+export type ChildRun = {
+  readonly threadId: ThreadId;
+  readonly parent: {
+    readonly thread_id: ThreadId;
+    readonly branch_id: BranchId;
+    readonly event_id: EventId;
+  };
+  /** The prompt, then each subagent_stop continue reason, in order. */
+  readonly inputs: readonly string[];
+  /** The parent's decision for a child's call: the child only narrows it. */
+  readonly ceiling: (call: EventOf<"tool_call">) => Authorization;
+  /** The parent's pinned tool names: the child's tools are within them. */
+  readonly tools: ReadonlySet<string>;
+  /** The parent's team, which the child joins as a member. */
+  readonly team: Team;
+};
+
+export type Subagent = {
+  readonly budget?: NonNullable<Policy["budget"]>;
+  /** Runs the child thread (created on first use) until it ends; resumes it after a crash. */
+  readonly run: (child: ChildRun) => Promise<ChildEnd>;
+};
+
+/** Team state lives in the lead's log; members change it only through the lead's writer. */
+export type Team = {
+  /** Applies a member's team tool call in one append to the lead's log. */
+  readonly act: (
+    member: string,
+    call: EventOf<"tool_call">,
+  ) => { readonly isError: boolean; readonly output: string };
+  /** Messages to `member` (or to every member) from anyone else, oldest first. */
+  readonly inbox: (
+    member: string,
+  ) => readonly EventOf<"team_message">["data"][];
+};
+
+export type Agents = {
+  /** This agent's name: its member id in its own team and its parent's. */
+  readonly name: string;
+  readonly subagent: (name: string) => Subagent | undefined;
+  /** Present when this thread is a member: its parent's team. */
+  readonly team?: Team;
 };

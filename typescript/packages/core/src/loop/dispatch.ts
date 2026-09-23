@@ -29,7 +29,9 @@ export async function runCalls(s: Session): Promise<Halt | undefined> {
     const before = s.fold.seq;
     const stopped =
       (await runCall(s, call)) ?? (await afterTool(s, call, before));
-    if (stopped !== undefined || s.fold.parked.length > 0) return stopped;
+    // A step that parked or ended the turn (a handoff) dispatches nothing more.
+    if (stopped !== undefined || s.fold.parked.length > 0 || !s.fold.turnOpen)
+      return stopped;
   }
   return undefined;
 }

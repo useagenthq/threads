@@ -128,6 +128,7 @@ const NOTIFY: ReadonlySet<KnownEvent["type"]> = new Set([
   "parked",
   "retry_scheduled",
   "budget_exceeded",
+  "agent_finished",
 ]);
 
 /** The observation hooks for what one loop step appended. They never change execution. */

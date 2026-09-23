@@ -10,9 +10,11 @@ import type {
 import type { Model } from "../model";
 import type { Sandbox } from "../sandbox";
 import type { Egress } from "../tools";
+import { subagent } from "./child";
 import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
 import { pin } from "./pin";
+import { register } from "./registry";
 import type { RunResult } from "./result";
 import { type Resolved, type RunOptions, run } from "./run";
 import type { Tool } from "./tool";
@@ -42,6 +44,8 @@ export type AgentOptions<Deps, Output> = {
   readonly egress?: Egress;
   /** Instructions, tools, hooks and observers, in this order. */
   readonly extensions?: readonly Extension<Deps>[];
+  /** Agents spawn_agent may start, by name. Team tools come with them. */
+  readonly subagents?: readonly Agent<never, unknown>[];
 };
 
 /** One item of stream(): a committed event, or a transient text delta (never logged). */
@@ -119,8 +123,11 @@ function build<Deps, Output>(
     hookable: options.extensions ?? [],
     setup: once(options.extensions ?? []),
     decode,
+    subagents: (options.subagents ?? []).map((a) => a.name),
+    handoffs: [],
+    agents: options.subagents ?? [],
   };
-  return {
+  const handle: Agent<Deps, Output> = {
     name: def.name,
     run: (input, runOptions = {}) => run(def, input, runOptions),
     stream: (input, runOptions = {}) => stream(def, input, runOptions),
@@ -138,6 +145,8 @@ function build<Deps, Output>(
       }
     },
   };
+  register(handle, subagent(def));
+  return handle;
 }
 
 /** Each extension's setup runs once, at check() or the first run; a throw is a ConfigError. */

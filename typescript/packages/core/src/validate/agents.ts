@@ -16,11 +16,13 @@ export function checkAgentFinished(
       );
 }
 
+/** A task event's tag and data: the team tools check a claim with the same rule before appending. */
+type TaskChange =
+  | Pick<EventOf<"team_task_claimed">, "type" | "data">
+  | Pick<EventOf<"team_task_updated">, "type" | "data">;
+
 /** Rule 23: claim an open, unclaimed, unblocked task; update a claimed one. */
-export function checkTask(
-  fold: Fold,
-  e: EventOf<"team_task_claimed" | "team_task_updated">,
-): Violation {
+export function checkTask(fold: Fold, e: TaskChange): Violation {
   const task = fold.tasks.get(e.data.task_id);
   if (e.type === "team_task_updated")
     return task?.status === "claimed"

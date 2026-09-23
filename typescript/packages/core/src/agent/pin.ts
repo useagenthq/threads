@@ -39,20 +39,40 @@ export type PinOptions = {
   readonly sandbox: Sandbox | undefined;
   readonly egress: Egress | undefined;
   readonly extensions: readonly Extension<never>[];
+  /** Agent names spawn_agent may start. */
+  readonly subagents: readonly string[];
+  /** Agent names handoff may target, pinned as policy.handoffs. */
+  readonly handoffs: readonly string[];
+};
+
+type ThreadStarted = Extract<EventDraft, { type: "thread_started" }>["data"];
+
+/** A child thread's pin: no sandbox (isolation none), team member tools, within the parent's. */
+export type ChildPin = {
+  readonly parent: NonNullable<ThreadStarted["parent"]>;
+  readonly tools: ReadonlySet<string>;
 };
 
 /** The pinned tool specs and the thread_started draft. Throws ConfigError on a bad setup. */
-export function pin(o: PinOptions): {
+export function pin(
+  options: PinOptions,
+  child?: ChildPin,
+): {
   readonly specs: readonly ToolSpec[];
   readonly started: EventDraft;
 } {
-  const specs = [
+  const o = child === undefined ? options : { ...options, sandbox: undefined };
+  const all = [
     ...[
       ...builtins(o.sandbox, o.egress).map((b) => b.spec),
-      frameworkSpec("todo_write"),
+      ...agentTools(o, child !== undefined).map(frameworkSpec),
     ].toSorted((a, b) => (a.name < b.name ? -1 : 1)),
     ...o.tools.map((t) => t.spec()),
     ...extensionTools(o.extensions).map((t) => t.spec()),
+  ];
+  // A child never gains a tool its parent lacks.
+  const specs = [
+    ...all.filter((t) => child === undefined || child.tools.has(t.name)),
     ...finalOutput(o.output),
   ];
   const exts = o.extensions.map((e) => e.name);
@@ -88,7 +108,11 @@ export function pin(o: PinOptions): {
       type_version: 1,
       critical: true,
       actor: { kind: "host" },
-      data: { ...cfg, config_hash: sha256Hex(text.value) },
+      data: {
+        ...cfg,
+        config_hash: sha256Hex(text.value),
+        ...(child === undefined ? {} : { parent: child.parent }),
+      },
     },
   };
 }
@@ -123,11 +147,38 @@ function hashedOnly(o: PinOptions): Record<string, unknown> {
   };
 }
 
-/** the base instructions, then each extension's, in declaration order. */
+/**
+ * the base instructions, then each extension's, in declaration order, then the
+ * agents spawn_agent and handoff may name.
+ */
 function instructions(o: PinOptions): string {
-  return [o.instructions, ...o.extensions.flatMap((e) => e.instructions ?? [])]
+  const listed = (label: string, names: readonly string[]): string[] =>
+    names.length === 0 ? [] : [`${label}: ${names.join(", ")}.`];
+  return [
+    o.instructions,
+    ...o.extensions.flatMap((e) => e.instructions ?? []),
+    ...listed("Subagents you can start with spawn_agent", o.subagents),
+    ...listed("Agents you can hand the conversation to", o.handoffs),
+  ]
     .filter((t) => t !== "")
     .join("\n\n");
+}
+
+const TEAM = [
+  "send_message",
+  "team_task_claim",
+  "team_task_create",
+  "team_task_update",
+];
+
+/** todo_write always; spawn and team tools with agents; handoff with targets. */
+function agentTools(o: PinOptions, member: boolean): readonly string[] {
+  return [
+    "todo_write",
+    ...(o.subagents.length > 0 ? ["spawn_agent"] : []),
+    ...(o.subagents.length > 0 || member ? TEAM : []),
+    ...(o.handoffs.length > 0 ? ["handoff"] : []),
+  ];
 }
 
 /** Extension tools, namespaced <ext>__<tool> and sorted by that name. */
@@ -191,6 +242,7 @@ function policy(o: PinOptions): Policy {
           })),
         }),
     ...(o.budget === undefined ? {} : { budget: o.budget }),
+    ...(o.handoffs.length === 0 ? {} : { handoffs: [...o.handoffs] }),
     ...(o.output === undefined
       ? {}
       : { output: outputPolicy(o.output, o.outputRetries) }),

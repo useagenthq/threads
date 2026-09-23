@@ -32,20 +32,13 @@ export function writeTodos(
       ),
     );
   return s.append(
-    { ...draftTodos, data: { call_id, todos } },
+    draft.todosUpdated({ call_id, todos }),
     draft.toolResult(
       { call_id, is_error: false, origin: "executed", preview: "ok" },
       TOOL,
     ),
   );
 }
-
-const draftTodos = {
-  type: "todos_updated",
-  type_version: 1,
-  critical: true,
-  actor: { kind: "host" },
-} as const;
 
 /**
  * Right after a turn's input, before its first request: with open items and 10 completed turns

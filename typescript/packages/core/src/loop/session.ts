@@ -1,12 +1,12 @@
 import type { Fold } from "../fold/state";
-import type { ArtifactRef, BranchId, KnownEvent } from "../log";
+import type { ArtifactRef, BranchId, KnownEvent, ThreadId } from "../log";
 import type { ModelContext } from "../model";
 import { contextReader } from "../model/context";
 import { knownEvents, type ReducedState, reduce } from "../reduce";
 import { err, ok } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import type { Chain } from "../verify";
-import type { Halt, LoopConfig } from "./types";
+import type { ChildEnd, Halt, LoopConfig } from "./types";
 
 const encoder = new TextEncoder();
 
@@ -18,6 +18,10 @@ export class Session {
   readonly #writer: Writer;
   readonly artifacts: ArtifactStore;
   readonly config: LoopConfig;
+  /** Background children running in this process, by spawn call id. */
+  readonly background: Map<string, Promise<void>> = new Map();
+  /** Ended background children the loop records at its next step boundary. */
+  readonly finished: Map<string, ChildEnd> = new Map();
   #cache: { readonly chain: Chain; readonly events: readonly KnownEvent[] };
 
   constructor(writer: Writer, artifacts: ArtifactStore, config: LoopConfig) {
@@ -43,6 +47,12 @@ export class Session {
     const header = this.#writer.chain.segments.at(-1)?.header;
     if (header === undefined) throw new Error("a writer's chain has a header");
     return header.branch_id;
+  }
+
+  get threadId(): ThreadId {
+    const header = this.#writer.chain.segments[0]?.header;
+    if (header === undefined) throw new Error("a writer's chain has a header");
+    return header.thread_id;
   }
 
   now(): number {
