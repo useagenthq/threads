@@ -175,6 +175,12 @@ export type ChannelAdapter = {
     effectKey: string,
     credentials: Readonly<Record<string, string>>,
   ) => Promise<DeliveryOutcome>;
-  /** found carries the platform_ref. */
-  readonly lookup: (effectKey: string) => Promise<LookupResult<string>>;
+  /**
+   * found carries the platform_ref. `op` is what perform was given for this key (its recorded
+   * tool_call input), since a platform lookup is scoped to its conversation.
+   */
+  readonly lookup: (
+    effectKey: string,
+    op: z.infer<typeof JsonObject>,
+  ) => Promise<LookupResult<string>>;
 };
