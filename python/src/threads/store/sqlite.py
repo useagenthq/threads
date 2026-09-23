@@ -20,6 +20,7 @@ from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
 from threads.store.bindings import Bindings, Kind
+from threads.store.budgets import BudgetLedger
 from threads.store.context import CleanupContext, OwnerContext
 from threads.store.cursors import ObserverCursors
 from threads.store.forking import Forking, forking, start_child
@@ -84,6 +85,11 @@ class SqliteStore:
     def cursors(self) -> ObserverCursors:
         """Durable observer cursors."""
         return ObserverCursors(self._worker)
+
+    @property
+    def budgets(self) -> BudgetLedger:
+        """Tree-wide budget reservations."""
+        return BudgetLedger(self._worker)
 
     @property
     def ledger(self) -> Ledger:

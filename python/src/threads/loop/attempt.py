@@ -13,7 +13,7 @@ from pydantic import JsonValue
 
 from threads.log import EventId, ModelRequestEvent, OutputPart, ToolUsePart
 from threads.log.digest import sha256_hex
-from threads.loop import guard
+from threads.loop import budget, guard
 from threads.loop.calls import call_drafts
 from threads.loop.capabilities import mismatch
 from threads.loop.drafts import draft
@@ -41,6 +41,9 @@ async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Faile
         data = {"reason": "error", "code": unsupported}
         ended = await rt.append(draft("turn_completed", data))
         return lost(ended.error) if isinstance(ended, Err) else None
+    refused = await budget.reserve(rt)
+    if refused is not None or not rt.fold.in_turn:
+        return refused
     sha = await rt.store.put_artifact(body)
     data: dict[str, JsonValue] = {
         "attempt": attempt,
@@ -55,7 +58,9 @@ async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Faile
     event = appended.value[0]
     if not isinstance(event, ModelRequestEvent):
         raise AssertionError("a model_request draft stored another type")
-    return await _dispatch(rt, event, body)
+    sent = await _dispatch(rt, event, body)
+    await budget.settle(rt)
+    return sent
 
 
 async def _dispatch(rt: Runtime, event: ModelRequestEvent, body: bytes) -> Failed | EventId | None:

@@ -20,6 +20,7 @@ from threads.log import (
     ToolCallData,
     ToolSpec,
 )
+from threads.loop.covering import Covering
 from threads.loop.history import CallState
 from threads.loop.model import Model
 from threads.loop.tools import ToolRunner
@@ -118,6 +119,8 @@ class Runtime:
     read_file: Callable[[str], Awaitable[bytes | None]] | None = None
     """L3 restore's sandbox read, a framework read_only operation; None
     when there is no sandbox or the file can't be read."""
+    budgets: tuple[Covering, ...] = ()
+    """Ancestors' budgets that also cover this thread."""
     framework: Framework | None = None
     """Subagents, handoffs and teams, bound by the agents layer; None: those tools aren't run."""
 

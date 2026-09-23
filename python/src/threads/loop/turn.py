@@ -1,7 +1,6 @@
 """The two ways a step ends the loop's current decision: a turn request, or the turn's end."""
 
 from threads.loop import attempt, gates, ladder, todos
-from threads.loop.budget import reserve
 from threads.loop.drafts import draft
 from threads.loop.runtime import Failed, Halt, Runtime, lost
 from threads.result import Err
@@ -13,9 +12,6 @@ async def request(rt: Runtime, attempt_no: int) -> Halt | None:
     gated = await gates.before_request(rt) or await todos.remind(rt) or await ladder.fit(rt)
     if gated is not None:
         return None if gated == gates.AGAIN else gated
-    refused = await reserve(rt)
-    if refused is not None:
-        return refused
     sent = await attempt.request(rt, attempt_no)
     return sent if isinstance(sent, Failed) else None
 
