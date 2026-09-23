@@ -2,36 +2,12 @@ import { z } from "zod";
 import type { ToolSpec } from "../../src/log";
 import type { ToolImpl } from "../../src/loop";
 import type { LookupResult } from "../../src/model";
+import { SandboxScript } from "../../src/sandbox";
 import type { Counters } from "./cases";
 
 // The conformance ScriptedSandbox (case.schema.json $defs/SandboxScript) as tool bodies: a key
 // in executed_keys is provider dedup (its output, no new execution), lookup answers
 // reconciliation with its own finality, process answers termination.
-
-const Script = z.strictObject({
-  tools: z
-    .record(
-      z.string(),
-      z.strictObject({
-        output: z.string(),
-        is_error: z.boolean().optional(),
-        executed_keys: z.record(z.string(), z.string()).optional(),
-        lookup: z
-          .record(
-            z.string(),
-            z.strictObject({
-              result: z.enum(["found", "not_found"]),
-              final: z.boolean(),
-              output: z.string().optional(),
-            }),
-          )
-          .optional(),
-        process: z.enum(["running", "terminated", "unknown"]).optional(),
-      }),
-    )
-    .optional(),
-  snapshots: z.record(z.string(), z.unknown()).optional(),
-});
 
 export type ScriptedTools = {
   readonly tools: ReadonlyMap<string, ToolImpl>;
@@ -43,7 +19,7 @@ export function scriptedTools(
   specs: readonly ToolSpec[],
   now: () => number,
 ): ScriptedTools {
-  const tools = Script.parse(script ?? {}).tools ?? {};
+  const tools = SandboxScript.parse(script ?? {}).tools ?? {};
   const counters = { dispatches: {}, new_executions: {}, lookups: {} };
   const bump = (kind: keyof typeof counters, tool: string): void => {
     const map: Record<string, number> = counters[kind];

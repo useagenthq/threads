@@ -12,6 +12,7 @@ export {
   scriptedModel,
 } from "./model";
 export * from "./reduce";
+export * from "./sandbox";
 export * from "./store";
 export * from "./verify";
 export { VERSION } from "./version";
