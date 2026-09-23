@@ -9,8 +9,10 @@ never started. A child whose turn is closed, or already barred, is left as it is
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Final
 
+from pydantic.experimental.missing_sentinel import MISSING
+
 from threads.agents.store import Store, now_ms, open_store
-from threads.log import BranchId, ParseError, Principal, ThreadId
+from threads.log import BranchId, ParseError, Principal, ThreadId, ThreadStartedEvent
 from threads.loop.drive import open_cancel
 from threads.reduce import Fold
 from threads.reduce.handlers import to_json
@@ -67,3 +69,23 @@ async def bar_child(store: Store, child: ThreadId, principal: Principal) -> None
 
     await append(store, root.value, build)
     await cancel_children(store, root.value, principal)
+
+
+async def root_of(store: Store, thread_id: ThreadId) -> tuple[ThreadId, BranchId] | None:
+    """The thread at the top of a subagent's tree (a thread that is no subagent is its own
+    root), at the branch its child was spawned from."""
+    sq = await open_store(store)
+    root = await sq.root(thread_id)
+    if not isinstance(root, Ok):
+        return None
+    at = (thread_id, root.value)
+    while True:
+        read = await sq.read(at[1], 0)
+        if not isinstance(read, Ok):
+            return None
+        events = read.value.fold.events
+        started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
+        parent = MISSING if started is None else started.data.parent
+        if parent is MISSING or parent.relation != "subagent":
+            return at
+        at = (parent.thread_id, parent.branch_id)

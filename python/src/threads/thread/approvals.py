@@ -29,7 +29,8 @@ from threads.result import Err, Ok
 from threads.store import Draft, approvals
 from threads.store.companion import Companion, both
 from threads.store.lines import uuid7
-from threads.thread.control import Controlled, actor, append, forbidden, principal_key, resumed
+from threads.thread import authority
+from threads.thread.control import Controlled, actor, append, principal_key, resumed
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
@@ -84,7 +85,7 @@ async def decide(  # noqa: PLR0913 - one answer and its bindings
     principal: Principal,
     decision: Literal["granted", "denied"],
     *,
-    approvers: Sequence[Principal],
+    approvers: tuple[Principal, ...] | None,
     remember_rule: PermissionRule | None = None,
     reason: str | None = None,
     installation: str | None = None,
@@ -94,8 +95,9 @@ async def decide(  # noqa: PLR0913 - one answer and its bindings
     resumed when the branch is parked on it. Over a channel, the answer must come from the
     installation the challenge was issued in; `companion` binds more host rows (the inbox item
     that carried the answer) to the same append."""
-    if principal.tenant != store.tenant or principal not in approvers:
-        return forbidden("not an approver of this thread")
+    denied = await authority.refused(store, thread[0], principal, approvers)
+    if denied is not None:
+        return denied
     now = now_ms()
     row = await _open_row(store, thread, challenge_id, now)
     if isinstance(row, Err):

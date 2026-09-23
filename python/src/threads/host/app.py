@@ -27,6 +27,7 @@ from threads.log import BranchId, EventId, ParseError, Permissions, Principal, T
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import LOCAL_TENANT
+from threads.thread import tree
 from threads.thread.handle import Thread, open_thread
 
 if TYPE_CHECKING:
@@ -151,7 +152,7 @@ class Host:
         approvers and sandbox. Another tenant's thread is not_found."""
         store = self._runner.store(principal.tenant)
         # A subagent's thread is governed by the agent at the root of its tree.
-        root = await self._runner.root_of(store, thread_id)
+        root = await tree.root_of(store, thread_id)
         bound = None if root is None else await self._runner.bound(store, root[0])
         sandbox = None if bound is None else bound.definition.sandbox
         opened = await open_thread(store, thread_id, branch_id=branch_id, sandbox=sandbox)

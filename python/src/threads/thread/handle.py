@@ -29,7 +29,7 @@ from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import VerifiedLog
 from threads.store.lines import uuid7
-from threads.thread import approvals, control, tree
+from threads.thread import approvals, authority, control, tree
 from threads.thread.case import (
     CaseExpectation,
     CaseRequest,
@@ -37,7 +37,7 @@ from threads.thread.case import (
     recorded_stubs,
     save_case,
 )
-from threads.thread.control import LOCAL_OPERATOR, Controlled
+from threads.thread.control import Controlled
 from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch, fork_point
 
 
@@ -86,11 +86,11 @@ class Thread:
     sandbox: Sandbox | None = field(default=None, kw_only=True, compare=False, repr=False)
     """The adapter this thread's snapshots restore into: `fork` needs it, and `save_case`
     checks its egress."""
-    approvers: tuple[Principal, ...] = field(
-        default=(LOCAL_OPERATOR,), kw_only=True, compare=False, repr=False
+    approvers: tuple[Principal, ...] | None = field(
+        default=None, kw_only=True, compare=False, repr=False
     )
-    """Who may answer approvals and resolve parked effects: the agent's approver policy as it
-    stands now."""
+    """Who may answer approvals and resolve parked effects: the root agent's approver policy as
+    it stands now; None, unconfigured."""
     stubs: tuple[Stub, ...] | None = field(default=None, kw_only=True, compare=False, repr=False)
     """Stub mode: a run of this handle answers every mediated operation from these,
     never live. None: live."""
@@ -256,8 +256,14 @@ class Thread:
         principal: Principal,
     ) -> Controlled:
         """A human settles a parked effect; assume_not_done accepts duplicate risk."""
+        risk = resolution == "assume_not_done"
+        denied = await authority.refused(
+            self.store, self.id, principal, self.approvers, duplicate_risk=risk
+        )
+        if denied is not None:
+            return denied
         return await control.resolve_parked(
-            self.store, self.branch, effect_key, resolution, principal, approvers=self.approvers
+            self.store, self.branch, effect_key, resolution, principal
         )
 
     async def cancel(self, principal: Principal) -> Controlled:

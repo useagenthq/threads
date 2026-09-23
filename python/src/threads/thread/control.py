@@ -231,18 +231,14 @@ def _id(draft: Draft) -> str:
     return draft.event_id
 
 
-async def resolve_parked(  # noqa: PLR0913 - the control, plus who may take it
+async def resolve_parked(
     store: Store,
     branch: BranchId,
     effect_key: str,
     resolution: Literal["assume_done", "assume_not_done"],
     principal: Principal,
-    *,
-    approvers: Sequence[Principal],
 ) -> Controlled:
-    """A human settles an effect in doubt: effect_resolved{by: human}, then resumed (the same approver check as an approval)."""
-    if principal.tenant != store.tenant or principal not in approvers:
-        return forbidden("not an approver of this thread")
+    """A human settles an effect in doubt: effect_resolved{by: human}, then resumed (). The caller has checked the principal's authority (threads.thread.authority)."""
     address = ParkAddress(kind="effect", id=effect_key)
 
     def build(fold: Fold) -> Ok[Sequence[Draft]] | Err[ParseError]:

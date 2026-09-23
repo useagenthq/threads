@@ -197,3 +197,42 @@ async def _one_grant_by_the_approver(store: Store) -> None:
     assert [g.actor.principal for g in grants] == [APPROVER]
     inputs = [e.data.text for e in events if isinstance(e, UserInputEvent)]
     assert inputs == ["send it", "yes"]
+
+
+def test_with_no_approvers_configured_the_requester_answers_its_own_card() -> None:
+    """as decided: an unconfigured agent's requester approves its own calls, so
+    a channel thread never parks forever; another member of the channel still can't."""
+    runs: list[str] = []
+
+    async def send(args: Note, _ctx: RunContext[None]) -> str:
+        runs.append(args.text)
+        return "sent"
+
+    use: JsonValue = {
+        "content": [{"type": "tool_use", "call_id": "c1", "name": "send", "input": {"text": "x"}}],
+        "stop_reason": "tool_use",
+        "usage": USAGE,
+    }
+    send_tool = tool(name="send", description="Send.", input=Note, runs="host", execute=send)
+    bot = agent(model=scripted_model({"responses": [use, text("Sent.")]}), tools=[send_tool])
+    channel = ItemsChannel()
+    store = sqlite(":memory:")
+
+    async def main() -> None:
+        async with host(store=store, agents={"bot": bot}, channels={"fake": channel}) as served:
+            sq = await open_store(scoped(store, TEAM))
+
+            async def challenge() -> str | None:
+                rows = await sq.run(
+                    lambda c: c.execute("SELECT challenge_id FROM approvals").fetchall()
+                )
+                return text_of(rows[0][0]) if rows else None
+
+            await served.receive("fake", webhook("d1", message("m1", "send it")))
+            challenge_id = await until(challenge)
+            await served.receive("fake", webhook("d2", press("b1", challenge_id, APPROVER)))
+            await served.receive("fake", webhook("d3", press("b2", challenge_id, REQUESTER)))
+            await until(lambda: _replies(channel, 2))
+
+    asyncio.run(main())
+    assert runs == ["x"]

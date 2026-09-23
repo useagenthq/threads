@@ -11,8 +11,6 @@ import contextlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 
-from pydantic.experimental.missing_sentinel import MISSING
-
 from threads.agents.agent import Agent
 from threads.agents.definition import Definition
 from threads.agents.intake import Intake
@@ -33,7 +31,7 @@ from threads.log import (
 )
 from threads.result import Ok
 from threads.secrets import resolve
-from threads.thread.control import LOCAL_OPERATOR
+from threads.thread import tree
 from threads.thread.handle import Thread
 
 WAKE_S = 1.0
@@ -46,7 +44,8 @@ class Bound:
     """How a thread runs here: its agent's definition, who may approve, and its channel."""
 
     definition: Definition[None]
-    approvers: tuple[Principal, ...]
+    approvers: tuple[Principal, ...] | None
+    """None: unconfigured (threads.thread.authority)."""
     channel: Conversation | None = None
     """Where a channel thread's replies go."""
 
@@ -100,11 +99,9 @@ class Runner:
             self._credentials[name] = {k: resolve(v) for k, v in adapter.secrets.items()}
 
     def bound_to(self, key: str, *, channel: Conversation | None = None) -> Bound:
-        """An agent key's binding. A channel thread's approvers default to nobody (): approval then comes through the host API."""
+        """An agent key's binding, with its configured approvers (None: unconfigured)."""
         definition = self._agents[key].definition
-        default = () if channel is not None else None
-        approvers = definition.approvers if definition.approvers is not None else default
-        return Bound(definition, approvers if approvers is not None else (LOCAL_OPERATOR,), channel)
+        return Bound(definition, definition.approvers, channel)
 
     async def bound(self, store: Store, thread_id: ThreadId) -> Bound | None:
         """The binding of an existing thread, or None when no host agent owns it."""
@@ -161,31 +158,12 @@ class Runner:
         task.add_done_callback(lambda done: self._ended(thread, done))
         return task
 
-    async def root_of(self, store: Store, thread_id: ThreadId) -> tuple[ThreadId, BranchId] | None:
-        """The thread at the top of a subagent's tree (a thread that is no subagent is its own
-        root), at the branch its child was spawned from."""
-        sq = await open_store(store)
-        root = await sq.root(thread_id)
-        if not isinstance(root, Ok):
-            return None
-        at = (thread_id, root.value)
-        while True:
-            read = await sq.read(at[1], 0)
-            if not isinstance(read, Ok):
-                return None
-            events = read.value.fold.events
-            started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
-            parent = MISSING if started is None else started.data.parent
-            if parent is MISSING or parent.relation != "subagent":
-                return at
-            at = (parent.thread_id, parent.branch_id)
-
     async def resume(self, store: Store, thread_id: ThreadId, branch: BranchId) -> None:
         """Continues a thread a control unparked (or cancelled). It records nothing new; the
         loop takes up what the log holds. A run still in flight (unwinding from the park the
         control answered) is followed by the resume once it ends. A control on a subagent's
         thread resumes the root of its tree, which runs the child on."""
-        root = await self.root_of(store, thread_id)
+        root = await tree.root_of(store, thread_id)
         if root is not None and root[0] != thread_id:
             thread_id, branch = root
         if self.running(branch):

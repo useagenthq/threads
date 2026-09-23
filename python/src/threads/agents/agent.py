@@ -59,8 +59,8 @@ class AgentOptions(TypedDict, total=False):
     lsp: LspOptions
     """lsp for these languages, served by the sandbox image."""
     approvers: Sequence[Principal]
-    """Who may answer approval challenges; default the local operator for run(), nobody for
-    channel-started threads."""
+    """Who may answer approval challenges. Unset: the principal whose input started the run, or
+    the local operator; only the operator may re-send an effect in doubt."""
 
 
 class ServerAgentOptions(AgentOptions, total=False):

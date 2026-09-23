@@ -7,6 +7,7 @@ import asyncio
 from http import HTTPStatus
 
 import httpx
+import pytest
 from pydantic import BaseModel, JsonValue
 from starlette.requests import Request
 
@@ -16,6 +17,7 @@ from threads.log import ParkAddress, Principal
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
+BOB = Principal(issuer="api", tenant="acme", subject="bob")
 
 
 def text(reply: str) -> JsonValue:
@@ -28,14 +30,19 @@ def use(name: str, args: JsonValue) -> JsonValue:
 
 
 async def bearer(request: Request) -> Principal | None:
-    return ALICE if request.headers.get("authorization") == "Bearer alice" else None
+    return {"Bearer alice": ALICE, "Bearer bob": BOB}.get(request.headers.get("authorization", ""))
 
 
 class Note(BaseModel):
     text: str
 
 
-def test_a_childs_approval_is_answered_on_its_thread_and_the_root_resumes() -> None:
+@pytest.mark.parametrize("approvers", [[ALICE], None])
+def test_a_childs_approval_is_answered_on_its_thread_and_the_root_resumes(
+    approvers: list[Principal] | None,
+) -> None:
+    """Configured or not, the root agent's policy governs the child's challenge: with none
+    configured, the root run's requester (alice) may answer it and bob may not."""
     sent: list[str] = []
 
     async def send(args: Note, _ctx: RunContext[None]) -> str:
@@ -49,11 +56,11 @@ def test_a_childs_approval_is_answered_on_its_thread_and_the_root_resumes() -> N
         tools=[send_tool],
     )
     spawn = use("spawn_agent", {"agent": "worker", "prompt": "Send it."})
-    lead = agent(
-        model=scripted_model({"responses": [spawn, text("All done.")]}),
-        tools=[send_tool],
-        subagents=[worker],
-        approvers=[ALICE],
+    model = scripted_model({"responses": [spawn, text("All done.")]})
+    lead = (
+        agent(model=model, tools=[send_tool], subagents=[worker])
+        if approvers is None
+        else agent(model=model, tools=[send_tool], subagents=[worker], approvers=approvers)
     )
     auth = {"authorization": "Bearer alice"}
 
@@ -76,6 +83,9 @@ def test_a_childs_approval_is_answered_on_its_thread_and_the_root_resumes() -> N
                 child = f"/v1/threads/{address.id}"
                 (challenge,) = (await client.get(f"{child}/approvals", headers=auth)).json()
                 decide = f"{child}/approvals/{challenge['challenge_id']}"
+                bob = {"authorization": "Bearer bob"}
+                refused = await client.post(decide, json={"decision": "grant"}, headers=bob)
+                assert refused.status_code == HTTPStatus.FORBIDDEN, refused.text
                 granted = await client.post(decide, json={"decision": "grant"}, headers=auth)
                 assert granted.status_code == HTTPStatus.OK, granted.text
                 # The root resumes in the background: until its run records the child's
