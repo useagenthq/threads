@@ -125,7 +125,7 @@ def test_github_ignores_bots_and_classifies_send_errors() -> None:
     comment: dict[str, JsonValue] = {
         "action": "created",
         "installation": {"id": 42},
-        "sender": {"login": "octo", "type": "User"},
+        "sender": {"id": 7, "login": "octo", "type": "User"},
         "repository": {"full_name": "o/r"},
         "issue": {"number": 3},
         "comment": {"body": "please"},
@@ -137,8 +137,8 @@ def test_github_ignores_bots_and_classifies_send_errors() -> None:
     assert isinstance(parsed, Ok)
     (item,) = parsed.value
     assert isinstance(item, Message)
-    assert (item.address, item.item_key, item.principal.tenant) == ("o/r#3", "d1#0", "inst_42")
-    bot: dict[str, JsonValue] = {**comment, "sender": {"login": "app[bot]", "type": "Bot"}}
+    assert (item.address, item.principal.tenant) == ("o/r#3", "github:42")
+    bot: dict[str, JsonValue] = {**comment, "sender": {"id": 8, "login": "app[bot]", "type": "Bot"}}
     by_bot = hub_request(
         bot,
         **{k.replace("_", "-"): v for k, v in headers.items()},

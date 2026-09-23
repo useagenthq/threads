@@ -3,11 +3,11 @@
 A webhook is verified by `X-Hub-Signature-256` over the raw bytes with the app secret, and the
 URL's GET subscription check by the verify token, compared in constant time. The business phone
 number is the installation and the tenant is `whatsapp:<phone_number_id>` (TS's formats); a
-webhook that speaks for two phone numbers is refused rather than filed under one. One webhook may batch several messages, each keyed by
-its own `wamid`, so none is dropped as a duplicate of a neighbor. Outbound sends carry the
-effect key as `biz_opaque_callback_data`. The Cloud API has no lookup by that key, so an
-uncertain send parks. Meta publishes no official Python SDK; the REST
-API is called through the fenced httpx client.
+webhook that speaks for two phone numbers is refused rather than filed under one. One webhook
+may batch several messages, each keyed by its own `wamid`, so none is dropped as a duplicate of
+a neighbor. Outbound sends carry the effect key as `biz_opaque_callback_data`. The Cloud API has
+no lookup by that key, so an uncertain send parks. Meta publishes no
+official Python SDK; the REST API is called through the fenced httpx client.
 """
 
 import hashlib

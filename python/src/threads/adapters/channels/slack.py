@@ -196,7 +196,10 @@ class SlackChannel:
         body: dict[str, JsonValue] = {
             "channel": channel,
             "text": op["text"],
-            "metadata": {"event_type": "threads_effect", "event_payload": {"effect_key": effect_key}},
+            "metadata": {
+                "event_type": "threads_effect",
+                "event_payload": {"effect_key": effect_key},
+            },
         }
         if thread_ts:
             body["thread_ts"] = thread_ts

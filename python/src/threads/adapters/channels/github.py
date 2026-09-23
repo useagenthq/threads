@@ -1,13 +1,18 @@
 """`github()` (extra `github`, ): issue and pull-request comments.
 
 A webhook is verified by `X-Hub-Signature-256` with the webhook secret; the App installation is
-the tenant and `X-GitHub-Delivery` the delivery id. A new comment by a person becomes one item
-keyed `<delivery>#0`; bots' comments (the app's own included) are ignored. A reply is a comment
-carrying the effect key in a hidden marker, which lookup finds by listing that issue's comments.
-The channel declares its lookup nonfinal, so an uncertain send it can't find parks. GitHub
-publishes no official Python SDK; the REST API is called through the fenced httpx client.
+the installation and `github:<installation id>` the tenant, and the sender is named by its
+numeric id (a login can be renamed and taken). GitHub signs no timestamp and does not sign
+`X-GitHub-Delivery`, so the delivery id is the hash of the signed bytes: a replayed body is the
+same inbox item whatever header it comes with. A new comment by a person becomes one item keyed
+`<delivery>#0`; bots' comments (the app's own included) and threads' own marked comments are
+ignored. A reply is a comment carrying the effect key in a hidden marker, which lookup finds by
+listing that issue's comments. The channel declares its lookup nonfinal, so an uncertain send
+it can't find parks. GitHub publishes no official Python SDK; the REST API is called through
+the fenced httpx client.
 """
 
+import hashlib
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -61,7 +66,7 @@ class _Installation(Loose):
 
 
 class _User(Loose):
-    login: str
+    id: int
     type: str = "User"
 
 
@@ -95,8 +100,11 @@ class _Hook(Loose):
     comment: _Comment | None = None
 
 
+_MARK: Final = "<!-- threads:effect_key="
+
+
 def marker(effect_key: str) -> str:
-    return f"<!-- threads:effect_key={effect_key} -->"
+    return f"{_MARK}{effect_key} -->"
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,12 +127,12 @@ class GitHubChannel:
         header = raw.headers.get("x-hub-signature-256")
         if not hub_signature(resolve(self.webhook_secret), raw.body, header):
             return unverified("the GitHub signature does not match")
-        delivery = raw.headers.get("x-github-delivery")
         hook = _hook(raw)
-        if delivery is None or hook is None or hook.installation is None:
+        if hook is None or hook.installation is None:
             return unverified("not a GitHub App delivery")
-        installation = f"inst_{hook.installation.id}"
-        return Ok(VerifiedDelivery(installation, installation, delivery))
+        installation = str(hook.installation.id)
+        delivery = hashlib.sha256(raw.body).hexdigest()
+        return Ok(VerifiedDelivery(f"github:{installation}", installation, delivery))
 
     def parse(self, raw: RawRequest) -> Ok[Sequence[Inbound]] | Err[ParseError]:
         hook = _hook(raw)
@@ -203,10 +211,10 @@ def _item(raw: RawRequest, hook: _Hook, delivery: VerifiedDelivery) -> Inbound:
         return Ignore(kind="ignore")
     if person.type == "Bot" or hook.repository is None or hook.issue is None:
         return Ignore(kind="ignore")
-    if hook.comment is None or not hook.comment.body:
+    if hook.comment is None or not hook.comment.body.strip() or _MARK in hook.comment.body:
         return Ignore(kind="ignore")
-    tenant = delivery.tenant
-    who = Principal(issuer=f"github:{tenant}", tenant=tenant, subject=person.login)
+    issuer = f"github:{delivery.installation_id}"
+    who = Principal(issuer=issuer, tenant=delivery.tenant, subject=str(person.id))
     address = f"{hook.repository.full_name}#{hook.issue.number}"
     key = f"{delivery.delivery_id}#0"
     answer = _DECISION.fullmatch(hook.comment.body.strip())

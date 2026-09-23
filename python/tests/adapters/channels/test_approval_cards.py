@@ -110,7 +110,7 @@ def test_slack_posts_a_card_whose_buttons_carry_only_the_challenge() -> None:
     assert isinstance(body, dict)
     blocks = body["blocks"]
     assert isinstance(blocks, list)
-    values = [b["value"] for b in blocks[1]["elements"]]  # type: ignore[index] - JSON
+    values: list[str] = [b["value"] for b in blocks[1]["elements"]]  # type: ignore[index] - JSON
     assert [json.loads(v) for v in values] == [
         {"challenge_id": CHALLENGE, "decision": verdict} for verdict in ("grant", "deny")
     ]
@@ -193,7 +193,7 @@ def test_github_asks_for_a_reply_bound_to_the_challenge() -> None:
         body: JsonValue = {
             "action": "created",
             "installation": {"id": 42},
-            "sender": {"login": "octo", "type": "User"},
+            "sender": {"id": 7, "login": "octo", "type": "User"},
             "repository": {"full_name": "o/r"},
             "issue": {"number": 3},
             "comment": {"body": text},
