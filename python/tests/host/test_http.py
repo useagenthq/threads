@@ -216,3 +216,43 @@ def test_the_log_records_the_authenticated_principal_never_the_local_operator() 
             assert [i.actor.principal for i in inputs] == [BOB]
 
     run(main)
+
+
+def test_thread_routes_are_scoped_parsed_and_recorded() -> None:
+    async def main() -> None:
+        bot = agent(model=scripted_model({"responses": [text("Hi.")]}))
+        async with served(bot) as client:
+            receipt = (
+                await start(client, "alice", "k", {"agent": "support", "input": "hi"})
+            ).json()
+            thread, run_id = receipt["thread_id"], receipt["run_id"]
+            sse(
+                await client.get(f"/v1/threads/{thread}/runs/{run_id}/events", headers=as_("alice"))
+            )
+            base = f"/v1/threads/{thread}"
+            foreign = await client.get(f"{base}/runs/{run_id}/events", headers=as_("eve"))
+            assert foreign.status_code == HTTPStatus.NOT_FOUND
+            bad = await client.post(f"{base}/mode", json={"mode": "loud"}, headers=as_("alice"))
+            assert (bad.status_code, bad.json()["error"]["code"]) == (
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+            )
+            moved = await client.post(f"{base}/mode", json={"mode": "plan"}, headers=as_("alice"))
+            assert moved.status_code == HTTPStatus.OK
+            stopped = await client.post(f"{base}/cancel", headers=as_("bob"))
+            assert stopped.status_code == HTTPStatus.OK
+            listed = await client.get(f"{base}/branches", headers=as_("alice"))
+            (branch,) = listed.json()
+            assert (branch["branch_id"], branch["runnable"]) == (receipt["branch_id"], True)
+            wrong = await client.get(
+                f"{base}/timeline", params={"branch_id": run_id}, headers=as_("alice")
+            )
+            assert wrong.status_code == HTTPStatus.NOT_FOUND
+            timeline = (await client.get(f"{base}/timeline", headers=as_("alice"))).json()
+            last = timeline["entries"][-1]["event"]
+            assert (last["type"], last["actor"]["principal"]["subject"]) == (
+                "cancel_requested",
+                "bob",
+            )
+
+    run(main)
