@@ -1,4 +1,4 @@
-import type { KnownEvent, Principal } from "../log";
+import type { KnownEvent, Policy, Principal } from "../log";
 import {
   type Agents,
   type Authorization,
@@ -36,7 +36,11 @@ export type RunEnv<Deps> = {
   readonly ledger: BudgetLedger;
   /** The branch's events, for the host's memory write authority. */
   readonly events: () => readonly KnownEvent[];
+  /** The principal and host ceilings every decision is also made under. */
+  readonly ceilings: readonly Permissions[];
 };
+
+type Permissions = NonNullable<Policy["permissions"]>;
 
 export function loopConfig<Deps, Output>(
   def: SetUp<Deps, Output>,
@@ -71,13 +75,16 @@ export function loopConfig<Deps, Output>(
       })),
     ),
     authorize: narrowed(
-      (call, fold) =>
-        withMemoryWrite(
-          authorize(call, fold),
-          def.memoryWrite,
-          call.data.name,
-          env.events(),
-        ),
+      capped(
+        (call, fold) =>
+          withMemoryWrite(
+            authorize(call, fold),
+            def.memoryWrite,
+            call.data.name,
+            env.events(),
+          ),
+        env.ceilings,
+      ),
       env.child,
     ),
     clock: {
@@ -117,6 +124,39 @@ const authorize: LoopConfig["authorize"] = (call, fold) => {
     ...(d.rule === undefined ? {} : { rule_id: d.rule }),
   };
 };
+
+/**
+ * Each ceiling decides the call too, in its own mode; the stricter wins and a tie reports the
+ * thread's own decision.
+ */
+function capped(
+  own: LoopConfig["authorize"],
+  ceilings: readonly Permissions[],
+): LoopConfig["authorize"] {
+  if (ceilings.length === 0) return own;
+  return (call, fold) =>
+    ceilings.reduce(
+      (decided: Authorization, ceiling) => {
+        const d = decide(ceiling, WORKSPACE, {
+          tool: call.data.name,
+          category: category(
+            call.data.name,
+            toolSpec(fold, call.data.name)?.effect_class,
+          ),
+          input: call.data.input,
+          mode: ceiling.mode,
+        });
+        return RANK[d.decision] > RANK[decided.decision]
+          ? {
+              decision: d.decision,
+              source: d.source,
+              ...(d.rule === undefined ? {} : { rule_id: d.rule }),
+            }
+          : decided;
+      },
+      own(call, fold),
+    );
+}
 
 /** A child's decision is its own policy's, capped by its parent's: the stricter wins. */
 function narrowed(

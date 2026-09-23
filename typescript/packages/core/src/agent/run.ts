@@ -1,12 +1,15 @@
+import type { z } from "zod";
 import { ObserverPump } from "../hooks/observers";
 import {
   BranchId,
   type InputPart,
   type KnownEvent,
+  type PermissionsPolicy,
   type Principal,
   ThreadId,
 } from "../log";
 import { type ChildRun, type LoopEnd, resume } from "../loop";
+import { DEFAULT_PERMISSIONS } from "../permissions";
 import { knownEvents } from "../reduce";
 import {
   type EventDraft,
@@ -48,7 +51,11 @@ export type RunOptions<Deps> = {
   readonly budget?: NonNullable<PinOptions["budget"]>;
   readonly principal?: Principal;
   readonly signal?: AbortSignal;
+  /** The principal and host ceiling (spec/api.json Agent.run ceiling). */
+  readonly ceiling?: Partial<Permissions>;
 };
+
+type Permissions = z.infer<typeof PermissionsPolicy>;
 
 export type Resolved<Deps, Output> = Omit<PinOptions, "mcp"> & {
   readonly bindable: readonly Tool<unknown, unknown, Deps>[];
@@ -110,7 +117,17 @@ export type Plan<Deps> = RunOptions<Deps> & {
   readonly child?: ChildRun;
   /** A handoff target's thread, likewise. */
   readonly target?: Target;
+  /** A handoff target's ceilings: the handing-off run's, never the source agent's policy. */
+  readonly ceilings?: readonly Permissions[];
 };
+
+/** Every ceiling this run is also decided under. */
+export function ceilingsOf(plan: Plan<unknown>): readonly Permissions[] {
+  if (plan.ceilings !== undefined) return plan.ceilings;
+  return plan.ceiling === undefined
+    ? []
+    : [{ ...DEFAULT_PERMISSIONS, ...plan.ceiling }];
+}
 
 /** A handoff target: created on first use with the forwarded history after thread_started. */
 export type Target = {
@@ -191,6 +208,7 @@ export async function execute<Deps, Output>(
       },
       builtin: [...builtin.tools, ...providers.tools],
       events: () => knownEvents(writer.chain),
+      ceilings: ceilingsOf(plan),
       ledger: log.budgets,
       ...(builtin.readFile === undefined ? {} : { readFile: builtin.readFile }),
       ...(child === undefined ? {} : { child }),

@@ -20,6 +20,10 @@ import type { z } from "zod";
 
 type Json = z.infer<typeof JsonValue>;
 
+export type HostCeiling = NonNullable<
+  Parameters<HostRunner["execute"]>[0]["ceiling"]
+>;
+
 export type HostedAgent = {
   readonly key: string;
   readonly agent: Agent<never, unknown>;
@@ -30,6 +34,7 @@ export class HostContext {
   readonly store: Store;
   readonly agents: ReadonlyMap<string, HostedAgent>;
   readonly channels: ReadonlyMap<string, ChannelAdapter>;
+  readonly ceiling: HostCeiling | undefined;
   /** The last in-process execution per branch; a new one waits for it. */
   readonly #lanes = new Map<string, Promise<RunResult<Json> | undefined>>();
   /** A run's in-process result, by run_id, for a halt the log can't show. */
@@ -41,8 +46,10 @@ export class HostContext {
     store: Store,
     agents: Readonly<Record<string, Agent<never, unknown>>>,
     channels: Readonly<Record<string, ChannelAdapter>>,
+    ceiling?: HostCeiling,
   ) {
     this.store = store;
+    this.ceiling = ceiling;
     this.agents = new Map(
       Object.entries(agents).map(([key, agent]) => {
         const runner = hostRunner(agent);
@@ -93,6 +100,7 @@ export class HostContext {
             principal,
             thread: { ...thread, store },
             signal: abort.signal,
+            ...(this.ceiling === undefined ? {} : { ceiling: this.ceiling }),
           },
           [],
         );

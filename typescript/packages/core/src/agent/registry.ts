@@ -1,4 +1,4 @@
-import type { ArtifactRef, EventId, Principal, ThreadId } from "../log";
+import type { ArtifactRef, EventId, Policy, Principal, ThreadId } from "../log";
 import type { Subagent } from "../loop";
 import type { HostRunner } from "./hosted";
 import type { ThreadRef } from "./result";
@@ -13,6 +13,8 @@ export type ChildEnv = {
   /** The originating principal: neither a child nor a handoff creates a new caller. */
   readonly principal: Principal;
   readonly signal?: AbortSignal;
+  /** A handoff target's ceilings: those of the run that handed off. */
+  readonly ceilings?: readonly NonNullable<Policy["permissions"]>[];
 };
 
 export type ChildFactory = (env: ChildEnv) => Subagent;

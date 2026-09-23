@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { agent, scriptedModel, sqlite, type ThreadRef } from "../../src";
+import { z } from "zod";
+import { agent, scriptedModel, sqlite, type ThreadRef, tool } from "../../src";
 import { openStore } from "../../src/agent/sqlite";
 import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
@@ -139,5 +140,79 @@ describe("handoff", () => {
     const target = await events(store, first.to_thread);
     expect(target.filter((e) => e.type === "user_input")).toHaveLength(1);
     expect(billingModel.unexpected()).toBe(0);
+  });
+});
+
+describe("the principal and host ceiling", () => {
+  async function refund(ceiling?: { deny: string[] }) {
+    const store = sqlite(":memory:");
+    const refunded: string[] = [];
+    const pay = tool({
+      name: "refund",
+      description: "Refund a charge.",
+      input: z.object({ id: z.string() }),
+      runs: "host",
+      execute: async ({ id }) => {
+        refunded.push(id);
+        return "refunded";
+      },
+    });
+    const billing = agent({
+      name: "billing",
+      model: scriptedModel({
+        responses: [
+          {
+            content: [
+              {
+                type: "tool_use",
+                call_id: "r1",
+                name: "refund",
+                input: { id: "ch_1" },
+              },
+            ],
+            stop_reason: "tool_use",
+            usage,
+          },
+          say("Done."),
+        ],
+      }),
+      tools: [pay],
+      permissions: { mode: "bypass", allow_bypass: true, allow: ["refund"] },
+    });
+    const front = agent({
+      name: "front",
+      model: scriptedModel({ responses: [handoff("billing")] }),
+      handoffs: [billing],
+    });
+    const result = await front.run("Refund me.", {
+      store,
+      ...(ceiling === undefined ? {} : { ceiling }),
+    });
+    if (result.status !== "handed_off") throw new Error(result.status);
+    const target = await events(store, result.to_thread);
+    const decision = target.find((e) => e.type === "permission_decision");
+    return { refunded, decision };
+  }
+
+  test("a handoff target's own allow runs without a ceiling", async () => {
+    const { refunded, decision } = await refund();
+    expect(refunded).toEqual(["ch_1"]);
+    expect(
+      decision?.type === "permission_decision" && decision.data,
+    ).toMatchObject({
+      decision: "allow",
+    });
+  });
+
+  test("the run's ceiling caps the target: its deny wins over the target's allow", async () => {
+    const { refunded, decision } = await refund({ deny: ["refund"] });
+    expect(refunded).toEqual([]);
+    expect(
+      decision?.type === "permission_decision" && decision.data,
+    ).toMatchObject({
+      decision: "deny",
+      source: "policy",
+      rule_id: "refund",
+    });
   });
 });

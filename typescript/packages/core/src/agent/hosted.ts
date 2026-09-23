@@ -3,7 +3,7 @@ import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
 import { pin } from "./pin";
 import type { RunResult, ThreadRef } from "./result";
-import type { Hooks } from "./run";
+import type { Hooks, RunOptions } from "./run";
 import { execute, type Resolved } from "./run";
 import type { Store } from "./sqlite";
 
@@ -22,6 +22,7 @@ export type HostRunner = {
       readonly principal: Principal;
       readonly thread: ThreadRef;
       readonly signal?: AbortSignal;
+      readonly ceiling?: NonNullable<RunOptions<unknown>["ceiling"]>;
     },
     inputs: readonly EventDraft[],
     hooks?: Hooks,

@@ -243,6 +243,35 @@ describe("approvals over the API", () => {
     expect(sent).toEqual(["bob"]);
   });
 
+  test("the host ceiling caps every run it starts", async () => {
+    const sent: string[] = [];
+    h = harness({
+      agents: {
+        support: mailer({
+          responses: [use("send_email", { to: "bob" }, "c1"), say("Sent.")],
+          sent,
+        }),
+      },
+      ceiling: { deny: ["send_email"] },
+    });
+    const { call, store } = h;
+    const accepted = await (
+      await call("POST", "/v1/runs", { as: alice, body, headers: key })
+    ).json();
+    await sseMessages(
+      await call(
+        "GET",
+        `/v1/threads/${accepted.thread_id}/runs/${accepted.run_id}/events`,
+        { as: alice },
+      ),
+    );
+    const log = await eventsOf(store, "acme", accepted.branch_id);
+    expect(
+      log.find((e) => e.type === "permission_decision")?.["data"],
+    ).toMatchObject({ decision: "deny", rule_id: "send_email" });
+    expect(sent).toEqual([]);
+  });
+
   test("a control route on a lease another process holds answers 409 branch_busy", async () => {
     h = harness({
       agents: {

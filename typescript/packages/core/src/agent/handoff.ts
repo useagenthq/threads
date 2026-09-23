@@ -3,7 +3,7 @@ import type { KnownEvent } from "../log";
 import type { EventDraft } from "../store";
 import { type TargetFactory, targetFactory } from "./registry";
 import type { RunResult, ThreadRef } from "./result";
-import { execute, type Plan, type Resolved } from "./run";
+import { ceilingsOf, execute, type Plan, type Resolved } from "./run";
 
 // A handoff's target: a new thread of the listed agent with its own pinned
 // line 0 and policy, under the originating principal. The forwarded history arrives as
@@ -44,6 +44,7 @@ export function target<Deps, Output>(
           prefix: [injected],
         },
         ...(env.signal === undefined ? {} : { signal: env.signal }),
+        ceilings: env.ceilings ?? [],
       },
       [request],
     );
@@ -69,6 +70,7 @@ export async function handedOff<Deps, Output>(
   const to_thread = await factory({
     store: plan.store,
     principal: plan.principal,
+    ceilings: ceilingsOf(plan),
     ...(plan.signal === undefined ? {} : { signal: plan.signal }),
   })({
     threadId: handoff.data.to_thread_id,

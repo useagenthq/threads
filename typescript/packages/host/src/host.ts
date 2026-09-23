@@ -9,7 +9,7 @@ import {
   ThreadId,
 } from "@threads/core/host";
 import { consume } from "./consume";
-import { HostContext } from "./context";
+import { type HostCeiling, HostContext } from "./context";
 import { failure } from "./errors";
 import { type Authenticate, api } from "./http";
 import { challenge, receive } from "./intake";
@@ -31,6 +31,8 @@ export type HostOptions = {
   readonly schedules?: readonly Schedule[];
   /** Maps an HTTP API request to a principal, or null for 401. Absent: every /v1 route is 401. */
   readonly authenticate?: Authenticate;
+  /** The host ceiling every run of this host is also decided under. */
+  readonly ceiling?: HostCeiling;
 };
 
 export type Host = {
@@ -76,6 +78,7 @@ export function host(options: HostOptions): Host {
     options.store,
     options.agents,
     options.channels ?? {},
+    options.ceiling,
   );
   const consuming = new Map<string, Promise<void>>();
   let timer: ReturnType<typeof setInterval> | undefined;
