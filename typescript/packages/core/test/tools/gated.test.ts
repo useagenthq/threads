@@ -11,7 +11,7 @@ import { openStore } from "../../src/agent/sqlite";
 import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { refReader, verifyRequests } from "../../src/render";
-import type { WebTransport } from "../../src/tools/web-fetch";
+import type { WebTransport } from "../../src/tools/web-transport";
 import { unwrap } from "../store/helpers";
 
 // The gated built-ins in an agent: pinned only when configured,

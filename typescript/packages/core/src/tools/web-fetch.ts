@@ -1,28 +1,14 @@
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 import { sha256Hex } from "../hash";
 import type { ToolContext, ToolRun } from "../loop/types";
 import { type Builtin, builtin, done } from "./builtin";
 import { WebFetchInput } from "./gateway-inputs";
 import { htmlTitle, htmlToMarkdown } from "./html";
-import { isPublicAddress } from "./ssrf";
+import { liveTransport, vet, type WebTransport } from "./web-transport";
 
 // web_fetch: host-side, read_only, fenced at the real transport. Every
 // resolved address of every hop must be public (ssrf.ts); at most 5 same-host redirects, and a
 // redirect to another host ends the call with its URL. The page is untrusted reference: the
 // result records the final URL, status and content hash, and cites the fetched artifact.
-
-/** The host's network, injectable so tests never touch it. */
-export type WebTransport = {
-  readonly fetch: (url: string, init: RequestInit) => Promise<Response>;
-  readonly resolve: (host: string) => Promise<readonly string[]>;
-};
-
-export const liveTransport: WebTransport = {
-  fetch: (url, init) => fetch(url, init),
-  resolve: async (host) =>
-    (await lookup(host, { all: true, verbatim: true })).map((a) => a.address),
-};
 
 const MAX_REDIRECTS = 5;
 const MAX_BYTES = 5 << 20;
@@ -32,31 +18,6 @@ const TIMEOUT_MS = 30_000;
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 const TEXTUAL =
   /^(text\/|application\/(json|xml|xhtml\+xml|[a-z.+-]+\+(json|xml))$)/;
-
-/** Why this URL may not be fetched, or undefined when every address is public. */
-// ponytail: the addresses are checked, then fetch resolves again (a rebinding window). Pinning
-// the checked address needs a connector that dials an IP with the original SNI.
-export async function denied(
-  url: URL,
-  transport: WebTransport,
-): Promise<string | undefined> {
-  if (url.protocol !== "https:" && url.protocol !== "http:")
-    return `only http and https URLs are fetched, not ${url.protocol}`;
-  if (url.username !== "" || url.password !== "")
-    return "a URL with credentials is not fetched";
-  const host = url.hostname.replace(/^\[|\]$/g, "");
-  let addresses: readonly string[];
-  try {
-    addresses = isIP(host) === 0 ? await transport.resolve(host) : [host];
-  } catch {
-    return `${host} does not resolve`;
-  }
-  if (addresses.length === 0) return `${host} does not resolve`;
-  const blocked = addresses.find((a) => !isPublicAddress(a));
-  return blocked === undefined
-    ? undefined
-    : `${host} resolves to a non-public address (${blocked})`;
-}
 
 async function body(res: Response): Promise<Uint8Array> {
   const reader = res.body?.getReader();
@@ -88,13 +49,12 @@ async function follow(
 ): Promise<Fetched> {
   let url = start;
   for (let hop = 0; ; hop += 1) {
-    const refused = await denied(url, transport);
-    if (refused !== undefined) return done(`denied: ${refused}`, true);
+    const target = await vet(url, transport);
+    if ("denied" in target) return done(`denied: ${target.denied}`, true);
     // The lease is re-checked at the send point: a stale owner sends nothing.
     const fenced = await ctx.fence();
     if (!fenced.ok) return { kind: "not_sent" };
-    const res = await transport.fetch(url.href, {
-      redirect: "manual",
+    const res = await transport.fetch(url.href, target.address, {
       signal: AbortSignal.any([ctx.signal, AbortSignal.timeout(TIMEOUT_MS)]),
       headers: {
         "user-agent": "threads-web-fetch/1",

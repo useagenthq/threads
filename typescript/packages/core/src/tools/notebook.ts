@@ -55,8 +55,11 @@ function outputText(raw: unknown): string {
   const o = Output.safeParse(raw);
   if (!o.success) return "[output]";
   if (o.data.text !== undefined) return joined(o.data.text);
-  if (o.data.ename !== undefined) return `${o.data.ename}: ${o.data.evalue ?? ""}`;
-  const plain = z.union([z.string(), z.array(z.string())]).safeParse(o.data.data?.["text/plain"]);
+  if (o.data.ename !== undefined)
+    return `${o.data.ename}: ${o.data.evalue ?? ""}`;
+  const plain = z
+    .union([z.string(), z.array(z.string())])
+    .safeParse(o.data.data?.["text/plain"]);
   if (plain.success) return joined(plain.data);
   return `[${Object.keys(o.data.data ?? {}).join(", ") || o.data.output_type} output]`;
 }

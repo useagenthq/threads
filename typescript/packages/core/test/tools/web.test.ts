@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { err, ok } from "../../src/result";
 import { htmlTitle, htmlToMarkdown } from "../../src/tools/html";
 import { isPublicAddress } from "../../src/tools/ssrf";
-import { type WebTransport, webFetch } from "../../src/tools/web-fetch";
+import { webFetch } from "../../src/tools/web-fetch";
 import { type SearchBackend, webSearch } from "../../src/tools/web-search";
+import type { WebTransport } from "../../src/tools/web-transport";
 import { bound } from "./kit";
 
 // web_fetch and web_search: host-side, fenced, SSRF-guarded,

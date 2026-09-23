@@ -169,8 +169,6 @@ export function answered(
     : done(shown);
 }
 
-export type LspServer = Server;
-
 function servers(languages: readonly string[]): readonly Server[] {
   return languages.map((name) => {
     const server = LSP_SERVERS[name];

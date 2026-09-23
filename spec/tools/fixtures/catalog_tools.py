@@ -160,7 +160,9 @@ def _computer_crash(root: pathlib.Path) -> None:
         extra={
             "model.json": NO_MODEL,
             "sandbox.json": {
-                "tools": {"computer": {"output": "click done", "executed_keys": {KEY: "click done"}}}
+                "tools": {
+                    "computer": {"output": "click done", "executed_keys": {KEY: "click done"}}
+                }
             },
         },
     )

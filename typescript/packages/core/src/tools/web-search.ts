@@ -35,18 +35,25 @@ export type SearchBackend = {
 };
 
 /** A host equals a listed domain or is a subdomain of it. */
+/** A host equals a listed domain (`*.` and case ignored) or is a subdomain of it. */
 const within = (host: string, domains: readonly string[]): boolean =>
-  domains.some((d) => host === d || host.endsWith(`.${d}`));
+  domains.some((listed) => {
+    const d = listed
+      .toLowerCase()
+      .replace(/^\*\./, "")
+      .replace(/^\.+|\.+$/g, "");
+    return host === d || host.endsWith(`.${d}`);
+  });
 
 function hostOf(url: string): string | undefined {
   try {
-    return new URL(url).hostname;
+    return new URL(url).hostname.toLowerCase();
   } catch {
     return undefined;
   }
 }
 
-export function kept(
+function kept(
   hits: readonly SearchHit[],
   allowed: readonly string[] | undefined,
   blocked: readonly string[] | undefined,
@@ -54,7 +61,9 @@ export function kept(
   return hits.filter((hit) => {
     const host = hostOf(hit.url);
     if (host === undefined) return false;
-    if (allowed !== undefined && !within(host, allowed)) return false;
+    // No allowed domains means no restriction.
+    if (allowed !== undefined && allowed.length > 0 && !within(host, allowed))
+      return false;
     return blocked === undefined || !within(host, blocked);
   });
 }

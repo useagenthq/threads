@@ -7,8 +7,9 @@ import type { GitOptions } from "./git/host";
 import { openPullRequest } from "./git/pull-request";
 import { gitPush } from "./git/push";
 import { lsp } from "./lsp";
-import { type WebTransport, webFetch } from "./web-fetch";
+import { webFetch } from "./web-fetch";
 import { type SearchBackend, webSearch } from "./web-search";
+import type { WebTransport } from "./web-transport";
 
 // The capability-gated built-ins: offered only when
 // their capability is configured. Naming one whose capability is missing is a setup error that

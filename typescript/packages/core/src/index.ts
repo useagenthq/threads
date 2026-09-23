@@ -32,6 +32,7 @@ export type {
   SearchHit,
 } from "./tools";
 export type { GitOptions } from "./tools/git/host";
-export type { WebTransport } from "./tools/web-fetch";
+export { brave, exa, tavily } from "./tools/search-backends";
+export type { WebTransport } from "./tools/web-transport";
 export * from "./verify";
 export { VERSION } from "./version";
