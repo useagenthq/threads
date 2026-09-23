@@ -3,16 +3,16 @@
 import json
 
 import pytest
+from pydantic_core import to_json
 
 from threads import ConfigError, secret
-from threads.reduce.handlers import to_json
 from threads.secrets import resolve
 
 
 def test_a_secret_serializes_and_prints_as_its_name_only() -> None:
     ref = secret("API_KEY")
     assert repr(ref) == "secret('API_KEY')"
-    assert json.dumps(to_json(ref)) == '{"name": "API_KEY"}'
+    assert json.loads(to_json(ref)) == {"name": "API_KEY"}
 
 
 def test_resolve_reads_the_host_environment_only_when_called() -> None:
