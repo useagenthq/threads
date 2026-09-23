@@ -71,11 +71,17 @@ def _delete_one(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, n
             "UPDATE resources SET state = 'releasing' WHERE owner_branch_id = ? AND state = 'live'",
             (branch,),
         )
-    for table in ("approvals", "inbox", "channel_threads", "run_receipts"):
+    for table in ("approvals", "inbox", "channel_threads", "run_receipts", "schedule_threads"):
         conn.execute(
             f"DELETE FROM {table} WHERE thread_id = ? AND tenant_id = ?",  # noqa: S608
             (thread_id, tenant_id),
         )
+    # Its undecided reservations are dropped, never logged; the rows only keep their keys taken.
+    conn.execute(
+        "UPDATE schedule_occurrences SET state = 'retired'"
+        " WHERE thread_id = ? AND tenant_id = ? AND state = 'pending'",
+        (thread_id, tenant_id),
+    )
     conn.execute(
         "DELETE FROM branches WHERE thread_id = ? AND tenant_id = ?", (thread_id, tenant_id)
     )

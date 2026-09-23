@@ -1,19 +1,25 @@
-"""Job `schedule-two-schedulers-one-run`: two host processes
-fire the same schedule's occurrences at once on one store. Each occurrence is claimed once, so
-it fires once and starts one run."""
+"""Job `schedule-two-schedulers-one-run`: two host processes tick the same schedule over the same
+due occurrences on one store. Each occurrence is decided once and runs at most once."""
 
 import asyncio
 import json
-from collections import Counter
 from pathlib import Path
 
 import pytest
-from jobs.drill import finish, pids, spawn
+from jobs.drill import finish, spawn
 from jobs.worker import rows
 
-from threads.log import ScheduleFiredEvent, UserInputEvent
+from threads.log import (
+    Event,
+    ScheduleFiredEvent,
+    ScheduleSkippedEvent,
+    ThreadId,
+    ThreadStartedEvent,
+    UserInputEvent,
+)
 from threads.result import Ok
 from threads.store import SqliteStore
+from threads.store.sql import text_of
 
 pytestmark = pytest.mark.jobs
 
@@ -30,35 +36,41 @@ def test_two_schedulers_run_each_occurrence_once(tmp_path: Path) -> None:
     for scheduler in schedulers:
         finish(scheduler)
 
-    claims = Counter(int(str(r["at"])) for r in rows(tmp_path / "claims.jsonl"))
-    assert claims == Counter(OCCURRENCES)
-    assert len(rows(tmp_path / "model.jsonl")) == len(OCCURRENCES)
-    fired, inputs = asyncio.run(_fired(tmp_path))
-    assert sorted(fired) == OCCURRENCES
-    assert inputs == len(OCCURRENCES)
-    # A claim and its run belong to one process: runs started only where claims were won.
-    assert pids(tmp_path, "model.jsonl") <= pids(tmp_path, "claims.jsonl")
+    decided, events = asyncio.run(_read(tmp_path))
+    # Each occurrence is decided exactly once, by one scheduler.
+    assert [at for at, _ in decided] == OCCURRENCES
+    fired = [e.data.scheduled_for for e in events if isinstance(e, ScheduleFiredEvent)]
+    skipped = [e.data.reason for e in events if isinstance(e, ScheduleSkippedEvent)]
+    # One fired an occurrence while the other's run still held the thread: an overlap, run never.
+    assert fired == [at for at, state in decided if state == "fired"]
+    assert set(skipped) <= {"overlap"}
+    assert len(fired) + len(skipped) == len(OCCURRENCES)
+    assert fired
+    # Every fired occurrence ran exactly once: one input, one model call, across both processes.
+    assert sum(isinstance(e, UserInputEvent) for e in events) == len(fired)
+    assert len(rows(tmp_path / "model.jsonl")) == len(fired)
+    assert sum(isinstance(e, ThreadStartedEvent) for e in events) == 1
 
 
-async def _fired(where: Path) -> tuple[list[int], int]:
-    """Every schedule_fired's occurrence, and the user_inputs, across the store's threads."""
+async def _read(where: Path) -> tuple[list[tuple[int, str]], list[Event]]:
+    """The decided occurrences, and the schedule's one thread read back from the log."""
     opened = await SqliteStore.open(where / "threads.db")
     assert isinstance(opened, Ok)
     sq = opened.value
     try:
-        threads = await sq.run(
-            lambda c: c.execute("SELECT thread_id FROM schedule_occurrences").fetchall()
+        decided: list[tuple[int, str]] = await sq.run(
+            lambda c: c.execute(
+                "SELECT occurrence_at, state FROM schedule_occurrences ORDER BY occurrence_at"
+            ).fetchall()
         )
-        fired: list[int] = []
-        inputs = 0
-        for (thread,) in threads:
-            root = await sq.root(thread)
-            assert isinstance(root, Ok)
-            log = await sq.read(root.value, 0)
-            assert isinstance(log, Ok)
-            events = log.value.fold.events
-            fired += [e.data.scheduled_for for e in events if isinstance(e, ScheduleFiredEvent)]
-            inputs += sum(isinstance(e, UserInputEvent) for e in events)
-        return fired, inputs
+        found: list[tuple[object]] = await sq.run(
+            lambda c: c.execute("SELECT thread_id FROM schedule_threads").fetchall()
+        )
+        ((thread,),) = found
+        root = await sq.root(ThreadId(text_of(thread)))
+        assert isinstance(root, Ok)
+        log = await sq.read(root.value, 0)
+        assert isinstance(log, Ok)
+        return decided, list(log.value.fold.events)
     finally:
         await sq.close()

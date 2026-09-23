@@ -215,6 +215,18 @@ export class HostContext {
     this.#stop.abort();
   }
 
+  /** Until every in-process job has ended, including jobs they queued; later ones still run. */
+  async idle(): Promise<void> {
+    let seen: readonly Promise<unknown>[] = [];
+    while (
+      seen.length !== this.#lanes.size ||
+      !seen.every((job) => [...this.#lanes.values()].includes(job))
+    ) {
+      seen = [...this.#lanes.values()];
+      await Promise.all(seen);
+    }
+  }
+
   /** Aborts, then waits for every in-process execution. */
   async stop(): Promise<void> {
     this.abort();

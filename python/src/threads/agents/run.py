@@ -58,6 +58,7 @@ from threads.log import (
     ThreadStartedEvent,
 )
 from threads.loop import gates
+from threads.loop.drafts import draft
 from threads.loop.drive import drive
 from threads.loop.runtime import Halt, Idle, Parked, RunErrorCode, Runtime, serving
 from threads.loop.stubs import Stub
@@ -65,7 +66,7 @@ from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, provider_tools
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
-from threads.store import SqliteStore, StoredEvent, Writer
+from threads.store import Draft, SqliteStore, StoredEvent, Writer
 from threads.store.lines import uuid7
 from threads.thread.control import LOCAL_OPERATOR
 from threads.tools import ReadResults, SandboxTools
@@ -344,6 +345,22 @@ async def with_servers[D](
     if len(set(names)) != len(names):
         raise ConfigError("duplicate_name", f"tool names repeat: {names}")
     return connected
+
+
+async def pinned_start[D](definition: Definition[D], store: Store) -> Draft:
+    """The thread_started a new thread of this agent opens with, its config durable first: what a
+    host appends itself when it creates the thread (a schedule's). Its tool servers are connected
+    only to list their tools, which dispatches nothing, so no writer fences them."""
+    async with AsyncExitStack() as stack:
+        started, config = (await with_servers(definition, stack, outside_any_branch)).pin()
+    await (await open_store(store)).put_artifact(config)
+    return draft("thread_started", started)
+
+
+async def outside_any_branch() -> bool:
+    """The fence for listing tools on no branch (check(), a host pinning a new thread): there is
+    no lease to lose, and listing dispatches nothing."""
+    return True
 
 
 def _ceilings[D](options: RunOptions[D], launch: Launch | None) -> tuple[Permissions, ...]:

@@ -13,6 +13,7 @@ export type AgentEvent = EventOf<
   | "team_message"
   | "channel_delivery"
   | "schedule_fired"
+  | "schedule_skipped"
 >;
 
 export function applyAgents(fold: Fold, e: AgentEvent): void {
@@ -43,6 +44,7 @@ export function applyAgents(fold: Fold, e: AgentEvent): void {
       fold.itemKeys.add(e.data.item_key);
       return;
     case "schedule_fired":
+    case "schedule_skipped":
       fold.occurrenceIds.add(e.data.occurrence_id);
       return;
     default:

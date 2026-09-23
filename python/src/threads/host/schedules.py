@@ -1,10 +1,11 @@
 """Schedules (spec/api.json `Schedule`): a cron expression in an IANA zone starts
-a run of a host agent at each occurrence.
+a run of a host agent at each occurrence, on the schedule's one thread.
 
-An occurrence is claimed in `schedule_occurrences` before its schedule_fired is appended, so two
-hosts that see the same due minute start one run. Each occurrence runs on a new thread, so an
-occurrence never overlaps the last one's run. Operator config: the local tenant, and the
-schedule itself as the principal.
+A due occurrence (tenant, schedule id, scheduled instant UTC) is first reserved as a pending row,
+with the agent, input and timezone it fires with frozen, and then decided under its thread's
+writer (`host.occurrences`). Every pass first decides the tenant's pending rows, whatever
+schedules are configured now, so a reservation outlives a restart or its schedule's removal.
+Operator config: the local tenant, and the schedule itself as the principal.
 """
 
 import asyncio
@@ -16,13 +17,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from threads._generated.host_api_v1 import Input
 from threads.agents.config import ConfigError
-from threads.agents.intake import Intake
+from threads.agents.run import pinned_start
 from threads.agents.store import now_ms, open_store
+from threads.host.occurrences import Pass, decide_thread
 from threads.host.runs import Runner
-from threads.log import BranchId, Principal, ThreadId
-from threads.store import LOCAL_TENANT, Draft, StoredEvent
-from threads.store.lines import uuid7
-from threads.thread.handle import Thread
+from threads.log.jcs import canonicalize
+from threads.reduce.handlers import to_json
+from threads.result import Ok
+from threads.store import LOCAL_TENANT
+from threads.store.schedules import Pending
 
 MINUTE_MS: Final = 60_000
 _RANGES: Final = ((0, 59), (0, 23), (1, 31), (1, 12), (0, 6))
@@ -120,11 +123,17 @@ def is_due(cron: Cron, timezone: str, at: int) -> bool:
 
 class Scheduler:
     def __init__(
-        self, runner: Runner, schedules: Sequence[Schedule], clock: Callable[[], int] = now_ms
+        self,
+        runner: Runner,
+        schedules: Sequence[Schedule],
+        clock: Callable[[], int] = now_ms,
+        *,
+        tenant: str = LOCAL_TENANT,
     ) -> None:
         self._runner = runner
         self._schedules = schedules
         self._clock = clock
+        self._pass = Pass(runner, runner.store(tenant), tenant)
 
     def check(self, agents: Callable[[str], object]) -> None:
         """ready(): every schedule names a host agent, a valid cron and a known zone."""
@@ -136,45 +145,63 @@ class Scheduler:
 
     async def run(self) -> None:
         """Checks each minute boundary as it passes; runs until cancelled."""
+        started_at = self._clock()
         while True:
+            await self.tick(started_at, self._clock())
             now = self._clock()
-            at = now - now % MINUTE_MS
-            await self.tick(at)
-            await asyncio.sleep((at + MINUTE_MS - self._clock()) / 1000)
+            await asyncio.sleep((now - now % MINUTE_MS + MINUTE_MS - now) / 1000)
 
-    async def tick(self, at: int) -> None:
-        """Fires every schedule due at the minute starting at `at` (UTC ms)."""
+    async def tick(self, started_at: int, now: int) -> None:
+        """One pass at `now`; `started_at` is when this host became ready."""
+        await self._sweep()
         for schedule in self._schedules:
-            if is_due(parse_cron(schedule.cron), schedule.timezone, at):
-                await self.fire(schedule, at)
+            await self._reserve_due(schedule, started_at, now)
+        await self._sweep()
+        await self._resume_open()
 
-    async def fire(self, schedule: Schedule, at: int) -> bool:
-        """Claims the occurrence and starts its run; False when another scheduler had it."""
-        store = self._runner.store(LOCAL_TENANT)
-        sq = await open_store(store)
-        now = self._clock()
-        thread_id, branch_id = ThreadId(uuid7(now)), BranchId(uuid7(now))
-        if not await sq.tables.claim(schedule.id, at, thread_id, now):
-            return False
-        await sq.create(thread_id, branch_id, now)
-        fired = uuid7(now)
-        data = {
-            "schedule_id": schedule.id,
-            "occurrence_id": f"{schedule.id}:{at}",
-            "scheduled_for": at,
-            "timezone": schedule.timezone,
-        }
-        recorded: asyncio.Future[StoredEvent] = asyncio.get_running_loop().create_future()
-        intake = Intake(
-            "schedule",
-            recorded,
-            before=(Draft("schedule_fired", data, {"kind": "scheduler"}, True, fired),),
-            delivery_event_id=fired,
+    async def _sweep(self) -> None:
+        """Decides every pending row of the tenant, thread by thread in occurrence order."""
+        rows = (await open_store(self._pass.store)).tables.schedules
+        threads = dict.fromkeys(r.thread_id for r in await rows.pending())
+        for thread in threads:
+            await decide_thread(self._pass, thread)
+
+    async def _reserve_due(self, schedule: Schedule, started_at: int, now: int) -> None:
+        """Reserves the schedule's occurrences due since its last one (or since ready)."""
+        sq = await open_store(self._pass.store)
+        rows = sq.tables.schedules
+        after = await rows.last(schedule.id) or started_at
+        cron = parse_cron(schedule.cron)
+        first = after - after % MINUTE_MS + MINUTE_MS
+        # ponytail: one is_due per minute since the last occurrence; step by cron fields if a
+        # host is ever down for months.
+        due = [at for at in range(first, now + 1, MINUTE_MS) if is_due(cron, schedule.timezone, at)]
+        if not due:
+            return
+        definition = self._runner.bound_to(schedule.agent).definition
+        thread = await rows.thread(
+            schedule.id, lambda: pinned_start(definition, self._pass.store), self._clock()
         )
-        bound = self._runner.bound_to(schedule.agent)
-        thread = Thread(thread_id, branch_id, store)
-        who = Principal(issuer="schedule", tenant=LOCAL_TENANT, subject=schedule.id)
-        task = self._runner.launch(bound, schedule.input, thread, who, intake=intake)
-        # Returns once the occurrence's input is durable (or its run ended without one).
-        await asyncio.wait({recorded, task}, return_when=asyncio.FIRST_COMPLETED)
-        return True
+        given = schedule.input
+        text = canonicalize(given if isinstance(given, str) else [to_json(p) for p in given])
+        if not isinstance(text, Ok):
+            raise AssertionError("a parsed input is canonical JSON")
+        for at in due:
+            missed = "missed" if at <= started_at else None
+            row = Pending(
+                schedule.id, at, thread, missed, schedule.agent, text.value, schedule.timezone
+            )
+            await rows.reserve(row, self._clock())
+
+    async def _resume_open(self) -> None:
+        """A run whose input is durable but that never went (its host died, or the writer was
+        held when it fired) runs on from the log."""
+        sq = await open_store(self._pass.store)
+        for thread in await sq.tables.schedules.threads():
+            root = await sq.root(thread)
+            read = await sq.read(root.value, self._clock()) if isinstance(root, Ok) else None
+            if not isinstance(root, Ok) or not isinstance(read, Ok):
+                continue
+            fold = read.value.fold
+            if fold.in_turn and not fold.parked and not self._runner.running(root.value):
+                await self._runner.resume(self._pass.store, thread, root.value)

@@ -1,5 +1,5 @@
-"""Schedules: cron in an IANA zone, and an occurrence claimed once before its
-schedule_fired, so two schedulers that see the same due minute start one run."""
+"""Cron parsing and ready() checks, and the single winner of a pending occurrence. The schedule
+lifecycle is replayed from the shared vector in test_schedule_threads.py."""
 
 import asyncio
 from datetime import UTC, datetime
@@ -8,11 +8,12 @@ import pytest
 from pydantic import JsonValue
 
 from threads import ConfigError, agent, scripted_model, sqlite
-from threads.agents.store import open_store
+from threads.agents.store import Store, now_ms, open_store
 from threads.host import Schedule, host
+from threads.host.occurrences import log_occurrence
 from threads.host.runs import Runner
 from threads.host.schedules import Scheduler, parse_cron
-from threads.log import ScheduleFiredEvent, UserInputEvent
+from threads.log import ScheduleFiredEvent, ScheduleSkippedEvent
 from threads.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
@@ -37,32 +38,54 @@ def test_cron_fields_steps_ranges_and_day_rules() -> None:
             parse_cron(bad)
 
 
-def test_an_occurrence_is_claimed_once_and_runs_on_its_own_thread() -> None:
-    schedule = Schedule(id="digest", agent="bot", cron="0 9 * * *", input="Send the digest.")
+def test_two_schedulers_holding_one_pending_row_the_stale_one_appends_nothing() -> None:
+    schedule = Schedule(id="daily", agent="bot", cron="0 9 * * *", input="Report.")
+    nine = int(datetime(2026, 5, 1, 9, 0, tzinfo=UTC).timestamp() * 1000)
+    day = 86_400_000
+
+    def runner(store: Store) -> Runner:
+        return Runner(
+            store, {"bot": agent(name="bot", model=scripted_model({"responses": [REPLY] * 2}))}, {}
+        )
 
     async def main() -> None:
         store = sqlite(":memory:")
-        bot = agent(model=scripted_model({"responses": [REPLY]}))
-        runner = Runner(store, {"bot": bot}, {})
-        at = int(datetime(2026, 9, 23, 9, 0, tzinfo=UTC).timestamp() * 1000)
-        first, second = Scheduler(runner, [schedule]), Scheduler(runner, [schedule])
-        assert await first.fire(schedule, at)
-        assert not await second.fire(schedule, at)
-        await runner.stop()
+        a = runner(store)
+        await Scheduler(a, [schedule]).tick(nine - 60_000, nine + 1_000)
+        await a.settled()
         sq = await open_store(store)
-        rows = await sq.run(
-            lambda c: c.execute("SELECT thread_id FROM schedule_occurrences").fetchall()
-        )
-        ((thread,),) = rows
+        (thread,) = await sq.tables.schedules.threads()
         root = await sq.root(thread)
         assert isinstance(root, Ok)
-        read = await sq.read(root.value, 0)
+        # An outbound delivery holds the writer when the next occurrence falls due: it stays
+        # pending.
+        outbound = await sq.acquire(root.value, "outbound", now_ms)
+        assert isinstance(outbound, Ok)
+        await Scheduler(a, [schedule]).tick(nine - 60_000, nine + day + 1_000)
+        await outbound.value.release()
+        # After a restart, two schedulers both select it; one decides it first.
+        (stale,) = await sq.tables.schedules.pending()
+        b = runner(store)
+        await Scheduler(b, [schedule]).tick(nine + day + 60_000, nine + day + 60_000)
+        await b.settled()
+        writer = await sq.acquire(root.value, "stale-scheduler", now_ms)
+        assert isinstance(writer, Ok)
+        assert not await log_occurrence(writer.value, "local", stale, None)
+        await writer.value.release()
+        read = await sq.read(root.value, now_ms())
         assert isinstance(read, Ok)
-        events = read.value.fold.events
-        (fired,) = [e for e in events if isinstance(e, ScheduleFiredEvent)]
-        assert (fired.data.schedule_id, fired.data.scheduled_for) == ("digest", at)
-        (entered,) = [e for e in events if isinstance(e, UserInputEvent)]
-        assert (entered.data.source, entered.data.delivery_event_id) == ("schedule", fired.event_id)
+        occurrences = ScheduleFiredEvent | ScheduleSkippedEvent
+        logged = [type(e) for e in read.value.fold.events if isinstance(e, occurrences)]
+        assert logged == [ScheduleFiredEvent, ScheduleFiredEvent]
+        states = await sq.run(
+            lambda c: c.execute(
+                "SELECT state, logged_seq IS NOT NULL FROM schedule_occurrences"
+                " ORDER BY occurrence_at"
+            ).fetchall()
+        )
+        assert states == [("fired", 1), ("fired", 1)]
+        await a.stop()
+        await b.stop()
 
     asyncio.run(main())
 

@@ -86,6 +86,7 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "team_message":
     case "channel_delivery":
     case "schedule_fired":
+    case "schedule_skipped":
       applyAgents(fold, e);
       return;
     case "injected":
@@ -96,7 +97,6 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "hook_decision":
     case "park_escalated":
     case "stop_when_idle":
-    case "schedule_skipped":
     case "log_repaired":
     case "retry_scheduled":
     case "context_edited":

@@ -1,14 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { sqlite } from "@threads/core";
-import { storeConnection } from "@threads/core/host";
+import {
+  openStore,
+  storeConnection,
+  ThreadId,
+  tenantStore,
+} from "@threads/core/host";
 import { z } from "zod";
 import { HostContext } from "../src/context";
 import { occurrences, parseCron } from "../src/cron";
-import { bindSchedules, type Schedule, tick } from "../src/schedules";
+import { bindSchedules, tick } from "../src/schedules";
+import { logOccurrence } from "../src/schedules/decide";
+import { pendingRows } from "../src/schedules/rows";
 import { eventsOf, mailer, say } from "./kit";
 
-// Schedules: occurrence identity, DST rules, missed and overlapping occurrences,
-// and one run when two schedulers see the same due occurrence.
+// Cron parsing and DST rules, and the single winner of a pending occurrence. The schedule lifecycle
+// is replayed from the shared vector in schedule-threads.test.ts.
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
@@ -60,124 +67,74 @@ describe("cron", () => {
   });
 });
 
-const Row = z.strictObject({
-  occurrence_at: z.int(),
-  state: z.string(),
-  reason: z.string().nullable(),
-  thread_id: z.string().nullable(),
-});
+const nine = Date.parse("2026-05-01T09:00:00Z");
+const DAY = 86_400_000;
 
-function setup(
-  schedule: Omit<Schedule, "agent"> = {
-    id: "daily",
-    cron: "0 9 * * *",
-    input: "Report.",
-  },
-) {
-  const store = sqlite(":memory:");
+async function scheduleThread(store: ReturnType<typeof sqlite>) {
+  const { db } = await storeConnection(store);
+  const [row] = z
+    .array(z.strictObject({ thread_id: ThreadId }))
+    .parse(db.all("SELECT thread_id FROM schedule_threads", []));
+  const { log } = await openStore(tenantStore(store, "local"));
+  if (row === undefined) throw new Error("no schedule thread");
+  const main = log.mainBranch(row.thread_id);
+  if (!main.ok) throw new Error(main.error.message);
+  return { db, log, branch: main.value };
+}
+
+function host(store: ReturnType<typeof sqlite>) {
   const ctx = new HostContext(
     store,
-    {
-      support: mailer({
-        responses: [say("ok"), say("ok"), say("ok"), say("ok")],
-      }),
-    },
+    { support: mailer({ responses: [say("ok"), say("ok")] }) },
     {},
   );
-  const bound = bindSchedules(ctx, [{ ...schedule, agent: "support" }]);
+  const bound = bindSchedules(ctx, [
+    { id: "daily", agent: "support", cron: "0 9 * * *", input: "Report." },
+  ]);
   if (typeof bound === "string") throw new Error(bound);
-  return { store, ctx, bound };
+  return { ctx, bound };
 }
-
-async function rows(store: ReturnType<typeof sqlite>) {
-  const { db } = await storeConnection(store);
-  return z
-    .array(Row)
-    .parse(
-      db.all(
-        "SELECT occurrence_at, state, reason, thread_id FROM schedule_occurrences ORDER BY occurrence_at",
-        [],
-      ),
-    );
-}
-
-async function scheduleEvents(store: ReturnType<typeof sqlite>) {
-  const [row] = await rows(store);
-  if (row?.thread_id === null || row === undefined) return [];
-  const { db } = await storeConnection(store);
-  const [branch] = z
-    .array(z.strictObject({ branch_id: z.string() }))
-    .parse(
-      db.all("SELECT branch_id FROM branches WHERE thread_id = ?", [
-        row.thread_id,
-      ]),
-    );
-  return eventsOf(store, "local", branch?.branch_id ?? "");
-}
-
-const DAY = 86_400_000;
-const nine = Date.parse("2026-05-01T09:00:00Z");
 
 describe("scheduler", () => {
-  test("ready triggers nothing; the due occurrence fires once with schedule_fired then its input", async () => {
-    const { store, ctx, bound } = setup();
-    const startedAt = nine - 60_000;
-    await tick(ctx, bound, startedAt, startedAt);
-    expect(await rows(store)).toEqual([]);
-    await tick(ctx, bound, startedAt, nine + 1_000);
-    await tick(ctx, bound, startedAt, nine + 2_000);
-    await ctx.stop();
-    expect((await rows(store)).map((r) => r.state)).toEqual(["fired"]);
-    const types = (await scheduleEvents(store)).map((e) => e.type);
-    expect(types.slice(0, 3)).toEqual([
-      "thread_started",
+  test("two schedulers holding one pending row after a restart: the stale one appends nothing", async () => {
+    const store = sqlite(":memory:");
+    const a = host(store);
+    await tick(a.ctx, a.bound, nine - 60_000, nine + 1_000);
+    await a.ctx.idle();
+    // An outbound delivery holds the writer when the next occurrence falls due: it stays pending.
+    const { db, log, branch } = await scheduleThread(store);
+    const outbound = log.acquire(branch, "outbound");
+    if (!outbound.ok) throw new Error(outbound.error.message);
+    await tick(a.ctx, a.bound, nine - 60_000, nine + DAY + 1_000);
+    outbound.value.release();
+    // After a restart, two schedulers both select it; one decides it first.
+    const [stale] = pendingRows(db, "local");
+    if (stale === undefined) throw new Error("no pending row");
+    const b = host(store);
+    await tick(b.ctx, b.bound, nine + DAY + 60_000, nine + DAY + 60_000);
+    await b.ctx.idle();
+    const writer = log.acquire(branch, "stale-scheduler");
+    if (!writer.ok) throw new Error(writer.error.message);
+    const pass = { ctx: b.ctx, db, log, tenant: "local" };
+    expect(logOccurrence(pass, writer.value, stale, null)).toBe(false);
+    writer.value.release();
+    const logged = (await eventsOf(store, "local", branch)).filter(
+      (e) => e.type === "schedule_fired" || e.type === "schedule_skipped",
+    );
+    expect(logged.map((e) => e.type)).toEqual([
       "schedule_fired",
-      "user_input",
+      "schedule_fired",
     ]);
-    expect(types).toContain("turn_completed");
-  });
-
-  test("two schedulers seeing the same due occurrence start one run", async () => {
-    const { store, ctx, bound } = setup();
-    const startedAt = nine - 60_000;
-    await Promise.all([
-      tick(ctx, bound, startedAt, nine + 1_000),
-      tick(ctx, bound, startedAt, nine + 1_000),
+    expect(
+      db.all(
+        "SELECT state, logged_seq IS NOT NULL AS logged FROM schedule_occurrences ORDER BY occurrence_at",
+        [],
+      ),
+    ).toEqual([
+      { state: "fired", logged: 1 },
+      { state: "fired", logged: 1 },
     ]);
-    await ctx.stop();
-    expect(await rows(store)).toHaveLength(1);
-    const fired = (await scheduleEvents(store)).filter(
-      (e) => e.type === "schedule_fired",
-    );
-    expect(fired).toHaveLength(1);
-  });
-
-  test("occurrences missed while the host was down are recorded as missed and run nothing", async () => {
-    const { store, ctx, bound } = setup();
-    await tick(ctx, bound, nine - 60_000, nine + 1_000);
-    await ctx.stop();
-    const again = new HostContext(
-      store,
-      { support: mailer({ responses: [] }) },
-      {},
-    );
-    const rebound = bindSchedules(again, [
-      { id: "daily", cron: "0 9 * * *", input: "Report.", agent: "support" },
-    ]);
-    if (typeof rebound === "string") throw new Error(rebound);
-    const restart = nine + 3 * DAY + 3_600_000;
-    await tick(again, rebound, restart, restart);
-    await again.stop();
-    const recorded = await rows(store);
-    expect(recorded.map((r) => [r.state, r.reason])).toEqual([
-      ["fired", null],
-      ["skipped", "missed"],
-      ["skipped", "missed"],
-      ["skipped", "missed"],
-    ]);
-    const skipped = (await scheduleEvents(store)).filter(
-      (e) => e.type === "schedule_skipped",
-    );
-    expect(skipped).toHaveLength(3);
+    await a.ctx.stop();
+    await b.ctx.stop();
   });
 });

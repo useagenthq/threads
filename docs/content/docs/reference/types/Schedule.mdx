@@ -1,8 +1,10 @@
 ---
 title: "Schedule"
-description: "A cron schedule on a host: each time it is due, it starts a run of one of the host's agents on a new thread."
+description: "A cron schedule on a host."
 icon: "Braces"
 ---
+
+A schedule keeps one thread, created at its first occurrence, and each occurrence continues it: fired (a run of the agent with input), or skipped as missed (it fell due while no host ran), overlap (the previous run was still going) or removed (its agent is no longer served). Every decided occurrence is logged on that thread with occurrence id &lt;id>@&lt;scheduled instant, RFC 3339 UTC with milliseconds>. An occurrence is reserved when due with the agent, input and timezone of that moment, so a reservation still fires after its schedule is removed; one whose thread is deleted before it is decided is dropped and never logged.
 
 ## Fields
 

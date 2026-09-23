@@ -78,7 +78,10 @@ export function parseRows<T>(
   return ok(parsed);
 }
 
-/** Creates the store.sql tables. A database a newer schema wrote is refused, never downgraded. */
+/**
+ * Creates the store.sql tables on a new database. A database a newer schema wrote is refused,
+ * never downgraded; one an earlier version wrote is refused too, since stores are not migrated.
+ */
 export function installSchema(db: SqliteDriver): Result<void, LogError> {
   const rows = parseRows(VersionRow, db.all("PRAGMA user_version", []));
   if (!rows.ok) return rows;
@@ -88,6 +91,13 @@ export function installSchema(db: SqliteDriver): Result<void, LogError> {
       logError(
         "unsupported_format",
         `store schema ${found} is newer than ${STORE_VERSION}`,
+      ),
+    );
+  if (found !== 0 && found < STORE_VERSION)
+    return err(
+      logError(
+        "unsupported_format",
+        `this store was created by an earlier threads version (schema ${found}); create a new store`,
       ),
     );
   db.exec(STORE_SQL);

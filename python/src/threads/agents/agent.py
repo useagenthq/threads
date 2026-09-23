@@ -28,6 +28,7 @@ from threads.agents.run import (
     RunOptions,
     RunOptionsWithDeps,
     execute,
+    outside_any_branch,
     with_servers,
 )
 from threads.agents.setup import set_up
@@ -220,7 +221,7 @@ class Agent[D, O]:
         try:
             await set_up(self._definition)
             async with AsyncExitStack() as sessions:
-                pinned = await with_servers(self._definition, sessions, _outside_any_branch)
+                pinned = await with_servers(self._definition, sessions, outside_any_branch)
                 pinned.pin()
         except ConfigError as error:
             return Err(Failure(error.code, error.message))
@@ -233,11 +234,6 @@ def _drop(_item: StreamEvent) -> None:
 
 def _text(text: str) -> str:
     return text
-
-
-async def _outside_any_branch() -> bool:
-    """check() lists tools for no branch, so there is no lease to lose."""
-    return True
 
 
 @overload

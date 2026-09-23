@@ -13,6 +13,7 @@ from threads.log import (
     ForkEvent,
     ParseError,
     ScheduleFiredEvent,
+    ScheduleSkippedEvent,
     SnapshotEvent,
     TeamMessageEvent,
     TeamTaskClaimedEvent,
@@ -124,7 +125,7 @@ def _task_updated(fold: Fold, event: TeamTaskUpdatedEvent) -> ParseError | None:
     return None
 
 
-type _Keyed = TeamMessageEvent | ScheduleFiredEvent | ChannelDeliveryEvent
+type _Keyed = TeamMessageEvent | ScheduleFiredEvent | ScheduleSkippedEvent | ChannelDeliveryEvent
 
 
 def _unique(fold: Fold, event: _Keyed, kind: str, value: str) -> ParseError | None:
@@ -138,7 +139,8 @@ def _message(fold: Fold, event: TeamMessageEvent) -> ParseError | None:
     return _unique(fold, event, "message_id", event.data.message_id)
 
 
-def _fired(fold: Fold, event: ScheduleFiredEvent) -> ParseError | None:
+def _occurrence(fold: Fold, event: ScheduleFiredEvent | ScheduleSkippedEvent) -> ParseError | None:
+    # An occurrence is logged once, fired or skipped.
     return _unique(fold, event, "occurrence_id", event.data.occurrence_id)
 
 
@@ -158,7 +160,8 @@ HANDLERS: Mapping[type, Handler] = dict(
         on(TeamTaskClaimedEvent, _task_claimed),
         on(TeamTaskUpdatedEvent, _task_updated),
         on(TeamMessageEvent, _message),
-        on(ScheduleFiredEvent, _fired),
+        on(ScheduleFiredEvent, _occurrence),
+        on(ScheduleSkippedEvent, _occurrence),
         on(ChannelDeliveryEvent, _delivery),
     ]
 )

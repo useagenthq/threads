@@ -88,8 +88,8 @@ function subagentsOf(
 
 /**
  * One thread's rows: its branches' log rows, leases, cursors, approvals, inbox and channel rows,
- * receipts and budget rows go; its live resources move to releasing for gc; a tombstone records
- * it.
+ * receipts, schedule identity and budget rows go; its pending schedule reservations are retired;
+ * its live resources move to releasing for gc; a tombstone records it.
  */
 function deleteOne(
   db: SqliteDriver,
@@ -111,11 +111,23 @@ function deleteOne(
       [branch],
     );
   }
-  for (const table of ["approvals", "inbox", "channel_threads", "run_receipts"])
+  for (const table of [
+    "approvals",
+    "inbox",
+    "channel_threads",
+    "run_receipts",
+    "schedule_threads",
+  ])
     db.run(`DELETE FROM ${table} WHERE thread_id = ? AND tenant_id = ?`, [
       threadId,
       tenantId,
     ]);
+  // Its undecided reservations are dropped, never logged; the rows only keep their keys taken.
+  db.run(
+    `UPDATE schedule_occurrences SET state = 'retired'
+      WHERE thread_id = ? AND tenant_id = ? AND state = 'pending'`,
+    [threadId, tenantId],
+  );
   db.run("DELETE FROM budget_ledger WHERE budget_id = ? OR budget_id LIKE ?", [
     `thread:${threadId}`,
     `run:${threadId}:%`,
