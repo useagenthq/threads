@@ -17,13 +17,24 @@ _CLASSES: Final = frozenset("dDwWsS")
 _CONTROLS: Final = frozenset("tnvfr")
 _DOT: Final = "[^\\n\\r\\u2028\\u2029]"
 _BOUND: Final = re.compile(r"\{([0-9]+)(,([0-9]*))?\}")
+_WORD: Final = "[A-Za-z0-9_]"
+_BOUNDARY: Final = f"(?:(?<={_WORD})(?!{_WORD})|(?<!{_WORD})(?={_WORD}))"
+_NOT_BOUNDARY: Final = f"(?:(?<={_WORD})(?={_WORD})|(?<!{_WORD})(?!{_WORD}))"
+MAX_LENGTH: Final = 1000
+"""Limits every engine meets the same way: code points in a pattern, a quantifier's bound, and
+how deep groups nest."""
+MAX_BOUND: Final = 1000
+MAX_DEPTH: Final = 32
 
 
 def compile_pattern(pattern: str) -> re.Pattern[str]:
-    """The pattern, compiled with its portable meaning; TypeError outside the subset."""
+    """The pattern, compiled with its portable meaning; TypeError outside the subset or its
+    limits, whatever the regex engine raises."""
+    if len(pattern) > MAX_LENGTH:
+        raise TypeError(f"a pattern over {MAX_LENGTH} characters is outside the portable subset")
     try:
         return re.compile(_Translator(pattern).run(), re.ASCII)
-    except re.error as error:
+    except (re.error, OverflowError, RecursionError) as error:
         raise TypeError(f"pattern {pattern!r} doesn't compile: {error}") from None
 
 
@@ -90,9 +101,13 @@ class _Translator:
         bound = _BOUND.match(self.text, self.at)
         if bound is None:
             raise self.refuse("an unescaped '{'")
+        if any(int(n) > MAX_BOUND for n in (bound.group(1), bound.group(3)) if n):
+            raise self.refuse(f"a bound over {MAX_BOUND}")
         self.emit(bound.group(0), "quantified", len(bound.group(0)))
 
     def group(self) -> None:
+        if len(self.groups) >= MAX_DEPTH:
+            raise self.refuse(f"groups nested over {MAX_DEPTH} deep")
         kind = self.text[self.at + 1 : self.at + 3]
         if kind[:1] != "?":
             self.groups.append("(")
@@ -108,7 +123,8 @@ class _Translator:
         if char in _CLASSES or char in _CONTROLS:
             self.emit("\\" + char, "atom", 2)
         elif char in ("b", "B"):
-            self.emit("\\" + char, "assert", 2)
+            # Spelled out: engines disagree on \B at a string's edges (Python: ^\B$ fails on "").
+            self.emit(_BOUNDARY if char == "b" else _NOT_BOUNDARY, "assert", 2)
         elif char and char in _ESCAPABLE:
             self.emit(re.escape(char), "atom", 2)
         else:
@@ -136,18 +152,21 @@ class _Translator:
         """One class member at `at`: its Python text, its width, and what it was."""
         char = self.text[at]
         if char == "\\":
-            escaped = self.text[at + 1 : at + 2]
-            if escaped in _CLASSES and escaped != "S":
-                return "\\" + escaped, 2, "set"
-            if escaped and (escaped in _CONTROLS or escaped in _ESCAPABLE):
-                return "\\" + escaped, 2, "char"
-            raise self.refuse(f"the class escape '\\{escaped}'")
+            return self.class_escape(self.text[at + 1 : at + 2], prev)
         if char == "[":
             raise self.refuse("an unescaped '[' in a class")
         if char != "-" or first or self.text[at + 1 : at + 2] == "]":
             # The end of a range is not the start of the next one.
             return re.escape(char), 1, "range" if prev == "dash" else "char"
-        after = self.text[at + 1 : at + 2]
-        if prev != "char" or after == "\\":
+        if prev != "char":
             raise self.refuse("a range whose ends are not single characters")
         return "-", 1, "dash"
+
+    def class_escape(self, escaped: str, prev: str) -> tuple[str, int, str]:
+        """A class escape: a set (\\d \\D \\w \\W \\s), never a range end; or one character,
+        which may end a range (`[A-\\]]`)."""
+        if escaped in _CLASSES and escaped != "S" and prev != "dash":
+            return "\\" + escaped, 2, "set"
+        if escaped and (escaped in _CONTROLS or escaped in _ESCAPABLE):
+            return "\\" + escaped, 2, "range" if prev == "dash" else "char"
+        raise self.refuse(f"the class escape '\\{escaped}'")

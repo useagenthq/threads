@@ -9,7 +9,7 @@ from typing import Literal
 import pytest
 from pydantic import BaseModel, Field, JsonValue
 
-from threads._json_schema import holds, unchecked
+from threads._json_schema import conforms, holds, unchecked
 
 
 class Color(enum.Enum):
@@ -130,3 +130,28 @@ def test_const_and_enum_use_json_equality_on_the_shared_vector() -> None:
     for case in json.loads((VECTOR.parent / "json-equal.json").read_text())["cases"]:
         assert holds({"const": case["a"]}, case["b"]) is case["equal"], case
         assert holds({"enum": ["other", case["a"]]}, case["b"]) is case["equal"], case
+
+
+@pytest.mark.parametrize(
+    ("schema", "named"),
+    [
+        ({"$ref": "#"}, "loop"),
+        ({"$defs": {"A": {"anyOf": [{"$ref": "#"}]}}, "allOf": [{"$ref": "#/$defs/A"}]}, "loop"),
+        ({"not": {"$ref": "#/$defs/B"}, "$defs": {"B": {"$ref": "#/$defs/B"}}}, "loop"),
+        ({"items": {"$ref": "#/$defs/Missing"}}, "missing definition"),
+    ],
+)
+def test_a_ref_that_loops_or_names_nothing_is_refused_and_never_raises(
+    schema: dict[str, JsonValue], named: str
+) -> None:
+    why = unchecked(schema)
+    assert why is not None
+    assert named in why
+    assert conforms(schema, {}) is False
+
+
+def test_a_ref_that_reaches_into_the_value_is_recursion_not_a_loop() -> None:
+    schema: JsonValue = {"properties": {"next": {"$ref": "#"}}, "type": "object"}
+    assert unchecked(schema) is None
+    assert holds(schema, {"next": {"next": {}}})
+    assert not holds(schema, {"next": {"next": 1}})

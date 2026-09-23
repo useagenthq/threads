@@ -82,7 +82,7 @@ The scripted model's first answer uses `"urgent"`, which isn't allowed, so it is
   The schema of the final answer. The agent's type becomes `Agent<Deps, z.infer<typeof schema>>` in TypeScript and `Agent[D, Triage]` in Python. In Python anything but a Pydantic model class is a `ConfigError`.
 </Field>
 <Field name="outputRetries / output_retries" type="number / int" default="2">
-  When this many answers have failed in a turn (rejected by the schema, or plain text with no `final_output` call, which is answered with a request to call it), the run ends `failed` with code `output_invalid`. A non-negative integer; anything else is a `ConfigError` (`invalid_config`).
+  When this many answers have failed in a turn (rejected by the schema, or plain text with no `final_output` call, which is answered with a request to call it), the run ends `failed` with code `output_invalid`. An integer from 0 to 2^53 − 1; anything else is a `ConfigError` (`invalid_config`).
 </Field>
 
 ## What an output schema can use

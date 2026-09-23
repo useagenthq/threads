@@ -18,6 +18,7 @@ from pydantic import JsonValue
 
 from threads._json_formats import FORMATS, multiple_of
 from threads._json_pattern import compile_pattern
+from threads._json_refs import check_refs
 
 type Root = Mapping[str, JsonValue]
 """The whole schema document: `$ref`s resolve against it."""
@@ -59,19 +60,24 @@ def _holds(schema: JsonValue, value: object, root: Root) -> bool:
 
 
 def conforms(schema: Mapping[str, JsonValue], value: JsonValue) -> bool:
-    """Semantic rule 20: whether an output value satisfies the pinned output schema. A keyword
-    this reader can't check fails closed rather than accepting unchecked output."""
+    """Semantic rule 20: whether an output value satisfies the pinned output schema. A schema
+    this reader can't check (an imported log may carry one) fails closed: False, never a
+    raise."""
+    if unchecked(dict(schema)) is not None:
+        return False
     try:
         return holds(dict(schema), value)
-    except TypeError:
+    except (TypeError, RecursionError, OverflowError):
         return False
 
 
 def unchecked(schema: JsonValue) -> str | None:
     """The first keyword `holds` can't check anywhere in `schema` (or a `$ref` it can't
-    follow, or a pattern it can't compile), else None."""
+    follow or that loops, or a pattern outside the portable subset), else None."""
     try:
         _walk(schema)
+        if isinstance(schema, dict):
+            check_refs(schema)
     except TypeError as error:
         return str(error)
     return None

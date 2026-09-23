@@ -1,5 +1,6 @@
 import { FORMATS, multipleOf } from "./formats";
 import { compilePattern } from "./pattern";
+import { checkRefs } from "./refs";
 
 // The JSON Schema evaluator semantic rule 20 checks an output value with: the keyword set that
 // spec/schema/README.md ("Output schemas") defines, the same as the Python reader
@@ -27,14 +28,15 @@ export function holds(schema: unknown, value: unknown): boolean {
 }
 
 /**
- * Semantic rule 20: whether an output value satisfies the pinned output schema. A keyword this
- * reader can't check fails closed rather than accepting unchecked output.
+ * Semantic rule 20: whether an output value satisfies the pinned output schema. A schema this
+ * reader can't check (an imported log may carry one) fails closed: false, never a throw.
  */
 export function conforms(schema: unknown, value: unknown): boolean {
+  if (unchecked(schema) !== undefined) return false;
   try {
     return holds(schema, value);
   } catch (error) {
-    if (error instanceof TypeError) return false;
+    if (error instanceof TypeError || error instanceof RangeError) return false;
     throw error;
   }
 }
@@ -43,6 +45,7 @@ export function conforms(schema: unknown, value: unknown): boolean {
 export function unchecked(schema: unknown): string | undefined {
   try {
     walk(schema);
+    if (isObject(schema)) checkRefs(schema);
     return undefined;
   } catch (error) {
     if (error instanceof TypeError) return error.message;

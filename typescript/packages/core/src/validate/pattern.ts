@@ -10,13 +10,31 @@ const CLASSES = new Set("dDwWsS");
 const CONTROLS = new Set("tnvfr");
 const SPACES = "\\t\\n\\v\\f\\r ";
 const BOUND = /^\{([0-9]+)(,([0-9]*))?\}/;
+const WORD = "[A-Za-z0-9_]";
+const BOUNDARY = `(?:(?<=${WORD})(?!${WORD})|(?<!${WORD})(?=${WORD}))`;
+const NOT_BOUNDARY = `(?:(?<=${WORD})(?=${WORD})|(?<!${WORD})(?!${WORD}))`;
+/**
+ * Limits every engine meets the same way: code points in a pattern, a quantifier's bound, and
+ * how deep groups nest.
+ */
+export const MAX_LENGTH = 1000;
+const MAX_BOUND = 1000;
+const MAX_DEPTH = 32;
 
-/** The pattern, compiled with its portable meaning; TypeError outside the subset. */
+/**
+ * The pattern, compiled with its portable meaning; TypeError outside the subset or its limits,
+ * whatever the regex engine throws.
+ */
 export function compilePattern(pattern: string): RegExp {
+  if ([...pattern].length > MAX_LENGTH)
+    throw new TypeError(
+      `a pattern over ${MAX_LENGTH} characters is outside the portable subset`,
+    );
   const source = new Translator(pattern).run();
   try {
     return new RegExp(source, "u");
   } catch {
+    // A SyntaxError, or a RangeError from an engine limit: either way outside the subset.
     throw new TypeError(`pattern '${pattern}' doesn't compile`);
   }
 }
@@ -92,12 +110,20 @@ class Translator {
       this.#emit(char, "quantified");
       return;
     }
-    const bound = BOUND.exec(this.text.slice(this.#at))?.[0];
-    if (bound === undefined) throw this.#refuse("an unescaped '{'");
-    this.#emit(bound, "quantified", bound.length);
+    const bound = BOUND.exec(this.text.slice(this.#at));
+    if (bound === null) throw this.#refuse("an unescaped '{'");
+    if (
+      [bound[1], bound[3]].some(
+        (n) => n !== undefined && n !== "" && Number(n) > MAX_BOUND,
+      )
+    )
+      throw this.#refuse(`a bound over ${MAX_BOUND}`);
+    this.#emit(bound[0], "quantified", bound[0].length);
   }
 
   #group(): void {
+    if (this.#groups.length >= MAX_DEPTH)
+      throw this.#refuse(`groups nested over ${MAX_DEPTH} deep`);
     const kind = this.text.slice(this.#at + 1, this.#at + 3);
     if (!kind.startsWith("?")) {
       this.#groups.push("(");
@@ -114,7 +140,9 @@ class Translator {
     else if (char === "S") this.#emit(`[^${SPACES}]`, "atom", 2);
     else if (CLASSES.has(char) || CONTROLS.has(char))
       this.#emit(`\\${char}`, "atom", 2);
-    else if (char === "b" || char === "B") this.#emit(`\\${char}`, "assert", 2);
+    else if (char === "b" || char === "B")
+      // Spelled out, as the Python reader does: engines disagree on \B at a string's edges.
+      this.#emit(char === "b" ? BOUNDARY : NOT_BOUNDARY, "assert", 2);
     else if (char === "-") this.#emit("-", "atom", 2);
     else if (char !== "" && ESCAPABLE.has(char))
       this.#emit(`\\${char}`, "atom", 2);
@@ -152,7 +180,7 @@ class Translator {
     first: boolean,
   ): readonly [string, number, Member] {
     const char = this.#char(at);
-    if (char === "\\") return this.#classEscape(this.#char(at + 1));
+    if (char === "\\") return this.#classEscape(this.#char(at + 1), prev);
     if (char === "[") throw this.#refuse("an unescaped '[' in a class");
     const after = this.#char(at + 1);
     if (char !== "-" || first || after === "]")
@@ -162,17 +190,23 @@ class Translator {
         1,
         prev === "dash" ? "range" : "char",
       ];
-    if (prev !== "char" || after === "\\")
+    if (prev !== "char")
       throw this.#refuse("a range whose ends are not single characters");
     return ["-", 1, "dash"];
   }
 
-  #classEscape(escaped: string): readonly [string, number, Member] {
-    if (escaped === "s") return [SPACES, 2, "set"];
-    if (CLASSES.has(escaped) && escaped !== "S")
-      return [`\\${escaped}`, 2, "set"];
+  /**
+   * A class escape: a set (\d \D \w \W \s), never a range end; or one character, which may end
+   * a range (`[A-\]]`).
+   */
+  #classEscape(
+    escaped: string,
+    prev: Member,
+  ): readonly [string, number, Member] {
+    const set = CLASSES.has(escaped) && escaped !== "S" && prev !== "dash";
+    if (set) return [escaped === "s" ? SPACES : `\\${escaped}`, 2, "set"];
     if (escaped !== "" && (CONTROLS.has(escaped) || ESCAPABLE.has(escaped)))
-      return [`\\${escaped}`, 2, "char"];
+      return [`\\${escaped}`, 2, prev === "dash" ? "range" : "char"];
     throw this.#refuse(`the class escape '\\${escaped}'`);
   }
 }

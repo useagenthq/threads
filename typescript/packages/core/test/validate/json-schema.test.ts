@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { jsonSchema } from "../../src/agent/tool";
-import { holds, unchecked } from "../../src/validate/json-schema";
+import { conforms, holds, unchecked } from "../../src/validate/json-schema";
 
 // The rule 20 reader (spec/schema/README.md, Output schemas): the same answers as the Python
 // reader, on the shared multipleOf vector, each format, and what Zod exports.
@@ -129,4 +129,30 @@ test("const and enum use JSON equality on the shared vector", () => {
     expect(holds({ const: c.a }, c.b)).toBe(c.equal);
     expect(holds({ enum: ["other", c.a] }, c.b)).toBe(c.equal);
   }
+});
+
+test.each([
+  [{ $ref: "#" }, "loop"],
+  [
+    {
+      $defs: { A: { anyOf: [{ $ref: "#" }] } },
+      allOf: [{ $ref: "#/$defs/A" }],
+    },
+    "loop",
+  ],
+  [{ not: { $ref: "#/$defs/B" }, $defs: { B: { $ref: "#/$defs/B" } } }, "loop"],
+  [{ items: { $ref: "#/$defs/Missing" } }, "missing definition"],
+])(
+  "a $ref that loops or names nothing is refused and never throws",
+  (schema, named) => {
+    expect(unchecked(schema)).toContain(named);
+    expect(conforms(schema, {})).toBe(false);
+  },
+);
+
+test("a $ref that reaches into the value is recursion, not a loop", () => {
+  const schema = { properties: { next: { $ref: "#" } }, type: "object" };
+  expect(unchecked(schema)).toBeUndefined();
+  expect(holds(schema, { next: { next: {} } })).toBe(true);
+  expect(holds(schema, { next: { next: 1 } })).toBe(false);
 });
