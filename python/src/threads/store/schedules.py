@@ -136,7 +136,7 @@ class ScheduleRows:
                 "SELECT thread_id FROM schedule_threads WHERE tenant_id = ?", (tenant,)
             ).fetchall()
         )
-        return tuple(ThreadId(text_of(t)) for (t,) in rows)
+        return tuple(_thread_id(t) for (t,) in rows)
 
 
 def decided(tenant_id: str, row: Pending, reason: Reason | None) -> Companion:
@@ -263,7 +263,7 @@ def _thread_of(conn: sqlite3.Connection, tenant_id: str, schedule_id: str) -> Th
         "SELECT thread_id FROM schedule_threads WHERE tenant_id = ? AND schedule_id = ?",
         (tenant_id, schedule_id),
     ).fetchone()
-    return None if found is None else ThreadId(text_of(found[0]))
+    return None if found is None else _thread_id(found[0])
 
 
 def _keeps(
@@ -276,7 +276,8 @@ def _keeps(
     branch = root(conn, thread_id, tenant_id)
     read = None if branch is None else verify_export(export(conn, branch), now)
     if not isinstance(read, Ok):
-        return False
+        # An unreadable thread can't be shown quiet: the pass fails, and its identity stays.
+        raise TypeError(f"schedule thread {thread_id} can't be read")
     fold = read.value.fold
     started = next((e for e in fold.events if isinstance(e, ThreadStartedEvent)), None)
     if started is not None and started.data.config_hash == pin:

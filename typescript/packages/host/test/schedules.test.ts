@@ -205,4 +205,29 @@ describe("scheduler", () => {
     ]);
     expect(bound).toContain("lowercase letters, digits and underscores");
   });
+
+  test("an unreadable schedule thread fails the reservation and keeps its identity", async () => {
+    const store = sqlite(":memory:");
+    const a = host(store);
+    await tick(a.ctx, a.bound, nine - 60_000, nine + 1_000);
+    await a.ctx.idle();
+    const { db, log, thread } = await scheduleThread(store);
+    db.run("UPDATE events SET line = ? WHERE seq = 1", [new Uint8Array([0])]);
+    const started = await a.bound[0]?.hosted.runner.started();
+    if (started === undefined) throw new Error("no schedule");
+    const due = {
+      schedule_id: "daily",
+      occurrence_at: nine + DAY,
+      agent: "support",
+      input: "Report.",
+      timezone: "UTC",
+      missed: false,
+    };
+    expect(() => reserveDue(db, log, started, [due])).toThrow("can't be read");
+    expect(db.all("SELECT thread_id FROM schedule_threads", [])).toEqual([
+      { thread_id: thread },
+    ]);
+    expect(db.all("SELECT 1 FROM schedule_occurrences", [])).toHaveLength(1);
+    await a.ctx.stop();
+  });
 });

@@ -227,7 +227,9 @@ function keeps(
   started: EventDraft,
 ): boolean {
   const read = logOf(log, threadId);
-  if (read === undefined) return false;
+  // An unreadable thread can't be shown quiet: the pass fails, and its identity stays.
+  if (read === undefined)
+    throw new Error(`schedule thread ${threadId} can't be read`);
   if (pinIn(read) === hashOf(started)) return true;
   return read.fold.turnOpen || pendingOf(db, log.tenant, threadId).length > 0;
 }

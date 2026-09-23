@@ -77,7 +77,7 @@ Schedules start firing after `ready()`, which `threads dev` and `threads start` 
 - **Daylight saving.** A local time skipped by a spring-forward runs at the first valid minute after it; a time repeated by a fall-back runs once.
 - A bad cron expression, an unknown time zone or an unknown agent fails `ready()` with a `ConfigError`.
 
-## One thread per schedule
+## One thread per schedule config
 
 A schedule keeps one thread, created at its first occurrence, for as long as its agent's config stays the same. Every occurrence is logged on it, so each config's history is one log you can read, replay and test:
 

@@ -135,6 +135,31 @@ def test_a_deletion_before_a_reservation_strands_nothing_and_a_retired_key_stays
     asyncio.run(main())
 
 
+def test_an_unreadable_schedule_thread_fails_the_reservation_and_keeps_its_identity() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        bot = agent(name="bot", model=scripted_model({"responses": [REPLY]}))
+        runner = Runner(store, {"bot": bot}, {})
+        await Scheduler(runner, [DAILY]).tick(NINE - 60_000, NINE + 1_000)
+        await runner.settled()
+        sq = await open_store(store)
+        rows = sq.tables.schedules
+        (thread,) = await rows.threads()
+        await sq.run(lambda c: c.execute("UPDATE events SET line = x'00' WHERE seq = 1"))
+        started = await pinned_start(bot.definition, store)
+        due = [Due("daily", NINE + DAY, "bot", "Report.", "UTC", missed=False)]
+        with pytest.raises(TypeError, match="can't be read"):
+            await rows.reserve_due(started, due, now_ms())
+        assert await rows.threads() == (thread,)
+        count = await sq.run(
+            lambda c: c.execute("SELECT count(*) FROM schedule_occurrences").fetchone()
+        )
+        assert count == (1,)
+        await runner.stop()
+
+    asyncio.run(main())
+
+
 def test_a_stored_pending_row_whose_input_is_not_an_input_is_reported_as_corrupt() -> None:
     async def main() -> None:
         sq = await open_store(sqlite(":memory:"))
