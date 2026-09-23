@@ -6,12 +6,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import ALICE, ALLOW
-from .jcs import JsonValue, Obj
 from .log import Log
 from .pieces import answer, case, render_case, started, user, write_case
 
 if TYPE_CHECKING:
     import pathlib
+
+    from .jcs import JsonValue, Obj
 
 BOB: Obj = {"issuer": "api", "tenant": "acme", "subject": "bob"}
 RUN: Obj = {"agent": "demo", "input": "Deploy it."}
@@ -20,6 +21,10 @@ RUN: Obj = {"agent": "demo", "input": "Deploy it."}
 def _msg(conversation: str, sender: str, message: str, item_id: str | None = None) -> Obj:
     item: Obj = {"conversation": conversation, "sender": sender, "text": message}
     return item if item_id is None else {"item_id": item_id, **item}
+
+
+def _webhooks(*hooks: Obj) -> list[JsonValue]:
+    return list(hooks)
 
 
 def _hook(installation: str, delivery: str, items: list[JsonValue], **more: JsonValue) -> Obj:
@@ -80,7 +85,7 @@ def _host_reply(root: pathlib.Path) -> None:
 
 def build(root: pathlib.Path) -> None:
     _host_reply(root)
-    hello = [_msg("C1", "U1", "hello")]
+    hello: list[JsonValue] = [_msg("C1", "U1", "hello")]
     write_case(
         root,
         case(
@@ -90,10 +95,10 @@ def build(root: pathlib.Path) -> None:
             "A webhook that fails the adapter's verification is answered 401 and nothing is "
             "stored, before any append; the authentic delivery after it is stored once.",
             input={
-                "webhooks": [
+                "webhooks": _webhooks(
                     _hook("T024BE7LD", "Ev07", hello, forged=True),
                     _hook("T024BE7LD", "Ev07", hello),
-                ]
+                )
             },
         ),
         None,
@@ -113,7 +118,7 @@ def build(root: pathlib.Path) -> None:
             "The provider redelivers the same message three times, including after a crash "
             "before and after our response. Each redelivery is answered and inserts nothing: "
             "one inbox row, so one run and one reply.",
-            input={"webhooks": [_hook("T024BE7LD", "Ev09", hello)] * 3},
+            input={"webhooks": _webhooks(*[_hook("T024BE7LD", "Ev09", hello)] * 3)},
         ),
         None,
         {
@@ -133,10 +138,10 @@ def build(root: pathlib.Path) -> None:
             "different installations, so different inbox rows and different threads: message "
             "content or ids never select another workspace's thread.",
             input={
-                "webhooks": [
+                "webhooks": _webhooks(
                     _hook("T024BE7LD", "Ev11", hello),
                     _hook("T999OTHER", "Ev11", hello),
-                ]
+                )
             },
         ),
         None,
