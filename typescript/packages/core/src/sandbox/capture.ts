@@ -1,6 +1,6 @@
 import { err, ok, type Result } from "../result";
 import type { ResourceLedger, ResourceRow } from "../store/ledger";
-import type { Writer } from "../store/writer";
+import type { EventDraft, Writer } from "../store/writer";
 import { type LogError, logError } from "../verify/error";
 import { isRefusal, ownerContext } from "./context";
 import { release, resolvePending } from "./ledger";
@@ -19,7 +19,38 @@ import type {
 
 type CaptureFailure = Failure<"not_quiescent" | "unavailable" | "timeout">;
 
-export type Captured = Result<SnapshotData, LogError | CaptureFailure>;
+/**
+ * A snapshot whose image was proven to hold its manifest. Only captureSnapshot makes one (the
+ * class value isn't exported), so a raw provider candidate (`SandboxSession.snapshot`'s
+ * SnapshotData) can't be recorded as a snapshot event or fork point by mistake.
+ */
+class VerifiedSnapshot {
+  readonly data: SnapshotData;
+  readonly #verified = true;
+
+  constructor(data: SnapshotData) {
+    this.data = data;
+  }
+
+  get verified(): boolean {
+    return this.#verified;
+  }
+}
+
+export type { VerifiedSnapshot };
+
+export type Captured = Result<VerifiedSnapshot, LogError | CaptureFailure>;
+
+/** The snapshot event: the one way a capture becomes a fork point. */
+export function snapshotEvent(snapshot: VerifiedSnapshot): EventDraft {
+  return {
+    type: "snapshot",
+    type_version: 1,
+    critical: true,
+    actor: { kind: "host" },
+    data: snapshot.data,
+  };
+}
 
 const refused = (message: string): LogError => logError("stale_epoch", message);
 
@@ -106,7 +137,7 @@ export async function captureSnapshot(
   if (!live.ok) return live;
   const verified = await verifyImage(ledger, writer, sandbox, data);
   if (!verified.ok) return verified;
-  if (verified.value) return ok(data);
+  if (verified.value) return ok(new VerifiedSnapshot(data));
   const dropped = await release(ledger, writer, sandbox, live.value);
   if (!dropped.ok) return dropped;
   return err({

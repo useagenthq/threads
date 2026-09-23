@@ -58,7 +58,7 @@ describe("a ledgered snapshot capture", () => {
     const { sandbox, box } = await parent(world);
     const snap = unwrap(
       await captureSnapshot(f.store.ledger, f.writer, sandbox, box),
-    );
+    ).data;
     expect(snap.manifest_hash).toBe(world.hashOf(snap.snapshot_id));
     expect(rows(f)).toEqual([
       ["snapshot", "live"],

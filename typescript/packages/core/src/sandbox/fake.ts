@@ -42,6 +42,14 @@ export type FakeSandbox = Sandbox & {
   readonly creates: () => number;
   readonly execs: () => readonly FakeExec[];
   readonly files: () => readonly Uint8Array[];
+  /** A guest writer around the next capture only: `before` just before it, `after` right after. */
+  readonly aroundNextCapture: (hook: Around) => void;
+};
+
+/** Writes the guest makes to a sandbox's tree (absolute paths) around one capture. */
+export type Around = {
+  readonly before: (tree: Map<string, Uint8Array>) => void;
+  readonly after: (tree: Map<string, Uint8Array>) => void;
 };
 
 const INFO: SandboxInfo = {
@@ -136,6 +144,7 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
   const captured = new Map<string, Captured>();
   const operations = new Map<string, Operation>();
   const execs: FakeExec[] = [];
+  let around: Around | undefined;
   const trees: Tree[] = [];
   let creates = 0;
   let serial = 0;
@@ -186,16 +195,24 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
         const fenced = await context.fence();
         if (!fenced.ok) return fenced;
         serial += 1;
+        // Like a provider, the manifest is measured, then the image taken: a guest write
+        // between them (aroundNextCapture) makes an image that doesn't hold its manifest.
+        const manifest = manifestHash(manifestOf(tree));
+        const hook = around;
+        around = undefined;
+        hook?.before(tree);
+        const image = new Map(tree);
+        hook?.after(tree);
         const data: SnapshotData = {
           snapshot_id: SnapshotId.parse(`snap_fake_${serial}`),
           provider: INFO.provider,
           sandbox_id: self.id,
           capture_class: "filesystem",
           expires_at: null,
-          manifest_hash: manifestHash(manifestOf(tree)),
+          manifest_hash: manifest,
           quiesced: { frozen: [], stopped: [], excluded: [] },
         };
-        captured.set(data.snapshot_id, { tree: new Map(tree), data });
+        captured.set(data.snapshot_id, { tree: image, data });
         operations.set(operationKey, {
           kind: "snapshot",
           id: data.snapshot_id,
@@ -292,6 +309,9 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
     creates: () => creates,
     execs: () => execs,
     files: () => trees.flatMap((t) => [...t.values()]),
+    aroundNextCapture: (hook) => {
+      around = hook;
+    },
     create: async (operationKey, context) => {
       const fenced = await context.fence();
       if (!fenced.ok) return fenced;

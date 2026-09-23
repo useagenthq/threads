@@ -1,4 +1,9 @@
-export { type Captured, captureSnapshot } from "./capture";
+export {
+  type Captured,
+  captureSnapshot,
+  snapshotEvent,
+  type VerifiedSnapshot,
+} from "./capture";
 export { cleanupContext, ownerContext } from "./context";
 export {
   type ExecFailure,
