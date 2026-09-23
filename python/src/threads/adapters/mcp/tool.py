@@ -2,9 +2,8 @@
 checked against the server's JSON Schema with a real validator, its call on the effect path, and
 its output framed as untrusted reference."""
 
+import asyncio
 from dataclasses import dataclass
-from datetime import timedelta
-from http import HTTPStatus
 from typing import Final
 
 from jsonschema import Draft202012Validator, validate
@@ -27,10 +26,11 @@ from threads.loop.model import LookupResult, LookupUnknown
 from threads.loop.tools import Dispatched, NotSent, Output, Uncertain
 from threads.render.framing import reference
 
-CALL_TIMEOUT: Final = timedelta(seconds=120)
-_TIMEOUT: Final = frozenset({HTTPStatus.REQUEST_TIMEOUT, -32001})
-"""The request-timeout codes of the Python (408) and TS (-32001) SDKs. A local timeout and a
-server that sends either code look alike, so both are uncertain in both languages."""
+CALL_TIMEOUT: float = 120
+"""Seconds. Timed here, not by the SDK, which reports its own timeout as the HTTP status 408:
+an HTTP status is never read as a JSON-RPC code (spec/schema/README.md, Server-originated
+text)."""
+REQUEST_TIMEOUT: Final = -32001
 READ_RESOURCE: Final = "read_resource"
 READ_RESOURCE_SCHEMA: Final[dict[str, JsonValue]] = {
     "type": "object",
@@ -76,7 +76,8 @@ class McpTool:
             if self.resource:
                 read = await self.session.read_resource(AnyUrl(str(input["uri"])))
                 return _contents(self.name, read)
-            result = await self.session.call_tool(self.remote, dict(input), CALL_TIMEOUT)
+            async with asyncio.timeout(CALL_TIMEOUT):
+                result = await self.session.call_tool(self.remote, dict(input))
         except McpError as error:
             return self._answered(error)
         except TimeoutError:
@@ -90,7 +91,7 @@ class McpTool:
         match error.error.code:
             case code if code == FENCE_REFUSED:
                 return NotSent()
-            case code if code in _TIMEOUT:
+            case code if code == REQUEST_TIMEOUT:
                 return Uncertain("timeout")
             case code if code == CONNECTION_CLOSED:
                 return Uncertain("transport_error")
