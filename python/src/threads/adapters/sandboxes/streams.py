@@ -38,6 +38,9 @@ class Pipe:
         await self._err.put(None)
         if isinstance(code, BaseException):
             self._exit.set_exception(code)
+            # A reader that abandoned the exec (a timeout) never awaits it: that is not an
+            # unhandled error. One that awaits still gets the exception.
+            self._exit.exception()
         else:
             self._exit.set_result(code)
 
