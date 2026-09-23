@@ -142,7 +142,18 @@ export function pin(
       ? {}
       : { sandbox_provider: o.sandbox.info.provider }),
   };
-  const text = canonicalize(z.json().parse({ ...cfg, ...hashedOnly(o) }));
+  const concurrent = [...o.tools, ...extensionTools(o.extensions, o.mcp)]
+    .filter((t) => t.concurrent === true && names.includes(t.name))
+    .map((t) => t.name)
+    .toSorted();
+  const text = canonicalize(
+    z.json().parse({
+      ...cfg,
+      ...hashedOnly(o),
+      // Changes when reads run, not what the model sees: hashed, not in line 0.
+      ...(concurrent.length === 0 ? {} : { concurrent_tools: concurrent }),
+    }),
+  );
   if (!text.ok) throw new ConfigError("invalid_config", text.error.message);
   return {
     specs,
@@ -250,6 +261,7 @@ function namespaced<Deps>(
   const name = `${ext}__${t.name}`;
   return {
     name,
+    ...(t.concurrent === undefined ? {} : { concurrent: t.concurrent }),
     spec: () => ({ ...t.spec(), name }),
     bind: (env) => {
       const impl = t.bind(env);

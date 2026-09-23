@@ -14,6 +14,8 @@ from threads.log import (
     ApprovalRequestedEvent,
     ArtifactRef,
     CallId,
+    CancelledEvent,
+    CancelRequestedEvent,
     CompactedEvent,
     CompactionFailedEvent,
     EffectBeginEvent,
@@ -176,3 +178,13 @@ def _fold_call(s: CallState, event: Event, call_id: CallId) -> CallState:  # noq
             return replace(s, effect=event.data.outcome, commit=ref)
         case _:
             return s
+
+
+def open_cancel(events: Sequence[Event]) -> CancelRequestedEvent | None:
+    """The open turn's cancel barrier: nothing new starts after it."""
+    for event in reversed(turn_events(events)):
+        if isinstance(event, CancelledEvent):
+            return None
+        if isinstance(event, CancelRequestedEvent):
+            return event
+    return None

@@ -1,0 +1,540 @@
+{
+  "description": "Parallel tool calls (spec/schema/README.md): each case's pending calls, in call order, and the dispatch plan groups() must return. A call joins a group only when its tool is concurrent, read_only, not a framework tool, doesn't end the turn, and its decision is allow; the group is the longest such run from the first pending call, and every other call runs alone. decision none: not authorized yet. recorded_order: three concurrent reads a, b, c that finish c, b, a, where b brings an injection and an extension observes after_tool; both runtimes record exactly this sequence of tool_result, injected and after_tool hook_decision events.",
+  "cases": [
+    {
+      "name": "two concurrent reads",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "name": "a single concurrent read",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "name": "read, write, read",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "send_email",
+          "effect_class": "unguarded",
+          "concurrent": false,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "name": "two groups around a write",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "send_email",
+          "effect_class": "unguarded",
+          "concurrent": false,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0,
+          1
+        ],
+        [
+          2
+        ],
+        [
+          3,
+          4
+        ]
+      ]
+    },
+    {
+      "name": "a non-concurrent read is a barrier",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "lookup",
+          "effect_class": "read_only",
+          "concurrent": false,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "name": "an ask ends the group",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "ask"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ],
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "name": "an approved ask stays a barrier: its recorded decision is still ask",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "ask"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ],
+        [
+          1,
+          2
+        ]
+      ]
+    },
+    {
+      "name": "a deny in the middle",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "deny"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "name": "an unauthorized call ends the group",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "none"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "name": "a framework tool between reads",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "todo_write",
+          "effect_class": "read_only",
+          "concurrent": false,
+          "framework": true,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "name": "a concurrent flag on a framework tool is ignored",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "todo_write",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": true,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "name": "a pinned effect other than read_only is a barrier",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "idempotent",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "name": "a tool that ends the turn runs alone",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "finish",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": true,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "name": "three concurrent reads",
+      "pending": [
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        },
+        {
+          "name": "search",
+          "effect_class": "read_only",
+          "concurrent": true,
+          "framework": false,
+          "ends_turn": false,
+          "decision": "allow"
+        }
+      ],
+      "plan": [
+        [
+          0,
+          1,
+          2
+        ]
+      ]
+    }
+  ],
+  "recorded_order": [
+    "tool_result:call_1",
+    "after_tool:call_1",
+    "tool_result:call_2",
+    "injected",
+    "after_tool:call_2",
+    "tool_result:call_3",
+    "after_tool:call_3"
+  ]
+}

@@ -180,6 +180,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
             hooks=bind(definition.extensions, hook_ctx),
             budgets=() if launch is None else launch.budgets,
             framework=agents,
+            concurrent=definition.concurrent_tools(),
         )
         moved = rt.fold.handed_off
         recorded = Recorded(input, principal, options.get("budget"), launch, intake)

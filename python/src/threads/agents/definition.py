@@ -10,7 +10,7 @@ from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
 from threads.agents.catalog import NO_CATALOG, Catalog
 from threads.agents.skills import Skill, listing, pinned
-from threads.agents.tool import json_schema
+from threads.agents.tool import Tool, json_schema
 from threads.hooks.extension import Extension, extension_tools
 from threads.log import Budget, Context, Permissions, Principal, Retry, ToolSpec
 from threads.log.digest import canonical_sha256, sha256_hex
@@ -172,11 +172,24 @@ class Definition[D]:
             # What a child may do is part of what this thread may do: a changed subagent is a
             # changed config.
             config["subagents"] = [s.pin()[0]["config_hash"] for s in self.subagents]
+        if concurrent := self.concurrent_tools():
+            # Changes when reads run, not what the model sees: hashed, not in line 0.
+            config["concurrent_tools"] = list[JsonValue](sorted(concurrent))
         text = canonicalize(config)
         if not isinstance(text, Ok):
             raise AssertionError("a definition built from parsed models always canonicalizes")
         raw = text.value.encode("utf-8")
         return {**data, "config_hash": sha256_hex(raw)}, raw
+
+    def concurrent_tools(self) -> frozenset[str]:
+        """The pinned app and extension tools declared `concurrent=True`: the loop's grouping
+        lookup, hashed as `concurrent_tools`. MCP and built-in tools are never concurrent."""
+        pinned = {s.name for s in self.specs()}
+        mine = [(t.name, t) for t in self.tools]
+        mine += [(t.name, t.tool) for t in extension_tools(self.extensions)]
+        return frozenset(
+            name for name, t in mine if name in pinned and isinstance(t, Tool) and t.concurrent
+        )
 
     def manifests(self) -> list[JsonValue]:
         return [e.manifest() for e in self.extensions]

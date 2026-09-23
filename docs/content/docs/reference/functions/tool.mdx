@@ -22,6 +22,7 @@ function tool(options: {
   effect?: EffectClass;
   dedupWindowMs?: PosInt;
   reconcile?: { lookup: (effectKey: string, ctx: RunContext<Deps>) => Promise<LookupResult<Output>>; finality: "final" | "nonfinal" };
+  concurrent?: boolean;
   endsTurn?: boolean;
 }): Tool<Input, Output, Deps>
 ```
@@ -40,6 +41,7 @@ def tool(
     effect: EffectClass = "unguarded",
     dedup_window_ms: PosInt | None = None,
     reconcile: Reconcile[Output, Deps] | None = None,
+    concurrent: bool = False,
     ends_turn: bool = False,
 ) -> Tool[Input, Output, Deps]
 ```
@@ -107,6 +109,10 @@ def tool(
 
 <Field name="reconcile.finality" type={"\"final\" | \"nonfinal\""} required>
   Whether a not_found from lookup is trustworthy. final: not_found means the effect never happened. nonfinal: not_found may just not be visible yet, so the call parks for a person to settle.
+</Field>
+
+<Field name="concurrent" type={"boolean"} default={"false"}>
+  true: this read-only tool may run at the same time as the other concurrent read-only calls of one model response. Needs effect "read_only" and not ends_turn (setup error invalid_config otherwise). Results are always recorded in call order. At most 8 are outstanding at once. Covered by config_hash (not shown to the model), so changing it is a config change.
 </Field>
 
 <Field name="endsTurn / ends_turn" type={"boolean"} default={"false"}>

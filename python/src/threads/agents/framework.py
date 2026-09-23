@@ -13,8 +13,8 @@ from threads.agents.spawn import Tasks, busy, once, spawn, start_background
 from threads.agents.team import deliver, team_tool
 from threads.log import AgentSpawnedEvent, ParkAddress
 from threads.loop.drafts import draft
-from threads.loop.drive import open_cancel, parked
-from threads.loop.history import CallState
+from threads.loop.drive import parked
+from threads.loop.history import CallState, open_cancel
 from threads.loop.runtime import Halt, Idle, Runtime, lost
 from threads.reduce.handlers import to_json
 from threads.result import Err

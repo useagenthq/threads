@@ -45,6 +45,8 @@ export type ToolDefinition<Input, Output, Deps = undefined> = {
     readonly finality: "final" | "nonfinal";
   };
   readonly endsTurn?: boolean;
+  /** true: runs with the other concurrent read-only calls of one response. Hashed, not in line 0. */
+  readonly concurrent?: boolean;
 };
 
 /** The environment a run binds its tools to. */
@@ -62,6 +64,8 @@ export type Tool<Input, Output, Deps = undefined> = {
   /** The pinned spec; throws ConfigError when the definition can't run. */
   readonly spec: () => ToolSpec;
   readonly bind: (env: ToolEnv<Deps>) => ToolImpl;
+  /** Declared `concurrent: true`; pinned by config_hash as concurrent_tools. */
+  readonly concurrent?: true;
 };
 
 export function tool<Input, Output, Deps = undefined>(
@@ -75,6 +79,7 @@ export function tool<Input, Output, Deps = undefined>(
     name: def.name,
     spec,
     bind: (env) => bound(def, strict, spec(), env),
+    ...(def.concurrent === true ? { concurrent: true } : {}),
   };
 }
 
@@ -97,6 +102,14 @@ function pinned<Input, Output, Deps>(
     throw new ConfigError(
       "invalid_config",
       `tool ${def.name}: reconcile is required exactly when effect is reconcilable`,
+    );
+  if (
+    def.concurrent === true &&
+    (effect !== "read_only" || def.endsTurn === true)
+  )
+    throw new ConfigError(
+      "invalid_config",
+      `tool ${def.name}: concurrent needs effect: "read_only" and no endsTurn; tools with side effects, or that end the turn, run one at a time`,
     );
   const parsed = ToolSpec.safeParse({
     name: def.name,
@@ -178,6 +191,7 @@ function bound<Input, Output, Deps>(
     spec,
     input: strict,
     run,
+    ...(def.concurrent === true ? { concurrent: true } : {}),
     ...(reconcile === undefined
       ? {}
       : {

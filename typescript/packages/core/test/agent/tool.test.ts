@@ -93,3 +93,79 @@ describe("tool() runs", () => {
     tool({ ...base, runs: "elsewhere" });
   });
 });
+
+describe("tool() concurrent", () => {
+  const { effect: _readOnly, ...unsaid } = base;
+  const hashOf = async (t: ReturnType<typeof tool>) => {
+    const bot = agent({
+      model: scriptedModel({ responses: [say("ok")] }),
+      tools: [t],
+    });
+    const result = await bot.run("hi", { store: sqlite(":memory:") });
+    return configHash(result.thread);
+  };
+
+  test.each([
+    ["an omitted effect (unguarded)", tool({ ...unsaid, concurrent: true })],
+    ["unguarded", tool({ ...base, effect: "unguarded", concurrent: true })],
+    [
+      "idempotent",
+      tool({
+        ...base,
+        effect: "idempotent",
+        dedupWindowMs: 1000,
+        concurrent: true,
+      }),
+    ],
+    [
+      "reconcilable",
+      tool({
+        ...base,
+        effect: "reconcilable",
+        reconcile: {
+          lookup: async () => ({ status: "not_found" }),
+          finality: "final",
+        },
+        concurrent: true,
+      }),
+    ],
+    ["ends_turn", tool({ ...base, endsTurn: true, concurrent: true })],
+  ])("concurrent with %s is invalid_config naming the tool", (_, t) => {
+    expect(() => t.spec()).toThrow(ConfigError);
+    expect(() => t.spec()).toThrow("tool echo: concurrent");
+  });
+
+  test("the ToolSpec equals the one without concurrent: the model never sees it", () => {
+    expect(tool({ ...base, concurrent: true }).spec()).toEqual(
+      tool(base).spec(),
+    );
+  });
+
+  test("config_hash covers it; no concurrent tool keeps the hash", async () => {
+    const plain = await hashOf(tool(base));
+    expect(await hashOf(tool({ ...base, concurrent: false }))).toBe(plain);
+    expect(await hashOf(tool({ ...base, concurrent: true }))).not.toBe(plain);
+    expect({
+      plain,
+      concurrent: await hashOf(tool({ ...base, concurrent: true })),
+    }).toEqual({
+      plain: "be791e242b20a14b825d5bd99584c51bd4e8b4d5bdffd37fb10590010bf5cec9",
+      concurrent:
+        "d2277d2fc7926e8c9ae5676a3dda3cf00e1147e35b032ada444160201d402c39",
+    });
+  });
+
+  test("turning it on for an existing thread fails closed", async () => {
+    const say1 = () => scriptedModel({ responses: [say("ok")] });
+    const seed = await agent({ model: say1(), tools: [tool(base)] }).run("hi", {
+      store: sqlite(":memory:"),
+    });
+    const flipped = agent({
+      model: say1(),
+      tools: [tool({ ...base, concurrent: true })],
+    });
+    await expect(flipped.run("again", { thread: seed.thread })).rejects.toThrow(
+      "another config",
+    );
+  });
+});

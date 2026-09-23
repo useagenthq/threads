@@ -14,7 +14,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.store import Store, now_ms, open_store
 from threads.log import BranchId, ParseError, Principal, ThreadId, ThreadStartedEvent
-from threads.loop.drive import open_cancel
+from threads.loop.history import open_cancel
 from threads.reduce import Fold
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok

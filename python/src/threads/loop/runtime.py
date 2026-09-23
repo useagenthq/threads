@@ -182,6 +182,9 @@ class Runtime:
     """Ancestors' budgets that also cover this thread."""
     framework: Framework | None = None
     """Subagents, handoffs and teams, bound by the agents layer; None: those tools aren't run."""
+    concurrent: frozenset[str] = frozenset()
+    """The bound tools declared `concurrent=True` (pinned by config_hash): their read-only calls
+    of one response may run in a group (threads.loop.parallel). Never a built-in or MCP tool."""
 
     @property
     def fold(self) -> Fold:

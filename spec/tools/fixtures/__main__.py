@@ -41,6 +41,7 @@ from . import (
     structure,
     summaries,
     teams,
+    tool_groups,
     tool_inputs,
 )
 from .common import CASES, sha
@@ -160,7 +161,7 @@ def main() -> int:
         _generate(out)
         problems = coverage.check(out)
         if sys.argv[1:] == ["--check"]:
-            problems += tool_inputs.check()
+            problems += tool_inputs.check() + tool_groups.check()
         for p in problems:
             print(f"coverage.json: {p}")
         if problems:
@@ -172,6 +173,7 @@ def main() -> int:
             print("fixtures up to date" if not diffs else f"{len(diffs)} difference(s)")
             return 1 if diffs else 0
         tool_inputs.write()
+        tool_groups.write()
         shutil.rmtree(CASES, ignore_errors=True)
         shutil.copytree(out, CASES)
         print(f"wrote {sum(1 for _ in CASES.iterdir())} cases")

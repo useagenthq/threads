@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, assert_never
 from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
-    CancelledEvent,
     CancelRequestedEvent,
     CompactionFailedEvent,
     ContextEditedEvent,
@@ -33,10 +32,17 @@ from threads.log import (
     ToolResultLateEvent,
     TurnCompletedEvent,
 )
-from threads.loop import calls, gates, output, retries, tool_gates
+from threads.loop import calls, gates, output, parallel, retries, tool_gates
 from threads.loop.defaults import context, max_pauses
 from threads.loop.drafts import draft
-from threads.loop.history import CONTINUE_TEXT, continuations, pauses, step, turn_events
+from threads.loop.history import (
+    CONTINUE_TEXT,
+    continuations,
+    open_cancel,
+    pauses,
+    step,
+    turn_events,
+)
 from threads.loop.runtime import Halt, Idle, Parked, Runtime, lost
 from threads.loop.turn import complete, request
 from threads.result import Err
@@ -90,9 +96,7 @@ async def _step(rt: Runtime) -> Halt | None:
         gated = await gates.after_model(rt)
         if gated is not None:
             return None if gated == gates.AGAIN else gated
-        call_id = fold.pending[0]
-        halt = await calls.run_call(rt, call_id)
-        return halt or await tool_gates.after_tool(rt, call_id)
+        return await parallel.run_pending(rt)
     return await _next(rt)
 
 
@@ -116,15 +120,6 @@ def parked(events: Sequence[Event], open_addresses: Sequence[ParkAddress]) -> Pa
 def _last_reason(events: Sequence[Event]) -> str:
     done = next((e for e in reversed(events) if isinstance(e, TurnCompletedEvent)), None)
     return "end_turn" if done is None else done.data.reason
-
-
-def open_cancel(events: Sequence[Event]) -> CancelRequestedEvent | None:
-    for event in reversed(turn_events(events)):
-        if isinstance(event, CancelledEvent):
-            return None
-        if isinstance(event, CancelRequestedEvent):
-            return event
-    return None
 
 
 async def _cancel(rt: Runtime, cancel: CancelRequestedEvent) -> Halt | None:

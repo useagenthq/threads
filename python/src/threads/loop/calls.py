@@ -14,7 +14,7 @@ from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state
 from threads.loop.results import As, reference_drafts, result_draft
 from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
-from threads.loop.tools import NotSent, Output, Uncertain
+from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
 from threads.result import Err, Ok
 from threads.store import Draft
 from threads.store.lines import uuid7
@@ -75,7 +75,7 @@ async def run_call(rt: Runtime, call_id: CallId) -> Halt | None:
 async def _advance(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
     call_id = state.call.data.call_id
     if state.decision is None:
-        return await _authorize(rt, state, spec)
+        return await authorize(rt, state, spec)
     if state.decision == "deny" or state.approved is False:
         return await close(rt, call_id, "denied", "denied by policy")
     if state.decision == "ask" and state.approved is None:
@@ -127,12 +127,13 @@ async def recheck(rt: Runtime, state: CallState) -> Halt | None:
     spec = rt.fold.tools[state.call.data.name]
     if rt.authorize(rt.fold, state.call.data, spec).decision == "allow":
         return None
-    return await _authorize(rt, state, spec, "recovery")
+    return await authorize(rt, state, spec, "recovery")
 
 
-async def _authorize(
+async def authorize(
     rt: Runtime, state: CallState, spec: ToolSpec, actor: ActorKind = "host"
 ) -> Halt | None:
+    """Records the call's authorization: policy, then before_tool; an ask opens its challenge."""
     policy = rt.authorize(rt.fold, state.call.data, spec)
     decision, hooked = await tool_gates.authorize(rt, state.call, policy)
     data: dict[str, JsonValue] = {
@@ -197,8 +198,13 @@ async def _read_only(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | No
     stale = await fence(rt)
     if stale is not None:
         return stale
+    return await record_read(rt, inv, await rt.tools.dispatch(inv))
+
+
+async def record_read(rt: Runtime, inv: Invocation, ran: Dispatched) -> Halt | None:
+    """A read_only call's result and its references. An uncertain read is just a failed one."""
     references: list[Draft] = []
-    match await rt.tools.dispatch(inv):
+    match ran:
         case Output(
             text=text, is_error=is_error, full_output=full, references=recalled, content=parts
         ):
@@ -209,7 +215,7 @@ async def _read_only(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | No
             text = f"{reason}: the read did not finish"
             result = await result_draft(rt, inv.call_id, text, As("executed", True))
         case NotSent(unmatched=True):
-            return Failed("unmatched_external_op", f"no recorded stub for {spec.name}")
+            return Failed("unmatched_external_op", f"no recorded stub for {inv.spec.name}")
         case NotSent():
             result = await result_draft(rt, inv.call_id, "not sent", As("not_executed", True))
     done = await rt.append(result, *references)

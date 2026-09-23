@@ -41,6 +41,7 @@ class ToolOptions[I: BaseModel, O, D](TypedDict, total=False):
     dedup_window_ms: int
     reconcile: Reconcile[O, D]
     ends_turn: bool
+    concurrent: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +56,8 @@ class Tool[I: BaseModel, O, D]:
     dedup_window_ms: int | None = None
     reconcile: Reconcile[O, D] | None = None
     ends_turn: bool = False
+    concurrent: bool = False
+    """Runs with the other concurrent read-only calls of one response. Hashed, not in line 0."""
 
     def spec(self) -> ToolSpec:
         """The pinned ToolSpec: what line 0 shows and what decides the effect class."""
@@ -132,7 +135,8 @@ def render_value(value: object) -> str:
 def tool[I: BaseModel, O, D](**options: Unpack[ToolOptions[I, O, D]]) -> Tool[I, O, D]:
     """spec/api.json `tool`. `runs` defaults to "host" and is not pinned. Raises ConfigError for
     a definition that can't run: a sandbox tool (no sandbox in this build), an idempotent tool
-    without its dedup window, or a reconcilable tool without its lookup."""
+    without its dedup window, a reconcilable tool without its lookup, or a concurrent tool that
+    isn't read_only or ends the turn."""
     effect = options.get("effect", "unguarded")
     execute = options.get("execute")
     if options.get("runs", "host") != "host" or execute is None:
@@ -143,6 +147,14 @@ def tool[I: BaseModel, O, D](**options: Unpack[ToolOptions[I, O, D]]) -> Tool[I,
     reconcile = options.get("reconcile")
     if (effect == "reconcilable") != (reconcile is not None):
         raise ConfigError("invalid_config", "reconcile goes with effect='reconcilable' only")
+    concurrent = options.get("concurrent", False)
+    ends_turn = options.get("ends_turn", False)
+    if concurrent and (effect != "read_only" or ends_turn):
+        raise ConfigError(
+            "invalid_config",
+            f"tool {options['name']}: concurrent needs effect='read_only' and no ends_turn; "
+            "tools with side effects, or that end the turn, run one at a time",
+        )
     return Tool(
         options["name"],
         options["description"],
@@ -151,5 +163,6 @@ def tool[I: BaseModel, O, D](**options: Unpack[ToolOptions[I, O, D]]) -> Tool[I,
         effect,
         window,
         reconcile,
-        options.get("ends_turn", False),
+        ends_turn,
+        concurrent,
     )

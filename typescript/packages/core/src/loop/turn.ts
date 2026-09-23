@@ -55,13 +55,22 @@ export function toolSpec(fold: Fold, name: string): ToolSpec | undefined {
   return fold.tools.find((t) => t.name === name);
 }
 
+/** A cancel_requested barrier in the open turn: nothing new starts after it. */
+export function cancelRequested(
+  events: readonly KnownEvent[],
+): EventOf<"cancel_requested"> | undefined {
+  const cancel = turnEvents(events).findLast(
+    (e) => e.type === "cancel_requested",
+  );
+  return cancel?.type === "cancel_requested" ? cancel : undefined;
+}
+
 export function nextStep(events: readonly KnownEvent[], fold: Fold): Step {
   if (!fold.turnOpen) return { kind: "idle" };
   if (fold.parked.length > 0) return { kind: "parked" };
+  const cancel = cancelRequested(events);
+  if (cancel !== undefined) return { kind: "cancel", request: cancel };
   const turn = turnEvents(events);
-  const cancel = turn.findLast((e) => e.type === "cancel_requested");
-  if (cancel?.type === "cancel_requested")
-    return { kind: "cancel", request: cancel };
   if (fold.pending.size > 0) return { kind: "calls" };
   const at = turn.findLastIndex((e) => isTurnResponse(e, fold));
   const response = turn[at];

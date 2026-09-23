@@ -31,9 +31,8 @@ from threads.log import (
 )
 from threads.loop.budget import inherited
 from threads.loop.drafts import draft
-from threads.loop.drive import open_cancel
 from threads.loop.gates import MAX_STOP_CONTINUES, said, verdict
-from threads.loop.history import CallState
+from threads.loop.history import CallState, open_cancel
 from threads.loop.results import As, result_draft, text_ref
 from threads.loop.runtime import Failed as HaltFailed
 from threads.loop.runtime import Halt, Runtime, lost

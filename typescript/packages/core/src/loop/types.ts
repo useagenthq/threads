@@ -109,6 +109,8 @@ export type ToolImpl = {
   ) => Promise<"terminated" | "already_exited" | "unknown">;
   /** idempotent: the provider's clock; absent means the host clock with a doubled skew margin. */
   readonly providerNow?: () => number;
+  /** An app tool declared `concurrent: true`: it may run in a group (loop/groups.ts). */
+  readonly concurrent?: true;
 };
 
 /** A permission_decision the loop records for a new call (fold, hooks later). */

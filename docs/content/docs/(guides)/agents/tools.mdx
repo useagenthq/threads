@@ -74,6 +74,9 @@ Then pass it to an agent with `tools: [getWeather]` (`tools=[weather_tool]` in P
 <Field name="endsTurn" type="boolean" default="false">
   `ends_turn` in Python. When the call succeeds, the turn ends without another model call.
 </Field>
+<Field name="concurrent" type="boolean" default="false">
+  A `read_only` tool may run at the same time as the other concurrent calls of one model response. See [Run read-only tools in parallel](#run-read-only-tools-in-parallel).
+</Field>
 <Field name="output" type="Zod schema">
   TypeScript only. A result that fails this schema is reported to the model as an error.
 </Field>
@@ -291,6 +294,49 @@ finish = tool(
 </Tab>
 </Tabs>
 
+## Run read-only tools in parallel
+
+When the model asks for several lookups in one response, mark the tool `concurrent` and they run at the same time instead of one after another.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const searchDocs = tool({
+  name: "search_docs",
+  description: "Search the product docs.",
+  input: z.object({ query: z.string() }),
+  effect: "read_only",
+  concurrent: true,
+  execute: async ({ query }) => docs.search(query),
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+search_docs = tool(
+    name="search_docs",
+    description="Search the product docs.",
+    input=SearchInput,
+    effect="read_only",
+    concurrent=True,
+    execute=search,
+)
+```
+
+</Tab>
+</Tabs>
+
+- **Only reads.** `concurrent` needs `effect: "read_only"` and no `endsTurn`. A tool with side effects always runs alone: it starts after every earlier call is recorded, and nothing starts until it finishes.
+- **Recorded in call order.** Results land in the log in the order the model asked for them, never in the order they finished, so a replay reads the same log.
+- **At most 8 at once.** The 9th call starts when the 1st is recorded.
+- **Stopping.** A cancel lets the calls already running finish and skips the rest. If the process stops mid-way, the reads that weren't recorded run again on the next run; a costly read may run twice.
+- Built-in and MCP tools, and calls from different model responses, still run one at a time.
+
+Turning `concurrent` on or off changes the agent's config, so a thread started with the old setting can't be continued with the new one; start a new thread.
+
 ## Setup errors
 
-`tool()` checks its definition and raises `ConfigError` when it can't run: `dedupWindowMs` without `effect: "idempotent"` (or the reverse), `reconcile` without `effect: "reconcilable"` (or the reverse), or `runs: "sandbox"`, which isn't supported yet.
+`tool()` checks its definition and raises `ConfigError` when it can't run: `dedupWindowMs` without `effect: "idempotent"` (or the reverse), `reconcile` without `effect: "reconcilable"` (or the reverse), `concurrent` on a tool that isn't `read_only` or that ends the turn, or `runs: "sandbox"`, which isn't supported yet.

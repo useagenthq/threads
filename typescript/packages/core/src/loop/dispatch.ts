@@ -21,24 +21,17 @@ import type { Halt, ToolRun } from "./types";
 
 const HOUR = 3_600_000;
 
-export async function runCalls(s: Session): Promise<Halt | undefined> {
-  for (const callId of [...s.fold.pending]) {
-    const call = s.events.findLast(
-      (e) => e.type === "tool_call" && e.data.call_id === callId,
-    );
-    if (call?.type !== "tool_call") continue;
-    const before = s.fold.seq;
-    const stopped =
-      (await runCall(s, call)) ?? (await afterTool(s, call, before));
-    // A step that parked or ended the turn (a handoff) dispatches nothing more.
-    if (stopped !== undefined || s.fold.parked.length > 0 || !s.fold.turnOpen)
-      return stopped;
-  }
-  return undefined;
+/** One call on its own: authorized, run, and observed by after_tool. */
+export async function runAlone(
+  s: Session,
+  call: EventOf<"tool_call">,
+): Promise<Halt | undefined> {
+  const before = s.fold.seq;
+  return (await runCall(s, call)) ?? (await afterTool(s, call, before));
 }
 
 /** after_tool observes a result this call just recorded; it can't deny or undo the effect. */
-async function afterTool(
+export async function afterTool(
   s: Session,
   call: EventOf<"tool_call">,
   before: number,
@@ -139,13 +132,7 @@ async function dispatch(
   if (spec?.effect_class === "read_only") {
     const fenced = s.fence();
     if (fenced !== undefined) return fenced;
-    const run = await body(s, call);
-    // A read_only call changes nothing, so an uncertain run is just a failed one.
-    const done: Extract<ToolRun, { kind: "done" }> =
-      run.kind === "done"
-        ? run
-        : { kind: "done", output: `failed: ${run.kind}`, isError: true };
-    return s.append(result(s, callId, done), ...injections(done));
+    return recordRead(s, callId, await body(s, call));
   }
   const attempts = s.events.filter(
     (e) => e.type === "effect_begin" && e.data.call_id === callId,
@@ -159,6 +146,20 @@ async function dispatch(
   if (fenced !== undefined) return fenced;
   const run = await sent(s, call);
   return settle(s, callId, run);
+}
+
+/** A read_only call's result and its injections. */
+export function recordRead(
+  s: Session,
+  callId: string,
+  run: ToolRun,
+): Halt | undefined {
+  // A read_only call changes nothing, so an uncertain run is just a failed one.
+  const done: Extract<ToolRun, { kind: "done" }> =
+    run.kind === "done"
+      ? run
+      : { kind: "done", output: `failed: ${run.kind}`, isError: true };
+  return s.append(result(s, callId, done), ...injections(done));
 }
 
 /** The body of a mediated operation, or its stub in stub mode. */
@@ -176,7 +177,12 @@ async function sent(
     : { kind: "done", output: answer.output, isError: answer.isError };
 }
 
-async function body(s: Session, call: EventOf<"tool_call">): Promise<ToolRun> {
+/** Runs the tool; `signal` is the run's, or a group's composed with it. */
+export async function body(
+  s: Session,
+  call: EventOf<"tool_call">,
+  signal: AbortSignal = s.config.signal ?? new AbortController().signal,
+): Promise<ToolRun> {
   const impl = s.config.tools.get(call.data.name);
   if (impl === undefined)
     return {
@@ -192,7 +198,7 @@ async function body(s: Session, call: EventOf<"tool_call">): Promise<ToolRun> {
       branchId: s.branchId,
       epoch: s.epoch,
       principal: s.config.principal,
-      signal: s.config.signal ?? new AbortController().signal,
+      signal,
       fence: async () => {
         const halted = s.fence();
         return halted === undefined

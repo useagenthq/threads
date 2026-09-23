@@ -195,6 +195,15 @@ A team tool call changes the lead's log through the lead's writer. `<member>` is
 
 A member receives each `team_message` addressed to it or to `*` (and not from itself) once, before its next turn request, as `injected{source: agent, trust: untrusted_reference, origin: {id: message_id}, text: "<from>: <text>"}`; one already injected with that `origin.id` is never injected again.
 
+## Parallel tool calls
+
+An app tool declared `concurrent: true` (only with `effect_class: read_only` and without `ends_turn`) may run at the same time as its neighbours. Before dispatching, the loop takes the pending calls in call order and forms a **group**: the longest run, from the first pending call, of calls whose bound tool is declared concurrent, whose pinned `effect_class` is `read_only`, and whose recorded `permission_decision` is `allow` (an approved `ask` still runs alone). Framework, built-in and MCP tools are never in a group. Every other call runs alone, after every earlier result is recorded and before any later call starts, so an effect never overlaps anything and its `effect_begin` stays durable and fenced before dispatch (invariant 3). The rule is pinned by `conformance/vectors/tool-groups.json`.
+
+- **Recorded in call order.** The lease is checked immediately before each body starts. Results (and their `injected` events and `after_tool` decisions) are appended in call order, never in finish order. At most 8 calls are started and unrecorded at once: call *i + 8* starts only after result *i* is recorded. TypeScript records authorization with the calls, so a group's log equals a sequential run's; Python authorizes lazily, so a group's `before_tool`/`permission_decision` events all come before its first result.
+- **No effect events.** A group holds only `read_only` calls, which write none (rule 8), so there are no new events or rules.
+- **Stopping.** A `cancel_requested` noticed during a group lets the started calls finish and be recorded; queued calls never start and close `not_executed` at the barrier. A lost lease records nothing more; started bodies are aborted (TypeScript signal, Python task cancel) and awaited. After a crash, a `read_only` call without a result is simply run again, in call order.
+- **Pinned by `config_hash`.** The sorted names of the concurrent tools are hashed as `concurrent_tools` (omitted when empty); they are not in `ToolSpec` or Render line 0.
+
 ## Subagent cancellation and parking
 
 - **Tree-wide cancel.** `Thread.cancel` appends the thread's own `cancel_requested` (the barrier), then, for every child its log has an `agent_spawned` for and no `agent_finished`, appends `cancel_requested{scope: tree, reason: "ancestor cancelled"}` (actor `host`, principal the canceller) to that child's thread, recursively through the child's children. A child whose thread doesn't exist yet gets nothing: it is never started.

@@ -104,7 +104,7 @@
     {
       "id": "builtin-tool-config",
       "open": "The draft design says web, git and browser tools need configuration but not where.",
-      "choice": "agent({web: {fetch, search}, git: {credential}, browser: {auth}}); sandbox tools come with sandbox.",
+      "choice": "agent({web: {fetch, search}, git: {credential}}); sandbox tools come with sandbox. Delegated browser sessions are deferred past v0.1.",
       "why": "Config-first; no extra factory names."
     },
     {
@@ -375,43 +375,12 @@
           "doc": "Pins lsp for these languages (typescript, python, go, rust), run in the sandbox image's language servers. Needs a sandbox; an unknown language is unknown_preset. A server that isn't installed or ready answers unavailable at run time. Omitted: no lsp tool."
         },
         {
-          "name": "browser",
-          "kind": "option",
-          "type": {
-            "object": {
-              "auth": {
-                "type": {
-                  "array": {
-                    "object": {
-                      "origin": {"type": {"prim": "string"}, "required": true, "doc": "The site origin, scheme and host with an optional port, such as https://example.com."},
-                      "profile": {"type": {"prim": "string"}, "required": true, "doc": "The name of the host browser profile whose signed-in session is used for this origin."}
-                    },
-                    "casing": "wire"
-                  }
-                },
-                "required": true,
-                "doc": "The sites the browser may use while signed in, each with the host browser profile that holds the session."
-              }
-            }
-          },
-          "required": false,
-          "doc": "Delegated browser sessions. Not built yet in either language. Omitted: no browser tools."
-        },
-        {
           "name": "output_styles",
           "kind": "option",
           "type": {"map": {"prim": "string"}},
           "required": false,
           "default": {},
           "doc": "Named output styles for Thread.setOutputStyle."
-        },
-        {
-          "name": "stream_release",
-          "kind": "option",
-          "type": {"enum": ["immediate", "after_guardrails"]},
-          "required": false,
-          "default": "immediate",
-          "doc": "When streamed output is released: immediately, or only after the output guardrails pass."
         }
       ],
       "returns": {"$ref": "#/types/Agent", "args": [{"generic": "Deps"}, {"generic": "Output"}]}
@@ -477,21 +446,6 @@
           "doc": "The tool body for runs host, the only kind built today. Its return value is the result; a thrown error becomes an error tool_result the model sees. Omitting it is a setup error capability_missing."
         },
         {
-          "name": "module",
-          "kind": "option",
-          "type": {"prim": "string"},
-          "required": false,
-          "doc": "runs sandbox: required. Path of the module uploaded into the sandbox; JSON on stdin and stdout. Not built yet: runs sandbox is a setup error today. Omit it for a host tool."
-        },
-        {
-          "name": "entrypoint",
-          "kind": "option",
-          "type": {"prim": "string"},
-          "required": false,
-          "default": "main",
-          "doc": "runs sandbox: the function the module exposes."
-        },
-        {
           "name": "effect",
           "kind": "option",
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EffectClass"},
@@ -543,7 +497,7 @@
           "type": {"prim": "boolean"},
           "required": false,
           "default": false,
-          "doc": "May run in parallel with other concurrent calls of one response (F1.1)."
+          "doc": "true: this read-only tool may run at the same time as the other concurrent read-only calls of one model response. Needs effect \"read_only\" and not ends_turn (setup error invalid_config otherwise). Results are always recorded in call order. At most 8 are outstanding at once. Covered by config_hash (not shown to the model), so changing it is a config change."
         },
         {"name": "ends_turn", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "true: a successful result from this tool ends the turn with no further model call; an error result doesn't. Default false."}
       ],
