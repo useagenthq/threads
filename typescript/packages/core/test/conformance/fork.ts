@@ -1,30 +1,27 @@
-import { expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { storeOf } from "../../src/agent/sqlite";
 import { BranchId, EventId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
-import {
-  type FakeSandbox,
-  fakeSandbox,
-  type Sandbox,
-  SandboxScript,
-} from "../../src/sandbox";
+import { type Sandbox, SandboxScript } from "../../src/sandbox";
 import { LEASE_TTL_MS } from "../../src/store";
 import { openThread } from "../../src/thread";
 import { forkBranch, recoverForks } from "../../src/thread/fork";
 import { verifyExport } from "../../src/verify";
 import { CTX } from "../sandbox/context";
+import { fakeHarness, type SandboxHarness } from "../sandbox/harness";
 import { count, fixture, unwrap } from "../store/helpers";
-import { type Case, caseStore } from "./cases";
+import { CASE_NAMES, type Case, caseStore, loadCase } from "./cases";
 import { expectAppended } from "./recover";
 
-// The fork kind (spec/conformance/README.md): fork against the fake sandbox, then check the
-// child, the parent, the sandboxes and the resource ledger the operation left.
+// The fork kind (spec/conformance/README.md): fork against a sandbox adapter (the fake, or a
+// provider adapter over its mocked transport), then check the child, the parent, the
+// sandboxes and the resource ledger the operation left.
 
 class Crash extends Error {}
 
 /** The host dies right after the restore returns, before the child's fork event. */
-function dies(sandbox: FakeSandbox): Sandbox {
+function dies(sandbox: Sandbox): Sandbox {
   return {
     ...sandbox,
     restore: async (...args) => {
@@ -40,7 +37,11 @@ const Input = z.strictObject({
   knowledge_policy: z.enum(["pinned", "current"]).optional(),
 });
 
-export async function runFork(c: Case, bytes: Uint8Array): Promise<void> {
+export async function runFork(
+  c: Case,
+  bytes: Uint8Array,
+  harness: SandboxHarness = fakeHarness,
+): Promise<void> {
   const input = Input.parse(c.input);
   const f = caseStore(c);
   f.clock.now = c.now;
@@ -50,7 +51,7 @@ export async function runFork(c: Case, bytes: Uint8Array): Promise<void> {
   const parent = leaf.branch_id;
   const before = unwrap(f.store.exportBranch(parent));
   const script = SandboxScript.parse(c.scripts.sandbox ?? {});
-  const sandbox = fakeSandbox(script);
+  const { sandbox, creates } = harness.make(script);
   const crash = Object.values(script.snapshots ?? {}).some(
     (s) => s.restore_response === "crash",
   );
@@ -72,7 +73,7 @@ export async function runFork(c: Case, bytes: Uint8Array): Promise<void> {
   if (handle.ok) checkChild(c, f, input.new_branch_id);
   else await checkNothingLeft(c, f, sandbox, script);
   if (c.resources !== undefined) {
-    expect(sandbox.creates()).toBe(c.resources.creates);
+    expect(creates()).toBe(c.resources.creates);
     expect<unknown>(
       unwrap(f.store.ledger.rows()).map((r) => ({
         kind: r.kind,
@@ -87,7 +88,7 @@ export async function runFork(c: Case, bytes: Uint8Array): Promise<void> {
 async function checkNothingLeft(
   c: Case,
   f: ReturnType<typeof caseStore>,
-  sandbox: FakeSandbox,
+  sandbox: Sandbox,
   script: SandboxScript,
 ): Promise<void> {
   expect(c.appended ?? []).toEqual([]);
@@ -105,7 +106,7 @@ async function operate(
   c: Case,
   f: ReturnType<typeof caseStore>,
   used: Sandbox,
-  sandbox: FakeSandbox,
+  sandbox: Sandbox,
   parent: BranchId,
   input: z.infer<typeof Input>,
 ): Promise<void> {
@@ -166,4 +167,16 @@ function checkChild(
   for (const a of c.artifacts) other.artifacts.put(a);
   expect(unwrap(other.store.importLog(exported)).segments.length).toBe(2);
   other.db.close();
+}
+
+/** Every fork case of the corpus against one adapter. */
+export function forkCases(harness: SandboxHarness): void {
+  describe(`fork conformance: ${harness.name}`, () => {
+    for (const name of CASE_NAMES) {
+      const c = loadCase(name);
+      const { log } = c;
+      if (c.kind === "fork" && log !== undefined)
+        test(name, () => runFork(c, log, harness));
+    }
+  });
 }
