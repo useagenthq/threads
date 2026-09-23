@@ -168,8 +168,11 @@ export function tokenBounds(
   const { max_tokens: output } = params;
   return {
     ...(input === undefined ? {} : { input }),
-    // Only a JSON integer bounds the output, as in Python; a fraction or a boolean doesn't.
-    ...(Number.isSafeInteger(output) && typeof output === "number"
+    // Only a positive JSON integer bounds the output, as in Python: a fraction or a boolean
+    // doesn't, and zero or less would reserve less than any response can use.
+    ...(Number.isSafeInteger(output) &&
+    typeof output === "number" &&
+    output >= 1
       ? { output }
       : {}),
   };

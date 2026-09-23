@@ -14,11 +14,12 @@ import type { Sandbox } from "../sandbox";
 import type { Capabilities, Egress } from "../tools";
 import type { GitOptions } from "../tools/git/host";
 import { subagent } from "./child";
+import { checkTree } from "./enforceable";
 import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
 import { target } from "./handoff";
 import { hosted } from "./hosted";
-import { type MemoryWrite, pin } from "./pin";
+import { type MemoryWrite, type PinOptions, pin } from "./pin";
 import { register } from "./registry";
 import type { RunResult } from "./result";
 import { type Resolved, type RunOptions, run } from "./run";
@@ -44,6 +45,11 @@ export type AgentOptions<Deps, Output> = {
   readonly permissions?: Partial<z.infer<typeof PermissionsPolicy>>;
   /** Thread budget: it covers the thread and every descendant. */
   readonly budget?: z.infer<typeof Budget>;
+  /**
+   * How a budget counts an attempt with no known usage. "stop" lets a limit the model can't
+   * bound per attempt pass setup; the attempt is refused at run time instead. Absent: upper_bound.
+   */
+  readonly onUnknownUsage?: PinOptions["onUnknownUsage"];
   readonly retry?: Partial<z.infer<typeof RetryPolicy>>;
   readonly context?: Partial<z.infer<typeof ContextPolicy>>;
   /** Absent: no sandbox tools (bash, files). */
@@ -148,6 +154,7 @@ function build<Deps, Output>(
     fallback: options.fallback ?? [],
     permissions: options.permissions ?? {},
     budget: options.budget,
+    onUnknownUsage: options.onUnknownUsage,
     retry: options.retry ?? {},
     context: options.context ?? {},
     sandbox: options.sandbox,
@@ -173,6 +180,7 @@ function build<Deps, Output>(
     check: async () => {
       try {
         pin({ ...def, mcp: await def.setup() });
+        checkTree(def);
         return { ok: true, value: undefined };
       } catch (error) {
         if (!(error instanceof ConfigError)) throw error;
@@ -186,6 +194,7 @@ function build<Deps, Output>(
   register(handle, {
     child: subagent(def),
     target: target(def),
+    enforce: (covering) => checkTree(def, covering),
     host: hosted(def, options.approvers),
   });
   return handle;
@@ -209,8 +218,9 @@ function agentsOf<Deps, Output>(
   Resolved<Deps, Output>,
   "subagents" | "handoffs" | "agents" | "targets"
 > {
-  const agents = options.subagents ?? [];
-  const targets = options.handoffs ?? [];
+  // Copies: a list the caller changes later can't change the pinned agents, or form a cycle.
+  const agents = [...(options.subagents ?? [])];
+  const targets = [...(options.handoffs ?? [])];
   return {
     subagents: agents.map((a) => a.name),
     handoffs: targets.map((a) => a.name),

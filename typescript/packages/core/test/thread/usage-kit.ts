@@ -2,7 +2,7 @@ import { z } from "zod";
 import { agent, openThread, scriptedModel, type sqlite } from "../../src";
 import { openStore, storeConnection } from "../../src/agent/sqlite";
 import { sha256Hex } from "../../src/hash";
-import { canonicalize, ThreadId } from "../../src/log";
+import { type Cost, canonicalize, ThreadId } from "../../src/log";
 import { markTestKit } from "../../src/model/guard";
 import type { Model } from "../../src/model/protocol";
 import type { Thread } from "../../src/thread";
@@ -99,4 +99,20 @@ export async function childIds(thread: Thread): Promise<readonly ThreadId[]> {
   return (await thread.children()).map((c) =>
     ThreadId.parse(c.child_thread_id),
   );
+}
+
+/** A USD total whose upper bound is its known cost (every attempt here settles). */
+export function usd(known: number, exact: boolean): Cost {
+  return {
+    currency: "USD",
+    known_nanos: known,
+    upper_bound_nanos: known,
+    complete: exact,
+    bounded: exact,
+  };
+}
+
+/** The tree cost of `thread`: Thread.cost({ tree: true }). */
+export function tree(thread: Thread): ReturnType<Thread["cost"]> {
+  return thread.cost({ tree: true });
 }

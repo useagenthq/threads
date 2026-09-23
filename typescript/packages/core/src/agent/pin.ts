@@ -46,6 +46,8 @@ export type PinOptions = {
   readonly fallback: readonly Model[];
   readonly permissions: Partial<z.infer<typeof PermissionsPolicy>>;
   readonly budget: z.infer<typeof Budget> | undefined;
+  /** Pinned as policy.on_unknown_usage when set; absent: upper_bound. */
+  readonly onUnknownUsage: Policy["on_unknown_usage"];
   readonly retry: Partial<z.infer<typeof RetryPolicy>>;
   readonly context: Partial<z.infer<typeof ContextPolicy>>;
   readonly sandbox: Sandbox | undefined;
@@ -126,7 +128,7 @@ export function pin(
   const twice = names.find((n, i) => names.indexOf(n) !== i);
   if (twice !== undefined)
     throw new ConfigError("duplicate_name", `two tools are named ${twice}`);
-  checkEnforceable(o.budget, [o.model, ...o.fallback]);
+  checkEnforceable(o.budget, [o.model, ...o.fallback], o.onUnknownUsage);
   const { model, params, adapter } = o.model.info;
   const cfg = {
     agent_name: o.name,
@@ -295,6 +297,9 @@ function policy(o: PinOptions): Policy {
           })),
         }),
     ...(o.budget === undefined ? {} : { budget: o.budget }),
+    ...(o.onUnknownUsage === undefined
+      ? {}
+      : { on_unknown_usage: o.onUnknownUsage }),
     ...(o.handoffs.length === 0 ? {} : { handoffs: [...o.handoffs] }),
     ...(o.output === undefined
       ? {}

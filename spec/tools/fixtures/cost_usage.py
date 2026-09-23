@@ -26,7 +26,22 @@ def build(root: pathlib.Path) -> None:
     _usage_overflow(root)
     _cost_overflow(root)
     _cache_break_exact(root)
-    _max_tokens_not_integer(root)
+    _max_tokens_unbounded(
+        root,
+        True,
+        "cost-max-tokens-not-integer",
+        "The pinned model_params.max_tokens is true, not an integer, so the attempt has no "
+        "output bound. Its request has no response, so cost can't bound it: bounded false. "
+        "A boolean is never read as 1.",
+    )
+    _max_tokens_unbounded(
+        root,
+        0,
+        "cost-max-tokens-not-positive",
+        "The pinned model_params.max_tokens is 0, so the attempt has no output bound: a "
+        "response can use more than zero tokens. Its request has no response, so cost can't "
+        "bound it: bounded false. Zero is never a bound.",
+    )
 
 
 def _unpinned_projections(root: pathlib.Path) -> None:
@@ -181,13 +196,13 @@ def _cache_break_exact(root: pathlib.Path) -> None:
     )
 
 
-def _max_tokens_not_integer(root: pathlib.Path) -> None:
+def _max_tokens_unbounded(root: pathlib.Path, max_tokens: JsonValue, name: str, why: str) -> None:
     log = Log()
     cfg: Obj = {
         "agent_name": "demo",
         "instructions": "You are a helpful agent.",
         "model": MODEL,
-        "model_params": {**PARAMS, "max_tokens": True},
+        "model_params": {**PARAMS, "max_tokens": max_tokens},
         "adapter": ADAPTER,
         "tools": [],
         "policy": policy(),
@@ -198,13 +213,7 @@ def _max_tokens_not_integer(root: pathlib.Path) -> None:
     log.model_request()
     reduce_case(
         root,
-        (
-            "cost-max-tokens-not-integer",
-            "cancellation_resume",
-            "The pinned model_params.max_tokens is true, not an integer, so the attempt has no "
-            "output bound. Its request has no response, so cost can't bound it: bounded false. "
-            "A boolean is never read as 1.",
-        ),
+        (name, "cancellation_resume", why),
         log,
         {"cost": cost(log)},
     )

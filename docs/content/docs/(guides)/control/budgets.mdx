@@ -134,9 +134,9 @@ capped = agent(model=priced, budget=Budget(max_cost_nanos=2_000_000_000))  # USD
 
 A limit the model can't bound is refused at setup with the error code `budget_unenforceable`, rather than silently not enforced. Set `max_cost_nanos` without a price and you get this error. In TypeScript it surfaces from `check()` or the first `run`; in Python, `agent()` raises `ConfigError`.
 
-<Callout>
-  **Python only:** `on_unknown_usage="stop"` on `agent()` moves this refusal from setup to run time, so the agent can be created. TypeScript has no such option yet.
-</Callout>
+`onUnknownUsage: "stop"` (`on_unknown_usage="stop"` in Python) on `agent()` moves this refusal from setup to run time: the agent can be created, and a request the limit can't bound is refused before it is sent, ending the run with `budget_exhausted`.
+
+To see what a thread actually used and spent, read it back from the log: see [Usage and cost](/docs/control/usage-and-cost).
 
 ## Related
 

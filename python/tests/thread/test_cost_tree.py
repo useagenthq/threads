@@ -78,6 +78,26 @@ def test_an_unpriced_root_counts_in_its_first_priced_descendants_currency() -> N
     check(body)
 
 
+def test_an_unpriced_tree_with_a_missing_child_log_is_none_unknown_never_zero() -> None:
+    async def body(store: Store) -> None:
+        free = agent(name="free", model=unpriced(say("Free.")))
+        thread = await run(store, unpriced(spawn("free"), say("Done.")), [free])
+        free_id = (await child_ids(thread))[0]
+        unstarted = uuid7(now_ms())
+
+        def spawn_only(lines: list[Line]) -> list[Line]:
+            at = next(i for i, line in enumerate(lines) if line["type"] == "agent_spawned")
+            return [
+                obj(json.loads(json.dumps(line).replace(free_id, unstarted)))
+                for line in lines[: at + 1]
+            ]
+
+        await rewrite_log(store, thread.id, spawn_only)
+        assert await thread.cost(tree=True) == Ok(None)
+
+    check(body)
+
+
 def test_an_all_unpriced_tree_is_none() -> None:
     async def body(store: Store) -> None:
         kid = agent(name="free", model=unpriced(say("Free.")))
@@ -142,7 +162,7 @@ def test_a_started_child_that_made_no_model_request_changes_nothing() -> None:
     check(body)
 
 
-def test_a_spawned_child_that_never_started_changes_nothing() -> None:
+def test_a_spawned_child_with_no_log_counts_nothing_and_the_total_is_incomplete() -> None:
     async def body(store: Store) -> None:
         kid = agent(name="kid", model=priced(say("Kid.")))
         thread = await run(store, priced(spawn("kid"), say("Done.")), [kid])
@@ -159,8 +179,46 @@ def test_a_spawned_child_that_never_started_changes_nothing() -> None:
             ]
 
         await rewrite_log(store, thread.id, spawn_only)
-        # Only the lead's first response (the spawn) was recorded.
-        assert await thread.cost(tree=True) == Ok(usd(ONE, exact=True))
+        # Only the lead's first response (the spawn) was recorded. Nothing proves the child
+        # never ran (its log could have been deleted), so the total is not complete.
+        assert await thread.cost(tree=True) == Ok(usd(ONE, exact=False))
+
+    check(body)
+
+
+@pytest.mark.parametrize(
+    ("usage", "expected"),
+    [
+        # Counts nothing, and the total is incomplete: a started child cancelled with unknown
+        # usage writes the same record, so it can't prove the child never ran.
+        ({"input_tokens": None, "output_tokens": None}, Ok(usd(2 * ONE, exact=False))),
+        ({"input_tokens": 10, "output_tokens": 2}, "log_corrupt"),
+    ],
+)
+def test_a_cancelled_child_that_was_never_created(usage: JsonValue, expected: object) -> None:
+    async def body(store: Store) -> None:
+        kid = agent(name="kid", model=priced(say("Kid.")))
+        thread = await run(store, priced(spawn("kid"), say("Done.")), [kid])
+        kid_id = (await child_ids(thread))[0]
+        unstarted = uuid7(now_ms())
+
+        def cancelled(lines: list[Line]) -> list[Line]:
+            out = [obj(json.loads(json.dumps(line).replace(kid_id, unstarted))) for line in lines]
+            return [
+                {**line, "data": {**obj(line["data"]), "status": "cancelled", "usage": usage}}
+                if line["type"] == "agent_finished"
+                else line
+                for line in out
+            ]
+
+        await rewrite_log(store, thread.id, cancelled)
+        total = await thread.cost(tree=True)
+        if isinstance(expected, str):
+            assert isinstance(total, Err)
+            assert total.error.code == expected
+            assert "its parent recorded it cancelled" in total.error.message
+        else:
+            assert total == expected
 
     check(body)
 
@@ -189,6 +247,41 @@ def test_a_finished_child_whose_log_is_missing_is_log_corrupt_never_a_partial_su
     check(body)
 
 
+def test_two_spawns_naming_the_same_missing_child_are_log_corrupt() -> None:
+    async def body(store: Store) -> None:
+        one = agent(name="one", model=priced(say("One.")))
+        two = agent(name="two", model=priced(say("Two.")))
+        thread = await run(store, priced(spawn("one"), spawn("two"), say("Done.")), [one, two])
+        ids = await child_ids(thread)
+        missing = uuid7(now_ms())
+        never: Line = {
+            "status": "cancelled",
+            "usage": {"input_tokens": None, "output_tokens": None},
+        }
+
+        def same_child(lines: list[Line]) -> list[Line]:
+            spawns = [i for i, line in enumerate(lines) if line["type"] == "agent_spawned"]
+            out: list[Line] = []
+            for line in lines[: spawns[1] + 1]:
+                text = json.dumps(line)
+                for child in ids:
+                    text = text.replace(child, missing)
+                edited = obj(json.loads(text))
+                if edited["type"] == "agent_finished":
+                    data: Line = {**obj(edited["data"]), **never}
+                    edited["data"] = data
+                out.append(edited)
+            return out
+
+        await rewrite_log(store, thread.id, same_child)
+        total = await thread.cost(tree=True)
+        assert isinstance(total, Err)
+        assert total.error.code == "log_corrupt"
+        assert "appears twice" in total.error.message
+
+    check(body)
+
+
 def test_a_corrupt_child_is_log_corrupt_naming_it() -> None:
     async def body(store: Store) -> None:
         kid = agent(name="kid", model=priced(say("Kid.")))
@@ -199,6 +292,23 @@ def test_a_corrupt_child_is_log_corrupt_naming_it() -> None:
         assert code == "log_corrupt"
         assert f"child {kid_id}:" in message
         assert await thread.cost() == Ok(usd(2 * ONE, exact=True))
+
+    check(body)
+
+
+def test_of_two_broken_paths_the_first_depth_first_is_reported() -> None:
+    async def body(store: Store) -> None:
+        leaf = agent(name="leaf", model=priced(say("Leaf.")))
+        mid = agent(name="mid", model=priced(spawn("leaf"), say("Mid.")), subagents=[leaf])
+        kid = agent(name="kid", model=priced(say("Kid.")))
+        thread = await run(store, priced(spawn("mid"), spawn("kid"), say("Done.")), [mid, kid])
+        mid_id, kid_id = await child_ids(thread)
+        leaf_id = (await child_ids(await handle(store, mid_id)))[0]
+        await corrupt(store, leaf_id, "Do it.")
+        await corrupt(store, kid_id, "Do it.")
+        code, message = await failure(thread)
+        assert code == "log_corrupt"
+        assert message.startswith(f"child {mid_id}: child {leaf_id}:")
 
     check(body)
 

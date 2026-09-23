@@ -312,6 +312,8 @@ def test_a_child_whose_thread_was_never_created_is_recorded_cancelled_not_starte
         finished = next(e for e in events if isinstance(e, AgentFinishedEvent))
         assert (finished.data.status, finished.data.usage.input_tokens) == ("cancelled", None)
         assert isinstance(await open_thread(store, finished.data.child_thread_id), Err)
+        # The never-created child counts nothing; it doesn't make the tree log_corrupt.
+        assert isinstance(await thread.cost(tree=True), Ok)
 
     asyncio.run(main())
 

@@ -2,6 +2,9 @@
 its own main branch, so the logs stay the only truth (the budget ledger is a cache, never reused
 here)."""
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.store import Store, open_store
@@ -9,6 +12,7 @@ from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
     Cost,
+    Event,
     ModelRequestEvent,
     ParseError,
     ThreadId,
@@ -20,52 +24,101 @@ from threads.store import VerifiedLog
 from threads.thread.read import read_log
 
 
+@dataclass(frozen=True, slots=True)
+class _Pending:
+    """A spawned child still to read and walk, with the path of child ids that leads to it."""
+
+    spawn: AgentSpawnedEvent
+    finish: AgentFinishedEvent | None
+    path: str
+
+
 async def tree_cost(
     store: Store, root: ThreadId, log: VerifiedLog
 ) -> Ok[Cost | None] | Err[ParseError]:
+    """Every thread of the tree, depth first in spawn order, with an explicit stack so a tree of
+    any depth is walked, and each child read only on its turn, so the first broken path depth
+    first is the one reported. Each child must name, as its parent, the agent_spawned that
+    started it; a child that doesn't, or a thread named twice (a cycle, or two spawns of one id),
+    makes the tree log_corrupt. A child with no log counts as an unpriced thread that ran:
+    nothing proves it spent nothing (its log may have been deleted), so the total is incomplete
+    and unbounded, never falsely complete."""
     parts: list[TreePart] = []
-    walked = await _visit(store, root, log, parts, set())
-    return walked if isinstance(walked, Err) else merge_tree(parts)
+    seen = {root}
+    stack: list[_Pending] = []
+    walk: tuple[VerifiedLog, str] | None = (log, "")
+    while walk is not None:
+        at, path = walk
+        own = cost(at.fold)
+        if isinstance(own, Err):
+            return _within(path, own)
+        events = at.fold.events
+        parts.append(TreePart(own.value, any(isinstance(e, ModelRequestEvent) for e in events)))
+        stack.extend(reversed(_pending(events, path)))
+        read = await _next_child(store, stack, seen, parts)
+        if isinstance(read, Err):
+            return read
+        walk = read.value
+    return merge_tree(parts)
 
 
-async def _visit(
-    store: Store, thread: ThreadId, log: VerifiedLog, parts: list[TreePart], seen: set[ThreadId]
-) -> Ok[None] | Err[ParseError]:
-    """Appends `thread` and its descendants, depth first in spawn order. Each child must name,
-    as its parent, the agent_spawned that started it; a child that doesn't, or a thread met twice
-    (a cycle), makes the tree log_corrupt."""
-    if thread in seen:
-        return Err(ParseError("log_corrupt", f"thread {thread} appears twice in the tree"))
-    seen.add(thread)
-    own = cost(log.fold)
-    if isinstance(own, Err):
-        return own
-    events = log.fold.events
-    parts.append(TreePart(own.value, any(isinstance(e, ModelRequestEvent) for e in events)))
-    finished = {e.data.child_thread_id for e in events if isinstance(e, AgentFinishedEvent)}
-    for spawn in (e for e in events if isinstance(e, AgentSpawnedEvent)):
-        child = spawn.data.child_thread_id
-        read = await _child_log(store, spawn, finished=child in finished)
-        below = (
-            await _visit(store, child, read.value, parts, seen)
-            if isinstance(read, Ok) and read.value is not None
-            else read
-        )
-        if isinstance(below, Err):
-            e = below.error
-            return Err(ParseError(e.code, f"child {child}: {e.message}", e.seq))
+def _pending(events: Sequence[Event], path: str) -> list[_Pending]:
+    """The spawns of `events`, in order, each with the parent's agent_finished for its child."""
+    finished = {e.data.child_thread_id: e for e in events if isinstance(e, AgentFinishedEvent)}
+    return [
+        _Pending(e, finished.get(e.data.child_thread_id), f"{path}child {e.data.child_thread_id}: ")
+        for e in events
+        if isinstance(e, AgentSpawnedEvent)
+    ]
+
+
+async def _next_child(
+    store: Store, stack: list[_Pending], seen: set[ThreadId], parts: list[TreePart]
+) -> Ok[tuple[VerifiedLog, str] | None] | Err[ParseError]:
+    """Pops pending children until one has a log to walk; each without a log adds its unpriced
+    part instead. None when the stack is empty."""
+    while stack:
+        top = stack.pop()
+        child = top.spawn.data.child_thread_id
+        if child in seen:
+            why = f"{top.path}thread {child} appears twice in the tree"
+            return Err(ParseError("log_corrupt", why))
+        seen.add(child)
+        read = await _child_log(store, top.spawn, top.finish)
+        if isinstance(read, Err):
+            return _within(top.path, read)
+        if read.value is not None:
+            return Ok((read.value, top.path))
+        parts.append(TreePart(None, ran=True))
     return Ok(None)
 
 
+def _within(path: str, failed: Err[ParseError]) -> Err[ParseError]:
+    """The error, keeping its code, with the path to the descendant that failed."""
+    e = failed.error
+    return Err(ParseError(e.code, f"{path}{e.message}", e.seq)) if path else failed
+
+
+def _never_created(finish: AgentFinishedEvent) -> bool:
+    """spec/schema/README.md, Subagent cancellation: a child with no thread is recorded
+    cancelled, with unknown usage, and never created. A started child cancelled with unknown
+    usage writes the same record, so it can't prove the child spent nothing."""
+    usage = finish.data.usage
+    return finish.data.status == "cancelled" and (usage.input_tokens, usage.output_tokens) == (
+        None,
+        None,
+    )
+
+
 async def _child_log(
-    store: Store, spawn: AgentSpawnedEvent, *, finished: bool
+    store: Store, spawn: AgentSpawnedEvent, finish: AgentFinishedEvent | None
 ) -> Ok[VerifiedLog | None] | Err[ParseError]:
-    """The spawned child's log; None when it has no thread and its parent never recorded it
-    finishing, so it never started. A finished child's missing log is log_corrupt: counting
-    nothing for it would be a partial sum."""
+    """The spawned child's log; None when it has no thread and its parent's record allows that:
+    no agent_finished, or the one a cancelled parent writes for a child it never created. Any
+    other finished child's missing log is log_corrupt."""
     root = await (await open_store(store)).root(spawn.data.child_thread_id)
-    if isinstance(root, Err) and finished:
-        why = "its log is missing, though its parent recorded agent_finished for it"
+    if isinstance(root, Err) and finish is not None and not _never_created(finish):
+        why = f"its log is missing, though its parent recorded it {finish.data.status}"
         return Err(ParseError("log_corrupt", why))
     if isinstance(root, Err):
         return Ok(None)

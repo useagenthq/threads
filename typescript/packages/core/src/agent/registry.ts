@@ -1,4 +1,12 @@
-import type { ArtifactRef, EventId, Policy, Principal, ThreadId } from "../log";
+import type { z } from "zod";
+import type {
+  ArtifactRef,
+  Budget,
+  EventId,
+  Policy,
+  Principal,
+  ThreadId,
+} from "../log";
 import type { ChildRun, Covering, Subagent } from "../loop";
 import type { HostRunner } from "./hosted";
 import type { ThreadRef } from "./result";
@@ -40,9 +48,13 @@ export type TargetFactory = (
   env: ChildEnv,
 ) => (link: HandoffLink) => Promise<ThreadRef>;
 
+/** Setup's check of an agent's tree under the limits covering it. */
+export type Enforcement = (covering: readonly z.infer<typeof Budget>[]) => void;
+
 type Entry = {
   readonly child: ChildFactory;
   readonly target: TargetFactory;
+  readonly enforce: Enforcement;
   readonly host?: HostRunner;
 };
 
@@ -59,6 +71,10 @@ export function childFactory(agent: object): ChildFactory | undefined {
 /** The host's view of an agent handle (@threads/host), or undefined for a foreign object. */
 export function hostRunner(agent: object): HostRunner | undefined {
   return AGENTS.get(agent)?.host;
+}
+
+export function enforcement(agent: object): Enforcement | undefined {
+  return AGENTS.get(agent)?.enforce;
 }
 
 export function targetFactory(agent: object): TargetFactory | undefined {

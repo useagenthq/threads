@@ -31,6 +31,7 @@ function agent(options: {
   permissions?: Partial<Policy.permissions>;
   approvers?: readonly Principal[];
   budget?: Budget;
+  onUnknownUsage?: Policy.on_unknown_usage;
   retry?: Partial<Policy.retry>;
   context?: Partial<Policy.context>;
   egress?: readonly string[] | "unenforced";
@@ -153,8 +154,8 @@ def agent(
   Thread budget: limits such as max_turns, max_model_requests, max_input_tokens, max_output_tokens, max_cost_nanos and max_wall_ms, checked before every model request. It covers the thread and every descendant. Omitted: no thread budget.
 </Field>
 
-<Field name="on_unknown_usage" type={"Policy.on_unknown_usage"} default={"upper_bound"}>
-  Python only. How a budget counts a model attempt the provider reports no usage for. upper_bound counts it at its conservative upper bound; stop lets a limit the model can't bound per attempt pass setup and refuses it at run time instead of failing setup with budget_unenforceable.
+<Field name="onUnknownUsage / on_unknown_usage" type={"Policy.on_unknown_usage"} default={"upper_bound"}>
+  How a budget counts a model attempt the provider reports no usage for. upper_bound counts it at its conservative upper bound; stop lets a limit the model can't bound per attempt pass setup and refuses it at run time instead of failing setup with budget_unenforceable.
 </Field>
 
 <Field name="retry" type={"Partial<Policy.retry>"}>

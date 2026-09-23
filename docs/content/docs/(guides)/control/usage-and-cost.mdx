@@ -1,0 +1,176 @@
+---
+title: Usage and cost
+description: Read what a thread and its subagents used and spent, straight from the log.
+icon: Receipt
+---
+
+import { Network, Wallet } from "lucide-react";
+
+Every model response records its token counts in the thread's log, so what a thread used and spent is read back from the log, not from a separate meter. Open the thread and ask it.
+
+## Tokens used
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+// A price on the model is what lets cost() count money (see Models).
+const bot = agent({
+  model: anthropic({
+    model: "claude-sonnet-5",
+    maxTokens: 8192,
+    contextWindow: 200_000,
+    maxOutputTokens: 8192,
+    price: { input: 3000, output: 15000 },
+  }),
+});
+const store = sqlite(".threads");
+
+const result = await bot.run("Summarize the report.", { store });
+const opened = await openThread(store, result.thread.id);
+if (!opened.ok) throw new Error(opened.error.message);
+const thread = opened.value;
+
+const usage = await thread.usage();
+if (!usage.ok) throw new Error(usage.error.message);
+const { input_tokens, output_tokens, unknown_responses } = usage.value;
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+# A price on the model is what lets cost() count money (see Models).
+bot = agent(
+    model=anthropic(
+        "claude-sonnet-5",
+        context_window=200_000,
+        max_output_tokens=8192,
+        price=Price(input=3000, output=15000),
+    )
+)
+store = sqlite(".threads")
+
+result = await bot.run("Summarize the report.", store=store)
+thread = result.thread
+
+usage = await thread.usage()
+if isinstance(usage, Err):
+    raise SystemExit(usage.error.message)
+print(usage.value.input_tokens, usage.value.output_tokens, usage.value.unknown_responses)
+```
+
+</Tab>
+</Tabs>
+
+`unknown_responses` counts responses whose provider didn't report usage (for example a stream that broke), and the rare response whose counts would take a total past 2^53-1. They are never added as zero, so a non-zero count tells you the totals are a lower bound.
+
+A fork counts its parent's prefix too: its usage is everything on its branch.
+
+## Money spent
+
+`cost()` prices the recorded usage with the model's `price`. An agent whose model has a price records its currency as USD, so the model factory's `price` is in nano-dollars per token (USD 3 per million tokens is `3000`, see [Models](/docs/agents/models)).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const cost = await thread.cost();
+if (!cost.ok) throw new Error(cost.error.message);
+if (cost.value !== null) {
+  const { currency, known_nanos, complete } = cost.value;
+  console.log(`${currency} ${known_nanos / 1e9}`, complete ? "" : "(at least)");
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+cost = await thread.cost()
+if isinstance(cost, Err):
+    raise SystemExit(cost.error.message)
+if cost.value is not None:
+    c = cost.value
+    print(c.currency, c.known_nanos / 1e9, "" if c.complete else "(at least)")
+```
+
+</Tab>
+</Tabs>
+
+| Field | Meaning |
+|---|---|
+| `currency` | The pinned currency: `USD` for `agent()` |
+| `known_nanos` | What the recorded usage costs, in billionths of the currency unit |
+| `upper_bound_nanos` | `known_nanos` plus the worst case of every attempt whose usage is unknown |
+| `complete` | `true` when every attempt's cost is known exactly |
+| `bounded` | `false` when some unknown usage has no worst case, so `upper_bound_nanos` is not a bound |
+
+`cost()` is `null` when none of the agent's models (its `model` and `fallback`) has a `price`: threads doesn't guess money it can't count. If only some have one, requests to an unpriced model make the cost incomplete (`complete: false`) rather than free.
+
+### A whole team
+
+Pass `tree: true` to add every subagent's spend, at any depth, each read from its own log:
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const total = await thread.cost({ tree: true });
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+total = await thread.cost(tree=True)
+```
+
+</Tab>
+</Tabs>
+
+The total never hides spend it can't count. It is in the root's currency, or the first priced subagent's; if no thread in the tree has a price it is `null`, which means unknown, not free. `complete` and `bounded` turn `false` when a subagent called a model with no price, or was priced in another currency, or when a subagent has no log to prove it spent nothing (for example one a cancel stopped before it started). If a subagent's log can't be read, the whole call returns that error, naming the subagent, rather than a partial sum.
+
+## Prompt-cache breaks
+
+A cache break is a turn whose prompt-cache reads dropped sharply, which usually means you paid full price for a prompt that was cached a moment before. `cacheBreaks()` / `cache_breaks()` lists them with the likely cause:
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const breaks = await thread.cacheBreaks();
+if (!breaks.ok) throw new Error(breaks.error.message);
+for (const b of breaks.value) console.log(b.request_event_id, b.likely_cause);
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+breaks = await thread.cache_breaks()
+if isinstance(breaks, Err):
+    raise SystemExit(breaks.error.message)
+for b in breaks.value:
+    print(b.request_event_id, b.likely_cause)
+```
+
+</Tab>
+</Tabs>
+
+`likely_cause` is `settings_changed` (model or settings switched), `compacted`, `context_edited`, `tools_changed`, `ttl_expired` (the gap since the last request outlived the cache) or `unknown`. The cache lifetime it judges by is `context.cache_ttl_ms`, 5 minutes by default; if you set a longer provider cache, set `cache_ttl_ms` to match.
+
+## Errors
+
+All three return a value instead of throwing. A log that fails its integrity check comes back as `log_corrupt`; one written by a newer threads as `unsupported_format` or `unsupported_critical_event`. `cost()` also returns `cost_overflow` when a total passes 2^53-1 nanos, rather than a rounded number.
+
+## Related
+
+<Cards>
+  <Card title="Budgets" icon={<Wallet />} href="/docs/control/budgets">
+    Stop an agent before it spends more than you allow.
+  </Card>
+  <Card title="Subagents" icon={<Network />} href="/docs/multi-agent/subagents">
+    The agents whose spend `tree: true` adds up.
+  </Card>
+</Cards>

@@ -1,0 +1,9 @@
+{
+  "name": "cost-max-tokens-not-positive",
+  "family": "cancellation_resume",
+  "kind": "reduce",
+  "description": "The pinned model_params.max_tokens is 0, so the attempt has no output bound: a response can use more than zero tokens. Its request has no response, so cost can't bound it: bounded false. Zero is never a bound.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

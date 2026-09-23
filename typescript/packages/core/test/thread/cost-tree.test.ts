@@ -14,22 +14,13 @@ import {
   type Store,
   say,
   spawn,
+  tree,
   unpricedMiddle,
+  usd,
 } from "./usage-kit";
 
 // Thread.cost({ tree: true }) over real child logs: the tree merge of spec/api.json Thread.cost,
 // and the tree's integrity (each child names the spawn that started it; no thread twice).
-
-/** A USD total whose upper bound is its known cost (every attempt here settles). */
-const usd = (known: number, exact: boolean): Cost => ({
-  currency: "USD",
-  known_nanos: known,
-  upper_bound_nanos: known,
-  complete: exact,
-  bounded: exact,
-});
-
-const tree = async (thread: Thread) => thread.cost({ tree: true });
 
 async function handle(store: Store, id: ThreadId | undefined): Promise<Thread> {
   if (id === undefined) throw new Error("no such child");
@@ -144,29 +135,6 @@ describe("the tree merge", () => {
     await rewriteLog(store, freeId, (lines) => lines.slice(0, 2));
     expect(unwrap(await tree(thread))).toEqual(usd(2 * ONE, true));
   });
-
-  test("a spawned child that never started changes nothing", async () => {
-    const store = sqlite(":memory:");
-    const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
-    const thread = await run(store, priced([spawn("kid"), say("Done.")]), [
-      kid,
-    ]);
-    const [kidId] = await childIds(thread);
-    if (kidId === undefined) throw new Error("no child");
-    // As if the host crashed right after agent_spawned: the spawn names a child with no thread,
-    // and nothing after it (no agent_finished) was written.
-    const unstarted = "0192a000-0000-7000-8000-0000000000ee";
-    await rewriteLog(store, thread.id, (lines) => {
-      const at = lines.findIndex((l) => l["type"] === "agent_spawned");
-      return lines
-        .slice(0, at + 1)
-        .map((l) =>
-          obj(JSON.parse(JSON.stringify(l).replaceAll(kidId, unstarted))),
-        );
-    });
-    // Only the lead's first response (the spawn) was recorded.
-    expect(unwrap(await tree(thread))).toEqual(usd(ONE, true));
-  });
 });
 
 describe("a tree that can't be read fails the call, naming the path", () => {
@@ -185,28 +153,29 @@ describe("a tree that can't be read fails the call, naming the path", () => {
     expect(unwrap(await thread.cost())).toEqual(usd(2 * ONE, true));
   });
 
-  test("a finished child whose log is missing is log_corrupt, never a partial sum", async () => {
+  test("of two broken paths, the first depth first is reported", async () => {
     const store = sqlite(":memory:");
+    const leaf = agent({ name: "leaf", model: priced([say("Leaf.")]) });
+    const mid = agent({
+      name: "mid",
+      model: priced([spawn("leaf"), say("Mid.")]),
+      subagents: [leaf],
+    });
     const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
-    const thread = await run(store, priced([spawn("kid"), say("Done.")]), [
-      kid,
-    ]);
-    const [kidId] = await childIds(thread);
-    // The parent's agent_finished proves the child ran; its log is gone from this store.
-    const { db } = await storeConnection(store);
-    const elsewhere = "0192a000-0000-7000-8000-0000000000ef";
-    db.run(
-      "INSERT INTO threads (thread_id, tenant_id) SELECT ?, tenant_id FROM threads WHERE thread_id = ?",
-      [elsewhere, kidId ?? ""],
+    const thread = await run(
+      store,
+      priced([spawn("mid"), spawn("kid"), say("Done.")]),
+      [mid, kid],
     );
-    db.run("UPDATE branches SET thread_id = ? WHERE thread_id = ?", [
-      elsewhere,
-      kidId ?? "",
-    ]);
+    const [midId, kidId] = await childIds(thread);
+    const [leafId] = await childIds(await handle(store, midId));
+    if (leafId === undefined || kidId === undefined) throw new Error("no tree");
+    await corrupt(store, leafId, "Do it.");
+    await corrupt(store, kidId, "Do it.");
     const total = await tree(thread);
     expect(code(total)).toBe("log_corrupt");
-    expect(total.ok ? "" : total.error.message).toContain(
-      `child ${kidId}: its log is missing`,
+    expect(total.ok ? "" : total.error.message).toStartWith(
+      `child ${midId}: child ${leafId}:`,
     );
   });
 

@@ -33,7 +33,6 @@
   {"name": "VerifiedDelivery", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
   {"name": "agent.browser", "lang": "py", "kind": "missing", "lane": "18-agent-tool-options"},
   {"name": "agent.browser", "lang": "ts", "kind": "missing", "lane": "18-agent-tool-options"},
-  {"name": "agent.on_unknown_usage", "lang": "ts", "kind": "missing", "lane": "04-thread-usage-cost-cache"},
   {"name": "agent.output_styles", "lang": "py", "kind": "missing", "lane": "17-thread-methods"},
   {"name": "agent.output_styles", "lang": "ts", "kind": "missing", "lane": "17-thread-methods"},
   {"name": "agent.stream_release", "lang": "py", "kind": "missing", "lane": "18-agent-tool-options"},
