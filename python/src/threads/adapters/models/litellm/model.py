@@ -20,8 +20,7 @@ from threads.adapters.models import transport
 from threads.adapters.models.litellm.request import build
 from threads.adapters.models.litellm.stream import Assembler
 from threads.adapters.models.options import ModelOptions, info
-from threads.adapters.models.render import check_adapter
-from threads.adapters.models.render import parse as parse_render
+from threads.adapters.models.render import prepare
 from threads.log import AdapterRef, ModelRef
 from threads.loop.model import (
     LookupResult,
@@ -31,6 +30,7 @@ from threads.loop.model import (
     ModelInfo,
     ModelRequest,
     ModelResponse,
+    Rejected,
 )
 from threads.result import Err
 
@@ -66,9 +66,11 @@ class LiteLLMModel:
         return self._info
 
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
-        rendered = parse_render(request.body)
-        check_adapter(rendered.head, ADAPTER)
-        body = await build(rendered, context)
+        prepared = await prepare(request.body, ADAPTER, context, build)
+        if isinstance(prepared, Rejected):
+            yield prepared
+            return
+        _, body = prepared
         if isinstance(await context.fence(), Err):
             return
         assembler = Assembler()

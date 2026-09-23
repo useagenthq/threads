@@ -10,7 +10,6 @@ from fakes import FakeContext, Script, collect, golden, line, render_case, sse
 from pydantic import JsonValue
 
 from threads.adapters.models.openai.model import OpenAIModel, client
-from threads.adapters.models.render import UnsupportedContentError
 from threads.log import CallId, ReasoningPart, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
 from threads.openai import openai
@@ -98,11 +97,9 @@ def test_a_recorded_reasoning_item_goes_back_byte_for_byte() -> None:
 
 def test_hosted_tool_parts_and_foreign_reasoning_are_refused_before_dispatch() -> None:
     body, context = render_case("render-hosted-search-citations", "openai", "openai")
-    with pytest.raises(UnsupportedContentError, match="continuation_unsupported"):
-        run(Script([]), body, context)
+    assert run(Script([]), body, context) == [Rejected("provider_error")]
     body, context = render_case("render-thinking-block-replay", "openai", "openai")
-    with pytest.raises(UnsupportedContentError, match="continuation_unsupported"):
-        run(Script([]), body, context)
+    assert run(Script([]), body, context) == [Rejected("provider_error")]
 
 
 def test_the_stream_maps_to_deltas_parts_and_usage() -> None:

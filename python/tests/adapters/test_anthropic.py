@@ -10,7 +10,6 @@ from fakes import FakeContext, Script, collect, golden, line, render_case, sse
 from pydantic import JsonValue
 
 from threads.adapters.models.anthropic.model import AnthropicModel, client
-from threads.adapters.models.render import UnsupportedContentError
 from threads.anthropic import anthropic
 from threads.log import CallId, ReasoningPart, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
@@ -90,22 +89,19 @@ def test_a_render_case_maps_to_its_golden_request(case: str) -> None:
 def test_hosted_tool_parts_are_refused_before_dispatch() -> None:
     body, context = render_case("render-hosted-search-citations", "anthropic", "anthropic")
     script = Script([])
-    with pytest.raises(UnsupportedContentError, match="continuation_unsupported"):
-        run(script, body, context)
+    assert run(script, body, context) == [Rejected("provider_error")]
     assert script.sent == []
 
 
 def test_another_providers_reasoning_is_refused_not_dropped() -> None:
     body, context = render_case("render-thinking-block-replay", "anthropic", "anthropic")
     body = body.replace(b'"provider":"anthropic","ref"', b'"provider":"openai","ref"')
-    with pytest.raises(UnsupportedContentError, match="continuation_unsupported"):
-        run(Script([]), body, context)
+    assert run(Script([]), body, context) == [Rejected("provider_error")]
 
 
 def test_an_epoch_pinned_to_another_adapter_is_refused() -> None:
     body = one_turn().replace(b'"name":"anthropic"', b'"name":"openai"', 1)
-    with pytest.raises(UnsupportedContentError):
-        run(Script([]), body)
+    assert run(Script([]), body) == [Rejected("provider_error")]
 
 
 def test_the_stream_maps_to_deltas_parts_and_usage() -> None:

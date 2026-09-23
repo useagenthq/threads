@@ -14,7 +14,6 @@ from fakes import FakeContext, Script, collect, golden, line, render_case
 from pydantic import JsonValue
 
 from threads.adapters.models.litellm.model import ACOMPLETION, LiteLLMModel
-from threads.adapters.models.render import UnsupportedContentError
 from threads.litellm import litellm
 from threads.log import CallId, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
@@ -89,8 +88,7 @@ def test_the_bridge_carries_no_continuation_and_no_media_results() -> None:
     for case in ("render-thinking-block-replay", "render-screenshot-tool-result"):
         body, context = render_case(case, "litellm", "litellm")
         recorder = Recorder()
-        with pytest.raises(UnsupportedContentError):
-            run(LiteLLMModel(INFO, recorder), body, context)
+        assert run(LiteLLMModel(INFO, recorder), body, context) == [Rejected("provider_error")]
         assert recorder.calls == []
 
 

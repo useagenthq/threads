@@ -4,7 +4,7 @@ The request an adapter sends is a function of these lines and the artifact bytes
 recorded request always maps to the same provider request (spec/schema/README.md, "Render v1").
 """
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Literal
 
@@ -23,7 +23,7 @@ from threads.log import (
     ResultPart,
 )
 from threads.log.jcs import canonicalize
-from threads.loop.model import ModelContext
+from threads.loop.model import ModelContext, Rejected
 from threads.render.artifacts import AnyRef
 from threads.result import Err
 
@@ -127,6 +127,23 @@ def canonical(value: JsonValue) -> str:
 async def store_json(context: ModelContext, value: JsonValue) -> ArtifactRef:
     """Exact provider JSON (a reasoning block or item), durable before a part names it."""
     return await context.put(canonical(value).encode("utf-8"), "application/json")
+
+
+async def prepare[T](
+    body: bytes,
+    adapter: str,
+    context: ModelContext,
+    build: Callable[[Request, ModelContext], Awaitable[T]],
+) -> tuple[Request, T] | Rejected:
+    """The provider request for Render v1 `body`, or the typed, non-retryable rejection of a
+    request this adapter can't send (spec/schema/README.md, "Capability pre-check"): nothing
+    left, so it is never an unknown outcome that gets re-sent."""
+    request = parse(body)
+    try:
+        check_adapter(request.head, adapter)
+        return request, await build(request, context)
+    except UnsupportedContentError:
+        return Rejected("provider_error")
 
 
 def check_adapter(head: Head, name: str) -> None:

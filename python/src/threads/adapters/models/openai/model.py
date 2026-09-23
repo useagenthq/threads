@@ -16,8 +16,7 @@ from threads.adapters.models.openai.request import PROVIDER, build
 from threads.adapters.models.openai.stream import Assembler, ProviderStreamError
 from threads.adapters.models.openai.wire import parse
 from threads.adapters.models.options import ModelOptions, info
-from threads.adapters.models.render import check_adapter
-from threads.adapters.models.render import parse as parse_render
+from threads.adapters.models.render import prepare
 from threads.log import AdapterRef, ModelRef
 from threads.loop.model import (
     LookupResult,
@@ -52,9 +51,11 @@ class OpenAIModel:
         return self._info
 
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
-        rendered = parse_render(request.body)
-        check_adapter(rendered.head, ADAPTER)
-        body = await build(rendered, context)
+        prepared = await prepare(request.body, ADAPTER, context, build)
+        if isinstance(prepared, Rejected):
+            yield prepared
+            return
+        rendered, body = prepared
         try:
             with transport.attempt(context):
                 response = await self._client.post(
