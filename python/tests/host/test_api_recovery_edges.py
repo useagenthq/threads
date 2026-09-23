@@ -5,6 +5,7 @@ ending the host's runs."""
 
 import asyncio
 import logging
+import sqlite3
 
 import pytest
 from host.test_api_recovery import (
@@ -21,11 +22,13 @@ from host.test_api_recovery import (
     until,
 )
 
-from threads import agent, sqlite
+from threads import Store, agent, sqlite
+from threads.agents import run as run_module
 from threads.agents.store import open_store
 from threads.host import app, host
 from threads.host.app import recovered
 from threads.log import ModelRequestEvent, TurnCompletedEvent
+from threads.store import SqliteStore
 from threads.store.tables import Tables
 
 LOGGER = "threads"
@@ -110,5 +113,41 @@ def test_stop_ends_the_runs_after_a_store_error_in_the_first_pass(
             await served.stop()
         runner = served._runner  # pyright: ignore[reportPrivateUsage] - what stop() ended
         assert not runner.running(run.branch_id)
+
+    asyncio.run(main())
+
+
+def test_a_store_error_inside_a_resumed_run_is_retried_and_the_turn_completes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(app, "REOPEN_S", 0.05)
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        late = stalled(text("late"))
+        first = support(store, late)
+        run = await start(first, ALICE)
+        await until(has(store, ALICE, run, ModelRequestEvent))
+
+        model = answering(text("done"))
+        async with support(store, model) as second:
+            # The first pass loses to the live lease; the next run fails opening the store once.
+            await recovered(second)
+            opened = run_module.open_store
+            blinked = asyncio.Event()
+
+            async def flaky(given: Store) -> SqliteStore:
+                if blinked.is_set():
+                    return await opened(given)
+                blinked.set()
+                raise sqlite3.OperationalError("database is locked")
+
+            monkeypatch.setattr(run_module, "open_store", flaky)
+            await asyncio.wait_for(blinked.wait(), 5)
+            await expire_leases(store)
+            await until(has(store, ALICE, run, TurnCompletedEvent))
+        assert model.calls == 1
+        late.held.set()
+        await first.stop()
 
     asyncio.run(main())

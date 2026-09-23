@@ -8,6 +8,7 @@ in flight is one task per branch; a resume starts one only when none is in fligh
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from weakref import WeakKeyDictionary
@@ -37,6 +38,8 @@ from threads.store import SqliteStore
 from threads.thread import tree
 from threads.thread.authority import Checked
 from threads.thread.handle import Thread
+
+_log = logging.getLogger(__name__)
 
 type RunTask = asyncio.Task[RunResult[str]]
 """One run of a branch, as a task of this host."""
@@ -277,7 +280,15 @@ class Runner:
         if live is not None and not live.done():
             return live
         read = await (await open_store(store)).read(branch, 0)
-        if not isinstance(read, Ok) or not read.value.fold.in_turn or read.value.fold.parked:
+        if not isinstance(read, Ok):
+            _log.warning(
+                "threads host: API run on %s not recovered (%s: %s)",
+                branch,
+                read.error.code,
+                read.error.message,
+            )
+            return None
+        if not read.value.fold.in_turn or read.value.fold.parked:
             return None
         return await self.resume(store, thread_id, branch)
 

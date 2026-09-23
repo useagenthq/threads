@@ -71,7 +71,11 @@ def unfinished(conn: sqlite3.Connection) -> tuple[tuple[str, ThreadId, BranchId]
         try:
             tenant, thread, branch = _ROW.validate_python(row)
         except ValidationError as error:
-            _log.warning("threads store: run_receipts row skipped (%r): %s", row, error)
+            # Only the branch, bounded, and the fields that failed: the row's text is untrusted.
+            bad = ", ".join(str(e["loc"][0]) for e in error.errors())
+            _log.warning(
+                "threads store: run_receipts row skipped (branch %.64r; bad field %s)", row[2], bad
+            )
             continue
         found.append((tenant, ThreadId(thread), BranchId(branch)))
     return tuple(found)

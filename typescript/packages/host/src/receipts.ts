@@ -110,10 +110,14 @@ export function unfinishedRuns(db: SqliteDriver): readonly RunBranch[] {
   return rows.flatMap((row) => {
     const parsed = RunBranchRow.safeParse(row);
     if (parsed.success) return [parsed.data];
+    // Only the branch, bounded, and the fields that failed: the row's text is untrusted.
+    const branch =
+      typeof row === "object" && row !== null && "branch_id" in row
+        ? String(row.branch_id).slice(0, 64)
+        : "?";
+    const bad = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
     console.error(
-      "threads store: run_receipts row skipped",
-      row,
-      parsed.error.message,
+      `threads store: run_receipts row skipped (branch ${JSON.stringify(branch)}; bad field ${bad})`,
     );
     return [];
   });

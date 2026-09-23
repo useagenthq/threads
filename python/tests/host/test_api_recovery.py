@@ -4,6 +4,7 @@ whose model or tool never answers and is never stopped; its lease is expired, as
 and a new host starts on the same store."""
 
 import asyncio
+import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
 from pydantic import BaseModel, JsonValue
@@ -357,7 +358,7 @@ def test_an_earlier_runs_late_failure_never_answers_for_the_run_after_it() -> No
     asyncio.run(main())
 
 
-def test_only_a_lost_lease_is_retried() -> None:
+def test_only_a_lost_lease_or_a_store_error_is_retried() -> None:
     async def main() -> None:
         gave_up = app._gave_up  # pyright: ignore[reportPrivateUsage] - the retry rule
         thread = Thread(ThreadId("t"), BranchId("b"), sqlite(":memory:"))
@@ -368,6 +369,9 @@ def test_only_a_lost_lease_is_retried() -> None:
                 return Completed("done", thread)
             return Failed(RunError(code, "x"), thread)
 
+        async def raising(error: Exception) -> RunResult[str]:
+            raise error
+
         async def pending() -> RunResult[str]:
             await asyncio.Event().wait()
             raise AssertionError
@@ -375,9 +379,13 @@ def test_only_a_lost_lease_is_retried() -> None:
         busy, down, done = (
             asyncio.ensure_future(ended(c)) for c in ("branch_busy", "model_unavailable", None)
         )
+        locked = asyncio.ensure_future(raising(sqlite3.OperationalError("database is locked")))
+        bug = asyncio.ensure_future(raising(ValueError("a bug")))
         live = asyncio.ensure_future(pending())
-        await asyncio.wait({busy, down, done})
-        assert [gave_up(row, t) for t in (busy, down, done, live)] == [False, True, False, False]
+        await asyncio.wait({busy, down, done, locked, bug})
+        tasks = (busy, down, done, locked, bug, live)
+        noted: set[app.OpenRun] = set()
+        assert [gave_up(row, t, noted) for t in tasks] == [False, True, False, False, True, False]
         live.cancel()
 
     asyncio.run(main())

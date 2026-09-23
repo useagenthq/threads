@@ -161,4 +161,36 @@ describe("API run recovery edges", () => {
       logged.mockRestore();
     }
   }, 15_000);
+
+  test("a store error inside a resumed run is retried and the turn completes", async () => {
+    const store = sqlite(":memory:");
+    const first = serve(store, stalled());
+    const run = await started(first, alice, "k-1");
+    await until(() => requested(store, alice.tenant, run.branch_id));
+
+    const second = serve(store, scriptedModel({ responses: [say("done")] }));
+    await second.ready();
+    // The first pass loses to the live lease; the next run's acquire hits a store error once.
+    await hostTicked(second);
+    await hostTicked(second);
+    const { log } = await openStore(tenantStore(store, alice.tenant));
+    const acquire = log.acquire.bind(log);
+    let blinked = false;
+    log.acquire = (branch, holder, ttl) => {
+      if (blinked || !holder.startsWith("run-"))
+        return acquire(branch, holder, ttl);
+      blinked = true;
+      throw Object.assign(new Error("database is locked"), {
+        name: "SQLiteError",
+        code: "SQLITE_BUSY",
+      });
+    };
+    await until(async () => blinked, 5_000);
+    await expireLeases(store);
+    await until(
+      async () =>
+        !(await fold(store, alice.tenant, run.branch_id)).fold.turnOpen,
+      5_000,
+    );
+  }, 15_000);
 });

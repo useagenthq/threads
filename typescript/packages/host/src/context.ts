@@ -47,6 +47,8 @@ export class HostContext {
   readonly #thrown = new Map<BranchId, unknown>();
   /** Branches recovery ran that failed another way than losing the lease: not run again. */
   readonly #notRetried = new Set<BranchId>();
+  /** Branches whose recovery run hit a store error, said once. */
+  readonly #noted = new Set<BranchId>();
   readonly #stop = new AbortController();
   /** Aborted once the host stops: every run and every send not yet settled gives up on it. */
   readonly stopping: AbortSignal = this.#stop.signal;
@@ -187,7 +189,12 @@ export class HostContext {
     if (this.#notRetried.delete(thread.branch)) return "done";
     const { log } = await this.open(tenant);
     const read = log.read(thread.branch);
-    if (!read.ok) return "done";
+    if (!read.ok) {
+      console.error(
+        `threads host: run on ${thread.branch} not recovered (${read.error.code}: ${read.error.message})`,
+      );
+      return "done";
+    }
     const { fold } = read.value;
     if (!fold.turnOpen || fold.parked.length > 0)
       return this.replies(tenant, thread);
@@ -202,9 +209,9 @@ export class HostContext {
   }
 
   /**
-   * A recovery run. Only a lost lease is worth another try on a later tick: any other failure
-   * is logged with its reason and not retried, and the turn stays open in the log for a control,
-   * a new input or the next start.
+   * A recovery run. A lost lease or a store error is worth another try on a later tick: any
+   * other failure is logged with its reason and not retried, and the turn stays open in the log
+   * for a control, a new input or the next start.
    */
   async #rerun(
     hosted: HostedAgent,
@@ -213,9 +220,19 @@ export class HostContext {
     thread: { readonly id: ThreadId; readonly branch: BranchId },
   ): Promise<void> {
     const result = await this.resume(hosted, tenant, who, thread);
+    const thrown = this.#thrown.get(thread.branch);
+    if (result === undefined && storeError(thrown)) {
+      if (!this.#noted.has(thread.branch))
+        console.error(
+          `threads host: run on ${thread.branch} hit a store error; looking again`,
+          thrown,
+        );
+      this.#noted.add(thread.branch);
+      return;
+    }
     const why =
       result === undefined
-        ? this.#thrown.get(thread.branch)
+        ? thrown
         : result.status === "failed" && result.error.code !== "branch_busy"
           ? `${result.error.code}: ${result.error.message}`
           : undefined;
@@ -293,6 +310,16 @@ export class HostContext {
   async open(tenant: string): Promise<Awaited<ReturnType<typeof openStore>>> {
     return openStore(this.storeFor(tenant));
   }
+}
+
+/** The store's and the system's errors (SQLITE_BUSY, EIO): a later look may not meet them again. */
+function storeError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    /^(SQLITE_|E[A-Z]+$)/.test(error.code)
+  );
 }
 
 /** A pin never changes in place: continuing a thread needs the config it started with. */
