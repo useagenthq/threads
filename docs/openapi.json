@@ -137,7 +137,9 @@
                             "unauthenticated",
                             "forbidden",
                             "not_found",
-                            "log_corrupt"
+                            "log_corrupt",
+                            "unsupported_format",
+                            "unsupported_critical_event"
                           ]
                         }
                       }
@@ -6156,7 +6158,9 @@
           "unauthenticated",
           "forbidden",
           "not_found",
-          "log_corrupt"
+          "log_corrupt",
+          "unsupported_format",
+          "unsupported_critical_event"
         ],
         "parameters": [
           {

@@ -1135,7 +1135,7 @@
           "doc": "Every step with the exact request the model saw; fork points marked (F13.1).",
           "async": true,
           "params": [],
-          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Timeline"}, "errors": ["log_corrupt"]}
+          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Timeline"}, "errors": ["log_corrupt", "unsupported_format", "unsupported_critical_event"]}
         },
         "branches": {
           "ts": "branches",
@@ -1469,7 +1469,7 @@
         "cost": {
           "ts": "cost",
           "py": "cost",
-          "doc": "What the thread spent, in nano-units of its pinned currency, with a conservative upper bound. null when this thread pins no currency or no models. tree adds every descendant at any depth, each read from its own main branch: nanos summed, complete and bounded ANDed. A descendant with no cost or another currency adds nothing and makes complete and bounded false; it never stops the walk. A descendant never started adds nothing; one whose log can't be read fails the call with its read error, naming the child.",
+          "doc": "What the thread spent, in nano-units of its pinned currency, with a conservative upper bound; null when it pins no currency or no models. tree: true merges every descendant subagent at any depth, each read from its own main branch, depth first in spawn order. The total is in the root's currency, else the first priced descendant's; with no priced thread it is null. A thread in that currency adds its nanos and ANDs complete and bounded. A thread in another currency, or unpriced but with a model request, adds nothing and makes complete and bounded false. A thread with no model request, or a child never started, changes nothing. A descendant whose log can't be read fails the call with its read error; one whose thread_started doesn't name the agent_spawned that started it, or a thread met twice (a cycle), fails it with log_corrupt. Messages name the path of child thread ids.",
           "async": true,
           "params": [
             {

@@ -5,6 +5,7 @@ import {
   PermissionMode,
   PermissionRule,
 } from "./common";
+import { Currency } from "./cost";
 import { Int, JsonObject, Name, NonEmpty, PosInt, Sha256 } from "./primitives";
 import type { Arr, EnumOf, Opt, Strict } from "./zod-types";
 
@@ -216,10 +217,7 @@ export const Policy: Strict<{
         "Every model this thread may use (primary and fallbacks), with its window, output cap and price. settings_changed may only name a listed model.",
       )
       .optional(),
-    currency: z
-      .string()
-      .regex(/^[A-Z]{3}$/)
-      .optional(),
+    currency: Currency.optional(),
     retry: RetryPolicy.optional(),
     fallback: z.array(ModelSettings).optional(),
     context: ContextPolicy.optional(),

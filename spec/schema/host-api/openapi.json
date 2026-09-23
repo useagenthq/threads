@@ -34,7 +34,7 @@
       },
       "GetTimelineError": {
         "description": "Typed failure of getTimeline.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "log_corrupt"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "log_corrupt", "unsupported_format", "unsupported_critical_event"] } } } } }] } } }
       },
       "ListBranchesError": {
         "description": "Typed failure of listBranches.",
@@ -119,7 +119,7 @@
       "get": {
         "operationId": "getTimeline",
         "x-api": ["Thread.timeline"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "log_corrupt"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "log_corrupt", "unsupported_format", "unsupported_critical_event"],
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "responses": {
           "200": { "description": "The branch's steps.", "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/Timeline" } } } },

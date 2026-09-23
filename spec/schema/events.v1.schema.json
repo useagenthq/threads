@@ -171,6 +171,30 @@
       },
       "type": "object"
     },
+    "CacheBreak": {
+      "additionalProperties": false,
+      "description": "A turn request whose prompt-cache reads dropped sharply, with the first likely cause before it.",
+      "properties": {
+        "likely_cause": {
+          "enum": [
+            "settings_changed",
+            "compacted",
+            "context_edited",
+            "tools_changed",
+            "ttl_expired",
+            "unknown"
+          ]
+        },
+        "request_event_id": {
+          "$ref": "#/$defs/EventId"
+        }
+      },
+      "required": [
+        "request_event_id",
+        "likely_cause"
+      ],
+      "type": "object"
+    },
     "CallId": {
       "description": "Tool call id; may be provider-issued. The effect key is derived: <branch_id of the tool_call event>:<call_id>.",
       "pattern": "^[A-Za-z0-9_.-]{1,128}$",
@@ -245,6 +269,40 @@
           "$ref": "#/$defs/CitationPart"
         }
       ]
+    },
+    "Cost": {
+      "additionalProperties": false,
+      "description": "What a thread spent: known cost and a conservative upper bound.",
+      "properties": {
+        "bounded": {
+          "description": "false when some unknown usage has no declared bound; upper_bound_nanos is then not a bound.",
+          "type": "boolean"
+        },
+        "complete": {
+          "description": "true when every attempt's cost is known exactly.",
+          "type": "boolean"
+        },
+        "currency": {
+          "pattern": "^[A-Z]{3}$",
+          "type": "string"
+        },
+        "known_nanos": {
+          "$ref": "#/$defs/Int",
+          "description": "Nano-units of currency the recorded usage costs."
+        },
+        "upper_bound_nanos": {
+          "$ref": "#/$defs/Int",
+          "description": "known_nanos plus each unsettled attempt's declared bound."
+        }
+      },
+      "required": [
+        "currency",
+        "known_nanos",
+        "upper_bound_nanos",
+        "complete",
+        "bounded"
+      ],
+      "type": "object"
     },
     "DocumentPart": {
       "additionalProperties": false,

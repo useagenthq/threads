@@ -325,10 +325,10 @@
       "$ref": "urn:threads:schema:conformance:v1#/$defs/ReducedState/properties/usage"
     },
     "Cost": {
-      "$ref": "urn:threads:schema:conformance:v1#/$defs/Cost"
+      "$ref": "urn:threads:schema:events:v1#/$defs/Cost"
     },
     "CacheBreak": {
-      "$ref": "urn:threads:schema:conformance:v1#/$defs/CacheBreak"
+      "$ref": "urn:threads:schema:events:v1#/$defs/CacheBreak"
     },
     "Todo": {
       "$ref": "urn:threads:schema:events:v1#/$defs/ev_todos_updated/properties/data/properties/todos/items"

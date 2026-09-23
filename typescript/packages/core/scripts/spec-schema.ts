@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
+  CacheBreak,
   ContentPart,
+  Cost,
   ErrorCode,
   KnownTag,
   LogLine,
@@ -15,7 +17,15 @@ type Json = z.core.util.JSONType;
 type Node = { [key: string]: Json };
 
 // Defs that only a rule's `$ref` or the wire contract names; the walk from LogLine misses them.
-const EXTRA_DEFS = [ErrorCode, KnownTag, TextOrRef, TextOrContent, ContentPart];
+const EXTRA_DEFS = [
+  ErrorCode,
+  KnownTag,
+  TextOrRef,
+  TextOrContent,
+  ContentPart,
+  Cost,
+  CacheBreak,
+];
 
 const SUBSCHEMA_MAPS = new Set(["properties", "$defs"]);
 const SUBSCHEMA_LISTS = new Set(["allOf", "anyOf", "oneOf", "prefixItems"]);
