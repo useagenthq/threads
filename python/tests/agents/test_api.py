@@ -16,6 +16,7 @@ from threads import (
     ModelRequest,
     Parked,
     RunContext,
+    Tool,
     agent,
     scripted_model,
     sqlite,
@@ -44,6 +45,9 @@ def text(reply: str) -> JsonValue:
 def use(name: str, args: JsonValue, call_id: str = "call_1") -> JsonValue:
     part: JsonValue = {"type": "tool_use", "call_id": call_id, "name": name, "input": args}
     return {"content": [part], "stop_reason": "tool_use", "usage": USAGE}
+
+
+NO_REPLIES: dict[str, JsonValue] = {"responses": []}
 
 
 class Echo(BaseModel):
@@ -151,6 +155,40 @@ def test_a_sandbox_tool_is_a_setup_error() -> None:
     with pytest.raises(ConfigError) as raised:
         tool(name="echo", description="Echo.", input=Echo, runs="sandbox", execute=run)
     assert raised.value.code == "capability_missing"
+    with pytest.raises(ConfigError):
+        tool(name="echo", description="Echo.", input=Echo, runs="elsewhere", execute=run)  # pyright: ignore[reportArgumentType] - runs is host or sandbox
+
+
+def test_a_tool_without_runs_is_a_host_tool() -> None:
+    async def run(args: Echo, _ctx: RunContext[None]) -> str:
+        return args.text
+
+    echo = tool(name="echo", description="Echo.", input=Echo, execute=run, effect="read_only")
+    script: JsonValue = {"responses": [use("echo", {"text": "hello"}), text("Done.")]}
+
+    async def main() -> None:
+        bot = agent(model=scripted_model(script), tools=[echo], permissions=ALLOW_ECHO)
+        result = await bot.run("say hello", store=sqlite(":memory:"), deps=None)
+        assert isinstance(result, Completed)
+        assert result.output == "Done."
+
+    asyncio.run(main())
+
+
+def test_omitted_and_explicit_host_runs_pin_identical_bytes() -> None:
+    async def run(args: Echo, _ctx: RunContext[None]) -> str:
+        return args.text
+
+    omitted = tool(name="echo", description="Echo.", input=Echo, execute=run)
+    host = tool(name="echo", description="Echo.", input=Echo, runs="host", execute=run)
+    assert omitted.spec() == host.spec()
+
+    def pinned(t: Tool[Echo, str, None]) -> JsonValue:
+        return agent(model=scripted_model(NO_REPLIES), tools=[t]).definition.thread_started()[
+            "config_hash"
+        ]
+
+    assert pinned(omitted) == pinned(host)
 
 
 class RealModel:

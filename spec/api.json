@@ -438,8 +438,9 @@
           "name": "runs",
           "kind": "option",
           "type": {"enum": ["host", "sandbox"]},
-          "required": true,
-          "doc": "Required, no default."
+          "required": false,
+          "default": "host",
+          "doc": "Where execute runs. Not pinned: host and an omitted runs give the same ToolSpec and config_hash. sandbox is capability_missing in this release."
         },
         {
           "name": "execute",

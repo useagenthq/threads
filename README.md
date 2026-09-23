@@ -35,7 +35,6 @@ const openPullRequest = tool({
   name: "open_pull_request",
   description: "Open a pull request with the fix.",
   input: z.object({ title: z.string(), branch: z.string() }),
-  runs: "host",
   execute: async ({ title, branch }) => myForge.openPr(title, branch), // myForge: your own code
 });
 
@@ -72,7 +71,6 @@ open_pull_request = tool(
     name="open_pull_request",
     description="Open a pull request with the fix.",
     input=PrInput,
-    runs="host",
     execute=open_pr,
 )
 

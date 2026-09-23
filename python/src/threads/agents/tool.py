@@ -35,7 +35,7 @@ class ToolOptions[I: BaseModel, O, D](TypedDict, total=False):
     name: Required[str]
     description: Required[str]
     input: Required[type[I]]
-    runs: Required[Literal["host", "sandbox"]]
+    runs: Literal["host", "sandbox"]
     execute: Callable[[I, RunContext[D]], Awaitable[O]]
     effect: EffectClass
     dedup_window_ms: int
@@ -118,12 +118,12 @@ def render_value(value: object) -> str:
 
 
 def tool[I: BaseModel, O, D](**options: Unpack[ToolOptions[I, O, D]]) -> Tool[I, O, D]:
-    """spec/api.json `tool`. Raises ConfigError for a definition that can't run: a sandbox tool
-    (no sandbox in this build), an idempotent tool without its dedup window, or a reconcilable
-    tool without its lookup."""
+    """spec/api.json `tool`. `runs` defaults to "host" and is not pinned. Raises ConfigError for
+    a definition that can't run: a sandbox tool (no sandbox in this build), an idempotent tool
+    without its dedup window, or a reconcilable tool without its lookup."""
     effect = options.get("effect", "unguarded")
     execute = options.get("execute")
-    if options["runs"] != "host" or execute is None:
+    if options.get("runs", "host") != "host" or execute is None:
         raise ConfigError("capability_missing", f"{options['name']}: only runs='host' with execute")
     window = options.get("dedup_window_ms")
     if (effect == "idempotent") != (window is not None):

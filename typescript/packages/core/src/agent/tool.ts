@@ -31,8 +31,8 @@ export type ToolDefinition<Input, Output, Deps = undefined> = {
   readonly description: string;
   readonly input: z.ZodType<Input>;
   readonly output?: z.ZodType<Output>;
-  /** Required, no default. Only host tools run in this release. */
-  readonly runs: "host" | "sandbox";
+  /** Defaults to "host", the only value that runs in this release. Not pinned. */
+  readonly runs?: "host" | "sandbox";
   readonly execute?: (input: Input, ctx: RunContext<Deps>) => Promise<Output>;
   /**. Undeclared tools are unguarded: uncertainty always parks. */
   readonly effect?: z.infer<typeof EffectClass>;
@@ -83,7 +83,7 @@ function pinned<Input, Output, Deps>(
   input: z.ZodType,
 ): ToolSpec {
   const effect = def.effect ?? "unguarded";
-  if (def.runs !== "host" || def.execute === undefined)
+  if ((def.runs ?? "host") !== "host" || def.execute === undefined)
     throw new ConfigError(
       "capability_missing",
       `tool ${def.name}: only runs "host" with execute is supported in this release`,
