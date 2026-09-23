@@ -82,7 +82,7 @@ def agent(
 ## Parameters
 
 <Field name="model" type={"Model"} required>
-  See [Model](/docs/reference/types/Model).
+  The model every turn is sent to: a model adapter such as anthropic() or openai(), or scriptedModel() in tests. Fallback models are tried after it. See [Model](/docs/reference/types/Model).
 </Field>
 
 <Field name="instructions" type={"string"} default={""}>
@@ -93,20 +93,20 @@ def agent(
   Unique among the agents a host, subagent list or handoff list names.
 </Field>
 
-<Field name="tools" type={"readonly (Tool | McpServer)[]"}>
+<Field name="tools" type={"readonly (Tool | McpServer)[]"} default={"[]"}>
   App tools and MCP servers. Built-in tools come from the sandbox and the options below.
 </Field>
 
-<Field name="extensions" type={"readonly Extension[]"}>
+<Field name="extensions" type={"readonly Extension[]"} default={"[]"}>
   Instructions and hooks run in this order.
 </Field>
 
 <Field name="sandbox" type={"Sandbox"}>
-  Absent: no sandbox tools (bash, files, browser, computer). See [Sandbox](/docs/reference/types/Sandbox).
+  The sandbox the sandbox tools run in: bash and the file tools (read, write, edit, ls, glob, grep). The git, lsp and computer options also need one. Omitted: no sandbox tools. See [Sandbox](/docs/reference/types/Sandbox).
 </Field>
 
 <Field name="memory" type={"MemoryProvider"}>
-  See [MemoryProvider](/docs/reference/types/MemoryProvider).
+  Saved cross-run memory: localMemory() or a memory adapter. It pins save_memory, search_memory and forget_memory. Omitted: the agent has no memory tools. See [MemoryProvider](/docs/reference/types/MemoryProvider).
 </Field>
 
 <Field name="memoryWrite / memory_write" type={"\"deny\" | \"ask\" | \"allow_principal\" | \"allow\""} default={"ask"}>
@@ -114,61 +114,87 @@ def agent(
 </Field>
 
 <Field name="knowledge" type={"KnowledgeProvider"}>
-  See [KnowledgeProvider](/docs/reference/types/KnowledgeProvider).
+  Retrieval over sources the host admits: localKnowledge(paths) or a knowledge adapter. It pins search_knowledge. Omitted: the agent has no knowledge tool. See [KnowledgeProvider](/docs/reference/types/KnowledgeProvider).
 </Field>
 
-<Field name="skills" type={"readonly Skill[]"}>
+<Field name="skills" type={"readonly Skill[]"} default={"[]"}>
   Pinned in config_hash (name, description, sha256 of body). The system prompt lists them after the extension instructions as "Skills you can load with load_skill:" then one "- name: description" line each, in the given order; load_skill (pinned only when this is non-empty) appends the body as injected&#123;source: skill, trust: trusted_instruction, origin: &#123;id: name, version: sha256 of body&#125;&#125;. Unique names; a description is one non-empty line.
 </Field>
 
 <Field name="output" type={"z.ZodType<Output>"}>
-  Structured final output. Absent: completed.output is the final text.
+  Structured final output: a schema the final answer must parse with. Omitted: completed.output is the final text.
 </Field>
 
 <Field name="outputRetries / output_retries" type={"number"} default={"2"}>
   Failed candidates per turn (a rejected final_output or a plain-text end) before turn_completed&#123;output_invalid&#125;. An integer from 0 to 2^53-1; anything else is ConfigError invalid_config.
 </Field>
 
-<Field name="subagents" type={"readonly (Agent<unknown, unknown>)[]"}>
+<Field name="subagents" type={"readonly (Agent<unknown, unknown>)[]"} default={"[]"}>
   Agents spawn_agent may start, by name. Team tools come with them. A subagent with output reports the canonical JSON of its accepted output.
 </Field>
 
-<Field name="handoffs" type={"readonly (Agent<unknown, unknown>)[]"}>
+<Field name="handoffs" type={"readonly (Agent<unknown, unknown>)[]"} default={"[]"}>
   Agents this one may hand the conversation to, pinned as policy.handoffs.
 </Field>
 
-<Field name="fallback" type={"readonly Model[]"}>
+<Field name="fallback" type={"readonly Model[]"} default={"[]"}>
   Fallback models in order. With the default fallback_scope turn, the next user_input reverts to the settings before the fallback (settings_changed&#123;reason: revert&#125;), gated by before_model_switch.
 </Field>
 
-<Field name="permissions" type={"Partial<Policy.permissions>"} />
+<Field name="permissions" type={"Partial<Policy.permissions>"}>
+  The permission policy every tool call is decided under: mode, allow, ask and deny rules, protected_paths, allow_bypass and plan_exit_mode. In TypeScript the fields you give override the defaults; Python takes a complete Permissions. Omitted: mode default, no rules, the built-in protected paths, allow_bypass false and plan_exit_mode default.
+</Field>
 
 <Field name="approvers" type={"readonly Principal[]"}>
-  Who may answer approval challenges and resolve parked effects for runs this agent roots, its subagents and handoff targets included.
+  Who may answer approval challenges and resolve parked effects for runs this agent roots, its subagents and handoff targets included. Omitted: only the root run's originating principal (the principal of the root thread's latest user_input).
 </Field>
 
 <Field name="budget" type={"Budget"}>
-  Thread budget.
+  Thread budget: limits such as max_turns, max_model_requests, max_input_tokens, max_output_tokens, max_cost_nanos and max_wall_ms, checked before every model request. It covers the thread and every descendant. Omitted: no thread budget.
 </Field>
 
 <Field name="on_unknown_usage" type={"Policy.on_unknown_usage"} default={"upper_bound"}>
-  Python only.
+  Python only. How a budget counts a model attempt the provider reports no usage for. upper_bound counts it at its conservative upper bound; stop lets a limit the model can't bound per attempt pass setup and refuses it at run time instead of failing setup with budget_unenforceable.
 </Field>
 
-<Field name="retry" type={"Partial<Policy.retry>"} />
+<Field name="retry" type={"Partial<Policy.retry>"}>
+  Model retry settings: max_retries, base_delay_ms, max_delay_ms, max_retry_after_ms, max_total_wait_ms, crash_resends, fallback_after, fallback_scope and heartbeat_ms. In TypeScript the fields you give override the defaults; Python takes a complete Retry. Omitted: the default policy (8 retries, 1000 ms base delay doubling up to 32000 ms, fallback after 3 failures in a turn).
+</Field>
 
-<Field name="context" type={"Partial<Policy.context>"} />
+<Field name="context" type={"Partial<Policy.context>"}>
+  Context-window settings: reserve_tokens, clearing old tool results, spilling large results, compaction and what is restored after it, output continuations and tool deferral. In TypeScript the fields you give override the defaults; Python takes a complete Context. Omitted: the default context policy.
+</Field>
 
-<Field name="egress" type={"readonly string[] | \"unenforced\""}>
+<Field name="egress" type={"readonly string[] | \"unenforced\""} default={"[]"}>
   Sandbox egress allowlist of hosts. [] is deny-all. unenforced opts in to a provider that can't enforce it; stub mode then refuses. Host allowlists are not supported yet in either language: use [] (deny-all) or "unenforced".
 </Field>
 
 <Field name="web" type={"{ fetch?: boolean; search?: SearchBackend }"}>
-  Host-side web_fetch and web_search.
+  Host-side web tools: web_fetch and web_search run on the host, not in the sandbox. Omitted: no web tools.
+</Field>
+
+<Field name="web.fetch" type={"boolean"} default={"false"}>
+  true pins web_fetch, which fetches a URL from the host. false (the default) leaves it out.
+</Field>
+
+<Field name="web.search" type={"SearchBackend"}>
+  The search backend web_search uses (an adapter such as exa, brave or tavily). Omitted: no web_search tool.
 </Field>
 
 <Field name="git" type={"{ credential: Secret; forgeUrl?: string; apiUrl?: string }"}>
-  Enables the git gateway tools git_clone, git_fetch, git_push and open_pull_request. The forge is GitHub; the credential is revealed only on the host and never enters the sandbox.
+  Enables the git gateway tools git_clone, git_fetch, git_push and open_pull_request. The forge is GitHub; the credential is revealed only on the host and never enters the sandbox. Needs a sandbox. Omitted: no git tools.
+</Field>
+
+<Field name="git.credential" type={"Secret"} required>
+  The forge token, as a secret(). It is revealed only on the host when a git tool talks to the forge, never in the sandbox.
+</Field>
+
+<Field name="git.forgeUrl / git.forge_url" type={"string"} default={"https://github.com"}>
+  A repo owner/name lives at &lt;forge_url>/&lt;owner>/&lt;name>.git.
+</Field>
+
+<Field name="git.apiUrl / git.api_url" type={"string"} default={"https://api.github.com"}>
+  The forge REST API open_pull_request uses.
 </Field>
 
 <Field name="computer" type={"boolean"} default={"false"}>
@@ -176,7 +202,11 @@ def agent(
 </Field>
 
 <Field name="lsp" type={"{ languages: readonly string[] }"}>
-  Pins lsp for these languages (typescript, python, go, rust), run in the sandbox image's language servers. Needs a sandbox; an unknown language is unknown_preset. A server that isn't installed or ready answers unavailable at run time.
+  Pins lsp for these languages (typescript, python, go, rust), run in the sandbox image's language servers. Needs a sandbox; an unknown language is unknown_preset. A server that isn't installed or ready answers unavailable at run time. Omitted: no lsp tool.
+</Field>
+
+<Field name="lsp.languages" type={"readonly string[]"} required>
+  The languages lsp serves: typescript, python, go or rust. Any other name is a setup error unknown_preset.
 </Field>
 
 ## Returns

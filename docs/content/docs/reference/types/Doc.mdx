@@ -1,17 +1,29 @@
 ---
 title: "Doc"
-description: "The Doc type."
+description: "One admitted document version, as KnowledgeProvider.get returns it."
 icon: "Braces"
 ---
 
+Its bytes are an artifact in the store, named by content_ref.
+
 ## Fields
 
-<Field name="doc_id" type={"string"} required />
+<Field name="doc_id" type={"string"} required>
+  The document's id.
+</Field>
 
-<Field name="version" type={"string"} required />
+<Field name="version" type={"string"} required>
+  The version asked for.
+</Field>
 
-<Field name="media_type" type={"string"} required />
+<Field name="media_type" type={"string"} required>
+  The document's media type, as it was ingested.
+</Field>
 
-<Field name="content_ref" type={"ArtifactRef"} required />
+<Field name="content_ref" type={"ArtifactRef"} required>
+  Content-addressed bytes.
+</Field>
 
-<Field name="binding" type={"Binding"} required />
+<Field name="binding" type={"Binding"} required>
+  Issued by the host; the provider stores it opaquely.
+</Field>

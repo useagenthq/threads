@@ -29,7 +29,9 @@ def fake_sandbox(
 
 ## Parameters
 
-<Field name="script" type={"SandboxScript"} />
+<Field name="script" type={"SandboxScript"} default={"{}"}>
+  What the fake sandbox answers: output per scripted tool, effect keys it already executed, lookup answers for reconciliation, process state for recovery, and snapshots. Default &#123;&#125;: an in-memory sandbox with no scripted tools.
+</Field>
 
 ## Returns
 

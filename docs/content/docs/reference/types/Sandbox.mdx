@@ -10,11 +10,15 @@ Every create and restore carries an operation key written to the resource ledger
 
 ## Properties
 
-<Field name="info" type={"SandboxInfo"} required />
+<Field name="info" type={"SandboxInfo"} required>
+  What this sandbox provider is and can do: its provider name, egress enforcement, snapshot capture classes, browser and desktop support, lookup capabilities and termination. Read when the agent is pinned.
+</Field>
 
 ## Methods
 
 ### create
+
+Create a new isolated sandbox and return its session. Await context.fence() at the provider call; a failed fence returns its code and creates nothing.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -36,10 +40,12 @@ async def create(
 </Tab>
 </Tabs>
 
-<Field name="operationKey / operation_key" type={"string"} required />
+<Field name="operationKey / operation_key" type={"string"} required>
+  The key the runtime wrote to the resource ledger before this call. Tag the provider resource with it so lookup can find the sandbox if the response is lost.
+</Field>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() at the provider call. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `unavailable`, `timeout`.
@@ -70,16 +76,20 @@ async def restore(
 </Tab>
 </Tabs>
 
-<Field name="snapshotId / snapshot_id" type={"string"} required />
+<Field name="snapshotId / snapshot_id" type={"string"} required>
+  The provider's id of the snapshot to restore, from the snapshot event.
+</Field>
 
 <Field name="manifestHash / manifest_hash" type={"Sha256"} required>
   The snapshot event's manifest_hash.
 </Field>
 
-<Field name="operationKey / operation_key" type={"string"} required />
+<Field name="operationKey / operation_key" type={"string"} required>
+  The key the runtime wrote to the resource ledger before this call. Tag the new sandbox with it, as create does.
+</Field>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() at the provider call. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `snapshot_expired`, `snapshot_missing`, `snapshot_restore_failed`, `snapshot_manifest_mismatch`, `unavailable`.
@@ -108,10 +118,12 @@ async def lookup(
 </Tab>
 </Tabs>
 
-<Field name="operationKey / operation_key" type={"string"} required />
+<Field name="operationKey / operation_key" type={"string"} required>
+  The operation key of the create or restore call whose response was lost.
+</Field>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() before asking the provider. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`.
@@ -140,10 +152,12 @@ async def lookup_snapshot(
 </Tab>
 </Tabs>
 
-<Field name="operationKey / operation_key" type={"string"} required />
+<Field name="operationKey / operation_key" type={"string"} required>
+  The operation key of the snapshot call whose response was lost.
+</Field>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() before asking the provider. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`.
@@ -172,10 +186,12 @@ async def attach(
 </Tab>
 </Tabs>
 
-<Field name="ref" type={"string"} required />
+<Field name="ref" type={"string"} required>
+  The provider's id of the sandbox, as the resource ledger recorded it.
+</Field>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() before reaching the provider. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `not_found`, `resource_unknown`, `unavailable`.
@@ -204,10 +220,12 @@ async def release(
 </Tab>
 </Tabs>
 
-<Field name="ref" type={"string"} required />
+<Field name="ref" type={"string"} required>
+  The snapshot's provider id, as the resource ledger recorded it.
+</Field>
 
 <Field name="context" type={"SandboxContext"} required>
-  See [SandboxContext](/docs/reference/types/SandboxContext).
+  The authority to re-check with context.fence() before the release call: the owner's lease, or gc's cleanup claim. See [SandboxContext](/docs/reference/types/SandboxContext).
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `release_failed`, `unavailable`.

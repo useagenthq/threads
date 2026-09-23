@@ -15,7 +15,8 @@ Stdlib only, Python 3.12+. Checks:
 - every host API operation names existing api.json methods (x-api) and lists at least
   their failure codes;
 - every host API route's error responses allow exactly its x-error-codes, no more, no fewer;
-- api.json CaseExpectation and case.schema.json $defs/CaseExpectation stay the same shape.
+- api.json CaseExpectation and case.schema.json $defs/CaseExpectation stay the same shape;
+- every public entry has an explanation (api_docs.py).
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ import pathlib
 import re
 import sys
 from typing import TYPE_CHECKING
+
+from api_docs import check_docs
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -378,6 +381,7 @@ def main() -> int:
     problems += check_fence_codes(api)
     problems += check_route_errors(openapi)
     problems += check_case_expectation(api, docs[SPEC / "conformance" / "case.schema.json"])
+    problems += check_docs(api, by_id)
     for p in problems:
         print(p)
     print("api contract ok" if not problems else f"{len(problems)} problem(s)")

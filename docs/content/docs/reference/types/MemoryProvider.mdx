@@ -1,8 +1,10 @@
 ---
 title: "MemoryProvider"
-description: "The MemoryProvider type."
+description: "Long-term memory storage behind save_memory, search_memory and forget_memory."
 icon: "Plug"
 ---
+
+A provider only stores and searches: the framework issues bindings, checks scope, bounds and logs every call, and presents hits as untrusted reference. Build one with local_memory() or an adapter factory.
 
 <Callout>A protocol: adapters implement it.</Callout>
 
@@ -12,11 +14,15 @@ icon: "Plug"
   The effect class of save_memory and forget_memory with this provider. Absent: unguarded. idempotent requires dedup_window_ms: the provider dedups on the key within it.
 </Field>
 
-<Field name="dedupWindowMs / dedup_window_ms" type={"PosInt"} />
+<Field name="dedupWindowMs / dedup_window_ms" type={"PosInt"}>
+  How long, in milliseconds, the provider dedups a write on its key. Required when write_effect is idempotent; otherwise leave it out. local_memory keeps keys forever.
+</Field>
 
 ## Methods
 
 ### remember
+
+Store one record in the scope and return its id and version. The same key with the same record is a no-op that returns the same reference; the same key with a different record is invalid.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -40,18 +46,22 @@ async def remember(
 </Tabs>
 
 <Field name="scope" type={"Scope"} required>
-  See [Scope](/docs/reference/types/Scope).
+  The scope to store the record in, issued by the host. See [Scope](/docs/reference/types/Scope).
 </Field>
 
 <Field name="record" type={"MemoryRecord"} required>
-  See [MemoryRecord](/docs/reference/types/MemoryRecord).
+  The record to store, binding included. Store the binding as given. See [MemoryRecord](/docs/reference/types/MemoryRecord).
 </Field>
 
-<Field name="key" type={"string"} required />
+<Field name="key" type={"string"} required>
+  The write's idempotency key (the save_memory call's effect key). Dedup on it: a retry after a crash sends the same key.
+</Field>
 
 **Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
 
 ### recall
+
+Return the records in the scope that best match a query, best first. Return only records from this scope; the framework drops and audits any other.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -78,16 +88,22 @@ async def recall(
 </Tabs>
 
 <Field name="scope" type={"Scope"} required>
-  See [Scope](/docs/reference/types/Scope).
+  The scope to search, issued by the host. See [Scope](/docs/reference/types/Scope).
 </Field>
 
-<Field name="query" type={"string"} required />
+<Field name="query" type={"string"} required>
+  The search text, as the model wrote it in search_memory.
+</Field>
 
-<Field name="k" type={"PosInt"} default={"5"} />
+<Field name="k" type={"PosInt"} default={"5"}>
+  The most hits to return, a positive integer. search_memory passes the model's k (1 to 20, 5 when it gives none), and the framework also caps the total hit text at 16 KB.
+</Field>
 
 **Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
 
 ### forget
+
+Delete one record from the scope. Forgetting a record twice succeeds; a record that isn't in the scope is invalid.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -111,11 +127,15 @@ async def forget(
 </Tabs>
 
 <Field name="scope" type={"Scope"} required>
-  See [Scope](/docs/reference/types/Scope).
+  The scope the record is in, issued by the host. See [Scope](/docs/reference/types/Scope).
 </Field>
 
-<Field name="id" type={"string"} required />
+<Field name="id" type={"string"} required>
+  The record's id, as remember or recall returned it.
+</Field>
 
-<Field name="key" type={"string"} required />
+<Field name="key" type={"string"} required>
+  The delete's idempotency key (the forget_memory call's effect key). A retry sends the same key.
+</Field>
 
 **Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.

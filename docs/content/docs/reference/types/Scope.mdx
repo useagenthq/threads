@@ -8,8 +8,14 @@ Never a tool argument.
 
 ## Fields
 
-<Field name="tenant_id" type={"string"} required />
+<Field name="tenant_id" type={"string"} required>
+  The tenant of the verified principal the run acts for. A provider must never return or change records from another tenant.
+</Field>
 
-<Field name="agent" type={"string"} required />
+<Field name="agent" type={"string"} required>
+  The agent's name. Memory and knowledge are kept apart per agent within a tenant.
+</Field>
 
-<Field name="scope" type={"string"} required />
+<Field name="scope" type={"string"} required>
+  Whose records these are within the agent: for memory, the principal as issuer/subject (a / inside either part is escaped); for knowledge, the fixed value knowledge, shared by all of the agent's users.
+</Field>

@@ -1,16 +1,22 @@
 ---
 title: "ModelResponse"
-description: "The ModelResponse type."
+description: "A complete model response, as a found lookup returns it: the output parts, why it stopped, token usage and the provider's request id."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="content" type={"readonly OutputPart[]"} required />
+<Field name="content" type={"readonly OutputPart[]"} required>
+  The output parts in order: text, tool calls, reasoning and hosted tool results.
+</Field>
 
-<Field name="stop_reason" type={"ModelResponseEvent.data.stop_reason"} required />
+<Field name="stop_reason" type={"ModelResponseEvent.data.stop_reason"} required>
+  Only end_turn, stop_sequence and refusal complete a turn; tool_use dispatches; max_tokens continues; pause_turn re-requests with the paused content as-is, up to context.max_pause_continuations; context_window_exceeded ends the turn context_exhausted; other (a reason the adapter can't name) ends it error.
+</Field>
 
-<Field name="usage" type={"Usage"} required />
+<Field name="usage" type={"Usage"} required>
+  Per-field measured-or-unknown usage.
+</Field>
 
 <Field name="provider_request_id" type={"NonEmpty | null"} required>
   The provider's id for this request, or null when it gives none. A found model lookup must carry it, since model_response_recovered records it.

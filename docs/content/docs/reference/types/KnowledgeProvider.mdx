@@ -1,14 +1,18 @@
 ---
 title: "KnowledgeProvider"
-description: "The KnowledgeProvider type."
+description: "Knowledge-base storage behind search_knowledge."
 icon: "Plug"
 ---
+
+A provider only stores and searches: the host ingests documents at run setup, and the framework checks scope, bounds and logs every call, and presents hits as untrusted reference. Build one with local_knowledge() or an adapter factory.
 
 <Callout>A protocol: adapters implement it.</Callout>
 
 ## Methods
 
 ### ingest
+
+Admit one document version into the scope and return it with the new store revision. The same key with the same content returns the earlier version; the same key with other content is invalid.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -32,18 +36,22 @@ async def ingest(
 </Tabs>
 
 <Field name="scope" type={"Scope"} required>
-  See [Scope](/docs/reference/types/Scope).
+  The scope to admit the document into, issued by the host. See [Scope](/docs/reference/types/Scope).
 </Field>
 
 <Field name="source" type={"KnowledgeSource"} required>
-  See [KnowledgeSource](/docs/reference/types/KnowledgeSource).
+  The document, binding included. Store the binding as given. See [KnowledgeSource](/docs/reference/types/KnowledgeSource).
 </Field>
 
-<Field name="key" type={"string"} required />
+<Field name="key" type={"string"} required>
+  The ingest's idempotency key, unique to this scope and content. Dedup on it.
+</Field>
 
 **Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
 
 ### remove
+
+Remove a document from the scope from the next revision on; searches as of an earlier revision still see it. A retried key is a no-op. No built-in tool calls it today.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -67,16 +75,22 @@ async def remove(
 </Tabs>
 
 <Field name="scope" type={"Scope"} required>
-  See [Scope](/docs/reference/types/Scope).
+  The scope the document is in, issued by the host. See [Scope](/docs/reference/types/Scope).
 </Field>
 
-<Field name="docId / doc_id" type={"string"} required />
+<Field name="docId / doc_id" type={"string"} required>
+  The document to remove.
+</Field>
 
-<Field name="key" type={"string"} required />
+<Field name="key" type={"string"} required>
+  The remove's idempotency key. A retry sends the same key.
+</Field>
 
 **Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
 
 ### search
+
+Return the passages in the scope that best match a query, best first. Return only passages from this scope; the framework drops and audits any other.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -107,22 +121,30 @@ async def search(
 </Tabs>
 
 <Field name="scope" type={"Scope"} required>
-  See [Scope](/docs/reference/types/Scope).
+  The scope to search, issued by the host. See [Scope](/docs/reference/types/Scope).
 </Field>
 
-<Field name="query" type={"string"} required />
+<Field name="query" type={"string"} required>
+  The search text, as the model wrote it in search_knowledge.
+</Field>
 
-<Field name="k" type={"PosInt"} default={"5"} />
+<Field name="k" type={"PosInt"} default={"5"}>
+  The most hits to return, a positive integer. search_knowledge passes the model's k (1 to 20, 5 when it gives none), and the framework also caps the total hit text at 16 KB.
+</Field>
 
-<Field name="sources" type={"readonly string[]"} />
+<Field name="sources" type={"readonly string[]"}>
+  Search only these documents, by doc_id (the source_id). Omitted or empty: search every document in the scope.
+</Field>
 
 <Field name="asOf / as_of" type={"number"}>
-  Search as of this revision (a pinned fork).
+  Search as of this store revision, a non-negative integer: a pinned fork passes the revision its snapshot recorded, so it sees the corpus its original run saw. Omitted: search the current revision.
 </Field>
 
 **Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
 
 ### get
+
+Return one admitted document version, or not_found when the scope has no such version.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -146,12 +168,16 @@ async def get(
 </Tabs>
 
 <Field name="scope" type={"Scope"} required>
-  See [Scope](/docs/reference/types/Scope).
+  The scope the document is in, issued by the host. See [Scope](/docs/reference/types/Scope).
 </Field>
 
-<Field name="docId / doc_id" type={"string"} required />
+<Field name="docId / doc_id" type={"string"} required>
+  The document to get.
+</Field>
 
-<Field name="version" type={"string"} required />
+<Field name="version" type={"string"} required>
+  The version to get, as ingest or a hit returned it.
+</Field>
 
 **Returns an error value** with one of these codes: `not_found`, `unavailable`, `timeout`, `invalid`, `scope_violation`.
 
@@ -179,7 +205,7 @@ async def revision(
 </Tabs>
 
 <Field name="scope" type={"Scope"} required>
-  See [Scope](/docs/reference/types/Scope).
+  The scope asking, issued by the host. local_knowledge keeps one revision for the whole store and ignores it. See [Scope](/docs/reference/types/Scope).
 </Field>
 
 **Returns an error value** with one of these codes: `unavailable`, `timeout`.

@@ -49,16 +49,20 @@ def tool(
 
 ## Parameters
 
-<Field name="name" type={"Name"} required />
+<Field name="name" type={"Name"} required>
+  The name the model calls the tool by: lowercase letters, digits and underscores, starting with a letter, at most 64 characters. It must be unique within the agent.
+</Field>
 
-<Field name="description" type={"string"} required />
+<Field name="description" type={"string"} required>
+  What the tool does, shown to the model in its tool list. Write it for the model: when to call the tool and what it returns.
+</Field>
 
 <Field name="input" type={"z.ZodType<Input>"} required>
   Tool arguments are parsed with it at the boundary; its JSON Schema is the pinned input_schema.
 </Field>
 
 <Field name="output" type={"z.ZodType<Output>"}>
-  TypeScript only. Pinned output_schema. A result that fails it is an error result; the effect still happened.
+  TypeScript only. Pinned output_schema. A result that fails it is an error result; the effect still happened. Omitted: the result isn't checked; a string is shown as is and any other value as canonical JSON.
 </Field>
 
 <Field name="runs" type={"\"host\" | \"sandbox\""} default={"host"}>
@@ -66,7 +70,15 @@ def tool(
 </Field>
 
 <Field name="execute" type={"(input: Input, ctx: RunContext<Deps>) => Promise<Output>"}>
-  runs host: required. The value is the result; a thrown error becomes an error tool_result the model sees.
+  The tool body for runs host, the only kind built today. Its return value is the result; a thrown error becomes an error tool_result the model sees. Omitting it is a setup error capability_missing.
+</Field>
+
+<Field name="execute(input)" type={"Input"} required>
+  The model's arguments, already parsed by the tool's input schema: the parsed Zod value in TypeScript, an instance of the input model in Python.
+</Field>
+
+<Field name="execute(ctx)" type={"RunContext<Deps>"} required>
+  The run this call belongs to: deps, thread_id, branch_id, principal, call_id and effect_key (send effect_key to providers that dedup). In TypeScript it also carries an abort signal.
 </Field>
 
 <Field name="effect" type={"EffectClass"} default={"unguarded"}>
@@ -74,14 +86,32 @@ def tool(
 </Field>
 
 <Field name="dedupWindowMs / dedup_window_ms" type={"PosInt"}>
-  Required exactly when effect is idempotent.
+  Milliseconds within which the provider dedups a repeated request that carries the same effect key. Required exactly when effect is idempotent; omit it for any other effect, where giving it is a setup error invalid_config.
 </Field>
 
 <Field name="reconcile" type={"{ lookup: (effectKey: string, ctx: RunContext<Deps>) => Promise<LookupResult<Output>>; finality: \"final\" | \"nonfinal\" }"}>
-  Required exactly when effect is reconcilable. finality is the tool's declared LookupCapability: the runtime accepts a not_found answer as final only when it is final; under nonfinal a not_found is treated as not_found_nonfinal and the call parks.
+  Required exactly when effect is reconcilable; omit it for any other effect. finality is the tool's declared LookupCapability: the runtime accepts a not_found answer as final only when it is final; under nonfinal a not_found is treated as not_found_nonfinal and the call parks.
 </Field>
 
-<Field name="endsTurn / ends_turn" type={"boolean"} default={"false"} />
+<Field name="reconcile.lookup" type={"(effectKey: string, ctx: RunContext<Deps>) => Promise<LookupResult<Output>>"} required>
+  Asks the provider whether the call with this effect key took effect, after a crash or lost response. Returns a LookupResult: found with the value, not_found, or unknown.
+</Field>
+
+<Field name="reconcile.lookup(effectKey) / reconcile.lookup(effect_key)" type={"string"} required>
+  The effect key of the call being checked, &lt;branch_id>:&lt;call_id>: the same key execute saw as ctx.effect_key.
+</Field>
+
+<Field name="reconcile.lookup(ctx)" type={"RunContext<Deps>"} required>
+  The run the call belongs to: deps, thread_id, branch_id, principal and effect_key.
+</Field>
+
+<Field name="reconcile.finality" type={"\"final\" | \"nonfinal\""} required>
+  Whether a not_found from lookup is trustworthy. final: not_found means the effect never happened. nonfinal: not_found may just not be visible yet, so the call parks for a person to settle.
+</Field>
+
+<Field name="endsTurn / ends_turn" type={"boolean"} default={"false"}>
+  true: a successful result from this tool ends the turn with no further model call; an error result doesn't. Default false.
+</Field>
 
 ## Returns
 

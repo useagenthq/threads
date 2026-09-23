@@ -8,6 +8,10 @@ Every other expected failure is a value.
 
 ## Fields
 
-<Field name="code" type={"ConfigErrorCode"} required />
+<Field name="code" type={"ConfigErrorCode"} required>
+  Which kind of setup problem it is, one of ConfigErrorCode.
+</Field>
 
-<Field name="message" type={"string"} required />
+<Field name="message" type={"string"} required>
+  What is wrong, naming the option or environment variable to fix.
+</Field>

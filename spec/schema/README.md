@@ -9,6 +9,8 @@ The wire contract for the threads log. Both implementations read and write exact
 | `api.schema.json` | The shape of `../api.json`, the public API contract |
 | `store.sql` | The normative SQLite DDL of the log store, versioned by `PRAGMA user_version`. Embedded in both implementations by `../tools/gen_store_sql.py` (`--check` in CI) |
 
+**Every `api.json` entry is explained.** Every public function, type, method, parameter, option, field and property, and every field of an inline object and parameter of a callback at any depth, has an explanation. Inputs (parameters, options, inline object fields, callback parameters) always have their own `doc`, and an optional one shows its `default` or says what omitting it does. A field or property may instead take the first sentence of the type it references, unless its type is primitive, `JsonValue` or a union. `../tools/check_api.py` enforces it with the rule in `../tools/api_docs.py`, which the docs generator uses for its rows.
+
 ## Ownership
 
 One schema, three forms, with a single author.

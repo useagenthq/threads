@@ -82,7 +82,7 @@ build-backend = "uv_build"
 
 [tool.pyright]
 include = ["src", "tests", "tools"]
-extraPaths = ["src", "tests"]
+extraPaths = ["src", "tests", "../spec/tools", "../docs/scripts"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = "error"
@@ -94,7 +94,7 @@ reportUnknownLambdaType = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
 venvPath = "."
 venv = ".venv"
-# docs/scripts/gen_api_ref.py imports its sibling api_ref package.
+# docs/scripts/gen_api_ref.py imports its sibling api_ref package, which imports spec/tools/api_docs.py.
 executionEnvironments = [{ root = "../docs/scripts" }]
 
 [tool.ruff]
@@ -115,7 +115,7 @@ select = ["E", "F", "W", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF", "ANN", "P
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["tests"]
+pythonpath = ["tests", "../spec/tools", "../docs/scripts"]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
 markers = [
     "live: the live gate; sends real provider requests, only with THREADS_LIVE=1",

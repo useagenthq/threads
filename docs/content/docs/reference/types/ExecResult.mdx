@@ -8,7 +8,9 @@ The framework's sandbox layer, not the adapter, builds it: it writes the ExecOut
 
 ## Fields
 
-<Field name="exit_code" type={"number"} required />
+<Field name="exit_code" type={"number"} required>
+  The process's exit code: 0 for success, anything else for failure.
+</Field>
 
 <Field name="stdout" type={"string"} required>
   Head and tail preview.
@@ -18,7 +20,9 @@ The framework's sandbox layer, not the adapter, builds it: it writes the ExecOut
   Head and tail preview.
 </Field>
 
-<Field name="truncated" type={"boolean"} required />
+<Field name="truncated" type={"boolean"} required>
+  true when stdout or stderr was longer than its preview; the complete output is then in full_output.
+</Field>
 
 <Field name="full_output" type={"ArtifactRef"}>
   Present exactly when truncated: the complete stdout and stderr, readable with read_tool_result.

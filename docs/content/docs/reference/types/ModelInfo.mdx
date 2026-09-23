@@ -1,16 +1,22 @@
 ---
 title: "ModelInfo"
-description: "The ModelInfo type."
+description: "What a model adapter declares about itself: which model and adapter it is, its parameters and limits, the inputs it accepts, its hosted tools and whether a lost response can be looked up."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="model" type={"ModelRef"} required />
+<Field name="model" type={"ModelRef"} required>
+  The provider and model name. Recorded when the thread starts.
+</Field>
 
-<Field name="adapter" type={"AdapterRef"} required />
+<Field name="adapter" type={"AdapterRef"} required>
+  The model adapter and every provider-conversion setting that affects the wire request (API flavour, cache-breakpoint placement, tool-choice mapping).
+</Field>
 
-<Field name="params" type={"JsonObject"} required />
+<Field name="params" type={"JsonObject"} required>
+  The model parameters the adapter sends (temperature, output limits and the like), recorded when the thread starts. Changing them changes the agent's config hash.
+</Field>
 
 <Field name="limits" type={"Policy.models.items"} required>
   Window, output cap, billing bound and price.
@@ -20,7 +26,9 @@ icon: "Braces"
   Input parts it accepts; others fail pre-dispatch with content_unsupported.
 </Field>
 
-<Field name="hosted_tools" type={"readonly string[]"} />
+<Field name="hosted_tools" type={"readonly string[]"} default={"[]"}>
+  Names of provider-hosted tools this model can call (for example web search run by the provider). A live model that declares any is refused in stub-mode runs, since hosted calls can't be stubbed.
+</Field>
 
 <Field name="lookup" type={"LookupCapability"} required>
   Response lookup by client request id.

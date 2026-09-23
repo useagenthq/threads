@@ -1,12 +1,14 @@
 ---
 title: "SavedCase"
-description: "The SavedCase type."
+description: "What saveCase returns: where the case was written and whether it replays anywhere."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="path" type={"string"} required />
+<Field name="path" type={"string"} required>
+  The case directory that was written, &lt;dir>/&lt;name>.
+</Field>
 
 <Field name="portable" type={"boolean"} required>
   false when the case depends on a named provider.

@@ -1,11 +1,15 @@
 ---
 title: "RawRequest"
-description: "The RawRequest type."
+description: "A webhook as the host received it."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="headers" type={"Record<string, string>"} required />
+<Field name="headers" type={"Record<string, string>"} required>
+  Request headers by name, names lowercased.
+</Field>
 
-<Field name="body" type={"Uint8Array"} required />
+<Field name="body" type={"Uint8Array"} required>
+  The body's exact bytes, unparsed, so a signature over them can be checked.
+</Field>

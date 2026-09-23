@@ -1,13 +1,19 @@
 ---
 title: "SearchHit"
-description: "The SearchHit type."
+description: "One web search result, as a SearchBackend returns it."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="url" type={"string"} required />
+<Field name="url" type={"string"} required>
+  The result's URL, non-empty. A hit whose URL has no host is dropped.
+</Field>
 
-<Field name="title" type={"string"} required />
+<Field name="title" type={"string"} required>
+  The page title, possibly empty.
+</Field>
 
-<Field name="snippet" type={"string"} required />
+<Field name="snippet" type={"string"} required>
+  A short excerpt from the page, possibly empty.
+</Field>

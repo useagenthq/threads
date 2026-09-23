@@ -10,11 +10,17 @@ Every method reads or appends through the store; none needs the agent in memory.
 
 ## Properties
 
-<Field name="id" type={"ThreadId"} required />
+<Field name="id" type={"ThreadId"} required>
+  The thread's id: pass it to openThread to get a handle again later.
+</Field>
 
-<Field name="branch" type={"BranchId"} required />
+<Field name="branch" type={"BranchId"} required>
+  The branch this handle reads and appends to.
+</Field>
 
-<Field name="store" type={"Store"} required />
+<Field name="store" type={"Store"} required>
+  The SQLite log and artifact store (sqlite()).
+</Field>
 
 ## Methods
 
@@ -42,6 +48,8 @@ async def timeline() -> Ok[Timeline] | Err[Failure]
 **Returns an error value** with one of these codes: `log_corrupt`, `unsupported_format`, `unsupported_critical_event`.
 
 ### branches
+
+Every visible branch of this thread, with its parent branch and fork seq. A branch still being forked, or whose fork failed, is not listed.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -110,13 +118,17 @@ async def fork(
 </Tab>
 </Tabs>
 
-<Field name="point" type={"EventId | ForkPoint"} required />
+<Field name="point" type={"EventId | ForkPoint"} required>
+  Where to fork: the event_id of an eligible snapshot, or a ForkPoint from forkPoints(). Any other event is no_snapshot_boundary.
+</Field>
 
 <Field name="mode" type={"\"live\" | \"stub\""} default={"live"}>
   stub runs the new branch without live side effects: every mediated call is answered from what the original branch recorded after the fork point. Stubbing works in Python only today; in TypeScript a run on a stub fork is live. A stub-mode run on a live model that declares hosted tools is refused with ConfigError hosted_tool_unsupported, because hosted calls can't be stubbed.
 </Field>
 
-<Field name="knowledge" type={"\"pinned\" | \"current\""} default={"pinned"} />
+<Field name="knowledge" type={"\"pinned\" | \"current\""} default={"pinned"}>
+  "pinned": the new branch searches knowledge as it was at the snapshot. "current": it searches the live knowledge base.
+</Field>
 
 **Returns an error value** with one of these codes: `sandbox_required`, `no_snapshot_boundary`, `snapshot_expired`, `snapshot_missing`, `snapshot_restore_failed`, `snapshot_manifest_mismatch`, `resource_unknown`, `egress_policy_unsupported`.
 
@@ -153,10 +165,12 @@ async def save_case(
 </Tab>
 </Tabs>
 
-<Field name="name" type={"string"} required />
+<Field name="name" type={"string"} required>
+  The case's directory name under dir: lowercase letters, digits and hyphens, starting with a letter or digit. Anything else is invalid_request.
+</Field>
 
 <Field name="expect" type={"CaseExpectation"} required>
-  See [CaseExpectation](/docs/reference/types/CaseExpectation).
+  What a replay of the case must show; a case needs at least one must assertion, else invalid_request. See [CaseExpectation](/docs/reference/types/CaseExpectation).
 </Field>
 
 <Field name="externalEffects / external_effects" type={"\"stub\""} required>
@@ -164,7 +178,7 @@ async def save_case(
 </Field>
 
 <Field name="at" type={"EventId"}>
-  The snapshot event the case restores.
+  The snapshot event the case restores. Omitted: the branch's latest fork point; a branch without one is no_snapshot_boundary.
 </Field>
 
 <Field name="dir" type={"string"} default={"cases"}>
@@ -174,6 +188,8 @@ async def save_case(
 **Returns an error value** with one of these codes: `invalid_request`, `no_snapshot_boundary`, `case_missing_dependency`, `egress_policy_unsupported`.
 
 ### pendingApprovals / pending_approvals
+
+Open approval challenges on this branch, each with the tool call it guards and the suggested_rules an approver may keep. Python returns Ok or Err.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -193,6 +209,8 @@ async def pending_approvals() -> Sequence[PendingApproval]
 </Tabs>
 
 ### approve
+
+Grants an open approval challenge: appends approval_granted and resumes the branch if it was parked on it. Each challenge takes one answer: a second is approval_duplicate, and one after it expires is approval_expired.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -218,17 +236,23 @@ async def approve(
 </Tab>
 </Tabs>
 
-<Field name="challengeId / challenge_id" type={"Uuid"} required />
+<Field name="challengeId / challenge_id" type={"Uuid"} required>
+  The challenge_id of an open approval, from pendingApprovals() or the approval_requested event.
+</Field>
 
-<Field name="principal" type={"Principal"} required />
+<Field name="principal" type={"Principal"} required>
+  The approver answering, recorded as the event's actor. It must be one of the agent's approvers, else forbidden.
+</Field>
 
 <Field name="rememberRule / remember_rule" type={"PermissionRule"}>
-  One of the challenge's suggested_rules.
+  One of the challenge's suggested_rules, also recorded as an allow rule so matching calls later in the thread need no approval. Any other rule is invalid_request. Omitted: the approval covers this one call.
 </Field>
 
 **Returns an error value** with one of these codes: `forbidden`, `not_found`, `approval_mismatch`, `approval_expired`, `approval_duplicate`, `branch_busy`.
 
 ### deny
+
+Refuses an open approval challenge: appends approval_denied, so the tool call does not run, and resumes the branch if it was parked on it. Each challenge takes one answer.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -254,15 +278,23 @@ async def deny(
 </Tab>
 </Tabs>
 
-<Field name="challengeId / challenge_id" type={"Uuid"} required />
+<Field name="challengeId / challenge_id" type={"Uuid"} required>
+  The challenge_id of an open approval, from pendingApprovals() or the approval_requested event.
+</Field>
 
-<Field name="principal" type={"Principal"} required />
+<Field name="principal" type={"Principal"} required>
+  The approver answering, recorded as the event's actor. It must be one of the agent's approvers, else forbidden.
+</Field>
 
-<Field name="reason" type={"string"} />
+<Field name="reason" type={"string"}>
+  Free text recorded on approval_denied, for example why the call was refused. Omitted: no reason is recorded.
+</Field>
 
 **Returns an error value** with one of these codes: `forbidden`, `not_found`, `approval_mismatch`, `approval_expired`, `approval_duplicate`, `branch_busy`.
 
 ### resolveParked / resolve_parked
+
+A person settles a side effect whose outcome is unknown and that parked the branch, then the branch resumes. Use it when the effect can't be checked automatically.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -285,11 +317,17 @@ async def resolve_parked(
 </Tab>
 </Tabs>
 
-<Field name="effectKey / effect_key" type={"string"} required />
+<Field name="effectKey / effect_key" type={"string"} required>
+  The parked effect's key, &lt;branch_id>:&lt;call_id>, as listed in the parked result's pending. A key that isn't parked is not_parked.
+</Field>
 
-<Field name="resolution" type={"\"assume_done\" | \"assume_not_done\""} required />
+<Field name="resolution" type={"\"assume_done\" | \"assume_not_done\""} required>
+  "assume_done": record that the effect happened, so it never runs again. "assume_not_done": let it run again, accepting the risk that it happens twice.
+</Field>
 
-<Field name="principal" type={"Principal"} required />
+<Field name="principal" type={"Principal"} required>
+  The person settling it, recorded as the event's actor. It must be one of the agent's approvers, else forbidden.
+</Field>
 
 **Returns an error value** with one of these codes: `forbidden`, `not_parked`, `branch_busy`.
 
@@ -346,7 +384,9 @@ async def set_model(
 </Tab>
 </Tabs>
 
-<Field name="settings" type={"SettingsChange"} required />
+<Field name="settings" type={"SettingsChange"} required>
+  The model to switch to, with optional model_params and settings. The host resolves it to the model of that name in the agent's model or fallback list.
+</Field>
 
 <Field name="principal" type={"Principal"} required>
   Who takes this action; recorded as the event's actor and authorized by the host.
@@ -355,6 +395,8 @@ async def set_model(
 **Returns an error value** with one of these codes: `forbidden`, `invalid_transition`, `branch_busy`.
 
 ### setMode / set_mode
+
+Changes the branch's permission mode, recorded as mode_changed and used by later permission decisions. Switching to bypass is invalid_transition unless the agent's permissions set allow_bypass.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -376,7 +418,9 @@ async def set_mode(
 </Tab>
 </Tabs>
 
-<Field name="mode" type={"PermissionMode"} required />
+<Field name="mode" type={"PermissionMode"} required>
+  The new mode: plan, dont_ask, default, accept_edits or bypass.
+</Field>
 
 <Field name="principal" type={"Principal"} required>
   Who takes this action; recorded as the event's actor and authorized by the host.
@@ -464,7 +508,7 @@ async def cache_breaks() -> Ok[Sequence[CacheBreak]] | Err[Failure]
 
 ### todos
 
-TypeScript returns the list itself; Python returns Ok or Err.
+The agent's current todo list: the latest one it wrote on this branch, or empty. TypeScript returns the list itself; Python returns Ok or Err.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -485,7 +529,7 @@ async def todos() -> Sequence[Todo]
 
 ### children
 
-TypeScript returns the list itself; Python returns Ok or Err.
+Every subagent this thread started, in start order, with its final status or running. TypeScript returns the list itself; Python returns Ok or Err.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

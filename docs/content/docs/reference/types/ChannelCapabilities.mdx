@@ -1,6 +1,6 @@
 ---
 title: "ChannelCapabilities"
-description: "The ChannelCapabilities type."
+description: "What a channel adapter declares about its provider."
 icon: "Braces"
 ---
 
@@ -10,14 +10,26 @@ icon: "Braces"
   Delivery lookup by effect key.
 </Field>
 
-<Field name="buttons" type={"boolean"} required />
+<Field name="buttons" type={"boolean"} required>
+  true when the provider can show interactive buttons (for example approval cards). Declarative: the host doesn't read it today.
+</Field>
 
-<Field name="edits" type={"boolean"} required />
+<Field name="edits" type={"boolean"} required>
+  true when a sent message can be edited later. Declarative: the host doesn't read it today.
+</Field>
 
-<Field name="files" type={"boolean"} required />
+<Field name="files" type={"boolean"} required>
+  true when the provider accepts file uploads. Declarative: the host doesn't read it today.
+</Field>
 
-<Field name="direct_messages" type={"boolean"} required />
+<Field name="direct_messages" type={"boolean"} required>
+  true when the provider supports one-to-one conversations. Declarative: the host doesn't read it today.
+</Field>
 
-<Field name="dedup_window_ms" type={"PosInt"} />
+<Field name="dedup_window_ms" type={"PosInt"}>
+  Milliseconds during which the provider drops a re-send under the same effect key. Inside it, an uncertain send is re-sent safely; omitted means the provider doesn't deduplicate, so the host looks the send up or parks it.
+</Field>
 
-<Field name="delivery" type={"\"reliable\" | \"best_effort\""} />
+<Field name="delivery" type={"\"reliable\" | \"best_effort\""} default={"reliable"}>
+  reliable or best_effort: whether the provider promises delivery once it accepts a message. Declarative: the host doesn't read it today.
+</Field>

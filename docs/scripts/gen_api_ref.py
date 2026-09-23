@@ -11,6 +11,10 @@ api_ref/tables.py.
 """
 
 import sys
+from pathlib import Path
+
+# api_ref shares the doc rule with spec/tools/check_api.py through spec/tools/api_docs.py.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "spec" / "tools"))
 
 # Works as a script (python3 docs/scripts/gen_api_ref.py) and as a module (-m docs.scripts...).
 if __package__:

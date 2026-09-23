@@ -1,17 +1,27 @@
 ---
 title: "KnowledgeSource"
-description: "The KnowledgeSource type."
+description: "One document to admit into a knowledge base, as the framework hands it to KnowledgeProvider.ingest."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="source_id" type={"string"} required />
+<Field name="source_id" type={"string"} required>
+  The document's id, non-empty; it becomes the doc_id. For local_knowledge it is the file path.
+</Field>
 
-<Field name="media_type" type={"string"} required />
+<Field name="media_type" type={"string"} required>
+  The content's media type, non-empty, such as text/markdown. The host guesses it from the file name and falls back to text/plain; local_knowledge accepts only text/* and application/json.
+</Field>
 
-<Field name="content" type={"Uint8Array"} required />
+<Field name="content" type={"Uint8Array"} required>
+  The document's bytes.
+</Field>
 
-<Field name="location" type={"string"} />
+<Field name="location" type={"string"}>
+  Where the document came from, such as its file path, kept for reference. Omitted when there is none.
+</Field>
 
-<Field name="binding" type={"Binding"} required />
+<Field name="binding" type={"Binding"} required>
+  Issued by the host; the provider stores it opaquely.
+</Field>

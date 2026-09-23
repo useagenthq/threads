@@ -1,23 +1,41 @@
 ---
 title: "SandboxInfo"
-description: "The SandboxInfo type."
+description: "What a sandbox adapter declares about itself: its provider name, whether it enforces egress, what its snapshots capture, browser and desktop support, which lost operations it can look up, and whether terminate can confirm a process is gone."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="provider" type={"Name"} required />
+<Field name="provider" type={"Name"} required>
+  The provider's name: lowercase letters, digits and underscores (for example e2b, daytona, modal). Recovery and gc resolve a ledger row only with the adapter of the same provider.
+</Field>
 
-<Field name="egress" type={"\"enforced\" | \"unenforced\""} required />
+<Field name="egress" type={"\"enforced\" | \"unenforced\""} required>
+  "enforced": the sandbox can deny all outbound network. "unenforced": it can't, so the agent must opt in with egress "unenforced", and stub-mode forks and saved cases refuse it.
+</Field>
 
-<Field name="capture_classes" type={"readonly SnapshotEvent.data.capture_class[]"} required />
+<Field name="capture_classes" type={"readonly SnapshotEvent.data.capture_class[]"} required>
+  What a snapshot can capture: filesystem, filesystem_and_processes or full_vm. Recorded when the thread starts.
+</Field>
 
-<Field name="browser" type={"\"none\" | \"headless\""} required />
+<Field name="browser" type={"\"none\" | \"headless\""} required>
+  "headless" when the sandbox image can run a headless browser, "none" otherwise.
+</Field>
 
-<Field name="desktop" type={"\"none\" | \"native\" | \"image\""} required />
+<Field name="desktop" type={"\"none\" | \"native\" | \"image\""} required>
+  "native" or "image" when the sandbox has a desktop the computer tools can drive, "none" otherwise. The agent's computer option needs one of the first two.
+</Field>
 
 <Field name="lookup" type={"{ create: LookupCapability; snapshot: LookupCapability }"} required>
   Per operation: create (Sandbox.lookup) and snapshot (Sandbox.lookupSnapshot).
+</Field>
+
+<Field name="lookup.create" type={"LookupCapability"} required>
+  Whether Sandbox.lookup can find a sandbox whose create or restore response was lost: none, nonfinal or final.
+</Field>
+
+<Field name="lookup.snapshot" type={"LookupCapability"} required>
+  Whether Sandbox.lookupSnapshot can find a snapshot whose capture response was lost: none, nonfinal or final.
 </Field>
 
 <Field name="termination" type={"\"confirmed\" | \"unconfirmed\""} required>

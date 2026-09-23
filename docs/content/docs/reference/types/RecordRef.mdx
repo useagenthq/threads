@@ -1,11 +1,15 @@
 ---
 title: "RecordRef"
-description: "The RecordRef type."
+description: "What MemoryProvider.remember returns: the stored record's id and version."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="id" type={"string"} required />
+<Field name="id" type={"string"} required>
+  The provider's id for the record, non-empty. The model passes it to forget_memory; local_memory derives it from the write's key, so a retried save returns the same id.
+</Field>
 
-<Field name="version" type={"string"} required />
+<Field name="version" type={"string"} required>
+  The provider's version of the record, non-empty. local_memory always returns "1" (records never change).
+</Field>

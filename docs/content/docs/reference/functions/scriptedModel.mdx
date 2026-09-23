@@ -29,7 +29,9 @@ def scripted_model(
 
 ## Parameters
 
-<Field name="script" type={"ModelScript"} required />
+<Field name="script" type={"ModelScript"} required>
+  The answers the model gives, in order: each entry is a response (content, stop_reason, usage) or a provider error. A call past the end fails the run.
+</Field>
 
 ## Returns
 

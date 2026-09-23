@@ -1,8 +1,12 @@
 """The Field lists of parameters, fields and properties, with their docs."""
 
 import json
+from collections.abc import Mapping
+from dataclasses import dataclass
 
-from .json_access import Obj, array, doc_of, obj, text
+from api_docs import Entry, Kind, resolved_doc, walk_type
+
+from .json_access import Json, Obj, array, obj, text
 from .render import Render, ref_name
 from .tables import DOC_OVERRIDES, LANG_LABEL, NOT_BUILT, NOTES, ONLY_IN
 from .text import attr, camel, clean, field
@@ -41,52 +45,102 @@ def lang_of(member: Obj) -> str | None:
     return None if lang is None else text(lang)
 
 
-def param_label(name: str, lang: str | None) -> str:
-    ts_name = camel(name)
+def labels(name: str, casing: str = "api") -> tuple[str, str]:
+    """A member's TypeScript and Python names."""
+    return (camel(name) if casing == "api" else name, name)
+
+
+def label_text(names: tuple[str, str], lang: str | None) -> str:
+    ts, py = names
     if lang == "ts":
-        return ts_name
+        return ts
     if lang == "py":
-        return name
-    return name if ts_name == name else f"{ts_name} / {name}"
+        return py
+    return ts if ts == py else f"{ts} / {py}"
 
 
-def param_field(container: str, p: Obj) -> str:
+@dataclass(frozen=True, slots=True)
+class Explain:
+    """Each row's explanation, by the one rule check_api.py enforces (spec/tools/api_docs.py)."""
+
+    types: Obj
+    schemas: Mapping[str, Json]
+
+    def __call__(self, entry: Entry) -> str:
+        doc = resolved_doc(entry, self.types, self.schemas)
+        if doc is None:
+            raise ValueError(f"api.json {entry.path} ({entry.kind}) has no doc: see check_api.py")
+        return doc
+
+
+def row(
+    names: tuple[str, str], node: Mapping[str, Json], type_text: str, lang: str | None, doc: str
+) -> str:
+    attrs = [f'name="{label_text(names, lang)}"', f"type={attr(type_text)}"]
+    if node.get("required", True):
+        attrs.append("required")
+    if "default" in node:
+        value = node["default"]
+        attrs.append(f"default={attr(value if isinstance(value, str) else json.dumps(value))}")
+    return field(attrs, doc)
+
+
+def nested_rows(
+    explain: Explain, path: str, names: tuple[str, str], t: Obj, lang: str | None
+) -> list[str]:
+    """One row per inline object field and callback parameter inside t, at any depth, labelled
+    from the parent row (web.fetch, execute(ctx))."""
+    known = {path: names}
+    rows: list[str] = []
+    for entry in walk_type(t, path):
+        parent, _, name = entry.path.rpartition(".")
+        ts, py = known[parent]
+        own_ts, own_py = labels(name)
+        if entry.kind == "callback_param":
+            known[entry.path] = (f"{ts}({own_ts})", f"{py}({own_py})")
+        else:
+            known[entry.path] = (f"{ts}.{own_ts}", f"{py}.{own_py}")
+        type_text = Render(lang or "ts").expr(obj(entry.node["type"]))
+        doc = member_doc(parent, name, explain(entry), lang)
+        rows.append(row(known[entry.path], entry.node, type_text, lang, doc))
+    return rows
+
+
+def param_field(explain: Explain, container: str, p: Obj) -> str:
     name = text(p["name"])
     lang = lang_of(p)
     ptype = obj(p["type"])
-    attrs = [f'name="{param_label(name, lang)}"', f"type={attr(Render(lang or 'ts').expr(ptype))}"]
-    if p.get("required"):
-        attrs.append("required")
-    value = p.get("default")
-    if "default" in p and value not in ([], {}, None):
-        attrs.append(f"default={attr(value if isinstance(value, str) else json.dumps(value))}")
-    doc = member_doc(container, name, doc_of(p), lang)
+    path = f"{container}.{name}"
+    kind: Kind = "option" if p["kind"] == "option" else "param"
+    doc = member_doc(container, name, explain(Entry(p, kind, path)), lang)
     ref = ptype.get("$ref")
     if isinstance(ref, str):
         type_name, link = ref_name(ref)
         if link:
-            doc = (doc + " " if doc else "") + f"See [{type_name or 'type'}]({link})."
-    return field(attrs, doc)
+            doc += f" See [{type_name or 'type'}]({link})."
+    type_text = Render(lang or "ts").expr(ptype)
+    rows = [row(labels(name), p, type_text, lang, doc)]
+    return "\n\n".join(rows + nested_rows(explain, path, labels(name), ptype, lang))
 
 
-def param_fields(container: str, params: list[Obj]) -> str:
-    return "\n\n".join(param_field(container, p) for p in params)
+def param_fields(explain: Explain, container: str, params: list[Obj]) -> str:
+    return "\n\n".join(param_field(explain, container, p) for p in params)
 
 
-def fields_section(container: str, fields: Obj, casing: str) -> str:
+def fields_section(explain: Explain, container: str, fields: Obj, casing: str, kind: Kind) -> str:
     items: list[str] = []
     for name, value in fields.items():
         if (container, name) in NOT_BUILT:
             continue
         spec = obj(value)
         lang = ONLY_IN.get((container, name), lang_of(spec))
-        ts_name = camel(name) if casing == "api" else name
-        label = name if ts_name == name else f"{ts_name} / {name}"
-        render = Render(lang or "ts")
-        attrs = [f'name="{label}"', f"type={attr(render.expr(obj(spec['type']), casing))}"]
-        if spec.get("required", True):
-            attrs.append("required")
-        items.append(field(attrs, member_doc(container, name, doc_of(spec), lang)))
+        path = f"{container}.{name}"
+        names = labels(name, casing)
+        ftype = obj(spec["type"])
+        type_text = Render(lang or "ts").expr(ftype, casing)
+        doc = member_doc(container, name, explain(Entry(spec, kind, path)), lang)
+        items.append(row(names, spec, type_text, lang, doc))
+        items += nested_rows(explain, path, names, ftype, lang)
     return "\n\n".join(items)
 
 

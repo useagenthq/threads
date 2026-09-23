@@ -6,6 +6,10 @@ icon: "Braces"
 
 ## Fields
 
-<Field name="namespace" type={"string"} required />
+<Field name="namespace" type={"string"} required>
+  The host's namespace for the record (memory or knowledge). Store it as given and return it unchanged on every hit.
+</Field>
 
-<Field name="record_id" type={"string"} required />
+<Field name="record_id" type={"string"} required>
+  The id the host issued for this record within its scope. Store it as given and return it unchanged; a hit whose binding the host didn't issue to the calling scope is dropped and audited.
+</Field>

@@ -43,25 +43,31 @@ def host(
 ## Parameters
 
 <Field name="store" type={"Store"} required>
-  See [Store](/docs/reference/types/Store).
+  The store every bound agent's threads, runs and host records live in. See [Store](/docs/reference/types/Store).
 </Field>
 
 <Field name="agents" type={"Record<string, Agent<unknown, unknown>>"} required>
   Keyed by the name channels, schedules and the HTTP API use.
 </Field>
 
-<Field name="channels" type={"Record<string, ChannelAdapter>"}>
+<Field name="channels" type={"Record<string, ChannelAdapter>"} default={"{}"}>
   A channel thread's replies are derived from its log, whatever ran it: each end_turn reply and each open approval card is a host-issued channel_send, issued after every run of the thread and, for a crash in between, again after ready(). A send with a result or a parked effect is never issued twice.
 </Field>
 
 <Field name="ceiling" type={"Partial<Policy.permissions>"}>
-  The host ceiling every run this host starts or resumes is also decided under (Agent.run ceiling). Absent: no ceiling.
+  The host ceiling every run this host starts or resumes is also decided under (Agent.run ceiling). Omitted: no ceiling.
 </Field>
 
-<Field name="schedules" type={"readonly Schedule[]"} />
+<Field name="schedules" type={"readonly Schedule[]"} default={"[]"}>
+  The schedules the host fires once ready() has run. Default [] fires none.
+</Field>
 
 <Field name="authenticate" type={"(request: Request) => Promise<Principal | null>"}>
-  Maps an HTTP API request to a principal, or null for 401. Absent: every /v1 route answers 401; channel webhooks still work.
+  Maps an HTTP API request to a principal, or null for 401. Omitted: every /v1 route answers 401; channel webhooks still work.
+</Field>
+
+<Field name="authenticate(request)" type={"Request"} required>
+  The incoming HTTP request, to read its headers or cookies: a fetch Request in TypeScript, a Starlette Request in Python.
 </Field>
 
 ## Returns

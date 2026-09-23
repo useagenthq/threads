@@ -14,7 +14,9 @@ verify, parse, ack and render are pure.
   The host agent key this channel routes to.
 </Field>
 
-<Field name="capabilities" type={"ChannelCapabilities"} required />
+<Field name="capabilities" type={"ChannelCapabilities"} required>
+  What the provider can do for delivery. The host reads lookup and dedup_window_ms to decide how an uncertain send is settled; the other flags are declarative.
+</Field>
 
 <Field name="limits" type={"Record<string, number>"} required>
   Provider limits (message bytes, rate).
@@ -27,6 +29,8 @@ verify, parse, ack and render are pure.
 ## Methods
 
 ### verify
+
+Checks the provider's signature over the raw webhook bytes and returns who sent it. Return unverified for anything that doesn't check out: the host answers 401 and stores nothing.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -48,12 +52,14 @@ def verify(
 </Tabs>
 
 <Field name="raw" type={"RawRequest"} required>
-  See [RawRequest](/docs/reference/types/RawRequest).
+  The webhook exactly as received: lowercased header names and the body's exact bytes, which the signature covers. See [RawRequest](/docs/reference/types/RawRequest).
 </Field>
 
 **Returns an error value** with one of these codes: `unverified`.
 
 ### parse
+
+Turns a verified webhook into its batch of inbound items, in order. Return invalid for a body you can't read: the host answers 400 and stores nothing.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -75,12 +81,14 @@ def parse(
 </Tabs>
 
 <Field name="raw" type={"RawRequest"} required>
-  See [RawRequest](/docs/reference/types/RawRequest).
+  The same webhook verify just accepted. See [RawRequest](/docs/reference/types/RawRequest).
 </Field>
 
 **Returns an error value** with one of these codes: `invalid`.
 
 ### ack
+
+The synchronous reply to the provider (usually a 200, or the provider's URL challenge). The host sends it only after every item of the batch is stored.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -102,7 +110,7 @@ def ack(
 </Tabs>
 
 <Field name="raw" type={"RawRequest"} required>
-  See [RawRequest](/docs/reference/types/RawRequest).
+  The webhook being answered. See [RawRequest](/docs/reference/types/RawRequest).
 </Field>
 
 ### challenge
@@ -128,7 +136,9 @@ def challenge(
 </Tab>
 </Tabs>
 
-<Field name="query" type={"Record<string, string>"} required />
+<Field name="query" type={"Record<string, string>"} required>
+  The GET request's query parameters by name, for example hub.mode, hub.verify_token and hub.challenge.
+</Field>
 
 **Returns an error value** with one of these codes: `unverified`.
 
@@ -155,9 +165,13 @@ def render(
 </Tab>
 </Tabs>
 
-<Field name="event" type={"Event"} required />
+<Field name="event" type={"Event"} required>
+  A log event to reply with: a turn's final model_response or an open approval card. Return one op per message to send, or none.
+</Field>
 
 ### perform
+
+Sends one op to the provider and says what is known about delivery. Answer definite_not_sent only when you can prove nothing reached the provider; any doubt is outcome_unknown, which the host reconciles instead of re-sending.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -180,11 +194,17 @@ async def perform(
 </Tab>
 </Tabs>
 
-<Field name="op" type={"JsonObject"} required />
+<Field name="op" type={"JsonObject"} required>
+  One op from render, with the conversation's address, installation_id and last_inbound_at added by the host. It is the channel_send tool call's recorded input.
+</Field>
 
-<Field name="effectKey / effect_key" type={"string"} required />
+<Field name="effectKey / effect_key" type={"string"} required>
+  The send's effect key, &lt;branch_id>:&lt;call_id>. Embed it where the platform allows, so lookup and provider dedup can find this send again.
+</Field>
 
-<Field name="credentials" type={"Record<string, string>"} required />
+<Field name="credentials" type={"Record<string, string>"} required>
+  The values of the adapter's secrets, by the same names, resolved by the host on the host side.
+</Field>
 
 ### lookup
 
@@ -210,6 +230,10 @@ async def lookup(
 </Tab>
 </Tabs>
 
-<Field name="effectKey / effect_key" type={"string"} required />
+<Field name="effectKey / effect_key" type={"string"} required>
+  The effect key perform was given for the send being reconciled.
+</Field>
 
-<Field name="op" type={"JsonObject"} required />
+<Field name="op" type={"JsonObject"} required>
+  The op perform was given for this key, read back from its recorded tool_call, so the lookup can search the right conversation.
+</Field>

@@ -53,13 +53,17 @@ async def start_run(
 </Tab>
 </Tabs>
 
-<Field name="request" type={"StartRunRequest"} required />
+<Field name="request" type={"StartRunRequest"} required>
+  What to run: the host agent's key and the input, and optionally the thread and branch to continue and a run budget.
+</Field>
 
 <Field name="principal" type={"Principal"} required>
   The authenticated caller, never the local-operator default.
 </Field>
 
-<Field name="idempotencyKey / idempotency_key" type={"string"} required />
+<Field name="idempotencyKey / idempotency_key" type={"string"} required>
+  The client's key for this request, 1 to 255 characters (the Idempotency-Key header over HTTP). Retrying with the same key, principal and request returns the first receipt and starts nothing new.
+</Field>
 
 **Returns an error value** with one of these codes: `forbidden`, `invalid_request`, `not_found`, `branch_busy`, `branch_not_runnable`, `idempotency_key_reused`, `idempotency_key_principal_mismatch`.
 
@@ -93,11 +97,17 @@ async def subscribe(
 </Tab>
 </Tabs>
 
-<Field name="threadId / thread_id" type={"ThreadId"} required />
+<Field name="threadId / thread_id" type={"ThreadId"} required>
+  The thread the run belongs to.
+</Field>
 
-<Field name="runId / run_id" type={"EventId"} required />
+<Field name="runId / run_id" type={"EventId"} required>
+  The run to follow: run_id from startRun's receipt (its user_input event id). A run not found in this tenant's thread is not_found.
+</Field>
 
-<Field name="principal" type={"Principal"} required />
+<Field name="principal" type={"Principal"} required>
+  The authenticated caller. It must belong to the thread's tenant; another tenant's thread is not_found.
+</Field>
 
 <Field name="afterSeq / after_seq" type={"Int"} default={"0"}>
   Resume after this seq (SSE Last-Event-ID).

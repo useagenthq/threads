@@ -1,14 +1,18 @@
 ---
 title: "Agent"
-description: "The Agent type."
+description: "An agent made by agent(): its name and config, ready to run."
 icon: "Box"
 ---
+
+Building one does no I/O; run() or stream() starts a run.
 
 <Callout>A handle returned by the library.</Callout>
 
 ## Properties
 
-<Field name="name" type={"Name"} required />
+<Field name="name" type={"Name"} required>
+  The agent's name as given to agent(): lowercase letters, digits and underscores, up to 64 characters.
+</Field>
 
 ## Methods
 
@@ -55,31 +59,31 @@ async def run(
 </Field>
 
 <Field name="thread" type={"ThreadId | Thread"}>
-  Continue this thread (a handle continues its branch). Absent: a new thread.
+  The thread to continue: a Thread handle continues its branch; in TypeScript a thread id also works (Python takes a handle only). Omitted: a new thread.
 </Field>
 
 <Field name="store" type={"Store"}>
-  See [Store](/docs/reference/types/Store).
+  Where the thread's log lives. Omitted: the handle's store when thread is a Thread handle, else sqlite(".threads") in the working directory. See [Store](/docs/reference/types/Store).
 </Field>
 
 <Field name="deps" type={"Deps"}>
-  Host-only dependencies for tools and hooks (RunContext.deps). Never serialized. Required when Deps is not null.
+  Host-only dependencies your tools and hooks read as RunContext.deps; never serialized or logged. Required when the agent's Deps type is not null; omitted, tools see null (None in Python).
 </Field>
 
 <Field name="budget" type={"Budget"}>
-  Run budget, recorded on the user_input. Covers the thread and every descendant.
+  Run budget, recorded on the user_input; it covers this thread and every subagent it starts. Omitted: only the agent's own budget option applies.
 </Field>
 
 <Field name="principal" type={"Principal"}>
-  The verified sender of this input.
+  The verified sender of this input, recorded on the user_input. Omitted: the local operator (issuer "api", tenant "local", subject "operator").
 </Field>
 
 <Field name="ceiling" type={"Partial<Policy.permissions>"}>
-  The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Absent: no ceiling.
+  The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Omitted: no ceiling, so only the agent's own permissions apply.
 </Field>
 
 <Field name="signal" type={"AbortSignal"}>
-  TypeScript only. Local cancellation. Python uses task cancellation. Durable cancellation is Thread.cancel().
+  TypeScript only. Local cancellation: aborting it stops the run in this process, and tools see it as RunContext.signal. Python uses task cancellation instead. Omitted: the run stops only through the durable Thread.cancel().
 </Field>
 
 **Throws** `ConfigError` for a definition that can't run.
@@ -127,31 +131,31 @@ def stream(
 </Field>
 
 <Field name="thread" type={"ThreadId | Thread"}>
-  Continue this thread (a handle continues its branch). Absent: a new thread.
+  The thread to continue: a Thread handle continues its branch; in TypeScript a thread id also works (Python takes a handle only). Omitted: a new thread.
 </Field>
 
 <Field name="store" type={"Store"}>
-  See [Store](/docs/reference/types/Store).
+  Where the thread's log lives. Omitted: the handle's store when thread is a Thread handle, else sqlite(".threads") in the working directory. See [Store](/docs/reference/types/Store).
 </Field>
 
 <Field name="deps" type={"Deps"}>
-  Host-only dependencies for tools and hooks (RunContext.deps). Never serialized. Required when Deps is not null.
+  Host-only dependencies your tools and hooks read as RunContext.deps; never serialized or logged. Required when the agent's Deps type is not null; omitted, tools see null (None in Python).
 </Field>
 
 <Field name="budget" type={"Budget"}>
-  Run budget, recorded on the user_input. Covers the thread and every descendant.
+  Run budget, recorded on the user_input; it covers this thread and every subagent it starts. Omitted: only the agent's own budget option applies.
 </Field>
 
 <Field name="principal" type={"Principal"}>
-  The verified sender of this input.
+  The verified sender of this input, recorded on the user_input. Omitted: the local operator (issuer "api", tenant "local", subject "operator").
 </Field>
 
 <Field name="ceiling" type={"Partial<Policy.permissions>"}>
-  The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Absent: no ceiling.
+  The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Omitted: no ceiling, so only the agent's own permissions apply.
 </Field>
 
 <Field name="signal" type={"AbortSignal"}>
-  TypeScript only. Local cancellation. Python uses task cancellation. Durable cancellation is Thread.cancel().
+  TypeScript only. Local cancellation: aborting it stops the run in this process, and tools see it as RunContext.signal. Python uses task cancellation instead. Omitted: the run stops only through the durable Thread.cancel().
 </Field>
 
 **Throws** `ConfigError` for a definition that can't run.

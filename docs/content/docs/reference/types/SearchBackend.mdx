@@ -10,6 +10,8 @@ icon: "Plug"
 
 ### search
 
+Search the web for a query and return hits. The framework applies the domain filters again to what you return, parses every hit, and shows them to the model as untrusted reference.
+
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
@@ -35,10 +37,16 @@ async def search(
 </Tab>
 </Tabs>
 
-<Field name="query" type={"string"} required />
+<Field name="query" type={"string"} required>
+  The search text, as the model wrote it in web_search.
+</Field>
 
-<Field name="allowedDomains / allowed_domains" type={"readonly string[]"} />
+<Field name="allowedDomains / allowed_domains" type={"readonly string[]"}>
+  Return only hits on these hosts or their subdomains (a leading *. and case are ignored). Omitted or empty: no restriction.
+</Field>
 
-<Field name="blockedDomains / blocked_domains" type={"readonly string[]"} />
+<Field name="blockedDomains / blocked_domains" type={"readonly string[]"}>
+  Drop hits on these hosts or their subdomains (a leading *. and case are ignored). Omitted or empty: block nothing.
+</Field>
 
 **Returns an error value** with one of these codes: `unavailable`, `timeout`.

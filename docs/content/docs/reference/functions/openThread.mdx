@@ -37,15 +37,19 @@ async def open_thread(
 ## Parameters
 
 <Field name="store" type={"Store"} required>
-  See [Store](/docs/reference/types/Store).
+  The store the thread's log lives in, usually the same sqlite() the agent ran with. See [Store](/docs/reference/types/Store).
 </Field>
 
-<Field name="threadId / thread_id" type={"ThreadId"} required />
+<Field name="threadId / thread_id" type={"ThreadId"} required>
+  The id of the thread to open, such as the thread id in a RunResult.
+</Field>
 
-<Field name="branchId / branch_id" type={"BranchId"} />
+<Field name="branchId / branch_id" type={"BranchId"}>
+  The branch to open. Omitted: the thread's main branch.
+</Field>
 
 <Field name="sandbox" type={"Sandbox"}>
-  The sandbox provider that restores snapshots for fork(). Inspection (timeline, branches, forkPoints, saveCase) doesn't need it; fork() on a handle without one fails with sandbox_required. See [Sandbox](/docs/reference/types/Sandbox).
+  The sandbox provider that restores snapshots for fork(). Inspection (timeline, branches, forkPoints, saveCase) doesn't need it; fork() on a handle without one fails with sandbox_required. Omit it when you only inspect. See [Sandbox](/docs/reference/types/Sandbox).
 </Field>
 
 ## Returns

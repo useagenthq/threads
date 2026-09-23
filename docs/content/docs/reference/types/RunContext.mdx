@@ -1,18 +1,26 @@
 ---
 title: "RunContext"
-description: "The RunContext type."
+description: "What your tool or hook receives about the run it is part of."
 icon: "Braces"
 ---
 
 ## Fields
 
-<Field name="deps" type={"Deps"} required />
+<Field name="deps" type={"Deps"} required>
+  The deps passed to run() or stream(): host-only values such as clients. Never serialized; undefined (TypeScript) or None (Python) when none were passed.
+</Field>
 
-<Field name="threadId / thread_id" type={"ThreadId"} required />
+<Field name="threadId / thread_id" type={"ThreadId"} required>
+  The thread this run appends to.
+</Field>
 
-<Field name="branchId / branch_id" type={"BranchId"} required />
+<Field name="branchId / branch_id" type={"BranchId"} required>
+  The branch of that thread this run appends to.
+</Field>
 
-<Field name="principal" type={"Principal"} required />
+<Field name="principal" type={"Principal"} required>
+  A verified identity, normalized by the host.
+</Field>
 
 <Field name="callId / call_id" type={"CallId"}>
   Set inside a tool or tool hook.
@@ -23,5 +31,5 @@ icon: "Braces"
 </Field>
 
 <Field name="signal" type={"AbortSignal"} required>
-  TypeScript only.
+  TypeScript only. Aborts when the run's signal option aborts; pass it on to fetch or other cancellable work. It never aborts when run() had no signal.
 </Field>
