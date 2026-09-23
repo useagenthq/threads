@@ -43,6 +43,8 @@ export type PinOptions = {
   readonly tools: readonly Tool<unknown, unknown, never>[];
   readonly output: z.ZodType | undefined;
   readonly outputRetries: number;
+  /** Pinned as policy.output_styles when any is defined. */
+  readonly outputStyles: Readonly<Record<string, string>>;
   readonly fallback: readonly Model[];
   readonly permissions: Partial<z.infer<typeof PermissionsPolicy>>;
   readonly budget: z.infer<typeof Budget> | undefined;
@@ -99,6 +101,7 @@ export function pin(
   if (within === undefined) requireCapabilities(o.capabilities, o.sandbox);
   checkSkills(o.skills);
   checkRetries(o.outputRetries);
+  checkStyles(o.outputStyles);
   // Built-ins (the framework and provider tools among them) sorted by name, then app tools,
   // then extension and MCP tools sorted by namespaced name.
   const all = [
@@ -313,10 +316,24 @@ function policy(o: PinOptions): Policy {
       ? {}
       : { on_unknown_usage: o.onUnknownUsage }),
     ...(o.handoffs.length === 0 ? {} : { handoffs: [...o.handoffs] }),
+    // Absent when none is defined, so agents without styles keep their config_hash.
+    ...(Object.keys(o.outputStyles).length === 0
+      ? {}
+      : { output_styles: { ...o.outputStyles } }),
     ...(o.output === undefined
       ? {}
       : { output: outputPolicy(o.output, o.outputRetries) }),
   };
+}
+
+/** Every output style has a name and a text: an empty one could never be switched to. */
+function checkStyles(styles: Readonly<Record<string, unknown>>): void {
+  for (const [name, text] of Object.entries(styles))
+    if (name === "" || typeof text !== "string" || text === "")
+      throw new ConfigError(
+        "invalid_config",
+        `outputStyles: style ${JSON.stringify(name)} needs a non-empty name and text`,
+      );
 }
 
 /** outputRetries counts failed candidates: a non-negative integer. */

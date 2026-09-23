@@ -21,10 +21,10 @@ import {
   answer,
   type ControlError,
   control,
-  decide,
   resolveParked,
   type SettingsChange,
 } from "./control";
+import { decide } from "./decide";
 import { forkBranch, type KnowledgePolicy } from "./fork";
 import {
   type BranchInfo,
@@ -33,8 +33,10 @@ import {
   pendingApprovals,
 } from "./pending";
 import { type ReadError, readLog } from "./read";
+import { type ReplayError, replay } from "./replay";
 import { type SaveCaseOptions, type SavedCase, saveCase } from "./save-case";
 import { cancel, setMode, setModel } from "./settings";
+import { compact, setOutputStyle } from "./style";
 import { type ThreadUsage, usageMethods } from "./usage";
 
 // openThread() (spec/api.json): a handle for inspection and control that reads
@@ -79,6 +81,12 @@ export type Thread = ThreadRef & {
   readonly todos: () => Promise<Projections["todos"]>;
   /** One entry per spawned child, running until its agent_finished. */
   readonly children: () => Promise<Projections["children"]>;
+  /**
+   * Re-renders every recorded model request from the log and checks it byte for byte: no model
+   * or tool calls, no appends. The first failure names the request's seq. Run it in CI to prove
+   * an upgrade still reproduces your threads.
+   */
+  readonly replay: () => Promise<Result<void, ReplayError>>;
 } & ThreadUsage &
   ThreadControl;
 
@@ -117,6 +125,16 @@ export type ThreadControl = {
     mode: z.infer<typeof PermissionMode>,
     principal: Principal,
   ) => Controlled;
+  /**
+   * While the thread is idle, asks its next run to summarize everything up to now before its
+   * first model request. The summary, or why it failed, is in the timeline.
+   */
+  readonly compact: (
+    principal: Principal,
+    options?: { readonly instructions?: string },
+  ) => Controlled;
+  /** While the thread is idle, switches later replies to one of the agent's output styles. */
+  readonly setOutputStyle: (name: string, principal: Principal) => Controlled;
 };
 
 export type OpenThreadOptions = {
@@ -238,6 +256,7 @@ export async function openThread(
       const current = readLog(log, branchId);
       return current.ok ? projections(current.value).children : [];
     },
+    replay: async () => replay(log, artifacts, branchId),
     ...usageMethods(log, threadId, branchId),
     ...controls(log, threadId, branchId),
     saveCase: async (name, caseOptions) =>
@@ -308,5 +327,19 @@ function controls(
       control(log, branchId, principal, setModel(settings, principal)),
     setMode: (mode, principal) =>
       control(log, branchId, principal, setMode(mode, principal)),
+    compact: (principal, options = {}) =>
+      control(
+        log,
+        branchId,
+        principal,
+        compact(principal, options.instructions),
+        {
+          idle: true,
+        },
+      ),
+    setOutputStyle: (name, principal) =>
+      control(log, branchId, principal, setOutputStyle(name, principal), {
+        idle: true,
+      }),
   };
 }

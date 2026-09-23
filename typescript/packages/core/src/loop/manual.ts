@@ -12,6 +12,7 @@ import {
   summarized,
 } from "./compact";
 import { RECOVERY } from "./drafts";
+import type { Gated } from "./gates";
 import { retryPolicy } from "./policy";
 import type { Session } from "./session";
 import type { Halt } from "./types";
@@ -85,11 +86,16 @@ export function stage(
   return { kind: "failed", reason: "model_error" };
 }
 
-/** The ladder's first layer: the unanswered request, carried out until it is answered. */
-export async function requested(s: Session): Promise<Halt | undefined> {
+/**
+ * The ladder's first layer: the unanswered request, carried out until it is answered. "ended"
+ * when it ran, so the loop takes its next step from the log: a cancel that landed during the side
+ * attempt is handled before any turn request.
+ */
+export async function requested(s: Session): Promise<Gated> {
+  if (s.fold.compactionRequest === undefined) return undefined;
   for (;;) {
     const request = s.fold.compactionRequest;
-    if (request === undefined) return undefined;
+    if (request === undefined) return "ended";
     const stopped = await advance(s, request, stage(s.events, s.fold, request));
     if (stopped !== undefined) return stopped;
   }

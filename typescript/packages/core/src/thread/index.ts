@@ -12,6 +12,7 @@ export {
 } from "./open";
 export type { BranchInfo, PendingApproval } from "./pending";
 export type { ReadError, ReadErrorCode } from "./read";
+export type { ReplayError } from "./replay";
 export type {
   CaseExpectation,
   EventMatcher,
