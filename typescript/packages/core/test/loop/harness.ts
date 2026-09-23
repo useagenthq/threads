@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { KnownEvent, ToolSpec } from "../../src/log";
+import type { KnownEvent, Policy, ToolSpec } from "../../src/log";
 import type { LoopConfig, ToolImpl, ToolRun } from "../../src/loop";
 import { type ScriptedModel, scriptedModel } from "../../src/model";
 import { knownEvents } from "../../src/reduce";
@@ -28,7 +28,10 @@ export const EMAIL: ToolSpec = {
   effect_class: "unguarded",
 };
 
-export function startedWith(tools: readonly ToolSpec[]): EventDraft {
+export function startedWith(
+  tools: readonly ToolSpec[],
+  policy?: Policy,
+): EventDraft {
   return {
     type: "thread_started",
     type_version: 1,
@@ -42,6 +45,7 @@ export function startedWith(tools: readonly ToolSpec[]): EventDraft {
       adapter: { name: "scripted", version: "1", settings: {} },
       instructions: "You are a helpful agent.",
       tools: [...tools],
+      ...(policy === undefined ? {} : { policy }),
     },
   };
 }
@@ -62,11 +66,12 @@ export function harness(
     output: "ok",
     isError: false,
   }),
+  policy?: Policy,
 ): Harness {
   const f = fixture();
   unwrap(f.store.createBranch(THREAD, ROOT));
   const writer = unwrap(f.store.acquire(ROOT, "setup", 1));
-  unwrap(writer.append([startedWith(tools), ...drafts]));
+  unwrap(writer.append([startedWith(tools, policy), ...drafts]));
   f.clock.now += 10;
   const model = scriptedModel({ responses });
   const runs = new Map<string, number>();
