@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import NOW, num, obj
+from .common import NOW, eid, num, obj
 from .log import Log, reduce
 from .pieces import FINAL, READ_FILE, answer, case, render_case, started, user, write_case
 from .policies import PRIMARY_SETTINGS, RETRY, SMALL_SETTINGS, policy
@@ -25,6 +25,7 @@ def build(root: pathlib.Path) -> None:
     _reverts(root)
     _sticks(root)
     _deny_keyed(root)
+    _early_decision(root)
 
 
 def _overloaded(log: Log, attempt: int) -> Obj:
@@ -78,9 +79,11 @@ def _denied(root: pathlib.Path) -> None:
     )
 
 
-def _fell_back(scope: str) -> tuple[Log, Obj, Obj]:
+def _fell_back(scope: str, *, early: bool = False) -> tuple[Log, Obj, Obj]:
     """Turn 1 falls back to the small model, which answers; turn 2's input is recorded. Returns
-    the log and the declared prefixes of the primary and the fallback epoch."""
+    the log and the declared prefixes of the primary and the fallback epoch. `early` records,
+    just before the input, a deny that names the input's event id: a decision before its input
+    never settles it."""
     log = _two_overloaded(scope)
     second = _overloaded(log, 2)
     fallback: Obj = {
@@ -90,6 +93,8 @@ def _fell_back(scope: str) -> tuple[Log, Obj, Obj]:
     }
     log.add("settings_changed", fallback)
     answer(log, "Done.")
+    if early:
+        log.add("hook_decision", {**DENY, "input_event_id": eid(log.seq + 2, log.branch)})
     user(log, "Say it again.")
     prefixes = [
         obj(e["data"])["declared_prefix"] for e in log.events if e["type"] == "model_request"
@@ -164,4 +169,22 @@ def _deny_keyed(root: pathlib.Path) -> None:
         "revert: the turn is sent on the fallback epoch.",
         log,
         _next_turn(small),
+    )
+
+
+def _early_decision(root: pathlib.Path) -> None:
+    log, primary, _ = _fell_back("turn", early=True)
+    revert: Obj = {
+        "reason": "revert",
+        "settings": PRIMARY_SETTINGS,
+        "cause_event_id": log.events[-1]["event_id"],
+    }
+    _recover_case(
+        root,
+        "model-fallback-revert-ignores-earlier-decision",
+        "A before_model_switch deny names turn 2's input but was recorded before it. Only a "
+        "decision after the input settles its revert, so recovery reverts to the primary as if "
+        "there were none.",
+        log,
+        [{"type": "settings_changed", "actor_kind": "host", "data": revert}, *_next_turn(primary)],
     )

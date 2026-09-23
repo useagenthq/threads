@@ -254,7 +254,7 @@
           "type": {"prim": "integer"},
           "required": false,
           "default": 2,
-          "doc": "Failed candidates per turn (a rejected final_output or a plain-text end) before turn_completed{output_invalid}. A non-negative integer; anything else is ConfigError invalid_config."
+          "doc": "Failed candidates per turn (a rejected final_output or a plain-text end) before turn_completed{output_invalid}. An integer from 0 to 2^53-1; anything else is ConfigError invalid_config."
         },
         {
           "name": "subagents",

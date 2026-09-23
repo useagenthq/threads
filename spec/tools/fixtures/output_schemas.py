@@ -128,9 +128,23 @@ MEETING_BROKEN: list[tuple[str, str, JsonValue]] = [
 ]
 
 
+# Property names a JavaScript object inherits: a reader looks only at the object's own keys.
+OWN: Obj = {
+    "properties": {"toString": {"type": "string"}},
+    "required": ["toString"],
+    "additionalProperties": False,
+    "type": "object",
+}
+OWN_BROKEN: list[tuple[str, str, JsonValue]] = [
+    ("required-own-key", "toString", None),
+    ("additional-own-key", "constructor", 1),
+]
+
+
 def build(root: pathlib.Path) -> None:
     _suite(root, ESTIMATE, GOOD, BROKEN, "constraints")
     _suite(root, MEETING, MEETING_GOOD, MEETING_BROKEN, "formats")
+    _suite(root, OWN, {"toString": "x"}, OWN_BROKEN, "own-keys")
 
 
 def _suite(
@@ -166,8 +180,14 @@ def _suite(
                 "the pinned output schema (spec/schema/README.md, Output schemas): "
                 "invalid_transition. Every keyword is checked, never skipped.",
             ),
-            _accepted(schema, {**good, field: bad}),
+            _accepted(schema, _broken(good, field, bad)),
         )
+
+
+def _broken(good: Obj, field: str, bad: JsonValue) -> Obj:
+    """`good` with `field` set to `bad`, or removed when `bad` is None."""
+    value = {k: v for k, v in good.items() if k != field}
+    return value if bad is None else {**value, field: bad}
 
 
 def _accepted(schema: Obj, value: Obj) -> Log:

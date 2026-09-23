@@ -290,10 +290,17 @@ Checked by readers and writers (`validate_next`) on top of the schema, except ru
 Both readers check `policy.output.schema` with their own evaluator of one keyword set, defined here, never with a library's reading of JSON Schema. A writer records a candidate `accepted` only if its agent's validator **and** this check pass it; otherwise it is `rejected` and the model tries again. An output model whose schema uses any other keyword is refused at setup (`ConfigError invalid_config`, naming the keyword).
 
 - **Annotations** (never constrain): `title`, `description`, `default`, `examples`, `$defs`, `$schema`, `$comment`.
-- **Structure**: `type`, `properties`, `required`, `additionalProperties`, `items`, `minProperties`, `enum`, `const`, `allOf`, `anyOf`, `oneOf`, `not`, `if`/`then`/`else`; `$ref` is `#` (the whole schema) or `#/$defs/<name>`, recursion included.
+- **Structure**: `type`, `properties`, `required`, `additionalProperties`, `items`, `minProperties`, `enum`, `const`, `allOf`, `anyOf`, `oneOf`, `not`, `if`/`then`/`else`; `$ref` is `#` (the whole schema) or `#/$defs/<name>`, recursion included. A property is the object's own key: a name like `toString` is never found on a prototype (`output-schema-required-own-key-rejected`, `output-schema-additional-own-key-rejected`).
+- **Equality** (`const`, `enum`): a boolean equals only the same boolean; numbers compare by value (`1` equals `1.0`); strings and `null` exactly; arrays item by item in order; objects key by key, in any key order (`vectors/json-equal.json`).
 - **Numbers**: `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum` (number form); `multipleOf` (positive) is exact in decimal: each number is read as its shortest round-trip decimal `d × 10^e`, and `value` is a multiple when, scaled to the smaller exponent, the value's digits are divisible by the divisor's (`0.3` is a multiple of `0.1`; `0.35` is not).
 - **Lengths**: `minLength`/`maxLength` count Unicode code points; `minItems`/`maxItems` count items.
-- **`pattern`**: an ECMA-262 regular expression, searched (not anchored), with ASCII `\d` and `\w`. `\s` is Unicode whitespace in ECMA-262 and ASCII in the Python reader, so a pattern that relies on non-ASCII whitespace is outside the shared contract.
+- **`pattern`**: searched (not anchored) in a string, written in this portable subset of ECMA-262 and meaning the same in both readers (`vectors/pattern.json`). Anything else is unsupported: refused at setup, failed closed by a reader.
+  - Characters other than `\ ^ $ . | ? * + ( ) [ ] { }` match themselves; `\` before one of those or `/` or `-` makes it literal; `\t \n \v \f \r` are those controls.
+  - `\d` is `[0-9]`, `\w` is `[A-Za-z0-9_]`, `\s` is `[\t\n\v\f\r ]`, and `\D \W \S` their complements; `\b \B` are word boundaries over that `\w`.
+  - `.` is any code point but `\n`, `\r`, U+2028 and U+2029 (an emoji is one); `^` is the start and `$` the very end of the string (a trailing `\n` is not skipped).
+  - Groups `( )` and `(?: )`, lookaheads `(?= )` and `(?! )` (never repeated), alternation `|`; quantifiers `* + ? {n} {n,} {n,m}` after something repeatable, each optionally lazy with `?`.
+  - Classes `[ ]` and `[^ ]` are non-empty; members are single characters (`[` escaped), `\d \D \w \W \s` and the escapes above, and ranges between two single characters; `-` is a literal only first or last.
+  - Unsupported, among others: named groups, lookbehind, back-references, inline flags, `\p`, `\u`, `\x`, `\c`, `\0`, `\S` inside a class, possessive quantifiers, unescaped `{`, `}` or `]`.
 - **`format`** constrains strings only; any name but these is unsupported:
 
 | Format | A string matches when |
