@@ -170,3 +170,32 @@ describe("the send's terminal error (Model.send returns.errors)", () => {
     expect(events(writer).at(-1)?.type).toBe("model_request");
   });
 });
+
+describe("stub mode and hosted tools", () => {
+  const stub = { answer: () => undefined };
+
+  test("a live model declaring hosted tools is refused before anything runs", async () => {
+    const h = harness([], [], [NEVER]);
+    const live: Model = {
+      info: { ...h.model.info, hosted_tools: ["web_search"] },
+      send: h.model.send,
+    };
+    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const before = events(writer).length;
+    await expect(
+      resume(writer, h.artifacts, h.config({ models: () => live, stub }), {
+        input: userInput("search the web"),
+      }),
+    ).rejects.toMatchObject({ code: "hosted_tool_unsupported" });
+    expect(events(writer).length).toBe(before);
+  });
+
+  test("a test-kit model runs in stub mode", async () => {
+    const h = harness([], [], [NEVER]);
+    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const end = await resume(writer, h.artifacts, h.config({ stub }), {
+      input: userInput("hi"),
+    });
+    expect(end).toEqual({ kind: "idle" });
+  });
+});

@@ -11,6 +11,10 @@ export function markTestKit(model: Model): void {
   testKit.add(model);
 }
 
+export function isTestKit(model: Model): boolean {
+  return testKit.has(model);
+}
+
 /** Blocks every model that is not test kit, for the rest of the process. */
 export function blockRealModels(): void {
   blocked = true;

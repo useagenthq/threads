@@ -1,3 +1,5 @@
+import { ConfigError } from "../agent/errors";
+import { isTestKit } from "../model/guard";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import { drainBackground, resumeBackground } from "./agents/background";
 import { observe } from "./hooks";
@@ -42,6 +44,7 @@ export async function resume(
   options: { readonly loop?: boolean; readonly input?: EventDraft } = {},
 ): Promise<LoopEnd> {
   const s = new Session(writer, artifacts, config);
+  refuseHostedStub(s);
   const stopped = await recover(s);
   if (stopped !== undefined) return { kind: "halted", halt: stopped };
   if (options.loop === false)
@@ -50,6 +53,24 @@ export async function resume(
   // session_end observes; its failure is recorded and changes nothing.
   if (end.kind !== "halted") await observe(s, "session_end", []);
   return end;
+}
+
+/**
+ * Hosted calls run inside the provider and can't be stubbed, so a stub-mode run with a live
+ * model declaring any is refused before recovery or dispatch.
+ */
+function refuseHostedStub(s: Session): void {
+  if (s.config.stub === undefined || s.fold.model === undefined) return;
+  const model = s.config.models(s.fold.model);
+  if (
+    model !== undefined &&
+    !isTestKit(model) &&
+    (model.info.hosted_tools ?? []).length > 0
+  )
+    throw new ConfigError(
+      "hosted_tool_unsupported",
+      `stub mode can't stub the hosted tools of live model ${model.info.model.provider}/${model.info.model.name}`,
+    );
 }
 
 async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
