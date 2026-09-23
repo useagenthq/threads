@@ -1,0 +1,9 @@
+{
+  "name": "projections-absent-without-policy",
+  "family": "context_compaction",
+  "kind": "reduce",
+  "description": "The policy pins priced models but no currency and no context. cost is null: prices mean nothing without a currency, and a zero would read as free. cache_breaks is null though reads fell from 8000 to 1000: the projection has no pinned ttl to judge against.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

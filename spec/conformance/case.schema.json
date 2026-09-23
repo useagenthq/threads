@@ -1102,33 +1102,15 @@
           "$ref": "urn:threads:schema:events:v1#/$defs/ModelRef"
         },
         "cost": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "currency",
-            "known_nanos",
-            "upper_bound_nanos",
-            "complete",
-            "bounded"
-          ],
-          "properties": {
-            "currency": {
-              "type": "string"
+          "description": "null when policy.currency or policy.models is absent.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cost"
             },
-            "known_nanos": {
-              "type": "integer"
-            },
-            "upper_bound_nanos": {
-              "type": "integer"
-            },
-            "complete": {
-              "type": "boolean"
-            },
-            "bounded": {
-              "type": "boolean",
-              "description": "false when some unknown usage has no declared bound; upper_bound_nanos is then not a bound."
+            {
+              "type": "null"
             }
-          }
+          ]
         },
         "output": {
           "type": "object",
@@ -1148,30 +1130,18 @@
           }
         },
         "cache_breaks": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "request_event_id",
-              "likely_cause"
-            ],
-            "properties": {
-              "request_event_id": {
-                "type": "string"
-              },
-              "likely_cause": {
-                "enum": [
-                  "settings_changed",
-                  "compacted",
-                  "context_edited",
-                  "tools_changed",
-                  "ttl_expired",
-                  "unknown"
-                ]
+          "description": "null when policy.context is absent.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CacheBreak"
               }
+            },
+            {
+              "type": "null"
             }
-          }
+          ]
         },
         "compaction": {
           "type": "object",
@@ -1211,6 +1181,58 @@
         "body": {
           "description": "The POST /v1/runs body as sent: a host-api StartRunRequest (urn:threads:schema:host-api:v1#/$defs/StartRunRequest).",
           "type": "object"
+        }
+      }
+    },
+    "Cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currency",
+        "known_nanos",
+        "upper_bound_nanos",
+        "complete",
+        "bounded"
+      ],
+      "properties": {
+        "currency": {
+          "type": "string"
+        },
+        "known_nanos": {
+          "type": "integer"
+        },
+        "upper_bound_nanos": {
+          "type": "integer"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "bounded": {
+          "type": "boolean",
+          "description": "false when some unknown usage has no declared bound; upper_bound_nanos is then not a bound."
+        }
+      }
+    },
+    "CacheBreak": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_event_id",
+        "likely_cause"
+      ],
+      "properties": {
+        "request_event_id": {
+          "type": "string"
+        },
+        "likely_cause": {
+          "enum": [
+            "settings_changed",
+            "compacted",
+            "context_edited",
+            "tools_changed",
+            "ttl_expired",
+            "unknown"
+          ]
         }
       }
     }

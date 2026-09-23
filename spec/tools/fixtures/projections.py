@@ -76,10 +76,13 @@ def _response_cost(usage: Obj, price: Obj, bound: int | None) -> tuple[int, int 
     return known, None if bound is None else known + bound
 
 
-def cost(log: Log) -> Obj:
+def cost(log: Log) -> Obj | None:
     """Known cost and a conservative bound. Every potentially sent attempt without a response,
-    and every response with unknown usage, is charged at its model-declared reservation."""
+    and every response with unknown usage, is charged at its model-declared reservation. None
+    without a pinned currency and models: there is nothing to price against."""
     pol = _policy(log)
+    if "currency" not in pol or "models" not in pol:
+        return None
     models = {(text(obj(m)["provider"]), text(obj(m)["name"])): obj(m) for m in arr(pol["models"])}
     known = upper = 0
     complete = bounded = True
@@ -108,9 +111,13 @@ def cost(log: Log) -> Obj:
     }
 
 
-def cache_breaks(log: Log) -> list[JsonValue]:
-    """A drop of cache reads below 95% of the previous turn request's, by at least 2000 tokens."""
-    ttl = num(obj(_policy(log)["context"])["cache_ttl_ms"])
+def cache_breaks(log: Log) -> list[JsonValue] | None:
+    """A drop of cache reads below 95% of the previous turn request's, by at least 2000 tokens.
+    None without a pinned policy.context."""
+    pol = _policy(log)
+    if "context" not in pol:
+        return None
+    ttl = num(obj(pol["context"])["cache_ttl_ms"])
     purpose = {
         e["event_id"]: obj(e["data"]).get("purpose", "turn")
         for e in log.events

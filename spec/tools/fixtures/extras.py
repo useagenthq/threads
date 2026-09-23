@@ -9,7 +9,8 @@ from .common import ALICE, T0, sha, tokens, tool
 from .jcs import JsonValue, Obj, canonical
 from .log import Log
 from .pieces import answer, call, reduce_case, render_case, result, started, user
-from .policies import SMALL_SETTINGS, permissions, policy
+from .policies import MODELS, SMALL_SETTINGS, permissions, policy
+from .projections import cache_breaks, cost
 
 if TYPE_CHECKING:
     import pathlib
@@ -23,6 +24,7 @@ def build(root: pathlib.Path) -> None:
     _thread_rule(root)
     _reminder(root)
     _hooks(root)
+    _unpinned_projections(root)
 
 
 def _ask_call(log: Log, cid: str, cmd: str) -> Obj:
@@ -172,4 +174,28 @@ def _hooks(root: pathlib.Path) -> None:
         ),
         log,
         {},
+    )
+
+
+def _unpinned_projections(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [], policy={"models": MODELS})
+    for i, cache_read in enumerate((8000, 1000)):
+        user(log, f"Question {i + 1}.")
+        r = log.model_request()
+        usage: Obj = {**tokens(100, 10), "cache_read_tokens": cache_read, "cache_write_tokens": 0}
+        log.model_response(r, [{"type": "text", "text": f"Answer {i + 1}."}], "end_turn", usage)
+        log.add("turn_completed", {"reason": "end_turn"})
+    reduce_case(
+        root,
+        (
+            "projections-absent-without-policy",
+            "context_compaction",
+            "The policy pins priced models but no currency and no context. cost is null: "
+            "prices mean nothing without a currency, and a zero would read as free. "
+            "cache_breaks is null though reads fell from 8000 to 1000: the projection has no "
+            "pinned ttl to judge against.",
+        ),
+        log,
+        {"cost": cost(log), "cache_breaks": cache_breaks(log)},
     )

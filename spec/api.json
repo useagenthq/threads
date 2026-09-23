@@ -1462,12 +1462,14 @@
           "ts": "usage",
           "py": "usage",
           "async": true,
+          "doc": "Usage over this branch's resolved chain (a fork includes its parent's prefix).",
           "params": [],
-          "returns": {"$ref": "urn:threads:schema:host-api:v1#/$defs/UsageTotals"}
+          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/UsageTotals"}, "errors": ["log_corrupt", "unsupported_format", "unsupported_critical_event"]}
         },
         "cost": {
           "ts": "cost",
           "py": "cost",
+          "doc": "null when this thread pins no currency or no models. tree adds each descendant's, recursively through its main branch: nanos summed, complete and bounded ANDed; a descendant with no cost or another currency makes complete and bounded false and adds nothing. A descendant never started adds nothing; one whose log can't be read fails the call with its read error, naming the child.",
           "async": true,
           "params": [
             {
@@ -1479,14 +1481,15 @@
               "doc": "Add descendants from their logs."
             }
           ],
-          "returns": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Cost"}
+          "returns": {"result": {"union": [{"$ref": "urn:threads:schema:host-api:v1#/$defs/Cost"}, {"prim": "null"}]}, "errors": ["log_corrupt", "unsupported_format", "unsupported_critical_event"]}
         },
         "cacheBreaks": {
           "ts": "cacheBreaks",
           "py": "cache_breaks",
+          "doc": "The cache_breaks projection under the effective policy.context: the default cache_ttl_ms when none is pinned, so always a list.",
           "async": true,
           "params": [],
-          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/CacheBreak"}}
+          "returns": {"result": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/CacheBreak"}}, "errors": ["log_corrupt", "unsupported_format", "unsupported_critical_event"]}
         },
         "todos": {
           "ts": "todos",
