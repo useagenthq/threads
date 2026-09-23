@@ -28,8 +28,14 @@ KNOWLEDGE_SCOPE = "knowledge"
 def memory_scope(agent: str, principal: Principal) -> Scope:
     """Never mixed across tenants, agents or users: the tenant and the user are the verified
     principal's, never a tool argument."""
-    user = f"{principal.issuer}/{principal.subject}"
+    user = f"{_part(principal.issuer)}/{_part(principal.subject)}"
     return Scope(tenant_id=principal.tenant, agent=agent, scope=user)
+
+
+def _part(text: str) -> str:
+    """Escapes the separator, so ("a/b", "c") and ("a", "b/c") never share a scope. `%` first;
+    a part with neither character is unchanged, so existing scopes keep their memories."""
+    return text.replace("%", "%25").replace("/", "%2F")
 
 
 def writes(memory: MemoryProvider | None) -> Writes | None:

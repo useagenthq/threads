@@ -22,6 +22,7 @@ from threads.log import (
 from threads.memory.authority import MemoryWrite
 from threads.memory.local_memory import local_memory
 from threads.memory.protocol import MemoryProvider
+from threads.memory.setup import memory_scope
 from threads.memory.types import MemoryHit, MemoryRecord, Outcome, RecordRef, Scope
 from threads.result import Ok
 
@@ -180,6 +181,14 @@ def test_an_unguarded_provider_write_that_fails_parks_never_retries() -> None:
         assert len([e for e in got if isinstance(e, EffectBeginEvent)]) == 1
 
     asyncio.run(main())
+
+
+def test_principals_that_differ_only_around_a_slash_get_different_scopes() -> None:
+    a = memory_scope("support", Principal(issuer="idp/a", tenant="acme", subject="b"))
+    b = memory_scope("support", Principal(issuer="idp", tenant="acme", subject="a/b"))
+    assert a.scope != b.scope
+    # A principal without "/" or "%" keeps the scope it always had.
+    assert memory_scope("support", ALICE).scope == "api/alice"
 
 
 class _ReadOnly(_Down):
