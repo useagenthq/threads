@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   closeSync,
   fsyncSync,
@@ -20,6 +21,15 @@ import { type LogError, logError } from "../verify/error";
 export type ArtifactStore = {
   readonly put: (bytes: Uint8Array) => string;
   readonly get: (sha256: string) => Result<Uint8Array, LogError>;
+  /** Streams one artifact in chunks, so large output is never held whole. */
+  readonly sink: () => ArtifactSink;
+};
+
+/** One artifact being written. `finish` returns once it is durable; `abort` drops it. */
+export type ArtifactSink = {
+  readonly write: (chunk: Uint8Array) => void;
+  readonly finish: () => { readonly sha256: string; readonly bytes: number };
+  readonly abort: () => void;
 };
 
 function verified(
@@ -36,13 +46,36 @@ function verified(
 /** Artifacts in memory, for tests and in-memory stores. */
 export function memoryArtifacts(): ArtifactStore {
   const saved = new Map<string, Uint8Array>();
+  const put = (bytes: Uint8Array): string => {
+    const sha256 = sha256Hex(bytes);
+    saved.set(sha256, bytes.slice());
+    return sha256;
+  };
   return {
-    put: (bytes) => {
-      const sha256 = sha256Hex(bytes);
-      saved.set(sha256, bytes.slice());
-      return sha256;
-    },
+    put,
     get: (sha256) => verified(sha256, saved.get(sha256)),
+    sink: () => {
+      const chunks: Uint8Array[] = [];
+      return {
+        write: (chunk) => {
+          chunks.push(chunk.slice());
+        },
+        finish: () => {
+          const bytes = new Uint8Array(
+            chunks.reduce((n, c) => n + c.length, 0),
+          );
+          let at = 0;
+          for (const c of chunks) {
+            bytes.set(c, at);
+            at += c.length;
+          }
+          return { sha256: put(bytes), bytes: bytes.length };
+        },
+        abort: () => {
+          chunks.length = 0;
+        },
+      };
+    },
   };
 }
 
@@ -50,38 +83,65 @@ export function memoryArtifacts(): ArtifactStore {
 export function fileArtifacts(root: string): ArtifactStore {
   const path = (sha256: string): string =>
     join(root, "sha256", sha256.slice(0, 2), sha256);
+  const sink = (): ArtifactSink => fileSink(root, path);
   return {
     put: (bytes) => {
-      const sha256 = sha256Hex(bytes);
+      const s = sink();
+      s.write(bytes);
+      return s.finish().sha256;
+    },
+    get: (sha256) => verified(sha256, readArtifact(path(sha256))),
+    sink,
+  };
+}
+
+/**
+ * Writes a temp file chunk by chunk while hashing, then fsyncs it and links it to its
+ * content address (EEXIST: keep the existing copy if it verifies), then fsyncs the directory.
+ */
+function fileSink(
+  root: string,
+  path: (sha256: string) => string,
+): ArtifactSink {
+  const tmp = join(root, "sha256");
+  mkdirSync(tmp, { recursive: true, mode: 0o700 });
+  const temp = join(tmp, `.${crypto.randomUUID()}.tmp`);
+  const fd = openSync(temp, "wx", 0o600);
+  const hash = createHash("sha256");
+  let size = 0;
+  let open = true;
+  const close = (): void => {
+    if (open) closeSync(fd);
+    open = false;
+  };
+  return {
+    write: (chunk) => {
+      writeSync(fd, chunk);
+      hash.update(chunk);
+      size += chunk.length;
+    },
+    finish: () => {
+      fsyncSync(fd);
+      close();
+      const sha256 = hash.digest("hex");
       const dir = join(root, "sha256", sha256.slice(0, 2));
       mkdirSync(dir, { recursive: true, mode: 0o700 });
-      const temp = join(dir, `.${sha256}.${process.pid}.${Date.now()}.tmp`);
-      writeDurably(temp, bytes);
       try {
         linkSync(temp, path(sha256));
       } catch (error) {
-        // Another writer stored it first: keep theirs if it is intact.
         if (!isExists(error)) throw error;
-        const existing = readArtifact(path(sha256));
-        if (!verified(sha256, existing).ok) throw error;
+        if (!verified(sha256, readArtifact(path(sha256))).ok) throw error;
       } finally {
         unlinkSync(temp);
       }
       fsyncDir(dir);
-      return sha256;
+      return { sha256, bytes: size };
     },
-    get: (sha256) => verified(sha256, readArtifact(path(sha256))),
+    abort: () => {
+      close();
+      unlinkSync(temp);
+    },
   };
-}
-
-function writeDurably(path: string, bytes: Uint8Array): void {
-  const fd = openSync(path, "wx", 0o600);
-  try {
-    writeSync(fd, bytes);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
 }
 
 function fsyncDir(dir: string): void {

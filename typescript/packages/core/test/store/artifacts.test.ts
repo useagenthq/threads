@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileArtifacts } from "../../src/store";
+import { fileArtifacts, memoryArtifacts } from "../../src/store";
 
 const bytes = new TextEncoder().encode("dropped bytes");
 
@@ -27,5 +27,30 @@ describe("file artifacts", () => {
     writeFileSync(join(root, "sha256", sha.slice(0, 2), sha), "tampered");
     const corrupt = store.get(sha);
     expect(corrupt.ok ? "ok" : corrupt.error.code).toBe("artifact_corrupt");
+  });
+});
+
+describe("artifact sinks", () => {
+  const stores = {
+    file: () => fileArtifacts(mkdtempSync(join(tmpdir(), "threads-sink-"))),
+    memory: memoryArtifacts,
+  };
+  for (const [name, make] of Object.entries(stores))
+    test(`${name}: chunks land as one content-addressed artifact`, () => {
+      const store = make();
+      const sink = store.sink();
+      sink.write(bytes.subarray(0, 4));
+      sink.write(bytes.subarray(4));
+      const done = sink.finish();
+      expect(done).toEqual({ sha256: store.put(bytes), bytes: bytes.length });
+      expect(store.get(done.sha256)).toEqual({ ok: true, value: bytes });
+    });
+
+  test("an aborted file sink leaves no temp file", () => {
+    const root = mkdtempSync(join(tmpdir(), "threads-sink-"));
+    const sink = fileArtifacts(root).sink();
+    sink.write(bytes);
+    sink.abort();
+    expect(readdirSync(join(root, "sha256"))).toEqual([]);
   });
 });
