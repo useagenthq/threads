@@ -157,19 +157,34 @@ When retries run out, the run ends `failed` with code `model_unavailable`. In Ty
 
 ## Fallback models
 
-<Callout>
-TypeScript only. Python's `agent()` has no `fallback` option yet.
-</Callout>
+After `fallback_after` overloaded errors in a row, the agent switches to the next model in `fallback` and records the switch in the log. From then on requests go to that model, and its own context window sets the compaction thresholds.
 
-After `fallback_after` overloaded errors in a row, the agent switches to the next model in `fallback` and records the switch in the log.
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
 
-```ts title="TypeScript"
+```ts
 const assistant = agent({
   model: claude,
   fallback: [gpt],
   retry: { max_retries: 4, fallback_after: 2 },
 });
 ```
+
+</Tab>
+<Tab value="Python">
+
+```python
+assistant = agent(model=claude, fallback=[gpt])
+```
+
+</Tab>
+</Tabs>
+
+A fallback lasts for the rest of the turn. With the default `fallback_scope: "turn"`, the thread's next input goes back to the settings it had before the fallback, recorded as a `settings_changed` with reason `revert` before that input's first request. With `fallback_scope: "thread"` the fallback stays.
+
+The `before_model_switch` hook gates every switch, fallbacks and reverts alike. A deny keeps the current model: a denied fallback retries on the same model, and a denied revert keeps the fallback for that input's turn. The hook is asked once per input for a revert, even across a crash.
+
+Every fallback model counts toward a budget: a model with no per-attempt bound for one of the budget's limits is refused at setup (`budget_unenforceable`).
 
 ## Switch models mid-thread
 

@@ -57,8 +57,11 @@ def agent(
     memory_write: Literal["deny", "ask", "allow_principal", "allow"] = "ask",
     knowledge: KnowledgeProvider | None = None,
     skills: Sequence[Skill] = (),
+    output: type[Output] | None = None,
+    output_retries: int = 2,
     subagents: Sequence[Agent[object, object]] = (),
     handoffs: Sequence[Agent[object, object]] = (),
+    fallback: Sequence[Model] = (),
     permissions: Policy.permissions | None = None,
     approvers: Sequence[Principal] | None = None,
     budget: Budget | None = None,
@@ -119,15 +122,15 @@ def agent(
 </Field>
 
 <Field name="output" type={"z.ZodType<Output>"}>
-  TypeScript only. Structured final output. Absent: completed.output is the final text.
+  Structured final output. Absent: completed.output is the final text.
 </Field>
 
-<Field name="outputRetries" type={"number"} default={"2"}>
-  TypeScript only.
+<Field name="outputRetries / output_retries" type={"number"} default={"2"}>
+  Failed candidates per turn (a rejected final_output or a plain-text end) before turn_completed&#123;output_invalid&#125;. A non-negative integer; anything else is ConfigError invalid_config.
 </Field>
 
 <Field name="subagents" type={"readonly (Agent<unknown, unknown>)[]"}>
-  Agents spawn_agent may start, by name. Team tools come with them.
+  Agents spawn_agent may start, by name. Team tools come with them. A subagent with output reports the canonical JSON of its accepted output.
 </Field>
 
 <Field name="handoffs" type={"readonly (Agent<unknown, unknown>)[]"}>
@@ -135,7 +138,7 @@ def agent(
 </Field>
 
 <Field name="fallback" type={"readonly Model[]"}>
-  TypeScript only. Fallback models in order.
+  Fallback models in order. With the default fallback_scope turn, the next user_input reverts to the settings before the fallback (settings_changed&#123;reason: revert&#125;), gated by before_model_switch.
 </Field>
 
 <Field name="permissions" type={"Partial<Policy.permissions>"} />

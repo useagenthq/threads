@@ -4,13 +4,12 @@ description: Get a typed, validated value back from a run instead of free text.
 icon: Braces
 ---
 
-<Callout>
-TypeScript only today. Python's `agent()` has no `output` option yet; a Python run's `output` is always the final text.
-</Callout>
+Pass a schema as `output` (a Zod schema in TypeScript, a Pydantic model class in Python) and a completed run's `output` is a value of that type. The model returns its answer through a `final_output` tool whose input is your schema. threads validates each answer strictly (`"1"` is not a number); if one fails, the model sees the validation error and tries again.
 
-Pass a Zod schema as `output` and a completed run's `output` is typed as that schema. The model returns its answer through a `final_output` tool whose input is your schema. threads validates each answer; if one fails, the model sees the validation error and tries again.
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
 
-```ts title="TypeScript"
+```ts
 const Triage = z.object({
   severity: z.enum(["low", "medium", "high"]),
   summary: z.string(),
@@ -44,15 +43,50 @@ if (result.status === "completed") {
 }
 ```
 
-The scripted model's first answer uses `"urgent"`, which isn't in the enum, so it is rejected and the second answer is accepted. With a real model you only write the schema.
+</Tab>
+<Tab value="Python">
+
+```python
+class Triage(BaseModel):
+    severity: Literal["low", "medium", "high"]
+    summary: str
+    needs_human: bool
+
+
+def answer(call_id: str, severity: str) -> JsonValue:
+    args: JsonValue = {"severity": severity, "summary": "Checkout is down", "needs_human": True}
+    use: JsonValue = {"type": "tool_use", "call_id": call_id, "name": "final_output", "input": args}
+    return {"content": [use], "stop_reason": "tool_use", "usage": usage}
+
+
+triage = agent(
+    instructions="Triage the incoming support ticket.",
+    model=scripted_model({"responses": [answer("c1", "urgent"), answer("c2", "high")]}),
+    output=Triage,
+    output_retries=2,
+)
+
+result = await triage.run("Nobody can pay since 9am!", store=sqlite(":memory:"))
+if isinstance(result, Completed):
+    print(result.output.severity, result.output.needs_human)  # result.output is a Triage
+```
+
+</Tab>
+</Tabs>
+
+The scripted model's first answer uses `"urgent"`, which isn't allowed, so it is rejected and the second answer is accepted. With a real model you only write the schema.
 
 ## Options
 
-<Field name="output" type="z.ZodType">
-  The schema of the final answer. The agent's type becomes `Agent<Deps, z.infer<typeof schema>>`.
+<Field name="output" type="z.ZodType / type[BaseModel]">
+  The schema of the final answer. The agent's type becomes `Agent<Deps, z.infer<typeof schema>>` in TypeScript and `Agent[D, Triage]` in Python. In Python anything but a Pydantic model class is a `ConfigError`.
 </Field>
-<Field name="outputRetries" type="number" default="2">
-  When this many answers have failed (rejected by the schema, or plain text with no `final_output` call), the run ends `failed` with code `output_invalid`.
+<Field name="outputRetries / output_retries" type="number / int" default="2">
+  When this many answers have failed in a turn (rejected by the schema, or plain text with no `final_output` call, which is answered with a request to call it), the run ends `failed` with code `output_invalid`. A non-negative integer; anything else is a `ConfigError` (`invalid_config`).
 </Field>
 
 Each accepted or rejected answer is recorded in the log, so you can see in the [timeline](/docs/evals/timeline) exactly what the model tried.
+
+## Subagents
+
+A subagent with an `output` hands its parent the accepted value as canonical JSON text (sorted keys, no spaces). That text is the `spawn_agent` call's result and the child's recorded output, and it is the same bytes in both languages.

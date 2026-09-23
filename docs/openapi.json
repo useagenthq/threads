@@ -3964,7 +3964,7 @@
               },
               "input_event_id": {
                 "$ref": "#/components/schemas/events_EventId",
-                "description": "before_input: the user_input or steer decided on. A deny or failed decision means that input renders nothing."
+                "description": "before_input: the user_input or steer decided on. A deny or failed decision means that input renders nothing. before_model_switch for a revert: the input that caused it."
               },
               "reason": {
                 "type": "string"

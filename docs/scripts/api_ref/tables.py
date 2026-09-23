@@ -18,7 +18,6 @@ type Member = tuple[str, str | None]
 # (container, member): in spec/api.json, not in either implementation yet.
 NOT_BUILT: frozenset[Member] = frozenset(
     {
-        ("agent", "output_mode"),
         ("agent", "browser"),
         ("agent", "output_styles"),
         ("agent", "stream_release"),
@@ -59,9 +58,6 @@ DEV_SERVER = "http://localhost:8787"
 
 # (container, member): built in one language only.
 ONLY_IN: dict[Member, str] = {
-    ("agent", "output"): "ts",
-    ("agent", "output_retries"): "ts",
-    ("agent", "fallback"): "ts",
     ("agent", "on_unknown_usage"): "py",
     ("tool", "output"): "ts",
     ("Agent", "check"): "ts",
