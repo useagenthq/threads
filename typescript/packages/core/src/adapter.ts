@@ -2,10 +2,21 @@
 
 export { ConfigError } from "./agent/errors";
 export { jsonSchema } from "./agent/tool";
+export { type Secret, secret } from "./agent/secret";
 export { assertNever } from "./assert-never";
 export { sha256Hex } from "./hash";
 /** What a tool provider package (MCP) builds on: the dispatchable tool and its run context. */
 export type { EffectClass, ToolSpec } from "./log";
+export {
+  type ChannelAdapter,
+  type ChannelCapabilities,
+  DeliveryOutcome,
+  Inbound,
+  Input,
+  type RawRequest,
+  type RawResponse,
+  VerifiedDelivery,
+} from "./channel/protocol";
 export {
   type ArtifactRef,
   type InputPart,

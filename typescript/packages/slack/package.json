@@ -1,0 +1,13 @@
+{
+  "name": "@threads/slack",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@threads/core": "workspace:*",
+    "zod": "^4.6.5",
+    "@slack/web-api": "8.1.1"
+  }
+}

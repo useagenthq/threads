@@ -1,0 +1,13 @@
+{
+  "name": "@threads/github",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@threads/core": "workspace:*",
+    "zod": "^4.6.5",
+    "@octokit/rest": "22.0.1"
+  }
+}

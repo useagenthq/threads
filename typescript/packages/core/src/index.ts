@@ -1,6 +1,16 @@
 export * from "./agent";
 export * from "./memory";
 export {
+  type ChannelAdapter,
+  type ChannelCapabilities,
+  DeliveryOutcome,
+  Inbound,
+  Input,
+  type RawRequest,
+  type RawResponse,
+  VerifiedDelivery,
+} from "./channel/protocol";
+export {
   blockRealModels,
   type LookupCapability,
   type LookupResult,
