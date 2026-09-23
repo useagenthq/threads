@@ -203,6 +203,10 @@ def mcp(**options: Unpack[McpOptions]) -> McpServer:
     if options.get("runs", "host") == "sandbox":
         # ponytail: in-sandbox stdio servers aren't built; host-spawned is the default.
         raise ConfigError("capability_missing", f"MCP server {name}: runs='sandbox'")
+    if options.get("effect") == "idempotent":
+        # ponytail: no dedup window option and no effect key on the call yet, so the claim
+        # couldn't be honored; add both (api.json first) when a server dedups on a key.
+        raise ConfigError("invalid_config", f"MCP server {name}: effect='idempotent'")
     filters = options.get("tools", {})
     allow = filters.get("allow")
     return McpServer(

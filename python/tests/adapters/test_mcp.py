@@ -107,6 +107,14 @@ def test_a_call_that_fails_after_dispatch_parks_and_is_never_retried() -> None:
     asyncio.run(main())
 
 
+def test_an_idempotent_server_is_a_config_error_until_a_dedup_window_is_declared() -> None:
+    # spec/api.json's mcp() has no dedup_window_ms and the call carries no effect key, so an
+    # idempotent claim could never be honored.
+    with pytest.raises(ConfigError, match="idempotent") as raised:
+        mcp(name="pay", url="http://pay.test/mcp", effect="idempotent")
+    assert raised.value.code == "invalid_config"
+
+
 def _refused(request: httpx.Request) -> httpx.Response:
     raise httpx.ConnectError("connection refused", request=request)
 
