@@ -7,13 +7,19 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from kit import USER
+from corpus import Clock
+from kit import USER, Tools, allow_all, text
+from loop.test_loop_cases import check_expect, run_case
 from pydantic import JsonValue
 from sandbox_kit import OPEN
+from schema_check import CASE_ID, valid
 
 from threads.agents.store import HOLDER, Store, now_ms, open_store, sqlite
 from threads.log import BranchId, ForkEvent, SnapshotEvent, ThreadId
 from threads.loop.drafts import draft
+from threads.loop.drive import drive
+from threads.loop.runtime import Runtime
+from threads.loop.scripted import scripted_model
 from threads.result import Err, Ok
 from threads.sandbox import FakeSandbox, SandboxSession, fake_sandbox
 from threads.store import ForkRequest, SqliteStore, Writer, verify_export
@@ -161,20 +167,43 @@ def test_a_repair_child_is_inspection_only_but_forks_at_a_snapshot() -> None:
     run(body)
 
 
-def test_save_case_writes_the_export_through_the_snapshot(tmp_path: Path) -> None:
+async def turn(w: World, reply: str) -> None:
+    """One recorded turn after the snapshot: the input and the model's reply."""
+    clock = Clock(now_ms())
+    model = scripted_model({"responses": [text(reply)]})
+    rt = Runtime(w.sq, w.writer, model, Tools({}, clock), allow_all, now_ms, clock.wait_until)
+    user = replace(draft("user_input", {"source": "api", "text": "again"}), actor=USER)
+    assert isinstance(await rt.append(user), Ok)
+    await drive(rt)
+
+
+def test_save_case_writes_a_stub_case_the_runner_replays(tmp_path: Path) -> None:
     async def body(w: World) -> None:
-        snap = await snapshot(w)
+        await snapshot(w)
+        await turn(w, "Hi.")
         thread = await opened(w, sandbox=w.sandbox)
-        expect = CaseExpectation(must=({"type": "snapshot"},))
+        expect = CaseExpectation(must=({"type": "turn_completed"},))
         saved = await thread.save_case(
-            "keeps-a", expect=expect, external_effects="stub", dir=str(tmp_path)
+            "says-hi", expect=expect, external_effects="stub", dir=str(tmp_path)
         )
         assert isinstance(saved, Ok), saved
         folder = Path(saved.value.path)
-        assert isinstance(verify_export((folder / "log.jsonl").read_bytes(), now_ms()), Ok)
-        case = json.loads((folder / "case.json").read_bytes())
-        assert case["snapshot"]["event_id"] == snap.event_id
-        assert case["expect"]["must"] == [{"type": "snapshot"}]
+        meta = json.loads((folder / "case.json").read_bytes())
+        assert valid(meta, f"{CASE_ID}#/$defs/Case")
+        assert (meta["kind"], meta["input"]) == ("stub", {"text": "again"})
+        for name, schema in [("model.json", "ModelScript"), ("stubs.json", "StubScript")]:
+            assert valid(json.loads((folder / name).read_bytes()), f"{CASE_ID}#/$defs/{schema}")
+        for impl in ("threads-py", "threads-ts"):
+            log = verify_export((folder / f"log.{impl}.jsonl").read_bytes(), now_ms())
+            assert isinstance(log, Ok), log
+            assert log.value.segments[-1].header.writer.impl == impl
+            expected = json.loads((folder / f"expected.{impl}.json").read_bytes())
+            assert valid(expected, f"{CASE_ID}#/$defs/Expected")
+            assert expected["state"] == log.value.state.to_json()
+        # The Python stub runner replays it: input, the recorded reply, and the assertion.
+        outcome = await run_case(folder)
+        assert (outcome.error, outcome.model.remaining) == (None, 0)
+        check_expect(meta, outcome.appended)
         refused = await thread.save_case(
             "no-assertion",
             expect=CaseExpectation(must=()),

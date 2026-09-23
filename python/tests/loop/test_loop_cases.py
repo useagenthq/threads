@@ -10,7 +10,7 @@ exports and imports cleanly.
 import asyncio
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -32,6 +32,7 @@ from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import ToolCallData, ToolSpec
+from threads.loop.drafts import draft
 from threads.loop.drive import drive
 from threads.loop.model import Model
 from threads.loop.recovery import recover
@@ -149,7 +150,27 @@ async def _resume(rt: Runtime, meta: dict[str, JsonValue]) -> Halt | None:
     halt = await recover(rt)
     if isinstance(halt, Failed) or "model_script" not in meta:
         return halt
+    text = obj(meta.get("input", {})).get("text")
+    if isinstance(text, str):
+        # A saved case's next input after its snapshot (spec/conformance/README.md, stub).
+        user = replace(draft("user_input", {"source": "api", "text": text}), actor=RUNNER)
+        appended = await rt.append(user)
+        assert isinstance(appended, Ok), appended
     return await drive(rt)
+
+
+RUNNER: dict[str, JsonValue] = {
+    "kind": "user",
+    "principal": {"issuer": "api", "tenant": "local", "subject": "conformance"},
+}
+
+
+def check_expect(meta: dict[str, JsonValue], appended: list[StoredEvent]) -> None:
+    """A case's `expect.must`: each matcher matches at least one appended event."""
+    must = obj(meta.get("expect", {"must": []})).get("must", [])
+    assert isinstance(must, list)
+    for matcher in must:
+        assert any(matches(obj(matcher), e) for e in appended), matcher
 
 
 def _counters(expected: dict[str, JsonValue], got: dict[str, dict[str, int]]) -> None:
@@ -176,6 +197,7 @@ def test_loop_case(name: str) -> None:
     for matcher, event in zip(matchers, outcome.appended, strict=True):
         assert matches(obj(matcher), event), (matcher, to_json(event))
     assert outcome.model.remaining == 0, "leftover scripted model responses"
+    check_expect(load(case, "case.json"), outcome.appended)
     if isinstance(outcome.tools, ScriptedTools):
         _counters(obj(expected.get("sandbox", {})), outcome.tools.counters())
     else:

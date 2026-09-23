@@ -40,24 +40,19 @@ def _obj(node: JsonValue) -> dict[str, JsonValue]:
     return node
 
 
+_TYPES: Final[dict[str, Callable[[JsonValue], bool]]] = {
+    "object": lambda v: isinstance(v, dict),
+    "array": lambda v: isinstance(v, list),
+    "string": lambda v: isinstance(v, str),
+    "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+    "number": lambda v: isinstance(v, int | float) and not isinstance(v, bool),
+    "boolean": lambda v: isinstance(v, bool),
+    "null": lambda v: v is None,
+}
+
+
 def _type(name: JsonValue, v: JsonValue) -> bool:
-    match name:
-        case "object":
-            return isinstance(v, dict)
-        case "array":
-            return isinstance(v, list)
-        case "string":
-            return isinstance(v, str)
-        case "integer":
-            return isinstance(v, int) and not isinstance(v, bool)
-        case "number":
-            return isinstance(v, int | float) and not isinstance(v, bool)
-        case "boolean":
-            return isinstance(v, bool)
-        case "null":
-            return v is None
-        case _:
-            raise ValueError(f"type {name!r}")
+    return _TYPES[str(name)](v)
 
 
 def _same(a: JsonValue, b: JsonValue) -> bool:
@@ -81,18 +76,26 @@ class _Checker:
             "minItems": lambda a: not isinstance(v, list) or len(v) >= _int(a),
             "minProperties": lambda a: not isinstance(v, dict) or len(v) >= _int(a),
             "required": lambda a: not isinstance(v, dict) or all(str(k) in v for k in _list(a)),
-            "properties": lambda a: not isinstance(v, dict)
-            or all(self.check(sub, v[k], base) for k, sub in _obj(a).items() if k in v),
-            "additionalProperties": lambda a: not isinstance(v, dict)
-            or all(
-                self.check(a, x, base) for k, x in v.items() if k not in _obj(s.get("properties", {}))
+            "properties": lambda a: (
+                not isinstance(v, dict)
+                or all(self.check(sub, v[k], base) for k, sub in _obj(a).items() if k in v)
+            ),
+            "additionalProperties": lambda a: (
+                not isinstance(v, dict)
+                or all(
+                    self.check(a, x, base)
+                    for k, x in v.items()
+                    if k not in _obj(s.get("properties", {}))
+                )
             ),
             "items": lambda a: not isinstance(v, list) or all(self.check(a, x, base) for x in v),
             "allOf": lambda a: all(self.check(x, v, base) for x in _list(a)),
             "anyOf": lambda a: any(self.check(x, v, base) for x in _list(a)),
             "oneOf": lambda a: sum(self.check(x, v, base) for x in _list(a)) == 1,
             "not": lambda a: not self.check(a, v, base),
-            "if": lambda a: self.check(s.get("then", True) if self.check(a, v, base) else s.get("else", True), v, base),
+            "if": lambda a: self.check(
+                s.get("then", True) if self.check(a, v, base) else s.get("else", True), v, base
+            ),
             "then": lambda _: True,
             "else": lambda _: True,
         }
