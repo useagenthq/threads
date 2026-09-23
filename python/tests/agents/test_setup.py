@@ -5,7 +5,9 @@ check() and a run can use different event loops; resolved secrets are redacted f
 longest first."""
 
 import asyncio
+import gc
 import socket
+import weakref
 
 import pytest
 from aiohttp.test_utils import TestServer
@@ -221,3 +223,12 @@ def test_a_resolved_secret_is_recorded_redacted_in_a_tool_result() -> None:
         return done.data.preview
 
     assert asyncio.run(main()) == "token=[secret THREADS_TEST_TOKEN]"
+
+
+def test_a_set_up_adapter_is_not_kept_alive_by_the_setup_memory() -> None:
+    model = Counted([])
+    alive = weakref.ref(model)
+    assert asyncio.run(agent(model=model).check()) == Ok(None)
+    del model
+    gc.collect()
+    assert alive() is None

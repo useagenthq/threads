@@ -8,6 +8,8 @@ client: those belong to a run, on the run's own event loop. MCP is not part of i
 check() and each run opens its own sessions.
 """
 
+import contextlib
+import weakref
 from collections.abc import Awaitable, Callable
 from functools import partial
 from typing import Protocol, runtime_checkable
@@ -26,18 +28,20 @@ class SetsUp(Protocol):
     async def setup(self) -> None: ...
 
 
-_READY: dict[int, object] = {}
-"""Objects whose setup succeeded, by identity. Each is held so its id can't be reused.
-
-ponytail: held for the process's life; adapters are few and long-lived. Use weak references if
-agents are ever built per request."""
+_READY: weakref.WeakValueDictionary[int, object] = weakref.WeakValueDictionary()
+"""Objects whose setup succeeded, by identity, held weakly: an entry goes when its object does,
+so a long-running host that builds agents per request keeps nothing alive, and a reused id
+never matches a dead object."""
 
 
 async def _once(target: object, setup: Callable[[], Awaitable[None]]) -> None:
-    if id(target) in _READY:
+    if _READY.get(id(target)) is target:
         return
     await setup()
-    _READY[id(target)] = target
+    # An object without weak references (a custom adapter with __slots__) is simply set up
+    # again next time; setup is idempotent by contract.
+    with contextlib.suppress(TypeError):
+        _READY[id(target)] = target
 
 
 async def _extension(e: Extension) -> None:
