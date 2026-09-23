@@ -17,7 +17,6 @@ from threads.loop.model import Found, NotFound
 from threads.loop.results import As, result_draft, text_ref
 from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import Invocation, NotSent, Output, Uncertain
-from threads.redaction import redact_secrets
 from threads.result import Err
 
 if TYPE_CHECKING:
@@ -63,8 +62,7 @@ async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
 
 
 async def _commit(rt: Runtime, inv: Invocation, output: Output) -> Halt | None:
-    # The committed artifact is stored too, so it is redacted like the result (C5).
-    ref = await text_ref(rt, redact_secrets(output.text))
+    ref = await text_ref(rt, output.text)
     commit = draft("effect_commit", {"call_id": inv.call_id, "result_ref": ref})
     how = As("executed", output.is_error)
     result = await result_draft(
@@ -162,7 +160,7 @@ async def _reconcile(
         return stale
     match await rt.tools.lookup(inv):
         case Found(value=text):
-            ref = await text_ref(rt, redact_secrets(text))
+            ref = await text_ref(rt, text)
             data: dict[str, JsonValue] = {
                 "call_id": inv.call_id,
                 "outcome": "confirmed_success",

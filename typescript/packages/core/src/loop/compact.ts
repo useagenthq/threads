@@ -63,6 +63,7 @@ export async function compact(
       );
     case "broken":
     case "unsupported":
+    case "leaked":
     case "budget":
       return failed(s, "model_error");
     default:

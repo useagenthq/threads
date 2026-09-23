@@ -91,7 +91,7 @@ def event_line(draft: Draft, at: Position) -> Ok[tuple[StoredEvent, bytes]] | Er
     """The draft as its stored line, parsed back through the reader's own boundary so the
     writer can never store a line a reader would refuse."""
     value: JsonValue = {
-        "actor": dict(draft.actor),
+        "actor": redact_json(dict(draft.actor)),
         "branch_id": at.branch_id,
         "critical": draft.critical,
         # Nothing is recorded with a resolved secret in it (C5): every event passes here.

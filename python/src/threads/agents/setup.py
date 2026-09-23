@@ -55,7 +55,7 @@ async def _attempt(target: object, setup: Callable[[], Awaitable[None]]) -> None
     outcome = asyncio.get_running_loop().create_future()
     _RUNNING[key] = outcome
     try:
-        await setup()
+        await redacted(setup)
         _READY[key] = target
     except Exception as error:
         outcome.set_exception(error)
@@ -65,6 +65,15 @@ async def _attempt(target: object, setup: Callable[[], Awaitable[None]]) -> None
         del _RUNNING[key]
         if not outcome.done():
             outcome.set_result(None)  # done or cancelled: waiters look at _READY again
+
+
+async def redacted(setup: Callable[[], Awaitable[object]]) -> None:
+    """Runs `setup`; its ConfigError is what check() returns and a run raises, so a resolved
+    secret in its message is redacted (C5)."""
+    try:
+        await setup()
+    except ConfigError as error:
+        raise ConfigError(error.code, redact_secrets(error.message)) from None
 
 
 def _weakly_held(target: object) -> None:

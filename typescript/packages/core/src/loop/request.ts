@@ -80,6 +80,10 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
       return rejected(s, got.rejection.reason);
     case "unsupported":
       return s.append(draft.turnCompleted("error", got.refused.code));
+    case "leaked":
+      return s.append(
+        draft.turnCompleted("error", "secret_in_provider_output"),
+      );
     case "budget":
       return endTurn(s, "budget_exhausted");
     default:

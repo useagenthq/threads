@@ -6,7 +6,7 @@ import { assertModelAllowed, type Model, type ModelChunk } from "../model";
 import { type Unsupported, unsupported } from "../model/capabilities";
 import type { ProviderRejection } from "../model/protocol";
 import { parseRender } from "../model/render-lines";
-import { redactStream } from "../redact";
+import { redactStream, SecretInProviderOutput } from "../redact";
 import { compactionInstruction, refReader, render } from "../render";
 import { draft } from "./drafts";
 import { reserve, settleOpen } from "./ledger";
@@ -26,6 +26,11 @@ export type Attempted =
   | { readonly kind: "broken" }
   /** Refused before sending, by the loop's pre-check or the adapter (8). */
   | { readonly kind: "unsupported"; readonly refused: Unsupported }
+  /**
+   * The response held a registered secret in provider material that can't be redacted (C5):
+   * nothing of it is stored, and the turn ends with secret_in_provider_output.
+   */
+  | { readonly kind: "leaked" }
   /** A covering budget refused the reservation; budget_exceeded is recorded. */
   | { readonly kind: "budget" }
   | { readonly kind: "halt"; readonly halt: Halt };
@@ -38,7 +43,8 @@ type Collected =
       readonly usage: Usage;
     }
   | { readonly kind: "rejected"; readonly rejection: Rejection }
-  | { readonly kind: "broken" };
+  | { readonly kind: "broken" }
+  | { readonly kind: "leaked" };
 
 const halt = (code: Halt["code"], message: string): Attempted => ({
   kind: "halt",
@@ -129,7 +135,8 @@ async function collect(
           assertNever(chunk);
       }
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof SecretInProviderOutput) return { kind: "leaked" };
     // A transport failure after dispatch: the attempt may have been billed.
     return { kind: "broken" };
   }
@@ -168,6 +175,17 @@ function record(s: Session, requestId: string, c: Collected): Attempted {
           request_event_id: requestId,
           provider_outcome: "unknown",
           reason: "stream_broken",
+        }),
+      );
+      return stopped === undefined ? c : { kind: "halt", halt: stopped };
+    }
+    case "leaked": {
+      // The response arrived (it may be billed) but none of it is kept.
+      const stopped = s.append(
+        draft.abandoned({
+          request_event_id: requestId,
+          provider_outcome: "unknown",
+          reason: "provider_error",
         }),
       );
       return stopped === undefined ? c : { kind: "halt", halt: stopped };

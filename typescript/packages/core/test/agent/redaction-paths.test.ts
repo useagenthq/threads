@@ -67,11 +67,17 @@ function nothingHolds(dir: string, sent: readonly string[], key: string): void {
 const storeDir = (): string =>
   join(mkdtempSync(join(tmpdir(), "threads-redact4-")), "store");
 
-describe("streaming redaction never leaks across a chunk boundary", () => {
-  const short = credential("short", "apiKey", "abc-l9", "U")();
-  const long = credential("long", "apiKey", "abc-l9-123", "U")();
+/** `abc-l9` and `abc-l9-123`, registered for one test (each test starts with none). */
+function overlapping(): { readonly short: string; readonly long: string } {
+  return {
+    short: credential("short", "apiKey", "abc-l9", "U")(),
+    long: credential("long", "apiKey", "abc-l9-123", "U")(),
+  };
+}
 
+describe("streaming redaction never leaks across a chunk boundary", () => {
   test("a value that a longer one continues is held until the longer one is decided", () => {
+    const { long } = overlapping();
     const stream = redactStream();
     const shown =
       stream.feed("x abc-l9") + stream.feed("-123 y") + stream.end();
@@ -80,6 +86,7 @@ describe("streaming redaction never leaks across a chunk boundary", () => {
   });
 
   test("the final flush decides a held prefix", () => {
+    const { short } = overlapping();
     const stream = redactStream();
     expect(stream.feed(`x ${short}`) + stream.end()).toBe(
       "x [secret short.apiKey]",
@@ -87,6 +94,7 @@ describe("streaming redaction never leaks across a chunk boundary", () => {
   });
 
   test("a value split inside a multi-byte character is still replaced", () => {
+    const { long } = overlapping();
     const key = credential("fake", "apiKey", "ключ-l9-секрет", "U")();
     const artifacts = memoryArtifacts();
     const sink = redactingSink(artifacts.sink());

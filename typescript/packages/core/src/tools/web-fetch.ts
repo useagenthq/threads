@@ -1,5 +1,6 @@
 import { sha256Hex } from "../hash";
 import type { ToolContext, ToolRun } from "../loop/types";
+import { redactBytes } from "../redact";
 import { type Builtin, builtin, done } from "./builtin";
 import { WebFetchInput } from "./gateway-inputs";
 import { htmlTitle, htmlToMarkdown } from "./html";
@@ -81,7 +82,7 @@ async function follow(
 function record(
   url: URL,
   res: Response,
-  bytes: Uint8Array,
+  fetched: Uint8Array,
   ctx: ToolContext,
   put: (bytes: Uint8Array) => string,
 ): ToolRun {
@@ -93,6 +94,8 @@ function record(
   const media = /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(type)
     ? type
     : "application/octet-stream";
+  // The page is stored as the cited artifact: redacted first (C5). Only text is kept.
+  const bytes = redactBytes(fetched);
   const sha256 = sha256Hex(bytes);
   const head = `URL: ${url.href}\nStatus: ${res.status}\nSHA-256: ${sha256}\n`;
   if (type !== "" && !TEXTUAL.test(type))

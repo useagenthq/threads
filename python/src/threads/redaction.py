@@ -22,10 +22,20 @@ def register(value: str, label: str) -> None:
         _REGISTERED[value] = label
 
 
+def _marker(label: str) -> str:
+    """The marker for a value: its label, unless some registered value appears in it (`api` in
+    `[secret fake.api_key]`); then the first plainer marker that holds none. A marker never
+    brings a value back."""
+    for marker in (f"[secret {label}]", "[secret]", "[redacted]"):
+        if not any(v in marker for v in _REGISTERED):
+            return marker
+    return ""
+
+
 def _replacements(encode: Callable[[str], str]) -> dict[str, str]:
     """Value to replacement, longest value first, then by code point."""
     ordered = sorted(_REGISTERED.items(), key=lambda item: (-len(item[0]), item[0]))
-    return {encode(v): encode(f"[secret {label}]") for v, label in ordered}
+    return {encode(v): encode(_marker(label)) for v, label in ordered}
 
 
 def _held_from(pending: str, values: dict[str, str]) -> int:
@@ -68,16 +78,47 @@ def redact_secrets(text: str) -> str:
 
 
 def redact_json(value: JsonValue) -> JsonValue:
-    """`value` with every string in it redacted: structured data about to be recorded."""
+    """`value` with every string in it redacted, object keys included: structured data about
+    to be recorded. A redacted key that meets another is numbered, so no entry is lost."""
     match value:
         case str():
             return redact_secrets(value)
         case list():
             return [redact_json(v) for v in value]
         case dict():
-            return {k: redact_json(v) for k, v in value.items()}
+            return _redact_object(value)
         case _:
             return value
+
+
+def _redact_object(value: dict[str, JsonValue]) -> JsonValue:
+    out: dict[str, JsonValue] = {}
+    for key, item in value.items():
+        base = name = redact_secrets(key)
+        n = 2
+        while name in out:
+            name, n = f"{base} ({n})", n + 1
+        out[name] = redact_json(item)
+    return out
+
+
+def redact_bytes(data: bytes) -> bytes:
+    """`data` with every resolved value replaced (a textual artifact about to be stored)."""
+    stream = StreamRedactor()
+    return stream.feed(data) + stream.end()
+
+
+def holds_secret(data: bytes) -> bool:
+    """Whether `data` holds a resolved value."""
+    return redact_bytes(data) != data
+
+
+class SecretInProviderOutputError(Exception):
+    """Provider continuation material (signed or encrypted reasoning, a hosted tool's item) is
+    replayed byte-exact, so it is never edited: one that holds a resolved value is refused."""
+
+    def __init__(self) -> None:
+        super().__init__("a registered secret appeared in unmodifiable provider output")
 
 
 def _as_bytes(text: str) -> str:

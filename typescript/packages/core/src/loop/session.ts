@@ -2,6 +2,7 @@ import type { Fold } from "../fold/state";
 import type { ArtifactRef, BranchId, KnownEvent, ThreadId } from "../log";
 import type { ModelContext } from "../model";
 import { contextReader } from "../model/context";
+import { holdsSecret, redactSecrets, SecretInProviderOutput } from "../redact";
 import { knownEvents, type ReducedState, reduce } from "../reduce";
 import { err, ok } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
@@ -109,13 +110,18 @@ export class Session {
           : err({ code: "stale_epoch", message: halted.message });
       },
       read: contextReader(this.artifacts),
-      put: async (data, mediaType) => this.store(data, mediaType),
+      put: async (data, mediaType) => {
+        // Replayed byte-exact, so never edited: a secret in it ends the turn instead.
+        if (holdsSecret(data)) throw new SecretInProviderOutput();
+        return this.store(data, mediaType);
+      },
     };
   }
 
-  /** Stores bytes before any event names them, and returns their ref. */
+  /** Stores bytes before any event names them, and returns their ref. Text is redacted (C5). */
   store(bytes: Uint8Array | string, mediaType: string): ArtifactRef {
-    const data = typeof bytes === "string" ? encoder.encode(bytes) : bytes;
+    const data =
+      typeof bytes === "string" ? encoder.encode(redactSecrets(bytes)) : bytes;
     return {
       sha256: this.artifacts.put(data),
       bytes: data.length,

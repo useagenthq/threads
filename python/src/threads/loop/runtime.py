@@ -27,6 +27,7 @@ from threads.loop.history import CallState
 from threads.loop.model import Model
 from threads.loop.tools import ToolRunner
 from threads.permissions import Decision
+from threads.redaction import SecretInProviderOutputError, holds_secret
 from threads.reduce import Fold
 from threads.render.artifacts import read_verified
 from threads.result import Err, Ok
@@ -64,6 +65,7 @@ type RunErrorCode = Literal[
     "content_unsupported",
     "continuation_unsupported",
     "transport_fence_unsupported",
+    "secret_in_provider_output",
     "artifact_missing",
     "artifact_corrupt",
     "unmatched_external_op",
@@ -231,6 +233,9 @@ class WriterContext:
         return read_verified(lambda _sha: got, ref, None)
 
     async def put(self, data: bytes, media_type: str) -> ArtifactRef:
+        # Replayed byte-exact, so never edited: a secret in it ends the turn instead (C5).
+        if holds_secret(data):
+            raise SecretInProviderOutputError
         sha = await self.rt.store.put_artifact(data)
         return ArtifactRef(sha256=sha, bytes=len(data), media_type=media_type)
 

@@ -3,10 +3,12 @@ hit text is a text part annotated by a `citation{source_kind: web}` part, and th
 are an artifact the citation names, so replay reads exactly what the model saw."""
 
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 from typing import Final
 
 from threads.log import ArtifactRef, CitationPart, ResultPart, TextPart
 from threads.loop.tools import Dispatched, NotSent, Output, Uncertain
+from threads.redaction import holds_secret, redact_bytes
 from threads.web.fetch import Moved, Page
 from threads.web.http import WebError
 from threads.web.markdown import to_markdown
@@ -27,11 +29,18 @@ def _media(kind: str) -> str:
 
 
 async def page_output(page: Page, put: Put) -> Output:
+    textual = page.media_type.startswith(_TEXTUAL)
+    if not textual and holds_secret(page.body):
+        # Non-text bytes are never edited, so a page holding a secret is not stored (C5).
+        return Output(f"URL: {page.url}\nthe response holds a registered secret; not kept", True)
+    # The page is stored as the cited artifact: redacted first (C5).
+    body = redact_bytes(page.body) if textual else page.body
+    page = replace(page, body=body)
     ref = await put(page.body, _media(page.media_type))
     header = f"URL: {page.url}\nStatus: {page.status}\nSHA-256: {ref.sha256}\n"
     if page.truncated:
         header += "The response was cut at the size cap.\n"
-    if not page.media_type.startswith(_TEXTUAL):
+    if not textual:
         body = f"{page.media_type} content ({len(page.body)} bytes), not shown as text."
     else:
         text = _decode(page.body, page.charset)

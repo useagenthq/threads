@@ -55,6 +55,21 @@ async function once(target: object, setup: () => Promise<void>): Promise<void> {
   return promise;
 }
 
+/** A setup error as check() returns it and a run throws it: a resolved secret redacted. */
+function redacted(error: unknown): unknown {
+  return error instanceof ConfigError
+    ? new ConfigError(error.code, redactSecrets(error.message))
+    : error;
+}
+
+async function redactedSetup(setup: () => Promise<void>): Promise<void> {
+  try {
+    await setup();
+  } catch (error) {
+    throw redacted(error);
+  }
+}
+
 async function extensionSetup<Deps>(e: Extension<Deps>): Promise<void> {
   try {
     await e.setup?.();
@@ -77,7 +92,8 @@ export async function setUp<Deps>(
 ): Promise<void> {
   for (const e of extensions) await once(e, () => extensionSetup(e));
   for (const a of adapters)
-    if (a?.setup !== undefined) await once(a, async () => a.setup?.());
+    if (a?.setup !== undefined)
+      await once(a, () => redactedSetup(async () => a.setup?.()));
   for (const agent of agents) await setupOf(agent)?.();
 }
 
@@ -102,7 +118,7 @@ export async function connectAll(
   const failed = opened.find((o) => o.status === "rejected");
   if (failed !== undefined) {
     await close();
-    throw failed.reason;
+    throw redacted(failed.reason);
   }
   return {
     tools: sessions.flatMap((s) => s.tools),

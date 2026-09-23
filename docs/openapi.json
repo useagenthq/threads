@@ -793,6 +793,7 @@
           "content_unsupported",
           "continuation_unsupported",
           "transport_fence_unsupported",
+          "secret_in_provider_output",
           "artifact_missing",
           "artifact_corrupt",
           "unmatched_external_op",
@@ -1566,7 +1567,8 @@
           "permission_rule_invalid",
           "branch_not_runnable",
           "resource_unknown",
-          "writer_mismatch"
+          "writer_mismatch",
+          "secret_in_provider_output"
         ]
       },
       "events_Event": {
@@ -5923,11 +5925,12 @@
             },
             "properties": {
               "code": {
-                "description": "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried).",
+                "description": "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried); or the response held a registered secret in provider material that is replayed byte-exact and so can't be redacted (secret_in_provider_output: nothing of it is stored, never retried).",
                 "enum": [
                   "content_unsupported",
                   "continuation_unsupported",
-                  "transport_fence_unsupported"
+                  "transport_fence_unsupported",
+                  "secret_in_provider_output"
                 ]
               },
               "reason": {

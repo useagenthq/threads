@@ -28,6 +28,25 @@ export function register(value: string, label: string): void {
     registered.set(value, label);
 }
 
+/** Forgets every registered value: each test starts with none (test/setup.ts). */
+export function forgetSecrets(): void {
+  registered.clear();
+}
+
+/**
+ * The marker for a value: its label, unless some registered value appears in it (`api` in
+ * `[secret fake.apiKey]`); then the first plainer marker that holds none. A marker never
+ * brings a value back.
+ */
+function marker(label: string): string {
+  const candidates = [`[secret ${label}]`, "[secret]", "[redacted]"];
+  return (
+    candidates.find(
+      (m) => ![...registered.keys()].some((v) => m.includes(v)),
+    ) ?? ""
+  );
+}
+
 /** Value → replacement, longest value first, then by code point. */
 function replacements(
   encode: (text: string) => string,
@@ -36,7 +55,7 @@ function replacements(
     ([a], [b]) =>
       Array.from(b).length - Array.from(a).length || byCodePoints(a, b),
   );
-  return new Map(ordered.map(([v, l]) => [encode(v), encode(`[secret ${l}]`)]));
+  return new Map(ordered.map(([v, l]) => [encode(v), encode(marker(l))]));
 }
 
 const escapeRegExp = (text: string): string =>
@@ -98,15 +117,22 @@ export function redactSecrets(text: string): string {
   return scan(text, replacements(same), true).out;
 }
 
-/** `value` with every string in it redacted: structured data about to be recorded. */
+/**
+ * `value` with every string in it redacted, object keys included: structured data about to be
+ * recorded. A redacted key that meets another is numbered, so no entry is lost.
+ */
 export function redactStrings(value: unknown): unknown {
   if (typeof value === "string") return redactSecrets(value);
   if (Array.isArray(value)) return value.map(redactStrings);
-  if (typeof value === "object" && value !== null)
-    return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k, redactStrings(v)]),
-    );
-  return value;
+  if (typeof value !== "object" || value === null) return value;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) {
+    const base = redactSecrets(k);
+    let name = base;
+    for (let n = 2; Object.hasOwn(out, name); n += 1) name = `${base} (${n})`;
+    out[name] = redactStrings(v);
+  }
+  return out;
 }
 
 /** A text stream (model deltas) redacted as it arrives, a value split across chunks included. */
@@ -133,6 +159,27 @@ export function redactStream(): {
 // character is held and matched like any other.
 const bytes = (text: string): string =>
   Buffer.from(text, "utf8").toString("latin1");
+
+/** `data` with every resolved value replaced (a textual artifact about to be stored). */
+export function redactBytes(data: Uint8Array): Uint8Array {
+  const text = Buffer.from(data).toString("latin1");
+  return Buffer.from(scan(text, replacements(bytes), true).out, "latin1");
+}
+
+/** Whether `data` holds a resolved value. */
+export function holdsSecret(data: Uint8Array): boolean {
+  return !Buffer.from(data).equals(redactBytes(data));
+}
+
+/**
+ * Provider continuation material (signed or encrypted reasoning, a hosted tool's item) is
+ * replayed byte-exact, so it is never edited: one that holds a resolved value is refused.
+ */
+export class SecretInProviderOutput extends Error {
+  constructor() {
+    super("a registered secret appeared in unmodifiable provider output");
+  }
+}
 
 /** An artifact sink (a spilled exec output) that stores its bytes redacted as they stream in. */
 export function redactingSink(sink: ArtifactSink): ArtifactSink {

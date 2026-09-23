@@ -62,6 +62,7 @@ from threads.loop.runtime import Halt, Idle, Parked, RunErrorCode, Runtime, serv
 from threads.loop.stubs import Stub
 from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, provider_tools
+from threads.redaction import redact_secrets
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import SqliteStore, StoredEvent, Writer
@@ -294,7 +295,11 @@ async def with_servers[D](
 
     found: list[AppTool[object]] = []
     for server in definition.servers:
-        found.extend(await stack.enter_async_context(server.connect(fence)))
+        try:
+            found.extend(await stack.enter_async_context(server.connect(fence)))
+        except ConfigError as error:
+            # check() returns it and a run raises it: a resolved secret in it is redacted (C5).
+            raise ConfigError(error.code, redact_secrets(error.message)) from None
     extra = sorted(found, key=lambda t: t.name)
     connected = replace(definition, tools=(*definition.tools, *extra))
     names = [s.name for s in connected.specs()]

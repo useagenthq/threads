@@ -23,6 +23,7 @@ const RUN_ERROR_CODES = [
   "content_unsupported",
   "continuation_unsupported",
   "transport_fence_unsupported",
+  "secret_in_provider_output",
   "artifact_missing",
   "artifact_corrupt",
   "unmatched_external_op",

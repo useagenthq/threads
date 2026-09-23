@@ -215,6 +215,7 @@ export class Writer {
     const line = canonicalLine({
       ...draft,
       // Nothing is recorded with a resolved secret in it (C5): every event passes here.
+      actor: redactStrings(draft.actor),
       data: redactStrings(draft.data),
       seq: trial.fold.seq + 1,
       event_id: uuidv7(now),

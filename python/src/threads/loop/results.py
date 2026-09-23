@@ -36,8 +36,9 @@ class As:
 
 
 async def text_ref(rt: Runtime, text: str) -> JsonValue:
-    """Stores text as a durable artifact and returns its ref."""
-    raw = text.encode("utf-8")
+    """Stores text as a durable artifact and returns its ref. Every text artifact the loop
+    stores (a result, a commit, a child's output, a handoff transcript) is redacted here (C5)."""
+    raw = redact_secrets(text).encode("utf-8")
     sha = await rt.store.put_artifact(raw)
     return {"sha256": sha, "bytes": len(raw), "media_type": "text/plain"}
 
