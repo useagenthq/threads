@@ -193,6 +193,11 @@ def requester(events: Sequence[StoredEvent]) -> Principal | None:
     return None
 
 
+def answer_text(text: str | Sequence[str]) -> str:
+    """A list answer joins with newlines: a comma may sit inside a choice (spec, Multi-choice)."""
+    return text if isinstance(text, str) else "\n".join(text)
+
+
 async def answer(
     store: Store,
     branch: BranchId,
@@ -204,7 +209,7 @@ async def answer(
     whose input opened the turn, then resumed."""
     if principal.tenant != store.tenant:
         return forbidden("another tenant's thread")
-    preview = text if isinstance(text, str) else ", ".join(text)
+    preview = answer_text(text)
     address = ParkAddress(kind="input", id=call_id)
 
     def build(fold: Fold) -> Ok[Sequence[Draft]] | Err[ParseError]:

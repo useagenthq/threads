@@ -130,9 +130,9 @@ class ProviderTools:
         if isinstance(got, Err):
             return _failed(got.error)
         refs = tuple(Reference("memory", h.id, h.version, h.text) for h in got.value)
-        return Output(
-            _listing("memories", [f"{h.id}@{h.version}" for h in got.value]), False, None, refs
-        )
+        # Provider ids appear only in each reference's id, never in the listing (spec pin).
+        listing = f"{len(refs)} memories, shown below as untrusted references"
+        return Output(listing if refs else "no memories found", False, None, refs)
 
     async def _forget(self, memory: ScopedMemory, id: str, key: str) -> Dispatched:
         # Only an id this branch recalled, so passed the scope check, can be forgotten.
