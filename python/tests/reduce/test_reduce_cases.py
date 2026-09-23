@@ -4,7 +4,7 @@ view of every other case's log (spec/conformance/README.md, "What a runner does 
 A `reduce` case imports its log read-only into a fresh SQLite store, reads it back through the
 same boundary, and compares `state` and `projections`, or the error `code` and `seq`. A `render`
 case also replays every recorded request and renders the next one. policy, recover and stub
-cases have their own runners; fork and intake need parts not built yet and are skipped by name
+and fork cases have their own runners; intake needs parts not built yet and is skipped by name
 with the reason. Every other kind's log must still import to its pinned `state`.
 """
 
@@ -39,12 +39,10 @@ EXPECTED_KEYS = frozenset(
     {"outcome", "error", "state", "committed_bytes", "appended", "sandbox", "fork", "resources"}
     | {"render", "head_verified", "stubs", "responses", "inbox", "decisions", "projections"}
 )
-LATER = {
-    "fork": "the fork operation (eligibility, sandbox restore, resource ledger) is not built yet",
-    "intake": "the host intake pipeline is not built yet",
-}
-OWN_RUNNER = frozenset({"policy", "recover", "stub"})
-"""Kinds another runner owns: policy (tests/permissions), recover and stub (tests/loop)."""
+LATER = {"intake": "the host intake pipeline is not built yet"}
+OWN_RUNNER = frozenset({"policy", "recover", "stub", "fork"})
+"""Kinds another runner owns: policy (tests/permissions), recover and stub (tests/loop), fork
+(tests/thread)."""
 
 
 def _error(error: ParseError) -> Err[str]:

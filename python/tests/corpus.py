@@ -12,10 +12,12 @@ from threads._strict_model import holds
 from threads.log import JsonObject, ToolSpec
 from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound, NotFoundNonfinal
 from threads.loop.tools import Dispatched, Invocation, Output, Termination
-from threads.store import MemoryArtifacts
+from threads.reduce.handlers import to_json
+from threads.store import MemoryArtifacts, StoredEvent
 
 CASES = Path(__file__).resolve().parents[2] / "spec" / "conformance" / "cases"
 IMPL = "threads-py"
+MATCHED_EXACTLY = ("type", "seq", "epoch", "branch_id", "critical")
 _JSON: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 
 
@@ -139,3 +141,22 @@ class ScriptedTools:
             "new_executions": dict(self.new_executions),
             "lookups": dict(self.lookups),
         }
+
+
+def _subset(expected: JsonValue, actual: JsonValue) -> bool:
+    if isinstance(expected, dict):
+        return isinstance(actual, dict) and all(
+            k in actual and _subset(v, actual[k]) for k, v in expected.items()
+        )
+    return expected == actual and type(expected) is type(actual)
+
+
+def matches(matcher: dict[str, JsonValue], event: StoredEvent) -> bool:
+    """An `EventMatcher` (spec/conformance/README.md, "Matching appended")."""
+    wire = obj(to_json(event))
+    for key in MATCHED_EXACTLY:
+        if key in matcher and matcher[key] != wire[key]:
+            return False
+    if "actor_kind" in matcher and matcher["actor_kind"] != obj(wire["actor"])["kind"]:
+        return False
+    return _subset(matcher.get("data", {}), wire["data"])

@@ -21,6 +21,7 @@ from corpus import (
     cases,
     json_schema_holds,
     load,
+    matches,
     now_of,
     obj,
     own,
@@ -45,8 +46,6 @@ from threads.reduce.handlers import to_json
 from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.store import SqliteStore, StoredEvent, verify_export
-
-MATCHED_EXACTLY = ("type", "seq", "epoch", "branch_id", "critical")
 
 
 def conformance_allow(_fold: Fold, _call: ToolCallData, _spec: ToolSpec) -> Decision:
@@ -153,24 +152,6 @@ async def _resume(rt: Runtime, meta: dict[str, JsonValue]) -> Halt | None:
     return await drive(rt)
 
 
-def _subset(expected: JsonValue, actual: JsonValue) -> bool:
-    if isinstance(expected, dict):
-        return isinstance(actual, dict) and all(
-            k in actual and _subset(v, actual[k]) for k, v in expected.items()
-        )
-    return expected == actual and type(expected) is type(actual)
-
-
-def _matches(matcher: dict[str, JsonValue], event: StoredEvent) -> bool:
-    wire = obj(to_json(event))
-    for key in MATCHED_EXACTLY:
-        if key in matcher and matcher[key] != wire[key]:
-            return False
-    if "actor_kind" in matcher and matcher["actor_kind"] != obj(wire["actor"])["kind"]:
-        return False
-    return _subset(matcher.get("data", {}), wire["data"])
-
-
 def _counters(expected: dict[str, JsonValue], got: dict[str, dict[str, int]]) -> None:
     for counter, per_tool in expected.items():
         for tool, count in obj(per_tool).items():
@@ -193,7 +174,7 @@ def test_loop_case(name: str) -> None:
     got = [json.loads(json.dumps(to_json(e))) for e in outcome.appended]
     assert len(outcome.appended) == len(matchers), got
     for matcher, event in zip(matchers, outcome.appended, strict=True):
-        assert _matches(obj(matcher), event), (matcher, to_json(event))
+        assert matches(obj(matcher), event), (matcher, to_json(event))
     assert outcome.model.remaining == 0, "leftover scripted model responses"
     if isinstance(outcome.tools, ScriptedTools):
         _counters(obj(expected.get("sandbox", {})), outcome.tools.counters())
