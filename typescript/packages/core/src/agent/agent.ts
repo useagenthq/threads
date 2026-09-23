@@ -5,6 +5,7 @@ import type {
   InputPart,
   KnownEvent,
   PermissionsPolicy,
+  Principal,
   RetryPolicy,
 } from "../log";
 import type { KnowledgeProvider, MemoryProvider } from "../memory/protocol";
@@ -15,6 +16,7 @@ import { subagent } from "./child";
 import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
 import { target } from "./handoff";
+import { hosted } from "./hosted";
 import { type MemoryWrite, pin } from "./pin";
 import { register } from "./registry";
 import type { RunResult } from "./result";
@@ -58,6 +60,11 @@ export type AgentOptions<Deps, Output> = {
   readonly memoryWrite?: MemoryWrite;
   /** Retrieval over host-admitted sources: localKnowledge({paths}) or an adapter. */
   readonly knowledge?: KnowledgeProvider;
+  /**
+   * Who may answer this agent's approval challenges through a host. Absent:
+   * the host API's authenticated principals of the thread's tenant, and nobody over a channel.
+   */
+  readonly approvers?: readonly Principal[];
 };
 
 /** One item of stream(): a committed event, or a transient text delta (never logged). */
@@ -162,7 +169,11 @@ function build<Deps, Output>(
       }
     },
   };
-  register(handle, { child: subagent(def), target: target(def) });
+  register(handle, {
+    child: subagent(def),
+    target: target(def),
+    host: hosted(def, options.approvers),
+  });
   return handle;
 }
 

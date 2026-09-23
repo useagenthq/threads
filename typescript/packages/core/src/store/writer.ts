@@ -9,6 +9,7 @@ import {
 } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import { VERSION } from "../version";
+import { recordApprovals } from "./approvals";
 import type { SqliteDriver } from "./driver";
 import { canonicalLine, uuidv7 } from "./encode";
 import {
@@ -100,9 +101,14 @@ export class Writer {
     return this.#chain;
   }
 
-  /** Appends drafts in order and returns once their transaction has committed with full sync. */
+  /**
+   * Appends drafts in order and returns once their transaction has committed with full sync.
+   * `alongside` writes host rows (an idempotency receipt, a consumed inbox item) in the same
+   * transaction, after the events; an error from it rolls the append back.
+   */
   append(
     drafts: readonly EventDraft[],
+    alongside?: (added: readonly ChainEvent[]) => Result<void, LogError>,
   ): Result<readonly ChainEvent[], LogError> {
     if (this.#poisoned)
       return err(
@@ -117,7 +123,7 @@ export class Writer {
     }
     const expectedSeq = this.#chain.fold.seq;
     const committed = atomically(this.#db, () =>
-      this.#commit(expectedSeq, added),
+      this.#commit(expectedSeq, added, alongside),
     );
     if (!committed.ok) {
       const { code } = committed.error;
@@ -225,17 +231,25 @@ export class Writer {
   #commit(
     expectedSeq: number,
     added: readonly ChainEvent[],
+    alongside?: (added: readonly ChainEvent[]) => Result<void, LogError>,
   ): Result<void, LogError> {
     const live = this.#checkLease();
     if (!live.ok) return live;
     const branch = getBranch(this.#db, this.lease.branchId);
     if (!branch.ok) return branch;
-    if (branch.value?.head_seq !== expectedSeq)
+    if (branch.value === undefined || branch.value.head_seq !== expectedSeq)
       return err(
         logError("seq_conflict", `the stored head is not ${expectedSeq}`),
       );
     insertEvents(this.#db, this.lease.branchId, added);
-    return ok(undefined);
+    const approvals = recordApprovals(
+      this.#db,
+      branch.value,
+      added,
+      this.#now(),
+    );
+    if (!approvals.ok || alongside === undefined) return approvals;
+    return alongside(added);
   }
 
   #checkLease(): Result<void, LogError> {

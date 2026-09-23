@@ -71,3 +71,33 @@ export function forkEligible(
       )
     : ok(undefined);
 }
+
+const Listed: Strict<{
+  branch_id: typeof BranchId;
+  parent_branch_id: z.ZodNullable<typeof BranchId>;
+  fork_at_seq: z.ZodNullable<z.ZodInt>;
+  state: z.ZodEnum<{ ready: "ready"; inspection_only: "inspection_only" }>;
+}> = z.strictObject({
+  branch_id: BranchId,
+  parent_branch_id: BranchId.nullable(),
+  fork_at_seq: z.int().nullable(),
+  state: z.enum(["ready", "inspection_only"]),
+});
+export type ListedBranch = z.infer<typeof Listed>;
+
+/** A thread's listed branches, oldest first: ready or inspection-only, never forking or failed. */
+export function listedBranches(
+  db: SqliteDriver,
+  threadId: string,
+  tenantId: string,
+): Result<readonly ListedBranch[], LogError> {
+  return parseRows(
+    Listed,
+    db.all(
+      `SELECT branch_id, parent_branch_id, fork_at_seq, state FROM branches
+        WHERE thread_id = ? AND tenant_id = ? AND state IN ('ready', 'inspection_only')
+        ORDER BY rowid`,
+      [threadId, tenantId],
+    ),
+  );
+}

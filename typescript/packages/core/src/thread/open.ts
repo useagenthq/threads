@@ -1,14 +1,38 @@
+import type { z } from "zod";
 import type { ThreadRef } from "../agent/result";
 import { openStore, type Store } from "../agent/sqlite";
-import { BranchId, type EventId, type ThreadId } from "../log";
+import {
+  BranchId,
+  type EventId,
+  type PermissionMode,
+  type PermissionRule,
+  type Principal,
+  type ThreadId,
+} from "../log";
 import { knownEvents, type Projections, projections, reduce } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { Sandbox, SnapshotData } from "../sandbox/protocol";
 import type { LogStore } from "../store";
 import { uuidv7 } from "../store/encode";
 import { type LogError, logError, type VerifiedLog } from "../verify";
+import {
+  type Appended,
+  answer,
+  type ControlError,
+  control,
+  decide,
+  resolveParked,
+  type SettingsChange,
+} from "./control";
 import { forkBranch, type KnowledgePolicy } from "./fork";
+import {
+  type BranchInfo,
+  branchInfo,
+  type PendingApproval,
+  pendingApprovals,
+} from "./pending";
 import { type SaveCaseOptions, type SavedCase, saveCase } from "./save-case";
+import { cancel, setMode, setModel } from "./settings";
 
 // openThread() (spec/api.json, ): a handle for inspection and control that reads
 // through the store and needs no agent in memory.
@@ -52,6 +76,43 @@ export type Thread = ThreadRef & {
   readonly todos: () => Promise<Projections["todos"]>;
   /** One entry per spawned child, running until its agent_finished. */
   readonly children: () => Promise<Projections["children"]>;
+} & ThreadControl;
+
+type Controlled = Promise<Result<Appended, ControlError>>;
+
+/** The control half of spec/api.json Thread: every method that appends names its principal. */
+export type ThreadControl = {
+  readonly branches: () => Promise<readonly BranchInfo[]>;
+  readonly pendingApprovals: () => Promise<readonly PendingApproval[]>;
+  readonly approve: (
+    challengeId: string,
+    principal: Principal,
+    options?: { readonly rememberRule?: z.infer<typeof PermissionRule> },
+  ) => Controlled;
+  readonly deny: (
+    challengeId: string,
+    principal: Principal,
+    options?: { readonly reason?: string },
+  ) => Controlled;
+  readonly answer: (
+    callId: string,
+    answer: string | readonly string[],
+    principal: Principal,
+  ) => Controlled;
+  readonly resolveParked: (
+    effectKey: string,
+    resolution: "assume_done" | "assume_not_done",
+    principal: Principal,
+  ) => Controlled;
+  readonly cancel: (principal: Principal) => Controlled;
+  readonly setModel: (
+    settings: SettingsChange,
+    principal: Principal,
+  ) => Controlled;
+  readonly setMode: (
+    mode: z.infer<typeof PermissionMode>,
+    principal: Principal,
+  ) => Controlled;
 };
 
 export type OpenThreadOptions = {
@@ -186,6 +247,7 @@ export async function openThread(
       const current = readLog(log, branchId);
       return current.ok ? projections(current.value).children : [];
     },
+    ...controls(log, threadId, branchId),
     saveCase: async (name, caseOptions) =>
       saveCase(log, branchId, name, caseOptions, {
         artifacts,
@@ -193,4 +255,62 @@ export async function openThread(
         points: await points(),
       }),
   });
+}
+
+function controls(
+  log: LogStore,
+  threadId: ThreadId,
+  branchId: BranchId,
+): ThreadControl {
+  return {
+    branches: async () => {
+      const rows = log.branches(threadId);
+      return rows.ok ? rows.value.map(branchInfo) : [];
+    },
+    pendingApprovals: async () => {
+      const current = readLog(log, branchId);
+      if (!current.ok) return [];
+      return pendingApprovals(
+        knownEvents(current.value),
+        current.value.fold,
+        log.now(),
+      );
+    },
+    approve: (id, principal, options = {}) =>
+      control(
+        log,
+        branchId,
+        principal,
+        decide(id, principal, log.now(), {
+          grant: true,
+          ...(options.rememberRule === undefined
+            ? {}
+            : { rememberRule: options.rememberRule }),
+        }),
+      ),
+    deny: (id, principal, options = {}) =>
+      control(
+        log,
+        branchId,
+        principal,
+        decide(id, principal, log.now(), {
+          grant: false,
+          ...(options.reason === undefined ? {} : { reason: options.reason }),
+        }),
+      ),
+    answer: (callId, text, principal) =>
+      control(log, branchId, principal, answer(callId, text, principal)),
+    resolveParked: (key, resolution, principal) =>
+      control(
+        log,
+        branchId,
+        principal,
+        resolveParked(key, resolution, principal),
+      ),
+    cancel: (principal) => control(log, branchId, principal, cancel(principal)),
+    setModel: (settings, principal) =>
+      control(log, branchId, principal, setModel(settings, principal)),
+    setMode: (mode, principal) =>
+      control(log, branchId, principal, setMode(mode, principal)),
+  };
 }

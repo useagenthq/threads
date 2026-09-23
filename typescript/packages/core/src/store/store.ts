@@ -10,7 +10,13 @@ import { newBranch } from "./branch";
 import { BudgetLedger } from "./budget";
 import { ObserverCursors } from "./cursors";
 import type { SqliteDriver } from "./driver";
-import { forkEligible, forkingBranches, loadChain } from "./forking";
+import {
+  forkEligible,
+  forkingBranches,
+  type ListedBranch,
+  listedBranches,
+  loadChain,
+} from "./forking";
 import { importSegments } from "./import";
 import { ResourceLedger } from "./ledger";
 import { exportBytes } from "./lines";
@@ -324,6 +330,14 @@ export class LogStore {
       setBranchState(this.#db, writer.lease.branchId, "fork_failed");
       return ok(undefined);
     });
+  }
+
+  get tenant(): string {
+    return this.#tenant;
+  }
+
+  branches(threadId: ThreadId): Result<readonly ListedBranch[], LogError> {
+    return listedBranches(this.#db, threadId, this.#tenant);
   }
 
   /** Branches a crash left mid-fork, for their creator's recovery. */

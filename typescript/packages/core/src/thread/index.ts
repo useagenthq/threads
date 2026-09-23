@@ -1,3 +1,4 @@
+export type { Appended, ControlError, SettingsChange } from "./control";
 export { type KnowledgePolicy, recoverFork, recoverForks } from "./fork";
 export {
   type ForkOptions,
@@ -5,8 +6,10 @@ export {
   type OpenThreadOptions,
   openThread,
   type Thread,
+  type ThreadControl,
   type Timeline,
 } from "./open";
+export type { BranchInfo, PendingApproval } from "./pending";
 export type {
   CaseExpectation,
   EventMatcher,

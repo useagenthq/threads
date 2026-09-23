@@ -90,6 +90,13 @@ function denied(s: Session, callId: string, reason?: string): Halt | undefined {
 /** An ask opens an approval challenge and parks until an approver answers. */
 function ask(s: Session, call: EventOf<"tool_call">): Halt | undefined {
   const { call_id: callId, input } = call.data;
+  // A granted challenge allowed the call, so an answered one here was denied: never ask again.
+  if (
+    [...s.fold.approvals.values()].some(
+      (a) => a.callId === callId && a.consumed,
+    )
+  )
+    return denied(s, callId, "approval denied");
   const open = [...s.fold.approvals].find(
     ([, a]) => a.callId === callId && !a.consumed,
   );

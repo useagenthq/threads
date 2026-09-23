@@ -1,5 +1,6 @@
 import type { ArtifactRef, EventId, Principal, ThreadId } from "../log";
 import type { Subagent } from "../loop";
+import type { HostRunner } from "./hosted";
 import type { ThreadRef } from "./result";
 import type { Store } from "./sqlite";
 
@@ -33,7 +34,11 @@ export type TargetFactory = (
   env: ChildEnv,
 ) => (link: HandoffLink) => Promise<ThreadRef>;
 
-type Entry = { readonly child: ChildFactory; readonly target: TargetFactory };
+type Entry = {
+  readonly child: ChildFactory;
+  readonly target: TargetFactory;
+  readonly host?: HostRunner;
+};
 
 const AGENTS = new WeakMap<object, Entry>();
 
@@ -43,6 +48,11 @@ export function register(agent: object, entry: Entry): void {
 
 export function childFactory(agent: object): ChildFactory | undefined {
   return AGENTS.get(agent)?.child;
+}
+
+/** The host's view of an agent handle (@threads/host), or undefined for a foreign object. */
+export function hostRunner(agent: object): HostRunner | undefined {
+  return AGENTS.get(agent)?.host;
 }
 
 export function targetFactory(agent: object): TargetFactory | undefined {
