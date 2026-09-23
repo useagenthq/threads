@@ -1,5 +1,12 @@
 import type { EventOf } from "../fold/state";
-import type { InputPart, OutputPart, Policy, Usage } from "../log";
+import type {
+  ArtifactRef,
+  BranchId,
+  InputPart,
+  OutputPart,
+  Policy,
+  Usage,
+} from "../log";
 import type { Result } from "../result";
 
 // The model adapter protocol (spec/api.json types Model, ModelInfo, ModelRequest, ModelResponse,
@@ -66,15 +73,44 @@ export type ModelChunk =
     };
 
 /**
+ * What the loop hands an adapter for one send or lookup (spec/api.json ModelContext). Bound to
+ * the writer that created it: fence, read and put act for that branch and epoch only.
+ */
+export type ModelContext = {
+  readonly branchId: BranchId;
+  readonly epoch: number;
+  /** Awaited at the real network send point; a failure means send nothing. */
+  readonly fence: () => Promise<
+    Result<void, { readonly code: "stale_epoch"; readonly message: string }>
+  >;
+  /** Verified bytes (sha256 and length) of an artifact a Render v1 line names. */
+  readonly read: (ref: ArtifactRef) => Promise<
+    Result<
+      Uint8Array,
+      {
+        readonly code: "artifact_missing" | "artifact_corrupt";
+        readonly message: string;
+      }
+    >
+  >;
+  /** Stores exact provider bytes; the ref is returned once they are durable. */
+  readonly put: (data: Uint8Array, mediaType: string) => Promise<ArtifactRef>;
+};
+
+/**
  * What a model adapter returns. One transport attempt per `send`; SDK retries off (* item 2). `lookup` is present when `info.lookup` is not `none`.
  */
 export type Model = {
   readonly info: ModelInfo;
   readonly send: (
     request: ModelRequest,
+    context: ModelContext,
     options?: { readonly signal?: AbortSignal },
   ) => AsyncIterable<ModelChunk>;
-  readonly lookup?: (requestId: string) => Promise<LookupResult<ModelResponse>>;
+  readonly lookup?: (
+    requestId: string,
+    context: ModelContext,
+  ) => Promise<LookupResult<ModelResponse>>;
   readonly countTokens?: (
     request: ModelRequest,
   ) => Promise<

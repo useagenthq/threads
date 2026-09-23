@@ -1,0 +1,39 @@
+// @threads/core/adapter: what a model adapter package builds on. Core never imports adapters.
+
+export { ConfigError } from "./agent/errors";
+export { assertNever } from "./assert-never";
+export {
+  type ArtifactRef,
+  type InputPart,
+  type Json,
+  JsonObject,
+  OutputPart,
+  type ResultPart,
+  type Usage,
+} from "./log";
+export type {
+  LookupCapability,
+  LookupResult,
+  Model,
+  ModelChunk,
+  ModelContext,
+  ModelInfo,
+  ModelRequest,
+  ModelResponse,
+} from "./model";
+export { memoryContext } from "./model/context";
+export {
+  loadedTools,
+  parseRender,
+  type RenderLine,
+  type RenderRequest,
+  type ToolLine,
+} from "./model/render-lines";
+export {
+  type Fetch,
+  fencedFetch,
+  rejectionFor,
+  retryAfterMs,
+  StaleEpochError,
+  staleEpoch,
+} from "./model/transport";

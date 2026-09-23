@@ -1,6 +1,9 @@
 import type { Fold } from "../fold/state";
 import type { ArtifactRef, BranchId, KnownEvent } from "../log";
+import type { ModelContext } from "../model";
+import { contextReader } from "../model/context";
 import { knownEvents } from "../reduce";
+import { err, ok } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import type { Chain } from "../verify";
 import type { Halt, LoopConfig } from "./types";
@@ -74,6 +77,25 @@ export class Session {
   /** The lease epoch every dispatch carries. */
   get epoch(): number {
     return this.#writer.lease.epoch;
+  }
+
+  /**
+   * The context a model send or lookup carries, bound to this writer: its fence, reads and
+   * stores act for this branch and epoch only (spec/api.json ModelContext).
+   */
+  modelContext(): ModelContext {
+    return {
+      branchId: this.branchId,
+      epoch: this.epoch,
+      fence: async () => {
+        const halted = this.fence();
+        return halted === undefined
+          ? ok(undefined)
+          : err({ code: "stale_epoch", message: halted.message });
+      },
+      read: contextReader(this.artifacts),
+      put: async (data, mediaType) => this.store(data, mediaType),
+    };
   }
 
   /** Stores bytes before any event names them, and returns their ref. */

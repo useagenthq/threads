@@ -55,7 +55,7 @@ async function recoverRequest(
   const answer =
     model?.lookup === undefined || model.info.lookup === "none"
       ? undefined
-      : await model.lookup(`${s.branchId}:${requestId}`);
+      : await model.lookup(`${s.branchId}:${requestId}`, s.modelContext());
   // model_response_recovered records the provider's id; a found answer without one can't be
   // recorded, so the attempt stays unknown.
   const found = answer?.status === "found" ? answer.value : undefined;

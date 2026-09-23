@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./bun-sqlite": "./src/store/bun-sqlite.ts"
+    "./bun-sqlite": "./src/store/bun-sqlite.ts",
+    "./adapter": "./src/adapter.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"

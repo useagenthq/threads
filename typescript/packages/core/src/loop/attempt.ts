@@ -83,7 +83,7 @@ async function collect(
   const options =
     s.config.signal === undefined ? {} : { signal: s.config.signal };
   try {
-    for await (const chunk of model.send(request, options)) {
+    for await (const chunk of model.send(request, s.modelContext(), options)) {
       switch (chunk.kind) {
         case "delta":
           s.config.onDelta?.(requestId, chunk.text);

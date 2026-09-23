@@ -67,3 +67,4 @@ function jsonObject(): JsonObjectSchema {
 export const JsonObject: JsonObjectSchema = jsonObject().meta({
   id: "JsonObject",
 });
+export type JsonObject = z.infer<typeof JsonObject>;
