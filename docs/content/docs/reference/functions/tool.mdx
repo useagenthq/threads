@@ -17,7 +17,7 @@ function tool(options: {
   description: string;
   input: z.ZodType<Input>;
   output?: z.ZodType<Output>;
-  runs: "host" | "sandbox";
+  runs?: "host" | "sandbox";
   execute?: (input: Input, ctx: RunContext<Deps>) => Promise<Output>;
   effect?: EffectClass;
   dedupWindowMs?: PosInt;
@@ -35,7 +35,7 @@ def tool(
     name: Name,
     description: str,
     input: type[Input],
-    runs: Literal["host", "sandbox"],
+    runs: Literal["host", "sandbox"] = "host",
     execute: Callable[[Input, RunContext[Deps]], Awaitable[Output]] | None = None,
     effect: EffectClass = "unguarded",
     dedup_window_ms: PosInt | None = None,
@@ -61,8 +61,8 @@ def tool(
   TypeScript only. Pinned output_schema. A result that fails it is an error result; the effect still happened.
 </Field>
 
-<Field name="runs" type={"\"host\" | \"sandbox\""} required>
-  Required, no default. Only "host" is supported today; "sandbox" is a setup error.
+<Field name="runs" type={"\"host\" | \"sandbox\""} default={"host"}>
+  Where execute runs. host (the default) runs it in the host process. sandbox is reserved and not supported in this release: a sandbox tool fails setup with ConfigError capability_missing (Python at tool(), TypeScript at agent check() or the first run) and never executes. Not pinned: host and an omitted runs give the same ToolSpec and config_hash. Only "host" is supported today; "sandbox" is a setup error.
 </Field>
 
 <Field name="execute" type={"(input: Input, ctx: RunContext<Deps>) => Promise<Output>"}>
