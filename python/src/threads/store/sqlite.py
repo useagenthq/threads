@@ -14,7 +14,7 @@ from pydantic import JsonValue
 from threads import VERSION
 from threads.log import BranchId, Event, ParseError, ThreadId
 from threads.log.digest import sha256_hex
-from threads.redaction import contains_secret
+from threads.redaction import SecretInStoredBytesError, published
 from threads.render import Rendered, render
 from threads.render.verify import verify_requests
 from threads.result import Err, Ok
@@ -25,7 +25,7 @@ from threads.store.budgets import BudgetLedger
 from threads.store.context import CleanupContext, OwnerContext
 from threads.store.cursors import ObserverCursors
 from threads.store.forking import Forking, forking, start_child
-from threads.store.lines import Draft, head_line, header_line
+from threads.store.lines import Draft, head_line, header_line, imported_bytes
 from threads.store.resources import Ledger, Resource
 from threads.store.spill import Spill
 from threads.store.tables import Tables
@@ -142,10 +142,6 @@ class SqliteStore:
         Every model request must first replay from the log and the artifacts already in the
         store (C7, Render v1): the first failing request's error is the result."""
         tenant, artifacts = self._tenant, self._artifacts
-        if contains_secret(_imported_bytes(log)):
-            # Imported bytes are stored exactly as exported, torn tail included (C5).
-            message = "the export holds a registered secret; nothing imported"
-            return Err(ParseError("secret_in_stored_bytes", message))
 
         def store(conn: sqlite3.Connection) -> ParseError | None:
             replayed = verify_requests(log.fold.events, artifacts.get)
@@ -155,11 +151,17 @@ class SqliteStore:
             dropped = artifacts.put(log.dropped) if log.dropped else None
             return sql.import_segments(conn, log, tenant, dropped)
 
-        return _result(await self._worker.call(store))
+        try:
+            # Imported bytes are stored exactly as exported, torn tail included (C5).
+            data = imported_bytes(log)
+            return _result(await self._worker.call(lambda c: published(data, lambda: store(c))))
+        except SecretInStoredBytesError:
+            message = "the export holds a registered secret; nothing imported"
+            return Err(ParseError("secret_in_stored_bytes", message))
 
     async def put_artifact(self, data: bytes) -> str:
         """Stores bytes content-addressed and returns their sha256 once they are durable."""
-        return await self._worker.call(lambda _: self._artifacts.put(data))
+        return await self._worker.call(lambda _: published(data, lambda: self._artifacts.put(data)))
 
     async def spill(self) -> Spill:
         """A new artifact written a chunk at a time, never held whole in memory."""
@@ -392,9 +394,3 @@ def _corrupt(cause: ParseError) -> ParseError:
     # A stored branch that fails verification refuses writable opens; the precise code is the
     # cause (spec/schema/README.md wire rule 14). Readers still get the precise error.
     return ParseError("log_corrupt", f"{cause.code}: {cause.message}", cause.seq)
-
-
-def _imported_bytes(log: VerifiedLog) -> bytes:
-    """Every byte an import stores: each segment's header and event lines, and a torn tail."""
-    lines = [line for s in log.segments for line in (s.header_line, *(b for _, b in s.events))]
-    return b"\n".join(lines) + b"\n" + log.dropped

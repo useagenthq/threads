@@ -7,6 +7,7 @@ from pathlib import Path
 from sandbox_kit import OPEN
 
 from threads.log import Spill
+from threads.redaction import register
 from threads.result import Err, Ok
 from threads.sandbox import Command, ExecResult, SandboxError, fake_sandbox, run_exec
 from threads.sandbox.fake_session import CHUNK
@@ -58,5 +59,25 @@ def test_large_output_keeps_head_and_tail_and_spills_every_byte(tmp_path: Path) 
         # Nothing but the tree is left behind: the temp file became the artifact.
         assert [p.name for p in (tmp_path / "artifacts").iterdir()] == ["sha256"]
         await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_dropped_spill_leaves_a_preview_that_names_no_full_output() -> None:
+    """A value registered while the output streamed drops the spill (C5, Codex #374)."""
+
+    async def main() -> None:
+        opened = await SqliteStore.open()
+        assert isinstance(opened, Ok)
+        sandbox = fake_sandbox({"tools": {"cat": {"output": "x" * 200}}})
+        made = await sandbox.create("k", OPEN)
+        assert isinstance(made, Ok)
+        spill = await opened.value.spill()
+        register("registered-meanwhile", "late")
+        got = await run_exec(made.value, Command(["cat"], "key-1"), OPEN, spill, LIMITS)
+        assert isinstance(got, Ok)
+        assert (got.value.truncated, got.value.full_output) == (True, None)
+        assert "full_output" not in got.value.stdout
+        await opened.value.close()
 
     asyncio.run(main())

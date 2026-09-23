@@ -2,21 +2,25 @@
 registered while a spill streams, direct knowledge ingest, and a torn-tail import."""
 
 import asyncio
-from collections.abc import AsyncGenerator, Sequence
+import sqlite3
+from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
+import pytest
 from pydantic import JsonValue
 
 from threads import Failed, agent, scripted_model, sqlite
 from threads.agents.bindings import AppTool, Fence
 from threads.log import BranchId, ThreadId
+from threads.log.digest import sha256_hex
 from threads.memory.conformance import A
 from threads.memory.local_knowledge import LocalKnowledge
 from threads.memory.types import Binding, KnowledgeSource
-from threads.redaction import register
+from threads.redaction import SecretInStoredBytesError, register
 from threads.result import Err, Ok
 from threads.secrets import credential
 from threads.store import Draft, SqliteStore, Writer, verify_export
+from threads.store.worker import Worker
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000001")
@@ -177,6 +181,7 @@ def test_the_local_knowledge_provider_refuses_a_source_holding_a_value() -> None
         assert isinstance(got, Err)
         assert got.error.code == "invalid"
         assert await provider.revision(A) == Ok(0)
+        assert isinstance(await store.get_artifact(sha256_hex(source.content)), Err)
         await store.close()
 
     asyncio.run(main())
@@ -198,6 +203,101 @@ def test_a_torn_tail_holding_a_value_refuses_the_import() -> None:
         assert verified.value.dropped == tail
         credential("fake", "api_key", later, "U")()
         imported = await (await opened()).import_log(verified.value)
+        assert isinstance(imported, Err)
+        assert imported.error.code == "secret_in_stored_bytes"
+        await store.close()
+
+    asyncio.run(main())
+
+
+# Round 8 (Codex #374): a value registered after the event-loop check but before the store's
+# thread publishes. Handing a statement to that thread is where the window opens.
+
+
+class Race:
+    """Registers `value` when the store's thread is handed its `at`-th statement from now."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, value: str, at: int = 1) -> None:
+        self.left = at
+        original = Worker.call
+
+        async def call[T](worker: Worker, statement: Callable[[sqlite3.Connection], T]) -> T:
+            self.left -= 1
+            if self.left == 0:
+                register(value, "raced")
+            return await original(worker, statement)
+
+        monkeypatch.setattr(Worker, "call", call)
+
+
+RACED = "raced-abcdefgh"
+
+
+def test_a_value_registered_before_the_append_publishes_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        store = await opened()
+        w = await writer(store)
+        assert isinstance(await w.append([started({})]), Ok)
+        Race(monkeypatch, RACED)
+        appended = await w.append([user(f"note {RACED}")])
+        assert isinstance(appended, Err)
+        assert appended.error.code == "secret_in_stored_bytes"
+        exported = await store.export(ROOT)
+        assert isinstance(exported, Ok)
+        assert RACED.encode() not in exported.value
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_the_spill_commits_drops_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        store = await opened()
+        spill = await store.spill()
+        await spill.write(RACED.encode())
+        # The end-of-stream flush is the first statement; the commit is the second.
+        Race(monkeypatch, RACED, at=2)
+        assert await spill.commit() is None
+        assert isinstance(await store.get_artifact(sha256_hex(RACED.encode())), Err)
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_an_artifact_publishes_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = f"text {RACED}".encode()
+
+    async def main() -> None:
+        store = await opened()
+        Race(monkeypatch, RACED)
+        with pytest.raises(SecretInStoredBytesError):
+            await store.put_artifact(data)
+        assert isinstance(await store.get_artifact(sha256_hex(data)), Err)
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_an_import_publishes_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        store = await opened()
+        w = await writer(store)
+        assert isinstance(await w.append([started({}), user(f"hi {RACED}")]), Ok)
+        exported = await store.export(ROOT)
+        assert isinstance(exported, Ok)
+        verified = verify_export(exported.value, T0)
+        assert isinstance(verified, Ok)
+        fresh = await opened()
+        Race(monkeypatch, RACED)
+        imported = await fresh.import_log(verified.value)
         assert isinstance(imported, Err)
         assert imported.error.code == "secret_in_stored_bytes"
         await store.close()

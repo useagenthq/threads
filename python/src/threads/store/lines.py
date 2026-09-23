@@ -20,7 +20,7 @@ from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.redaction import contains_secret, redact_json
 from threads.result import Err, Ok
-from threads.store.verify import StoredEvent
+from threads.store.verify import StoredEvent, VerifiedLog
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,9 +87,12 @@ def _canonical(value: JsonValue) -> bytes:
             raise ValueError(reason)
 
 
-def event_line(draft: Draft, at: Position) -> Ok[tuple[StoredEvent, bytes]] | Err[ParseError]:
+def event_line(
+    draft: Draft, at: Position
+) -> Ok[tuple[StoredEvent, bytes, bytes]] | Err[ParseError]:
     """The draft as its stored line, parsed back through the reader's own boundary so the
-    writer can never store a line a reader would refuse."""
+    writer can never store a line a reader would refuse; then the canonical bytes of its
+    content (`actor` and `data`), which the store's thread checks again as it publishes."""
     # Nothing is recorded with a resolved secret in it (C5): every event passes here.
     actor, data = redact_json(dict(draft.actor)), redact_json(dict(draft.data))
     value: JsonValue = {
@@ -109,7 +112,8 @@ def event_line(draft: Draft, at: Position) -> Ok[tuple[StoredEvent, bytes]] | Er
     text = canonicalize(value)
     if isinstance(text, Err):
         return Err(ParseError("invalid_line", text.error, at.seq))
-    if contains_secret(_canonical({"actor": actor, "data": data})):
+    content = _canonical({"actor": actor, "data": data})
+    if contains_secret(content):
         # Canonical escaping or JSON punctuation can still join redacted strings into a value.
         message = "the event's stored bytes would hold a registered secret; nothing appended"
         return Err(ParseError("secret_in_stored_bytes", message, at.seq))
@@ -119,4 +123,10 @@ def event_line(draft: Draft, at: Position) -> Ok[tuple[StoredEvent, bytes]] | Er
     event = parsed.value
     if isinstance(event, Header | Head):
         raise AssertionError("an event draft parsed as a framing line")
-    return Ok((event, text.value.encode("utf-8")))
+    return Ok((event, text.value.encode("utf-8"), content))
+
+
+def imported_bytes(log: VerifiedLog) -> bytes:
+    """Every byte an import stores: each segment's header and event lines, and a torn tail."""
+    lines = [line for s in log.segments for line in (s.header_line, *(b for _, b in s.events))]
+    return b"\n".join(lines) + b"\n" + log.dropped

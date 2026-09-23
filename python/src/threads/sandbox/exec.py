@@ -19,7 +19,7 @@ from threads.sandbox.protocol import (
 )
 from threads.store.spill import Spill as Sink
 
-_MARKER = "\n[output truncated: {n} bytes in all; the full output is in full_output]\n"
+_MARKER = "\n[output truncated: {n} bytes in all]\n"
 
 
 @dataclass(frozen=True, slots=True)

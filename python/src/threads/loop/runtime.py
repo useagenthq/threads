@@ -27,7 +27,7 @@ from threads.loop.history import CallState
 from threads.loop.model import Model
 from threads.loop.tools import ToolRunner
 from threads.permissions import Decision
-from threads.redaction import SecretInProviderOutputError, contains_secret
+from threads.redaction import SecretInProviderOutputError, SecretInStoredBytesError
 from threads.reduce import Fold
 from threads.render.artifacts import read_verified
 from threads.result import Err, Ok
@@ -235,9 +235,10 @@ class WriterContext:
 
     async def put(self, data: bytes, media_type: str) -> ArtifactRef:
         # Replayed byte-exact, so never edited: a secret in it ends the turn instead (C5).
-        if contains_secret(data):
-            raise SecretInProviderOutputError
-        sha = await self.rt.store.put_artifact(data)
+        try:
+            sha = await self.rt.store.put_artifact(data)
+        except SecretInStoredBytesError:
+            raise SecretInProviderOutputError from None
         return ArtifactRef(sha256=sha, bytes=len(data), media_type=media_type)
 
 

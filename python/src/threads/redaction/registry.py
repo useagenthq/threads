@@ -2,6 +2,7 @@
 redaction", C5). A value is at least 8 characters and never a literal of the event schema, so
 no schema key or fixed literal ever holds one."""
 
+import threading
 from functools import cache
 
 from pydantic import JsonValue, TypeAdapter
@@ -14,6 +15,11 @@ MIN_CHARS = 8
 
 REGISTERED: dict[str, str] = {}
 """Values resolved in this host process, each with the smallest label it was registered under."""
+
+PAUSED = threading.Lock()
+"""Held while registering, and by the store's thread while it publishes bytes it checked: a
+value registered on the event loop between a check and the write it guards would otherwise
+reach disk (`stored.published`)."""
 
 
 @cache
@@ -53,9 +59,10 @@ def register(value: str, label: str) -> None:
         raise ConfigError("invalid_config", "secret values must be at least 8 characters")
     if value in _schema_literals():
         raise ConfigError("invalid_config", "a secret value can't be a literal of the event schema")
-    known = REGISTERED.get(value)
-    if known is None or label < known:
-        REGISTERED[value] = label
+    with PAUSED:
+        known = REGISTERED.get(value)
+        if known is None or label < known:
+            REGISTERED[value] = label
 
 
 def forget_secrets() -> None:

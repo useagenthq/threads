@@ -3,8 +3,9 @@ fetched page), refused when they must stay byte-exact (provider material, a scre
 knowledge source, the resolved config, an import)."""
 
 import json
+from collections.abc import Callable
 
-from threads.redaction.registry import ordered
+from threads.redaction.registry import PAUSED, generation, ordered
 from threads.redaction.scan import Stream, replacements, scan
 
 
@@ -33,6 +34,30 @@ def redact_bytes(data: bytes) -> bytes:
     r = replacements(_as_bytes)
     out, _ = scan(data.decode("latin-1"), r, final=True)
     return (r.redacted if r.holds(out) else out).encode("latin-1")
+
+
+class SecretInStoredBytesError(Exception):
+    """Bytes that held a registered value when the store's thread came to publish them: a value
+    was registered after the caller's own check. Nothing was written."""
+
+    def __init__(self) -> None:
+        super().__init__("a registered secret appeared in bytes about to be stored")
+
+
+def published[T](data: bytes, publish: Callable[[], T]) -> T:
+    """Runs `publish` (on the store's thread) with registration paused, unless `data` holds a
+    registered value by then: SecretInStoredBytesError, nothing written."""
+    with PAUSED:
+        if contains_secret(data):
+            raise SecretInStoredBytesError
+        return publish()
+
+
+def unchanged_since[T](seen: int, publish: Callable[[], T]) -> T | None:
+    """Runs `publish` with registration paused, unless a value was registered after the
+    generation `seen` (None): bytes already streamed out can't be checked again."""
+    with PAUSED:
+        return publish() if generation() == seen else None
 
 
 class SecretInProviderOutputError(Exception):

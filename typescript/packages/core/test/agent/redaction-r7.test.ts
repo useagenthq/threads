@@ -183,6 +183,7 @@ describe("the local knowledge provider refuses a source holding a value (#359 HI
     );
     expect(got.ok ? "ok" : got.error.code).toBe("invalid");
     expect(unwrap(await bound.local.search(scope, "key"))).toEqual([]);
+    expect(artifacts.get(sha256Hex(content)).ok).toBe(false);
   });
 });
 

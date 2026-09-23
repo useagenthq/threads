@@ -97,4 +97,4 @@ def start_child(
         at.seq,
         sha256_hex(built.value[1]),
     )
-    return Ok(ChildStart(row, built.value, fold))
+    return Ok(ChildStart(row, built.value[:2], fold))
