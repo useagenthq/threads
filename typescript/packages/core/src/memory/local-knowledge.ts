@@ -15,6 +15,7 @@ import type {
   ProviderError,
   Scope,
 } from "./protocol";
+import { rebuildIndex } from "./rebuild";
 
 // localKnowledge() (spec/api.json): admitted versions stored as artifacts,
 // an FTS5 index over their passages, and one monotonic revision. Versions are immutable and
@@ -79,14 +80,9 @@ const DocRow = z.object({
   namespace: z.string(),
   record_id: z.string(),
 });
-const IndexRow = z.object({ rowid: z.int(), content_sha256: z.string() });
 
 type Local = KnowledgeProvider & {
-  /**
-   * Drops the index and refills it from the admitted artifacts (F14.3), in one transaction. A
-   * source holding a value registered since it was admitted refuses the rebuild (invalid)
-   * before anything is cleared: the index stays as it was (C5).
-   */
+  /** Drops the index and refills it from the admitted artifacts (`rebuildIndex`). */
   readonly rebuild: () => Result<void, ProviderError>;
 };
 
@@ -353,29 +349,6 @@ function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
         });
       }),
     revision: async () => guard(() => ok(revision())),
-    rebuild: () => {
-      const rows = IndexRow.array().parse(
-        db.all("SELECT rowid, content_sha256 FROM local_knowledge_docs", []),
-      );
-      const sources = rows.map((r) => {
-        const got = artifacts.get(r.content_sha256);
-        const text = got.ok ? decodeText(got.value) : undefined;
-        if (!got.ok || text === undefined)
-          throw new Error(
-            `an admitted version's artifact is gone: ${r.content_sha256}`,
-          );
-        return { rowid: r.rowid, bytes: got.value, text };
-      });
-      if (sources.some((s) => containsSecret(s.bytes)))
-        return err({
-          code: "invalid",
-          message: "a source holds a registered secret; index kept",
-        });
-      return db.transaction(() => {
-        db.run("DELETE FROM local_knowledge_fts", []);
-        for (const s of sources) index(s.rowid, s.text);
-        return ok(undefined);
-      });
-    },
+    rebuild: () => rebuildIndex(db, artifacts, index),
   };
 }

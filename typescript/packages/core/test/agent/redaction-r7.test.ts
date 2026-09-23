@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { agent, type McpServer, scriptedModel, sqlite } from "../../src";
 import { credential } from "../../src/agent/secret";
 import type { McpSession } from "../../src/agent/setup";
@@ -8,7 +11,11 @@ import {
   localKnowledge,
 } from "../../src/memory/local-knowledge";
 import { redactingSink, register } from "../../src/redact";
-import { type EventDraft, memoryArtifacts } from "../../src/store";
+import {
+  type ArtifactStore,
+  type EventDraft,
+  memoryArtifacts,
+} from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import {
   fixture,
@@ -215,6 +222,47 @@ describe("a rebuild of the knowledge index checks every source first", () => {
     const rebuilt = bound.local.rebuild();
     expect(rebuilt.ok ? "ok" : rebuilt.error.code).toBe("invalid");
     expect(unwrap(await bound.local.search(scope, "hello"))).toEqual(before);
+  });
+});
+
+describe("a rebuild never drops a source another connection admits meanwhile", () => {
+  test("two connections to one store: the rebuild reads again and keeps both", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "threads-rebuild-")), "k.db");
+    const shared = memoryArtifacts();
+    const scope = { tenant_id: "t", agent: "a", scope: "u" };
+    const source = (id: string, text: string) => ({
+      source_id: id,
+      media_type: "text/markdown",
+      content: encoder.encode(text),
+      binding: { namespace: "n", record_id: id },
+    });
+    const other = bindLocalKnowledge(
+      localKnowledge({ paths: [] }),
+      openBunSqlite(path),
+      shared,
+    );
+    let meanwhile: (() => Promise<unknown>) | undefined = async () =>
+      other?.local.ingest(scope, source("b.md", "zebra second"), "b");
+    const reading: ArtifactStore = {
+      ...shared,
+      get: (sha256) => {
+        const run = meanwhile;
+        meanwhile = undefined;
+        void run?.();
+        return shared.get(sha256);
+      },
+    };
+    const mine = bindLocalKnowledge(
+      localKnowledge({ paths: [] }),
+      openBunSqlite(path),
+      reading,
+    );
+    if (mine === undefined || other === undefined)
+      throw new Error("localKnowledge binds");
+    unwrap(await mine.local.ingest(scope, source("a.md", "alpha first"), "a"));
+    unwrap(mine.local.rebuild());
+    const found = unwrap(await mine.local.search(scope, "zebra"));
+    expect(found.map((h) => h.doc_id)).toEqual(["b.md"]);
   });
 });
 

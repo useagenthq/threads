@@ -234,7 +234,8 @@ class LocalKnowledge:
 
 async def _rebuilt(store: SqliteStore) -> bool:
     """One rebuild attempt: reads the admitted sources, then checks them and refills the index
-    in one transaction with registration paused. False when an ingest moved the rows."""
+    in one transaction, with registration paused through its commit. False when an ingest
+    moved the rows."""
     read = await store.run(_admitted)
     sources: list[tuple[int, bytes]] = []
     for rowid, sha in read:
@@ -243,9 +244,13 @@ async def _rebuilt(store: SqliteStore) -> bool:
             raise AssertionError(f"an admitted version's artifact is gone: {sha}")
         sources.append((rowid, got.value))
     pieces = [content for _, content in sources]
-    return await store.run(
-        transaction(lambda c: published(pieces, lambda: _refill(c, read, sources)))
-    )
+
+    def refill(conn: sqlite3.Connection) -> bool:
+        # Registration stays paused until the transaction has committed, not only while the
+        # rows are written: the check covers the index until it is durable.
+        return published(pieces, lambda: transaction(lambda c: _refill(c, read, sources))(conn))
+
+    return await store.run(refill)
 
 
 def _insert(

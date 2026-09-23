@@ -3,6 +3,7 @@ writes what it guarded. Each write re-checks with registration paused."""
 
 import asyncio
 import sqlite3
+import threading
 from collections.abc import Callable, Mapping
 
 import pytest
@@ -11,6 +12,7 @@ from redaction_kit import RACED, ROOT, T0, Race, opened, started, user, writer
 
 from threads.log import BranchId, ParseError
 from threads.log.digest import sha256_hex
+from threads.memory import local_knowledge
 from threads.memory.conformance import A
 from threads.memory.local_knowledge import LocalKnowledge
 from threads.memory.types import Binding, KnowledgeSource
@@ -283,3 +285,56 @@ def test_a_source_admitted_while_the_index_rebuilds_stays_searchable(
         await store.close()
 
     asyncio.run(main())
+
+
+def test_registration_waits_until_the_rebuilt_index_is_committed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A value registered from another thread while the rebuild writes must wait for its COMMIT:
+    the check that let the refill run holds until the index is durable."""
+    events: list[str] = []
+    begin = local_knowledge.transaction
+
+    def transaction[T](
+        body: Callable[[sqlite3.Connection], T],
+    ) -> Callable[[sqlite3.Connection], T]:
+        """The rebuild's transaction, with a registration started on another thread as it
+        opens, and its COMMIT recorded after giving that registration every chance to land."""
+
+        def run(conn: sqlite3.Connection) -> T:
+            registering = threading.Thread(
+                target=lambda: (register(RACED, "late"), events.append("registered"))
+            )
+
+            def traced(statement: str) -> None:
+                if statement == "COMMIT":
+                    registering.join(timeout=0.5)
+                    events.append("COMMIT")
+
+            conn.set_trace_callback(traced)
+            registering.start()
+            return begin(body)(conn)
+
+        return run
+
+    async def main() -> None:
+        store = await opened()
+        provider = await LocalKnowledge(()).bind(store)
+        source = KnowledgeSource(
+            source_id="a.md",
+            media_type="text/markdown",
+            content=f"alpha {RACED}".encode(),
+            binding=Binding(namespace="n", record_id="a"),
+        )
+        assert isinstance(await provider.ingest(A, source, "a"), Ok)
+        monkeypatch.setattr(local_knowledge, "transaction", transaction)
+        assert await provider.rebuild_index() == Ok(None)
+        await store.run(lambda c: c.set_trace_callback(None))
+        await store.close()
+
+    asyncio.run(main())
+    deadline = 50
+    while "registered" not in events and deadline:
+        deadline -= 1
+        threading.Event().wait(0.1)
+    assert events.index("COMMIT") < events.index("registered"), events
