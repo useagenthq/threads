@@ -1,0 +1,10 @@
+{
+  "name": "compaction-replay-uses-recorded-summary",
+  "family": "context_compaction",
+  "kind": "recover",
+  "description": "A compacted run continues after a restart. The next request renders the recorded summary artifact; the estimate starts over after compacted, so nothing is summarized again: one turn request and its answer.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

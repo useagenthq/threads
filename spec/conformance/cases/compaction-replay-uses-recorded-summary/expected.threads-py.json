@@ -1,0 +1,70 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 2,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 1270,
+      "output_tokens": 80,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "summary",
+        "event_id": "0192e000-0000-7000-8000-000000000011"
+      },
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-00000000000b"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-00000000000d"
+      },
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000012"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 18,
+      "hash": "8c65c87b677f3eb7d3bcccf5a8d85209f4efdc1636370710e195e894f37409d6"
+    }
+  },
+  "appended": [
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ]
+}

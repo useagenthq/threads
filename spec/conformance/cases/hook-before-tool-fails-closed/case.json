@@ -1,0 +1,9 @@
+{
+  "name": "hook-before-tool-fails-closed",
+  "family": "hooks",
+  "kind": "reduce",
+  "description": "A before_tool hook times out. A gating hook's failure is recorded as failed and denies the call (source hook), so nothing is dispatched; the run continues and the turn completes.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -19,6 +19,7 @@ from . import (
     effects,
     extras,
     forks,
+    guards,
     host,
     integrity,
     ladder,
@@ -29,6 +30,7 @@ from . import (
     renders,
     rules,
     structure,
+    summaries,
     tool_inputs,
 )
 from .common import CASES, sha
@@ -54,6 +56,8 @@ FAMILIES = (
     ladder,
     extras,
     structure,
+    guards,
+    summaries,
 )
 
 

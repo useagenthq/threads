@@ -1,0 +1,9 @@
+{
+  "name": "hook-stop-continue-bounded",
+  "family": "hooks",
+  "kind": "reduce",
+  "description": "An on_stop hook answers continue every time. Each continue is recorded with its reason and forces one more request through a trusted hook instruction, three times; the fourth continue ends the turn stop_hook_limit.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

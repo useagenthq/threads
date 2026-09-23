@@ -1,0 +1,9 @@
+{
+  "name": "compaction-summary-tail",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "A run over the compaction trigger appends compacted{range, summary_ref}; the events in the range stay in the log. The next request renders the summary inside the untrusted-reference wrapper in place of the range, then the kept tail and the new input.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

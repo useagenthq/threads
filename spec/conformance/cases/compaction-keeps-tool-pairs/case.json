@@ -1,0 +1,9 @@
+{
+  "name": "compaction-keeps-tool-pairs",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "The compacted range ends at the step boundary before the kept tail, never between a tool_call and its tool_result: call_2's call and result both render after the summary, so the request never holds half of a pair.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

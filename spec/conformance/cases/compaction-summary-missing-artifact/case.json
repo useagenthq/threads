@@ -1,0 +1,9 @@
+{
+  "name": "compaction-summary-missing-artifact",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "The summary artifact of a compacted event is missing on reload. The next request can't render the summary, so it is never sent without it: artifact_missing at the compacted event.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

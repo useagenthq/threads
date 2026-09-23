@@ -1,0 +1,9 @@
+{
+  "name": "hook-after-tool-failure-no-reexec",
+  "family": "hooks",
+  "kind": "reduce",
+  "description": "An after_tool hook throws after the effect committed. The failure is recorded after the result; the effect stays committed, is not denied after the fact and is not executed again (one effect_begin), and the turn completes.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

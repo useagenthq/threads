@@ -1,0 +1,9 @@
+{
+  "name": "hook-before-tool-deny",
+  "family": "hooks",
+  "kind": "render",
+  "description": "A before_tool hook denies the call. Its hook_decision is recorded before the permission_decision, which carries source hook and the reason; the tool never runs (no effect event), and the next request shows the model the reason.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

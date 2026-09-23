@@ -263,7 +263,7 @@
         {
           "kind": "case",
           "ref": "compaction-summary-tail",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -274,7 +274,7 @@
         {
           "kind": "case",
           "ref": "compaction-replay-uses-recorded-summary",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -285,7 +285,7 @@
         {
           "kind": "case",
           "ref": "compaction-keeps-tool-pairs",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -296,7 +296,7 @@
         {
           "kind": "case",
           "ref": "compaction-summary-missing-artifact",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -694,7 +694,7 @@
         {
           "kind": "case",
           "ref": "hook-before-tool-deny",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -705,7 +705,7 @@
         {
           "kind": "case",
           "ref": "hook-stop-continue-bounded",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -716,7 +716,7 @@
         {
           "kind": "case",
           "ref": "hook-before-tool-fails-closed",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -727,7 +727,7 @@
         {
           "kind": "case",
           "ref": "hook-after-tool-failure-no-reexec",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -736,9 +736,9 @@
       "step1": false,
       "evidence": [
         {
-          "kind": "case",
+          "kind": "test",
           "ref": "observer-failure-isolated",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
