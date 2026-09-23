@@ -24,7 +24,7 @@ from threads.memory.types import (
     ProviderError,
     Scope,
 )
-from threads.redaction import SecretInStoredBytesError, contains_secret
+from threads.redaction import SecretInStoredBytesError, contains_secret, published
 from threads.result import Err, Ok
 from threads.store import SqliteStore
 
@@ -125,14 +125,14 @@ class LocalKnowledge:
             message = f"{source.source_id}: holds a registered secret; not ingested"
             return Err(ProviderError("invalid", message))
         digest = hashlib.sha256(source.content).hexdigest()
-        # The admitted bytes are durable before the row that references them.
+        admit = transaction(_admit(scope, source, key, digest, text))
         try:
-            await self.store.put_artifact(source.content)
+            # The bytes are durable before the rows (and passages) that reference them, and a
+            # value registered after the check above can't slip in between.
+            return await self.store.run(admit, publishing=source.content)
         except SecretInStoredBytesError:
-            # A value registered after the check above: the store refused the bytes.
             message = f"{source.source_id}: holds a registered secret; not ingested"
             return Err(ProviderError("invalid", message))
-        return await self.store.run(transaction(_admit(scope, source, key, digest, text)))
 
     async def remove(self, scope: Scope, doc_id: str, key: str) -> Outcome[None]:
         if self.store is None:
@@ -210,21 +210,29 @@ class LocalKnowledge:
             )
         )
 
-    async def rebuild_index(self) -> None:
-        """Drops the index and refills it from the admitted artifacts (F14.3)."""
+    async def rebuild_index(self) -> Outcome[None]:
+        """Drops the index and refills it from the admitted artifacts (F14.3), in one step. A
+        source holding a value registered since it was admitted refuses the rebuild before
+        anything is cleared: the index stays as it was (C5)."""
         store = self.store
         if store is None:
-            return
+            return _UNBOUND
 
         def rows(conn: sqlite3.Connection) -> list[tuple[int, str]]:
-            conn.execute("DELETE FROM local_knowledge_fts")
             return conn.execute("SELECT rowid, content_sha256 FROM local_knowledge_docs").fetchall()
 
+        sources: list[tuple[int, bytes]] = []
         for rowid, sha in await store.run(rows):
             got = await store.get_artifact(sha)
             if isinstance(got, Err):
                 raise AssertionError(f"an admitted version's artifact is gone: {sha}")
-            await store.run(_reindex(rowid, got.value.decode("utf-8")))
+            sources.append((rowid, got.value))
+        try:
+            pieces = [content for _, content in sources]
+            await store.run(transaction(lambda c: published(pieces, lambda: _refill(c, sources))))
+        except SecretInStoredBytesError:
+            return Err(ProviderError("invalid", "a source holds a registered secret; index kept"))
+        return Ok(None)
 
 
 def _insert(
@@ -294,8 +302,10 @@ def _admit(
     return write
 
 
-def _reindex(rowid: int, text: str) -> Callable[[sqlite3.Connection], None]:
-    return lambda conn: _index(conn, rowid, text)
+def _refill(conn: sqlite3.Connection, sources: Sequence[tuple[int, bytes]]) -> None:
+    conn.execute("DELETE FROM local_knowledge_fts")
+    for rowid, content in sources:
+        _index(conn, rowid, content.decode("utf-8"))
 
 
 def _version(doc_id: str, version: str, digest: str, revision: int) -> DocVersion:

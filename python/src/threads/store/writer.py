@@ -111,8 +111,12 @@ class Writer:
         try:
             error = await asyncio.shield(op)
         except asyncio.CancelledError:
-            if await op is None:
+            settled = await op
+            if settled is None:
                 self._settled(batch)
+            elif isinstance(settled, lease.Refused):
+                # Nothing was written: fold the committed log again, as append does.
+                await self._reload(now)
             raise
         if error is None:
             self._settled(batch)

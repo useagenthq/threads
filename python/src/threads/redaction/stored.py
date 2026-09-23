@@ -3,7 +3,7 @@ fetched page), refused when they must stay byte-exact (provider material, a scre
 knowledge source, the resolved config, an import)."""
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from threads.redaction.registry import PAUSED, generation, ordered
 from threads.redaction.scan import Stream, replacements, scan
@@ -44,11 +44,13 @@ class SecretInStoredBytesError(Exception):
         super().__init__("a registered secret appeared in bytes about to be stored")
 
 
-def published[T](data: bytes, publish: Callable[[], T]) -> T:
-    """Runs `publish` (on the store's thread) with registration paused, unless `data` holds a
-    registered value by then: SecretInStoredBytesError, nothing written."""
+def published[T](data: bytes | Sequence[bytes], publish: Callable[[], T]) -> T:
+    """Runs `publish` (on the store's thread) with registration paused, unless `data` (one
+    piece of bytes, or several checked one by one) holds a registered value by then:
+    SecretInStoredBytesError, nothing written."""
+    pieces = (data,) if isinstance(data, bytes) else data
     with PAUSED:
-        if contains_secret(data):
+        if any(contains_secret(piece) for piece in pieces):
             raise SecretInStoredBytesError
         return publish()
 

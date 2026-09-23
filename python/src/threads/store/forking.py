@@ -54,6 +54,15 @@ def forking(
 
 
 @dataclass(frozen=True, slots=True)
+class ForkRequest:
+    parent: BranchId
+    at_seq: int
+    child: BranchId
+    data: Mapping[str, JsonValue]
+    """The fork payload (reason, sandbox_id, knowledge_policy) minus the derived parent link."""
+
+
+@dataclass(frozen=True, slots=True)
 class ChildStart:
     row: Branch
     fork: tuple[StoredEvent, bytes]

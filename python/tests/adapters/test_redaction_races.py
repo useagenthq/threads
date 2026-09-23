@@ -1,0 +1,250 @@
+"""C5: a value registered after a check on the event loop but before the store's thread
+writes what it guarded. Each write re-checks with registration paused."""
+
+import asyncio
+import sqlite3
+from collections.abc import Callable, Mapping
+
+import pytest
+from pydantic import JsonValue
+from redaction_kit import RACED, ROOT, T0, Race, opened, started, user, writer
+
+from threads.log import BranchId, ParseError
+from threads.log.digest import sha256_hex
+from threads.memory.conformance import A
+from threads.memory.local_knowledge import LocalKnowledge
+from threads.memory.types import Binding, KnowledgeSource
+from threads.redaction import SecretInStoredBytesError, register
+from threads.result import Err, Ok
+from threads.store import Draft, ForkRequest, verify_export
+from threads.store import sqlite as store_sqlite
+from threads.store.forking import ChildStart, Forking
+from threads.store.worker import Worker
+
+
+def test_a_value_registered_before_the_append_publishes_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        store = await opened()
+        w = await writer(store)
+        assert isinstance(await w.append([started({})]), Ok)
+        Race(monkeypatch, RACED)
+        appended = await w.append([user(f"note {RACED}")])
+        assert isinstance(appended, Err)
+        assert appended.error.code == "secret_in_stored_bytes"
+        exported = await store.export(ROOT)
+        assert isinstance(exported, Ok)
+        assert RACED.encode() not in exported.value
+        # Nothing was written, so the writer goes on.
+        assert isinstance(await w.append([user("safe")]), Ok)
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_the_spill_commits_drops_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        store = await opened()
+        spill = await store.spill()
+        await spill.write(RACED.encode())
+        # The end-of-stream flush is the first statement; the commit is the second.
+        Race(monkeypatch, RACED, at=2)
+        assert await spill.commit() is None
+        assert isinstance(await store.get_artifact(sha256_hex(RACED.encode())), Err)
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_an_artifact_publishes_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = f"text {RACED}".encode()
+
+    async def main() -> None:
+        store = await opened()
+        Race(monkeypatch, RACED)
+        with pytest.raises(SecretInStoredBytesError):
+            await store.put_artifact(data)
+        assert isinstance(await store.get_artifact(sha256_hex(data)), Err)
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_an_import_publishes_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        store = await opened()
+        w = await writer(store)
+        assert isinstance(await w.append([started({}), user(f"hi {RACED}")]), Ok)
+        exported = await store.export(ROOT)
+        assert isinstance(exported, Ok)
+        verified = verify_export(exported.value, T0)
+        assert isinstance(verified, Ok)
+        fresh = await opened()
+        Race(monkeypatch, RACED)
+        imported = await fresh.import_log(verified.value)
+        assert isinstance(imported, Err)
+        assert imported.error.code == "secret_in_stored_bytes"
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_a_fork_event_publishes_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    child = BranchId("0192b000-0000-7000-8000-000000000002")
+    snapshot = Draft(
+        "snapshot",
+        {
+            "snapshot_id": "snap_01",
+            "provider": "fake",
+            "sandbox_id": "sbx_parent_01",
+            "capture_class": "filesystem",
+            "expires_at": None,
+            "manifest_hash": "1" * 64,
+            "quiesced": {"frozen": [], "stopped": [], "excluded": []},
+        },
+    )
+    built = store_sqlite.start_child
+
+    def racing(
+        started: Forking, data: Mapping[str, JsonValue], now: int
+    ) -> Ok[ChildStart] | Err[ParseError]:
+        made = built(started, data, now)
+        register(RACED, "raced")
+        return made
+
+    async def main() -> None:
+        store = await opened()
+        w = await writer(store)
+        done = Draft("turn_completed", {"reason": "end_turn"})
+        assert isinstance(await w.append([started({}), user("hi"), done, snapshot]), Ok)
+        monkeypatch.setattr(store_sqlite, "start_child", racing)
+        data: dict[str, JsonValue] = {
+            "reason": "snapshot",
+            "sandbox_id": RACED,
+            "knowledge_policy": "pinned",
+        }
+        forked = await store.fork(ForkRequest(ROOT, 4, child, data), "c", lambda: T0)
+        assert isinstance(forked, Err)
+        assert forked.error.code == "secret_in_stored_bytes"
+        exported = await store.export(child)
+        assert not (isinstance(exported, Ok) and RACED.encode() in exported.value)
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_a_knowledge_source_publishes_is_an_error_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        store = await opened()
+        provider = await LocalKnowledge(()).bind(store)
+        source = KnowledgeSource(
+            source_id="doc.md",
+            media_type="text/markdown",
+            content=f"the note {RACED}".encode(),
+            binding=Binding(namespace="n", record_id="doc"),
+        )
+        Race(monkeypatch, RACED)
+        got = await provider.ingest(A, source, "doc@1")
+        assert isinstance(got, Err)
+        assert got.error.code == "invalid"
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_a_knowledge_source_is_indexed_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The source is saved and indexed in one handoff to the store's thread, so there is no
+    second handoff where a value registered meanwhile could reach the index."""
+
+    async def main() -> None:
+        store = await opened()
+        provider = await LocalKnowledge(()).bind(store)
+        source = KnowledgeSource(
+            source_id="doc.md",
+            media_type="text/markdown",
+            content=f"the note {RACED}".encode(),
+            binding=Binding(namespace="n", record_id="doc"),
+        )
+        race = Race(monkeypatch, RACED)
+        got = await provider.ingest(A, source, "doc@1")
+        assert race.left == 0, "ingest hands the store exactly one statement"
+        assert isinstance(got, Err)
+        assert got.error.code == "invalid"
+        assert isinstance(await store.get_artifact(sha256_hex(source.content)), Err)
+        indexed = await store.run(
+            lambda c: c.execute("SELECT count(*) FROM local_knowledge_fts").fetchone()
+        )
+        assert indexed == (0,)
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_rebuild_over_a_source_holding_a_value_keeps_the_old_index() -> None:
+    async def main() -> None:
+        store = await opened()
+        provider = await LocalKnowledge(()).bind(store)
+        for name in ("a.md", "b.md"):
+            source = KnowledgeSource(
+                source_id=name,
+                media_type="text/markdown",
+                content=f"{name} mentions {RACED}".encode(),
+                binding=Binding(namespace="n", record_id=name),
+            )
+            assert isinstance(await provider.ingest(A, source, name), Ok)
+
+        def count(c: sqlite3.Connection) -> tuple[int]:
+            return c.execute("SELECT count(*) FROM local_knowledge_fts").fetchone()
+
+        before = await store.run(count)
+        register(RACED, "later")
+        rebuilt = await provider.rebuild_index()
+        assert isinstance(rebuilt, Err)
+        assert rebuilt.error.code == "invalid"
+        assert await store.run(count) == before
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_cancelled_append_the_store_refused_leaves_the_writer_usable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        store = await opened()
+        w = await writer(store)
+        assert isinstance(await w.append([started({})]), Ok)
+        original = Worker.call
+        appending: list[asyncio.Task[object]] = []
+
+        async def call[T](worker: Worker, statement: Callable[[sqlite3.Connection], T]) -> T:
+            if appending:
+                register(RACED, "raced")
+                appending.pop().cancel()
+            return await original(worker, statement)
+
+        monkeypatch.setattr(Worker, "call", call)
+        task: asyncio.Task[object] = asyncio.ensure_future(w.append([user(f"note {RACED}")]))
+        appending.append(task)
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert isinstance(await w.append([user("safe")]), Ok)
+        exported = await store.export(ROOT)
+        assert isinstance(exported, Ok)
+        assert RACED.encode() not in exported.value
+        await store.close()
+
+    asyncio.run(main())

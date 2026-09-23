@@ -6,7 +6,6 @@ with the default ":memory:" path is the in-memory store tests use: the same code
 
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import JsonValue
@@ -24,7 +23,7 @@ from threads.store.bindings import Bindings, Kind
 from threads.store.budgets import BudgetLedger
 from threads.store.context import CleanupContext, OwnerContext
 from threads.store.cursors import ObserverCursors
-from threads.store.forking import Forking, forking, publish_fork, start_child
+from threads.store.forking import Forking, ForkRequest, forking, publish_fork, start_child
 from threads.store.lines import Draft, head_line, header_line, imported_bytes
 from threads.store.resources import Ledger, Resource
 from threads.store.spill import Spill
@@ -32,15 +31,6 @@ from threads.store.tables import Tables
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
-
-
-@dataclass(frozen=True, slots=True)
-class ForkRequest:
-    parent: BranchId
-    at_seq: int
-    child: BranchId
-    data: Mapping[str, JsonValue]
-    """The fork payload (reason, sandbox_id, knowledge_policy) minus the derived parent link."""
 
 
 class SqliteStore:
@@ -88,10 +78,22 @@ class SqliteStore:
         """Host-issued memory or knowledge bindings."""
         return Bindings(self._worker, kind)
 
-    async def run[T](self, statement: Callable[[sqlite3.Connection], T]) -> T:
+    async def run[T](
+        self, statement: Callable[[sqlite3.Connection], T], *, publishing: bytes | None = None
+    ) -> T:
         """A built-in provider's statement on the store's own thread (local_memory,
-        local_knowledge keep their tables in the run's store)."""
-        return await self._worker.call(statement)
+        local_knowledge keep their tables in the run's store). With `publishing`, those bytes
+        are stored as an artifact first, in the same step with registration paused: a
+        registered value in them writes nothing (SecretInStoredBytesError, C5)."""
+        if publishing is None:
+            return await self._worker.call(statement)
+        data = publishing
+
+        def both(conn: sqlite3.Connection) -> T:
+            self._artifacts.put(data)
+            return statement(conn)
+
+        return await self._worker.call(lambda c: published(data, lambda: both(c)))
 
     @property
     def cursors(self) -> ObserverCursors:
