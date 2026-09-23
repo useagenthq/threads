@@ -18,11 +18,11 @@ icon: "Braces"
   Where in the log the fact came from: the thread and the events behind the save.
 </Field>
 
-<Field name="provenance.threadId / provenance.thread_id" type={"ThreadId"} required>
+<Field name="provenance.thread_id" type={"ThreadId"} required>
   The thread whose run saved the fact.
 </Field>
 
-<Field name="provenance.eventIds / provenance.event_ids" type={"readonly EventId[]"} required>
+<Field name="provenance.event_ids" type={"readonly EventId[]"} required>
   The log events the save was based on. May be empty.
 </Field>
 

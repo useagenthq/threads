@@ -1672,7 +1672,7 @@
                 "union": [
                   {
                     "object": {
-                      "decision": {"type": {"literal": "allow"}, "required": true},
+                      "decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: the input goes on to the model, with this hook's injections (if any) added before the request."},
                       "injections": {
                         "type": {"array": {"prim": "string"}},
                         "required": false,
@@ -1684,8 +1684,8 @@
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the input stays in the log for audit but is never sent to the model, and the turn ends input_denied."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model never sees it."}
                     },
                     "casing": "wire"
                   }
@@ -1720,7 +1720,7 @@
                 "union": [
                   {
                     "object": {
-                      "decision": {"type": {"literal": "proceed"}, "required": true},
+                      "decision": {"type": {"literal": "proceed"}, "required": true, "doc": "proceed: the request is sent, with this hook's injections (if any) added first."},
                       "injections": {
                         "type": {"array": {"prim": "string"}},
                         "required": false,
@@ -1732,8 +1732,8 @@
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: this attempt is never sent to the model, and the turn ends error."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model never sees it."}
                     },
                     "casing": "wire"
                   }
@@ -1773,25 +1773,25 @@
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true, "doc": "proceed: the response stands; its tool calls go on to be authorized and run, or the turn ends as the response says."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the response's output is withheld and each of its tool calls is closed as denied without running. The turn ends error; in TypeScript, a response that had tool calls instead goes back to the model with each call shown as denied."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision. TypeScript shows it to the model on each closed call (denied: reason); Python shows a fixed text."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "guide"}, "required": true},
-                      "text": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "guide"}, "required": true, "doc": "guide: the response is withheld, its tool calls are closed without running, and the model is asked again with text as a trusted instruction."},
+                      "text": {"type": {"prim": "string"}, "required": true, "doc": "The instruction the model is re-asked with, as any text. It is recorded on the hook_decision and added to the next request as a trusted hook instruction."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "retry"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "retry"}, "required": true, "doc": "retry: like guide, with reason as the instruction. After 2 retries in one turn, a further retry counts as a deny."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "What to do differently, as any text. It is recorded on the hook_decision and sent to the model as a trusted hook instruction."}
                     },
                     "casing": "wire"
                   }
@@ -1824,18 +1824,18 @@
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: this hook doesn't object. The policy's decision stands; a hook can never loosen a policy ask or deny."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the call is refused and never runs. It closes as a denied tool_result the model sees, and permission_denied observers are told."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and the permission_decision. TypeScript shows it to the model in the denied result (denied: reason); Python shows a fixed text."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "ask"}, "required": true},
-                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false}
+                      "decision": {"type": {"literal": "ask"}, "required": true, "doc": "ask: the call needs approval. permission_request hooks may answer it; otherwise it opens an approval challenge and parks until an approver decides. In dont_ask mode an ask is a deny."},
+                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "A permission rule to show with the ask, such as bash(git push *). TypeScript records it as the decision's reason; Python ignores it. Omitted: the ask carries no rule."}
                     },
                     "casing": "wire"
                   }
@@ -1868,18 +1868,18 @@
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: the programmatic approver grants the call, so it runs without asking a person."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the programmatic approver refuses the call; it closes as a denied tool_result the model sees."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and the permission_decision. TypeScript shows it to the model in the denied result; Python shows a fixed text."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "ask"}, "required": true},
-                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false}
+                      "decision": {"type": {"literal": "ask"}, "required": true, "doc": "ask: the hook doesn't answer, so the call opens an approval challenge and parks until a person decides."},
+                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "A permission rule to show with the ask. TypeScript records it as the decision's reason; Python ignores it. Omitted: the ask carries no rule."}
                     },
                     "casing": "wire"
                   }
@@ -1978,18 +1978,18 @@
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true, "doc": "proceed: later requests render the result as it is."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "redact"}, "required": true},
-                      "spans": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}}, "required": true}
+                      "decision": {"type": {"literal": "redact"}, "required": true, "doc": "redact: the listed spans are hidden from every later request, recorded as context_edited guardrail. The raw result stays in the log."},
+                      "spans": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}}, "required": true, "doc": "The byte ranges to hide, as UTF-8 offsets into the result's text (start inclusive, end exclusive). At least one. In TypeScript a span outside the text, or not on a character boundary, clears the whole result instead."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the whole result is cleared from every later request (context_edited guardrail). The call already ran; the raw result stays in the log."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model sees the cleared result, not the reason."}
                     },
                     "casing": "wire"
                   }
@@ -2048,18 +2048,18 @@
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "proceed"}, "required": true, "doc": "proceed: compaction goes ahead: older turns are summarized by a side request."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: no summary is made this time, recorded as compaction_failed at stage hook."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model never sees it."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
-                      "decision": {"type": {"literal": "guide"}, "required": true},
-                      "text": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "guide"}, "required": true, "doc": "guide: compaction goes ahead, and text is added to the summary request's instructions."},
+                      "text": {"type": {"prim": "string"}, "required": true, "doc": "Extra instructions for the summary, such as what to keep, as any text. They follow the fixed summary instruction under Additional instructions."}
                     },
                     "casing": "wire"
                   }
@@ -2118,11 +2118,11 @@
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "stop"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "stop"}, "required": true, "doc": "stop: the turn ends end_turn as the model intended."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "continue"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "continue"}, "required": true, "doc": "continue: the turn doesn't end. The model is asked again with reason as a trusted instruction. After 3 continues in one turn it ends stop_hook_limit."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "What the model should still do, as any text. It is recorded on the hook_decision and sent to the model as a trusted hook instruction."}
                     },
                     "casing": "wire"
                   }
@@ -2181,11 +2181,11 @@
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: the subagent starts (agent_spawned)."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the subagent never starts. The spawn call closes as a denied tool_result the parent's model sees."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision. TypeScript shows it to the parent's model as the denied result; Python shows a fixed text."}
                     },
                     "casing": "wire"
                   }
@@ -2218,11 +2218,11 @@
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "stop"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "stop"}, "required": true, "doc": "stop: the subagent's result stands and goes back to the parent."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "continue"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "continue"}, "required": true, "doc": "continue: the subagent runs again with reason as its next input. After 3 continues, or when the subagent was cancelled, its result stands."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "The subagent's next input, as any text. It is recorded on the hook_decision."}
                     },
                     "casing": "wire"
                   }
@@ -2255,11 +2255,11 @@
               ],
               "returns": {
                 "union": [
-                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true}}, "casing": "wire"},
+                  {"object": {"decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: the switch to the fallback model goes ahead (settings_changed with reason fallback)."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true},
-                      "reason": {"type": {"prim": "string"}, "required": true}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: no switch to the fallback model. TypeScript keeps retrying the current model; Python ends the turn model_unavailable."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model never sees it."}
                     },
                     "casing": "wire"
                   }

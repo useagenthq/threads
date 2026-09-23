@@ -4,7 +4,9 @@ import json
 import sys
 from pathlib import Path
 
-from .json_access import Json, load, obj, text
+from api_docs import check_docs
+
+from .json_access import Json, Obj, load, obj, text
 from .members import Explain
 from .openapi import bundle_openapi
 from .overview import overview_page, sidebar_meta, type_groups
@@ -19,9 +21,7 @@ def schemas() -> dict[str, Json]:
     return {text(d["$id"]): d for d in docs if isinstance(d, dict) and "$id" in d}
 
 
-def outputs() -> dict[Path, str]:
-    api = obj(load(SPEC / "api.json"))
-    explain = Explain(obj(api["types"]), schemas())
+def outputs(api: Obj, explain: Explain) -> dict[Path, str]:
     files: dict[Path, str] = {}
     for key, value in obj(api["functions"]).items():
         f = obj(value)
@@ -48,7 +48,13 @@ def stale_pages(files: dict[Path, str]) -> list[Path]:
 
 def main() -> int:
     check = "--check" in sys.argv[1:]
-    files = outputs()
+    api, wire = obj(load(SPEC / "api.json")), schemas()
+    unexplained = check_docs(api, wire)
+    if unexplained:
+        # The same rule as check_api.py: every row the pages print needs an explanation.
+        print("\n".join(unexplained), file=sys.stderr)
+        return 1
+    files = outputs(api, Explain(obj(api["types"]), wire))
     stale = stale_pages(files)
     changed = [p for p, content in files.items() if not p.exists() or p.read_text() != content]
     if check:

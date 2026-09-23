@@ -246,3 +246,59 @@ def test_an_inherited_doc_fills_the_row() -> None:
 def test_the_generator_refuses_an_unexplained_row() -> None:
     with pytest.raises(ValueError, match=r"agent\.web\.fetch\.allow \(inline_field\) has no doc"):
         page(contract(allow=None), "agent")
+
+
+def decision(value: str, doc: str | None, **fields: Obj) -> Obj:
+    """One alternative of what a hook returns, tagged by its decision."""
+    tag = member({"literal": value}, doc, required=True)
+    return {"object": {"decision": tag, **fields}, "casing": "wire"}
+
+
+def hooks(reason: str | None) -> Obj:
+    """A Hooks-like type whose on_stop callback returns stop, or continue with a reason."""
+    returns: Obj = {
+        "union": [
+            decision("stop", "The run ends."),
+            decision("continue", "The run goes on.", reason=member(STRING, reason, required=True)),
+        ]
+    }
+    on_stop: Obj = {"fn": {"async": True, "params": [], "returns": returns}}
+    return row_type(on_stop=member(on_stop, "Called at the end; omit for none."))
+
+
+def test_an_undocumented_callback_return_field_fails() -> None:
+    assert problems(contract(types={"Hooks": hooks("Shown to the model, any text.")})) == []
+    assert problems(contract(types={"Hooks": hooks(None)})) == [
+        "api.json Hooks.on_stop()[continue].reason (inline_field): no doc"
+    ]
+
+
+def test_callback_return_fields_are_rows_on_the_page() -> None:
+    hooks_page = type_page(explain(contract()), "Hooks", hooks("Shown to the model."))
+    stop = "onStop()[stop].decision / on_stop()[stop].decision"
+    reason = "onStop()[continue].reason / on_stop()[continue].reason"
+    assert f'<Field name="{stop}" type={{"\\"stop\\""}} required>' in hooks_page
+    assert f'<Field name="{reason}" type={{"string"}} required>' in hooks_page
+    assert "  Shown to the model.\n</Field>" in hooks_page
+
+
+def test_an_optional_callback_param_says_what_its_absence_means() -> None:
+    def on(doc: str) -> Obj:
+        signal = param("signal", STRING, doc, kind="positional")
+        return with_param(param("on", callback(signal), "Called; omit for none."))
+
+    assert problems(on("Aborts the call.")) == [
+        "api.json run.on.signal (callback_param): optional with no default: "
+        "say what omitting it does"
+    ]
+    assert problems(on("Aborts the call; omitted in Python.")) == []
+
+
+def test_nested_rows_of_a_wire_object_keep_snake_case() -> None:
+    provenance: Obj = {"object": {"thread_id": member(STRING, "Where it was saved.")}}
+    field = member(provenance, "Omitted: unknown.")
+    wire_row: Obj = {**row_type(provenance=field), "casing": "wire"}
+    wire_page = type_page(explain(contract()), "Row", wire_row)
+    assert '<Field name="provenance.thread_id"' in wire_page
+    api_page = type_page(explain(contract()), "Row", row_type(provenance=field))
+    assert '<Field name="provenance.threadId / provenance.thread_id"' in api_page

@@ -86,24 +86,39 @@ def row(
 
 
 def nested_rows(
-    explain: Explain, path: str, names: tuple[str, str], t: Obj, lang: str | None
+    explain: Explain, parent_row: Entry, names: tuple[str, str], lang: str | None
 ) -> list[str]:
-    """One row per inline object field and callback parameter inside t, at any depth, labelled
-    from the parent row (web.fetch, execute(ctx))."""
-    known = {path: names}
+    """One row per inline object field, callback parameter and callback return field inside the
+    parent row's type, at any depth, labelled from the parent: web.fetch, execute(ctx),
+    beforeTool()[deny].reason."""
+    known = {parent_row.path: names}
     rows: list[str] = []
-    for entry in walk_type(t, path):
+    for entry in walk_type(parent_row.node["type"], parent_row.path, parent_row.casing):
         parent, _, name = entry.path.rpartition(".")
-        ts, py = known[parent]
-        own_ts, own_py = labels(name)
+        ts, py = label_of(known, parent)
+        own_ts, own_py = labels(name, "api" if entry.kind == "callback_param" else entry.casing)
         if entry.kind == "callback_param":
             known[entry.path] = (f"{ts}({own_ts})", f"{py}({own_py})")
         else:
             known[entry.path] = (f"{ts}.{own_ts}", f"{py}.{own_py}")
-        type_text = Render(lang or "ts").expr(obj(entry.node["type"]))
+        type_text = Render(lang or "ts").expr(obj(entry.node["type"]), entry.casing)
         doc = member_doc(parent, name, explain(entry), lang)
         rows.append(row(known[entry.path], entry.node, type_text, lang, doc))
     return rows
+
+
+def label_of(known: dict[str, tuple[str, str]], path: str) -> tuple[str, str]:
+    """A row's label; a path that has no row of its own (the "()" of a callback's return, a
+    union alternative's "[tag]") extends its nearest labelled ancestor."""
+    base = path
+    while base not in known:
+        cut = max(base.rfind("("), base.rfind("["))
+        if cut < 0:
+            raise KeyError(f"{path} has no labelled ancestor")
+        base = base[:cut]
+    ts, py = known[base]
+    suffix = path[len(base) :]
+    return ts + suffix, py + suffix
 
 
 def param_field(explain: Explain, container: str, p: Obj) -> str:
@@ -112,7 +127,8 @@ def param_field(explain: Explain, container: str, p: Obj) -> str:
     ptype = obj(p["type"])
     path = f"{container}.{name}"
     kind: Kind = "option" if p["kind"] == "option" else "param"
-    doc = member_doc(container, name, explain(Entry(p, kind, path)), lang)
+    entry = Entry(p, kind, path)
+    doc = member_doc(container, name, explain(entry), lang)
     ref = ptype.get("$ref")
     if isinstance(ref, str):
         type_name, link = ref_name(ref)
@@ -120,7 +136,7 @@ def param_field(explain: Explain, container: str, p: Obj) -> str:
             doc += f" See [{type_name or 'type'}]({link})."
     type_text = Render(lang or "ts").expr(ptype)
     rows = [row(labels(name), p, type_text, lang, doc)]
-    return "\n\n".join(rows + nested_rows(explain, path, labels(name), ptype, lang))
+    return "\n\n".join(rows + nested_rows(explain, entry, labels(name), lang))
 
 
 def param_fields(explain: Explain, container: str, params: list[Obj]) -> str:
@@ -138,9 +154,10 @@ def fields_section(explain: Explain, container: str, fields: Obj, casing: str, k
         names = labels(name, casing)
         ftype = obj(spec["type"])
         type_text = Render(lang or "ts").expr(ftype, casing)
-        doc = member_doc(container, name, explain(Entry(spec, kind, path)), lang)
+        entry = Entry(spec, kind, path, casing)
+        doc = member_doc(container, name, explain(entry), lang)
         items.append(row(names, spec, type_text, lang, doc))
-        items += nested_rows(explain, path, names, ftype, lang)
+        items += nested_rows(explain, entry, names, lang)
     return "\n\n".join(items)
 
 
