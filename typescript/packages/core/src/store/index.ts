@@ -17,7 +17,7 @@ export {
   ResourceRow,
   type ResourceState,
 } from "./ledger";
-export { liveWriter, running } from "./live";
+export { keepLease, liveWriter } from "./live";
 export { type ForkRequest, LEASE_TTL_MS, LogStore } from "./store";
 export { LOCAL_TENANT } from "./tables";
 export { type EventDraft, type Lease, Writer } from "./writer";

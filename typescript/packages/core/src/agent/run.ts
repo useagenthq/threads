@@ -16,7 +16,7 @@ import {
 } from "../loop";
 import { DEFAULT_PERMISSIONS } from "../permissions";
 import { knownEvents } from "../reduce";
-import { type EventDraft, LEASE_TTL_MS, running, type Writer } from "../store";
+import { type EventDraft, keepLease, type Writer } from "../store";
 import { bindBuiltins } from "../tools";
 import type { LogError } from "../verify";
 import type { Agent } from "./agent";
@@ -301,23 +301,6 @@ function pendingInputs(
     (e) => e.type === "user_input",
   ).length;
   return inputs.slice(given);
-}
-
-/**
- * Renews the lease every third of its TTL while the run is in flight, so slow model and tool
- * calls keep it, then hands it back so the next run starts at once. A failed renewal
- * poisons the writer, which fences every later dispatch and append.
- */
-function keepLease(writer: Writer): () => void {
-  const timer = setInterval(() => {
-    if (!writer.renew(LEASE_TTL_MS).ok) clearInterval(timer);
-  }, LEASE_TTL_MS / 3);
-  const done = running(writer);
-  return () => {
-    clearInterval(timer);
-    done();
-    writer.release();
-  };
 }
 
 function handleOf(

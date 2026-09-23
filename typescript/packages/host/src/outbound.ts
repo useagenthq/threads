@@ -2,6 +2,7 @@ import type { ChannelAdapter } from "@threads/core";
 import {
   type BranchId,
   type KnownEvent,
+  keepLease,
   knownEvents,
   storeConnection,
   ThreadId,
@@ -49,11 +50,14 @@ export async function reply(
   if (todo.length > 0) {
     const writer = log.acquire(main.value, `send-${crypto.randomUUID()}`);
     if (!writer.ok) return "busy";
+    // Renewed while the sends are in flight: one past the fence may take longer than the TTL,
+    // and a lapsed lease would let another host look it up as not sent and send it again.
+    const release = keepLease(writer.value);
     try {
       for (const call of missing(main.value, writer.value.chain.fold, todo))
         await sendOp(adapter, writer.value, artifacts, call, ctx.stopping);
     } finally {
-      writer.value.release();
+      release();
     }
   }
   return handOver(ctx, tenant, threadId, read.value);

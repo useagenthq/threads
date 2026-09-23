@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { agent, type Store, scriptedModel, sqlite } from "@threads/core";
 import { sandboxFetch } from "@threads/core/adapter";
-import { storeConnection } from "@threads/core/host";
+import { openStore, storeConnection, tenantStore } from "@threads/core/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
+import { hostTicked } from "../src/host";
 import {
   authenticate,
   eventsOf,
@@ -135,4 +136,39 @@ describe("stop() with a send in flight", () => {
     await until(async () => s.refused.length === 1);
     expect(s.landed).toHaveLength(0);
   });
+});
+
+describe("a send held past the fence for longer than the lease lasts", () => {
+  test("keeps its lease, so another host never sends it again", async () => {
+    const store = sqlite(":memory:");
+    // Every lease lasts 300 ms here: a send held for seconds outlives many of them.
+    const { log } = await openStore(tenantStore(store, TENANT));
+    const acquire = log.acquire.bind(log);
+    log.acquire = (branch, holder) => acquire(branch, holder, 300);
+    const s = gated("after");
+    const first = await started(s.channel, store);
+    hosts.push(first);
+    await s.at;
+    // Another host on the store, whose recovery looks at the thread on every tick.
+    const other = fakeChannel("support");
+    const second = host({
+      store,
+      authenticate,
+      agents: {
+        support: agent({
+          name: "support",
+          model: scriptedModel({ responses: [] }),
+        }),
+      },
+      channels: { slack: other },
+    });
+    hosts.push(second);
+    await second.ready();
+    await hostTicked(second);
+    await hostTicked(second);
+    s.gate.resolve();
+    await until(async () => s.landed.length === 1);
+    await hostTicked(second);
+    expect(other.performed).toHaveLength(0);
+  }, 15_000);
 });

@@ -165,13 +165,12 @@ export class LogStore {
     ttlMs: number = LEASE_TTL_MS,
   ): Result<Writer, LogError> {
     return atomically(this.#db, () => {
-      const now = this.#now();
       const row = ownedBranch(this.#db, branchId, this.tenant);
       const torn = row.ok && isTorn(row.value) ? row.value : undefined;
       if (torn !== undefined) markRepaired(this.#db, branchId);
       const log = this.#runnable(branchId);
       if (!log.ok) return log;
-      const writer = this.#take(branchId, holderId, now + ttlMs, log.value);
+      const writer = this.#take(branchId, holderId, ttlMs, log.value);
       if (!writer.ok || torn === undefined) return writer;
       return recordRepair(writer.value, this.#artifacts, torn, log.value);
     });
@@ -196,7 +195,7 @@ export class LogStore {
         );
       const chain = forking.loadChain(this.#db, branchId);
       if (!chain.ok) return chain;
-      return this.#take(branchId, holderId, this.#now() + ttlMs, chain.value);
+      return this.#take(branchId, holderId, ttlMs, chain.value);
     });
   }
 
@@ -204,7 +203,7 @@ export class LogStore {
   #take(
     branchId: BranchId,
     holderId: string,
-    expiresAt: number,
+    ttlMs: number,
     chain: Chain,
   ): Result<Writer, LogError> {
     const lease = getLease(this.#db, branchId);
@@ -219,7 +218,7 @@ export class LogStore {
         logError("branch_busy", `branch ${branchId} has a live lease`),
       );
     const epoch = Math.max(held?.epoch ?? 0, chain.fold.epoch) + 1;
-    return ok(this.#lease(branchId, holderId, epoch, expiresAt, chain));
+    return ok(this.#lease(branchId, holderId, epoch, ttlMs, chain));
   }
 
   /**
@@ -273,7 +272,7 @@ export class LogStore {
           request.branch,
           request.holderId,
           opened.value.fold.epoch + 1,
-          this.#now() + ttlMs,
+          ttlMs,
           opened.value,
         ),
       );
@@ -382,18 +381,18 @@ export class LogStore {
     branchId: string,
     holderId: string,
     epoch: number,
-    expiresAt: number,
+    ttlMs: number,
     chain: Chain,
   ): Writer {
     putLease(this.#db, branchId, {
       holder_id: holderId,
       epoch,
-      expires_at: expiresAt,
+      expires_at: this.#now() + ttlMs,
     });
     return new Writer(
       this.#db,
       this.#now,
-      { branchId, holderId, epoch },
+      { branchId, holderId, epoch, ttlMs },
       chain,
     );
   }

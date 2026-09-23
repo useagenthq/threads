@@ -43,6 +43,7 @@ export type { Fence } from "./sandbox/remote/fence";
 export {
   type ArtifactStore,
   type EventDraft,
+  keepLease,
   LEASE_TTL_MS,
   type LogStore,
   type SqliteDriver,
