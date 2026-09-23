@@ -331,6 +331,29 @@ describe("input, model and result gates", () => {
     expect((edit?.seq ?? 0) < (second?.seq ?? 0)).toBe(true);
   });
 
+  // The same cases as Python's test_a_bad_redaction_clears_the_result_instead_of_crashing.
+  test.each([
+    ["none", []],
+    ["zero-width", [{ start: 0, end: 0 }]],
+    ["out", [{ start: 0, end: 10_000 }]],
+  ])(
+    "before_tool_result redact with %s spans fails and clears the result",
+    async (_n, spans) => {
+      const h = harness([EMAIL], [], [SEND, FINAL]);
+      const log = await run(h, [
+        ext({
+          before_tool_result: async () => ({ decision: "redact", spans }),
+        }),
+      ]);
+      expect(of(log, "hook_decision").map((e) => e.data.decision)).toEqual([
+        "failed",
+      ]);
+      expect(of(log, "context_edited")[0]?.data).toMatchObject({
+        edits: [{ call_id: "call_1", action: "clear" }],
+      });
+    },
+  );
+
   test("after_model deny closes the undispatched calls and nothing runs", async () => {
     const h = harness([EMAIL], [], [SEND, FINAL]);
     const log = await run(h, [

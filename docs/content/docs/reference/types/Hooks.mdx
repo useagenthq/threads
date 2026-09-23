@@ -129,7 +129,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeTool / before_tool" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string } | { decision: \"ask\"; rule?: PermissionRule }>"}>
-  Runs before the permission decision on every tool call. Return allow, deny with a reason, or ask to require approval; when several extensions answer, the strictest wins, and a throw or timeout denies. Omit it and the agent's permission rules decide alone.
+  Runs before the permission decision on every tool call, even one the policy denies (the deny stands). Return allow, deny with a reason, or ask to require approval; when several extensions answer, the strictest wins, and a throw or timeout denies. TypeScript stops at the first extension that denies, so later ones aren't called; Python calls every extension. Omit it and the agent's permission rules decide alone.
 </Field>
 
 <Field name="beforeTool(call) / before_tool(call)" type={"ToolCallEvent.data"} required>
@@ -157,7 +157,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeTool()[ask].rule / before_tool()[ask].rule" type={"PermissionRule"}>
-  A permission rule to show with the ask, such as bash(git push *). It is recorded as the permission_decision's reason. Omitted: the ask carries no reason.
+  A permission rule to show with the ask, such as bash(git push *). It is recorded as the reason on the hook_decision and on the permission_decision. Omitted: the ask carries no reason.
 </Field>
 
 <Field name="permissionRequest / permission_request" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string } | { decision: \"ask\"; rule?: PermissionRule }>"}>
@@ -189,7 +189,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="permissionRequest()[ask].rule / permission_request()[ask].rule" type={"PermissionRule"}>
-  Not used: an ask answers nothing, so the earlier decision and its reason stand. Omit it.
+  Recorded as the hook_decision's reason only: an ask answers nothing, so the earlier decision and its reason stand. Omitted: no reason is recorded.
 </Field>
 
 <Field name="permissionDenied / permission_denied" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<void>"}>
@@ -245,7 +245,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeToolResult()[redact].spans / before_tool_result()[redact].spans" type={"readonly Span[]"} required>
-  The byte ranges to hide, as UTF-8 offsets into the result's text (start inclusive, end exclusive); give at least one. An empty list, a span outside the text or a span that splits a character counts as a failed hook, so the whole result is cleared instead.
+  The byte ranges to hide, as UTF-8 offsets into the result's first text part (the preview when it has no content), start inclusive and end exclusive; give at least one, each non-empty. An empty list, an empty span, a span outside that text or a span that splits a character counts as a failed hook, so the whole result is cleared instead.
 </Field>
 
 <Field name="beforeToolResult()[deny].decision / before_tool_result()[deny].decision" type={"\"deny\""} required>
@@ -397,7 +397,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeModelSwitch / before_model_switch" type={"(settings: ModelSettings, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string }>"}>
-  Gates an automatic switch to a fallback model, made after repeated overloaded rejections (retry.fallback_after). Return allow, or deny with a reason to stay on the current model; a throw or timeout denies. Thread.setModel is not gated. Omit it and every fallback switch is allowed.
+  Gates an automatic model switch: the switch to a fallback model after repeated overloaded rejections (retry.fallback_after) and, with fallback_scope turn, the revert at the next input. Return allow, or deny with a reason to stay on the current model; a throw or timeout denies. Thread.setModel doesn't run it. Omit it and every automatic switch is allowed.
 </Field>
 
 <Field name="beforeModelSwitch(settings) / before_model_switch(settings)" type={"ModelSettings"} required>

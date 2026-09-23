@@ -1449,7 +1449,7 @@
         "setModel": {
           "ts": "setModel",
           "py": "set_model",
-          "doc": "settings_changed{reason: user}. forbidden also covers a before_model_switch deny.",
+          "doc": "Changes the model for this thread's next requests, recorded as settings_changed{reason: user}. before_model_switch doesn't run for it: that hook gates only automatic switches (a fallback and its revert). forbidden: the principal can't act on this thread, such as another tenant's.",
           "async": true,
           "params": [
             {
@@ -1835,7 +1835,7 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "ask"}, "required": true, "doc": "ask: the call needs approval. permission_request hooks may answer it; otherwise it opens an approval challenge and parks until an approver decides. In dont_ask mode an ask is a deny."},
-                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "A permission rule to show with the ask, such as bash(git push *). It is recorded as the permission_decision's reason. Omitted: the ask carries no reason."}
+                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "A permission rule to show with the ask, such as bash(git push *). It is recorded as the reason on the hook_decision and on the permission_decision. Omitted: the ask carries no reason."}
                     },
                     "casing": "wire"
                   }
@@ -1844,7 +1844,7 @@
             }
           },
           "required": false,
-          "doc": "Runs before the permission decision on every tool call. Return allow, deny with a reason, or ask to require approval; when several extensions answer, the strictest wins, and a throw or timeout denies. Omit it and the agent's permission rules decide alone."
+          "doc": "Runs before the permission decision on every tool call, even one the policy denies (the deny stands). Return allow, deny with a reason, or ask to require approval; when several extensions answer, the strictest wins, and a throw or timeout denies. TypeScript stops at the first extension that denies, so later ones aren't called; Python calls every extension. Omit it and the agent's permission rules decide alone."
         },
         "permission_request": {
           "type": {
@@ -1879,7 +1879,7 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "ask"}, "required": true, "doc": "ask: the hook doesn't answer, so the call opens an approval challenge and parks until a person decides."},
-                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "Not used: an ask answers nothing, so the earlier decision and its reason stand. Omit it."}
+                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "Recorded as the hook_decision's reason only: an ask answers nothing, so the earlier decision and its reason stand. Omitted: no reason is recorded."}
                     },
                     "casing": "wire"
                   }
@@ -1982,7 +1982,7 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "redact"}, "required": true, "doc": "redact: the listed spans are hidden from every later request, recorded as context_edited guardrail. The raw result stays in the log."},
-                      "spans": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}}, "required": true, "doc": "The byte ranges to hide, as UTF-8 offsets into the result's text (start inclusive, end exclusive); give at least one. An empty list, a span outside the text or a span that splits a character counts as a failed hook, so the whole result is cleared instead."}
+                      "spans": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}}, "required": true, "doc": "The byte ranges to hide, as UTF-8 offsets into the result's first text part (the preview when it has no content), start inclusive and end exclusive; give at least one, each non-empty. An empty list, an empty span, a span outside that text or a span that splits a character counts as a failed hook, so the whole result is cleared instead."}
                     },
                     "casing": "wire"
                   },
@@ -2268,7 +2268,7 @@
             }
           },
           "required": false,
-          "doc": "Gates an automatic switch to a fallback model, made after repeated overloaded rejections (retry.fallback_after). Return allow, or deny with a reason to stay on the current model; a throw or timeout denies. Thread.setModel is not gated. Omit it and every fallback switch is allowed."
+          "doc": "Gates an automatic model switch: the switch to a fallback model after repeated overloaded rejections (retry.fallback_after) and, with fallback_scope turn, the revert at the next input. Return allow, or deny with a reason to stay on the current model; a throw or timeout denies. Thread.setModel doesn't run it. Omit it and every automatic switch is allowed."
         },
         "after_model_switch": {
           "type": {

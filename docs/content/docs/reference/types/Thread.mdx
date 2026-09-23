@@ -362,7 +362,7 @@ async def cancel(
 
 ### setModel / set_model
 
-settings_changed&#123;reason: user&#125;. forbidden also covers a before_model_switch deny.
+Changes the model for this thread's next requests, recorded as settings_changed&#123;reason: user&#125;. before_model_switch doesn't run for it: that hook gates only automatic switches (a fallback and its revert). forbidden: the principal can't act on this thread, such as another tenant's.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Final
 
 from threads.hooks.runner import RESULT, TEXTS, TOOL, Ran, decision_draft, injected
-from threads.log import CallId, ToolCallEvent, ToolResultEvent
+from threads.log import CallId, Span, ToolCallEvent, ToolResultEvent
 from threads.loop.drafts import draft
 from threads.loop.gates import Gated, append, decided, last_response, said, texts, verdict
 from threads.loop.history import turn_events
@@ -37,8 +37,12 @@ def _hooked(ran: Sequence[Ran[object]]) -> Decision:
     strictest, first = max(ranked, key=lambda pair: _RANK[pair[0]])
     if strictest == "allow":
         return Decision("allow", "hook")
-    why = first.failure or said(first, "reason" if strictest == "deny" else "rule")
-    return Decision(strictest, "hook", reason=why)
+    return Decision(strictest, "hook", reason=first.failure or _why(first))
+
+
+def _why(ran: Ran[object]) -> str | None:
+    """What a tool gate's answer records as its reason: an ask's rule, else its reason."""
+    return said(ran, "rule") if verdict(ran) == "ask" else said(ran, "reason")
 
 
 async def authorize(
@@ -52,18 +56,13 @@ async def authorize(
     decision = policy
     if rt.hooks.has("before_tool"):
         ran = await rt.hooks.run("before_tool", TOOL, call.data)
-        drafts += [
-            decision_draft("before_tool", r, verdict(r), said(r, "reason"), **ids) for r in ran
-        ]
+        drafts += [decision_draft("before_tool", r, verdict(r), _why(r), **ids) for r in ran]
         hooked = _hooked(ran)
         if policy.decision != "deny" and _RANK[hooked.decision] >= _RANK[policy.decision]:
             decision = hooked
     if decision.decision == "ask" and rt.hooks.has("permission_request"):
         ran = await rt.hooks.run("permission_request", TOOL, call.data)
-        drafts += [
-            decision_draft("permission_request", r, verdict(r), said(r, "reason"), **ids)
-            for r in ran
-        ]
+        drafts += [decision_draft("permission_request", r, verdict(r), _why(r), **ids) for r in ran]
         answered = _hooked(ran)
         # An ask answers nothing: the earlier decision and its reason stand.
         if answered.decision != "ask":
@@ -105,13 +104,16 @@ def _result(rt: Runtime, call_id: CallId) -> ToolResultEvent | None:
 
 
 async def before_results(rt: Runtime) -> Gated:
-    """Each result of the turn passes before_tool_result before any request renders it."""
+    """Each executed result of the turn passes before_tool_result before any request renders
+    it. A result of a call that never ran (denied, not executed) has nothing to guard."""
     if not rt.hooks.has("before_tool_result"):
         return None
     turn = turn_events(rt.events)
     for event in turn:
-        if isinstance(event, ToolResultEvent) and not decided(
-            turn, "before_tool_result", "call_id", event.data.call_id
+        if (
+            isinstance(event, ToolResultEvent)
+            and event.data.origin == "executed"
+            and not decided(turn, "before_tool_result", "call_id", event.data.call_id)
         ):
             return await _result_gate(rt, event)
     return None
@@ -134,7 +136,7 @@ async def _result_gate(rt: Runtime, result: ToolResultEvent) -> Gated:
         decided, why = verdict(r), said(r, "reason")
         if r.value is not None and r.value["decision"] == "redact":
             asked = r.value["spans"]
-            if not asked or text is None or span_error(text, asked) is not None:
+            if not _fits(text, asked):
                 decided, why = "failed", "redaction spans outside the result's text"
             else:
                 spans += [to_json(span) for span in asked]
@@ -148,6 +150,17 @@ async def _result_gate(rt: Runtime, result: ToolResultEvent) -> Gated:
     if edit is not None:
         drafts.append(draft("context_edited", {"reason": "guardrail", "edits": [edit]}))
     return await append(rt, drafts)
+
+
+def _fits(text: str | None, spans: Sequence[Span]) -> bool:
+    """A hook's redaction is at least one non-empty span inside the text, on character
+    boundaries. The log accepts an empty span; a hook asking to hide nothing is a mistake."""
+    return (
+        bool(spans)
+        and text is not None
+        and all(s.start < s.end for s in spans)
+        and span_error(text, spans) is None
+    )
 
 
 async def after_batch(rt: Runtime) -> Gated:
