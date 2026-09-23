@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    // Without DOM, WebSocket is Bun's, whose constructor takes headers (logs.ts).
+    "lib": ["ESNext"]
+  },
+  "include": ["src", "test"]
+}

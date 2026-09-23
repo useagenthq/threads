@@ -1,0 +1,13 @@
+{
+  "name": "@threads/daytona",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@threads/core": "workspace:*",
+    "@daytona/api-client": "0.216.0",
+    "@daytona/toolbox-api-client": "0.216.0"
+  }
+}

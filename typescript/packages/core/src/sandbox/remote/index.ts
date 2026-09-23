@@ -18,3 +18,4 @@ export {
   within,
 } from "./fence";
 export { type RemoteInfo, remoteSandbox } from "./sandbox";
+export { quote } from "./scripts";
