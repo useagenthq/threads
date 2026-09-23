@@ -2,16 +2,20 @@
 
 Inbound requests are verified with the official SDK's signing-secret check (slack_sdk), over
 the raw bytes and the request timestamp. A message event becomes one item keyed
-`<event_id>#0`; the bot's own messages and edits are ignored. A button press carries only a
-challenge id (`grant:<id>` / `deny:<id>`), so it approves nothing without the host's check.
+`<event_id>#0`; the bot's own messages and edits are ignored, and an `app_mention` (Slack sends a
+mention as a `message` too) is not a second input. The tenant is `slack:<team_id>`; on Enterprise
+Grid the installation is `<enterprise_id>/<team_id>`. A button's value is the JSON
+`{"challenge_id", "decision"}` and nothing else, so it approves nothing without the host's check;
+each press is keyed `<trigger_id>#<index>`. These are the TS adapter's formats.
 Outbound `chat.postMessage` carries the effect key in the message metadata, which lookup finds in
 the conversation's recent history; only recent history is read, so a miss parks the send.
 """
 
+import json
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Final
+from typing import Final, Literal
 from urllib.parse import parse_qs
 
 import httpx
@@ -20,7 +24,6 @@ from slack_sdk.signature import Clock, SignatureVerifier
 
 from threads.adapters.channels.common import (
     Loose,
-    answer_of,
     body_of,
     challenge_of,
     client,
@@ -65,6 +68,7 @@ class _Event(Loose):
 class _Envelope(Loose):
     type: str
     team_id: str | None = None
+    enterprise_id: str | None = None
     event_id: str | None = None
     challenge: str | None = None
     event: _Event | None = None
@@ -74,21 +78,31 @@ class _Id(Loose):
     id: str
 
 
+class _Team(Loose):
+    id: str
+    enterprise_id: str | None = None
+
+
 class _Action(Loose):
     value: str = ""
-    action_ts: str = ""
 
 
-class _Container(Loose):
+class _Button(Loose):
+    challenge_id: str
+    decision: Literal["grant", "deny"]
+
+
+class _Card(Loose):
     thread_ts: str | None = None
 
 
 class _Interaction(Loose):
     type: str
-    team: _Id
+    team: _Team
     user: _Id
+    trigger_id: str
     channel: _Id | None = None
-    container: _Container = Field(default_factory=_Container)
+    message: _Card = Field(default_factory=_Card)
     actions: tuple[_Action, ...] = ()
 
 
@@ -150,10 +164,11 @@ class SlackChannel:
         match payload:
             case _Envelope(type="url_verification"):
                 return Ok(VerifiedDelivery("", "", "url_verification"))
-            case _Envelope(team_id=str(team), event_id=str(event_id)):
-                return Ok(VerifiedDelivery(team, team, event_id))
-            case _Interaction(team=team, actions=(first, *_)):
-                return Ok(VerifiedDelivery(team.id, team.id, f"action:{first.action_ts}"))
+            case _Envelope(team_id=str(team), enterprise_id=grid, event_id=str(event_id)):
+                return Ok(VerifiedDelivery(f"slack:{team}", _installation(team, grid), event_id))
+            case _Interaction(team=team, trigger_id=trigger):
+                installation = _installation(team.id, team.enterprise_id)
+                return Ok(VerifiedDelivery(f"slack:{team.id}", installation, trigger))
             case _:
                 return unverified("the payload names no workspace")
 
@@ -162,7 +177,7 @@ class SlackChannel:
         verified = self.verify(raw)
         if payload is None or isinstance(verified, Err):
             return Err(ParseError("invalid", "not a verified Slack payload"))
-        return Ok((_item(payload, verified.value),))
+        return Ok(_items(payload, verified.value))
 
     def ack(self, raw: RawRequest) -> RawResponse:
         payload = _payload(raw)
@@ -181,7 +196,7 @@ class SlackChannel:
         body: dict[str, JsonValue] = {
             "channel": channel,
             "text": op["text"],
-            "metadata": {"event_type": "threads_send", "event_payload": {"effect_key": effect_key}},
+            "metadata": {"event_type": "threads_effect", "event_payload": {"effect_key": effect_key}},
         }
         if thread_ts:
             body["thread_ts"] = thread_ts
@@ -238,7 +253,7 @@ def _card(text: str, challenge: str) -> JsonValue:
             "action_id": f"threads_{verdict}",
             "text": {"type": "plain_text", "text": label},
             "style": style,
-            "value": f"{verdict}:{challenge}",
+            "value": json.dumps({"challenge_id": challenge, "decision": verdict}),
         }
         for verdict, label, style in (("grant", "Approve", "primary"), ("deny", "Deny", "danger"))
     ]
@@ -259,43 +274,57 @@ def _payload(raw: RawRequest) -> Payload | None:
         return None
 
 
-def _item(payload: Payload, delivery: VerifiedDelivery) -> Inbound:
-    team = delivery.tenant
-    key = f"{delivery.delivery_id}#0"
+def _installation(team: str, enterprise: str | None) -> str:
+    """Enterprise Grid: the org qualifies the workspace, so E1/T1 and E2/T1 never collide."""
+    return f"{enterprise}/{team}" if enterprise else team
+
+
+def _items(payload: Payload, delivery: VerifiedDelivery) -> Sequence[Inbound]:
     if isinstance(payload, _Interaction):
-        answer = answer_of(payload.actions[0].value)
-        if answer is None or payload.channel is None:
-            return Ignore(kind="ignore")
-        # The card was posted in the conversation's thread: the press answers from there.
-        channel, thread_ts = payload.channel.id, payload.container.thread_ts
-        return Decision(
-            kind="decision",
-            principal=_principal(team, payload.user.id),
-            address=channel if thread_ts is None else f"{channel}:{thread_ts}",
-            item_key=key,
-            challenge_id=answer[1],
-            decision=answer[0],
-        )
+        return tuple(_decision(payload, delivery, i) for i in range(len(payload.actions)))
+    return (_message(payload, delivery),)
+
+
+def _decision(press: _Interaction, delivery: VerifiedDelivery, index: int) -> Inbound:
+    try:
+        answer = _Button.model_validate_json(press.actions[index].value)
+    except ValidationError:
+        return Ignore(kind="ignore")
+    if press.channel is None:
+        return Ignore(kind="ignore")
+    # The card was posted in the conversation's thread: the press answers from there.
+    channel, thread_ts = press.channel.id, press.message.thread_ts
+    return Decision(
+        kind="decision",
+        principal=_principal(press.team.id, delivery.tenant, press.user.id),
+        address=f"{channel}:{thread_ts}" if thread_ts else channel,
+        item_key=f"{delivery.delivery_id}#{index}",
+        challenge_id=answer.challenge_id,
+        decision=answer.decision,
+    )
+
+
+def _message(payload: _Envelope, delivery: VerifiedDelivery) -> Inbound:
     event = payload.event
-    if event is None or event.type not in ("message", "app_mention"):
+    if event is None or event.type != "message" or payload.team_id is None:
         return Ignore(kind="ignore")
     if event.bot_id is not None or event.subtype is not None or not event.user:
         # The bot's own messages, edits and joins are not input.
         return Ignore(kind="ignore")
     if not event.channel or not event.text:
         return Ignore(kind="ignore")
-    address = event.channel if event.thread_ts is None else f"{event.channel}:{event.thread_ts}"
+    address = f"{event.channel}:{event.thread_ts}" if event.thread_ts else event.channel
     return Message(
         kind="message",
-        principal=_principal(team, event.user),
+        principal=_principal(payload.team_id, delivery.tenant, event.user),
         address=address,
-        item_key=key,
+        item_key=f"{delivery.delivery_id}#0",
         content=event.text,
     )
 
 
-def _principal(team: str, user: str) -> Principal:
-    return Principal(issuer=f"slack:{team}", tenant=team, subject=user)
+def _principal(team: str, tenant: str, user: str) -> Principal:
+    return Principal(issuer=f"slack:{team}", tenant=tenant, subject=user)
 
 
 def slack(

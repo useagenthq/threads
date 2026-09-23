@@ -70,7 +70,7 @@ def test_slack_verifies_the_signature_and_keys_its_event() -> None:
     request = slack_request(message_event())
     verified = channel.verify(request)
     assert isinstance(verified, Ok)
-    assert (verified.value.tenant, verified.value.delivery_id) == ("T1", "Ev01")
+    assert (verified.value.tenant, verified.value.delivery_id) == ("slack:T1", "Ev01")
     parsed = channel.parse(request)
     assert isinstance(parsed, Ok)
     (item,) = parsed.value
@@ -190,7 +190,7 @@ def test_a_send_outside_the_runs_fence_is_refused_before_any_byte() -> None:
 def test_lookups_find_the_effect_key_in_the_ops_conversation() -> None:
     def history(request: httpx.Request) -> httpx.Response:
         assert request.url.params["channel"] == "C1"
-        mine: JsonValue = {"event_type": "threads_send", "event_payload": {"effect_key": "b:c"}}
+        mine: JsonValue = {"event_type": "threads_effect", "event_payload": {"effect_key": "b:c"}}
         messages: JsonValue = [{"ts": "1.0"}, {"ts": "2.0", "metadata": mine}]
         return httpx.Response(200, json={"ok": True, "messages": messages})
 

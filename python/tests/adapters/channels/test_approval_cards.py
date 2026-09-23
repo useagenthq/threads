@@ -111,14 +111,17 @@ def test_slack_posts_a_card_whose_buttons_carry_only_the_challenge() -> None:
     blocks = body["blocks"]
     assert isinstance(blocks, list)
     values = [b["value"] for b in blocks[1]["elements"]]  # type: ignore[index] - JSON
-    assert values == [f"grant:{CHALLENGE}", f"deny:{CHALLENGE}"]
+    assert [json.loads(v) for v in values] == [
+        {"challenge_id": CHALLENGE, "decision": verdict} for verdict in ("grant", "deny")
+    ]
     press: JsonValue = {
         "type": "block_actions",
         "team": {"id": "T1"},
         "user": {"id": "U9"},
+        "trigger_id": "tr1",
         "channel": {"id": "C1"},
-        "container": {"type": "message", "thread_ts": "171.1"},
-        "actions": [{"value": f"grant:{CHALLENGE}", "action_ts": "9.9"}],
+        "message": {"thread_ts": "171.1"},
+        "actions": [{"value": values[0]}],
     }
     form = f"payload={quote(json.dumps(press))}".encode()
     base = f"v0:{NOW}:".encode() + form

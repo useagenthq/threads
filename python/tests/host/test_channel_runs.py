@@ -74,7 +74,7 @@ async def deliver(
         for request in requests:
             answered = await served.receive("slack", request)
             statuses.append(answered.value.status if isinstance(answered, Ok) else 401)
-    sq = await open_store(scoped(store, "T1"))
+    sq = await open_store(scoped(store, "slack:T1"))
     rows = await sq.tables.inbox_rows()
     if not rows:
         return statuses, []
