@@ -53,25 +53,6 @@ export async function treeHash(
   return manifest === undefined ? undefined : manifestHash(manifest);
 }
 
-/**
- * The manifest hash of a captured image, read from a scratch sandbox created from it and then
- * killed. Its key derives from the capture's, so a lost scratch create is still findable; it
- * dies at the provider's expiry either way.
- */
-async function imageHash(
-  driver: SandboxDriver,
-  ref: string,
-  operationKey: string,
-): Promise<string | undefined> {
-  const scratch = await driver.create(`${operationKey}.manifest`, ref);
-  if (scratch.kind !== "created") return undefined;
-  try {
-    return await treeHash(driver, scratch.id);
-  } finally {
-    await driver.kill(scratch.id);
-  }
-}
-
 const unavailable = (error: unknown) =>
   ({ code: "unavailable", message: messageOf(error) }) as const;
 
@@ -210,20 +191,10 @@ export function remoteSession(
         const before = await treeHash(driver, id);
         const made = await capture.take(id, operationKey);
         const after = await treeHash(driver, id);
-        // The manifest is the captured image's own tree: the parent's tree around
-        // the capture can match while the image holds a write made and undone in between.
-        const image = await imageHash(driver, made.ref, operationKey);
-        if (before === undefined || image === undefined) {
+        if (before === undefined || before !== after) {
           await driver.deleteSnapshot(made.ref);
           return err({
-            code: "unavailable",
-            message: `the tree of ${id} or its image can't be read`,
-          });
-        }
-        if (before !== after || image !== before) {
-          await driver.deleteSnapshot(made.ref);
-          return err({
-            code: "not_quiescent",
+            code: before === undefined ? "unavailable" : "not_quiescent",
             message: `the tree of ${id} changed around the capture`,
           });
         }

@@ -1,3 +1,4 @@
+export { type Captured, captureSnapshot } from "./capture";
 export { cleanupContext, ownerContext } from "./context";
 export { type ExecResult, execute, PREVIEW_BYTES } from "./exec";
 export {
