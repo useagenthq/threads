@@ -34,6 +34,7 @@ from threads.log import (
     CancelledEvent,
     CancelRequestedEvent,
     Event,
+    HookDecisionEvent,
     ModelRequestEvent,
     ParkAddress,
     ParkedEvent,
@@ -207,7 +208,10 @@ def test_cancelling_a_parent_cancels_its_running_child_before_its_own_stop(
         result = await lead.run("go", store=store, deps=None)
         assert isinstance(result, Cancelled), result
         events = await events_of(result.thread)
-        kinds = [e.type for e in events[-6:]]
+        # The hook's continue is recorded and has no effect.
+        decided = [e for e in events if isinstance(e, HookDecisionEvent)]
+        assert [d.data.decision for d in decided] == (["continue"] if keep_going else [])
+        kinds = [e.type for e in events if not isinstance(e, HookDecisionEvent)][-6:]
         assert kinds == [
             "agent_spawned",
             "cancel_requested",

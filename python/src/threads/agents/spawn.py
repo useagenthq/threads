@@ -218,8 +218,7 @@ async def _run[D](
             return halt
         data, output = await finished(scope.sq, spawned.data.child_thread_id, result)
         data["output_ref"] = await text_ref(rt, output)
-        final = data["status"] == "cancelled" or len(reasons) >= MAX_STOP_CONTINUES
-        if final or not rt.hooks.has("subagent_stop"):
+        if not rt.hooks.has("subagent_stop") or len(reasons) >= MAX_STOP_CONTINUES:
             return data, shown(str(data["status"]), output)
         ran = await rt.hooks.run("subagent_stop", STOP, AgentFinishedData.model_validate(data))
         ids = {"call_id": call_id}
@@ -228,8 +227,9 @@ async def _run[D](
             for r in ran
         ]
         await rt.append(*drafts)
-        # The append (or its refusal's reload) brought the parent's log up to date.
-        barred = open_cancel(rt.events) is not None
+        # A continue under a cancel is recorded and has no effect. The append (or its
+        # refusal's reload) brought the parent's log up to date.
+        barred = data["status"] == "cancelled" or open_cancel(rt.events) is not None
         if barred or all(verdict(r, "stop") != "continue" for r in ran):
             return data, shown(str(data["status"]), output)
 
