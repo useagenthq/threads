@@ -24,6 +24,8 @@ class Settings:
     image_id: str
     lifetime_s: int
     environment: str
+    internet: bool = False
+    """Off: the sandbox is created with block_network (deny-all egress)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +52,12 @@ class Control:
         """A named sandbox: Modal refuses a second running sandbox of one name in an app
         (ALREADY_EXISTS), so a create is idempotent on its name."""
         s = self._settings
-        definition = api_pb2.Sandbox(image_id=s.image_id, timeout_secs=s.lifetime_s, name=name)
+        definition = api_pb2.Sandbox(
+            image_id=s.image_id,
+            timeout_secs=s.lifetime_s,
+            name=name,
+            block_network=not s.internet,
+        )
         request = api_pb2.SandboxCreateRequest(app_id=await self._app(), definition=definition)
         made = await self._stub.SandboxCreate(request, metadata=self._meta)
         return _id(made.sandbox_id, "sandbox_id")

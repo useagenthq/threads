@@ -106,3 +106,19 @@ def test_setup_refuses_missing_tokens_and_bad_config(monkeypatch: pytest.MonkeyP
         (),
         "unconfirmed",
     )
+
+
+def test_egress_is_denied_unless_the_internet_is_allowed() -> None:
+    async def main() -> None:
+        backend = FakeBackend.scripted()
+        fake = FakeModal(backend)
+        async with harness(backend, "modal", fake) as sandbox:
+            assert sandbox.info.egress == "enforced"
+            assert isinstance(await sandbox.create("k", OPEN), Ok)
+        assert fake.blocked == [True]
+        opened = modal(
+            image_id="im-x", token_id=TOKEN_ID, token_secret=TOKEN_SECRET, allow_internet=True
+        )
+        assert opened.info.egress == "unenforced"
+
+    asyncio.run(main())

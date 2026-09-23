@@ -15,7 +15,8 @@ What Modal 1.5.5 supports here, and nothing broader:
 - no snapshots: the filesystem snapshot ends the sandbox, can't run during an exec and freezes
   nothing, so it can't be a quiescent capture of a parent that goes on; memory snapshots are
   experimental in the SDK. capture_classes is empty; restore answers snapshot_missing.
-- egress is not restricted by this adapter (unenforced).
+- egress is enforced deny-all (Modal's block_network) unless `allow_internet`, then
+  unenforced.
 """
 
 import os
@@ -58,7 +59,7 @@ class ModalSandbox:
         """The declared provider expiry: Modal ends a sandbox this long after its create."""
         self._info = SandboxInfo(
             provider=name,
-            egress="unenforced",
+            egress="unenforced" if settings.internet else "enforced",
             capture_classes=(),
             browser="none",
             desktop="none",
@@ -165,6 +166,7 @@ def modal(  # noqa: PLR0913 - the options a Modal sandbox is configured by
     app_name: str = "threads",
     environment: str = "",
     lifetime_ms: int = 3_600_000,
+    allow_internet: bool = False,
     name: str = "modal",
     server_url: str = SERVER_URL,
     connect: Connect = connect,
@@ -183,6 +185,12 @@ def modal(  # noqa: PLR0913 - the options a Modal sandbox is configured by
     if not _MIN_LIFETIME_MS <= lifetime_ms <= _MAX_LIFETIME_MS:
         raise ConfigError("invalid_config", f"modal: lifetime_ms {lifetime_ms} out of range")
     settings = Settings(
-        token_id, token_secret, app_name, image_id, lifetime_ms // 1000, environment
+        token_id,
+        token_secret,
+        app_name,
+        image_id,
+        lifetime_ms // 1000,
+        environment,
+        allow_internet,
     )
     return ModalSandbox(settings, name=name, server_url=server_url, connect=connect)
