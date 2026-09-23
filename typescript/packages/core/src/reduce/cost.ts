@@ -1,5 +1,5 @@
 import type { EventOf } from "../fold/state";
-import type { KnownEvent, Policy } from "../log";
+import type { Cost, KnownEvent, Policy } from "../log";
 
 type PolicyModel = NonNullable<Policy["models"]>[number];
 type Price = NonNullable<PolicyModel["price"]>;
@@ -7,14 +7,6 @@ type Usage = EventOf<"model_response">["data"]["usage"];
 type Settings = {
   readonly model: EventOf<"thread_started">["data"]["model"];
   readonly params: Readonly<Record<string, unknown>>;
-};
-
-export type Cost = {
-  readonly currency: string;
-  readonly known_nanos: number;
-  readonly upper_bound_nanos: number;
-  readonly complete: boolean;
-  readonly bounded: boolean;
 };
 
 type Attempt = {
@@ -214,18 +206,43 @@ export function cost(
   };
 }
 
+/** One thread of a tree, as the tree merge sees it. */
+export type TreePart = {
+  /** The thread's own cost projection; undefined when it pins no currency or no models. */
+  readonly cost: Cost | undefined;
+  /** It made at least one model request, so it may have spent money. */
+  readonly ran: boolean;
+};
+
 /**
- * A tree total: `part` added into `total`. A part with no cost, or in another currency, can't be
- * added, so the total stops claiming to be complete or a bound rather than undercounting.
+ * The tree merge of Thread.cost({ tree: true }), over the parts in walk order (the root first).
+ * The total is counted in the root's currency, else the first priced part's; with no priced part
+ * there is no total. A part in that currency adds its nanos and ANDs its flags. A part that can't
+ * be added (another currency, or unpriced but it ran) adds nothing and makes the total neither
+ * complete nor bounded, so the total never undercounts silently. A part that never ran changes
+ * nothing.
  */
-export function mergeCost(total: Cost, part: Cost | undefined): Cost {
-  if (part === undefined || part.currency !== total.currency)
-    return { ...total, complete: false, bounded: false };
-  return {
-    currency: total.currency,
-    known_nanos: total.known_nanos + part.known_nanos,
-    upper_bound_nanos: total.upper_bound_nanos + part.upper_bound_nanos,
-    complete: total.complete && part.complete,
-    bounded: total.bounded && part.bounded,
+export function mergeTree(parts: readonly TreePart[]): Cost | undefined {
+  const currency = parts.find((p) => p.cost !== undefined)?.cost?.currency;
+  if (currency === undefined) return undefined;
+  let total: Cost = {
+    currency,
+    known_nanos: 0,
+    upper_bound_nanos: 0,
+    complete: true,
+    bounded: true,
   };
+  for (const { cost: part, ran } of parts) {
+    if (part?.currency === currency)
+      total = {
+        currency,
+        known_nanos: total.known_nanos + part.known_nanos,
+        upper_bound_nanos: total.upper_bound_nanos + part.upper_bound_nanos,
+        complete: total.complete && part.complete,
+        bounded: total.bounded && part.bounded,
+      };
+    else if (part !== undefined || ran)
+      total = { ...total, complete: false, bounded: false };
+  }
+  return total;
 }

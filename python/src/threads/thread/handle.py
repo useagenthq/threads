@@ -7,8 +7,6 @@ from typing import Literal
 
 from threads._generated.host_api_v1 import (
     BranchInfo,
-    CacheBreak,
-    Cost,
     PendingApproval,
     SettingsChange,
 )
@@ -17,7 +15,9 @@ from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
     BranchId,
+    CacheBreak,
     CallId,
+    Cost,
     Event,
     EventId,
     ParseError,
@@ -107,7 +107,7 @@ class Thread:
 
     async def timeline(self) -> Ok[Timeline] | Err[ParseError]:
         """Every step, with the fork points marked (F13.1)."""
-        read = await self._read()
+        read = await read_log(self.store, self.branch)
         if isinstance(read, Err):
             return read
         points = set(read.value.fold.fork_points)
@@ -210,13 +210,17 @@ class Thread:
 
     async def cost(self, *, tree: bool = False) -> Ok[Cost | None] | Err[ParseError]:
         """What the thread spent, in nano-units of its pinned currency (USD for `agent()`), with
-        a conservative upper bound. None when the thread pins no prices. `tree=True` adds every
-        descendant subagent; one that declares no price makes the total incomplete and
-        unbounded."""
+        a conservative upper bound; None when the thread pins no prices. `tree=True` adds every
+        descendant subagent, in the root's currency (else the first priced descendant's; None
+        when none is priced). A thread that spent money it can't add (unpriced, or another
+        currency) makes the total incomplete and unbounded; one that made no model request
+        changes nothing."""
         read = await read_log(self.store, self.branch)
         if isinstance(read, Err):
             return read
-        return await tree_cost(self.store, read.value) if tree else Ok(cost(read.value.fold))
+        if not tree:
+            return Ok(cost(read.value.fold))
+        return await tree_cost(self.store, self.id, read.value)
 
     async def cache_breaks(self) -> Ok[tuple[CacheBreak, ...]] | Err[ParseError]:
         """Turns whose prompt-cache reads dropped sharply, each with its likely cause. A thread

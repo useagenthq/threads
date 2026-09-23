@@ -238,7 +238,7 @@ export async function openThread(
       const current = readLog(log, branchId);
       return current.ok ? projections(current.value).children : [];
     },
-    ...usageMethods(log, branchId),
+    ...usageMethods(log, threadId, branchId),
     ...controls(log, threadId, branchId),
     saveCase: async (name, caseOptions) =>
       saveCase(log, branchId, name, caseOptions, {

@@ -1,6 +1,5 @@
-export { type Cost, cost, mergeCost } from "./cost";
+export { cost, mergeTree, type TreePart } from "./cost";
 export {
-  type CacheBreak,
   cacheBreaks,
   type Projections,
   projections,

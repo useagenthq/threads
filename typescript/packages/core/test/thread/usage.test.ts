@@ -3,7 +3,8 @@ import { agent, openThread, scriptedModel, sqlite } from "../../src";
 import { openStore, storeConnection } from "../../src/agent/sqlite";
 import { BranchId, ThreadId } from "../../src/log";
 import { cost, knownEvents, reduce } from "../../src/reduce";
-import { code, started, unwrap } from "../store/helpers";
+import { code, unwrap } from "../store/helpers";
+import { rewriteLog } from "./rewrite-log";
 import { configHash, corrupt, ONE, priced, run, say } from "./usage-kit";
 
 // Thread.usage(), cost() and cacheBreaks() (spec/api.json) through openThread over real runs:
@@ -112,12 +113,10 @@ describe("Thread.cacheBreaks", () => {
 describe("usage, cost and cacheBreaks on edge logs", () => {
   test("a log with only thread_started: zero usage, no cost, no breaks", async () => {
     const store = sqlite(":memory:");
-    const { log } = await openStore(store);
-    const thread = ThreadId.parse("0192a000-0000-7000-8000-0000000000aa");
-    const branch = BranchId.parse("0192b000-0000-7000-8000-0000000000aa");
-    unwrap(log.createBranch(thread, branch));
-    unwrap(unwrap(log.acquire(branch, "holder")).append([started]));
-    const handle = unwrap(await openThread(store, thread));
+    const ran = await run(store, scriptedModel({ responses: [say("Hi.")] }));
+    // A real pin, as if the host crashed right after thread_started.
+    await rewriteLog(store, ran.id, (lines) => lines.slice(0, 1));
+    const handle = unwrap(await openThread(store, ran.id));
     expect(unwrap(await handle.usage())).toEqual({
       input_tokens: 0,
       output_tokens: 0,
@@ -139,7 +138,8 @@ describe("usage, cost and cacheBreaks on edge logs", () => {
       code(await thread.usage()),
       code(await thread.cost({ tree: true })),
       code(await thread.cacheBreaks()),
-    ]).toEqual(Array(3).fill("unsupported_critical_event"));
+      code(await thread.timeline()),
+    ]).toEqual(Array(4).fill("unsupported_critical_event"));
   });
 
   test("a branch gone after open is log_corrupt, the declared error", async () => {

@@ -6,11 +6,10 @@ from collections.abc import Callable, Coroutine, Sequence
 
 from pydantic import JsonValue, TypeAdapter
 
-from threads import Agent, Completed, Store, agent, scripted_model, sqlite
-from threads._generated.host_api_v1 import Cost
+from threads import Agent, Completed, Store, agent, sqlite
 from threads.agents.store import open_store
+from threads.log import Cost, OutputPart, ThreadId, Usage
 from threads.log import Model as ModelLimits
-from threads.log import OutputPart, ThreadId, Usage
 from threads.loop.model import Model, ModelInfo, ModelResponse
 from threads.loop.scripted import ScriptedModel
 from threads.result import Ok
@@ -46,13 +45,14 @@ def spawn(name: str) -> ModelResponse:
     return ModelResponse(parts, "tool_use", Usage.model_validate(USAGE), None)
 
 
-def usd(known: int, upper: int, *, complete: bool, bounded: bool) -> Cost:
+def usd(known: int, *, exact: bool) -> Cost:
+    """A USD total whose upper bound is its known cost (every attempt here settles)."""
     return Cost(
         currency="USD",
         known_nanos=known,
-        upper_bound_nanos=upper,
-        complete=complete,
-        bounded=bounded,
+        upper_bound_nanos=known,
+        complete=exact,
+        bounded=exact,
     )
 
 
@@ -60,13 +60,8 @@ def priced(*replies: ModelResponse) -> Priced:
     return Priced(list(replies), {})
 
 
-def free(text: str) -> ScriptedModel:
-    reply: JsonValue = {
-        "content": [{"type": "text", "text": text}],
-        "stop_reason": "end_turn",
-        "usage": USAGE,
-    }
-    return scripted_model({"responses": [reply]})
+def unpriced(*replies: ModelResponse) -> ScriptedModel:
+    return ScriptedModel(list(replies), {})
 
 
 async def run(store: Store, model: Model, subagents: Sequence[Agent[None]] = ()) -> Thread:
@@ -93,11 +88,11 @@ async def corrupt(store: Store, thread: ThreadId, prompt: str) -> None:
     await sq.run(edit)
 
 
-async def only_child(thread: Thread) -> ThreadId:
+async def child_ids(thread: Thread) -> tuple[ThreadId, ...]:
+    """The thread's children, in spawn order."""
     children = await thread.children()
     assert isinstance(children, Ok)
-    (child,) = children.value
-    return child.child_thread_id
+    return tuple(c.child_thread_id for c in children.value)
 
 
 def check(body: Callable[[Store], Coroutine[None, None, None]]) -> None:
@@ -107,6 +102,5 @@ def check(body: Callable[[Store], Coroutine[None, None, None]]) -> None:
 async def unpriced_middle(store: Store) -> Thread:
     """A priced lead whose child "mid" has no price and spawns a priced "leaf"."""
     leaf = agent(name="leaf", model=priced(say("Leaf.")))
-    mid_model = ScriptedModel([spawn("leaf"), say("Mid.")], {})
-    mid = agent(name="mid", model=mid_model, subagents=[leaf])
+    mid = agent(name="mid", model=unpriced(spawn("leaf"), say("Mid.")), subagents=[leaf])
     return await run(store, priced(spawn("mid"), say("Done.")), [mid])

@@ -6,7 +6,8 @@ import sqlite3
 
 import pytest
 from pydantic import JsonValue
-from thread.usage_kit import ONE, check, corrupt, free, priced, run, say, usd
+from thread.rewrite_log import rewrite_log
+from thread.usage_kit import ONE, check, corrupt, priced, run, say, unpriced, usd
 
 from threads import ConfigError, Store, agent
 from threads.agents.store import now_ms, open_store
@@ -42,14 +43,14 @@ def test_a_priced_agent_pins_usd_and_costs_the_projection() -> None:
         assert isinstance(read, Ok)
         own = await thread.cost()
         assert own == Ok(cost(read.value.fold))
-        assert own == Ok(usd(ONE, ONE, complete=True, bounded=True))
+        assert own == Ok(usd(ONE, exact=True))
 
     check(body)
 
 
 def test_an_unpriced_model_pins_no_currency_so_cost_is_none() -> None:
     async def body(store: Store) -> None:
-        thread = await run(store, free("Hi."))
+        thread = await run(store, unpriced(say("Hi.")))
         assert await thread.cost() == Ok(None)
         assert await thread.cost(tree=True) == Ok(None)
 
@@ -70,23 +71,10 @@ def test_cache_breaks_uses_the_default_ttl_when_no_context_is_pinned() -> None:
 
 def test_a_log_with_only_thread_started() -> None:
     async def body(store: Store) -> None:
-        sq = await open_store(store)
-        thread_id, branch = ThreadId(uuid7(now_ms())), uuid7(now_ms())
-        started: dict[str, JsonValue] = {
-            "agent_name": "test",
-            "config_hash": "0" * 64,
-            "instructions": "Test.",
-            "model": {"provider": "scripted", "name": "scripted-1"},
-            "model_params": {"max_tokens": 1024},
-            "adapter": {"name": "scripted", "version": "1", "settings": {}},
-            "tools": [],
-        }
-        root = BranchId(branch)
-        assert await sq.create(thread_id, root, now_ms()) == Ok(None)
-        writer = await sq.acquire(root, "holder", now_ms)
-        assert isinstance(writer, Ok)
-        assert isinstance(await writer.value.append([draft("thread_started", started)]), Ok)
-        opened = await open_thread(store, thread_id)
+        ran = await run(store, unpriced(say("Hi.")))
+        # A real pin, as if the host crashed right after thread_started.
+        await rewrite_log(store, ran.id, lambda lines: lines[:1])
+        opened = await open_thread(store, ran.id)
         assert isinstance(opened, Ok)
         assert await opened.value.usage() == Ok(UsageTotals(0, 0, 0))
         assert await opened.value.cost() == Ok(None)
@@ -128,6 +116,7 @@ def test_a_line_from_a_newer_writer_is_unsupported_not_corrupt() -> None:
             await thread.usage(),
             await thread.cost(tree=True),
             await thread.cache_breaks(),
+            await thread.timeline(),
         ):
             assert isinstance(result, Err)
             assert result.error.code == "unsupported_critical_event"

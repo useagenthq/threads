@@ -4,19 +4,20 @@ A projection whose pinned policy section is absent is `None`: there is nothing t
 against, and the ADR defaults don't price anything.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads._generated.host_api_v1 import CacheBreak, Cost
 from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
+    CacheBreak,
     CompactedEvent,
     CompactionFailedEvent,
     ContextEditedEvent,
+    Cost,
     EventId,
     Model,
     ModelAttemptAbandonedData,
@@ -180,18 +181,43 @@ def cost(fold: Fold) -> Cost | None:
     )
 
 
-def merge_cost(total: Cost, part: Cost | None) -> Cost:
-    """A tree total: `part` added into `total`. A part with no cost, or in another currency,
-    can't be added, so the total stops claiming to be complete or a bound rather than
-    undercounting."""
-    if part is None or part.currency != total.currency:
-        return total.model_copy(update={"complete": False, "bounded": False})
+@dataclass(frozen=True, slots=True)
+class TreePart:
+    """One thread of a tree, as the tree merge sees it."""
+
+    cost: Cost | None
+    """The thread's own cost projection; None when it pins no currency or no models."""
+    ran: bool
+    """It made at least one model request, so it may have spent money."""
+
+
+def merge_tree(parts: Sequence[TreePart]) -> Cost | None:
+    """The tree merge of Thread.cost(tree=True), over the parts in walk order (the root first).
+
+    The total is counted in the root's currency, else the first priced part's; with no priced
+    part there is no total. A part in that currency adds its nanos and ANDs its flags. A part that
+    can't be added (another currency, or unpriced but it ran) adds nothing and makes the total
+    neither complete nor bounded, so the total never undercounts silently. A part that never ran
+    changes nothing."""
+    currency = next((p.cost.currency for p in parts if p.cost is not None), None)
+    if currency is None:
+        return None
+    known = upper = 0
+    complete = bounded = True
+    for part in parts:
+        if part.cost is not None and part.cost.currency == currency:
+            known += part.cost.known_nanos
+            upper += part.cost.upper_bound_nanos
+            complete = complete and part.cost.complete
+            bounded = bounded and part.cost.bounded
+        elif part.cost is not None or part.ran:
+            complete = bounded = False
     return Cost(
-        currency=total.currency,
-        known_nanos=total.known_nanos + part.known_nanos,
-        upper_bound_nanos=total.upper_bound_nanos + part.upper_bound_nanos,
-        complete=total.complete and part.complete,
-        bounded=total.bounded and part.bounded,
+        currency=currency,
+        known_nanos=known,
+        upper_bound_nanos=upper,
+        complete=complete,
+        bounded=bounded,
     )
 
 

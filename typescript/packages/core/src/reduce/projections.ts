@@ -1,21 +1,17 @@
 import type { Fold, Todo } from "../fold/state";
-import type { KnownEvent } from "../log";
+import type { CacheBreak, Cost, KnownEvent } from "../log";
 import type { Chain } from "../verify/chain";
-import { type Cost, cost } from "./cost";
+import { cost } from "./cost";
 import { knownEvents } from "./reduce";
 
+/** The events a cache break is attributed to, checked against the schema's causes. */
 const CAUSES = [
   "settings_changed",
   "compacted",
   "context_edited",
   "tools_changed",
-] as const;
+] as const satisfies readonly CacheBreak["likely_cause"][];
 type Cause = (typeof CAUSES)[number];
-
-export type CacheBreak = {
-  readonly request_event_id: string;
-  readonly likely_cause: Cause | "ttl_expired" | "unknown";
-};
 
 /** Named projections beyond ReducedState (spec/conformance/README.md, "Projections"). */
 export type Projections = {

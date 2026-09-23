@@ -104,7 +104,7 @@ export async function timeline(call: Call): Promise<Response> {
   const o = await opened(call);
   if (o instanceof Response) return o;
   const t = await o.thread.timeline();
-  return t.ok ? json(200, t.value) : failure("log_corrupt", t.error.message);
+  return t.ok ? json(200, t.value) : failure(t.error.code, t.error.message);
 }
 
 export async function branches(call: Call): Promise<Response> {

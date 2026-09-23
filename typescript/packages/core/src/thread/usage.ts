@@ -1,14 +1,14 @@
-import { type BranchId, ThreadId } from "../log";
+import type { EventOf } from "../fold/state";
+import type { BranchId, CacheBreak, Cost, ThreadId } from "../log";
 import { contextPolicy } from "../loop/policy";
 import {
-  type CacheBreak,
-  type Cost,
   cacheBreaks,
   cost,
   knownEvents,
-  mergeCost,
+  mergeTree,
   type ReducedState,
   reduce,
+  type TreePart,
 } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { LogStore } from "../store";
@@ -26,8 +26,10 @@ export type ThreadUsage = {
   readonly usage: () => Promise<Result<ReducedState["usage"], LogError>>;
   /**
    * What the thread spent, in nano-units of its pinned currency (USD for agent()), with a
-   * conservative upper bound. null when the thread pins no prices. `tree: true` adds every
-   * descendant subagent; one that declares no price makes the total incomplete and unbounded.
+   * conservative upper bound; null when the thread pins no prices. `tree: true` adds every
+   * descendant subagent, in the root's currency (else the first priced descendant's; null when
+   * none is priced). A thread that spent money it can't add (unpriced, or another currency)
+   * makes the total incomplete and unbounded; one that made no model request changes nothing.
    */
   readonly cost: (options?: {
     readonly tree?: boolean;
@@ -36,7 +38,11 @@ export type ThreadUsage = {
   readonly cacheBreaks: () => Promise<Result<readonly CacheBreak[], LogError>>;
 };
 
-export function usageMethods(log: LogStore, branchId: BranchId): ThreadUsage {
+export function usageMethods(
+  log: LogStore,
+  threadId: ThreadId,
+  branchId: BranchId,
+): ThreadUsage {
   return {
     usage: async () => {
       const read = readLog(log, branchId);
@@ -45,11 +51,9 @@ export function usageMethods(log: LogStore, branchId: BranchId): ThreadUsage {
     cost: async (options = {}) => {
       const read = readLog(log, branchId);
       if (!read.ok) return read;
-      const total =
-        options.tree === true
-          ? treeCost(log, read.value)
-          : ok(ownCost(read.value));
-      return total.ok ? ok(total.value ?? null) : total;
+      if (options.tree !== true) return ok(ownCost(read.value) ?? null);
+      const parts = treeParts(log, threadId, read.value);
+      return parts.ok ? ok(mergeTree(parts.value) ?? null) : parts;
     },
     cacheBreaks: async () => {
       const read = readLog(log, branchId);
@@ -65,41 +69,72 @@ function ownCost(chain: VerifiedLog): Cost | undefined {
   return cost(knownEvents(chain), chain.fold.policy);
 }
 
-/** This thread's cost plus the cost of every descendant at any depth. */
-function treeCost(
-  log: LogStore,
-  chain: VerifiedLog,
-): Result<Cost | undefined, LogError> {
-  const parts = descendantCosts(log, chain);
-  if (!parts.ok) return parts;
-  const own = ownCost(chain);
-  return ok(
-    own === undefined
-      ? undefined
-      : parts.value.reduce<Cost>((total, part) => mergeCost(total, part), own),
-  );
-}
+type Spawned = EventOf<"agent_spawned">;
 
 /**
- * Each descendant's own cost (undefined when unpriced), read from its main branch, depth
- * first. An unpriced descendant doesn't stop the walk, and any unreadable one is the error.
+ * Every thread of the tree rooted at `root`, depth first in spawn order. Each child is read from
+ * its own main branch and must name, as its parent, the agent_spawned that started it; a child
+ * that doesn't, or a thread met twice (a cycle), makes the tree log_corrupt.
  */
-function descendantCosts(
+function treeParts(
   log: LogStore,
+  root: ThreadId,
   chain: VerifiedLog,
-): Result<readonly (Cost | undefined)[], LogError> {
-  const out: (Cost | undefined)[] = [];
-  for (const child of chain.fold.children.keys()) {
-    const branch = log.mainBranch(ThreadId.parse(child));
-    // A child with no thread yet was never started: it spent nothing.
-    if (!branch.ok && branch.error.code === "branch_not_found") continue;
-    const read = branch.ok ? readLog(log, branch.value) : branch;
-    if (!read.ok) return err(inChild(child, read.error));
-    const below = descendantCosts(log, read.value);
-    if (!below.ok) return err(inChild(child, below.error));
-    out.push(ownCost(read.value), ...below.value);
-  }
-  return ok(out);
+): Result<readonly TreePart[], LogError> {
+  const parts: TreePart[] = [];
+  const seen = new Set<ThreadId>();
+  const visit = (id: ThreadId, at: VerifiedLog): Result<void, LogError> => {
+    if (seen.has(id))
+      return err(
+        logError("log_corrupt", `thread ${id} appears twice in the tree`),
+      );
+    seen.add(id);
+    const events = knownEvents(at);
+    parts.push({
+      cost: ownCost(at),
+      ran: events.some((e) => e.type === "model_request"),
+    });
+    for (const spawn of events.filter((e) => e.type === "agent_spawned")) {
+      const child = spawn.data.child_thread_id;
+      const read = childLog(log, spawn);
+      const below =
+        read.ok && read.value !== undefined ? visit(child, read.value) : read;
+      if (!below.ok) return err(inChild(child, below.error));
+    }
+    return ok(undefined);
+  };
+  const walked = visit(root, chain);
+  return walked.ok ? ok(parts) : walked;
+}
+
+/** The spawned child's log; undefined when it has no thread yet, so it never started. */
+function childLog(
+  log: LogStore,
+  spawn: Spawned,
+): Result<VerifiedLog | undefined, LogError> {
+  const branch = log.mainBranch(spawn.data.child_thread_id);
+  if (!branch.ok)
+    return branch.error.code === "branch_not_found" ? ok(undefined) : branch;
+  const read = readLog(log, branch.value);
+  if (!read.ok) return read;
+  const started = knownEvents(read.value).find(
+    (e) => e.type === "thread_started",
+  );
+  const link =
+    started?.type === "thread_started" ? started.data.parent : undefined;
+  const backlinked =
+    link?.relation === "subagent" &&
+    link.thread_id === spawn.thread_id &&
+    link.branch_id === spawn.branch_id &&
+    link.event_id === spawn.event_id;
+  return backlinked
+    ? read
+    : err(
+        logError(
+          "log_corrupt",
+          "its thread_started doesn't name the agent_spawned that started it",
+        ),
+      );
 }
 
 /** The error, keeping its code, with the path to the descendant that failed. */
