@@ -3,6 +3,7 @@ import type { EventOf } from "../fold/state";
 import { effectKey } from "../fold/state";
 import { sha256Hex } from "../hash";
 import { canonicalize } from "../log";
+import type { EventDraft } from "../store";
 import { draft, TOOL } from "./drafts";
 import { FINAL_OUTPUT, validateCandidate } from "./output";
 import type { Session } from "./session";
@@ -110,8 +111,18 @@ async function dispatch(
   if (name === FINAL_OUTPUT) return validateCandidate(s, call);
   const spec = toolSpec(s.fold, name);
   if (spec?.effect_class === "read_only") {
+    const fenced = s.fence();
+    if (fenced !== undefined) return fenced;
     const run = await body(s, call);
-    return run.kind === "done" ? result(s, callId, run) : undefined;
+    // A read_only call changes nothing, so an uncertain run is just a failed one.
+    return s.append(
+      result(
+        callId,
+        run.kind === "done"
+          ? run
+          : { kind: "done", output: `failed: ${run.kind}`, isError: true },
+      ),
+    );
   }
   const attempts = s.events.filter(
     (e) => e.type === "effect_begin" && e.data.call_id === callId,
@@ -120,6 +131,9 @@ async function dispatch(
     draft.effectBegin({ call_id: callId, attempt: attempts + 1 }),
   );
   if (begun !== undefined) return begun;
+  // Fenced in the same synchronous section as the dispatch: a stale owner never runs it.
+  const fenced = s.fence();
+  if (fenced !== undefined) return fenced;
   const run = await sent(s, call);
   return settle(s, callId, run);
 }
@@ -152,6 +166,8 @@ async function body(s: Session, call: EventOf<"tool_call">): Promise<ToolRun> {
     return await impl.run(call.data.input, {
       effectKey: key,
       callId: call.data.call_id,
+      branchId: s.branchId,
+      epoch: s.epoch,
       principal: s.config.principal,
       signal: s.config.signal ?? new AbortController().signal,
     });
@@ -183,16 +199,16 @@ function settle(
   switch (run.kind) {
     case "done": {
       const ref = s.store(run.output, "text/plain");
-      return (
-        s.append(
-          draft.effectCommit({
-            call_id: callId,
-            result_ref: ref,
-            ...(run.receipt === undefined
-              ? {}
-              : { provider_receipt: run.receipt }),
-          }),
-        ) ?? result(s, callId, run)
+      // The result artifact is durable first; the commit and its result land together.
+      return s.append(
+        draft.effectCommit({
+          call_id: callId,
+          result_ref: ref,
+          ...(run.receipt === undefined
+            ? {}
+            : { provider_receipt: run.receipt }),
+        }),
+        result(callId, run),
       );
     }
     case "unknown":
@@ -227,19 +243,16 @@ function settle(
 }
 
 function result(
-  s: Session,
   callId: string,
   run: Extract<ToolRun, { kind: "done" }>,
-): Halt | undefined {
-  return s.append(
-    draft.toolResult(
-      {
-        call_id: callId,
-        is_error: run.isError,
-        origin: "executed",
-        preview: run.output,
-      },
-      TOOL,
-    ),
+): EventDraft {
+  return draft.toolResult(
+    {
+      call_id: callId,
+      is_error: run.isError,
+      origin: "executed",
+      preview: run.output,
+    },
+    TOOL,
   );
 }

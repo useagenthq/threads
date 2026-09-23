@@ -60,6 +60,22 @@ export class Session {
     return undefined;
   }
 
+  /**
+   * Called right before every adapter call (model send and lookup, tool run, lookup and
+   * terminate): a writer that lost its lease or epoch never reaches the adapter.
+   */
+  fence(): Halt | undefined {
+    const live = this.#writer.fence();
+    return live.ok
+      ? undefined
+      : { code: "branch_busy", message: live.error.message };
+  }
+
+  /** The lease epoch every dispatch carries. */
+  get epoch(): number {
+    return this.#writer.lease.epoch;
+  }
+
   /** Stores bytes before any event names them, and returns their ref. */
   store(bytes: Uint8Array | string, mediaType: string): ArtifactRef {
     const data = typeof bytes === "string" ? encoder.encode(bytes) : bytes;

@@ -64,6 +64,9 @@ export async function attempt(
   );
   if (stopped !== undefined) return { kind: "halt", halt: stopped };
   const requestId = s.events.at(-1)?.event_id ?? "";
+  // Fenced in the same synchronous section as the send: a stale owner never sends.
+  const fenced = s.fence();
+  if (fenced !== undefined) return { kind: "halt", halt: fenced };
   const collected = await collect(s, model, requestId, bytes);
   return record(s, requestId, collected);
 }

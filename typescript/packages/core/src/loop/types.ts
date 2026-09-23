@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import type { EventOf, Fold } from "../fold/state";
 import type { KnownEvent, Principal, ToolSpec } from "../log";
 import type { LookupResult, Model } from "../model";
@@ -47,6 +48,9 @@ export type ToolRun =
 export type ToolContext = {
   readonly effectKey: string;
   readonly callId: string;
+  /** The fencing pair a gateway re-checks before an external operation. */
+  readonly branchId: string;
+  readonly epoch: number;
   readonly principal: Principal;
   readonly signal: AbortSignal;
 };
@@ -54,6 +58,8 @@ export type ToolContext = {
 /** A dispatchable tool: its pinned spec, its body, and the recovery contract its class needs. */
 export type ToolImpl = {
   readonly spec: ToolSpec;
+  /** The tool's own schema: arguments are parsed with it before anything is authorized. */
+  readonly input: z.ZodType;
   readonly run: (
     input: EventOf<"tool_call">["data"]["input"],
     ctx: ToolContext,
@@ -99,6 +105,8 @@ export type LoopConfig = {
   /** the adapter's declared clock skew margin. */
   readonly skewMarginMs: number;
   readonly stub?: StubGateway;
+  /** The agent's output schema, when policy.output is pinned. */
+  readonly output?: z.ZodType;
   readonly signal?: AbortSignal;
   /** Transient stream items (text deltas, retry waits); never logged. */
   readonly onDelta?: (requestEventId: string, text: string) => void;

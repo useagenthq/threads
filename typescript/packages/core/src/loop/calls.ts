@@ -1,6 +1,6 @@
 import { draft } from "./drafts";
 import { FINAL_OUTPUT } from "./output";
-import { schemaErrors } from "./schema";
+import { parseErrors } from "./schema";
 import type { Session } from "./session";
 import type { Response } from "./turn";
 import { toolSpec } from "./turn";
@@ -64,6 +64,9 @@ function preEffectFailure(s: Session, use: ToolUse): string | undefined {
   if (use.name === FINAL_OUTPUT) return undefined;
   if (spec.defer_loading === true)
     return `tool_not_loaded: ${use.name}; find it with tool_search first`;
-  const errors = schemaErrors(spec.input_schema, use.input);
+  const impl = s.config.tools.get(use.name);
+  // Arguments parse with the tool's own schema; a tool without one fails closed.
+  if (impl === undefined) return `no implementation for ${use.name}`;
+  const errors = parseErrors(impl.input, use.input);
   return errors === undefined ? undefined : `invalid input: ${errors}`;
 }

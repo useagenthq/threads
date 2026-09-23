@@ -3,7 +3,7 @@ import type { EventOf } from "../fold/state";
 import { canonicalize } from "../log";
 import { draft, TOOL } from "./drafts";
 import { endTurn } from "./request";
-import { schemaErrors } from "./schema";
+import { parseErrors } from "./schema";
 import type { Session } from "./session";
 import { turnEvents } from "./turn";
 import type { Halt } from "./types";
@@ -31,7 +31,14 @@ export function validateCandidate(
         { kind: "host" },
       ),
     );
-  const errors = schemaErrors(output.schema, call.data.input);
+  // The agent's own schema validates; a pinned schema without one fails closed.
+  const schema = s.config.output;
+  if (schema === undefined)
+    return {
+      code: "output_invalid",
+      message: "no validator for the pinned output schema",
+    };
+  const errors = parseErrors(schema, call.data.input);
   const common = {
     source_event_id: call.event_id,
     schema_sha256: output.schema_sha256,

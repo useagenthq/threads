@@ -1,5 +1,6 @@
 import { assertNever } from "../assert-never";
-import { effectKey } from "../fold/state";
+import { type EventOf, effectKey } from "../fold/state";
+import type { EventDraft } from "../store";
 import { draft } from "./drafts";
 import type { Session } from "./session";
 import { toolSpec } from "./turn";
@@ -95,32 +96,23 @@ async function reconcile(
 ): Promise<Halt | undefined> {
   const contract = impl?.reconcile;
   if (contract === undefined) return park(s, callId, actor);
+  const fenced = s.fence();
+  if (fenced !== undefined) return fenced;
   const answer = await contract.lookup(effectKey(s.fold, callId, s.branchId));
   if (answer.status === "found") {
     const ref = s.store(answer.value, "text/plain");
-    return (
-      s.append(
-        draft.effectResolved(
-          {
-            call_id: callId,
-            outcome: "confirmed_success",
-            by: "reconcile",
-            result_ref: ref,
-          },
-          actor,
-        ),
-      ) ??
-      s.append(
-        draft.toolResult(
-          {
-            call_id: callId,
-            is_error: false,
-            origin: "executed",
-            preview: answer.value,
-          },
-          actor,
-        ),
-      )
+    // The resolution and its result commit together.
+    return s.append(
+      draft.effectResolved(
+        {
+          call_id: callId,
+          outcome: "confirmed_success",
+          by: "reconcile",
+          result_ref: ref,
+        },
+        actor,
+      ),
+      terminalResult(callId, "confirmed_success", answer.value, actor),
     );
   }
   // A not_found settles only when the tool's declared finality makes it final.
@@ -141,9 +133,21 @@ async function interrupt(
   impl: ToolImpl | undefined,
   actor: Actor,
 ): Promise<Halt | undefined> {
+  const fenced = s.fence();
+  if (fenced !== undefined) return fenced;
   const gone = await impl?.terminate?.(effectKey(s.fold, callId, s.branchId));
   if (gone !== "terminated" && gone !== "already_exited")
     return park(s, callId, actor);
+  return s.append(
+    draft.effectResolved(
+      { call_id: callId, outcome: "interrupted", by: "sandbox_terminated" },
+      actor,
+    ),
+    terminalResult(callId, "interrupted", interruption(s, callId), actor),
+  );
+}
+
+function interruption(s: Session, callId: string): string {
   const unknown = s.events.findLast(
     (e) => e.type === "effect_unknown" && e.data.call_id === callId,
   );
@@ -151,25 +155,55 @@ async function interrupt(
     unknown?.type === "effect_unknown" && unknown.data.reason === "timeout"
       ? "timed out"
       : "the run stopped";
-  return (
-    s.append(
-      draft.effectResolved(
-        { call_id: callId, outcome: "interrupted", by: "sandbox_terminated" },
-        actor,
-      ),
-    ) ??
-    s.append(
-      draft.toolResult(
-        {
-          call_id: callId,
-          is_error: true,
-          origin: "interrupted",
-          preview: `interrupted: ${why}; the command may have partly run`,
-        },
-        actor,
-      ),
-    )
+  return `interrupted: ${why}; the command may have partly run`;
+}
+
+type Terminal = "confirmed_success" | "interrupted" | "assume_done";
+
+/** The tool_result a terminal resolution closes its call with; the call is never re-run. */
+export function terminalResult(
+  callId: string,
+  outcome: Terminal,
+  preview: string,
+  actor: Actor,
+): EventDraft {
+  return draft.toolResult(
+    {
+      call_id: callId,
+      is_error: outcome === "interrupted",
+      origin: outcome === "interrupted" ? "interrupted" : "executed",
+      preview,
+    },
+    actor,
   );
+}
+
+/**
+ * A recorded terminal resolution whose result never landed (a crash between them): its result
+ * again, from the resolution alone.
+ */
+export function resolvedResult(
+  s: Session,
+  resolved: EventOf<"effect_resolved">,
+  actor: Actor,
+): Halt | undefined {
+  const { call_id: callId, outcome, result_ref: ref } = resolved.data;
+  if (outcome === "interrupted")
+    return s.append(
+      terminalResult(callId, outcome, interruption(s, callId), actor),
+    );
+  if (outcome === "assume_done")
+    return s.append(
+      terminalResult(callId, outcome, "assumed done by an approver", actor),
+    );
+  if (outcome !== "confirmed_success")
+    throw new Error(`${outcome} is not terminal`);
+  const bytes = ref === undefined ? undefined : s.artifacts.get(ref.sha256);
+  if (bytes !== undefined && !bytes.ok)
+    return { code: "artifact_missing", message: bytes.error.message };
+  const preview =
+    bytes === undefined ? "" : new TextDecoder().decode(bytes.value);
+  return s.append(terminalResult(callId, outcome, preview, actor));
 }
 
 function park(s: Session, callId: string, actor: Actor): Halt | undefined {

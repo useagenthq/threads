@@ -128,6 +128,21 @@ export class Writer {
     return ok(added);
   }
 
+  /**
+   * The dispatch fence: this writer still holds the lease at its epoch, read
+   * from the store right before an adapter is called. A stale writer is poisoned and must never
+   * dispatch. Passing proves nothing about what an older owner already sent.
+   */
+  fence(): Result<void, LogError> {
+    if (this.#poisoned)
+      return err(
+        logError("writer_poisoned", "this writer lost its lease or head"),
+      );
+    const live = this.#checkLease();
+    if (!live.ok) this.#poisoned = true;
+    return live;
+  }
+
   /** Extends the lease; fails (and poisons) if another holder or epoch took it. */
   renew(ttlMs: number): Result<void, LogError> {
     const renewed = atomically(this.#db, () => {

@@ -1,4 +1,5 @@
 import { expect } from "bun:test";
+import { z } from "zod";
 import type { BranchId, KnownEvent, ThreadId } from "../../src/log";
 import {
   type LoopConfig,
@@ -105,6 +106,7 @@ async function run(
   );
   const stubs =
     c.scripts.stubs === undefined ? undefined : recordedStubs(c.scripts.stubs);
+  const output = writer.chain.fold.policy?.output;
   const config: LoopConfig = {
     models: () => model,
     tools: sandbox.tools,
@@ -122,6 +124,9 @@ async function run(
     principal: ALICE,
     skewMarginMs: 1000,
     ...(stubs === undefined ? {} : { stub: stubs }),
+    ...(output === undefined
+      ? {}
+      : { output: z.fromJSONSchema(output.schema) }),
   };
   const end = await resume(writer, artifacts, config, {
     loop: c.scripts.model !== undefined,

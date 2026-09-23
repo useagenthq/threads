@@ -51,10 +51,23 @@ export function scriptedTools(
   };
   const impls = new Map<string, ToolImpl>();
   for (const spec of specs) {
+    // The case's tools exist only as pinned JSON Schemas; the test kit compiles them. The
+    // framework itself never evaluates a pinned schema.
+    const input = z.fromJSONSchema(spec.input_schema);
     const t = tools[spec.name];
-    if (t === undefined) continue;
+    if (t === undefined) {
+      impls.set(spec.name, {
+        spec,
+        input,
+        run: async () => {
+          throw new Error(`the case scripts no body for ${spec.name}`);
+        },
+      });
+      continue;
+    }
     impls.set(spec.name, {
       spec,
+      input,
       run: async (_input, ctx) => {
         bump("dispatches", spec.name);
         const deduped = t.executed_keys?.[ctx.effectKey];

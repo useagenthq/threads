@@ -2,7 +2,7 @@ import { assertNever } from "../assert-never";
 import { type EventOf, effectKey } from "../fold/state";
 import { draft, RECOVERY } from "./drafts";
 import type { Session } from "./session";
-import { settleUnknown } from "./settle";
+import { resolvedResult, settleUnknown } from "./settle";
 import type { Halt } from "./types";
 
 // the recovery classifier, run once a new lease is taken and before anything
@@ -27,6 +27,8 @@ async function recoverRequest(
   requestId: string,
 ): Promise<Halt | undefined> {
   const model = s.fold.model && s.config.models(s.fold.model);
+  const fenced = s.fence();
+  if (fenced !== undefined) return fenced;
   const answer =
     model?.lookup === undefined || model.info.lookup === "none"
       ? undefined
@@ -80,10 +82,37 @@ async function recoverCall(
     case "unknown":
       return settleUnknown(s, callId, RECOVERY);
     case "resolved":
+      return resolved(s, callId);
     case undefined:
       return notStarted(s, callId);
     default:
       return assertNever(status);
+  }
+}
+
+/**
+ * A resolved effect with its call still pending: a terminal resolution closes it from the
+ * record; only safe_to_retry, not_sent and assume_not_done may dispatch again.
+ */
+function resolved(s: Session, callId: string): Halt | undefined {
+  const last = s.events.findLast(
+    (e): e is EventOf<"effect_resolved"> =>
+      e.type === "effect_resolved" && e.data.call_id === callId,
+  );
+  if (last === undefined)
+    throw new Error("a resolved effect has its resolution");
+  const outcome = last.data.outcome;
+  switch (outcome) {
+    case "safe_to_retry":
+    case "not_sent":
+    case "assume_not_done":
+      return notStarted(s, callId);
+    case "confirmed_success":
+    case "interrupted":
+    case "assume_done":
+      return resolvedResult(s, last, RECOVERY);
+    default:
+      return assertNever(outcome);
   }
 }
 

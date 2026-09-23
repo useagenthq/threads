@@ -1,16 +1,13 @@
 import { z } from "zod";
-import type { JsonObject } from "../log";
 
-/** Errors of `value` against a pinned JSON Schema, or undefined when it conforms. */
-export function schemaErrors(
-  schema: z.infer<typeof JsonObject>,
+/**
+ * Errors of `value` against the tool's or agent's own Zod schema, or undefined when it parses.
+ * Pinned JSON Schemas are never evaluated here: they are what the model sees.
+ */
+export function parseErrors(
+  schema: z.ZodType,
   value: unknown,
 ): string | undefined {
-  let parsed: ReturnType<ReturnType<typeof z.fromJSONSchema>["safeParse"]>;
-  try {
-    parsed = z.fromJSONSchema(schema).safeParse(value);
-  } catch {
-    return "the pinned schema can't be compiled";
-  }
+  const parsed = schema.safeParse(value);
   return parsed.success ? undefined : z.prettifyError(parsed.error);
 }
