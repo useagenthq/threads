@@ -1,0 +1,16 @@
+{
+  "name": "@threads/anthropic",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@threads/core": "workspace:*",
+    "@anthropic-ai/sdk": "0.128.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@threads/adapter-testkit": "workspace:*"
+  }
+}

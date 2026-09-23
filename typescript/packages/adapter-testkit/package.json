@@ -1,0 +1,12 @@
+{
+  "name": "@threads/adapter-testkit",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@threads/core": "workspace:*"
+  }
+}

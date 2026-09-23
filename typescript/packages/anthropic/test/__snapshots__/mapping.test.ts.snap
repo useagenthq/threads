@@ -1,0 +1,387 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`golden: Render v1 conformance cases → Messages API request render-user-image-input 1`] = `
+{
+  "body": {
+    "max_tokens": 1024,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "What does this page show?",
+            "type": "text",
+          },
+          {
+            "source": {
+              "data": "iVBORw0KGgpmaXh0dXJlOiBsb2dpbiBwYWdlIHNjcmVlbnNob3Q=",
+              "media_type": "image/png",
+              "type": "base64",
+            },
+            "type": "image",
+          },
+        ],
+        "role": "user",
+      },
+    ],
+    "model": "claude-sonnet-5",
+    "stream": true,
+    "system": "You are a helpful agent.",
+    "temperature": 0,
+    "tools": [
+      {
+        "description": "Read a file from the sandbox workspace.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "path",
+          ],
+          "type": "object",
+        },
+        "name": "read_file",
+      },
+    ],
+  },
+  "documents": [],
+  "ok": true,
+}
+`;
+
+exports[`golden: Render v1 conformance cases → Messages API request render-screenshot-tool-result 1`] = `
+{
+  "body": {
+    "max_tokens": 1024,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Take a screenshot of the login page.",
+            "type": "text",
+          },
+        ],
+        "role": "user",
+      },
+      {
+        "content": [
+          {
+            "id": "call_1",
+            "input": {},
+            "name": "screenshot",
+            "type": "tool_use",
+          },
+        ],
+        "role": "assistant",
+      },
+      {
+        "content": [
+          {
+            "content": [
+              {
+                "text": "Login page loaded.",
+                "type": "text",
+              },
+              {
+                "source": {
+                  "data": "iVBORw0KGgpmaXh0dXJlOiBsb2dpbiBwYWdlIHNjcmVlbnNob3Q=",
+                  "media_type": "image/png",
+                  "type": "base64",
+                },
+                "type": "image",
+              },
+              {
+                "text": "Cursor at (640, 400).",
+                "type": "text",
+              },
+            ],
+            "is_error": false,
+            "tool_use_id": "call_1",
+            "type": "tool_result",
+          },
+        ],
+        "role": "user",
+      },
+    ],
+    "model": "claude-sonnet-5",
+    "stream": true,
+    "system": "You are a helpful agent.",
+    "temperature": 0,
+    "tools": [
+      {
+        "description": "Capture the sandbox desktop.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {},
+          "required": [],
+          "type": "object",
+        },
+        "name": "screenshot",
+      },
+    ],
+  },
+  "documents": [],
+  "ok": true,
+}
+`;
+
+exports[`golden: Render v1 conformance cases → Messages API request render-deferred-tool-loaded 1`] = `
+{
+  "body": {
+    "max_tokens": 1024,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Deploy to staging.",
+            "type": "text",
+          },
+        ],
+        "role": "user",
+      },
+      {
+        "content": [
+          {
+            "id": "call_1",
+            "input": {
+              "query": "deploy",
+            },
+            "name": "tool_search",
+            "type": "tool_use",
+          },
+        ],
+        "role": "assistant",
+      },
+      {
+        "content": [
+          {
+            "content": [
+              {
+                "text": "mcp__ops__deploy: Deploy the app.",
+                "type": "text",
+              },
+            ],
+            "is_error": false,
+            "tool_use_id": "call_1",
+            "type": "tool_result",
+          },
+        ],
+        "role": "user",
+      },
+    ],
+    "model": "claude-sonnet-5",
+    "stream": true,
+    "system": "You are a helpful agent.",
+    "temperature": 0,
+    "tools": [
+      {
+        "description": "Read a file from the sandbox workspace.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "path",
+          ],
+          "type": "object",
+        },
+        "name": "read_file",
+      },
+      {
+        "description": "Find deferred tools by keyword.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "query": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "query",
+          ],
+          "type": "object",
+        },
+        "name": "tool_search",
+      },
+      {
+        "description": "Deploy the app.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "env": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "env",
+          ],
+          "type": "object",
+        },
+        "name": "mcp__ops__deploy",
+      },
+    ],
+  },
+  "documents": [],
+  "ok": true,
+}
+`;
+
+exports[`golden: Render v1 conformance cases → Messages API request render-tool-results-cleared 1`] = `
+{
+  "body": {
+    "max_tokens": 1024,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "What is in README.md?",
+            "type": "text",
+          },
+        ],
+        "role": "user",
+      },
+      {
+        "content": [
+          {
+            "id": "call_1",
+            "input": {
+              "path": "README.md",
+            },
+            "name": "read_file",
+            "type": "tool_use",
+          },
+        ],
+        "role": "assistant",
+      },
+      {
+        "content": [
+          {
+            "content": [
+              {
+                "text": "[tool result cleared: call_id=call_1; read it with read_tool_result]",
+                "type": "text",
+              },
+            ],
+            "is_error": false,
+            "tool_use_id": "call_1",
+            "type": "tool_result",
+          },
+        ],
+        "role": "user",
+      },
+      {
+        "content": [
+          {
+            "text": "README.md contains one heading: demo.",
+            "type": "text",
+          },
+        ],
+        "role": "assistant",
+      },
+      {
+        "content": [
+          {
+            "text": "And .env?",
+            "type": "text",
+          },
+        ],
+        "role": "user",
+      },
+      {
+        "content": [
+          {
+            "id": "call_2",
+            "input": {
+              "path": ".env",
+            },
+            "name": "read_file",
+            "type": "tool_use",
+          },
+        ],
+        "role": "assistant",
+      },
+      {
+        "content": [
+          {
+            "content": [
+              {
+                "text": 
+"API_URL=https://api.example.test
+TOKEN=[redacted]
+"
+,
+                "type": "text",
+              },
+            ],
+            "is_error": false,
+            "tool_use_id": "call_2",
+            "type": "tool_result",
+          },
+        ],
+        "role": "user",
+      },
+      {
+        "content": [
+          {
+            "text": "It sets API_URL and TOKEN.",
+            "type": "text",
+          },
+        ],
+        "role": "assistant",
+      },
+      {
+        "content": [
+          {
+            "text": "Continue.",
+            "type": "text",
+          },
+        ],
+        "role": "user",
+      },
+    ],
+    "model": "claude-sonnet-5",
+    "stream": true,
+    "system": "You are a helpful agent.",
+    "temperature": 0,
+    "tools": [
+      {
+        "description": "Read a file from the sandbox workspace.",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "path",
+          ],
+          "type": "object",
+        },
+        "name": "read_file",
+      },
+    ],
+  },
+  "documents": [],
+  "ok": true,
+}
+`;
+
+exports[`golden: Render v1 conformance cases → Messages API request render-thinking-block-replay 1`] = `
+{
+  "message": "continuation_unsupported: a scripted thinking part can't be sent to anthropic",
+  "ok": false,
+}
+`;
+
+exports[`golden: Render v1 conformance cases → Messages API request render-hosted-search-citations 1`] = `
+{
+  "message": "continuation_unsupported: a scripted server_tool part can't be sent to anthropic",
+  "ok": false,
+}
+`;

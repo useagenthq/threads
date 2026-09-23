@@ -19,6 +19,7 @@
     "rules": {
       "preset": "recommended",
       "complexity": {
+        "useLiteralKeys": "off",
         "noExcessiveCognitiveComplexity": {
           "level": "error",
           "options": {
