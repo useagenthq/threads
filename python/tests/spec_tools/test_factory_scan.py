@@ -160,6 +160,9 @@ THROW = 'throw new E("missing_secret", "m");'
         ("const [E] = [ConfigError];\n" + THROW, "ts"),
         ("const make = { E: ConfigError };\n", "ts"),
         ("const E = ok ? Other : ConfigError;\n" + THROW, "ts"),
+        ('alias = {"#": ConfigError}["#"]\nraise alias("missing_secret", "m")\n', "py"),
+        ('const E = { "https://x": ConfigError }["https://x"];\n' + THROW, "ts"),
+        ("// a comment naming ConfigError\n", "ts"),
     ],
     ids=[
         "py-import-as",
@@ -176,6 +179,9 @@ THROW = 'throw new E("missing_secret", "m");'
         "ts-array",
         "ts-object",
         "ts-ternary",
+        "py-hash-in-string",
+        "ts-slashes-in-string",
+        "ts-comment",
     ],
 )
 def test_an_alias_or_subclass_of_config_error_is_unreadable(source: str, lang: str) -> None:
@@ -188,11 +194,7 @@ def test_catching_and_plain_imports_are_not_aliases() -> None:
         "try:\n    f()\nexcept ConfigError as e:\n    pass\n"
     )
     assert raised_codes(py, "py") == {}
-    ts = (
-        'import { ConfigError } from "./errors";\n'
-        "// a ConfigError in a comment\n"
-        "if (e instanceof ConfigError) {}\n"
-    )
+    ts = 'import { ConfigError } from "./errors";\nif (e instanceof ConfigError) {}\n'
     assert raised_codes(ts, "ts") == {}
     caught = "if isinstance(error, ConfigError):\n    pass  # ConfigError\n"
     assert raised_codes(caught, "py") == {}
