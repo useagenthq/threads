@@ -1,6 +1,6 @@
 """One Daytona sandbox as a `SandboxSession` (spec/api.json)."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from threads.adapters.sandboxes import posix
@@ -32,10 +32,19 @@ def resource_name(operation_key: str) -> str:
     return f"threads-{operation_key}"
 
 
+type Verify = Callable[
+    [str, str, SandboxContext], Awaitable["Ok[list[ManifestEntry]] | Err[SandboxError]"]
+]
+"""Measures a snapshot image by key: the adapter's verifier (sandbox.py)."""
+
+
 class DaytonaSession:
-    def __init__(self, ident: str, provider: str, control: Control, toolbox: Toolbox) -> None:
+    def __init__(
+        self, ident: str, provider: str, control: Control, toolbox: Toolbox, verify: Verify
+    ) -> None:
         self._id = SandboxId(ident)
         self._provider, self._control, self._toolbox = provider, control, toolbox
+        self._verify = verify
 
     @property
     def id(self) -> SandboxId:
@@ -92,12 +101,13 @@ class DaytonaSession:
         self, operation_key: str, context: SandboxContext
     ) -> Ok[SnapshotData] | Err[SandboxError]:
         """A cold snapshot: the whole sandbox is stopped (every process ends), captured, then
-        started again. Quiescent because stopped, and disruptive for that reason."""
+        started again. Quiescent because stopped, and disruptive for that reason. The manifest
+        is the image's, measured in a verifier restored from it."""
         name = resource_name(operation_key)
         taken = await dispatch(context, lambda: self._capture(name), classify)
         if isinstance(taken, Err):
             return taken
-        tree = await posix.manifest(self, context)
+        tree = await self._verify(taken.value, operation_key, context)
         if isinstance(tree, Err):
             return tree
         return Ok(self._data(taken.value, tree.value))

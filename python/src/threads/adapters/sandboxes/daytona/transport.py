@@ -1,12 +1,15 @@
 """The one aiohttp session every Daytona request goes through, REST and WebSocket alike.
 
-Its trace fences at aiohttp's send point, in `BaseConnector.connect` once the request holds a
-pool slot (past any queueing for one) and before `ClientRequest.send` writes its first byte
-(aiohttp 3.14, client.py `_connect_and_send_request`): `on_connection_reuseconn` for a pooled
-connection, `on_connection_create_start` for a new one. The latter runs before the TCP and TLS
-handshake rather than after it, because aiohttp leaks the new socket when a
-`create_end` hook raises; a handshake writes no request bytes. A failed fence raises, so nothing
-of the request is written.
+Its trace fences at aiohttp's send point: `on_connection_create_start` fires in
+`BaseConnector.connect` once the request holds a pool slot (past any queueing for one) and
+before `ClientRequest.send` writes its first byte (aiohttp 3.14, client.py
+`_connect_and_send_request`). A failed fence raises there, so nothing of the request is written
+and no socket is open yet.
+
+Connections are never reused (`force_close`): aiohttp's hook for a reused connection pops it
+from the pool and, when the hook raises, never closes it, so a refused fence would leak it.
+ponytail: one TCP and TLS handshake per request; pool again if aiohttp closes a connection whose
+reuse hook raised.
 """
 
 from collections.abc import Sequence
@@ -26,7 +29,6 @@ async def _fence(
 def trace() -> aiohttp.TraceConfig:
     config = aiohttp.TraceConfig()
     config.on_connection_create_start.append(_fence)
-    config.on_connection_reuseconn.append(_fence)
     return config
 
 
@@ -35,4 +37,5 @@ def session(api_key: str, extra: Sequence[aiohttp.TraceConfig] = ()) -> aiohttp.
     toolbox proxy (host side; the key never enters a sandbox). `extra` traces are for tests.
     Built inside the running loop: aiohttp binds its connector to it."""
     auth = {"Authorization": f"Bearer {api_key}"}
-    return aiohttp.ClientSession(headers=auth, trace_configs=[trace(), *extra])
+    connector = aiohttp.TCPConnector(force_close=True)
+    return aiohttp.ClientSession(connector=connector, headers=auth, trace_configs=[trace(), *extra])

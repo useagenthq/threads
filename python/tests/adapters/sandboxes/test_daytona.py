@@ -9,7 +9,7 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
 from corpus import CASES, cases
-from daytona_server import API_KEY, serve
+from daytona_server import API_KEY, DaytonaServer, serve
 from fork_kit import assert_expected, run_case, script_of
 from sandbox_backend import FakeBackend
 from sandbox_contract import CHECKS, Check, run_check
@@ -73,6 +73,45 @@ def test_a_refused_fence_writes_no_byte() -> None:
         assert got.error.code == "stale_epoch"
         assert stale.fences == 1
         assert b"".join(received) == b""
+
+    asyncio.run(main())
+
+
+def test_a_refused_fence_after_a_request_leaves_no_socket_open() -> None:
+    """aiohttp never closes a pooled connection whose reuse hook raised, so connections are not
+    reused: after a refusal right after a request, closing the adapter leaves no socket open."""
+
+    async def main() -> None:
+        server = DaytonaServer(FakeBackend.scripted())
+        async with TestServer(server.app, host="127.0.0.1") as test:
+            server.base = str(test.make_url("")).rstrip("/")
+            sandbox = DaytonaSandbox(API_KEY, api_url=server.base, poll_s=0.0, wait_s=1.0)
+            assert isinstance(await sandbox.create("k", OPEN), Ok)
+            for _ in range(3):
+                refused = await sandbox.attach("sbx_1", KitContext(live=False))
+                assert isinstance(refused, Err)
+                assert refused.error.code == "stale_epoch"
+            await sandbox.aclose()
+            await asyncio.sleep(0.05)
+            assert test.runner is not None
+            assert test.runner.server is not None
+            assert test.runner.server.connections == [], "a socket leaked"
+
+    asyncio.run(main())
+
+
+def test_closing_the_adapter_stops_every_stream_it_is_reading() -> None:
+    """An exec still streaming when the adapter closes makes no request after it: its pump is
+    stopped, not left to reconnect to a provider that went away."""
+
+    async def main() -> None:
+        async with serve(FakeBackend.scripted(), "daytona") as sandbox:
+            made = await sandbox.create("k", OPEN)
+            assert isinstance(made, Ok)
+            started = await made.value.exec(["sleep", "100"], OPEN, process_key="bg")
+            assert isinstance(started, Ok)
+        others = asyncio.all_tasks() - {asyncio.current_task()}
+        assert not [t for t in others if not t.done()]
 
     asyncio.run(main())
 

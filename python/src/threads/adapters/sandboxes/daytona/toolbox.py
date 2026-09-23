@@ -53,7 +53,7 @@ def env_file(env: Mapping[str, str]) -> bytes:
 
 
 class Toolbox:
-    def __init__(
+    def __init__(  # noqa: PLR0913 - the toolbox's address, session, pacing and pumps
         self,
         proxy_url: str,
         sandbox_id: str,
@@ -61,6 +61,7 @@ class Toolbox:
         session: aiohttp.ClientSession,
         poll_s: float,
         wait_s: float,
+        tasks: set[asyncio.Task[None]],
     ) -> None:
         self._host = f"{proxy_url.rstrip('/')}/{sandbox_id}"
         api = ApiClient(Configuration(host=self._host))
@@ -68,7 +69,8 @@ class Toolbox:
         self._files, self._process = FileSystemApi(api), ProcessApi(api)
         self._session = session
         self._poll_s, self._wait_s = poll_s, wait_s
-        self._tasks: set[asyncio.Task[None]] = set()
+        self._tasks = tasks
+        """The adapter's running pumps, cancelled when it closes."""
 
     async def upload(self, path: str, data: bytes) -> None:
         await body(self._files.upload_file_without_preload_content(path, data))

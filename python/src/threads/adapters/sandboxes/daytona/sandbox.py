@@ -19,12 +19,18 @@ What this adapter declares (Daytona 0.216, container sandboxes; ):
   snapshot is disruptive: the parent's processes don't survive it. Capture class filesystem;
   no provider expiry is declared. A snapshot can't be found by key with its manifest, so
   snapshot lookup is none. Restore verifies the manifest and deletes a mismatched child.
+- The manifest a snapshot returns is the image's own: a verifier sandbox is
+  cold-started from the snapshot, measured and deleted. Measuring the parent before or after
+  would miss a guest that writes just before the stop and restores the file just after the
+  start. The verifier has a short TTL, so one whose delete fails still dies on its own.
 """
 
+import asyncio
 import os
 import re
 from collections.abc import Sequence
-from typing import Literal
+from dataclasses import replace
+from typing import TYPE_CHECKING, Literal
 
 import aiohttp
 
@@ -48,8 +54,12 @@ from threads.sandbox.protocol import (
     SandboxSession,
 )
 
+if TYPE_CHECKING:
+    from threads.sandbox.manifest import ManifestEntry
+
 DEFAULT_API = "https://app.daytona.io/api"
 _PROVIDER = re.compile(r"[a-z][a-z0-9_]{0,63}")
+_VERIFIER_TTL_MINUTES = 60
 
 
 class DaytonaSandbox:
@@ -79,6 +89,7 @@ class DaytonaSandbox:
         self._name, self._poll_s, self._wait_s, self._traces = name, poll_s, wait_s, traces
         self._session: aiohttp.ClientSession | None = None
         self._control: Control | None = None
+        self._pumps: set[asyncio.Task[None]] = set()
 
     @property
     def info(self) -> SandboxInfo:
@@ -93,31 +104,45 @@ class DaytonaSandbox:
         )
 
     async def aclose(self) -> None:
+        """Stops reading any exec still streaming, then closes the session."""
+        for pump in self._pumps:
+            pump.cancel()
+        await asyncio.gather(*self._pumps, return_exceptions=True)
         if self._session is not None:
             await self._session.close()
 
     async def create(
         self, operation_key: str, context: SandboxContext
     ) -> Ok[SandboxSession] | Err[SandboxError]:
-        return await dispatch(context, lambda: self._create(operation_key, self._base), classify)
+        name = resource_name(operation_key)
+        return await dispatch(
+            context, lambda: self._create(name, self._base, self._placed), classify
+        )
 
     async def restore(
         self, snapshot_id: str, manifest_hash: str, operation_key: str, context: SandboxContext
     ) -> Ok[SandboxSession] | Err[SandboxError]:
-        expected = manifest_hash
-        made = await dispatch(context, lambda: self._restore(snapshot_id, operation_key), classify)
+        name = resource_name(operation_key)
+        made = await self._measured(snapshot_id, name, self._placed, context)
         if isinstance(made, Err):
             return made
-        if isinstance(made.value, SandboxError):
-            return Err(made.value)
-        child = made.value
-        tree = await posix.manifest(child, context)
-        if isinstance(tree, Ok) and manifest.manifest_hash(tree.value) == expected:
+        child, tree = made.value
+        if manifest.manifest_hash(tree) == manifest_hash:
             return Ok(child)
         await child.close(context)
-        if isinstance(tree, Err):
-            return Err(SandboxError("snapshot_restore_failed", tree.error.message))
         return Err(SandboxError("snapshot_manifest_mismatch", f"{snapshot_id}: manifest"))
+
+    async def verify(
+        self, snapshot_id: str, operation_key: str, context: SandboxContext
+    ) -> "Ok[list[ManifestEntry]] | Err[SandboxError]":
+        """The snapshot image's own manifest, from a verifier cold-started from it."""
+        placed = replace(self._placed, ttl_minutes=_VERIFIER_TTL_MINUTES, block_network=True)
+        made = await self._measured(snapshot_id, f"threads-verify-{operation_key}", placed, context)
+        if isinstance(made, Err):
+            return made
+        verifier, tree = made.value
+        await verifier.close(context)
+        return Ok(tree)
 
     async def lookup(
         self, operation_key: str, context: SandboxContext
@@ -152,11 +177,28 @@ class DaytonaSandbox:
             return Err(SandboxError("release_failed", removed.error.message))
         return Ok("released" if removed.value else "already_gone")
 
-    async def _create(self, key: str, snapshot: str | None) -> DaytonaSession:
-        made = await self._controls().create(resource_name(key), snapshot, self._placed)
-        return self._open(made)
+    async def _measured(
+        self, snapshot_id: str, name: str, placed: Placement, context: SandboxContext
+    ) -> "Ok[tuple[DaytonaSession, list[ManifestEntry]]] | Err[SandboxError]":
+        """A sandbox restored from the snapshot, and its manifest; deleted if unmeasurable."""
+        made = await dispatch(context, lambda: self._restore(snapshot_id, name, placed), classify)
+        if isinstance(made, Err):
+            return made
+        if isinstance(made.value, SandboxError):
+            return Err(made.value)
+        child = made.value
+        tree = await posix.manifest(child, context)
+        if isinstance(tree, Err):
+            await child.close(context)
+            return Err(SandboxError("snapshot_restore_failed", tree.error.message))
+        return Ok((child, tree.value))
 
-    async def _restore(self, snapshot: str, key: str) -> DaytonaSession | SandboxError:
+    async def _create(self, name: str, snapshot: str | None, placed: Placement) -> DaytonaSession:
+        return self._open(await self._controls().create(name, snapshot, placed))
+
+    async def _restore(
+        self, snapshot: str, name: str, placed: Placement
+    ) -> DaytonaSession | SandboxError:
         snap = await self._controls().snapshot(snapshot)
         if snap is None:
             return SandboxError("snapshot_missing", f"no snapshot {snapshot}")
@@ -164,7 +206,7 @@ class DaytonaSandbox:
             return SandboxError("snapshot_expired", f"snapshot {snapshot} is inactive")
         if snap.state != "active":
             return SandboxError("snapshot_restore_failed", f"snapshot {snapshot} is {snap.state}")
-        return await self._create(key, snap.name)
+        return await self._create(name, snap.name, placed)
 
     async def _find(self, ref: str) -> DaytonaSession | None:
         found = await self._controls().get(ref)
@@ -178,8 +220,9 @@ class DaytonaSandbox:
             session=session,
             poll_s=self._poll_s,
             wait_s=self._wait_s,
+            tasks=self._pumps,
         )
-        return DaytonaSession(dto.id, self._name, self._controls(), toolbox)
+        return DaytonaSession(dto.id, self._name, self._controls(), toolbox, self.verify)
 
     def _http(self) -> aiohttp.ClientSession:
         if self._session is None:
