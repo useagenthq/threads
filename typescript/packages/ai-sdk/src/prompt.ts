@@ -21,7 +21,7 @@ import {
   readOrRefuse,
   Unsendable,
 } from "@threads/core/adapter";
-import { ReplayPart } from "./replay";
+import { METADATA_FORMAT, PartMetadata, ReplayPart } from "./replay";
 
 // Render v1 → an AI SDK language model prompt and tool list, deterministically (item
 // 9). Parts go to the provider in recorded order; reasoning and hosted tool parts go back as
@@ -190,10 +190,13 @@ async function assistant(
   ctx: Ctx,
 ): Promise<AssistantContent> {
   const out: AssistantContent = [];
+  // Recorded metadata attaches to the text or tool call right after it.
+  let pending: Partial<Pick<PartMetadata, "providerOptions">> = {};
   for (const part of parts) {
     switch (part.type) {
       case "text":
-        out.push({ type: "text", text: part.text });
+        out.push({ type: "text", text: part.text, ...pending });
+        pending = {};
         break;
       case "tool_use":
         ctx.names.set(part.call_id, part.name);
@@ -202,18 +205,18 @@ async function assistant(
           toolCallId: part.call_id,
           toolName: part.name,
           input: part.input,
+          ...pending,
         });
+        pending = {};
         break;
       case "reasoning":
-      case "hosted_tool":
-        if (part.provider !== ctx.provider)
-          throw new Unsendable(
-            `continuation_unsupported: a ${part.provider} ${part.format} part can't be sent to ${ctx.provider}`,
-          );
-        out.push(
-          ReplayPart.parse(JSON.parse(utf8.decode(await ctx.bytes(part.ref)))),
-        );
+      case "hosted_tool": {
+        const stored = await opaque(part, ctx);
+        if (stored.type === "metadata")
+          pending = { providerOptions: stored.providerOptions };
+        else out.push(stored);
         break;
+      }
       case "citation":
         break;
       case "image_ref":
@@ -225,4 +228,19 @@ async function assistant(
     }
   }
   return out;
+}
+
+/** A recorded reasoning or hosted tool part: the exact AI SDK part, or part metadata. */
+async function opaque(
+  part: Extract<OutputPart, { type: "reasoning" | "hosted_tool" }>,
+  ctx: Ctx,
+): Promise<ReplayPart | PartMetadata> {
+  if (part.provider !== ctx.provider)
+    throw new Unsendable(
+      `continuation_unsupported: a ${part.provider} ${part.format} part can't be sent to ${ctx.provider}`,
+    );
+  const stored = JSON.parse(utf8.decode(await ctx.bytes(part.ref)));
+  return part.format === METADATA_FORMAT
+    ? PartMetadata.parse(stored)
+    : ReplayPart.parse(stored);
 }

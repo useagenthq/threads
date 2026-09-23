@@ -10,7 +10,12 @@ import {
   OutputPart,
   putJson,
 } from "@threads/core/adapter";
-import { ProviderOptions, type ReplayPart } from "./replay";
+import {
+  METADATA_FORMAT,
+  type PartMetadata,
+  ProviderOptions,
+  type ReplayPart,
+} from "./replay";
 
 // AI SDK stream parts → ModelChunks. Text streams as deltas and lands as one part at text-end;
 // reasoning and provider-executed tool parts are stored as the exact AI SDK part to send back.
@@ -46,7 +51,7 @@ export async function* decode(
   stream: ReadableStream<Part>,
   ctx: StreamContext,
 ): AsyncGenerator<ModelChunk, void, undefined> {
-  const open = new Map<string, string>();
+  const open: Open = new Map();
   for await (const part of stream) {
     if (part.type === "finish") {
       yield {
@@ -62,51 +67,95 @@ export async function* decode(
   throw new Error("ai-sdk stream ended before finish");
 }
 
+/** Open text and reasoning blocks by id: their text so far and the provider metadata seen. */
+type Open = Map<string, { text: string; metadata: unknown }>;
+
 async function* chunks(
   part: Part,
-  open: Map<string, string>,
+  open: Open,
   ctx: StreamContext,
 ): AsyncGenerator<ModelChunk, void, undefined> {
   switch (part.type) {
     case "text-start":
     case "reasoning-start":
-      open.set(part.id, "");
+      open.set(part.id, { text: "", metadata: part.providerMetadata });
       return;
     case "text-delta":
-      open.set(part.id, `${open.get(part.id) ?? ""}${part.delta}`);
-      yield { kind: "delta", text: part.delta };
-      return;
     case "reasoning-delta":
-      open.set(part.id, `${open.get(part.id) ?? ""}${part.delta}`);
+      grow(open, part.id, part.delta, part.providerMetadata);
+      if (part.type === "text-delta") yield { kind: "delta", text: part.delta };
       return;
     case "text-end":
-      yield text(open.get(part.id) ?? "");
+    case "reasoning-end": {
+      const block = grow(open, part.id, "", part.providerMetadata);
       open.delete(part.id);
+      if (part.type === "reasoning-end")
+        yield await reasoning(block.text, block.metadata, ctx);
+      else yield* withMetadata(block.metadata, text(block.text), ctx);
       return;
-    case "reasoning-end":
-      yield await reasoning(
-        open.get(part.id) ?? "",
-        part.providerMetadata,
-        ctx,
-      );
-      open.delete(part.id);
-      return;
+    }
     case "tool-call":
     case "tool-result":
-    case "source":
-      yield { kind: "part", part: await recorded(part, ctx) };
+    case "source": {
+      const local = part.type === "tool-call" && part.providerExecuted !== true;
+      const recordedPart = await recorded(part, ctx);
+      yield* local
+        ? withMetadata(part.providerMetadata, recordedPart, ctx)
+        : [{ kind: "part", part: recordedPart }];
       return;
+    }
     default:
       // Progress (tool-input-*, stream-start, response-metadata, raw) records nothing.
       return;
   }
 }
 
-function text(value: string): ModelChunk {
-  return {
-    kind: "part",
-    part: OutputPart.parse({ type: "text", text: value }),
+/** Appends to an open block; the latest metadata the provider sent wins. */
+function grow(
+  open: Open,
+  id: string,
+  more: string,
+  metadata: unknown,
+): { text: string; metadata: unknown } {
+  const block = open.get(id) ?? { text: "", metadata: undefined };
+  const next = {
+    text: `${block.text}${more}`,
+    metadata: metadata ?? block.metadata,
   };
+  open.set(id, next);
+  return next;
+}
+
+/**
+ * A text or local tool call part, preceded by its provider metadata as an opaque part when
+ * there is some, so the next request can attach it again (Gemini thought signatures).
+ */
+async function* withMetadata(
+  metadata: unknown,
+  part: OutputPart,
+  ctx: StreamContext,
+): AsyncGenerator<ModelChunk, void, undefined> {
+  if (metadata !== undefined) {
+    const stored: PartMetadata = {
+      type: "metadata",
+      providerOptions: ProviderOptions.parse(metadata),
+    };
+    yield {
+      kind: "part",
+      part: OutputPart.parse({
+        type: "reasoning",
+        provider: ctx.provider,
+        model: ctx.model,
+        format: METADATA_FORMAT,
+        ref: await putJson(ctx.context, stored),
+      }),
+    };
+  }
+  yield { kind: "part", part };
+}
+
+function text(value: string): OutputPart {
+  return OutputPart.parse({ type: "text", text: value });
 }
 
 async function reasoning(

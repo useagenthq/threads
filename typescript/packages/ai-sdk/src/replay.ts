@@ -60,3 +60,19 @@ export const ReplayPart: z.ZodDiscriminatedUnion<
   }),
 ]);
 export type ReplayPart = z.infer<typeof ReplayPart>;
+
+/**
+ * Provider metadata of a text or local tool-call part (Gemini thought signatures), recorded
+ * as an opaque part just before the part it belongs to, and attached to it again on replay.
+ */
+export const PartMetadata: z.ZodObject<{
+  type: z.ZodLiteral<"metadata">;
+  providerOptions: typeof ProviderOptions;
+}> = z.object({
+  type: z.literal("metadata"),
+  providerOptions: ProviderOptions,
+});
+export type PartMetadata = z.infer<typeof PartMetadata>;
+
+/** The reasoning format of a PartMetadata artifact. */
+export const METADATA_FORMAT = "ai_sdk_metadata";

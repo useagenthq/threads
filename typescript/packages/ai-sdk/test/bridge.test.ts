@@ -219,6 +219,68 @@ describe("streaming", () => {
     });
   });
 
+  test("provider metadata on text and tool calls goes back unchanged (thought signatures)", async () => {
+    const onText = { google: { thoughtSignature: "sig_text" } };
+    const onCall = { google: { thoughtSignature: "sig_call" } };
+    const { send, calls, m, context } = bridge([
+      [
+        { type: "text-start", id: "t", providerMetadata: onText },
+        { type: "text-delta", id: "t", delta: "Looking." },
+        { type: "text-end", id: "t" },
+        {
+          type: "tool-call",
+          toolCallId: "call_1",
+          toolName: "ls",
+          input: "{}",
+          providerMetadata: onCall,
+        },
+        finish("tool-calls"),
+      ],
+      [finish("stop")],
+    ]);
+    const { chunks } = await send(hi);
+    const parts = chunks.flatMap((c) => (c.kind === "part" ? [c.part] : []));
+    const head = {
+      adapter: m.info.adapter,
+      model: m.info.model,
+      params: m.info.params,
+      system: "",
+      tools: [],
+    };
+    await drain(
+      m.send(
+        {
+          request_id: "b:e2",
+          body: renderBody([
+            head,
+            hi,
+            { role: "assistant", content: parts },
+            {
+              role: "tool",
+              call_id: "call_1",
+              is_error: false,
+              content: [{ type: "text", text: "a b" }],
+            },
+          ]),
+        },
+        context,
+      ),
+    );
+    expect(calls[1]?.prompt[1]).toEqual({
+      role: "assistant",
+      content: [
+        { type: "text", text: "Looking.", providerOptions: onText },
+        {
+          type: "tool-call",
+          toolCallId: "call_1",
+          toolName: "ls",
+          input: {},
+          providerOptions: onCall,
+        },
+      ],
+    });
+  });
+
   test("a stream that ends without finish is broken (thrown)", async () => {
     const { send } = bridge([[{ type: "text-start", id: "t" }]]);
     expect(String((await send(hi)).thrown)).toContain("before finish");
