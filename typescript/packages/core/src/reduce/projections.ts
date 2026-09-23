@@ -115,8 +115,9 @@ function breakCause(
   ttl: number,
 ): CacheBreak["likely_cause"] | undefined {
   if (previous === undefined) return undefined;
+  // Exact: products of counts near 2^53 round as doubles, which could hide a drop.
   const dropped =
-    20 * current.reads < 19 * previous.reads &&
+    20n * BigInt(current.reads) < 19n * BigInt(previous.reads) &&
     previous.reads - current.reads >= DROP_MIN;
   if (!dropped) return undefined;
   return (

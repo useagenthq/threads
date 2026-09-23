@@ -97,7 +97,9 @@ def bounds(model: Model | None, max_tokens: JsonValue) -> dict[LimitName, int | 
     return {
         "max_cost_nanos": bound(model, max_tokens, MISSING) if priced else None,
         "max_input_tokens": window,
-        "max_output_tokens": max_tokens if isinstance(max_tokens, int) else None,
+        "max_output_tokens": max_tokens
+        if isinstance(max_tokens, int) and not isinstance(max_tokens, bool)
+        else None,
         "max_model_requests": 1,
     }
 

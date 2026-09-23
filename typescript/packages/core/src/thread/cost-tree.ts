@@ -9,7 +9,7 @@ import {
 } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { LogStore } from "../store";
-import type { LogError, VerifiedLog } from "../verify";
+import type { VerifiedLog } from "../verify";
 import { type ReadError, readError, readLog } from "./read";
 
 // Thread.cost({ tree: true }) (spec/api.json): the tree merge over this thread and every
@@ -19,7 +19,7 @@ import { type ReadError, readError, readLog } from "./read";
 /** Thread.cost's failures: a read error anywhere in the tree, or cost_overflow. */
 export type CostError =
   | ReadError
-  | (LogError & { readonly code: CostOverflow["error"] });
+  | { readonly code: CostOverflow["error"]; readonly message: string };
 
 /** The thread's own cost projection, or cost_overflow past the wire's integers. */
 export function ownCost(
@@ -136,6 +136,9 @@ function childLog(
 }
 
 /** The error, keeping its code, with the path to the descendant that failed. */
-function inChild<E extends LogError>(child: string, error: E): E {
+function inChild<E extends { readonly message: string }>(
+  child: string,
+  error: E,
+): E {
   return { ...error, message: `child ${child}: ${error.message}` };
 }

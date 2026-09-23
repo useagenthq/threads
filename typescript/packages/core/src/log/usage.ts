@@ -19,7 +19,7 @@ export const UsageTotals: Strict<{
   .meta({
     id: "UsageTotals",
     description:
-      "Sums of KNOWN input_tokens and output_tokens over model responses; unknown_responses counts responses where either is null. Unknown is never summed as zero.",
+      "Sums of KNOWN input_tokens and output_tokens over model responses. unknown_responses counts responses where either is null, and responses whose known counts would take a sum past 2^53-1 (they add neither). Unknown is never summed as zero.",
   });
 export type UsageTotals = z.infer<typeof UsageTotals>;
 

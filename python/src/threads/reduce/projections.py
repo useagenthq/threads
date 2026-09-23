@@ -69,7 +69,8 @@ def _bound(attempt: _Attempt) -> int | None:
 def bound(model: Model | None, max_tokens: JsonValue, input_tokens: int | MISSING) -> int | None:
     """An attempt's reservation: its input bound at the highest input-side
     price plus max_tokens at the output price. None when the model declares no bound."""
-    if model is None or not isinstance(max_tokens, int):
+    # Only a JSON integer bounds the output; a boolean is not one (Python's bool is an int).
+    if model is None or not isinstance(max_tokens, int) or isinstance(max_tokens, bool):
         return None
     if input_tokens is MISSING:
         if model.input_billing_bound != "context_window":

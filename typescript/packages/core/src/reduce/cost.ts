@@ -168,7 +168,10 @@ export function tokenBounds(
   const { max_tokens: output } = params;
   return {
     ...(input === undefined ? {} : { input }),
-    ...(typeof output === "number" ? { output } : {}),
+    // Only a JSON integer bounds the output, as in Python; a fraction or a boolean doesn't.
+    ...(Number.isSafeInteger(output) && typeof output === "number"
+      ? { output }
+      : {}),
   };
 }
 
