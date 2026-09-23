@@ -144,8 +144,11 @@ def _admission(root: pathlib.Path) -> None:
 
 
 def _torn(root: pathlib.Path, name: str, desc: str, served: Log, dropped: bytes) -> None:
-    """An export of `served` plus an unterminated final chunk: import drops only that chunk."""
+    """An export of `served` plus an unterminated final chunk: import drops only that chunk.
+    If the served prefix leaves a turn open with nothing pending, recovery then closes it as
+    interrupted."""
     good = served.body()
+    closes_turn = served.events[-1]["type"] not in ("turn_completed", "thread_started")
     write_case(
         root,
         case(name, "log", "recover", desc),
@@ -165,7 +168,19 @@ def _torn(root: pathlib.Path, name: str, desc: str, served: Log, dropped: bytes)
                         "at_offset": len(good),
                         "dropped_ref": aref(dropped, "application/octet-stream"),
                     },
-                }
+                },
+                *(
+                    [
+                        {
+                            "type": "turn_completed",
+                            "actor_kind": "recovery",
+                            "epoch": 2,
+                            "data": {"reason": "interrupted"},
+                        }
+                    ]
+                    if closes_turn
+                    else []
+                ),
             ],
         },
         extra={"log.jsonl": good + dropped},
@@ -249,7 +264,9 @@ def build(root: pathlib.Path) -> None:
         "torn-tail-wrong-head-unterminated",
         "The last event was removed and the head (seq 10) has no final newline. An "
         "unterminated final chunk is torn whatever it says, so this is a torn tail, not "
-        "head_mismatch (compare head-checkpoint-suffix-removed, where the head is terminated).",
+        "head_mismatch (compare head-checkpoint-suffix-removed, where the head is terminated). "
+        "The served prefix ends inside a turn with nothing pending, so recovery also closes it "
+        "as turn_completed{interrupted}.",
         cut,
         log.head(),
     )

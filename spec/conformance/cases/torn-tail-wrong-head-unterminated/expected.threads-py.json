@@ -54,6 +54,14 @@
           "media_type": "application/octet-stream"
         }
       }
+    },
+    {
+      "type": "turn_completed",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "reason": "interrupted"
+      }
     }
   ]
 }
