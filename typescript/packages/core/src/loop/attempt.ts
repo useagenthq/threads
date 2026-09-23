@@ -99,7 +99,7 @@ export async function attempt(
   const fenced = s.fence();
   if (fenced !== undefined) return { kind: "halt", halt: fenced };
   const collected = await collect(s, model, requestId, bytes);
-  const recorded = record(s, requestId, collected);
+  const recorded = record(s, requestId, collected, cause);
   settleOpen(s);
   return recorded;
 }
@@ -180,7 +180,12 @@ function delta(s: Session, requestId: string, text: string): void {
   if (text !== "") s.config.onDelta?.(requestId, text);
 }
 
-function record(s: Session, requestId: string, c: Collected): Attempted {
+function record(
+  s: Session,
+  requestId: string,
+  c: Collected,
+  cause: EventId | undefined,
+): Attempted {
   switch (c.kind) {
     case "done": {
       const stopped = s.append(
@@ -213,13 +218,26 @@ function record(s: Session, requestId: string, c: Collected): Attempted {
     }
     case "leaked": {
       // The response arrived (it may be billed) but none of it is kept. The abandonment and
-      // the turn's end are one batch: a crash between them can't leave the turn open.
+      // the turn's end are one batch: a crash between them can't leave the turn open. A
+      // requested compaction's side request is answered in it too, before the turn closes.
+      const answered =
+        cause === undefined
+          ? []
+          : [
+              draft.compactionFailed({
+                stage: "summary",
+                reason: "model_error",
+                request_event_id: requestId,
+                cause_event_id: cause,
+              }),
+            ];
       const stopped = s.append(
         draft.abandoned({
           request_event_id: requestId,
           provider_outcome: "unknown",
           reason: "provider_error",
         }),
+        ...answered,
         draft.turnCompleted("error", "secret_in_provider_output"),
       );
       return stopped === undefined ? c : { kind: "halt", halt: stopped };

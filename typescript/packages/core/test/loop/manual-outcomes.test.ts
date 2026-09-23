@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { scriptedModel } from "../../src";
+import { credential } from "../../src/agent/secret";
 import type { KnownEvent } from "../../src/log";
 import { resume } from "../../src/loop";
 import { CONTEXT_DEFAULTS } from "../../src/loop/policy";
@@ -191,5 +193,49 @@ describe("requested compaction around the side attempt", () => {
     expect(outcome(events(writer))).toBeUndefined();
     const log = await resumeOnce(h);
     expect(outcome(log)).toMatchObject({ type: "compacted" });
+  });
+});
+
+describe("a requested summary refused as leaked", () => {
+  test("records exactly one compaction_failed, and the turn ends secret_in_provider_output", async () => {
+    const key = credential("fake", "apiKey", "sk-l17-leak-5e6f", "U")();
+    const encoder = new TextEncoder();
+    const leaky: Model = {
+      info: scriptedModel({ responses: [] }).info,
+      send: async function* (_request, context) {
+        // Provider material that can't be redacted, holding a registered secret.
+        await context.put(
+          encoder.encode(JSON.stringify({ encrypted: key })),
+          "application/json",
+        );
+        yield {
+          kind: "done",
+          stop_reason: "end_turn",
+          usage: { input_tokens: 10, output_tokens: 2 },
+        };
+      },
+    };
+    markTestKit(leaky);
+    const h = asked([]);
+    const log = await resumeOnce(h, { models: () => leaky });
+    expect(sides(log)).toHaveLength(1);
+    const failed = log.filter((e) => e.type === "compaction_failed");
+    expect(failed).toHaveLength(1);
+    const request = log.find((e) => e.type === "model_request");
+    expect(failed[0]).toMatchObject({
+      data: {
+        stage: "summary",
+        reason: "model_error",
+        request_event_id: request?.event_id,
+      },
+    });
+    expect(log.slice(-3).map((e) => e.type)).toEqual([
+      "model_attempt_abandoned",
+      "compaction_failed",
+      "turn_completed",
+    ]);
+    expect(log.at(-1)).toMatchObject({
+      data: { reason: "error", code: "secret_in_provider_output" },
+    });
   });
 });

@@ -158,7 +158,10 @@ async function send(
     case "response":
     case "rejected":
     case "broken":
+      return undefined;
+    // Answered in the batch that refused it: budget_exceeded, or the leak that ended the turn.
     case "budget":
+    case "leaked":
       return undefined;
     case "unsupported":
       return halted(failed(s, "model_error", cause));
