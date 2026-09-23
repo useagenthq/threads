@@ -29,7 +29,8 @@ from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import VerifiedLog
 from threads.store.lines import uuid7
-from threads.thread import approvals, authority, control, tree
+from threads.thread import approvals, control, tree
+from threads.thread.authority import Checked, refused
 from threads.thread.case import (
     CaseExpectation,
     CaseRequest,
@@ -86,11 +87,9 @@ class Thread:
     sandbox: Sandbox | None = field(default=None, kw_only=True, compare=False, repr=False)
     """The adapter this thread's snapshots restore into: `fork` needs it, and `save_case`
     checks its egress."""
-    approvers: tuple[Principal, ...] | None = field(
-        default=None, kw_only=True, compare=False, repr=False
-    )
-    """Who may answer approvals and resolve parked effects: the root agent's approver policy as
-    it stands now; None, unconfigured."""
+    authority: Checked | None = field(default=None, kw_only=True, compare=False, repr=False)
+    """Who may answer approvals and resolve parked effects: a host handle's approval authority,
+    checked as it stands now; None, in-process operator authority (threads.thread.authority)."""
     stubs: tuple[Stub, ...] | None = field(default=None, kw_only=True, compare=False, repr=False)
     """Stub mode: a run of this handle answers every mediated operation from these,
     never live. None: live."""
@@ -224,7 +223,7 @@ class Thread:
             challenge_id,
             principal,
             "granted",
-            approvers=self.approvers,
+            authority=self.authority,
             remember_rule=remember_rule,
         )
 
@@ -239,7 +238,7 @@ class Thread:
             challenge_id,
             principal,
             "denied",
-            approvers=self.approvers,
+            authority=self.authority,
             reason=reason,
         )
 
@@ -256,10 +255,7 @@ class Thread:
         principal: Principal,
     ) -> Controlled:
         """A human settles a parked effect; assume_not_done accepts duplicate risk."""
-        risk = resolution == "assume_not_done"
-        denied = await authority.refused(
-            self.store, self.id, principal, self.approvers, duplicate_risk=risk
-        )
+        denied = await refused(self.store, self.id, principal, self.authority)
         if denied is not None:
             return denied
         return await control.resolve_parked(

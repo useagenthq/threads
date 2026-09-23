@@ -71,9 +71,12 @@ async def bar_child(store: Store, child: ThreadId, principal: Principal) -> None
     await cancel_children(store, root.value, principal)
 
 
-async def root_of(store: Store, thread_id: ThreadId) -> tuple[ThreadId, BranchId] | None:
+async def root_of(
+    store: Store, thread_id: ThreadId, through: tuple[str, ...] = ("subagent",)
+) -> tuple[ThreadId, BranchId] | None:
     """The thread at the top of a subagent's tree (a thread that is no subagent is its own
-    root), at the branch its child was spawned from."""
+    root), at the branch its child was spawned from; `through` also handoff parents for the
+    root run of approval authority."""
     sq = await open_store(store)
     root = await sq.root(thread_id)
     if not isinstance(root, Ok):
@@ -86,6 +89,6 @@ async def root_of(store: Store, thread_id: ThreadId) -> tuple[ThreadId, BranchId
         events = read.value.fold.events
         started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
         parent = MISSING if started is None else started.data.parent
-        if parent is MISSING or parent.relation != "subagent":
+        if parent is MISSING or parent.relation not in through:
             return at
         at = (parent.thread_id, parent.branch_id)

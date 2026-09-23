@@ -1,6 +1,6 @@
-"""Thread controls (spec/api.json Thread): approvals are single-use and approver-checked, every
-control is recorded with its principal, and a control reaches a run in flight through the run's
-own writer."""
+"""Thread controls (spec/api.json Thread): approvals are single-use (their authority is in
+test_authority), every control is recorded with its principal, and a control reaches a run in
+flight through the run's own writer."""
 
 import asyncio
 
@@ -36,7 +36,6 @@ from threads.thread.control import LOCAL_OPERATOR
 from threads.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
-STRANGER = Principal(issuer="api", tenant="local", subject="mallory")
 OTHER_TENANT = Principal(issuer="api", tenant="acme", subject="operator")
 
 
@@ -70,7 +69,7 @@ async def _parked(sent: list[str]) -> tuple[Thread, Agent[None]]:
     return result.thread, bot
 
 
-def test_an_approval_is_approver_checked_single_use_and_resumes_the_run() -> None:
+def test_an_approval_is_single_use_and_resumes_the_run() -> None:
     sent: list[str] = []
 
     async def main() -> None:
@@ -79,7 +78,7 @@ def test_an_approval_is_approver_checked_single_use_and_resumes_the_run() -> Non
         assert isinstance(pending, Ok)
         (challenge,) = pending.value
         assert (challenge.tool, challenge.suggested_rules) == ("send", ("send",))
-        refused = await thread.approve(challenge.challenge_id, STRANGER)
+        refused = await thread.approve(challenge.challenge_id, OTHER_TENANT)
         assert isinstance(refused, Err)
         assert refused.error.code == "forbidden"
         granted = await thread.approve(challenge.challenge_id, LOCAL_OPERATOR)

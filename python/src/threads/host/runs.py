@@ -32,6 +32,7 @@ from threads.log import (
 from threads.result import Ok
 from threads.secrets import resolve
 from threads.thread import tree
+from threads.thread.authority import Checked
 from threads.thread.handle import Thread
 
 WAKE_S = 1.0
@@ -41,11 +42,9 @@ never wake this one."""
 
 @dataclass(frozen=True, slots=True)
 class Bound:
-    """How a thread runs here: its agent's definition, who may approve, and its channel."""
+    """How a thread runs here: its agent's definition and its channel."""
 
     definition: Definition[None]
-    approvers: tuple[Principal, ...] | None
-    """None: unconfigured (threads.thread.authority)."""
     channel: Conversation | None = None
     """Where a channel thread's replies go."""
 
@@ -99,9 +98,9 @@ class Runner:
             self._credentials[name] = {k: resolve(v) for k, v in adapter.secrets.items()}
 
     def bound_to(self, key: str, *, channel: Conversation | None = None) -> Bound:
-        """An agent key's binding, with its configured approvers (None: unconfigured)."""
+        """An agent key's binding."""
         definition = self._agents[key].definition
-        return Bound(definition, definition.approvers, channel)
+        return Bound(definition, channel)
 
     async def bound(self, store: Store, thread_id: ThreadId) -> Bound | None:
         """The binding of an existing thread, or None when no host agent owns it."""
@@ -128,6 +127,13 @@ class Runner:
         name = None if started is None else started.data.agent_name
         key = next((k for k, a in self._agents.items() if a.definition.name == name), None)
         return None if key is None else self.bound_to(key)
+
+    async def authority(self, store: Store, thread_id: ThreadId) -> Checked:
+        """Approval authority on a thread: its root run's agent's approvers, through subagent
+        and handoff parents; a root no host agent owns has none."""
+        root = await tree.root_of(store, thread_id, through=("subagent", "handoff"))
+        bound = None if root is None else await self.bound(store, root[0])
+        return Checked(() if bound is None else bound.definition.approvers)
 
     def running(self, branch: BranchId) -> bool:
         task = self._tasks.get(branch)
@@ -185,7 +191,7 @@ class Runner:
         )
         if who is None:
             return
-        thread = Thread(thread_id, branch, store, approvers=bound.approvers)
+        thread = Thread(thread_id, branch, store)
         self.launch(bound, None, thread, who)
 
     async def redeliver(self, store: Store, thread_id: ThreadId) -> None:

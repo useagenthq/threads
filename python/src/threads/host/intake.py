@@ -142,7 +142,7 @@ class ChannelIntake:
         branch = await _branch(store, row.thread_id)
         if bound is None or isinstance(branch, Err):
             return False
-        thread = Thread(row.thread_id, branch.value, store, approvers=bound.approvers)
+        thread = Thread(row.thread_id, branch.value, store)
         match item:
             case Message():
                 if self._runner.running(branch.value) or await _parked(store, branch.value):
@@ -195,7 +195,7 @@ class ChannelIntake:
                 item.challenge_id,
                 item.principal,
                 decision,
-                approvers=bound.approvers,
+                authority=await self._runner.authority(thread.store, thread.id),
                 installation=row.installation_id,
                 companion=consume,
             )

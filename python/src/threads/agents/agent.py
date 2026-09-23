@@ -59,8 +59,9 @@ class AgentOptions(TypedDict, total=False):
     lsp: LspOptions
     """lsp for these languages, served by the sandbox image."""
     approvers: Sequence[Principal]
-    """Who may answer approval challenges. Unset: the principal whose input started the run, or
-    the local operator; only the operator may re-send an effect in doubt."""
+    """Who may answer approval challenges and resolve parked effects for runs this agent roots,
+    its subagents and handoff targets included. Unset: the root run's originating principal
+    (spec/schema/README.md, Approval authority)."""
 
 
 class ServerAgentOptions(AgentOptions, total=False):

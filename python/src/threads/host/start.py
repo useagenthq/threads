@@ -109,7 +109,7 @@ async def _target(
         created = await sq.create(thread_id, branch_id, now)
         if isinstance(created, Err):
             return created
-        return Ok((Thread(thread_id, branch_id, store, approvers=wanted.approvers), wanted))
+        return Ok((Thread(thread_id, branch_id, store), wanted))
     branch = None if request.branch_id is MISSING else request.branch_id
     opened = await open_thread(store, request.thread_id, branch_id=branch)
     if isinstance(opened, Err):
@@ -119,4 +119,4 @@ async def _target(
     if bound is None or bound.definition is not wanted.definition:
         return Err(ParseError("invalid_request", f"the thread does not run {request.agent}"))
     thread = opened.value
-    return Ok((Thread(thread.id, thread.branch, store, approvers=bound.approvers), bound))
+    return Ok((Thread(thread.id, thread.branch, store), bound))

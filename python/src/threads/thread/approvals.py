@@ -29,7 +29,7 @@ from threads.result import Err, Ok
 from threads.store import Draft, approvals
 from threads.store.companion import Companion, both
 from threads.store.lines import uuid7
-from threads.thread import authority
+from threads.thread.authority import Checked, refused
 from threads.thread.control import Controlled, actor, append, principal_key, resumed
 
 if TYPE_CHECKING:
@@ -85,7 +85,7 @@ async def decide(  # noqa: PLR0913 - one answer and its bindings
     principal: Principal,
     decision: Literal["granted", "denied"],
     *,
-    approvers: tuple[Principal, ...] | None,
+    authority: Checked | None,
     remember_rule: PermissionRule | None = None,
     reason: str | None = None,
     installation: str | None = None,
@@ -95,7 +95,7 @@ async def decide(  # noqa: PLR0913 - one answer and its bindings
     resumed when the branch is parked on it. Over a channel, the answer must come from the
     installation the challenge was issued in; `companion` binds more host rows (the inbox item
     that carried the answer) to the same append."""
-    denied = await authority.refused(store, thread[0], principal, approvers)
+    denied = await refused(store, thread[0], principal, authority)
     if denied is not None:
         return denied
     now = now_ms()

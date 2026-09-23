@@ -156,7 +156,7 @@ class Scheduler:
             delivery_event_id=fired,
         )
         bound = self._runner.bound_to(schedule.agent)
-        thread = Thread(thread_id, branch_id, store, approvers=bound.approvers)
+        thread = Thread(thread_id, branch_id, store)
         who = Principal(issuer="schedule", tenant=LOCAL_TENANT, subject=schedule.id)
         task = self._runner.launch(bound, schedule.input, thread, who, intake=intake)
         # Returns once the occurrence's input is durable (or its run ended without one).

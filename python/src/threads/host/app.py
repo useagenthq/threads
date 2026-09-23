@@ -148,8 +148,8 @@ class Host:
     async def thread(
         self, principal: Principal, thread_id: ThreadId, branch_id: BranchId | None
     ) -> Ok[Thread] | Err[ParseError]:
-        """The principal's tenant's thread at the branch (default main), with its agent's
-        approvers and sandbox. Another tenant's thread is not_found."""
+        """The principal's tenant's thread at the branch (default main), with its approval
+        authority and sandbox. Another tenant's thread is not_found."""
         store = self._runner.store(principal.tenant)
         # A subagent's thread is governed by the agent at the root of its tree.
         root = await tree.root_of(store, thread_id)
@@ -159,8 +159,8 @@ class Host:
         if isinstance(opened, Err):
             return opened
         thread = opened.value
-        approvers = () if bound is None else bound.approvers
-        return Ok(Thread(thread.id, thread.branch, store, sandbox=sandbox, approvers=approvers))
+        authority = await self._runner.authority(store, thread_id)
+        return Ok(Thread(thread.id, thread.branch, store, sandbox=sandbox, authority=authority))
 
     async def resume(self, thread: Thread) -> None:
         """After a control: continue the thread if it can move on."""

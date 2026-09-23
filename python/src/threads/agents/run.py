@@ -123,8 +123,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         if thread_id is None:
             raise AssertionError("an acquired branch has a thread")
         sandbox = definition.sandbox or (None if thread is None else thread.sandbox)
-        approvers = definition.approvers
-        handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox, approvers=approvers)
+        handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox)
         principal = options.get("principal", LOCAL_OPERATOR) if launch is None else launch.principal
         ctx = RunContext(deps, handle.id, handle.branch, principal)
         observers = {e.name: e.on for e in definition.extensions}
