@@ -3,7 +3,6 @@ import { type EventOf, effectKey } from "../fold/state";
 import { draft, RECOVERY } from "./drafts";
 import type { Session } from "./session";
 import { resolvedResult, settleUnknown } from "./settle";
-import { turnEvents } from "./turn";
 import type { Halt } from "./types";
 
 // the recovery classifier, run once a new lease is taken and before anything
@@ -11,10 +10,15 @@ import type { Halt } from "./types";
 // appends nothing. The open turn then continues in the loop, which reads the same log.
 
 export async function recover(s: Session): Promise<Halt | undefined> {
-  // An open turn with nothing in doubt and nothing pending ends interrupted (item 7). An input
-  // no request has answered yet is still pending: the loop sends it (a saved stub case).
+  // An open turn with nothing in doubt and nothing pending ends interrupted (item 7), unless no
+  // model_request follows its last user_input or steer: that input is unsent, so the loop sends it.
   const { fold } = s;
-  const answered = turnEvents(s.events).some((e) => e.type === "model_request");
+  const last = s.events.findLastIndex(
+    (e) => e.type === "user_input" || e.type === "steer",
+  );
+  const answered = s.events
+    .slice(Math.max(last, 0))
+    .some((e) => e.type === "model_request");
   if (
     fold.turnOpen &&
     answered &&
