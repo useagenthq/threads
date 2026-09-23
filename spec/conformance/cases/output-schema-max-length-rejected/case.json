@@ -2,7 +2,7 @@
   "name": "output-schema-max-length-rejected",
   "family": "tools_streaming",
   "kind": "reduce",
-  "description": "output_validated{accepted} whose root breaks only the max-length keyword of the pinned output schema: invalid_transition. Every keyword is checked, never skipped.",
+  "description": "output_validated{accepted} whose root breaks only the max-length rule of the pinned output schema (spec/schema/README.md, Output schemas): invalid_transition. Every keyword is checked, never skipped.",
   "clock": {
     "now": 1790000060000
   }

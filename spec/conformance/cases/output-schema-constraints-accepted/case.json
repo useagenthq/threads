@@ -2,7 +2,7 @@
   "name": "output-schema-constraints-accepted",
   "family": "tools_streaming",
   "kind": "reduce",
-  "description": "The pinned output schema is what a Pydantic model writes: titles and a default (annotations, never constraints), bounds, exclusive bounds, lengths, a pattern, enums, and a recursive model by $ref. An accepted value that satisfies every keyword, at every depth, is valid.",
+  "description": "The pinned output schema is what a Pydantic model writes (constraints), with titles and a default (annotations, never constraints). An accepted value that satisfies every keyword, at every depth, is valid.",
   "clock": {
     "now": 1790000060000
   }

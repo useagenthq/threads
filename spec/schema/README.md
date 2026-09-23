@@ -285,6 +285,28 @@ Checked by readers and writers (`validate_next`) on top of the schema, except ru
 | 28 | `event_id` is unique along the resolved chain, checked on append and on import. SQLite's `(branch_id, event_id)` index is physical only; the writer and importer also check every ancestor segment through its fork point | `invalid_transition` | `event-id-duplicate-across-fork-rejected` |
 
 
+### Output schemas (rule 20)
+
+Both readers check `policy.output.schema` with their own evaluator of one keyword set, defined here, never with a library's reading of JSON Schema. A writer records a candidate `accepted` only if its agent's validator **and** this check pass it; otherwise it is `rejected` and the model tries again. An output model whose schema uses any other keyword is refused at setup (`ConfigError invalid_config`, naming the keyword).
+
+- **Annotations** (never constrain): `title`, `description`, `default`, `examples`, `$defs`, `$schema`, `$comment`.
+- **Structure**: `type`, `properties`, `required`, `additionalProperties`, `items`, `minProperties`, `enum`, `const`, `allOf`, `anyOf`, `oneOf`, `not`, `if`/`then`/`else`; `$ref` is `#` (the whole schema) or `#/$defs/<name>`, recursion included.
+- **Numbers**: `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum` (number form); `multipleOf` (positive) is exact in decimal: each number is read as its shortest round-trip decimal `d × 10^e`, and `value` is a multiple when, scaled to the smaller exponent, the value's digits are divisible by the divisor's (`0.3` is a multiple of `0.1`; `0.35` is not).
+- **Lengths**: `minLength`/`maxLength` count Unicode code points; `minItems`/`maxItems` count items.
+- **`pattern`**: an ECMA-262 regular expression, searched (not anchored), with ASCII `\d` and `\w`. `\s` is Unicode whitespace in ECMA-262 and ASCII in the Python reader, so a pattern that relies on non-ASCII whitespace is outside the shared contract.
+- **`format`** constrains strings only; any name but these is unsupported:
+
+| Format | A string matches when |
+|---|---|
+| `date` | `YYYY-MM-DD` (ASCII digits), month 01–12, day 01 to the month's length (Gregorian leap years) |
+| `time` | `HH:MM:SS`, optional `.` and fraction digits, then `Z`/`z` or `±HH:MM`; hour 00–23, minute and second 00–59 (no leap second), offset hour 00–23 and minute 00–59 |
+| `date-time` | a `date`, `T` or `t`, then a `time` |
+| `email` | one or more characters other than `@` and ASCII whitespace, `@`, then two or more dot-separated labels of characters other than `@`, `.` and ASCII whitespace |
+| `uri` | a scheme (`A-Za-z` then `A-Za-z0-9+.-`), `:`, then characters other than ASCII whitespace |
+| `uuid` | `8-4-4-4-12` hex digits, either case, any version |
+
+Cases: `output-schema-constraints-accepted`, `output-schema-formats-accepted`, and one `output-schema-<keyword>-rejected` per keyword and format.
+
 **Structural errors** (import stage 2, checked on each line before `seq`, `prev_hash` and `validate_next`):
 
 | Structure | Error | Case |
