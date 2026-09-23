@@ -21,10 +21,12 @@ from threads._generated.tools_v1 import (
     GlobInput,
     GrepInput,
     LsInput,
+    NotebookEditInput,
     ReadInput,
     WriteInput,
 )
 from threads.log import JsonObject, ParseError, Spill, ToolSpec
+from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.loop.model import LookupResult, LookupUnknown
 from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Termination, Uncertain
@@ -34,7 +36,7 @@ from threads.result import Err, Ok
 from threads.sandbox.exec import Command, run_exec
 from threads.sandbox.protocol import ExecResult, SandboxContext, SandboxError, SandboxSession
 from threads.store import SqliteStore
-from threads.tools import files
+from threads.tools import files, notebook
 from threads.tools.specs import MODELS, PROVIDED
 
 DEFAULT_TIMEOUT_MS: Final = 120_000
@@ -75,6 +77,23 @@ class SandboxTools:
             self._session = opened.value if isinstance(opened, Ok) else None
         return self._session
 
+    @property
+    def context(self) -> SandboxContext:
+        return self._context
+
+    async def session(self) -> SandboxSession | None:
+        """The branch's session, opened on first use; None when it can't be opened."""
+        return await self._ensure()
+
+    async def command(
+        self, argv: Sequence[str], key: str, timeout_ms: int = DEFAULT_TIMEOUT_MS
+    ) -> Ok[ExecResult] | Err[Dispatched]:
+        """A framework control command in the sandbox (the git gateway's bundle steps), under
+        the calling tool's effect key; the host reads its output."""
+        if await self._ensure() is None:
+            return Err(NotSent())
+        return await self._exec(argv, key, timeout_ms, keep=LISTING_BYTES)
+
     async def read_file(self, path: str) -> bytes | None:
         """A framework read_only read (L3 restore): the file's bytes, or None."""
         session = await self._ensure()
@@ -110,6 +129,13 @@ class SandboxTools:
                 return await self._glob(args, call)
             case GrepInput() as args:
                 return await self._grep(args, call)
+            case other:
+                return await self._more(other, call)
+
+    async def _more(self, input: BaseModel, call: Invocation) -> Dispatched:
+        match input:
+            case NotebookEditInput() as args:
+                return await self._notebook(args, call)
             case other:
                 raise AssertionError(f"no sandbox built-in takes {type(other).__name__}")
 
@@ -210,7 +236,9 @@ class SandboxTools:
         got = await self._box.download(path, self._context)
         if isinstance(got, Err):
             return outcome(got.error)
-        body = files.text(got.value, path)
+        # A notebook reads as its cells with their outputs.
+        cells = notebook.render(got.value) if path.endswith(".ipynb") else None
+        body = files.text(got.value, path) if cells is None or isinstance(cells, Err) else cells
         if isinstance(body, Err):
             return Output(body.error, True)
         return Output(files.numbered(body.value, args))
@@ -240,6 +268,22 @@ class SandboxTools:
         if isinstance(new, Err):
             return Output(new.error, True)
         return await self._upload(path, new.value)
+
+    async def _notebook(self, args: NotebookEditInput, call: Invocation) -> Dispatched:
+        path = files.absolute(args.path)
+        got = await self._box.download(path, self._context)
+        if isinstance(got, Err):
+            return outcome(got.error)
+        kind = None if args.cell_type is MISSING else args.cell_type
+        change = notebook.Change(args.cell_id, args.new_source, args.mode, kind)
+        # Deterministic, so a replayed or reconciled call names the same cell.
+        new_id = sha256_hex(call.effect_key.encode("utf-8"))[:16]
+        edited = notebook.edit(got.value, args.path, change, new_id)
+        if isinstance(edited, Err):
+            return Output(edited.error, True)
+        data, said = edited.value
+        done = await self._box.upload(path, data, self._context)
+        return outcome(done.error) if isinstance(done, Err) else Output(said)
 
     async def _upload(self, path: str, content: str) -> Dispatched:
         data = content.encode("utf-8")

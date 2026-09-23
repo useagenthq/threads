@@ -24,11 +24,19 @@ _ENTRIES: Final = TypeAdapter(list[_Entry]).validate_python(json.loads(tools_v1.
 
 MODELS: Final[Mapping[str, type[StrictModel]]] = {
     "bash": tools_v1.BashInput,
+    "computer": tools_v1.ComputerInput,
+    "computer_screenshot": tools_v1.ComputerScreenshotInput,
     "edit": tools_v1.EditInput,
+    "git_clone": tools_v1.GitCloneInput,
+    "git_fetch": tools_v1.GitFetchInput,
+    "git_push": tools_v1.GitPushInput,
     "glob": tools_v1.GlobInput,
     "grep": tools_v1.GrepInput,
     "handoff": tools_v1.HandoffInput,
     "ls": tools_v1.LsInput,
+    "lsp": tools_v1.LspInput,
+    "notebook_edit": tools_v1.NotebookEditInput,
+    "open_pull_request": tools_v1.OpenPullRequestInput,
     "read": tools_v1.ReadInput,
     "read_tool_result": tools_v1.ReadToolResultInput,
     "send_message": tools_v1.SendMessageInput,
@@ -37,16 +45,29 @@ MODELS: Final[Mapping[str, type[StrictModel]]] = {
     "team_task_create": tools_v1.TeamTaskCreateInput,
     "team_task_update": tools_v1.TeamTaskUpdateInput,
     "todo_write": tools_v1.TodoWriteInput,
+    "web_fetch": tools_v1.WebFetchInput,
+    "web_search": tools_v1.WebSearchInput,
     "write": tools_v1.WriteInput,
 }
 _EFFECTS: Final[Mapping[str, EffectClass]] = {
     "bash": "sandbox_local",
+    # A click or keypress can submit a form: GUI actions are unguarded.
+    "computer": "unguarded",
+    "computer_screenshot": "read_only",
     "edit": "sandbox_local",
+    "git_clone": "read_only",
+    "git_fetch": "read_only",
+    "git_push": "reconcilable",
     "glob": "read_only",
     "grep": "read_only",
     "ls": "read_only",
+    "lsp": "read_only",
+    "notebook_edit": "sandbox_local",
+    "open_pull_request": "reconcilable",
     "read": "read_only",
     "read_tool_result": "read_only",
+    "web_fetch": "read_only",
+    "web_search": "read_only",
     "write": "sandbox_local",
 }
 HOST: Final = frozenset({"read_tool_result"})
@@ -55,8 +76,14 @@ TEAM: Final = frozenset({"send_message", "team_task_claim", "team_task_create", 
 """Offered to a team: an agent with subagents, and every child it spawns."""
 FRAMEWORK: Final = TEAM | {"todo_write", "handoff", "spawn_agent"}
 """Log-only tools: `read_only` is exact, since only log state changes."""
+WEB: Final = frozenset({"web_fetch", "web_search"})
+"""Host tools through the host's fenced web transport."""
+GIT: Final = frozenset({"git_clone", "git_fetch", "git_push", "open_pull_request"})
+"""The host git gateway: host credentials, the sandbox's clone."""
+GATED: Final = WEB | GIT | {"computer", "computer_screenshot", "lsp"}
+"""Pinned only when their capability is configured."""
 NAMES: Final = frozenset(MODELS)
-SANDBOXED: Final = NAMES - HOST - FRAMEWORK
+SANDBOXED: Final = NAMES - HOST - FRAMEWORK - WEB - GIT
 PROVIDED: Final[Mapping[str, type[StrictModel]]] = {
     "forget_memory": tools_v1.ForgetMemoryInput,
     "save_memory": tools_v1.SaveMemoryInput,
@@ -90,11 +117,12 @@ def specs(
     memory: Writes | None = None,
     knowledge: bool = False,
     framework: frozenset[str] = frozenset(),
+    gated: frozenset[str] = frozenset(),
 ) -> tuple[ToolSpec, ...]:
     """The pinned built-ins, sorted by name. bash is sandbox_local only under deny-all egress;
     with any outbound path a command may change state elsewhere. todo_write
-    is always offered; `framework` names the other framework tools this agent is offered
-   ."""
+    is always offered; `framework` names the other framework tools this agent is offered, and
+    `gated` the GATED tools whose capability is configured."""
     offered = framework | {"todo_write"}
     out: list[ToolSpec] = []
     for entry in _ENTRIES:
@@ -103,7 +131,10 @@ def specs(
             effect = "read_only" if name in offered else None
         else:
             effect = _effect(name, sandbox=sandbox, egress_denied=egress_denied, memory=memory)
-        if effect is None or (name == "search_knowledge" and not knowledge):
+        unset = (name == "search_knowledge" and not knowledge) or (
+            name in GATED and name not in gated
+        )
+        if effect is None or unset:
             continue  # a capability that isn't configured
         data: dict[str, JsonValue] = {
             "name": name,
@@ -126,6 +157,6 @@ def _effect(
         if memory is None:
             return None
         return memory.effect if name in _WRITES else "read_only"
-    if name not in NAMES or (name not in HOST and not sandbox):
+    if name not in NAMES or (name not in HOST | WEB and not sandbox):
         return None
     return "unguarded" if name == "bash" and not egress_denied else _EFFECTS[name]

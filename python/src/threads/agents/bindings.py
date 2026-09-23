@@ -110,9 +110,11 @@ class AppTools[D]:
 
 
 def category(spec: ToolSpec) -> Category:
-    if spec.effect_class == "read_only":
-        return "read_only"
-    return "edit" if spec.name in _EDITS else "other"
+    """Web and browser tools count as other: a URL can carry data out."""
+    if spec.name in _EDITS:
+        return "edit"
+    web = spec.name in ("web_fetch", "web_search") or spec.name.startswith("browser_")
+    return "read_only" if spec.effect_class == "read_only" and not web else "other"
 
 
 def permissions(fold: Fold) -> Permissions:

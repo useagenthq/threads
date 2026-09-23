@@ -4,16 +4,24 @@ pure functions of the file's bytes; the runner downloads and uploads. An unknown
 file that isn't a notebook fails before anything is written."""
 
 import json
-import uuid
-from typing import Final, Literal
+from dataclasses import dataclass
+from typing import Final, Literal, assert_never
 
 from pydantic import JsonValue, TypeAdapter, ValidationError
 
 from threads.result import Err, Ok
 
-type CellType = Literal["code", "markdown", "raw"]
-type Mode = Literal["replace", "insert", "delete"]
+type CellType = Literal["code", "markdown"]
 type Cell = dict[str, JsonValue]
+
+
+@dataclass(frozen=True, slots=True)
+class Change:
+    cell_id: str
+    source: str
+    mode: Literal["replace", "insert", "delete"]
+    cell_type: CellType | None = None
+
 
 _NOTEBOOK: Final = TypeAdapter(dict[str, JsonValue])
 _CELLS: Final = TypeAdapter(list[dict[str, JsonValue]])
@@ -67,50 +75,54 @@ def render(raw: bytes) -> Ok[str] | Err[str]:
     return Ok("\n".join(blocks) if blocks else "empty notebook")
 
 
-def _cell(kind: CellType, source: str) -> Cell:
-    cell: Cell = {
-        "cell_type": kind,
-        "id": uuid.uuid4().hex[:8],
-        "metadata": {},
-        "source": list[JsonValue](source.splitlines(keepends=True)),
-    }
+def _shaped(cell: Cell, kind: CellType, source: str) -> Cell:
+    """A code cell carries outputs and an execution count; a markdown cell carries neither.
+    Other fields and their order are kept."""
+    rest = {k: v for k, v in cell.items() if k not in ("outputs", "execution_count")}
+    shaped: Cell = {**rest, "cell_type": kind, "source": source}
     if kind == "code":
-        cell["execution_count"] = None
-        cell["outputs"] = []
-    return cell
+        shaped["outputs"] = []
+        shaped["execution_count"] = None
+    return shaped
 
 
-def edit(
-    raw: bytes, cell_id: str, source: str, mode: Mode, cell_type: CellType | None = None
-) -> Ok[bytes] | Err[str]:
-    """The notebook's new bytes. insert adds the new cell after `cell_id`; replace keeps the
-    cell's id and clears a code cell's outputs, since they no longer match its source."""
+def edit(raw: bytes, path: str, change: Change, new_id: str) -> Ok[tuple[bytes, str]] | Err[str]:
+    """The notebook's new bytes and what to tell the model, or why nothing is written. insert
+    adds the new cell, id `new_id`, after `cell_id`; replace keeps the cell's id."""
     parsed = _parse(raw)
     if isinstance(parsed, Err):
-        return parsed
+        return Err(f"{path} is not a Jupyter notebook; nothing written")
     notebook, cells = parsed.value
-    at = next((i for i, c in enumerate(cells) if c.get("id") == cell_id), None)
+    at = next((i for i, c in enumerate(cells) if c.get("id") == change.cell_id), None)
     if at is None:
-        return Err(f"not_found: no cell with id {cell_id}")
-    old = cells[at]
-    match mode:
+        return Err(f"cell_id {change.cell_id} not found; nothing written")
+    cell = cells[at]
+    match change.mode:
         case "delete":
             cells = [c for i, c in enumerate(cells) if i != at]
+            said = f"deleted cell {change.cell_id}"
         case "insert":
-            cells.insert(at + 1, _cell(cell_type or "code", source))
+            if change.cell_type is None:
+                return Err("insert needs cell_type; nothing written")
+            blank: Cell = {
+                "id": new_id,
+                "cell_type": change.cell_type,
+                "source": "",
+                "metadata": {},
+            }
+            cells.insert(at + 1, _shaped(blank, change.cell_type, change.source))
+            said = f"inserted cell {new_id} after {change.cell_id}"
         case "replace":
-            kind = cell_type or _kind(old)
-            new = {**_cell(kind, source), "id": old.get("id"), "metadata": old.get("metadata", {})}
-            cells[at] = new
-    notebook["cells"] = list[JsonValue](cells)
-    return Ok((json.dumps(notebook, indent=1, ensure_ascii=False) + "\n").encode("utf-8"))
-
-
-def _kind(cell: Cell) -> CellType:
-    match cell.get("cell_type"):
-        case "markdown":
-            return "markdown"
-        case "raw":
-            return "raw"
+            kind = change.cell_type or (
+                "markdown" if cell.get("cell_type") == "markdown" else "code"
+            )
+            same = kind == cell.get("cell_type") and kind != "code"
+            cells[at] = (
+                {**cell, "source": change.source} if same else _shaped(cell, kind, change.source)
+            )
+            said = f"replaced cell {change.cell_id}"
         case _:
-            return "code"
+            assert_never(change.mode)
+    notebook["cells"] = list[JsonValue](cells)
+    text = json.dumps(notebook, indent=1, ensure_ascii=False) + "\n"
+    return Ok((text.encode("utf-8"), said))

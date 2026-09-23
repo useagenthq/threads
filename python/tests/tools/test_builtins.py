@@ -18,7 +18,7 @@ from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertai
 from threads.result import Ok
 from threads.store import SqliteStore
 from threads.tools import SandboxTools, specs
-from threads.tools.specs import Writes, agent_tools
+from threads.tools.specs import GATED, Writes, agent_tools
 
 LIMITS = Spill(threshold_bytes=64, head_bytes=16, tail_bytes=8, request_budget_bytes=4096)
 DAY_MS = 86_400_000
@@ -28,6 +28,7 @@ ALL = specs(
     memory=Writes(),
     knowledge=True,
     framework=agent_tools(spawn=True, team=True, handoffs=True),
+    gated=GATED,
 )
 SPECS = {s.name: s for s in ALL}
 
@@ -63,6 +64,19 @@ def test_specs_are_sorted_and_bash_is_unguarded_without_deny_all_egress() -> Non
     assert SPECS["read"].effect_class == "read_only"
     open_egress = {s.name: s for s in specs(sandbox=True, egress_denied=False)}
     assert open_egress["bash"].effect_class == "unguarded"
+    # GUI actions unguarded, observations read_only, push reconcilable.
+    classes = {n: SPECS[n].effect_class for n in ("computer", "computer_screenshot", "git_push")}
+    assert classes == {
+        "computer": "unguarded",
+        "computer_screenshot": "read_only",
+        "git_push": "reconcilable",
+    }
+    # Gated tools need their capability; notebook_edit comes with any sandbox.
+    plain = {s.name for s in open_egress.values()}
+    assert "notebook_edit" in plain
+    assert not plain & GATED
+    host_only = {s.name for s in specs(sandbox=False, egress_denied=True, gated=GATED)}
+    assert host_only == {"read_tool_result", "todo_write", "web_fetch", "web_search"}
 
 
 def test_specs_are_the_shared_catalog_and_read_tool_result_is_always_there() -> None:
@@ -71,22 +85,7 @@ def test_specs_are_the_shared_catalog_and_read_tool_result_is_always_there() -> 
         {"name": s.name, "description": s.description, "input_schema": s.input_schema}
         for s in SPECS.values()
     ]
-    # The catalog additions the Python builder adopts next (parity: TS pins them).
-    pending = {
-        "computer",
-        "computer_screenshot",
-        "git_clone",
-        "git_fetch",
-        "git_push",
-        "lsp",
-        "notebook_edit",
-        "open_pull_request",
-        "web_fetch",
-        "web_search",
-    }
-    assert isinstance(catalog, list)
-    expected = [e for e in catalog if isinstance(e, dict) and e["name"] not in pending]
-    assert json.loads(json.dumps(pinned)) == expected
+    assert json.loads(json.dumps(pinned)) == catalog
     bare = specs(sandbox=False, egress_denied=True)
     assert [s.name for s in bare] == ["read_tool_result", "todo_write"]
 
@@ -262,3 +261,32 @@ def test_a_stale_owner_sends_nothing(tmp_path: Path) -> None:
         await opened.value.close()
 
     asyncio.run(main())
+
+
+def test_notebook_edit_and_read_by_cell_id(tmp_path: Path) -> None:
+    cell: JsonValue = {
+        "cell_type": "code",
+        "id": "c1",
+        "metadata": {},
+        "source": "1",
+        "outputs": [],
+    }
+    (tmp_path / "n.ipynb").write_text(json.dumps({"nbformat": 4, "cells": [cell]}))
+
+    async def body(call: Call, _s: LocalSession, _st: SqliteStore) -> None:
+        edit: JsonObject = {
+            "path": "n.ipynb",
+            "cell_id": "c1",
+            "new_source": "# Notes",
+            "cell_type": "markdown",
+        }
+        got = output(await call("notebook_edit", {**edit, "mode": "insert"}))
+        new_id = sha256_hex(b"b:notebook_edit")[:16]
+        assert got.text == f"inserted cell {new_id} after c1"
+        read = output(await call("read", {"path": "n.ipynb"}))
+        assert read.text == f"1\t[cell c1] code\n2\t1\n3\t[cell {new_id}] markdown\n4\t# Notes"
+        missing = output(await call("notebook_edit", {**edit, "cell_id": "nope"}))
+        assert missing.is_error
+        assert missing.text == "cell_id nope not found; nothing written"
+
+    run(tmp_path, body)

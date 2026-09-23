@@ -6,7 +6,7 @@ import json
 from pydantic import JsonValue
 
 from threads.result import Err, Ok
-from threads.tools.notebook import edit, render
+from threads.tools.notebook import Change, edit, render
 
 META: dict[str, JsonValue] = {"kernelspec": {"name": "python3"}}
 NB: dict[str, JsonValue] = {
@@ -45,32 +45,59 @@ def test_render_shows_cells_and_outputs() -> None:
     assert isinstance(render(b'{"cells": 3}'), Err)
 
 
-def test_replace_keeps_id_and_metadata_and_clears_outputs() -> None:
-    got = edit(RAW, "calc", "2 + 2\nprint(4)", "replace")
+def _edit(change: Change) -> tuple[bytes, str]:
+    got = edit(RAW, "a.ipynb", change, "newid")
     assert isinstance(got, Ok)
-    assert _cells(got.value)[1] == {
+    return got.value
+
+
+def test_replace_keeps_id_type_and_metadata_and_clears_outputs() -> None:
+    raw, said = _edit(Change("calc", "2 + 2", "replace"))
+    assert said == "replaced cell calc"
+    assert _cells(raw)[1] == {
         "cell_type": "code",
         "id": "calc",
         "metadata": {"tags": ["x"]},
-        "source": ["2 + 2\n", "print(4)"],
-        "execution_count": None,
+        "source": "2 + 2",
         "outputs": [],
+        "execution_count": None,
     }
-    assert json.loads(got.value)["metadata"] == META
+    assert json.loads(raw)["metadata"] == META
+    # Same non-code type: only the source changes.
+    raw, _ = _edit(Change("intro", "# New", "replace"))
+    assert _cells(raw)[0] == {
+        "cell_type": "markdown",
+        "id": "intro",
+        "metadata": {},
+        "source": "# New",
+    }
 
 
 def test_insert_goes_after_the_cell_and_delete_removes_it() -> None:
-    inserted = edit(RAW, "intro", "Some text", "insert", "markdown")
-    assert isinstance(inserted, Ok)
-    cells = _cells(inserted.value)
-    assert [c["cell_type"] for c in cells] == ["markdown", "markdown", "code"]
-    assert cells[1]["source"] == ["Some text"]
-    assert cells[1]["id"] not in ("intro", "calc")
-    deleted = edit(RAW, "intro", "", "delete")
-    assert isinstance(deleted, Ok)
-    assert [c["id"] for c in _cells(deleted.value)] == ["calc"]
+    raw, said = _edit(Change("intro", "x = 1", "insert", "code"))
+    assert said == "inserted cell newid after intro"
+    cells = _cells(raw)
+    assert [c["id"] for c in cells] == ["intro", "newid", "calc"]
+    assert cells[1] == {
+        "id": "newid",
+        "cell_type": "code",
+        "source": "x = 1",
+        "metadata": {},
+        "outputs": [],
+        "execution_count": None,
+    }
+    raw, said = _edit(Change("intro", "", "delete"))
+    assert said == "deleted cell intro"
+    assert [c["id"] for c in _cells(raw)] == ["calc"]
 
 
-def test_an_unknown_id_fails_before_any_write() -> None:
-    assert edit(RAW, "nope", "x", "replace") == Err("not_found: no cell with id nope")
-    assert isinstance(edit(b"[]", "calc", "x", "replace"), Err)
+def test_bad_edits_write_nothing() -> None:
+    assert edit(RAW, "a.ipynb", Change("nope", "x", "replace"), "n") == Err(
+        "cell_id nope not found; nothing written"
+    )
+    assert edit(RAW, "a.ipynb", Change("intro", "x", "insert"), "n") == Err(
+        "insert needs cell_type; nothing written"
+    )
+    assert edit(b"[]", "b.ipynb", Change("calc", "x", "replace"), "n") == Err(
+        "b.ipynb is not a Jupyter notebook; nothing written"
+    )
