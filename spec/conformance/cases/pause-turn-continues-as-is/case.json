@@ -1,0 +1,10 @@
+{
+  "name": "pause-turn-continues-as-is",
+  "family": "context_compaction",
+  "kind": "recover",
+  "description": "A provider pauses a long turn (pause_turn). The loop asks again with nothing added, so the paused content goes back as-is, and the turn completes when a response ends it. Each re-request is a visible model_request.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

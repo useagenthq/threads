@@ -139,6 +139,7 @@ export const ContextPolicy: Strict<{
   restore: typeof RestorePolicy;
   max_output_continuations: typeof Int;
   max_output_escalation_tokens: Opt<typeof PosInt>;
+  max_pause_continuations: Opt<typeof Int>;
   defer_tools: EnumOf<typeof DEFER_TOOLS>;
   defer_threshold: typeof Threshold;
   server_edits: EnumOf<typeof SERVER_EDITS>;
@@ -151,6 +152,9 @@ export const ContextPolicy: Strict<{
   restore: RestorePolicy,
   max_output_continuations: Int,
   max_output_escalation_tokens: PosInt.optional(),
+  max_pause_continuations: Int.describe(
+    "Re-requests after pause_turn responses in one turn before the turn ends with error. Absent means 3.",
+  ).optional(),
   defer_tools: z.enum(DEFER_TOOLS),
   defer_threshold: Threshold,
   server_edits: z.enum(SERVER_EDITS),

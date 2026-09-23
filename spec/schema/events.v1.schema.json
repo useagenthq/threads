@@ -1053,6 +1053,10 @@
             "max_output_escalation_tokens": {
               "$ref": "#/$defs/PosInt"
             },
+            "max_pause_continuations": {
+              "$ref": "#/$defs/Int",
+              "description": "Re-requests after pause_turn responses in one turn before the turn ends with error. Absent means 3."
+            },
             "reserve_tokens": {
               "$ref": "#/$defs/Int"
             },
@@ -3272,12 +3276,15 @@
               "$ref": "#/$defs/EventId"
             },
             "stop_reason": {
+              "description": "Only end_turn, stop_sequence and refusal complete a turn; tool_use dispatches; max_tokens continues; pause_turn re-requests with the paused content as-is, up to context.max_pause_continuations; context_window_exceeded ends the turn context_exhausted; other (a reason the adapter can't name) ends it error. Never success for the last two.",
               "enum": [
                 "end_turn",
                 "tool_use",
                 "max_tokens",
                 "stop_sequence",
                 "refusal",
+                "pause_turn",
+                "context_window_exceeded",
                 "other"
               ]
             },
@@ -3337,12 +3344,15 @@
               "$ref": "#/$defs/EventId"
             },
             "stop_reason": {
+              "description": "Only end_turn, stop_sequence and refusal complete a turn; tool_use dispatches; max_tokens continues; pause_turn re-requests with the paused content as-is, up to context.max_pause_continuations; context_window_exceeded ends the turn context_exhausted; other (a reason the adapter can't name) ends it error. Never success for the last two.",
               "enum": [
                 "end_turn",
                 "tool_use",
                 "max_tokens",
                 "stop_sequence",
                 "refusal",
+                "pause_turn",
+                "context_window_exceeded",
                 "other"
               ]
             },

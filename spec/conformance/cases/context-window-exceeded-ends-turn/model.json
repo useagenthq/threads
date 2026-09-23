@@ -1,0 +1,17 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Searching."
+        }
+      ],
+      "stop_reason": "context_window_exceeded",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 10
+      }
+    }
+  ]
+}

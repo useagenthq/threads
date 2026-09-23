@@ -194,6 +194,20 @@ Checked by readers and writers (`validate_next`) on top of the schema, except ru
 
 A line that fails its schema is `invalid_line`. Examples: a `tool_use` part inside `user_input`; a `settings_changed` by the model; a `settings_changed` with an automatic reason (`fallback`, `escalation`, `revert`) whose actor is not `host` or `recovery`; a `budget_exceeded` with scope `ancestor` and no `owner_thread_id` (`user-input-tool-use-part-rejected`, `settings-change-by-model-rejected`, `settings-change-auto-reason-by-user-rejected`, `budget-exceeded-ancestor-without-owner-rejected`). These are schema conditionals (`if`/`then`), not semantic rules.
 
+## Turn endings by stop_reason
+
+What the loop does after a turn response with no `tool_use` part (a response with one records its calls first). Both implementations follow this table; the cases pin it.
+
+| `stop_reason` | Loop step | Case |
+|---|---|---|
+| `end_turn`, `stop_sequence` | The turn completes (`turn_completed{end_turn}`, after structured output when pinned) | `recover-open-turn-unsent-continues` |
+| `refusal` | The turn completes as a refusal outcome (the text is the answer) | |
+| `tool_use` | The recorded calls dispatch | |
+| `max_tokens` | The fixed continuation instruction, up to `context.max_output_continuations`, then `turn_completed{max_output}` | `max-output-continuation-bounded` |
+| `pause_turn` | A new `model_request` with nothing added, so the paused content goes back as-is. When the turn's `pause_turn` responses exceed `context.max_pause_continuations` (absent: 3), `turn_completed{error}` | `pause-turn-continues-as-is`, `pause-turn-bounded` |
+| `context_window_exceeded` | `turn_completed{context_exhausted}`, never a completed run | `context-window-exceeded-ends-turn` |
+| `other` | A reason the adapter can't name: `turn_completed{error}`, never a completed run | |
+
 ## Versioning policy
 
 - **`type_version` per event type.** Any change to a type's `data` bumps its version.

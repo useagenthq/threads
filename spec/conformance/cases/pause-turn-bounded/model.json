@@ -1,0 +1,30 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Searching."
+        }
+      ],
+      "stop_reason": "pause_turn",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 10
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Searching."
+        }
+      ],
+      "stop_reason": "pause_turn",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 10
+      }
+    }
+  ]
+}

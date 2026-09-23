@@ -15,8 +15,15 @@ const STOP_REASONS = [
   "max_tokens",
   "stop_sequence",
   "refusal",
+  "pause_turn",
+  "context_window_exceeded",
   "other",
 ] as const;
+const StopReason = z
+  .enum(STOP_REASONS)
+  .describe(
+    "Only end_turn, stop_sequence and refusal complete a turn; tool_use dispatches; max_tokens continues; pause_turn re-requests with the paused content as-is, up to context.max_pause_continuations; context_window_exceeded ends the turn context_exhausted; other (a reason the adapter can't name) ends it error. Never success for the last two.",
+  );
 const COMPLETENESS = ["complete", "partial"] as const;
 const PROVIDER_OUTCOMES = ["not_sent", "unknown", "failed"] as const;
 const ABANDON_REASONS = [
@@ -78,7 +85,7 @@ export const ModelResponseData: Strict<{
 }> = z.strictObject({
   request_event_id: EventId,
   content: z.array(OutputPart),
-  stop_reason: z.enum(STOP_REASONS),
+  stop_reason: StopReason,
   usage: Usage,
   completeness: z.enum(COMPLETENESS),
 });
@@ -105,7 +112,7 @@ export const ModelResponseRecoveredData: Strict<{
   request_event_id: EventId,
   provider_request_id: NonEmpty,
   content: z.array(OutputPart),
-  stop_reason: z.enum(STOP_REASONS),
+  stop_reason: StopReason,
   usage: Usage,
   completeness: z.enum(COMPLETENESS),
 });

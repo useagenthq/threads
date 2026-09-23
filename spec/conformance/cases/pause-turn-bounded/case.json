@@ -1,0 +1,10 @@
+{
+  "name": "pause-turn-bounded",
+  "family": "context_compaction",
+  "kind": "recover",
+  "description": "With context.max_pause_continuations 1, a second pause_turn in the turn ends it with error: a run that never finishes its paused work is never reported as completed.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

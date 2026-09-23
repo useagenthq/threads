@@ -1,0 +1,10 @@
+{
+  "name": "context-window-exceeded-ends-turn",
+  "family": "context_compaction",
+  "kind": "recover",
+  "description": "A response cut off by the context window (context_window_exceeded) ends the turn context_exhausted, never end_turn: its text is not a finished answer.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}
