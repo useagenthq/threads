@@ -23,7 +23,7 @@ from threads.git.forge import GitHub, Refused
 from threads.git.host import credential_env, git
 from threads.log import JsonObject, ToolSpec
 from threads.log.digest import sha256_hex
-from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound
+from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound, NotFoundNonfinal
 from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Termination, Uncertain
 from threads.result import Err, Ok
 from threads.tools import files
@@ -199,7 +199,7 @@ class GitGateway:
             url = self._forge.git_url(args.repo)
             pushed = await git(["push", "--porcelain", url, f"{ref}:{ref}"], repo, env)
         if pushed.exit_code == 0:
-            return Output(f"pushed {args.branch} at {sha} to {args.repo}")
+            return Output(_pushed(args, sha))
         if any(line.startswith("!") for line in pushed.stdout.splitlines()):
             # The forge answered and refused this ref: nothing changed.
             return Output(f"push rejected: {pushed.stdout.strip()} {pushed.stderr.strip()}", True)
@@ -237,10 +237,11 @@ class GitGateway:
                 return LookupUnknown(f"{call.spec.name} has no lookup")
 
     async def _pushed(self, args: GitPushInput, key: str) -> LookupResult[str]:
-        """Found when the forge's branch is at the local branch's commit. Anything else is
-        unknown: without the forge's commit from before the push, not_found can't be proven.
-        ponytail: record the forge's commit at effect_begin to answer not_found."""
-        local = await self._local_head(args, key)
+        """Found when the forge's branch is at the local branch's commit. Anything else is a
+        nonfinal not_found (the forge may lag, or the head moved since), so it parks: a push is
+        never repeated blindly. The sandbox read runs under its own process key, apart from the
+        push's commands."""
+        local = await self._local_head(args, f"{key}:lookup")
         if isinstance(local, Err):
             return LookupUnknown("the sandbox branch is gone")
         with tempfile.TemporaryDirectory() as tmp:
@@ -251,16 +252,20 @@ class GitGateway:
             remote = await git(
                 ["ls-remote", url, f"refs/heads/{args.branch}"], home, self._env(home)
             )
+        if remote.exit_code != 0:
+            return LookupUnknown(f"the forge did not list {args.branch}")
         at = remote.stdout.split("\t", 1)[0].strip()
-        if remote.exit_code == 0 and at == local.value:
-            return Found(f"pushed {args.branch} at {at} to {args.repo}")
-        return LookupUnknown(f"the forge's {args.branch} is at {at or 'nothing'}")
+        return Found(_pushed(args, at)) if at == local.value else NotFoundNonfinal()
 
     async def terminate(self, call: Invocation) -> Termination:
         return "unknown"
 
     def provider_now(self) -> int | None:
         return None
+
+
+def _pushed(args: GitPushInput, sha: str) -> str:
+    return f"pushed {sha} to {args.repo} {args.branch}"
 
 
 def _failed(error: WebError | Refused) -> Dispatched:

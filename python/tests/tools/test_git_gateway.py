@@ -8,15 +8,29 @@ import subprocess
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from local_sandbox import LocalSession
+import pytest
+from local_sandbox import LocalSandbox, LocalSession
+from pydantic import JsonValue
 from sandbox_kit import KitContext
 
+from threads import Agent, Completed, EventItem, Thread, agent, scripted_model, sqlite
+from threads._generated.tools_v1 import GitPushInput
 from threads.git.forge import GitHub
 from threads.git.gateway import Forge, GitGateway
-from threads.log import CallId, JsonObject, Spill
-from threads.loop.model import Found, LookupUnknown, NotFound
-from threads.loop.tools import Invocation, NotSent, Output, Uncertain
+from threads.log import (
+    CallId,
+    EffectBeginEvent,
+    EffectResolvedEvent,
+    Event,
+    JsonObject,
+    Permissions,
+    Spill,
+    ToolResultEvent,
+)
+from threads.loop.model import Found, NotFound, NotFoundNonfinal
+from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
 from threads.result import Err, Ok
+from threads.secrets import secret
 from threads.store import SqliteStore
 from threads.tools import SandboxTools, specs
 from threads.tools.specs import GIT
@@ -111,10 +125,10 @@ def test_clone_push_and_reconcile_keep_the_credential_on_the_host(tmp_path: Path
         assert isinstance(stale, NotSent)
         assert sh("branch", "--list", "feature", cwd=forge / "acme/app.git") == ""
         pushed = await gw.dispatch(push)
-        assert pushed == Output(f"pushed feature at {head} to acme/app")
+        assert pushed == Output(f"pushed {head} to acme/app feature")
         assert sh("rev-parse", "refs/heads/feature", cwd=forge / "acme/app.git") == head
         # A push whose answer was lost is found by the forge's branch.
-        assert await gw.lookup(push) == Found(f"pushed feature at {head} to acme/app")
+        assert await gw.lookup(push) == Found(f"pushed {head} to acme/app feature")
         _no_canary(ws)
 
     run(tmp_path, body)
@@ -133,10 +147,10 @@ def test_fetch_brings_new_branches_and_a_moved_branch_is_unknown(tmp_path: Path)
         got = await gw.dispatch(call("git_fetch", {"repo": "acme/app", "path": "src"}, "b:c2"))
         assert got == Output("fetched acme/app into /workspace/src: refs/remotes/origin/*")
         assert sh("rev-parse", "origin/topic", cwd=ws / "src") == sh("rev-parse", "HEAD", cwd=other)
-        # The local branch isn't where the forge's is: the push can't be proven either way.
+        # The local branch isn't where the forge's is: not found, but not finally (it parks).
         push = call("git_push", {"repo": "acme/app", "branch": "main", "path": "src"})
         sh("commit", "--quiet", "--allow-empty", "-m", "local", cwd=ws / "src")
-        assert isinstance(await gw.lookup(push), LookupUnknown)
+        assert await gw.lookup(push) == NotFoundNonfinal()
         rejected = await gw.dispatch(
             call("git_push", {"repo": "acme/app", "branch": "nope", "path": "src"})
         )
@@ -200,3 +214,87 @@ def test_open_pull_request_returns_an_existing_one_and_reconciles_by_head(tmp_pa
                 assert await gw.lookup(call("open_pull_request", args)) == NotFound()
 
         run(tmp_path / str(id(api)), body, GitHub("https://api.github.com", api, _public))
+
+
+class _CrashError(Exception):
+    pass
+
+
+_USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
+_DONE: JsonValue = {
+    "content": [{"type": "text", "text": "ok"}],
+    "stop_reason": "end_turn",
+    "usage": _USAGE,
+}
+_BYPASS = Permissions(
+    mode="bypass",
+    allow=[],
+    ask=[],
+    deny=[],
+    protected_paths=[],
+    allow_bypass=True,
+    plan_exit_mode="default",
+)
+
+
+def _use(name: str, args: JsonValue, call_id: str) -> JsonValue:
+    part: JsonValue = {"type": "tool_use", "call_id": call_id, "name": name, "input": args}
+    return {"content": [part], "stop_reason": "tool_use", "usage": _USAGE}
+
+
+def test_a_push_interrupted_by_a_crash_is_settled_by_the_forge_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A crash after the push reached the forge: the next run's recovery looks it up by the
+    forge's branch, settles it confirmed_success and never pushes again (F11.12)."""
+    forge = make_forge(tmp_path)
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    box = LocalSandbox(ws)
+    monkeypatch.setenv("GH_TOKEN", CANARY)
+    local = Forge(lambda repo: str(forge / f"{repo}.git"))
+    monkeypatch.setattr("threads.agents.catalog.Forge", lambda: local)
+    who = " ".join(ID)
+    commit = f"cd app && git checkout -q -b feature && git {who} commit -q --allow-empty -m f"
+    first = [
+        _use("git_clone", {"repo": "acme/app"}, "c1"),
+        _use("bash", {"command": commit}, "c2"),
+        _use("git_push", {"repo": "acme/app", "branch": "feature"}, "c3"),
+    ]
+    pushed = GitGateway._push_bundle  # pyright: ignore[reportPrivateUsage] - crash after the real push
+
+    async def crash(self: GitGateway, args: GitPushInput, bundle: bytes, sha: str) -> Dispatched:
+        await pushed(self, args, bundle, sha)
+        raise _CrashError
+
+    def bot(responses: list[JsonValue]) -> Agent[None]:
+        return agent(
+            model=scripted_model({"responses": responses}),
+            sandbox=box,
+            git={"credential": secret("GH_TOKEN")},
+            permissions=_BYPASS,
+        )
+
+    async def main() -> list[Event]:
+        store = sqlite(str(tmp_path / "db" / "threads.db"))
+        monkeypatch.setattr(GitGateway, "_push_bundle", crash)
+        stream = bot(first).stream("push it", store=store)
+        seen = [i.event async for i in stream if isinstance(i, EventItem)]
+        with pytest.raises(_CrashError):
+            await stream.result
+        monkeypatch.setattr(GitGateway, "_push_bundle", pushed)
+        thread = Thread(seen[0].thread_id, seen[0].branch_id, store)
+        done = await bot([_DONE, _DONE]).run("status?", store=store, thread=thread)
+        assert isinstance(done, Completed), done
+        timeline = await done.thread.timeline()
+        assert isinstance(timeline, Ok)
+        return [e.event for e in timeline.value.entries]
+
+    events = asyncio.run(main())
+    head = sh("rev-parse", "refs/heads/feature", cwd=forge / "acme/app.git")
+    settled = [e for e in events if isinstance(e, EffectResolvedEvent)]
+    assert [(s.data.call_id, s.data.outcome) for s in settled] == [("c3", "confirmed_success")]
+    begins = [e for e in events if isinstance(e, EffectBeginEvent) and e.data.call_id == "c3"]
+    assert len(begins) == 1
+    result = next(e for e in events if isinstance(e, ToolResultEvent) and e.data.call_id == "c3")
+    assert result.data.preview == f"pushed {head} to acme/app feature"
