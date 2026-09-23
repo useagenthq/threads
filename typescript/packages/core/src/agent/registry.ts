@@ -1,26 +1,50 @@
-import type { Principal } from "../log";
+import type { ArtifactRef, EventId, Principal, ThreadId } from "../log";
 import type { Subagent } from "../loop";
+import type { ThreadRef } from "./result";
 import type { Store } from "./sqlite";
 
 // Agent handles are plain objects (spec/api.json Agent); what a parent needs to run one as a
-// child is kept here, keyed by the handle, so the public shape stays small.
+// subagent or a handoff target is kept here, keyed by the handle, so the public shape stays small.
 
-/** What a child run shares with its parent's run. */
+/** What a thread started by another run shares with that run. */
 export type ChildEnv = {
   readonly store: Store;
-  /** The originating principal: a child never creates a new caller. */
+  /** The originating principal: neither a child nor a handoff creates a new caller. */
   readonly principal: Principal;
   readonly signal?: AbortSignal;
 };
 
 export type ChildFactory = (env: ChildEnv) => Subagent;
 
-const CHILDREN = new WeakMap<object, ChildFactory>();
+/** The handoff a target thread starts from. */
+export type HandoffLink = {
+  readonly threadId: ThreadId;
+  readonly parent: {
+    readonly thread_id: ThreadId;
+    readonly branch_id: ThreadRef["branch"];
+    readonly event_id: EventId;
+    readonly relation: "handoff";
+  };
+  readonly forwarded?: ArtifactRef;
+  readonly request: string;
+};
 
-export function register(agent: object, factory: ChildFactory): void {
-  CHILDREN.set(agent, factory);
+export type TargetFactory = (
+  env: ChildEnv,
+) => (link: HandoffLink) => Promise<ThreadRef>;
+
+type Entry = { readonly child: ChildFactory; readonly target: TargetFactory };
+
+const AGENTS = new WeakMap<object, Entry>();
+
+export function register(agent: object, entry: Entry): void {
+  AGENTS.set(agent, entry);
 }
 
 export function childFactory(agent: object): ChildFactory | undefined {
-  return CHILDREN.get(agent);
+  return AGENTS.get(agent)?.child;
+}
+
+export function targetFactory(agent: object): TargetFactory | undefined {
+  return AGENTS.get(agent)?.target;
 }

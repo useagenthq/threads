@@ -95,7 +95,8 @@ function ended<Output>(
       return { status: "budget_exhausted", budget: budget.data, thread };
     }
     case "handoff":
-      throw new Error("handoffs are not part of this release");
+      // run() answers a handed-off thread itself, with the target it started.
+      throw new Error("a handoff's result names its target thread");
     case "error":
     case "interrupted":
       return failed("model_error", reason, thread);

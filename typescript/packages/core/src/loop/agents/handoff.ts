@@ -1,0 +1,83 @@
+import { type EventOf, responseText } from "../../fold/state";
+import { ThreadId } from "../../log";
+import { uuidv7 } from "../../store/encode";
+import { HandoffInput } from "../../tools/agent-inputs";
+import { draft, TOOL } from "../drafts";
+import type { Session } from "../session";
+import type { Halt } from "../types";
+
+// handoff: the conversation moves to a new thread of a listed agent. This
+// thread records handoff, the call's result and turn_completed{handoff}, and takes no input
+// after it; the host starts the target from the recorded handoff, so a restart finds it.
+
+type Call = EventOf<"tool_call">;
+
+export function handOff(s: Session, call: Call): Halt | undefined {
+  const { call_id } = call.data;
+  const { agent } = HandoffInput.parse(call.data.input);
+  // A target the source didn't list fails before anything happens.
+  if (!(s.fold.policy?.handoffs ?? []).includes(agent))
+    return s.append(
+      draft.toolResult(
+        {
+          call_id,
+          is_error: true,
+          origin: "not_executed",
+          preview: `not a handoff target: ${agent}`,
+        },
+        TOOL,
+      ),
+    );
+  // The turn ends here: calls after the handoff in the same response never run.
+  const others = [...s.fold.pending].filter((id) => id !== call_id);
+  return s.append(
+    {
+      type: "handoff",
+      type_version: 1,
+      critical: true,
+      actor: { kind: "host" },
+      data: {
+        call_id,
+        to_agent: agent,
+        to_thread_id: ThreadId.parse(uuidv7(s.now())),
+        forwarded: "transcript",
+        forwarded_ref: s.store(transcript(s), "text/plain"),
+      },
+    },
+    draft.toolResult(
+      {
+        call_id,
+        is_error: false,
+        origin: "executed",
+        preview: `Handed off to ${agent}.`,
+      },
+      TOOL,
+    ),
+    ...others.map((id) =>
+      draft.toolResult(
+        {
+          call_id: id,
+          is_error: true,
+          origin: "not_executed",
+          preview: "not executed: handed off",
+        },
+        { kind: "host" },
+      ),
+    ),
+    draft.turnCompleted("handoff"),
+  );
+}
+
+/** The forwarded history: what the user and the agent said, as plain text. */
+function transcript(s: Session): string {
+  return s.events
+    .flatMap((e) => {
+      if (e.type === "user_input") return [`user: ${e.data.text ?? ""}`];
+      if (e.type === "model_response") {
+        const text = responseText(e.data.content);
+        return text === "" ? [] : [`assistant: ${text}`];
+      }
+      return [];
+    })
+    .join("\n");
+}

@@ -7,7 +7,11 @@ import {
   sqlite,
   type ThreadRef,
 } from "../../src";
-import { childFactory, register } from "../../src/agent/registry";
+import {
+  childFactory,
+  register,
+  targetFactory,
+} from "../../src/agent/registry";
 import { openStore } from "../../src/agent/sqlite";
 import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
@@ -115,16 +119,21 @@ describe("recovery after a crash mid-subagent", () => {
     const model = scriptedModel({ responses: [say("LGTM")] });
     const reviewer = agent({ name: "reviewer", model });
     const real = childFactory(reviewer);
-    if (real === undefined) throw new Error("agent() registers every handle");
-    register(reviewer, (env) => {
-      const sub = real(env);
-      return {
-        ...sub,
-        run: async (child) => {
-          await sub.run(child);
-          throw new Error("process killed");
-        },
-      };
+    const target = targetFactory(reviewer);
+    if (real === undefined || target === undefined)
+      throw new Error("agent() registers every handle");
+    register(reviewer, {
+      target,
+      child: (env) => {
+        const sub = real(env);
+        return {
+          ...sub,
+          run: async (child) => {
+            await sub.run(child);
+            throw new Error("process killed");
+          },
+        };
+      },
     });
     const lead = agent({
       name: "lead",
@@ -138,7 +147,7 @@ describe("recovery after a crash mid-subagent", () => {
     await first.catch(() => undefined);
     expect(first).rejects.toThrow("process killed");
 
-    register(reviewer, real);
+    register(reviewer, { child: real, target });
     const again = await lead.run("Thanks.", { store, thread });
     expect(again.status).toBe("completed");
     const { parent, child } = await logs(store, again.thread);

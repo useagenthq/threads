@@ -13,6 +13,7 @@ import type { Egress } from "../tools";
 import { subagent } from "./child";
 import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
+import { target } from "./handoff";
 import { pin } from "./pin";
 import { register } from "./registry";
 import type { RunResult } from "./result";
@@ -46,6 +47,8 @@ export type AgentOptions<Deps, Output> = {
   readonly extensions?: readonly Extension<Deps>[];
   /** Agents spawn_agent may start, by name. Team tools come with them. */
   readonly subagents?: readonly Agent<never, unknown>[];
+  /** Agents this one may hand the conversation to, pinned as policy.handoffs. */
+  readonly handoffs?: readonly Agent<never, unknown>[];
 };
 
 /** One item of stream(): a committed event, or a transient text delta (never logged). */
@@ -123,9 +126,7 @@ function build<Deps, Output>(
     hookable: options.extensions ?? [],
     setup: once(options.extensions ?? []),
     decode,
-    subagents: (options.subagents ?? []).map((a) => a.name),
-    handoffs: [],
-    agents: options.subagents ?? [],
+    ...agentsOf(options),
   };
   const handle: Agent<Deps, Output> = {
     name: def.name,
@@ -145,8 +146,25 @@ function build<Deps, Output>(
       }
     },
   };
-  register(handle, subagent(def));
+  register(handle, { child: subagent(def), target: target(def) });
   return handle;
+}
+
+/** The agents spawn_agent and handoff may name, and their names as pinned. */
+function agentsOf<Deps, Output>(
+  options: AgentOptions<Deps, Output>,
+): Pick<
+  Resolved<Deps, Output>,
+  "subagents" | "handoffs" | "agents" | "targets"
+> {
+  const agents = options.subagents ?? [];
+  const targets = options.handoffs ?? [];
+  return {
+    subagents: agents.map((a) => a.name),
+    handoffs: targets.map((a) => a.name),
+    agents,
+    targets,
+  };
 }
 
 /** Each extension's setup runs once, at check() or the first run; a throw is a ConfigError. */

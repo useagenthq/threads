@@ -47,10 +47,13 @@ export type PinOptions = {
 
 type ThreadStarted = Extract<EventDraft, { type: "thread_started" }>["data"];
 
-/** A child thread's pin: no sandbox (isolation none), team member tools, within the parent's. */
+/**
+ * A thread started by another: its parent link. A subagent also has its parent's tools: it gets
+ * no sandbox (isolation none) and team member tools, and never more than those tools.
+ */
 export type ChildPin = {
   readonly parent: NonNullable<ThreadStarted["parent"]>;
-  readonly tools: ReadonlySet<string>;
+  readonly tools?: ReadonlySet<string>;
 };
 
 /** The pinned tool specs and the thread_started draft. Throws ConfigError on a bad setup. */
@@ -61,18 +64,19 @@ export function pin(
   readonly specs: readonly ToolSpec[];
   readonly started: EventDraft;
 } {
-  const o = child === undefined ? options : { ...options, sandbox: undefined };
+  const within = child?.tools;
+  const o = within === undefined ? options : { ...options, sandbox: undefined };
   const all = [
     ...[
       ...builtins(o.sandbox, o.egress).map((b) => b.spec),
-      ...agentTools(o, child !== undefined).map(frameworkSpec),
+      ...agentTools(o, within !== undefined).map(frameworkSpec),
     ].toSorted((a, b) => (a.name < b.name ? -1 : 1)),
     ...o.tools.map((t) => t.spec()),
     ...extensionTools(o.extensions).map((t) => t.spec()),
   ];
   // A child never gains a tool its parent lacks.
   const specs = [
-    ...all.filter((t) => child === undefined || child.tools.has(t.name)),
+    ...all.filter((t) => within === undefined || within.has(t.name)),
     ...finalOutput(o.output),
   ];
   const exts = o.extensions.map((e) => e.name);

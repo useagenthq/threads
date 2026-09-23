@@ -21,7 +21,8 @@ import type { Agent } from "./agent";
 import { loopConfig } from "./config";
 import { ConfigError } from "./errors";
 import { type Extension, observerOf } from "./extension";
-import type { PinOptions } from "./pin";
+import { handedOff } from "./handoff";
+import type { ChildPin, PinOptions } from "./pin";
 import { pin } from "./pin";
 import {
   type Decode,
@@ -53,6 +54,8 @@ export type Resolved<Deps, Output> = PinOptions & {
   readonly decode: Decode<Output>;
   /** The agents behind PinOptions.subagents, by name. */
   readonly agents: readonly Agent<never, unknown>[];
+  /** The agents behind PinOptions.handoffs, by name. */
+  readonly targets: readonly Agent<never, unknown>[];
 };
 
 /** The local operator. */
@@ -98,6 +101,15 @@ export type Plan<Deps> = RunOptions<Deps> & {
   readonly principal: Principal;
   /** A child thread, opened by its id and created on first use. */
   readonly child?: ChildRun;
+  /** A handoff target's thread, likewise. */
+  readonly target?: Target;
+};
+
+/** A handoff target: created on first use with the forwarded history after thread_started. */
+export type Target = {
+  readonly threadId: ThreadId;
+  readonly parent: ChildPin["parent"];
+  readonly prefix: readonly EventDraft[];
 };
 
 /**
@@ -111,22 +123,20 @@ export async function execute<Deps, Output>(
   inputs: readonly EventDraft[],
   hooks: Hooks = {},
 ): Promise<RunResult<Output>> {
-  const { store, child, principal } = plan;
+  const { store, child, principal, target } = plan;
   const { log, artifacts } = await openStore(store);
-  const pinned = pin(
-    def,
-    child === undefined
-      ? undefined
-      : {
-          parent: { ...child.parent, relation: "subagent" },
-          tools: child.tools,
-        },
-  );
+  const link = linkOf(plan);
+  const pinned = pin(def, link);
   await def.setup();
   // Each run is its own executor: a second run on a busy branch is branch_busy.
   const holder = `run-${crypto.randomUUID()}`;
-  const target = child?.threadId ?? plan.thread;
-  const opened = open(log, target, pinned.started, holder, child !== undefined);
+  const opened = open(
+    log,
+    child?.threadId ?? target?.threadId ?? plan.thread,
+    [pinned.started, ...(target?.prefix ?? [])],
+    holder,
+    link !== undefined,
+  );
   const thread: ThreadRef = {
     id: opened.threadId,
     branch: opened.branchId,
@@ -168,10 +178,7 @@ export async function execute<Deps, Output>(
       ...(builtin.readFile === undefined ? {} : { readFile: builtin.readFile }),
       ...(child === undefined ? {} : { child }),
     });
-    const given = knownEvents(writer.chain).filter(
-      (e) => e.type === "user_input",
-    ).length;
-    const pending = child === undefined ? inputs : inputs.slice(given);
+    const pending = pendingInputs(writer, link, inputs);
     // Recovery first; an in-doubt turn finishes before the next input opens the next one.
     let end: LoopEnd = await resume(writer, artifacts, config, {
       ...(pending[0] === undefined ? {} : { input: pending[0] }),
@@ -182,6 +189,8 @@ export async function execute<Deps, Output>(
     }
     if (end.kind === "idle" && child === undefined)
       await snapshotTurn(def.sandbox, builtin.session, log.ledger, writer);
+    if (end.kind === "idle" && writer.chain.fold.handedOff)
+      return handedOff(def, plan, knownEvents(writer.chain), thread);
     return runResult(
       end,
       knownEvents(writer.chain),
@@ -192,6 +201,34 @@ export async function execute<Deps, Output>(
   } finally {
     stop();
   }
+}
+
+/** How a thread started by another links to it: a subagent, or a handoff target. */
+function linkOf(plan: Plan<unknown>): ChildPin | undefined {
+  const { child, target } = plan;
+  if (child !== undefined)
+    return {
+      parent: { ...child.parent, relation: "subagent" },
+      tools: child.tools,
+    };
+  return target === undefined ? undefined : { parent: target.parent };
+}
+
+/**
+ * The inputs still to append. A linked thread's inputs are its whole history, so those its log
+ * has are skipped; a handed-off thread takes none (rule 26), its run only makes sure the target runs.
+ */
+function pendingInputs(
+  writer: Writer,
+  link: ChildPin | undefined,
+  inputs: readonly EventDraft[],
+): readonly EventDraft[] {
+  if (writer.chain.fold.handedOff) return [];
+  if (link === undefined) return inputs;
+  const given = knownEvents(writer.chain).filter(
+    (e) => e.type === "user_input",
+  ).length;
+  return inputs.slice(given);
 }
 
 /**
@@ -228,18 +265,18 @@ type Opened = {
 function open(
   log: LogStore,
   thread: RunOptions<unknown>["thread"],
-  started: ReturnType<typeof pin>["started"],
+  first: readonly EventDraft[],
   holder: string,
   create: boolean,
 ): Opened {
   if (thread === undefined)
-    return created(log, ThreadId.parse(uuidv7(Date.now())), started, holder);
+    return created(log, ThreadId.parse(uuidv7(Date.now())), first, holder);
   const threadId = typeof thread === "string" ? thread : thread.id;
   const branch =
     typeof thread === "string"
       ? log.mainBranch(thread)
       : { ok: true as const, value: thread.branch };
-  if (!branch.ok && create) return created(log, threadId, started, holder);
+  if (!branch.ok && create) return created(log, threadId, first, holder);
   if (!branch.ok)
     throw new ConfigError(
       "invalid_config",
@@ -255,7 +292,7 @@ function open(
 function created(
   log: LogStore,
   threadId: ThreadId,
-  started: ReturnType<typeof pin>["started"],
+  first: readonly EventDraft[],
   holder: string,
 ): Opened {
   const branchId = BranchId.parse(uuidv7(Date.now()));
@@ -263,8 +300,8 @@ function created(
   if (!made.ok) return { threadId, branchId, writer: made };
   const writer = log.acquire(branchId, holder);
   if (writer.ok) {
-    const first = writer.value.append([started]);
-    if (!first.ok) return { threadId, branchId, writer: first };
+    const appended = writer.value.append(first);
+    if (!appended.ok) return { threadId, branchId, writer: appended };
   }
   return { threadId, branchId, writer };
 }

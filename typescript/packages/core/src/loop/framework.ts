@@ -1,4 +1,5 @@
 import type { EventOf } from "../fold/state";
+import { handOff } from "./agents/handoff";
 import { spawnAgent } from "./agents/spawn";
 import { teamTool } from "./agents/team";
 import { FINAL_OUTPUT, validateCandidate } from "./output";
@@ -18,6 +19,7 @@ const HANDLERS: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   [FINAL_OUTPUT, validateCandidate],
   ["todo_write", writeTodos],
   ["spawn_agent", spawnAgent],
+  ["handoff", handOff],
   ["send_message", teamTool],
   ["team_task_claim", teamTool],
   ["team_task_create", teamTool],
