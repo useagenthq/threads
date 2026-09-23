@@ -409,7 +409,7 @@ async def usage() -> Ok[UsageTotals] | Err[Failure]
 
 ### cost
 
-What this thread spent, in nano-units of its pinned currency (USD for agent()), with a conservative upper bound; null when it pins no prices. With tree: true it also counts every subagent at any depth, each from its own log, in the root's currency (else the first priced subagent's). complete and bounded become false when some spend can't be counted: a thread priced in another currency, or an unpriced thread that called a model. A subagent that never started counts nothing. Errors: a subagent's read error; log_corrupt when a finished subagent's log is missing, a subagent doesn't name the spawn that started it, or the tree loops; cost_overflow past 2^53-1 nanos. Messages name the path of child thread ids.
+What this thread spent, in nano-units of its pinned currency (USD for agent()), with a conservative upper bound; null when its pinned policy has no currency or no model list (a pinned currency with an unpriced model gives an incomplete cost instead). With tree: true it also counts every subagent at any depth, each from its own log, in the root's currency (else the first priced subagent's). complete and bounded become false when some spend can't be counted: a thread priced in another currency, or an unpriced thread that called a model. A subagent that never started counts nothing. Errors: a subagent's read error; log_corrupt when a finished subagent's log is missing, a subagent doesn't name the spawn that started it, or the tree loops; cost_overflow past 2^53-1 nanos. Messages name the path of child thread ids.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
