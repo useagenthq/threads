@@ -1,0 +1,317 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`golden: Render v1 conformance cases → AI SDK prompt render-user-image-input 1`] = `
+{
+  "ok": true,
+  "prompt": [
+    {
+      "content": "You are a helpful agent.",
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "What does this page show?",
+          "type": "text",
+        },
+        {
+          "data": {
+            "data": {
+              "data": [
+                137,
+                80,
+                78,
+                71,
+                13,
+                10,
+                26,
+                10,
+                102,
+                105,
+                120,
+                116,
+                117,
+                114,
+                101,
+                58,
+                32,
+                108,
+                111,
+                103,
+                105,
+                110,
+                32,
+                112,
+                97,
+                103,
+                101,
+                32,
+                115,
+                99,
+                114,
+                101,
+                101,
+                110,
+                115,
+                104,
+                111,
+                116,
+              ],
+              "type": "Buffer",
+            },
+            "type": "data",
+          },
+          "mediaType": "image/png",
+          "type": "file",
+        },
+      ],
+      "role": "user",
+    },
+  ],
+  "tools": [
+    {
+      "description": "Read a file from the sandbox workspace.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "path",
+        ],
+        "type": "object",
+      },
+      "name": "read_file",
+      "type": "function",
+    },
+  ],
+}
+`;
+
+exports[`golden: Render v1 conformance cases → AI SDK prompt render-screenshot-tool-result 1`] = `
+{
+  "ok": true,
+  "prompt": [
+    {
+      "content": "You are a helpful agent.",
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Take a screenshot of the login page.",
+          "type": "text",
+        },
+      ],
+      "role": "user",
+    },
+    {
+      "content": [
+        {
+          "input": {},
+          "toolCallId": "call_1",
+          "toolName": "screenshot",
+          "type": "tool-call",
+        },
+      ],
+      "role": "assistant",
+    },
+    {
+      "content": [
+        {
+          "output": {
+            "type": "content",
+            "value": [
+              {
+                "text": "Login page loaded.",
+                "type": "text",
+              },
+              {
+                "data": {
+                  "data": {
+                    "data": [
+                      137,
+                      80,
+                      78,
+                      71,
+                      13,
+                      10,
+                      26,
+                      10,
+                      102,
+                      105,
+                      120,
+                      116,
+                      117,
+                      114,
+                      101,
+                      58,
+                      32,
+                      108,
+                      111,
+                      103,
+                      105,
+                      110,
+                      32,
+                      112,
+                      97,
+                      103,
+                      101,
+                      32,
+                      115,
+                      99,
+                      114,
+                      101,
+                      101,
+                      110,
+                      115,
+                      104,
+                      111,
+                      116,
+                    ],
+                    "type": "Buffer",
+                  },
+                  "type": "data",
+                },
+                "mediaType": "image/png",
+                "type": "file",
+              },
+              {
+                "text": "Cursor at (640, 400).",
+                "type": "text",
+              },
+            ],
+          },
+          "toolCallId": "call_1",
+          "toolName": "screenshot",
+          "type": "tool-result",
+        },
+      ],
+      "role": "tool",
+    },
+  ],
+  "tools": [
+    {
+      "description": "Capture the sandbox desktop.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object",
+      },
+      "name": "screenshot",
+      "type": "function",
+    },
+  ],
+}
+`;
+
+exports[`golden: Render v1 conformance cases → AI SDK prompt render-deferred-tool-loaded 1`] = `
+{
+  "ok": true,
+  "prompt": [
+    {
+      "content": "You are a helpful agent.",
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Deploy to staging.",
+          "type": "text",
+        },
+      ],
+      "role": "user",
+    },
+    {
+      "content": [
+        {
+          "input": {
+            "query": "deploy",
+          },
+          "toolCallId": "call_1",
+          "toolName": "tool_search",
+          "type": "tool-call",
+        },
+      ],
+      "role": "assistant",
+    },
+    {
+      "content": [
+        {
+          "output": {
+            "type": "text",
+            "value": "mcp__ops__deploy: Deploy the app.",
+          },
+          "toolCallId": "call_1",
+          "toolName": "tool_search",
+          "type": "tool-result",
+        },
+      ],
+      "role": "tool",
+    },
+  ],
+  "tools": [
+    {
+      "description": "Read a file from the sandbox workspace.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "path",
+        ],
+        "type": "object",
+      },
+      "name": "read_file",
+      "type": "function",
+    },
+    {
+      "description": "Find deferred tools by keyword.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "query",
+        ],
+        "type": "object",
+      },
+      "name": "tool_search",
+      "type": "function",
+    },
+    {
+      "description": "Deploy the app.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "env": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "env",
+        ],
+        "type": "object",
+      },
+      "name": "mcp__ops__deploy",
+      "type": "function",
+    },
+  ],
+}
+`;
+
+exports[`golden: Render v1 conformance cases → AI SDK prompt render-thinking-block-replay 1`] = `
+{
+  "message": "continuation_unsupported: a scripted thinking part can't be sent to acme_chat",
+  "ok": false,
+}
+`;

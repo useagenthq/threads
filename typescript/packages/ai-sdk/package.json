@@ -1,0 +1,17 @@
+{
+  "name": "@threads/ai-sdk",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/provider": "4.0.17",
+    "@threads/core": "workspace:*",
+    "@types/json-schema": "7.0.15",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@threads/adapter-testkit": "workspace:*"
+  }
+}

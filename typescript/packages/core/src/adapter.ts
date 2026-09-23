@@ -7,6 +7,7 @@ export {
   type InputPart,
   type Json,
   JsonObject,
+  JsonValue,
   OutputPart,
   type ResultPart,
   type Usage,
