@@ -130,6 +130,26 @@ describe("options over overloads", () => {
   });
 });
 
+describe("overloads that differ only in return type", () => {
+  test("an early overload behind eight that differ only in return type is red", () => {
+    const start = pkg.indexOf("export declare function four(");
+    const end = pkg.indexOf("export type Model");
+    const later = [1, 2, 3, 4, 5, 6, 7, 8]
+      .map(
+        (n) =>
+          `export declare function four(options: { readonly a: string; readonly d?: number }): ${n};`,
+      )
+      .join("\n");
+    const overloads = `export declare function four(options: { readonly d?: number }): void;\n${later}\n`;
+    const verdict = compile({
+      pkg: pkg.slice(0, start) + overloads + pkg.slice(end),
+    });
+    expect(verdict.failed).toContain(
+      "export type function_four_overloads = Assert<AtMostFiveOverloads<typeof core.four>>;",
+    );
+  });
+});
+
 describe("optional methods and gaps", () => {
   test("an optional method as an optional property of the base type is green", () => {
     expect(compile({}).ok).toBe(true);

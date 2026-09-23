@@ -35,31 +35,41 @@ export type Req<T, K extends PropertyKey> = K extends keyof T
   : false;
 
 /**
- * The parameter lists of a function's last eight overloads. With fewer than eight, tsc fills the
- * leading slots with copies of the first overload, so every overload is in the window.
+ * A function's last eight overloads, each as its whole signature. With fewer than eight, tsc
+ * fills the leading slots with copies of the first overload, so every overload is in the window.
  */
 type Signatures<F> = F extends {
-  (...args: infer A1): unknown;
-  (...args: infer A2): unknown;
-  (...args: infer A3): unknown;
-  (...args: infer A4): unknown;
-  (...args: infer A5): unknown;
-  (...args: infer A6): unknown;
-  (...args: infer A7): unknown;
-  (...args: infer A8): unknown;
+  (...args: infer A1): infer R1;
+  (...args: infer A2): infer R2;
+  (...args: infer A3): infer R3;
+  (...args: infer A4): infer R4;
+  (...args: infer A5): infer R5;
+  (...args: infer A6): infer R6;
+  (...args: infer A7): infer R7;
+  (...args: infer A8): infer R8;
 }
-  ? [A1, A2, A3, A4, A5, A6, A7, A8]
+  ? [
+      (...args: A1) => R1,
+      (...args: A2) => R2,
+      (...args: A3) => R3,
+      (...args: A4) => R4,
+      (...args: A5) => R5,
+      (...args: A6) => R6,
+      (...args: A7) => R7,
+      (...args: A8) => R8,
+    ]
   : never;
 
 /**
  * At most five overloads: then the first four slots are copies of the first overload, and the
  * window holds every overload, so the option checks below see all of them. With more, the
- * leading slots differ and this fails. (It can't tell four identical consecutive overloads from
- * padding: a function declaring the same signature four times in a row is out of scope.)
+ * leading slots are different overloads and this fails. The one thing it can't tell from padding
+ * is four consecutive overloads with identical signatures (parameters and return type), which a
+ * package has no reason to declare; that is out of scope.
  */
 export type AtMostFiveOverloads<F> =
-  Signatures<F> extends [infer A1, infer A2, infer A3, infer A4, ...unknown[]]
-    ? [Equals<A1, A2>, Equals<A2, A3>, Equals<A3, A4>] extends [
+  Signatures<F> extends [infer S1, infer S2, infer S3, infer S4, ...unknown[]]
+    ? [Equals<S1, S2>, Equals<S2, S3>, Equals<S3, S4>] extends [
         true,
         true,
         true,
@@ -76,7 +86,10 @@ type OptionsAt<A, N extends number> = A extends readonly unknown[]
   : never;
 
 /** Every overload's options object, as a union (each member of a union options type counts). */
-type EachOptions<F, N extends number> = OptionsAt<Signatures<F>[number], N>;
+type EachOptions<F, N extends number> = OptionsAt<
+  Parameters<Signatures<F>[number]>,
+  N
+>;
 
 type AnyHas<U, K extends PropertyKey> = true extends (
   U extends unknown
