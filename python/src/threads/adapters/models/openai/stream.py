@@ -45,6 +45,8 @@ from threads.result import Ok
 
 _ARGS: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 _INCOMPLETE: dict[str, StopReason] = {"max_output_tokens": "max_tokens"}
+"""Any other incomplete reason (content_filter, max_messages, steered) is one the loop has no
+name for: other, which ends the turn with error."""
 
 
 class ProviderStreamError(Exception):

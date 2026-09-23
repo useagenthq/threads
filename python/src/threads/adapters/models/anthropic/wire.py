@@ -168,6 +168,8 @@ STOPS: dict[str, StopReason] = {
     "max_tokens": "max_tokens",
     "stop_sequence": "stop_sequence",
     "refusal": "refusal",
+    "pause_turn": "pause_turn",
+    "model_context_window_exceeded": "context_window_exceeded",
 }
 
 

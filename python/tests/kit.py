@@ -11,12 +11,12 @@ from pydantic import JsonValue
 
 from threads.log import BranchId, JsonObject, ThreadId, ToolCallData, ToolSpec
 from threads.loop.drafts import draft
-from threads.loop.model import LookupResult, LookupUnknown
+from threads.loop.model import LookupResult, LookupUnknown, Model
 from threads.loop.runtime import Runtime
-from threads.loop.scripted import ScriptedModel
 from threads.loop.tools import Dispatched, Invocation, Termination, ToolRunner
 from threads.permissions import Decision
 from threads.reduce import Fold
+from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import SqliteStore, StoredEvent, Writer
 from threads.store.lines import uuid7
@@ -94,7 +94,7 @@ async def open_store(path: str | Path = ":memory:") -> SqliteStore:
 async def start(
     store: SqliteStore,
     specs: Sequence[JsonValue],
-    model: ScriptedModel,
+    model: Model,
     tools: ToolRunner,
     clock: Clock,
 ) -> Runtime:
@@ -107,9 +107,9 @@ async def start(
         "agent_name": "test",
         "config_hash": "0" * 64,
         "instructions": "Test.",
-        "model": {"provider": "scripted", "name": "scripted-1"},
-        "model_params": {"max_tokens": 1024},
-        "adapter": {"name": "scripted", "version": "1", "settings": {}},
+        "model": to_json(model.info.model),
+        "model_params": dict(model.info.params),
+        "adapter": to_json(model.info.adapter),
         "tools": list(specs),
     }
     user = replace(draft("user_input", {"source": "api", "text": "go"}), actor=USER)
