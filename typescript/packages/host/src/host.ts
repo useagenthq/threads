@@ -3,6 +3,7 @@ import {
   type EventId,
   type Principal,
   type Result,
+  type Sandbox,
   type Store,
   storeConnection,
   ThreadId,
@@ -35,6 +36,8 @@ export type HostOptions = {
 export type Host = {
   /** Mount in Next, Hono, Bun.serve. */
   readonly fetch: (request: Request) => Promise<Response>;
+  /** The channel keys; each one's webhook is POST /channels/<key>/events. */
+  readonly channels: readonly string[];
   readonly startRun: (
     request: StartRunRequest,
     options: { readonly principal: Principal; readonly idempotencyKey: string },
@@ -60,6 +63,13 @@ export type Host = {
 };
 
 const TICK_MS = 1_000;
+
+/** The sandbox providers of a host's agents, for `threads gc` to release their resources. */
+const SANDBOXES = new WeakMap<Host, readonly Sandbox[]>();
+
+export function hostSandboxes(h: Host): readonly Sandbox[] {
+  return SANDBOXES.get(h) ?? [];
+}
 
 export function host(options: HostOptions): Host {
   const ctx = new HostContext(
@@ -112,7 +122,8 @@ export function host(options: HostOptions): Host {
     await ctx.stop();
   };
 
-  return {
+  const made: Host = {
+    channels: [...ctx.channels.keys()],
     fetch: async (request) => {
       const { pathname } = new URL(request.url);
       const channel = /^\/channels\/([^/]+)\/events$/.exec(pathname);
@@ -159,6 +170,11 @@ export function host(options: HostOptions): Host {
     stop,
     [Symbol.asyncDispose]: stop,
   };
+  SANDBOXES.set(
+    made,
+    [...ctx.agents.values()].flatMap((a) => a.runner.sandbox ?? []),
+  );
+  return made;
 }
 
 /** Every channel routes to a host agent, and its secrets resolve (missing_secret otherwise). */

@@ -216,6 +216,17 @@ async function runHost(name: string, input: unknown): Promise<void> {
     bodies.push(await response.text());
   }
   await h.stop();
+  const receipts = compare(want, statuses, bodies);
+  const tenants = new Set(requests.map((r) => r.principal.tenant));
+  expect(await inputsOf(store, receipts, tenants)).toBe(want.user_inputs);
+}
+
+/** Checks each answer; returns the distinct 202 receipts. */
+function compare(
+  want: z.infer<typeof HostExpected>,
+  statuses: readonly number[],
+  bodies: readonly string[],
+): ReadonlySet<string> {
   const receipts = new Set<string>();
   for (const [i, answer] of want.api.entries()) {
     expect(statuses[i]).toBe(answer.status);
@@ -227,25 +238,35 @@ async function runHost(name: string, input: unknown): Promise<void> {
     if (answer.code !== undefined) expect(body.error.code).toBe(answer.code);
   }
   // A failure never carries another request's receipt.
+  const runIds = [...receipts].map((r) => Receipt.parse(JSON.parse(r)).run_id);
   for (const [i, answer] of want.api.entries())
     if (answer.code !== undefined)
-      for (const receipt of receipts)
-        expect(bodies[i]).not.toContain(
-          Receipt.parse(JSON.parse(receipt)).run_id,
-        );
+      for (const runId of runIds) expect(bodies[i]).not.toContain(runId);
+  return receipts;
+}
+
+/** user_input events in the logs of every thread a receipt names. */
+async function inputsOf(
+  store: ReturnType<typeof sqlite>,
+  receipts: ReadonlySet<string>,
+  tenants: ReadonlySet<string>,
+): Promise<number> {
   let inputs = 0;
   for (const receipt of receipts) {
-    const { branch_id } = Receipt.parse(JSON.parse(receipt));
-    for (const tenant of new Set(requests.map((r) => r.principal.tenant))) {
+    const branch = z
+      .string()
+      .brand<"BranchId">()
+      .parse(Receipt.parse(JSON.parse(receipt)).branch_id);
+    for (const tenant of tenants) {
       const { log } = await openStore(tenantStore(store, tenant));
-      const read = log.read(z.string().brand<"BranchId">().parse(branch_id));
+      const read = log.read(branch);
       if (read.ok)
         inputs += knownEvents(read.value).filter(
           (e) => e.type === "user_input",
         ).length;
     }
   }
-  expect(inputs).toBe(want.user_inputs);
+  return inputs;
 }
 
 describe("host conformance", () => {

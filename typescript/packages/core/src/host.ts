@@ -37,6 +37,7 @@ export {
 export { turnEvents } from "./loop/turn";
 export { knownEvents } from "./reduce";
 export { err, ok, type Result } from "./result";
+export { collect, type Sandbox } from "./sandbox";
 export {
   FenceRefused,
   within,
@@ -51,5 +52,6 @@ export {
   type Writer,
 } from "./store";
 export { uuidv7 } from "./store/encode";
+export { deleteTenant, deleteThread, sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";
 export type { ChainEvent, LogError, VerifiedLog } from "./verify";
