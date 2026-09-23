@@ -3,9 +3,9 @@ view of every other case's log (spec/conformance/README.md, "What a runner does 
 
 A `reduce` case imports its log read-only into a fresh SQLite store, reads it back through the
 same boundary, and compares `state` and `projections`, or the error `code` and `seq`. A `render`
-case also replays every recorded request and renders the next one. policy, recover and stub
-and fork cases have their own runners; intake and host need parts not built yet and are skipped
-by name with the reason. Every other kind's log must still import to its pinned `state`.
+case also replays every recorded request and renders the next one. policy, recover, stub and
+fork cases have their own runners, and intake and host cases theirs (tests/host). Every other
+kind's log must still import to its pinned `state`.
 """
 
 import asyncio
@@ -40,13 +40,9 @@ EXPECTED_KEYS = frozenset(
     | {"render", "head_verified", "stubs", "responses", "inbox", "decisions", "projections"}
     | {"threads", "api", "user_inputs"}
 )
-LATER = {
-    "intake": "the host intake pipeline is not built yet",
-    "host": "the host HTTP API is not built yet",
-}
-OWN_RUNNER = frozenset({"policy", "recover", "stub", "fork"})
+OWN_RUNNER = frozenset({"policy", "recover", "stub", "fork", "intake", "host"})
 """Kinds another runner owns: policy (tests/permissions), recover and stub (tests/loop), fork
-(tests/thread)."""
+(tests/thread), intake and host (tests/host)."""
 
 
 def _error(error: ParseError) -> Err[str]:
@@ -82,7 +78,7 @@ def test_corpus_kinds_and_keys_are_known() -> None:
         meta, expected = load(case, "case.json"), load(case, "expected.json")
         assert set(meta) <= CASE_KEYS, case.name
         assert set(expected) <= EXPECTED_KEYS, case.name
-        assert meta["kind"] in {"reduce", "render", *LATER, *OWN_RUNNER}, case.name
+        assert meta["kind"] in {"reduce", "render", *OWN_RUNNER}, case.name
 
 
 @pytest.mark.parametrize("name", cases("reduce"))
@@ -186,7 +182,7 @@ def test_render_case(name: str) -> None:
     _history_is_prefix(case, events, result.value)
 
 
-READER_VIEW = [n for n in cases(*LATER, *OWN_RUNNER) if own(CASES / n, "log.jsonl").exists()]
+READER_VIEW = [n for n in cases(*OWN_RUNNER) if own(CASES / n, "log.jsonl").exists()]
 
 
 @pytest.mark.parametrize("name", READER_VIEW)
@@ -206,10 +202,3 @@ def test_reader_view(name: str) -> None:
     read = asyncio.run(import_and_read(case, log, now_of(meta)))
     assert isinstance(read, Ok), read
     assert read.value.state == verified.value.state
-
-
-@pytest.mark.parametrize("name", cases(*LATER))
-def test_later_kind_steps(name: str) -> None:
-    kind = load(CASES / name, "case.json")["kind"]
-    assert isinstance(kind, str)
-    pytest.skip(f"{kind}: {LATER[kind]}")

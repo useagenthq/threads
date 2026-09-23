@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 from threads.agents.agent import Agent
 from threads.agents.definition import Definition
 from threads.agents.intake import Intake
-from threads.agents.results import RunResult, StreamEvent
+from threads.agents.results import Failed, RunResult, StreamEvent
 from threads.agents.run import Emit, Input, RunOptions, execute
 from threads.agents.store import Store, open_store, scoped
 from threads.host.channel import ChannelAdapter
@@ -60,11 +60,14 @@ class Runner:
         self._stores: dict[str, Store] = {}
         self._tasks: dict[BranchId, asyncio.Task[RunResult[str]]] = {}
         self._wake: dict[BranchId, asyncio.Event] = {}
+        self._again: set[BranchId] = set()
+        self._pending: set[asyncio.Task[None]] = set()
         self.on_end: Callable[[Store, ThreadId], None] | None = None
         """Called when a run of a thread ends here: the channel intake drains what waited."""
-        self.last: dict[BranchId, RunResult[str]] = {}
-        """Each branch's latest result in this process: a run that ended without a log record
-        of its end (a refusal before any append) is answered from here."""
+        self.last: dict[BranchId, Failed] = {}
+        """Each branch's latest failure in this process: a run that failed with nothing in the
+        log to say so (a refusal, an unavailable model) is answered from here. Every other
+        outcome is read from the log."""
 
     def store(self, tenant: str) -> Store:
         """The tenant's view of the host store, one per tenant."""
@@ -131,9 +134,11 @@ class Runner:
         return task
 
     async def resume(self, store: Store, thread_id: ThreadId, branch: BranchId) -> None:
-        """Continues a thread a control unparked (or cancelled), unless a run is in flight. It
-        records nothing new; the loop takes up what the log holds."""
+        """Continues a thread a control unparked (or cancelled). It records nothing new; the
+        loop takes up what the log holds. A run still in flight (unwinding from the park the
+        control answered) is followed by the resume once it ends."""
         if self.running(branch):
+            self._again.add(branch)
             return
         bound = await self.bound(store, thread_id)
         if bound is None:
@@ -165,9 +170,18 @@ class Runner:
         if self._tasks.get(branch) is task:
             del self._tasks[branch]
         if not task.cancelled() and task.exception() is None:
-            self.last[branch] = task.result()
+            result = task.result()
+            if isinstance(result, Failed):
+                self.last[branch] = result
         self.wake(branch)
-        if self.on_end is not None and not task.cancelled():
+        if task.cancelled():
+            return
+        if branch in self._again:
+            self._again.discard(branch)
+            again = self.resume(thread.store, thread.id, branch)
+            self._pending.add(asyncio.get_running_loop().create_task(again))
+            self._pending = {t for t in self._pending if not t.done()}
+        elif self.on_end is not None:
             self.on_end(thread.store, thread.id)
 
     def wake(self, branch: BranchId) -> None:
