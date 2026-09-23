@@ -216,9 +216,9 @@ describe("permissions, parking and setup errors", () => {
       ok: false,
       error: { code: "duplicate_name" },
     });
-    expect(bot.run("hi", { store: sqlite(":memory:") })).rejects.toBeInstanceOf(
-      ConfigError,
-    );
+    await expect(
+      bot.run("hi", { store: sqlite(":memory:") }),
+    ).rejects.toBeInstanceOf(ConfigError);
   });
 });
 
@@ -227,7 +227,7 @@ describe("the model-request guard", () => {
     const inner = scriptedModel({ responses: [say("never")] });
     const real: Model = { info: inner.info, send: inner.send };
     const bot = agent({ model: real });
-    expect(bot.run("hi", { store: sqlite(":memory:") })).rejects.toThrow(
+    await expect(bot.run("hi", { store: sqlite(":memory:") })).rejects.toThrow(
       "model request guard",
     );
   });

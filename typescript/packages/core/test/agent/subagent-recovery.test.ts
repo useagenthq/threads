@@ -89,7 +89,7 @@ describe("recovery after a crash mid-subagent", () => {
       store,
       thread,
     });
-    expect(first).rejects.toThrow("process killed");
+    await expect(first).rejects.toThrow("process killed");
     await first.catch(() => undefined);
 
     const model = scriptedModel({ responses: [say("LGTM")] });
@@ -148,7 +148,7 @@ describe("recovery after a crash mid-subagent", () => {
     const { thread } = await lead.run("Hi", { store });
     const first = lead.run("Review the diff.", { store, thread });
     await first.catch(() => undefined);
-    expect(first).rejects.toThrow("process killed");
+    await expect(first).rejects.toThrow("process killed");
 
     register(reviewer, { child: real, target, enforce });
     const again = await lead.run("Thanks.", { store, thread });

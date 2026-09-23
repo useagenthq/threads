@@ -55,6 +55,10 @@ describe("exec in a real sh", () => {
     expect(run(["probe"], { K: "v w" }).stdout).toBe("K=v w\n");
   });
 
+  test("a tool PATH does not change where argv[0] is found", () => {
+    expect(run(["probe"], { PATH: "/nowhere" }).stdout).toBe("PATH=/nowhere\n");
+  });
+
   test("a shell builtin is not a command: only an executable file on PATH runs", () => {
     const builtin = run(["export"], {});
     expect(builtin.exit).toBe(127);
@@ -71,7 +75,7 @@ describe("exec in a real sh", () => {
 });
 
 // A fixed tree: nested dirs, a non-ASCII name, a space, an executable and an empty file. Python
-// pins the same hash (tests/adapters/sandboxes/test_posix_linux.py), so both languages agree.
+// pins the same hash (tests/adapters/sandboxes/test_posix_sh.py), so both languages agree.
 const TREE: readonly (readonly [string, string, number])[] = [
   ["a.txt", "hello\n", 0o644],
   ["dir/sub/run.sh", "#!/bin/sh\necho hi\n", 0o755],

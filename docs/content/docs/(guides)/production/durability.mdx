@@ -72,7 +72,6 @@ const charge = tool({
   name: "charge_card",
   description: "Charge the customer's card.",
   input: z.object({ amount: z.number() }),
-  runs: "host",
   effect: "idempotent",
   dedupWindowMs: 24 * 60 * 60 * 1000, // the provider dedups a key for 24 hours
   execute: async ({ amount }, ctx) => payments.charge(amount, ctx.effectKey ?? ""),
@@ -82,7 +81,6 @@ const refund = tool({
   name: "refund",
   description: "Refund a charge.",
   input: z.object({ amount: z.number() }),
-  runs: "host",
   effect: "reconcilable",
   reconcile: {
     finality: "final",
@@ -98,7 +96,6 @@ const sendEmail = tool({
   name: "send_email",
   description: "Email the customer.",
   input: z.object({ to: z.string(), body: z.string() }),
-  runs: "host",
   // no effect declared: unguarded, so a crash mid-send parks for a human
   execute: async ({ to, body }) => mailer.send(to, body),
 });
@@ -125,7 +122,6 @@ charge = tool(
     name="charge_card",
     description="Charge the customer's card.",
     input=Amount,
-    runs="host",
     effect="idempotent",
     dedup_window_ms=24 * 60 * 60 * 1000,  # the provider dedups a key for 24 hours
     execute=do_charge,
@@ -135,7 +131,6 @@ refund = tool(
     name="refund",
     description="Refund a charge.",
     input=Amount,
-    runs="host",
     effect="reconcilable",
     reconcile=Reconcile(lookup=find_refund, finality="final"),
     execute=do_refund,
@@ -145,7 +140,6 @@ send_email = tool(
     name="send_email",
     description="Email the customer.",
     input=Email,
-    runs="host",
     # no effect declared: unguarded, so a crash mid-send parks for a human
     execute=do_send,
 )

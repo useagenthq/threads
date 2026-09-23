@@ -58,9 +58,9 @@ describe("budget coverage", () => {
       ok: false,
       error: { code: "budget_unenforceable" },
     });
-    expect(a.run("go", { store: sqlite(":memory:") })).rejects.toBeInstanceOf(
-      ConfigError,
-    );
+    await expect(
+      a.run("go", { store: sqlite(":memory:") }),
+    ).rejects.toBeInstanceOf(ConfigError);
   });
 
   test.each([0, -1])(
@@ -80,7 +80,7 @@ describe("budget coverage", () => {
 
   test("a run budget the model can't bound is refused at run start", async () => {
     const a = agent({ model: unbounded([say("done")]) });
-    expect(
+    await expect(
       a.run("go", {
         store: sqlite(":memory:"),
         budget: { max_output_tokens: 150 },
@@ -178,7 +178,7 @@ describe("budget coverage", () => {
       subagents: [worker],
     });
     expect(await lead.check()).toEqual({ ok: true, value: undefined });
-    expect(
+    await expect(
       lead.run("go", {
         store: sqlite(":memory:"),
         budget: { max_output_tokens: 5 },

@@ -205,7 +205,7 @@ describe("perform", () => {
   test("outside within() or behind a refusing fence nothing is sent", async () => {
     const t = transport(() => json({ ok: true, channel: "C1", ts: "9.9" }));
     const slack = adapter({ fetch: t.fetch });
-    expect(
+    await expect(
       slack.perform(message, "k", { botToken: TOKEN }),
     ).rejects.toBeInstanceOf(FenceRefused);
     const stale: SandboxContext = {

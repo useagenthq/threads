@@ -19,7 +19,6 @@ const getWeather = tool({
     city: z.string().describe("City name, e.g. Paris"),
     unit: z.enum(["c", "f"]).default("c"),
   }),
-  runs: "host",
   effect: "read_only",
   execute: async ({ city, unit }) => ({ city, unit, temperature: 21 }),
 });
@@ -42,7 +41,6 @@ weather_tool = tool(
     name="get_weather",
     description="Get the current weather for a city.",
     input=WeatherInput,
-    runs="host",
     effect="read_only",
     execute=get_weather,
 )
@@ -62,8 +60,8 @@ Then pass it to an agent with `tools: [getWeather]` (`tools=[weather_tool]` in P
 <Field name="input" type="schema" required>
   A Zod schema (TypeScript) or a Pydantic model class (Python). Unknown keys are rejected.
 </Field>
-<Field name="runs" type='"host"' required>
-  Where the tool runs. Tools run in your process today, so this is always `"host"`.
+<Field name="runs" type='"host" | "sandbox"' default="host">
+  Where the tool runs. Tools run in your process today, so leave it out. `"sandbox"` is reserved and is a setup error.
 </Field>
 <Field name="execute" type="(input, ctx) => Promise<Output>" required>
   Your function. It gets the parsed input and a [run context](/docs/reference/types/RunContext) with your `deps`. A string result is shown to the model as is; anything else as JSON.
@@ -133,7 +131,6 @@ const charge = tool({
   name: "charge_card",
   description: "Charge the customer's card.",
   input: z.object({ amount: z.int().positive() }),
-  runs: "host",
   effect: "idempotent",
   dedupWindowMs: 24 * 60 * 60 * 1000, // the provider dedups a key for 24 hours
   execute: async ({ amount }, ctx) => payments.charge(amount, ctx.effectKey ?? ""),
@@ -152,7 +149,6 @@ charge_card = tool(
     name="charge_card",
     description="Charge the customer's card.",
     input=ChargeInput,
-    runs="host",
     effect="idempotent",
     dedup_window_ms=24 * 60 * 60 * 1000,  # the provider dedups a key for 24 hours
     execute=charge,
@@ -174,7 +170,6 @@ const chargeChecked = tool({
   name: "charge_card_checked",
   description: "Charge the customer's card.",
   input: z.object({ amount: z.int().positive() }),
-  runs: "host",
   effect: "reconcilable",
   execute: async ({ amount }, ctx) => payments.charge(amount, ctx.effectKey ?? ""),
   reconcile: {
@@ -203,7 +198,6 @@ charge_card_checked = tool(
     name="charge_card_checked",
     description="Charge the customer's card.",
     input=ChargeInput,
-    runs="host",
     effect="reconcilable",
     execute=charge,
     # "final": a not_found answer proves the charge never happened
@@ -228,7 +222,6 @@ const sendEmail = tool({
   name: "send_email",
   description: "Send an email to a customer.",
   input: z.object({ to: z.email(), body: z.string() }),
-  runs: "host",
   execute: async ({ to, body }) => {
     await mailer.send(to, body);
     return "sent";
@@ -249,7 +242,6 @@ send_email = tool(
     name="send_email",
     description="Send an email to a customer.",
     input=EmailInput,
-    runs="host",
     execute=send,
 )
 ```
@@ -269,7 +261,6 @@ const finish = tool({
   name: "finish",
   description: "Call when the task is done.",
   input: z.object({ summary: z.string() }),
-  runs: "host",
   effect: "read_only",
   endsTurn: true,
   execute: async ({ summary }) => summary,
@@ -284,7 +275,6 @@ finish = tool(
     name="finish",
     description="Call when the task is done.",
     input=FinishInput,
-    runs="host",
     effect="read_only",
     ends_turn=True,
     execute=finish_run,

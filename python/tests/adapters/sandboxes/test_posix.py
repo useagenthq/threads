@@ -1,16 +1,20 @@
 """The sandbox-side scripts every adapter shares: the manifest parser is a trust boundary (the
 guest writes its input), and the exec wrapper's argv carries env names, never values."""
 
+import asyncio
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+from sandbox_kit import OPEN
 
-from threads.adapters.sandboxes.posix import WRAPPER, parse_manifest, stdin_path, wrap
+from threads.adapters.sandboxes.posix import WRAPPER, parse_manifest, run, stdin_path, wrap
 from threads.result import Err, Ok
 from threads.sandbox.manifest import ManifestEntry, in_order, manifest_hash, manifest_of
+from threads.sandbox.protocol import ExecOutput, SandboxContext, SandboxError
 
 _DIGEST = "a" * 64
 VECTOR = (
@@ -82,12 +86,95 @@ def test_a_malformed_manifest_is_refused(out: bytes) -> None:
 
 
 def test_the_wrapper_argv_names_env_but_never_carries_values() -> None:
-    argv = wrap(["printenv", "X"], {"B": "secret-b", "A": "secret-a"}, stdin_path("key"))
-    assert argv[:5] == ("/bin/sh", "-c", WRAPPER, "threads", "A B")
-    assert argv[5] == stdin_path("key")
-    assert argv[6:] == ("printenv", "X")
-    assert not any("secret" in arg for arg in argv)
-    with pytest.raises(ValueError, match="variable name"):
+    wrapped = wrap(["printenv", "X"], {"B": "secret-b", "A": "secret-a"}, stdin_path("key"))
+    assert wrapped.argv[:5] == ("/bin/sh", "-c", WRAPPER, "threads", "A B")
+    assert wrapped.argv[5] == stdin_path("key")
+    assert wrapped.argv[6:] == ("printenv", "X")
+    assert not any("secret" in arg for arg in wrapped.argv)
+    # The values travel through the provider API under carrier names the wrapper shell never
+    # interprets itself.
+    assert wrapped.env == {"__t_v_A": "secret-a", "__t_v_B": "secret-b"}
+    with pytest.raises(ValueError, match="not a shell name"):
         wrap(["x"], {"BAD NAME": "v"})
     with pytest.raises(ValueError, match="needs a command"):
         wrap([], {})
+    with pytest.raises(ValueError, match="reserved"):
+        wrap(["x"], {"__t_PATH": "/nowhere"})
+
+
+class _Recording:
+    """A provider session that records what reached it."""
+
+    def __init__(self) -> None:
+        self.sent: list[str] = []
+
+    async def start(
+        self,
+        argv: Sequence[str],
+        env: Mapping[str, str],
+        cwd: str,
+        context: SandboxContext,
+        process_key: str | None = None,
+    ) -> Ok[ExecOutput] | Err[SandboxError]:
+        self.sent.append("start")
+        raise AssertionError("a caller bug must not start")
+
+    async def upload(
+        self, path: str, data: bytes, context: SandboxContext
+    ) -> Ok[None] | Err[SandboxError]:
+        self.sent.append(path)
+        return Ok(None)
+
+
+@pytest.mark.parametrize(
+    ("command", "env", "error"),
+    [
+        ([], {}, "needs a command"),
+        (["printenv"], {"BAD NAME": "v"}, "not a shell name"),
+        (["printenv"], {"__t_PATH": "/nowhere"}, "reserved"),
+    ],
+)
+def test_a_caller_bug_raises_and_sends_nothing(
+    command: list[str], env: dict[str, str], error: str
+) -> None:
+    session = _Recording()
+    bug = run(session, command, OPEN, process_key="k", cwd="/workspace", env=env, stdin=b"x")
+    with pytest.raises(ValueError, match=error):
+        asyncio.run(bug)
+    assert session.sent == []
+
+
+class _Mutating:
+    """A provider whose stdin upload is where a caller changes the inputs it passed."""
+
+    def __init__(self, command: list[str], env: dict[str, str]) -> None:
+        self.command, self.env = command, env
+        self.started: tuple[Sequence[str], Mapping[str, str]] | None = None
+
+    async def start(
+        self,
+        argv: Sequence[str],
+        env: Mapping[str, str],
+        cwd: str,
+        context: SandboxContext,
+        process_key: str | None = None,
+    ) -> Ok[ExecOutput] | Err[SandboxError]:
+        self.started = (argv, env)
+        return Err(SandboxError("unavailable", "test: stop here"))
+
+    async def upload(
+        self, path: str, data: bytes, context: SandboxContext
+    ) -> Ok[None] | Err[SandboxError]:
+        self.command.append("--changed")
+        self.env["__t_keep"] = "x"
+        return Ok(None)
+
+
+def test_exec_sends_the_inputs_it_checked_even_if_the_caller_changes_them() -> None:
+    command, env = ["printenv"], {"K": "v"}
+    session = _Mutating(command, env)
+    asyncio.run(run(session, command, OPEN, process_key="k", cwd="/", env=env, stdin=b"x"))
+    assert session.started is not None
+    argv, sent_env = session.started
+    assert argv[-1] == "printenv"
+    assert dict(sent_env) == {"__t_v_K": "v"}

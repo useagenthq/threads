@@ -1,11 +1,13 @@
 """The fake sandbox keeps the adapter contract (spec/api.json `Sandbox`, `SandboxSession`)."""
 
 import asyncio
+from dataclasses import dataclass, field
 
 import pytest
 from pydantic import JsonValue, ValidationError
 from sandbox_kit import OPEN, KitContext
 
+from threads.log import ParseError
 from threads.loop.model import Found, LookupUnknown, NotFound
 from threads.result import Err, Ok
 from threads.sandbox import FakeSandbox, SandboxSession, fake_sandbox
@@ -64,6 +66,45 @@ def test_exec_is_scripted_per_command_with_provider_dedup() -> None:
         assert await missing.value.exit_code == NOT_FOUND_EXIT
         assert await s.terminate("k-new", OPEN) == Ok("terminated")
         assert await s.terminate("never-ran", OPEN) == Ok("already_exited")
+
+    asyncio.run(main())
+
+
+def test_an_empty_command_or_a_bad_or_reserved_env_name_is_a_caller_bug() -> None:
+    async def main() -> None:
+        s = await session(fake_sandbox({}))
+        with pytest.raises(ValueError, match="needs a command"):
+            await s.exec([], OPEN, process_key="k")
+        with pytest.raises(ValueError, match="not a shell name"):
+            await s.exec(["ls"], OPEN, process_key="k", env={"BAD NAME": "x"})
+        with pytest.raises(ValueError, match="reserved"):
+            await s.exec(["ls"], OPEN, process_key="k", env={"__t_keep": "x"})
+
+    asyncio.run(main())
+
+
+@dataclass
+class _ChangingInputs(KitContext):
+    """A context whose fence changes the caller's exec inputs, as a caller could mid-call."""
+
+    command: list[str] = field(default_factory=list[str])
+    env: dict[str, str] = field(default_factory=dict[str, str])
+
+    async def fence(self) -> Ok[None] | Err[ParseError]:
+        self.command[:] = ["nope"]
+        self.env["BAD NAME"] = "x"
+        return await super().fence()
+
+
+def test_exec_runs_what_it_checked_even_if_the_caller_changes_it_during_the_fence() -> None:
+    async def main() -> None:
+        s = await session(fake_sandbox({"tools": {"make": {"output": "built"}}}))
+        command, env = ["make"], {"A": "1"}
+        ran = await s.exec(
+            command, _ChangingInputs(command=command, env=env), process_key="k", env=env
+        )
+        assert isinstance(ran, Ok)
+        assert b"".join([c async for c in ran.value.stdout]) == b"built"
 
     asyncio.run(main())
 

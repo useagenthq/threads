@@ -42,12 +42,21 @@ async function configHash(thread: ThreadRef): Promise<string | undefined> {
 
 describe("tool() runs", () => {
   test("a tool without runs is a host tool", async () => {
+    const heard: string[] = [];
+    const echo = tool({
+      ...base,
+      execute: async ({ text }) => {
+        heard.push(text);
+        return text;
+      },
+    });
     const bot = agent({
       model: scriptedModel({ responses: [use("hello"), say("done")] }),
-      tools: [tool(base)],
+      tools: [echo],
     });
     const result = await bot.run("echo", { store: sqlite(":memory:") });
     expect(result).toMatchObject({ status: "completed", output: "done" });
+    expect(heard).toEqual(["hello"]);
   });
 
   test("omitted and explicit host runs pin identical bytes", async () => {
@@ -83,7 +92,10 @@ describe("tool() runs", () => {
     });
     expect(await bot.check()).toMatchObject({
       ok: false,
-      error: { code: "capability_missing" },
+      error: {
+        code: "capability_missing",
+        message: expect.stringContaining("runs"),
+      },
     });
     await expect(
       bot.run("echo", { store: sqlite(":memory:") }),

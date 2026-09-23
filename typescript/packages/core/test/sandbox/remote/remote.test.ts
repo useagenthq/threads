@@ -47,7 +47,7 @@ ledgerSuite(remoteHarness("remote kit", adapter));
 
 describe("the fence at the transport", () => {
   test("outside an operation nothing is sent", async () => {
-    expect(fenceHere()).rejects.toThrow(FenceRefused);
+    await expect(fenceHere()).rejects.toThrow(FenceRefused);
   });
 
   test("inside one, the context decides; a refusal the SDK rethrew as its own is still found", async () => {

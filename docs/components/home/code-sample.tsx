@@ -15,7 +15,6 @@ const getWeather = tool({
   name: "get_weather",
   description: "Get the weather for a city.",
   input: z.object({ city: z.string() }),
-  runs: "host",
   effect: "read_only",
   execute: async ({ city }) => \`It is sunny in \${city}.\`,
 });
@@ -57,7 +56,6 @@ weather_tool = tool(
     name="get_weather",
     description="Get the weather for a city.",
     input=WeatherInput,
-    runs="host",
     effect="read_only",
     execute=get_weather,
 )

@@ -3,7 +3,7 @@ import type { Sandbox, SandboxSession } from "../../../src/sandbox";
 import { execute, manifestHash } from "../../../src/sandbox";
 import { memoryArtifacts } from "../../../src/store/artifacts";
 import { code, unwrap } from "../../store/helpers";
-import { CTX } from "../context";
+import { CTX, changingInputs, type MutableCall } from "../context";
 import { created, drained, LOST_CLAIM, run, staleContext } from "./kit";
 import type { World } from "./world";
 
@@ -55,6 +55,94 @@ export function contractSuite(name: string, make: () => Contract): void {
       );
       const stdin = new TextEncoder().encode("from stdin");
       expect((await run(box, ["cat"], { stdin })).stdout).toBe("from stdin");
+    });
+
+    test("a caller bug throws and sends nothing: empty command, bad or reserved env name", async () => {
+      const { sandbox, world, sandboxTraffic } = make();
+      const box = await created(sandbox);
+      const machine = world.machine(box.id);
+      const before = {
+        scripts: machine.scripts.length,
+        files: machine.files.size,
+        traffic: sandboxTraffic(),
+      };
+      const stdin = new TextEncoder().encode("never sent");
+      const cases = [
+        { command: [], env: {}, error: "exec needs a command" },
+        {
+          command: ["printenv"],
+          env: { "BAD NAME": "v" },
+          error: "not a shell name",
+        },
+        {
+          command: ["printenv"],
+          env: { __t_PATH: "/nowhere" },
+          error: "reserved",
+        },
+      ] as const;
+      for (const { command, env, error } of cases)
+        await expect(
+          box.exec(command, CTX, { processKey: "bug", env, stdin }),
+        ).rejects.toThrow(error);
+      expect({
+        scripts: machine.scripts.length,
+        files: machine.files.size,
+        traffic: sandboxTraffic(),
+      }).toEqual(before);
+    });
+
+    test("exec runs what it checked, even if the caller changes it mid-call", async () => {
+      const { sandbox } = make();
+      const box = await created(sandbox);
+      const call: MutableCall = {
+        command: ["cat"],
+        options: {
+          processKey: "held",
+          cwd: "/workspace",
+          env: {},
+          stdin: new TextEncoder().encode("from stdin"),
+        },
+      };
+      const out = unwrap(
+        await box.exec(call.command, changingInputs(call), call.options),
+      );
+      expect(await drained(out)).toEqual({
+        exit: 0,
+        stdout: "from stdin",
+        stderr: "",
+      });
+    });
+
+    test("a timeout terminates the key the process started under, whatever the caller changes", async () => {
+      const { sandbox } = make();
+      const box = await created(sandbox);
+      const terminated = Promise.withResolvers<string>();
+      const watched: SandboxSession = {
+        ...box,
+        terminate: async (processKey, context) => {
+          terminated.resolve(processKey);
+          return box.terminate(processKey, context);
+        },
+      };
+      const call: MutableCall = {
+        command: ["sleep"],
+        options: {
+          processKey: "k-held",
+          cwd: "/workspace",
+          env: {},
+          timeoutMs: 5,
+        },
+      };
+      const ctx = changingInputs(call);
+      const ran = await execute(
+        watched,
+        call.command,
+        ctx,
+        call.options,
+        memoryArtifacts(),
+      );
+      expect(code(ran)).toBe("timeout");
+      expect(await terminated.promise).toBe("k-held");
     });
 
     test("terminate kills what the provider tracks but never confirms it", async () => {

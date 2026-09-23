@@ -1,5 +1,6 @@
 import { SandboxId, SnapshotId } from "../../log";
 import { err, ok } from "../../result";
+import { admitExec } from "../admit";
 import { manifestHash } from "../fake";
 import type {
   ExecOutput,
@@ -98,8 +99,13 @@ export function remoteSession(
       unavailable,
     );
 
-  const exec: SandboxSession["exec"] = (command, context, options) =>
-    guarded<ExecOutput, Failure<"timeout" | "invalid_path" | "unavailable">>(
+  const exec: SandboxSession["exec"] = async (given, context, givenOptions) => {
+    // Before `guarded`, which would turn a caller bug into a typed `unavailable`.
+    const { command, options } = admitExec(given, givenOptions);
+    return guarded<
+      ExecOutput,
+      Failure<"timeout" | "invalid_path" | "unavailable">
+    >(
       context,
       async () => {
         const cwd = sandboxPath(options.cwd ?? WORKSPACE);
@@ -112,7 +118,7 @@ export function remoteSession(
         const script = execScript({
           command,
           cwd,
-          env: options.env ?? {},
+          env: options.env,
           processKey: options.processKey,
           stdin: options.stdin !== undefined,
         });
@@ -138,6 +144,7 @@ export function remoteSession(
       },
       unavailable,
     );
+  };
 
   const upload: SandboxSession["upload"] = (path, data, context) =>
     guarded<void, FileFailure>(

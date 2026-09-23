@@ -118,9 +118,11 @@ export async function execute(
   artifacts: ArtifactStore,
   keep: number = PREVIEW_BYTES,
 ): Promise<Result<ExecResult, ExecFailure>> {
+  // Read before the await: the session runs a copy, and the deadline and the kill must match it
+  // even if the caller changes its options mid-call.
+  const { timeoutMs, processKey } = options;
   const started = await session.exec(command, context, options);
   if (!started.ok) return started;
-  const { timeoutMs } = options;
   const collected = collect(started.value, artifacts, keep);
   if (timeoutMs === undefined) return collected;
   // After a timeout nobody awaits it; a stream that breaks later is not a crash.
@@ -132,7 +134,7 @@ export async function execute(
     deadline.resolve(
       err({ code: "timeout", message: `no exit within ${timeoutMs} ms` }),
     );
-    void session.terminate(options.processKey, context);
+    void session.terminate(processKey, context);
   }, timeoutMs);
   try {
     return await Promise.race([collected, deadline.promise]);

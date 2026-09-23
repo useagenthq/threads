@@ -202,7 +202,8 @@ class FakeBackend:
         self.argvs.append(tuple(argv))
         match tuple(argv):
             case ("/bin/sh", "-c", posix.WRAPPER, _, keep, stdin, *command):
-                seen = {k: v for k, v in env.items() if k in keep.split()}
+                # As the wrapper does: each kept value arrives under its `__t_v_` carrier.
+                seen = {k: env[f"__t_v_{k}"] for k in keep.split() if f"__t_v_{k}" in env}
                 fed = box.files.get(stdin, b"") if stdin else b""
                 proc = self._command(box, command, seen, fed)
             case ("/bin/sh", "-c", posix.MANIFEST):

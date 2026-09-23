@@ -1,0 +1,8 @@
+language js
+
+`$assertion.rejects` as $call where {
+  $assertion <: `expect($_)`,
+  not $call <: within `await $_` ,
+  not $call <: within `return $_` ,
+  register_diagnostic(span=$call, message="Await this expect(...).rejects: unawaited, a failed rejection assertion never fails the test.")
+}

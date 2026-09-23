@@ -119,7 +119,7 @@ describe("a ledgered snapshot capture", () => {
         };
       },
     };
-    expect(
+    await expect(
       captureSnapshot(f.store.ledger, f.writer, dies, box),
     ).rejects.toThrow(Crash);
     await Bun.sleep(0);
@@ -147,7 +147,7 @@ describe("a ledgered snapshot capture", () => {
         throw new Crash("the host died");
       },
     };
-    expect(
+    await expect(
       captureSnapshot(f.store.ledger, f.writer, dies, box),
     ).rejects.toThrow(Crash);
     await Bun.sleep(0);

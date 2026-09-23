@@ -53,7 +53,7 @@ async def exec(
 </Tabs>
 
 <Field name="command" type={"readonly string[]"} required>
-  The program and its arguments, run directly as argv, not as a shell string. Pass ["/bin/sh", "-c", script] to use a shell.
+  The program and its arguments, run directly as argv, not as a shell string. Pass ["/bin/sh", "-c", script] to use a shell. An empty command is a caller bug: exec throws (Python ValueError) before anything reaches the sandbox.
 </Field>
 
 <Field name="context" type={"SandboxContext"} required>
@@ -65,7 +65,7 @@ async def exec(
 </Field>
 
 <Field name="env" type={"Record<string, string>"} default={"{}"}>
-  Exactly this env; nothing inherited.
+  Exactly this env; nothing inherited. Each name is a shell variable name ([A-Za-z_][A-Za-z0-9_]*) and must not start with __t_, which the sandbox-side wrapper keeps for itself; any other name is a caller bug: exec throws (Python ValueError) before anything is sent.
 </Field>
 
 <Field name="timeoutMs / timeout_ms" type={"PosInt"}>

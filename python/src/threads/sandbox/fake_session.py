@@ -10,6 +10,7 @@ from pydantic import ConfigDict, JsonValue, with_config
 from threads.log import SnapshotData
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
+from threads.sandbox.admit import admit_exec
 from threads.sandbox.protocol import (
     NO_ENV,
     ExecOutput,
@@ -65,8 +66,7 @@ class FakeSession:
         timeout_ms: int | None = None,
         stdin: bytes | None = None,
     ) -> Ok[ExecOutput] | Err[SandboxError]:
-        if not command:
-            raise ValueError("exec needs a command")
+        command, env = admit_exec(command, env)
         bad = invalid_path(cwd) or await refused(context)
         if bad is not None:
             return bad

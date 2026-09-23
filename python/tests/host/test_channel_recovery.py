@@ -49,10 +49,12 @@ def text(reply: str) -> JsonValue:
 @dataclass
 class Replies:
     """Renders a final response as one op; `crash` makes the first render die, as a host
-    that stops right after the turn ended. `hold` keeps each send waiting until it is set;
-    `sending` is set once a send has started."""
+    that stops right after the turn ended; `crashed` is set when it has. `hold` keeps each send
+    waiting until it is set; `sending` is set once a send has started."""
 
     crash: bool = False
+    # Render may run off the event loop, so a thread-safe flag.
+    crashed: threading.Event = field(default_factory=threading.Event)
     hold: asyncio.Event | None = None
     sending: asyncio.Event = field(default_factory=asyncio.Event)
     sent: list[JsonObject] = field(default_factory=list[JsonObject])
@@ -77,6 +79,7 @@ class Replies:
             return ()
         if self.crash:
             self.crash = False
+            self.crashed.set()
             raise _CrashError
         said = "".join(p.text for p in event.data.content if p.type == "text")
         return ({"text": said},)
@@ -130,8 +133,7 @@ async def crashed(store: Store) -> None:
     bot = agent(model=scripted_model({"responses": [text("Hi there.")]}))
     async with host(store=store, agents={"bot": bot}, channels={"fake": crashing}) as served:
         await served.receive("fake", webhook("d1", "m1", "hello"))
-        await until(lambda: _consumed(store))
-        await asyncio.sleep(0.05)
+        await until(lambda: _crashed(crashing))
     assert crashing.sent == []
 
 
@@ -185,6 +187,10 @@ async def _consumed(store: Store) -> bool:
         lambda c: c.execute("SELECT count(*) FROM inbox WHERE consumed_seq IS NULL").fetchone()
     )
     return rows is not None and rows[0] == 0
+
+
+async def _crashed(channel: Replies) -> bool:
+    return channel.crashed.is_set()
 
 
 async def _sent(channel: Replies, count: int) -> bool:

@@ -9,7 +9,7 @@ import {
 } from "../../src/sandbox";
 import { memoryArtifacts } from "../../src/store";
 import { unwrap } from "../store/helpers";
-import { CTX } from "./context";
+import { CTX, changingInputs, type MutableCall } from "./context";
 
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 const text = (b: Uint8Array): string => new TextDecoder().decode(b);
@@ -184,6 +184,34 @@ describe("scripted exec", () => {
       "",
       "ls: command not found\n",
     ]);
+  });
+
+  test("a caller bug throws: empty command, bad or reserved env name", async () => {
+    const s = await session(script);
+    await expect(s.exec([], CTX, { processKey: "k" })).rejects.toThrow(
+      "exec needs a command",
+    );
+    for (const [name, error] of [
+      ["BAD NAME", "not a shell name"],
+      ["__t_keep", "reserved"],
+    ] as const)
+      await expect(
+        s.exec(["ls"], CTX, { processKey: "k", env: { [name]: "x" } }),
+      ).rejects.toThrow(error);
+  });
+
+  test("exec runs what it checked, even if the caller changes it during the fence", async () => {
+    const s = await session(script);
+    const call: MutableCall = {
+      command: ["deploy"],
+      options: { processKey: "b:held", cwd: "/workspace", env: { A: "1" } },
+    };
+    const ctx = changingInputs(call);
+    const ran = unwrap(
+      await execute(s, call.command, ctx, call.options, memoryArtifacts()),
+    );
+    expect(ran.stdout).toBe("deployed");
+    expect(unwrap(await s.terminate("b:held", CTX))).toBe("terminated");
   });
 
   test("large output keeps head and tail previews and spills the whole to an artifact", async () => {

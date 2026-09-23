@@ -174,7 +174,6 @@ const lookupOrder = tool({
   name: "lookup_order",
   description: "Find an order's status by id.",
   input: z.object({ id: z.string() }),
-  runs: "host",
   effect: "read_only",
   execute: async ({ id }, ctx: RunContext<Deps>) =>
     ctx.deps?.db.get(id) ?? "not found",

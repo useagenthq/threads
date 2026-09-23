@@ -118,7 +118,7 @@ async function operate(
     holderId: "conformance-runner",
   });
   if (used !== sandbox) {
-    expect(forking).rejects.toThrow(Crash);
+    await expect(forking).rejects.toThrow(Crash);
     await forking.catch(() => undefined);
     f.clock.now += LEASE_TTL_MS + 1; // the dead process's lease lapses
     const failed = unwrap(await recoverForks(f.store, sandbox, "restarted"));

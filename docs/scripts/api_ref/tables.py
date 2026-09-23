@@ -70,7 +70,6 @@ DEV_SERVER = "http://localhost:8787"
 
 # Extra sentences where today's behavior is narrower than the contract.
 NOTES: dict[Member, str] = {
-    ("tool", "runs"): 'Only "host" is supported today; "sandbox" is a setup error.',
     ("mcp", "runs"): 'Only "host" is supported today; "sandbox" is a setup error.',
     ("agent", "egress"): "Host allowlists are not supported yet in either language: use [] "
     '(deny-all) or "unenforced".',

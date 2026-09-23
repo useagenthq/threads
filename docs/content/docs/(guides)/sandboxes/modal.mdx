@@ -21,7 +21,7 @@ worker = agent(
 )
 ```
 
-`image_id` is a built Modal image (`im-...`). Build it once at setup, for example with `modal.Image.debian_slim().build(app)`. The image needs `/bin/sh` and the GNU tools `sed`, `find`, `stat` and `sha256sum`.
+`image_id` is a built Modal image (`im-...`). Build it once at setup, for example with `modal.Image.debian_slim().build(app)`. The image needs `/bin/sh` and the GNU tools `env`, `find`, `stat` and `sha256sum`.
 
 ## Options
 

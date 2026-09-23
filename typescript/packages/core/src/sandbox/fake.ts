@@ -2,6 +2,7 @@ import { sha256Hex } from "../hash";
 import { canonicalize, SandboxId, SnapshotId } from "../log";
 import type { LookupResult } from "../model/protocol";
 import { err, ok, type Result } from "../result";
+import { admitExec } from "./admit";
 import { builtin, type Ran, toolName } from "./fake-shell";
 import type {
   ExecOutput,
@@ -157,7 +158,8 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
     trees.push(tree);
     const self: SandboxSession = {
       id: SandboxId.parse(id),
-      exec: async (command, context, options) => {
+      exec: async (given, context, givenOptions) => {
+        const { command, options } = admitExec(given, givenOptions);
         const fenced = await context.fence();
         if (!fenced.ok) return fenced;
         execs.push({ command: [...command], env: { ...options.env } });

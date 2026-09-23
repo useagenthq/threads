@@ -2761,7 +2761,7 @@
           "doc": "A timeout kills the whole process group.",
           "async": true,
           "params": [
-            {"name": "command", "kind": "positional", "type": {"array": {"prim": "string"}}, "required": true, "doc": "The program and its arguments, run directly as argv, not as a shell string. Pass [\"/bin/sh\", \"-c\", script] to use a shell."},
+            {"name": "command", "kind": "positional", "type": {"array": {"prim": "string"}}, "required": true, "doc": "The program and its arguments, run directly as argv, not as a shell string. Pass [\"/bin/sh\", \"-c\", script] to use a shell. An empty command is a caller bug: exec throws (Python ValueError) before anything reaches the sandbox."},
             {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before starting the process."},
             {"name": "cwd", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "/workspace", "doc": "The absolute working directory inside the sandbox. A path outside the sandbox tree is invalid_path."},
             {
@@ -2770,7 +2770,7 @@
               "type": {"map": {"prim": "string"}},
               "required": false,
               "default": {},
-              "doc": "Exactly this env; nothing inherited."
+              "doc": "Exactly this env; nothing inherited. Each name is a shell variable name ([A-Za-z_][A-Za-z0-9_]*) and must not start with __t_, which the sandbox-side wrapper keeps for itself; any other name is a caller bug: exec throws (Python ValueError) before anything is sent."
             },
             {
               "name": "timeout_ms",

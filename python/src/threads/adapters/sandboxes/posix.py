@@ -1,8 +1,9 @@
 """What every sandbox adapter runs inside its sandbox, over the provider's own exec.
 
-- exec starts the command through a wrapper that clears the inherited environment to exactly
-  the names given (values travel through the provider API, never argv) and feeds stdin from a
-  file uploaded first.
+- exec starts the command through a wrapper that runs it under `env -i` with exactly the names
+  given, and feeds stdin from a file uploaded first. The values reach the sandbox through the
+  provider API (never the provider's argv), under carrier names; inside the sandbox the wrapper
+  hands them to `env -i` as `NAME=value` arguments.
 - the manifest is computed in the sandbox over /workspace, paths relative.
 
 Nothing here proves a process ended or a sandbox was quiescent: anything the guest can write,
@@ -11,14 +12,15 @@ The image needs the tools spec/schema/README.md lists ("Sandbox image").
 """
 
 import asyncio
-import re
 from collections.abc import AsyncIterator, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Annotated, Protocol
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError
 
 from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
+from threads.sandbox.admit import admit_exec
 from threads.sandbox.manifest import ManifestEntry, in_order
 from threads.sandbox.protocol import (
     NO_ENV,
@@ -31,7 +33,7 @@ from threads.sandbox.protocol import (
 RUN_DIR = "/tmp/threads"  # noqa: S108 - a path inside the sandbox, not on the host
 WORKSPACE = "/workspace"
 
-WRAPPER = r"""__t_keep=" $1 "; __t_in=$2; shift 2
+WRAPPER = r"""__t_keep=$1; __t_in=$2; shift 2
 case "$1" in
   */*) __t_c=$1 ;;
   *) __t_c=; IFS=:; for __t_p in $PATH; do
@@ -40,13 +42,18 @@ case "$1" in
 esac
 [ -n "$__t_c" ] || { echo "threads: command not found: $1" >&2; exit 127; }
 shift
-for __t_n in $(env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p'); do
-  case "$__t_keep" in *" $__t_n "*) ;; *) unset "$__t_n" ;; esac
+set -- "$__t_c" "$@"
+for __t_k in $__t_keep; do
+  eval "__t_v=\${__t_v_$__t_k}"
+  set -- "$__t_k=$__t_v" "$@"
 done
-exec "$__t_c" "$@" < "${__t_in:-/dev/null}"
+exec env -i "$@" < "${__t_in:-/dev/null}"
 """
-"""$1 the env names to keep, $2 the stdin file (empty: none), then the command. The command
-is resolved on the provider's PATH before the environment is cleared."""
+"""$1 the env names to keep (shell names, checked by `admit_exec`), $2 the stdin file (empty:
+none), then the command. Each kept value arrives as `__t_v_<name>` (see `wrap`), so the wrapper
+shell never takes a tool value as its own PATH, PWD, IFS or SHLVL. The command is resolved on
+the provider's PATH, then runs under `env -i` with only the kept names: nothing the provider
+set, whatever its name, is inherited."""
 
 MANIFEST = r"""cd /workspace 2>/dev/null || exit 0
 find . -type f -exec sh -c 'for p do
@@ -55,8 +62,6 @@ find . -type f -exec sh -c 'for p do
 done' sh {} +
 """
 """NUL-separated path, octal mode, size, sha256 for every regular file under /workspace."""
-
-_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 class Primitives(Protocol):
@@ -85,17 +90,23 @@ def stdin_path(process_key: str) -> str:
     return f"{RUN_DIR}/{sha256_hex(process_key.encode('utf-8'))[:32]}.stdin"
 
 
-def wrap(
-    command: Sequence[str], env: Mapping[str, str], stdin: str | None = None
-) -> tuple[str, ...]:
-    """The provider argv that runs `command` with exactly `env`, stdin from the file `stdin`."""
-    if not command:
-        raise ValueError("exec needs a command")
-    names = sorted(env)
-    bad = [name for name in names if _NAME.fullmatch(name) is None]
-    if bad:
-        raise ValueError(f"not an environment variable name: {bad}")
-    return ("/bin/sh", "-c", WRAPPER, "threads", " ".join(names), stdin or "", *command)
+@dataclass(frozen=True, slots=True)
+class Wrapped:
+    """One exec as the provider runs it: `argv` for its exec, `env` for its env parameter."""
+
+    argv: tuple[str, ...]
+    env: Mapping[str, str]
+
+
+def wrap(command: Sequence[str], env: Mapping[str, str], stdin: str | None = None) -> Wrapped:
+    """The provider exec that runs `command` with exactly `env`, stdin from the file `stdin`.
+    The call is admitted here (copied and checked), so a caller bug raises before any send."""
+    command, env = admit_exec(command, env)
+    names = " ".join(sorted(env))
+    return Wrapped(
+        argv=("/bin/sh", "-c", WRAPPER, "threads", names, stdin or "", *command),
+        env={f"__t_v_{name}": value for name, value in env.items()},
+    )
 
 
 async def run(  # noqa: PLR0913 - the options spec/api.json names for exec
@@ -109,16 +120,16 @@ async def run(  # noqa: PLR0913 - the options spec/api.json names for exec
     stdin: bytes | None,
 ) -> Ok[ExecOutput] | Err[SandboxError]:
     """spec/api.json `SandboxSession.exec` over the provider's exec."""
+    fed = None if stdin is None else stdin_path(process_key)
+    wrapped = wrap(command, env, fed)
     bad = invalid_path(cwd)
     if bad is not None:
         return bad
-    fed = None
-    if stdin is not None:
-        fed = stdin_path(process_key)
+    if fed is not None and stdin is not None:
         uploaded = await session.upload(fed, stdin, context)
         if isinstance(uploaded, Err):
             return uploaded
-    return await session.start(wrap(command, env, fed), env, cwd, context, process_key)
+    return await session.start(wrapped.argv, wrapped.env, cwd, context, process_key)
 
 
 async def manifest(

@@ -164,12 +164,16 @@ def test_a_sandbox_tool_is_a_setup_error() -> None:
     with pytest.raises(ConfigError) as raised:
         tool(name="echo", description="Echo.", input=Echo, runs="sandbox", execute=run)
     assert raised.value.code == "capability_missing"
+    assert "runs" in str(raised.value)
     with pytest.raises(ConfigError):
         tool(name="echo", description="Echo.", input=Echo, runs="elsewhere", execute=run)  # pyright: ignore[reportArgumentType] - runs is host or sandbox
 
 
 def test_a_tool_without_runs_is_a_host_tool() -> None:
+    heard: list[str] = []
+
     async def run(args: Echo, _ctx: RunContext[None]) -> str:
+        heard.append(args.text)
         return args.text
 
     echo = tool(name="echo", description="Echo.", input=Echo, execute=run, effect="read_only")
@@ -182,6 +186,7 @@ def test_a_tool_without_runs_is_a_host_tool() -> None:
         assert result.output == "Done."
 
     asyncio.run(main())
+    assert heard == ["hello"]
 
 
 def test_omitted_and_explicit_host_runs_pin_identical_bytes() -> None:
