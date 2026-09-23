@@ -27,6 +27,7 @@ from threads.store.forking import Forking, forking, start_child
 from threads.store.lines import Draft, head_line, header_line
 from threads.store.resources import Ledger, Resource
 from threads.store.spill import Spill
+from threads.store.tables import Tables
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
@@ -71,6 +72,16 @@ class SqliteStore:
                 MemoryArtifacts() if memory else FileArtifacts(Path(path).parent / "artifacts")
             )
         return Ok(cls(worker, tenant_id, artifacts))
+
+    def scoped(self, tenant_id: str) -> "SqliteStore":
+        """The same database scoped to another tenant: the host serves each
+        authenticated principal's tenant through one of these."""
+        return SqliteStore(self._worker, tenant_id, self._artifacts)
+
+    @property
+    def tables(self) -> Tables:
+        """Approvals, inbox, receipts, schedule claims and branch listing of this tenant."""
+        return Tables(self._worker, self._tenant)
 
     def bindings(self, kind: Kind) -> Bindings:
         """Host-issued memory or knowledge bindings."""

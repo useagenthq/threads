@@ -9,6 +9,7 @@ from threads.reduce import Fold, apply
 from threads.reduce.state import HeadRef, ReducedState, reduced_state
 from threads.result import Err, Ok
 from threads.store import lease, sql
+from threads.store.companion import Companion
 from threads.store.lines import Draft, Position, event_line
 from threads.store.verify import StoredEvent, verify_export
 from threads.store.worker import Clock, Worker
@@ -67,9 +68,10 @@ class Writer:
         return self._requires_recovery
 
     async def append(
-        self, drafts: Sequence[Draft]
+        self, drafts: Sequence[Draft], companion: Companion | None = None
     ) -> Ok[tuple[StoredEvent, ...]] | Err[ParseError]:
-        """Appends the drafts as one transaction and resolves after it is durable."""
+        """Appends the drafts as one transaction and resolves after it is durable. A companion
+        that refuses rolls the append back: its error is the result and the writer goes on."""
         async with self._lock:
             if self._poisoned:
                 return Err(ParseError("writer_poisoned", "this writer lost its lease or head"))
@@ -83,18 +85,23 @@ class Writer:
             if not rows:
                 return Ok(())
             batch = lease.Batch(expected, rows, sha256_hex(rows[-1][1]))
-            error = await self._commit(batch, now)
+            error = await self._commit(batch, now, companion)
+            if isinstance(error, lease.Refused):
+                await self._reload(now)
+                return Err(error.error)
             if error is not None:
                 return Err(error)
             return Ok(tuple(event for event, _ in rows))
 
-    async def _commit(self, batch: lease.Batch, now: int) -> ParseError | None:
+    async def _commit(
+        self, batch: lease.Batch, now: int, companion: Companion | None
+    ) -> ParseError | lease.Refused | None:
         """Runs the append to settlement even if the caller is cancelled: the statement can't
         be recalled once queued, and the fold already holds the batch. Until it settles the
         writer is poisoned, so a second cancellation leaves it poisoned, never out of step."""
         self._poisoned = True
         op = asyncio.ensure_future(
-            self._worker.call(lambda c: lease.append(c, self._lease, now, batch))
+            self._worker.call(lambda c: lease.append(c, self._lease, now, batch, companion))
         )
         try:
             error = await asyncio.shield(op)
@@ -138,6 +145,7 @@ class Writer:
             case Ok(value=log):
                 self._fold = log.fold
                 self._last_line = log.segments[-1].last_line
+                self._poisoned = False
             case Err():
                 self._poisoned = True
 

@@ -18,11 +18,21 @@ checkpoint. Unknown critical events never parse: they refuse the log."""
 
 
 type ApiCode = Literal[
-    "branch_not_found", "branch_exists", "sandbox_required", "invalid_request", "not_found"
+    "branch_not_found",
+    "branch_exists",
+    "sandbox_required",
+    "invalid_request",
+    "not_found",
+    "forbidden",
+    "no_open_question",
+    "not_parked",
+    "idempotency_key_reused",
+    "idempotency_key_principal_mismatch",
 ]
 """branch_not_found: a branch that is absent or another tenant's. branch_exists: a thread
 another tenant owns. sandbox_required: a fork with no sandbox adapter for its snapshot's
-provider. invalid_request: a malformed call. not_found: a thread with no such branch."""
+provider. invalid_request: a malformed call. not_found: a thread with no such branch. The rest
+are the thread controls' and the host's typed failures (spec/api.json)."""
 
 
 @dataclass(frozen=True, slots=True)
