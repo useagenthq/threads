@@ -43,8 +43,9 @@ export class HostContext {
   readonly #pending = new Map<string, number>();
   /** A run's in-process result, by run_id, for a halt the log can't show. */
   readonly results: Map<string, RunResult<Json>> = new Map();
-  readonly #aborts = new Set<AbortController>();
-  #stopped = false;
+  readonly #stop = new AbortController();
+  /** Aborted once the host stops: every run and every send not yet settled gives up on it. */
+  readonly stopping: AbortSignal = this.#stop.signal;
 
   constructor(
     store: Store,
@@ -106,10 +107,8 @@ export class HostContext {
     runId?: string,
   ): Promise<RunResult<Json> | undefined> {
     return this.#queued(thread.branch, async () => {
-      if (this.#stopped) return undefined;
+      if (this.stopping.aborted) return undefined;
       const store = this.storeFor(tenant);
-      const abort = new AbortController();
-      this.#aborts.add(abort);
       try {
         // A reply begun before a crash is reconciled through the channel's lookup first: the
         // agent's recovery has no channel_send tool and would park it.
@@ -119,7 +118,7 @@ export class HostContext {
             store,
             principal,
             thread: { ...thread, store },
-            signal: abort.signal,
+            signal: this.stopping,
             ...(this.ceiling === undefined ? {} : { ceiling: this.ceiling }),
           },
           [],
@@ -131,8 +130,6 @@ export class HostContext {
       } catch (error) {
         console.error(`threads host: run on ${thread.branch} failed`, error);
         return undefined;
-      } finally {
-        this.#aborts.delete(abort);
       }
     });
   }
@@ -143,7 +140,7 @@ export class HostContext {
     thread: { readonly id: ThreadId; readonly branch: BranchId },
   ): Promise<"done" | "busy"> {
     return this.#queued(thread.branch, async () =>
-      this.#stopped ? "busy" : this.#reply(tenant, thread),
+      this.stopping.aborted ? "busy" : this.#reply(tenant, thread),
     );
   }
 
@@ -207,8 +204,7 @@ export class HostContext {
 
   /** Aborts every in-process run; later resumes and replies start nothing. */
   abort(): void {
-    this.#stopped = true;
-    for (const abort of this.#aborts) abort.abort();
+    this.#stop.abort();
   }
 
   /** Aborts, then waits for every in-process execution. */

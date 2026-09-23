@@ -51,7 +51,7 @@ export async function reply(
     if (!writer.ok) return "busy";
     try {
       for (const call of missing(main.value, writer.value.chain.fold, todo))
-        await sendOp(adapter, writer.value, artifacts, call);
+        await sendOp(adapter, writer.value, artifacts, call, ctx.stopping);
     } finally {
       writer.value.release();
     }

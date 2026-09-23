@@ -39,9 +39,11 @@ type Authenticate = Callable[["Request"], Awaitable[Principal | None]]
 """Maps an HTTP API request to its principal, or None for 401."""
 
 
-_RECOVERY: "WeakKeyDictionary[Host, tuple[asyncio.Event, Runner]]" = WeakKeyDictionary()
-"""Each host's start-up recovery pass (set once it has finished) and the runner whose runs it
-started: what the `recovered` seam waits on. The runner holds no reference to its host."""
+_RECOVERY: "WeakKeyDictionary[Host, tuple[asyncio.Event, list[asyncio.Task[object]]]]" = (
+    WeakKeyDictionary()
+)
+"""Each host's start-up recovery pass (set once it has finished) and the runs that pass started:
+what the `recovered` seam waits on, never an unrelated live run."""
 
 
 class Host:
@@ -66,7 +68,7 @@ class Host:
         self._runner.on_end = self._intake.consume
         self._scheduler = Scheduler(self._runner, schedules)
         self._ticking: asyncio.Task[None] | None = None
-        _RECOVERY[self] = (asyncio.Event(), self._runner)
+        _RECOVERY[self] = (asyncio.Event(), [])
         self._asgi: ASGIApp | None = None
 
     @property
@@ -101,10 +103,12 @@ class Host:
         self._scheduler.check(self._runner.agent)
         self._runner.resolve_secrets()
         await open_store(self._store)
+        self._runner.open()
         if self._ticking is None:
             # Each start has its own pass; cleared, not replaced, so a wait begun before this
             # start still sees it.
             _RECOVERY[self][0].clear()
+            _RECOVERY[self][1].clear()
             self._ticking = asyncio.get_running_loop().create_task(self._tick())
 
     async def _tick(self) -> None:
@@ -117,20 +121,24 @@ class Host:
             # in a table if hosts carry many conversations.
             for tenant, thread in await sq.tables.channel_threads():
                 if (tenant, thread) not in waiting:
-                    await self._runner.redeliver(self._runner.store(tenant), thread)
+                    run = await self._runner.redeliver(self._runner.store(tenant), thread)
+                    if run is not None:
+                        _RECOVERY[self][1].append(run)
         finally:
             _RECOVERY[self][0].set()
         await self._scheduler.run()
 
     async def stop(self) -> None:
-        """Drains intake in flight and ends the runs, which releases their leases."""
+        """Aborts first: every run is cancelled and none starts, so no consumer waits on its run
+        and no send is waited on (a begun one stays in doubt, for the next start to reconcile).
+        Then it drains intake in flight. Each run hands its lease back as it unwinds."""
         if self._ticking is not None:
             self._ticking.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._ticking
             self._ticking = None
-        await self._intake.drain()
         await self._runner.stop()
+        await self._intake.drain()
 
     async def __aenter__(self) -> Self:
         await self.ready()
@@ -213,6 +221,7 @@ async def recovered(served: Host) -> None:
     to redeliver replies have ended, so a test asserts what recovery did or didn't do without
     sleeping. Python recovers once per start (each start, including a restart of the same host),
     not on a timer as TS does, so there is no later pass to wait for. Internal: not exported."""
-    done, runner = _RECOVERY[served]
+    done, runs = _RECOVERY[served]
     await done.wait()
-    await runner.settled()
+    if runs:
+        await asyncio.wait(runs)

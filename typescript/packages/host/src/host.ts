@@ -23,7 +23,9 @@ import { Watch } from "./watch";
 // host() (spec/api.json): binds agents to a store, channels
 // and schedules. It starts nothing until ready(), which confirms the bindings, sends nothing and
 // starts no run; after it, the host consumes durable intake and fires due schedules. stop()
-// drains in-flight work and releases leases.
+// first aborts: runs get their abort signal, no send begins, and no begun send or lookup is
+// waited on (it stays potentially sent, for the next host to reconcile). Then it waits for the
+// work in flight to return and releases leases.
 
 export type HostOptions = {
   readonly store: Store;

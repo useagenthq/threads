@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { agent, scriptedModel, sqlite, tool } from "@threads/core";
-import { openStore, tenantStore } from "@threads/core/host";
+import {
+  BranchId,
+  knownEvents,
+  openStore,
+  storeConnection,
+  tenantStore,
+} from "@threads/core/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
 import { hostTicked } from "../src/host";
@@ -105,5 +111,61 @@ describe("recovery around a live run", () => {
     await h.stop();
     expect(aborted).toBe(true);
     expect(Date.now() - stopping).toBeLessThan(1_000);
+  }, 10_000);
+
+  test("stop() never waits on a send that never answers; the send stays potentially sent", async () => {
+    const stalled = {
+      ...fakeChannel("support"),
+      perform: () => new Promise<never>(() => {}),
+    };
+    const store = sqlite(":memory:");
+    const bot = () =>
+      agent({
+        name: "support",
+        model: scriptedModel({ responses: [say("hello")] }),
+      });
+    const h = host({
+      store,
+      authenticate,
+      agents: { support: bot() },
+      channels: { slack: stalled },
+    });
+    await h.ready();
+    await post(h, "E1", "C1");
+    const { log } = await openStore(tenantStore(store, TENANT));
+    const { db } = await storeConnection(store);
+    const events = () => {
+      const [row] = z
+        .array(z.object({ branch_id: BranchId }))
+        .parse(db.all("SELECT branch_id FROM branches", []));
+      const read = row === undefined ? undefined : log.read(row.branch_id);
+      return read?.ok === true ? knownEvents(read.value) : [];
+    };
+    await until(async () => events().some((e) => e.type === "effect_begin"));
+    const stopping = Date.now();
+    await h.stop();
+    expect(Date.now() - stopping).toBeLessThan(1_000);
+    // Begun and unsettled: never assumed unsent, and never re-sent blindly.
+    expect(events().map((e) => e.type)).not.toContain("effect_resolved");
+    expect(events().map((e) => e.type)).not.toContain("tool_result");
+    // The next host reconciles it through the channel's lookup.
+    const next = fakeChannel("support");
+    next.lookups.push("found");
+    const restarted = host({
+      store,
+      authenticate,
+      agents: { support: bot() },
+      channels: { slack: next },
+    });
+    hosts.push(restarted);
+    await restarted.ready();
+    await until(async () =>
+      events().some(
+        (e) =>
+          e.type === "effect_resolved" &&
+          e.data.outcome === "confirmed_success",
+      ),
+    );
+    expect(next.performed).toHaveLength(0);
   }, 10_000);
 });

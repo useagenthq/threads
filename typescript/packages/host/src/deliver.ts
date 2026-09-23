@@ -23,6 +23,8 @@ type Send = {
   readonly callId: string;
   readonly op: Op;
   readonly key: string;
+  /** The host stopping: no send begins after it, and none is waited on past it. */
+  readonly stopping: AbortSignal;
 };
 
 export const SEND_TOOL = "channel_send";
@@ -40,7 +42,9 @@ export async function sendOp(
     readonly op: Op;
     readonly requestId: string;
   },
+  stopping: AbortSignal,
 ): Promise<void> {
+  if (stopping.aborted) return;
   const branch = writer.lease.branchId;
   const s: Send = {
     adapter,
@@ -49,6 +53,7 @@ export async function sendOp(
     callId: call.callId,
     op: call.op,
     key: `${branch}:${call.callId}`,
+    stopping,
   };
   const known = writer.chain.fold.calls.get(call.callId);
   if (known?.result !== undefined) return;
@@ -96,6 +101,8 @@ function attempts(s: Send): number {
 }
 
 async function attempt(s: Send, n: number): Promise<void> {
+  // Not begun: a stopping host leaves it for the next one to issue.
+  if (s.stopping.aborted) return;
   const begun = s.writer.append([
     {
       ...base,
@@ -106,7 +113,7 @@ async function attempt(s: Send, n: number): Promise<void> {
   ]);
   if (!begun.ok) return;
   const sent = await perform(s);
-  if (sent === "stale") return;
+  if (sent === "stale" || sent === "stopped") return;
   if (sent.status === "sent") return commit(s, sent.platform_ref, "adapter");
   if (sent.sent === "outcome_unknown") {
     const unknown = append(s, {
@@ -126,21 +133,28 @@ async function attempt(s: Send, n: number): Promise<void> {
   if (!settled) return;
   // definite_not_sent: rate_limited and transient may re-send under the same key.
   if (sent.kind !== "permanent" && n < MAX_ATTEMPTS) {
-    await backoff(n);
+    await untilStopped(s.stopping, backoff(n));
     return attempt(s, n + 1);
   }
   append(s, result(s.callId, true, "not_executed", `not sent: ${sent.kind}`));
 }
 
-type Performed = DeliveryOutcome | "stale";
+/** "stale": the lease is lost; "stopped": the host stopped waiting. Either way, nothing more. */
+type Performed = DeliveryOutcome | "stale" | "stopped";
 
 async function perform(s: Send): Promise<Performed> {
   const credentials: Record<string, string> = {};
   for (const [name, secret] of Object.entries(s.adapter.secrets))
     credentials[name] = secret.reveal();
-  const done = await dispatched(fenceOf(s.writer), () =>
-    s.adapter.perform(s.op, s.key, credentials),
+  // A begun send the host stops waiting on stays begun, so potentially sent: the next host
+  // reconciles it through the channel's lookup, never assumes it unsent.
+  const done = await untilStopped(
+    s.stopping,
+    dispatched(fenceOf(s.writer), () =>
+      s.adapter.perform(s.op, s.key, credentials),
+    ),
   );
+  if (done === "stopped") return done;
   // A refused fence means this writer lost its lease: it appends and sends nothing more.
   if (done.refused) return "stale";
   if (!done.outcome.ok)
@@ -173,7 +187,12 @@ async function reconcile(s: Send, n: number): Promise<void> {
   const looked =
     capabilities.lookup === "none"
       ? undefined
-      : await within(fenceOf(s.writer), () => s.adapter.lookup(s.key, s.op));
+      : await untilStopped(
+          s.stopping,
+          within(fenceOf(s.writer), () => s.adapter.lookup(s.key, s.op)),
+        );
+  // Unanswered when the host stopped: still in doubt, for the next host to look up.
+  if (looked === "stopped") return;
   if (looked !== undefined && !looked.ok && looked.error.stale !== undefined)
     return;
   const answer = looked?.ok === true ? looked.value : undefined;
@@ -291,6 +310,22 @@ function fenceOf(writer: Writer): Fence {
           };
     },
   };
+}
+
+/** `work`, or "stopped" once `stopping` is aborted, whichever comes first; `work` isn't cancelled. */
+async function untilStopped<T>(
+  stopping: AbortSignal,
+  work: Promise<T>,
+): Promise<T | "stopped"> {
+  if (stopping.aborted) return "stopped";
+  const stopped = Promise.withResolvers<"stopped">();
+  const onAbort = (): void => stopped.resolve("stopped");
+  stopping.addEventListener("abort", onAbort, { once: true });
+  try {
+    return await Promise.race([work, stopped.promise]);
+  } finally {
+    stopping.removeEventListener("abort", onAbort);
+  }
 }
 
 async function backoff(n: number): Promise<void> {

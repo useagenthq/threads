@@ -147,6 +147,10 @@ async function message(
     // Only the thread's first event is its thread_started, whichever process creates it.
     const first: readonly EventDraft[] =
       w.chain.fold.seq === 0 ? [await t.hosted.runner.started()] : [];
+    // Checked again on the chain this lease holds: another host may have pinned another config
+    // since target() looked, and nothing can be appended under it until release.
+    if (first.length === 0 && !(await samePin(knownEvents(w.chain), t.hosted)))
+      return "busy";
     const done = w.fenced(() => {
       const delivered = w.append([...first, delivery(next)]);
       if (!delivered.ok) return delivered;
