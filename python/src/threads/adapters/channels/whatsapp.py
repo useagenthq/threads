@@ -20,16 +20,19 @@ from pydantic import Field, JsonValue, ValidationError
 
 from threads.adapters.channels.common import (
     Loose,
+    answer_of,
     body_of,
+    challenge_of,
     client,
-    final_text,
     hub_signature,
     refused,
+    render_ops,
     send,
     unverified,
 )
 from threads.host.channel import (
     ChannelCapabilities,
+    Decision,
     DeliveryError,
     DeliveryOutcome,
     Ignore,
@@ -52,11 +55,21 @@ class _Text(Loose):
     body: str
 
 
+class _Reply(Loose):
+    id: str
+
+
+class _Interactive(Loose):
+    type: str
+    button_reply: _Reply | None = None
+
+
 class _Message(Loose):
     id: str
     sender: str = Field(alias="from")
     type: str
     text: _Text | None = None
+    interactive: _Interactive | None = None
 
 
 class _Value(Loose):
@@ -86,7 +99,7 @@ class WhatsAppChannel:
     api: str = API
     transport: httpx.AsyncBaseTransport | None = None
     capabilities: ChannelCapabilities = field(
-        default_factory=lambda: ChannelCapabilities("none", False, False, True, True)
+        default_factory=lambda: ChannelCapabilities("none", True, False, True, True)
     )
     limits: Mapping[str, int] = field(default_factory=lambda: {"message_bytes": 4096})
 
@@ -129,19 +142,22 @@ class WhatsAppChannel:
         return RawResponse(200, {}, b"")
 
     def render(self, event: Event) -> Sequence[JsonObject]:
-        text = final_text(event)
-        return () if text is None else ({"text": text},)
+        return render_ops(event)
 
     async def perform(
         self, op: JsonObject, effect_key: str, credentials: Mapping[str, str]
     ) -> DeliveryOutcome:
-        body: JsonValue = {
+        body: dict[str, JsonValue] = {
             "messaging_product": "whatsapp",
             "to": op["address"],
             "type": "text",
             "text": {"body": op["text"]},
             "biz_opaque_callback_data": effect_key,
         }
+        challenge = challenge_of(op)
+        if challenge is not None:
+            del body["text"]
+            body |= {"type": "interactive", "interactive": _card(str(op["text"]), challenge)}
         headers = {"authorization": f"Bearer {credentials['access_token']}"}
         url = f"{self.api}/{self.phone_number_id}/messages"
         async with client(self.transport) as http:
@@ -160,6 +176,15 @@ class WhatsAppChannel:
         return LookupUnknown("the WhatsApp Cloud API has no lookup by effect key")
 
 
+def _card(text: str, challenge: str) -> JsonValue:
+    """Reply buttons whose ids carry only the challenge id."""
+    buttons: list[JsonValue] = [
+        {"type": "reply", "reply": {"id": f"{verdict}:{challenge}", "title": title}}
+        for verdict, title in (("grant", "Approve"), ("deny", "Deny"))
+    ]
+    return {"type": "button", "body": {"text": text}, "action": {"buttons": buttons}}
+
+
 def _webhook(raw: RawRequest) -> _Webhook | None:
     try:
         return _Webhook.model_validate_json(raw.body)
@@ -168,11 +193,25 @@ def _webhook(raw: RawRequest) -> _Webhook | None:
 
 
 def _item(account: str, message: _Message) -> Inbound:
+    who = Principal(issuer=f"whatsapp:{account}", tenant=account, subject=message.sender)
+    pressed = message.interactive
+    if pressed is not None and pressed.button_reply is not None:
+        answer = answer_of(pressed.button_reply.id)
+        if answer is None:
+            return Ignore(kind="ignore")
+        return Decision(
+            kind="decision",
+            principal=who,
+            address=message.sender,
+            item_key=message.id,
+            challenge_id=answer[1],
+            decision=answer[0],
+        )
     if message.type != "text" or message.text is None or not message.text.body:
         return Ignore(kind="ignore")
     return Message(
         kind="message",
-        principal=Principal(issuer=f"whatsapp:{account}", tenant=account, subject=message.sender),
+        principal=who,
         address=message.sender,
         item_key=message.id,
         content=message.text.body,

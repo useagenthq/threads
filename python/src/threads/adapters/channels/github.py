@@ -8,6 +8,7 @@ The channel declares its lookup nonfinal, so an uncertain send it can't find par
 publishes no official Python SDK; the REST API is called through the fenced httpx client.
 """
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final
@@ -19,14 +20,15 @@ from threads.adapters.channels.common import (
     Loose,
     body_of,
     client,
-    final_text,
     hub_signature,
     refused,
+    render_ops,
     send,
     unverified,
 )
 from threads.host.channel import (
     ChannelCapabilities,
+    Decision,
     DeliveryError,
     DeliveryOutcome,
     Ignore,
@@ -37,7 +39,7 @@ from threads.host.channel import (
     Sent,
     VerifiedDelivery,
 )
-from threads.log import Event, JsonObject, ParseError, Principal
+from threads.log import ApprovalRequestedEvent, Event, JsonObject, ParseError, Principal
 from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound
 from threads.memory.fence import check
 from threads.result import Err, Ok
@@ -46,6 +48,11 @@ from threads.secrets import Secret, resolve
 API: Final = "https://api.github.com"
 _PER_PAGE: Final = 100
 _PAGES: Final = 10
+_DECISION: Final = re.compile(
+    r"/(?P<verb>approve|deny) "
+    r"(?P<challenge>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+)
+"""A reply that answers an approval card: the verb and the challenge id, nothing else."""
 _ACCEPT: Final = {"accept": "application/vnd.github+json", "x-github-api-version": "2022-11-28"}
 
 
@@ -130,8 +137,11 @@ class GitHubChannel:
         return RawResponse(200, {}, b"")
 
     def render(self, event: Event) -> Sequence[JsonObject]:
-        text = final_text(event)
-        return () if text is None else ({"text": text},)
+        if isinstance(event, ApprovalRequestedEvent):
+            # No buttons: the text fallback, still bound to the challenge id.
+            answer = event.data.challenge_id
+            return render_ops(event, f" Reply `/approve {answer}` or `/deny {answer}`.")
+        return render_ops(event)
 
     async def perform(
         self, op: JsonObject, effect_key: str, credentials: Mapping[str, str]
@@ -196,12 +206,21 @@ def _item(raw: RawRequest, hook: _Hook, delivery: VerifiedDelivery) -> Inbound:
     if hook.comment is None or not hook.comment.body:
         return Ignore(kind="ignore")
     tenant = delivery.tenant
+    who = Principal(issuer=f"github:{tenant}", tenant=tenant, subject=person.login)
+    address = f"{hook.repository.full_name}#{hook.issue.number}"
+    key = f"{delivery.delivery_id}#0"
+    answer = _DECISION.fullmatch(hook.comment.body.strip())
+    if answer is not None:
+        return Decision(
+            kind="decision",
+            principal=who,
+            address=address,
+            item_key=key,
+            challenge_id=answer["challenge"],
+            decision="grant" if answer["verb"] == "approve" else "deny",
+        )
     return Message(
-        kind="message",
-        principal=Principal(issuer=f"github:{tenant}", tenant=tenant, subject=person.login),
-        address=f"{hook.repository.full_name}#{hook.issue.number}",
-        item_key=f"{delivery.delivery_id}#0",
-        content=hook.comment.body,
+        kind="message", principal=who, address=address, item_key=key, content=hook.comment.body
     )
 
 

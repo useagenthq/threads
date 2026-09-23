@@ -11,15 +11,15 @@ import hashlib
 import hmac
 from collections.abc import Mapping
 from http import HTTPStatus
-from typing import ClassVar, Final
+from typing import ClassVar, Final, Literal
 
 import httpx
 from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter, ValidationError
 
 from threads.adapters.memories.http import fenced_client
 from threads.host.channel import DeliveryError, DeliveryOutcome
+from threads.log import ApprovalRequestedEvent, JsonObject, ModelResponseEvent, ParseError, TextPart
 from threads.log import Event as LogEvent
-from threads.log import ModelResponseEvent, ParseError, TextPart
 from threads.result import Err, Ok
 
 
@@ -61,6 +61,35 @@ def final_text(event: LogEvent) -> str | None:
         return None
     text = "".join(p.text for p in event.data.content if isinstance(p, TextPart)).strip()
     return text or None
+
+
+def render_ops(event: LogEvent, fallback: str = "") -> tuple[JsonObject, ...]:
+    """A final response's text, or an approval card: the challenge id and a line naming the
+    call. `fallback` is appended to a card on a channel without buttons (how to answer)."""
+    if isinstance(event, ApprovalRequestedEvent):
+        data = event.data
+        text = f"Approval needed for call {data.call_id} (args sha256 {data.args_hash}).{fallback}"
+        return ({"text": text, "challenge_id": data.challenge_id},)
+    text = final_text(event)
+    return () if text is None else ({"text": text},)
+
+
+def challenge_of(op: JsonObject) -> str | None:
+    """An approval card's challenge id; None for a plain message."""
+    challenge = op.get("challenge_id")
+    return challenge if isinstance(challenge, str) else None
+
+
+def answer_of(value: str) -> tuple[Literal["grant", "deny"], str] | None:
+    """A button's `grant:<challenge id>` or `deny:<challenge id>`: all a button carries."""
+    verdict, _, challenge = value.partition(":")
+    if not challenge:
+        return None
+    match verdict:
+        case "grant" | "deny":
+            return verdict, challenge
+        case _:
+            return None
 
 
 def client(transport: httpx.AsyncBaseTransport | None) -> httpx.AsyncClient:

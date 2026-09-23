@@ -20,10 +20,12 @@ from slack_sdk.signature import Clock, SignatureVerifier
 
 from threads.adapters.channels.common import (
     Loose,
+    answer_of,
     body_of,
+    challenge_of,
     client,
-    final_text,
     refused,
+    render_ops,
     send,
     unverified,
 )
@@ -77,11 +79,16 @@ class _Action(Loose):
     action_ts: str = ""
 
 
+class _Container(Loose):
+    thread_ts: str | None = None
+
+
 class _Interaction(Loose):
     type: str
     team: _Id
     user: _Id
     channel: _Id | None = None
+    container: _Container = Field(default_factory=_Container)
     actions: tuple[_Action, ...] = ()
 
 
@@ -165,8 +172,7 @@ class SlackChannel:
         return RawResponse(200, {}, b"")
 
     def render(self, event: Event) -> Sequence[JsonObject]:
-        text = final_text(event)
-        return () if text is None else ({"text": text},)
+        return render_ops(event)
 
     async def perform(
         self, op: JsonObject, effect_key: str, credentials: Mapping[str, str]
@@ -179,6 +185,9 @@ class SlackChannel:
         }
         if thread_ts:
             body["thread_ts"] = thread_ts
+        challenge = challenge_of(op)
+        if challenge is not None:
+            body["blocks"] = _card(str(op["text"]), challenge)
         headers = {"authorization": f"Bearer {credentials['bot_token']}"}
         async with client(self.transport) as http:
             response = await send(http, f"{self.api}/chat.postMessage", headers, body)
@@ -221,6 +230,24 @@ class SlackChannel:
         return NotFound()
 
 
+def _card(text: str, challenge: str) -> JsonValue:
+    """The approval card: its text and two buttons whose values carry only the challenge id."""
+    buttons: list[JsonValue] = [
+        {
+            "type": "button",
+            "action_id": f"threads_{verdict}",
+            "text": {"type": "plain_text", "text": label},
+            "style": style,
+            "value": f"{verdict}:{challenge}",
+        }
+        for verdict, label, style in (("grant", "Approve", "primary"), ("deny", "Deny", "danger"))
+    ]
+    return [
+        {"type": "section", "text": {"type": "mrkdwn", "text": text}},
+        {"type": "actions", "elements": buttons},
+    ]
+
+
 def _payload(raw: RawRequest) -> Payload | None:
     """Events API requests are JSON; interactivity is a form with a `payload` field."""
     try:
@@ -236,16 +263,18 @@ def _item(payload: Payload, delivery: VerifiedDelivery) -> Inbound:
     team = delivery.tenant
     key = f"{delivery.delivery_id}#0"
     if isinstance(payload, _Interaction):
-        verdict, _, challenge = payload.actions[0].value.partition(":")
-        if verdict not in ("grant", "deny") or not challenge or payload.channel is None:
+        answer = answer_of(payload.actions[0].value)
+        if answer is None or payload.channel is None:
             return Ignore(kind="ignore")
+        # The card was posted in the conversation's thread: the press answers from there.
+        channel, thread_ts = payload.channel.id, payload.container.thread_ts
         return Decision(
             kind="decision",
             principal=_principal(team, payload.user.id),
-            address=payload.channel.id,
+            address=channel if thread_ts is None else f"{channel}:{thread_ts}",
             item_key=key,
-            challenge_id=challenge,
-            decision="grant" if verdict == "grant" else "deny",
+            challenge_id=answer[1],
+            decision=answer[0],
         )
     event = payload.event
     if event is None or event.type not in ("message", "app_mention"):
