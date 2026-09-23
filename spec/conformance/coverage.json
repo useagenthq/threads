@@ -529,7 +529,7 @@
         {
           "kind": "case",
           "ref": "skills-listing-then-load",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -540,7 +540,7 @@
         {
           "kind": "case",
           "ref": "skills-write-denied-all-paths",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -551,7 +551,7 @@
         {
           "kind": "case",
           "ref": "skills-repo-file-not-trusted",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },

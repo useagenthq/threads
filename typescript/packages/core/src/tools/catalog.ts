@@ -19,6 +19,7 @@ import {
 } from "./gateway-inputs";
 import {
   ForgetMemoryInput,
+  LoadSkillInput,
   SaveMemoryInput,
   SearchKnowledgeInput,
   SearchMemoryInput,
@@ -211,6 +212,12 @@ export const CATALOG: readonly CatalogEntry[] = [
     input: HandoffInput,
   },
   {
+    name: "load_skill",
+    description:
+      "Load a skill's instructions by name. Only the skills listed in the system prompt exist.",
+    input: LoadSkillInput,
+  },
+  {
     name: "ls",
     description: "List the entries of a sandbox directory.",
     input: LsInput,
@@ -334,9 +341,13 @@ export const AGENT_TOOLS: ReadonlySet<string> = new Set([
   "todo_write",
 ]);
 
-/** The entries: pinned only when a memory or knowledge provider is configured. */
+/**
+ * Pinned only when their host source is configured: a memory or knowledge provider,
+ * or skills (load_skill, ).
+ */
 export const PROVIDER_TOOLS: ReadonlySet<string> = new Set([
   "forget_memory",
+  "load_skill",
   "save_memory",
   "search_knowledge",
   "search_memory",

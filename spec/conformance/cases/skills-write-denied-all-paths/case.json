@@ -1,0 +1,127 @@
+{
+  "name": "skills-write-denied-all-paths",
+  "family": "skills",
+  "kind": "policy",
+  "description": "The self-config guard denies, before any rule or mode, every non-read-only call with any string argument word holding a .threads path segment (where config, skills, hooks and schedules would live): the file tools, bash, an MCP or GitHub edit, and a subagent's task, even in bypass with allow rules for them. A read is not a write, and .threads.md is not .threads. The host store itself is outside the sandbox, so config_hash never changes.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "workspace": "/workspace",
+    "permissions": {
+      "mode": "bypass",
+      "allow": [
+        "write(.threads/**)",
+        "edit(.threads/**)",
+        "bash",
+        "mcp__github__*",
+        "spawn_agent"
+      ],
+      "ask": [],
+      "deny": [],
+      "protected_paths": [
+        ".git/**",
+        ".threads/**",
+        ".claude/**",
+        ".mcp.json",
+        "**/.bashrc",
+        "**/.zshrc",
+        "**/.profile",
+        "**/.gitconfig",
+        "**/.ssh/**"
+      ],
+      "allow_bypass": false,
+      "plan_exit_mode": "default"
+    },
+    "calls": [
+      {
+        "mode": "bypass",
+        "tool": "write",
+        "category": "edit",
+        "input": {
+          "path": ".threads/skills/deploy/SKILL.md",
+          "content": "x"
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": "/workspace/.threads/skills/deploy/SKILL.md",
+          "old_string": "a",
+          "new_string": "b"
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "notebook_edit",
+        "category": "edit",
+        "input": {
+          "path": ".threads/hooks/a.ipynb",
+          "cell_id": "c1",
+          "new_source": "x"
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "echo x > .threads/skills/deploy/SKILL.md"
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "cd src && rm -rf ../.threads"
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "git checkout origin/evil -- .threads/"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "mcp__github__create_or_update_file",
+        "category": "other",
+        "input": {
+          "path": ".threads/schedules.json",
+          "content": "x"
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "spawn_agent",
+        "category": "other",
+        "input": {
+          "agent": "worker",
+          "prompt": "Edit .threads/skills/deploy/SKILL.md."
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "read",
+        "category": "read_only",
+        "input": {
+          "path": ".threads/skills/deploy/SKILL.md"
+        }
+      },
+      {
+        "mode": "bypass",
+        "tool": "write",
+        "category": "edit",
+        "input": {
+          "path": "notes/.threads.md",
+          "content": "x"
+        }
+      }
+    ]
+  }
+}

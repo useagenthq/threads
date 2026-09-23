@@ -39,3 +39,9 @@ export const SearchKnowledgeInput: Strict<{
     .optional()
     .describe("Only these source ids."),
 });
+
+// Skills: the name is one the pinned listing shows; the body comes from the host
+// store pinned at thread start, never from the sandbox.
+export const LoadSkillInput: Strict<{ name: z.ZodString }> = z.strictObject({
+  name: z.string().min(1).describe("A skill name from the listing."),
+});

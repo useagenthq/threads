@@ -1,0 +1,9 @@
+{
+  "name": "skills-listing-then-load",
+  "family": "skills",
+  "kind": "render",
+  "description": "Line 0 lists each pinned skill by name and one-line description, inside the declared prefix; no body is in it. load_skill appends the body as injected{source: skill, trust: trusted_instruction} whose origin is the skill name and the SHA-256 of its body, right after the result, so the next request renders it after the declared prefix.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

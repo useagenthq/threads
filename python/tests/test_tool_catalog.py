@@ -27,6 +27,7 @@ MODELS = {
     "glob": tools_v1.GlobInput,
     "grep": tools_v1.GrepInput,
     "handoff": tools_v1.HandoffInput,
+    "load_skill": tools_v1.LoadSkillInput,
     "ls": tools_v1.LsInput,
     "lsp": tools_v1.LspInput,
     "notebook_edit": tools_v1.NotebookEditInput,

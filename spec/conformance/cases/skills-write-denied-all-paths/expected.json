@@ -1,0 +1,45 @@
+{
+  "outcome": "ok",
+  "decisions": [
+    {
+      "decision": "deny",
+      "source": "self_config_guard"
+    },
+    {
+      "decision": "deny",
+      "source": "self_config_guard"
+    },
+    {
+      "decision": "deny",
+      "source": "self_config_guard"
+    },
+    {
+      "decision": "deny",
+      "source": "self_config_guard"
+    },
+    {
+      "decision": "deny",
+      "source": "self_config_guard"
+    },
+    {
+      "decision": "deny",
+      "source": "self_config_guard"
+    },
+    {
+      "decision": "deny",
+      "source": "self_config_guard"
+    },
+    {
+      "decision": "deny",
+      "source": "self_config_guard"
+    },
+    {
+      "decision": "allow",
+      "source": "mode"
+    },
+    {
+      "decision": "allow",
+      "source": "mode"
+    }
+  ]
+}

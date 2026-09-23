@@ -234,7 +234,7 @@
           "type": {"array": {"$ref": "#/types/Skill"}},
           "required": false,
           "default": [],
-          "doc": "Listed by name and description in line 0; a body is injected when invoked (F4)."
+          "doc": "Pinned in config_hash (name, description, sha256 of body). Line 0 lists them after the extension instructions as \"Skills you can load with load_skill:\" then one \"- name: description\" line each, in the given order; load_skill (pinned only when this is non-empty) appends the body as injected{source: skill, trust: trusted_instruction, origin: {id: name, version: sha256 of body}} (F4.1). Unique names; a description is one non-empty line."
         },
         {
           "name": "output",
@@ -2266,7 +2266,7 @@
         "description": {"type": {"prim": "string"}, "required": true},
         "body": {"type": {"prim": "string"}, "required": true}
       },
-      "doc": "Loaded from the host config store, pinned by hash. Files in the sandbox are never skills.",
+      "doc": "Loaded from the host config store, pinned by hash. Files in the sandbox are never skills (F4.3), and no agent path writes config: the self-config guard denies every non-read-only call with an argument word holding a .threads path segment (F4.2, step 1).",
       "source": ""
     },
     "Schedule": {

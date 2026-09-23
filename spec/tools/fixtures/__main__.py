@@ -33,6 +33,7 @@ from . import (
     recovery,
     renders,
     rules,
+    skills,
     structure,
     summaries,
     teams,
@@ -68,6 +69,7 @@ FAMILIES = (
     summaries,
     memory,
     catalog_tools,
+    skills,
 )
 
 

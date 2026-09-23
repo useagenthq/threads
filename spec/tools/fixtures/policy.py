@@ -27,7 +27,9 @@ def _path(p: str) -> Obj:
     return {"path": p}
 
 
-def _write(root: pathlib.Path, name: str, desc: str, inp: Obj, rows: list[Row]) -> None:
+def write_policy_case(  # noqa: PLR0913 - one argument per case field
+    root: pathlib.Path, name: str, desc: str, inp: Obj, rows: list[Row], *, family: str = FAM
+) -> None:
     calls: list[JsonValue] = [
         {"mode": m, "tool": t, "category": c, "input": i} for m, t, c, i, *_ in rows
     ]
@@ -39,7 +41,7 @@ def _write(root: pathlib.Path, name: str, desc: str, inp: Obj, rows: list[Row]) 
         decisions.append(d)
     write_case(
         root,
-        case(name, FAM, "policy", desc, input={"workspace": WS, **inp, "calls": calls}),
+        case(name, family, "policy", desc, input={"workspace": WS, **inp, "calls": calls}),
         None,
         {"outcome": "ok", "decisions": decisions},
     )
@@ -71,7 +73,7 @@ def build(root: pathlib.Path) -> None:
         (d, "bash", "other", _bash("git status && printf marker"), "ask", "mode", ""),
         (d, "bash", "other", _bash('git status \\"; rm -rf build; echo \\"'), "deny", "policy", rm),
     ]
-    _write(
+    write_policy_case(
         root,
         "permission-rule-bash-prefix",
         "Shell rules: prefix:* matches whole leading words, exact rules match the whole "
@@ -126,7 +128,7 @@ def build(root: pathlib.Path) -> None:
         (d, "read", "read_only", _path("secrets/token"), "deny", "policy", secret_dir),
         (d, "read", "read_only", _path("app/secrets/deep/token"), "deny", "policy", secret_dir),
     ]
-    _write(
+    write_policy_case(
         root,
         "permission-rule-paths-mcp-web",
         "Path rules are gitignore globs over the normalized path relative to the workspace; a "
@@ -157,7 +159,7 @@ def build(root: pathlib.Path) -> None:
         ("bypass", "edit", "edit", _path(".git/hooks/pre-commit"), "ask", "protected_path", ""),
         ("bypass", "edit", "edit", _path(".mcp.json"), "ask", "protected_path", ""),
     ]
-    _write(
+    write_policy_case(
         root,
         "permission-modes-protected-paths",
         "The five modes over the same calls. plan denies every non-read-only call except the "
@@ -178,7 +180,7 @@ def build(root: pathlib.Path) -> None:
         (b, "bash", "other", _bash("curl https://x.test"), "ask", "mode", ""),
         (b, "read", "read_only", _path("README.md"), "allow", "mode", ""),
     ]
-    _write(
+    write_policy_case(
         root,
         "handoff-target-policy-capped",
         "A handoff target's own pinned policy (bypass, allows git push) intersected with the "

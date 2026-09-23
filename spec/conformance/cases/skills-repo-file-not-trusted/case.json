@@ -1,0 +1,9 @@
+{
+  "name": "skills-repo-file-not-trusted",
+  "family": "skills",
+  "kind": "render",
+  "description": "A skill-shaped file in the sandbox is only data: reading it is an ordinary tool result, and load_skill for its name fails not_found with no injected event, since only the host store pinned at thread start counts. Line 0 is byte-equal to skills-listing-then-load's: the file never enters the listing.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

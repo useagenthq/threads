@@ -300,6 +300,20 @@
       ],
       "type": "object"
     },
+    "LoadSkillInput": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "A skill name from the listing.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "LsInput": {
       "additionalProperties": false,
       "properties": {
