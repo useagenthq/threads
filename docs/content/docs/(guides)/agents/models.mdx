@@ -25,8 +25,8 @@ import { anthropic } from "@threads/anthropic";
 const claude = anthropic({
   model: "claude-sonnet-5",
   maxTokens: 8192,
-  contextWindow: 200_000,
-  maxOutputTokens: 8192,
+  contextWindow: 1_000_000,
+  maxOutputTokens: 128_000,
   params: { temperature: 0.2 },
 });
 ```
@@ -39,8 +39,8 @@ from threads.anthropic import anthropic
 
 claude = anthropic(
     "claude-sonnet-5",
-    context_window=200_000,
-    max_output_tokens=8192,
+    context_window=1_000_000,
+    max_output_tokens=128_000,
     params={"temperature": 0.2},
 )
 ```
@@ -62,8 +62,8 @@ import { openai } from "@threads/openai";
 
 const gpt = openai({
   model: "gpt-5.5",
-  contextWindow: 400_000,
-  maxOutputTokens: 8192,
+  contextWindow: 1_050_000,
+  maxOutputTokens: 128_000,
   params: { reasoning: { effort: "medium" } },
 });
 ```
@@ -76,8 +76,8 @@ from threads.openai import openai
 
 gpt = openai(
     "gpt-5.5",
-    context_window=400_000,
-    max_output_tokens=8192,
+    context_window=1_050_000,
+    max_output_tokens=128_000,
     params={"reasoning": {"effort": "medium"}},
 )
 ```

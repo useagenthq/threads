@@ -49,8 +49,8 @@ const coder = agent({
   model: anthropic({
     model: "claude-sonnet-5",
     maxTokens: 8192,
-    contextWindow: 200_000,
-    maxOutputTokens: 8192,
+    contextWindow: 1_000_000,
+    maxOutputTokens: 128_000,
   }),
   sandbox: e2b(), // E2B_API_KEY. Your keys never enter the sandbox.
 });
@@ -69,7 +69,7 @@ from threads.e2b import e2b
 coder = agent(
     name="coder",
     instructions="Fix the failing tests in /workspace.",
-    model=anthropic("claude-sonnet-5", context_window=200_000, max_output_tokens=8192),
+    model=anthropic("claude-sonnet-5", context_window=1_000_000, max_output_tokens=128_000),
     sandbox=e2b(),  # E2B_API_KEY. Your keys never enter the sandbox.
 )
 
@@ -166,8 +166,8 @@ import { anthropic } from "@threads/anthropic";
 import { openai } from "@threads/openai";
 import { aiSdk } from "@threads/ai-sdk";
 
-model: anthropic({ model: "claude-sonnet-5", maxTokens: 8192, contextWindow: 200_000, maxOutputTokens: 8192 }), // ANTHROPIC_API_KEY
-model: openai({ model: "gpt-5.5", contextWindow: 400_000, maxOutputTokens: 8192 }),                              // OPENAI_API_KEY
+model: anthropic({ model: "claude-sonnet-5", maxTokens: 8192, contextWindow: 1_000_000, maxOutputTokens: 128_000 }), // ANTHROPIC_API_KEY
+model: openai({ model: "gpt-5.5", contextWindow: 1_050_000, maxOutputTokens: 128_000 }),                              // OPENAI_API_KEY
 model: aiSdk({ model: (fetch) => yourProvider({ fetch })("model-id"), contextWindow: 128_000, maxOutputTokens: 8192 }), // any AI SDK provider
 ```
 
@@ -176,8 +176,8 @@ from threads.anthropic import anthropic
 from threads.litellm import litellm
 from threads.openai import openai
 
-model=anthropic("claude-sonnet-5", context_window=200_000, max_output_tokens=8192)  # ANTHROPIC_API_KEY
-model=openai("gpt-5.5", context_window=400_000, max_output_tokens=8192)             # OPENAI_API_KEY
+model=anthropic("claude-sonnet-5", context_window=1_000_000, max_output_tokens=128_000)  # ANTHROPIC_API_KEY
+model=openai("gpt-5.5", context_window=1_050_000, max_output_tokens=128_000)             # OPENAI_API_KEY
 model=litellm("openai/my-model", base_url="http://localhost:4000", context_window=128_000, max_output_tokens=8192)
 ```
 
