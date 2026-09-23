@@ -1,3 +1,4 @@
+import { ObserverPump } from "../hooks/observers";
 import {
   BranchId,
   type InputPart,
@@ -15,8 +16,9 @@ import { uuidv7 } from "../store/encode";
 import { bindBuiltins } from "../tools";
 import type { LogError } from "../verify";
 import { ConfigError } from "./errors";
+import { type Extension, loopExtension, observerOf } from "./extension";
 import type { PinOptions } from "./pin";
-import { pin } from "./pin";
+import { extensionTools, pin } from "./pin";
 import {
   type Decode,
   type RunResult,
@@ -43,6 +45,8 @@ export type RunOptions<Deps> = {
 
 export type Resolved<Deps, Output> = PinOptions & {
   readonly bindable: readonly Tool<unknown, unknown, Deps>[];
+  readonly hookable: readonly Extension<Deps>[];
+  readonly setup: () => Promise<void>;
   readonly decode: Decode<Output>;
 };
 
@@ -69,6 +73,7 @@ export async function run<Deps, Output>(
     options.store ?? handleOf(options.thread)?.store ?? sqlite(".threads");
   const { log, artifacts } = await openStore(store);
   const pinned = pin(def);
+  await def.setup();
   // Each run is its own executor: a second run on a busy branch is branch_busy.
   const holder = `run-${crypto.randomUUID()}`;
   const opened = open(log, options.thread, pinned.started, holder);
@@ -88,12 +93,25 @@ export async function run<Deps, Output>(
       writer,
       artifacts,
     });
+    const observers = new ObserverPump(
+      log.cursors,
+      thread.branch,
+      () => knownEvents(writer.chain),
+      def.hookable.flatMap((e) => observerOf(e) ?? []),
+    );
+    observers.poke();
     const config = loopConfig(
       def,
       options,
       principal,
       thread,
-      hooks,
+      {
+        ...hooks,
+        onEvent: (event) => {
+          hooks.onEvent?.(event);
+          observers.poke();
+        },
+      },
       builtin.tools,
     );
     const result = (end: LoopEnd): RunResult<Output> =>
@@ -199,6 +217,16 @@ function checkPin(
   const first = knownEvents(writer.chain).find(
     (e) => e.type === "thread_started",
   );
+  // Checked before anything attaches to the thread's sandbox resource.
+  if (
+    first?.type === "thread_started" &&
+    started.type === "thread_started" &&
+    first.data.sandbox_provider !== started.data.sandbox_provider
+  )
+    throw new ConfigError(
+      "invalid_config",
+      `this thread runs on sandbox provider ${first.data.sandbox_provider ?? "(none)"}, not ${started.data.sandbox_provider ?? "(none)"}`,
+    );
   if (
     first?.type === "thread_started" &&
     started.type === "thread_started" &&
@@ -240,8 +268,17 @@ function loopConfig<Deps, Output>(
       ),
     tools: new Map([
       ...builtin.map((t) => [t.spec.name, t] as const),
-      ...def.bindable.map((t) => [t.name, t.bind(env)] as const),
+      ...[...def.bindable, ...extensionTools(def.hookable)].map(
+        (t) => [t.name, t.bind(env)] as const,
+      ),
     ]),
+    extensions: def.hookable.map((e) =>
+      loopExtension(e, (hc) => ({
+        ...env,
+        signal: hc.signal,
+        ...(hc.callId === undefined ? {} : { callId: hc.callId }),
+      })),
+    ),
     authorize: (call, fold) => {
       const permissions = fold.policy?.permissions;
       if (permissions === undefined)

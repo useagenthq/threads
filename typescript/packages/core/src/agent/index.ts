@@ -7,6 +7,12 @@ export {
   type StreamEvent,
 } from "./agent";
 export { ConfigError, type ConfigErrorCode } from "./errors";
+export {
+  type Extension,
+  type ExtensionOptions,
+  extension,
+  type Hooks,
+} from "./extension";
 export type { RunResult, ThreadRef } from "./result";
 export type { RunOptions } from "./run";
 export { type Secret, secret } from "./secret";

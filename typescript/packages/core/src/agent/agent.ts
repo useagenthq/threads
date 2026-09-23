@@ -11,6 +11,7 @@ import type { Model } from "../model";
 import type { Sandbox } from "../sandbox";
 import type { Egress } from "../tools";
 import { ConfigError } from "./errors";
+import type { Extension } from "./extension";
 import { pin } from "./pin";
 import type { RunResult } from "./result";
 import { type Resolved, type RunOptions, run } from "./run";
@@ -39,6 +40,8 @@ export type AgentOptions<Deps, Output> = {
   readonly sandbox?: Sandbox;
   /** Sandbox egress: absent is deny-all; "unenforced" opts in to a provider that can't enforce it. */
   readonly egress?: Egress;
+  /** Instructions, tools, hooks and observers, in this order. */
+  readonly extensions?: readonly Extension<Deps>[];
 };
 
 /** One item of stream(): a committed event, or a transient text delta (never logged). */
@@ -112,6 +115,9 @@ function build<Deps, Output>(
     context: options.context ?? {},
     sandbox: options.sandbox,
     egress: options.egress,
+    extensions: options.extensions ?? [],
+    hookable: options.extensions ?? [],
+    setup: once(options.extensions ?? []),
     decode,
   };
   return {
@@ -121,6 +127,7 @@ function build<Deps, Output>(
     check: async () => {
       try {
         pin(def);
+        await def.setup();
         return { ok: true, value: undefined };
       } catch (error) {
         if (!(error instanceof ConfigError)) throw error;
@@ -130,6 +137,29 @@ function build<Deps, Output>(
         };
       }
     },
+  };
+}
+
+/** Each extension's setup runs once, at check() or the first run; a throw is a ConfigError. */
+function once<Deps>(
+  extensions: readonly Extension<Deps>[],
+): () => Promise<void> {
+  let done: Promise<void> | undefined;
+  const all = async (): Promise<void> => {
+    for (const e of extensions) {
+      try {
+        await e.setup?.();
+      } catch (error) {
+        throw new ConfigError(
+          "invalid_config",
+          `extension ${e.name}: setup failed: ${String(error)}`,
+        );
+      }
+    }
+  };
+  return () => {
+    done ??= all();
+    return done;
   };
 }
 

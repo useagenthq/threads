@@ -17,6 +17,7 @@ import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
 import { builtins, type Egress } from "../tools";
 import { ConfigError } from "./errors";
+import { type Extension, hookNames } from "./extension";
 import { jsonSchema, type Tool } from "./tool";
 
 // The resolved, secret-free config an agent pins in thread_started: line 0's
@@ -36,6 +37,7 @@ export type PinOptions = {
   readonly context: Partial<z.infer<typeof ContextPolicy>>;
   readonly sandbox: Sandbox | undefined;
   readonly egress: Egress | undefined;
+  readonly extensions: readonly Extension<never>[];
 };
 
 /** The pinned tool specs and the thread_started draft. Throws ConfigError on a bad setup. */
@@ -46,8 +48,16 @@ export function pin(o: PinOptions): {
   const specs = [
     ...builtins(o.sandbox, o.egress).map((b) => b.spec),
     ...o.tools.map((t) => t.spec()),
+    ...extensionTools(o.extensions).map((t) => t.spec()),
     ...finalOutput(o.output),
   ];
+  const exts = o.extensions.map((e) => e.name);
+  const again = exts.find((n, i) => exts.indexOf(n) !== i);
+  if (again !== undefined)
+    throw new ConfigError(
+      "duplicate_name",
+      `two extensions are named ${again}`,
+    );
   const names = specs.map((s) => s.name);
   const twice = names.find((n, i) => names.indexOf(n) !== i);
   if (twice !== undefined)
@@ -55,14 +65,17 @@ export function pin(o: PinOptions): {
   const { model, params, adapter } = o.model.info;
   const cfg = {
     agent_name: o.name,
-    instructions: o.instructions,
+    instructions: instructions(o),
     model,
     model_params: params,
     adapter,
     tools: specs,
     policy: policy(o),
+    ...(o.sandbox === undefined
+      ? {}
+      : { sandbox_provider: o.sandbox.info.provider }),
   };
-  const text = canonicalize(z.json().parse(cfg));
+  const text = canonicalize(z.json().parse({ ...cfg, ...hashedOnly(o) }));
   if (!text.ok) throw new ConfigError("invalid_config", text.error.message);
   return {
     specs,
@@ -72,6 +85,67 @@ export function pin(o: PinOptions): {
       critical: true,
       actor: { kind: "host" },
       data: { ...cfg, config_hash: sha256Hex(text.value) },
+    },
+  };
+}
+
+/**
+ * Pinned by config_hash but not model-visible, so not in thread_started's fields: what the
+ * extensions hook and observe (hooks load only from the pinned config, and a
+ * changed hook set is a new thread), and the sandbox settings a resumed run must match.
+ */
+function hashedOnly(o: PinOptions): Record<string, unknown> {
+  return {
+    ...(o.extensions.length === 0
+      ? {}
+      : {
+          extensions: o.extensions.map((e) => ({
+            name: e.name,
+            hooks: hookNames(e),
+            observers: Object.keys(e.on ?? {}).toSorted(),
+            hook_timeout_ms: e.hookTimeoutMs ?? null,
+          })),
+        }),
+    ...(o.sandbox === undefined
+      ? {}
+      : {
+          sandbox: {
+            provider: o.sandbox.info.provider,
+            egress: o.sandbox.info.egress,
+            capture_classes: [...o.sandbox.info.capture_classes],
+            policy: o.egress ?? null,
+          },
+        }),
+  };
+}
+
+/** the base instructions, then each extension's, in declaration order. */
+function instructions(o: PinOptions): string {
+  return [o.instructions, ...o.extensions.flatMap((e) => e.instructions ?? [])]
+    .filter((t) => t !== "")
+    .join("\n\n");
+}
+
+/** Extension tools, namespaced <ext>__<tool> and sorted by that name. */
+export function extensionTools<Deps>(
+  extensions: readonly Extension<Deps>[],
+): readonly Tool<unknown, unknown, Deps>[] {
+  return extensions
+    .flatMap((e) => (e.tools ?? []).map((t) => namespaced(t, e.name)))
+    .toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+function namespaced<Deps>(
+  t: Tool<unknown, unknown, Deps>,
+  ext: string,
+): Tool<unknown, unknown, Deps> {
+  const name = `${ext}__${t.name}`;
+  return {
+    name,
+    spec: () => ({ ...t.spec(), name }),
+    bind: (env) => {
+      const impl = t.bind(env);
+      return { ...impl, spec: { ...impl.spec, name } };
     },
   };
 }
