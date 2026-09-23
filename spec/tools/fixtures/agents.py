@@ -3,8 +3,7 @@
 
 from __future__ import annotations
 
-import json
-import pathlib
+from typing import TYPE_CHECKING
 
 from .common import ALICE, T0, sha, tokens, tool
 from .jcs import JsonValue, Obj, canonical
@@ -21,6 +20,9 @@ from .pieces import (
 )
 from .policies import permissions, policy
 from .projections import children, mode, team_tasks, todos
+
+if TYPE_CHECKING:
+    import pathlib
 
 FAM = "agents_teams"
 CHILD_A = "0192a000-0000-7000-8000-0000000000c1"
@@ -49,7 +51,6 @@ def build(root: pathlib.Path) -> None:
     _handoff(root)
     _input_hook(root)
     _modes(root)
-    _listed(root)
 
 
 def _children(root: pathlib.Path) -> None:
@@ -387,50 +388,6 @@ def _modes(root: pathlib.Path) -> None:
             "permissions_approvals",
             "mode_changed to bypass when policy.permissions.allow_bypass is false: "
             "invalid_transition.",
-        ),
-        log,
-    )
-
-
-CATALOG = pathlib.Path(__file__).resolve().parents[2] / "schema" / "tools.v1.catalog.json"
-LEAD_TOOLS = (
-    "handoff",
-    "read_tool_result",
-    "send_message",
-    "spawn_agent",
-    "team_task_claim",
-    "team_task_create",
-    "team_task_update",
-    "todo_write",
-)
-
-
-def _catalog_specs(names: tuple[str, ...]) -> list[JsonValue]:
-    """Pinned specs of catalog tools, as the runtimes pin them: read_only, sorted by name."""
-    listed: list[Obj] = json.loads(CATALOG.read_bytes())
-    return [{**e, "effect_class": "read_only"} for e in listed if e["name"] in names]
-
-
-def _listed(root: pathlib.Path) -> None:
-    log = Log()
-    instructions = "\n\n".join(
-        (
-            "You coordinate a code review.",
-            "Subagents you can start with spawn_agent: reviewer, scanner.",
-            "Agents you can hand the conversation to: billing.",
-        )
-    )
-    started(log, _catalog_specs(LEAD_TOOLS), instructions, policy(handoffs=["billing"]))
-    user(log, "Review the diff.")
-    render_case(
-        root,
-        (
-            "render-agents-listed-in-system",
-            FAM,
-            "An agent with subagents reviewer and scanner and handoff target billing: line 0's "
-            "system ends with the two pinned agent sentences, in declaration order, joined by "
-            "blank lines; its tools are the framework catalog entries, read_only, sorted by name "
-            "with the built-ins.",
         ),
         log,
     )

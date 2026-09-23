@@ -31,6 +31,7 @@ from . import (
     rules,
     structure,
     summaries,
+    teams,
     tool_inputs,
 )
 from .common import CASES, sha
@@ -52,6 +53,7 @@ FAMILIES = (
     context,
     models,
     agents,
+    teams,
     policy,
     ladder,
     extras,
