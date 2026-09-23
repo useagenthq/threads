@@ -2642,7 +2642,8 @@
           "async": true,
           "params": [
             {"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true},
-            {"name": "data", "kind": "positional", "type": {"prim": "bytes"}, "required": true}
+            {"name": "data", "kind": "positional", "type": {"prim": "bytes"}, "required": true},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}
           ],
           "returns": {
             "result": {"prim": "void"},
@@ -2653,7 +2654,7 @@
           "ts": "download",
           "py": "download",
           "async": true,
-          "params": [{"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "params": [{"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
           "returns": {
             "result": {"prim": "bytes"},
             "errors": ["not_found", "invalid_path", "permission_denied", "is_directory", "too_large", "unavailable"]
