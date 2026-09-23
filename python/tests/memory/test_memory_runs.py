@@ -4,13 +4,15 @@ keyed effects under the write policy, recall as logged untrusted references."""
 import asyncio
 from collections.abc import Sequence
 
+import pytest
 from pydantic import JsonValue
 
-from threads import Completed, Parked, agent, open_thread, scripted_model, sqlite
+from threads import Completed, ConfigError, Parked, agent, open_thread, scripted_model, sqlite
 from threads.agents.agent import Agent
 from threads.agents.store import Store
 from threads.log import (
     EffectBeginEvent,
+    EffectClass,
     Event,
     InjectedEvent,
     Permissions,
@@ -176,5 +178,22 @@ def test_an_unguarded_provider_write_that_fails_parks_never_retries() -> None:
         assert result.reason == "effect_unknown"
         got = await events(store, result)
         assert len([e for e in got if isinstance(e, EffectBeginEvent)]) == 1
+
+    asyncio.run(main())
+
+
+class _ReadOnly(_Down):
+    """Claims its writes are read-only, which would let them skip effect_begin."""
+
+    write_effect: EffectClass = "read_only"
+    dedup_window_ms: int | None = None
+
+
+def test_a_provider_whose_writes_claim_read_only_is_a_setup_error() -> None:
+    async def main() -> None:
+        script = [use("save_memory", {"text": "x"}), text("done")]
+        with pytest.raises(ConfigError, match="read_only") as raised:
+            await bot(script, _ReadOnly()).run("hi", store=sqlite(":memory:"))
+        assert raised.value.code == "invalid_config"
 
     asyncio.run(main())

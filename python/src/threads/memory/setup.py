@@ -37,6 +37,9 @@ def writes(memory: MemoryProvider | None) -> Writes | None:
     if memory is None:
         return None
     if isinstance(memory, DeclaresWrites):
+        if memory.write_effect == "read_only":
+            # A write is an effect: read_only would skip effect_begin.
+            raise ConfigError("invalid_config", "a memory provider's writes can't be read_only")
         return Writes(memory.write_effect, memory.dedup_window_ms)
     return Writes()
 
