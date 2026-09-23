@@ -1,0 +1,52 @@
+{
+  "max_retries": 0,
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": "You are a helpful agent.",
+      "role": "system"
+    },
+    {
+      "content": [
+        {
+          "text": "What does this page show?",
+          "type": "text"
+        },
+        {
+          "image_url": {
+            "url": "data:image/png;base64,iVBORw0KGgpmaXh0dXJlOiBsb2dpbiBwYWdlIHNjcmVlbnNob3Q="
+          },
+          "type": "image_url"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "scripted-1",
+  "num_retries": 0,
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  },
+  "tools": [
+    {
+      "function": {
+        "description": "Read a file from the sandbox workspace.",
+        "name": "read_file",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    }
+  ]
+}
