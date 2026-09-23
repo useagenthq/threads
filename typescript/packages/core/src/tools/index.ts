@@ -63,7 +63,12 @@ export function bindBuiltins(
     readonly writer: Writer;
     readonly artifacts: ArtifactStore;
   },
-): { readonly tools: readonly ToolImpl[]; readonly session: SessionGetter } {
+): {
+  readonly tools: readonly ToolImpl[];
+  readonly session: SessionGetter;
+  /** L3 restore's framework read; absent without a sandbox. */
+  readonly readFile?: (path: string) => Promise<Uint8Array | undefined>;
+} {
   const { ledger, writer, artifacts } = run;
   const session: SessionGetter =
     sandbox === undefined
@@ -75,5 +80,13 @@ export function bindBuiltins(
     artifacts,
     events: () => knownEvents(writer.chain),
   };
-  return { tools: builtins(sandbox, egress).map((b) => b.bind(env)), session };
+  const tools = builtins(sandbox, egress).map((b) => b.bind(env));
+  if (sandbox === undefined) return { tools, session };
+  const readFile = async (path: string): Promise<Uint8Array | undefined> => {
+    const open = await session();
+    if (!open.ok) return undefined;
+    const got = await open.value.download(path, env.context);
+    return got.ok ? got.value : undefined;
+  };
+  return { tools, session, readFile };
 }

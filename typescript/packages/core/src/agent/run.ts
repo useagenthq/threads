@@ -113,6 +113,7 @@ export async function run<Deps, Output>(
         },
       },
       builtin.tools,
+      builtin.readFile,
     );
     const result = (end: LoopEnd): RunResult<Output> =>
       runResult(
@@ -251,6 +252,7 @@ function loopConfig<Deps, Output>(
   thread: ThreadRef,
   hooks: Hooks,
   builtin: readonly ToolImpl[],
+  readFile?: (path: string) => Promise<Uint8Array | undefined>,
 ): LoopConfig {
   const env = {
     deps: options.deps,
@@ -307,6 +309,7 @@ function loopConfig<Deps, Output>(
     principal,
     skewMarginMs: 1000,
     redact: redactSecrets,
+    ...(readFile === undefined ? {} : { readFile }),
     ...(def.output === undefined ? {} : { output: def.output }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(hooks.onEvent === undefined ? {} : { onEvent: hooks.onEvent }),
