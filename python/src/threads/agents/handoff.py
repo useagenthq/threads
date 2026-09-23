@@ -20,6 +20,7 @@ from threads.log import (
     TextPart,
     UserInputEvent,
 )
+from threads.loop.budget import inherited
 from threads.loop.drafts import draft
 from threads.loop.history import CallState
 from threads.loop.results import As, result_draft, text_ref
@@ -74,8 +75,9 @@ def _transcript(events: Sequence[Event]) -> str:
 
 
 def launch[D](scope: Scope[D], rt: Runtime, event: HandoffEvent) -> tuple[Launch, str]:
-    """The target's launch and the pending request it answers: under the originating principal
-    and the current ceilings, never the source agent's own tools."""
+    """The target's launch and the pending request it answers: under the originating principal,
+    the current ceilings and every budget covering the source, never the source agent's own
+    tools."""
     thread_id = rt.fold.thread_id
     if thread_id is None:
         raise AssertionError("an acquired branch has a thread")
@@ -101,6 +103,7 @@ def launch[D](scope: Scope[D], rt: Runtime, event: HandoffEvent) -> tuple[Launch
         "handoff",
         who,
         1,
+        budgets=tuple(inherited(thread_id, rt.fold, rt.budgets)),
         ceilings=scope.ceilings,
         before_input=(draft("injected", forwarded),),
     )

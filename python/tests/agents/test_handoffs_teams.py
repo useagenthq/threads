@@ -12,9 +12,12 @@ from pydantic import JsonValue
 from threads import Completed, Failed, HandedOff, Thread, agent, scripted_model, sqlite
 from threads.agents.bindings import capped
 from threads.log import (
+    Budget,
+    BudgetExceededEvent,
     Event,
     HandoffEvent,
     InjectedEvent,
+    ModelRequestEvent,
     Permissions,
     Principal,
     TeamMessageEvent,
@@ -110,6 +113,32 @@ def test_a_handoff_to_an_unlisted_agent_fails_before_any_effect() -> None:
         assert not only(events, HandoffEvent)
         refused = only(events, ToolResultEvent)[0].data
         assert (refused.origin, refused.is_error) == ("not_executed", True)
+
+    asyncio.run(main())
+
+
+def test_the_source_s_budgets_cover_its_handoff_target() -> None:
+    """the run's and the source thread's budgets also cover the target."""
+
+    def todo(i: str) -> JsonValue:
+        return call("todo_write", {"todos": [{"id": i, "content": i, "status": "pending"}]}, i)
+
+    async def main() -> None:
+        steps = [todo("t1"), todo("t2"), text("done")]
+        target = agent(name="target", model=scripted_model({"responses": steps}))
+        source = agent(
+            budget=Budget(max_model_requests=2),
+            model=scripted_model({"responses": [call("handoff", {"agent": "target"}, "h1")]}),
+            handoffs=[target],
+        )
+        store = sqlite(":memory:")
+        result = await source.run("help", store=store, budget=Budget(max_model_requests=2))
+        assert isinstance(result, HandedOff)
+        moved = await events_of(result.to_thread)
+        assert len(only(moved, ModelRequestEvent)) == 1
+        (exceeded,) = only(moved, BudgetExceededEvent)
+        assert (exceeded.data.scope, exceeded.data.limit) == ("ancestor", "max_model_requests")
+        assert exceeded.data.owner_thread_id == result.thread.id
 
     asyncio.run(main())
 
