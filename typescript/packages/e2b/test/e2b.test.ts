@@ -6,7 +6,7 @@ import { ledgerSuite } from "../../core/test/sandbox/ledger-suite";
 import { CANARY, contractSuite } from "../../core/test/sandbox/remote/contract";
 import { losesAfter } from "../../core/test/sandbox/remote/kit";
 import { World } from "../../core/test/sandbox/remote/world";
-import { code } from "../../core/test/store/helpers";
+import { code, unwrap } from "../../core/test/store/helpers";
 import { e2b } from "../src";
 import { fenceable } from "../src/transport";
 import { e2bBackend } from "./backend";
@@ -44,6 +44,19 @@ describe("e2b transport", () => {
     expect(world.creates).toBe(1);
     // The create reached E2B; the workspace script after it never left.
     expect(backend.traffic()).not.toContain("process.Process/Start");
+  });
+
+  test("envd, inside the sandbox, gets the sandbox's own token and never the API key", async () => {
+    const world = new World();
+    const { sandbox, backend } = adapter(world);
+    unwrap(await sandbox.create("op", CTX));
+    const envd = backend
+      .traffic()
+      .split("\nPOST ")
+      .filter((r) => r.includes("49983-"))
+      .join("\n");
+    expect(envd).toContain("x-access-token: envd-token");
+    expect(envd).not.toContain(CANARY);
   });
 
   test("other fetches in the process pass through untouched", async () => {

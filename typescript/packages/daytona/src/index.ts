@@ -22,6 +22,9 @@ import type { OpenSocket } from "./logs";
 // - Snapshots: cold (quiescence "stopped"): the sandbox is stopped for the capture and started
 //   again, so its running processes end: disruptive to the parent (driver.ts).
 // - Exec output: raw bytes, split into stdout and stderr by Daytona's in-band markers.
+// - Credentials: a sandbox gets no env, and no request body or URL carries the API key. Toolbox
+//   requests authenticate to Daytona's toolbox proxy with it, as Daytona's SDK does; Daytona
+//   doesn't document that the proxy drops it before the daemon inside the sandbox.
 
 export type DaytonaOptions = {
   /** Used only to authenticate the host's requests; never passed into a sandbox. */

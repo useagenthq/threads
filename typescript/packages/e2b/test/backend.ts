@@ -232,9 +232,15 @@ export function e2bBackend(world: World, domain: string): E2bBackend {
     const req = new Request(input, init);
     const body =
       req.method === "GET" ? "" : text.decode(await req.clone().arrayBuffer());
-    log.push(`${req.method} ${req.url} ${body}`);
     const url = new URL(req.url);
-    if (url.host === `api.${domain}`) return control(req, url);
+    if (url.host === `api.${domain}`) {
+      // The control plane is E2B's API, where the API key belongs (X-API-KEY).
+      log.push(`${req.method} ${req.url} ${body}`);
+      return control(req, url);
+    }
+    // envd runs inside the sandbox: nothing it receives, headers included, may carry the key.
+    const headers = [...req.headers].map(([k, v]) => `${k}: ${v}`).join("\n");
+    log.push(`${req.method} ${req.url}\n${headers}\n${body}`);
     const box = /^49983-(.+)$/.exec(url.host.slice(0, -domain.length - 1))?.[1];
     if (box !== undefined && url.host.endsWith(`.${domain}`))
       return envd(req, url, box);
