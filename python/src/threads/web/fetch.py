@@ -68,9 +68,14 @@ async def get(
     return Err(f"too_many_redirects: more than {MAX_REDIRECTS} redirects from {url}")
 
 
-def _host(url: str) -> str | None:
+def _host(url: str) -> tuple[str, int | None] | None:
+    """Host and non-default port, as TS's `URL.host` compares them: another port is another
+    host, and an http to https upgrade on the default ports is not."""
     found = origin(url)
-    return None if found is None else found[1]
+    if found is None:
+        return None
+    scheme, host, port = found
+    return host, None if port == (443 if scheme == "https" else 80) else port
 
 
 def _charset(params: str) -> str | None:

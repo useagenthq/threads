@@ -30,6 +30,8 @@ WEB_SEARCH: dict[str, JsonValue] = {"type": "web_search_20250305", "name": "web_
         {"type": "computer_20250124", "name": "computer"},
         {"type": "mcp", "server_label": "x"},
         {"name": "untyped"},
+        {"type": "web_search_mcp", "name": "web_search"},
+        {"type": "web_fetch_20250910_exec", "name": "web_fetch"},
     ],
 )
 def test_anthropic_refuses_effectful_hosted_tools_at_setup(tool: dict[str, JsonValue]) -> None:
@@ -39,7 +41,15 @@ def test_anthropic_refuses_effectful_hosted_tools_at_setup(tool: dict[str, JsonV
 
 
 @pytest.mark.parametrize(
-    "kind", ["code_interpreter", "file_search", "mcp", "computer_use_preview", "image_generation"]
+    "kind",
+    [
+        "code_interpreter",
+        "file_search",
+        "mcp",
+        "computer_use_preview",
+        "image_generation",
+        "web_search_mcp",
+    ],
 )
 def test_openai_refuses_effectful_hosted_tools_at_setup(kind: str) -> None:
     with pytest.raises(ConfigError) as raised:

@@ -37,7 +37,7 @@ class SearchBackend(Protocol):
 
 def in_domain(url: str, domain: str) -> bool:
     """The URL's host is the domain or a subdomain of it."""
-    host = (urlsplit(url).hostname or "").lower()
+    host = (urlsplit(url).hostname or "").lower().rstrip(".")
     domain = domain.lower().removeprefix("*.").strip(".")
     return host == domain or host.endswith(f".{domain}")
 

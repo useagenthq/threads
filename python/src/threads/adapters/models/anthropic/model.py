@@ -5,6 +5,7 @@ retry. The SDK sends through a fenced HTTP client, so a writer that lost its
 lease while the SDK prepared or queued the request sends nothing.
 """
 
+import re
 from collections.abc import AsyncIterator, Mapping, Sequence
 from http import HTTPStatus
 from typing import Unpack
@@ -99,11 +100,11 @@ class AnthropicOptions(ModelOptions, total=False):
     """Enables citations on documents (an adapter setting, so pinned in line 0)."""
     hosted_tools: Sequence[HostedTool]
     """Server tools, sent as given and pinned in line 0: web search and web fetch only
-    (`web_search_*`, `web_fetch_*`); anything else raises hosted_tool_unsupported."""
+    (`web_search_YYYYMMDD`, `web_fetch_YYYYMMDD`); anything else raises hosted_tool_unsupported."""
 
 
 def _web(kind: str) -> bool:
-    return kind.startswith(("web_search_", "web_fetch_"))
+    return re.fullmatch(r"(web_search|web_fetch)_\d{8}", kind) is not None
 
 
 def anthropic(name: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel:

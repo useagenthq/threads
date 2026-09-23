@@ -5,6 +5,7 @@ retry. The SDK sends through a fenced HTTP client, so a writer that lost its
 lease while the SDK prepared or queued the request sends nothing.
 """
 
+import re
 from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Unpack
 
@@ -98,12 +99,12 @@ def _too_long(error: sdk.APIStatusError) -> bool:
 
 class OpenAIOptions(ModelOptions, total=False):
     hosted_tools: Sequence[HostedTool]
-    """Hosted tools, sent as given and pinned in line 0: web search only (`web_search*`);
-    anything else raises hosted_tool_unsupported."""
+    """Hosted tools, sent as given and pinned in line 0: web search only (`web_search`, with an
+    optional `_preview` and date); anything else raises hosted_tool_unsupported."""
 
 
 def _web(kind: str) -> bool:
-    return kind.startswith("web_search")
+    return re.fullmatch(r"web_search(_preview)?(_\d{4}_\d{2}_\d{2})?", kind) is not None
 
 
 def openai(name: str, **options: Unpack[OpenAIOptions]) -> OpenAIModel:
