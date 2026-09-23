@@ -1,15 +1,21 @@
 """The sandbox-side scripts every adapter shares: the manifest parser is a trust boundary (the
 guest writes its input), and the exec wrapper's argv carries env names, never values."""
 
+import json
+from pathlib import Path
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
 from threads.adapters.sandboxes.posix import WRAPPER, parse_manifest, stdin_path, wrap
 from threads.result import Err, Ok
-from threads.sandbox.manifest import ManifestEntry, in_order, manifest_of
+from threads.sandbox.manifest import ManifestEntry, in_order, manifest_hash, manifest_of
 
 _DIGEST = "a" * 64
+VECTOR = (
+    Path(__file__).resolve().parents[4] / "spec" / "conformance" / "vectors" / "manifest-order.json"
+)
 
 
 def _nul(entries: list[ManifestEntry]) -> bytes:
@@ -44,6 +50,17 @@ def test_paths_order_by_utf16_code_units_like_jcs_keys() -> None:
     parsed = parse_manifest(_nul(manifest_of(tree)[::-1]))
     assert isinstance(parsed, Ok)
     assert [e["path"] for e in parsed.value] == ["a", "\U0001f600", ""]
+
+
+def test_the_parsed_manifest_matches_the_shared_vector() -> None:
+    """What the in-sandbox script prints for the vector's tree, in any order, parses to the
+    vector's paths and hash."""
+    vector = json.loads(VECTOR.read_text(encoding="utf-8"))
+    tree = {f["path"]: f["data"].encode() for f in vector["files"]}
+    parsed = parse_manifest(_nul(manifest_of(tree)[::-1]))
+    assert isinstance(parsed, Ok)
+    assert [e["path"] for e in parsed.value] == vector["manifest_paths"]
+    assert manifest_hash(parsed.value) == vector["manifest_hash"]
 
 
 @pytest.mark.parametrize(
