@@ -14,6 +14,7 @@ import {
   loadCase,
   plain,
 } from "./cases";
+import { runFork } from "./fork";
 import { runAppending } from "./recover";
 
 // One runner for every case in spec/conformance/cases, no per-case code. `reduce` and `render`
@@ -24,7 +25,7 @@ const LATER: Readonly<Record<Kind, string | undefined>> = {
   reduce: undefined,
   render: undefined,
   recover: undefined,
-  fork: "fork() needs the sandbox restore and the resource ledger (host sandbox slice)",
+  fork: undefined,
   stub: undefined,
   intake: "intake needs the host webhook pipeline (host slice)",
   policy: undefined,
@@ -165,6 +166,11 @@ function runnerFor(
       return async () => {
         runImport(c, log);
         await runAppending(c, log);
+      };
+    case "fork":
+      return async () => {
+        if (c.state !== undefined) runImport(c, log);
+        await runFork(c, log);
       };
     case "render":
       return () => runRender(c, log);

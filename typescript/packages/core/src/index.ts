@@ -14,5 +14,6 @@ export {
 export * from "./reduce";
 export * from "./sandbox";
 export * from "./store";
+export * from "./thread";
 export * from "./verify";
 export { VERSION } from "./version";

@@ -66,8 +66,20 @@ const ExpectedFile = z.strictObject({
       z.record(z.string(), z.int()),
     )
     .optional(),
-  fork: z.unknown().optional(),
-  resources: z.unknown().optional(),
+  fork: z
+    .strictObject({
+      child_created: z.boolean(),
+      at_seq: z.int().optional(),
+      parent_unchanged: z.boolean(),
+      knowledge_revision: z.int().nullable().optional(),
+    })
+    .optional(),
+  resources: z
+    .strictObject({
+      creates: z.int(),
+      rows: z.array(z.strictObject({ kind: z.string(), state: z.string() })),
+    })
+    .optional(),
   render: z
     .strictObject({
       next_request_sha256: z.string(),
@@ -101,6 +113,25 @@ export type Counters = Partial<
 /** What the runner reads from one case directory. */
 export type Case = {
   readonly dir: string;
+  /** case.json input, parsed by the kind's runner. */
+  readonly input: unknown;
+  readonly fork:
+    | {
+        readonly child_created: boolean;
+        readonly at_seq?: number | undefined;
+        readonly parent_unchanged: boolean;
+        readonly knowledge_revision?: number | null | undefined;
+      }
+    | undefined;
+  readonly resources:
+    | {
+        readonly creates: number;
+        readonly rows: readonly {
+          readonly kind: string;
+          readonly state: string;
+        }[];
+      }
+    | undefined;
   readonly appended: readonly Matcher[] | undefined;
   readonly sandbox: Counters | undefined;
   readonly stubs:
@@ -172,6 +203,9 @@ export function loadCase(name: string): Case {
     file === undefined ? undefined : readJson(join(dir, file));
   return {
     dir,
+    input: meta.input,
+    fork: expected.fork,
+    resources: expected.resources,
     appended: expected.appended,
     sandbox: expected.sandbox,
     stubs: expected.stubs,

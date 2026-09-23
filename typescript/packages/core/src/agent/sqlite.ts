@@ -53,3 +53,10 @@ async function connect(path: string): Promise<OpenStore> {
   if (!log.ok) throw new Error(`store ${path}: ${log.error.message}`);
   return { log: log.value, artifacts };
 }
+
+/** A Store over a log and artifact store already open, for the test kit and embedders. */
+export function storeOf(open: OpenStore): Store {
+  const store = new Store(":memory:");
+  opened.set(store, Promise.resolve(open));
+  return store;
+}
