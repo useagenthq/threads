@@ -82,8 +82,7 @@ async function attempt<T>(
 }
 
 export function zep(options: ZepOptions = {}): MemoryProvider {
-  const apiKey = (): string =>
-    credential("zep", "apiKey", options.apiKey, "ZEP_API_KEY");
+  const apiKey = credential("zep", "apiKey", options.apiKey, "ZEP_API_KEY");
   let client: ZepClient | undefined;
   const sdk = (): ZepClient => {
     client ??= new ZepClient({

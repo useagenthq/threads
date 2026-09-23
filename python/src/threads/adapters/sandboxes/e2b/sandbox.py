@@ -55,7 +55,8 @@ class E2BSandbox:
         domain: str | None = None,
         api_url: str | None = None,
     ) -> None:
-        self._api_key, self._domain, self._api_url = api_key, domain, api_url
+        self._key = credential("e2b", "api_key", api_key, API_KEY)
+        self._domain, self._api_url = domain, api_url
         self._name = name
         self._plane: tuple[ConnectionConfig, Owner] | None = None
         self._transports = transports
@@ -81,9 +82,6 @@ class E2BSandbox:
         """Resolves the key on the host. The control-plane client is made on first use, in the
         run."""
         self._key()
-
-    def _key(self) -> str:
-        return credential("e2b", "api_key", self._api_key, API_KEY)
 
     def _connection(self) -> tuple[ConnectionConfig, Owner]:
         if self._plane is None:

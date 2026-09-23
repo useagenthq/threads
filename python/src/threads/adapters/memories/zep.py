@@ -45,16 +45,11 @@ class Zep:
         self.base_url = base_url
         self.http = http
         """The transport under the fence; None opens real connections. Tests pass one."""
-        self._resolved: str | None = None
+        self._key = credential("zep", "api_key", api_key, API_KEY)
 
     async def setup(self) -> None:
         """Resolves the key on the host, once: a missing key fails here, not mid-run."""
         self._key()
-
-    def _key(self) -> str:
-        if self._resolved is None:
-            self._resolved = credential("zep", "api_key", self.api_key, API_KEY)
-        return self._resolved
 
     @asynccontextmanager
     async def _client(self) -> AsyncGenerator[AsyncZep]:

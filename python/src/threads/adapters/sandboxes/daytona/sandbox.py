@@ -92,7 +92,8 @@ class DaytonaSandbox:
         self._placed = Placement(
             target, ttl, auto_stop_minutes=auto_stop_minutes, block_network=not allow_internet
         )
-        self._api_key, self._api_url, self._base = api_key, api_url, snapshot
+        self._key = credential("daytona", "api_key", api_key, API_KEY)
+        self._api_url, self._base = api_url, snapshot
         self._name, self._poll_s, self._wait_s, self._traces = name, poll_s, wait_s, traces
         self._session: aiohttp.ClientSession | None = None
         self._control: Control | None = None
@@ -114,9 +115,6 @@ class DaytonaSandbox:
         """Resolves the key on the host. The HTTP session is opened on first use, in the run
         and on its event loop."""
         self._key()
-
-    def _key(self) -> str:
-        return credential("daytona", "api_key", self._api_key, API_KEY)
 
     async def aclose(self) -> None:
         """Closes the session, then the exec streams still reading it. The session goes first:

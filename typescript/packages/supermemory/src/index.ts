@@ -78,8 +78,12 @@ async function attempt<T>(
 }
 
 export function supermemory(options: SupermemoryOptions = {}): MemoryProvider {
-  const apiKey = (): string =>
-    credential("supermemory", "apiKey", options.apiKey, "SUPERMEMORY_API_KEY");
+  const apiKey = credential(
+    "supermemory",
+    "apiKey",
+    options.apiKey,
+    "SUPERMEMORY_API_KEY",
+  );
   let client: Supermemory | undefined;
   const sdk = (): Supermemory => {
     client ??= new Supermemory({

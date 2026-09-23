@@ -52,8 +52,7 @@ export function e2b(options: E2bOptions = {}): ProviderSandbox {
     );
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const internet = options.internet ?? false;
-  const apiKey = (): string =>
-    credential("e2b", "apiKey", options.apiKey, "E2B_API_KEY");
+  const apiKey = credential("e2b", "apiKey", options.apiKey, "E2B_API_KEY");
   const driver = e2bDriver({
     connection: () => ({
       apiKey: apiKey(),

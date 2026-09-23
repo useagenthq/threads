@@ -2,6 +2,7 @@
 
 export { ConfigError } from "./agent/errors";
 export { credential, type Secret, secret } from "./agent/secret";
+export type { McpSession } from "./agent/setup";
 export { jsonSchema } from "./agent/tool";
 export { assertNever } from "./assert-never";
 export {

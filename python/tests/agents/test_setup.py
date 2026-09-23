@@ -8,6 +8,7 @@ import asyncio
 import gc
 import socket
 import weakref
+from collections.abc import AsyncIterator
 
 import pytest
 from aiohttp.test_utils import TestServer
@@ -29,6 +30,14 @@ from threads import (
 )
 from threads.adapters.sandboxes.daytona.sandbox import DaytonaSandbox
 from threads.log import Permissions, ToolResultEvent
+from threads.loop.model import (
+    LookupResult,
+    ModelChunk,
+    ModelContext,
+    ModelInfo,
+    ModelRequest,
+    ModelResponse,
+)
 from threads.loop.scripted import ScriptedModel
 from threads.result import Err, Ok
 from threads.secrets import credential, redact_secrets, resolve
@@ -149,14 +158,17 @@ def _free_port() -> int:
         return port
 
 
-def test_check_and_a_run_on_different_event_loops() -> None:
+def test_check_and_a_run_on_different_event_loops(monkeypatch: pytest.MonkeyPatch) -> None:
     """Nothing check() makes survives its loop: the run opens its own HTTP session, on its own
     loop, and every Daytona call of the run goes through it."""
     port = _free_port()
-    sandbox = DaytonaSandbox(API_KEY, api_url=f"http://127.0.0.1:{port}", poll_s=0.0, wait_s=5.0)
+    monkeypatch.setenv("DAYTONA_API_KEY", API_KEY)
+    sandbox = DaytonaSandbox(None, api_url=f"http://127.0.0.1:{port}", poll_s=0.0, wait_s=5.0)
     model = scripted_model({"responses": [use("bash", {"command": "echo hi"}), say("Done.")]})
     bot = agent(model=model, sandbox=sandbox, permissions=BYPASS)
     assert asyncio.run(bot.check()) == Ok(None)
+    # The run makes its client with the key setup resolved, not by reading the env again.
+    monkeypatch.delenv("DAYTONA_API_KEY")
     backend = FakeBackend.scripted()
 
     async def run() -> None:
@@ -175,16 +187,16 @@ def test_check_and_a_run_on_different_event_loops() -> None:
 
 
 def test_a_longer_value_is_replaced_whole_even_when_a_prefix_came_first() -> None:
-    credential("short", "api_key", "abc-lane09", "UNUSED")
-    credential("long", "api_key", "abc-lane09-123", "UNUSED")
+    credential("short", "api_key", "abc-lane09", "UNUSED")()
+    credential("long", "api_key", "abc-lane09-123", "UNUSED")()
     assert redact_secrets("x abc-lane09-123 y abc-lane09") == (
         "x [secret long.api_key] y [secret short.api_key]"
     )
 
 
 def test_one_value_under_two_labels_redacts_to_the_smaller_label() -> None:
-    credential("zeta", "api_key", "same-lane09-value", "UNUSED")
-    credential("alpha", "api_key", "same-lane09-value", "UNUSED")
+    credential("zeta", "api_key", "same-lane09-value", "UNUSED")()
+    credential("alpha", "api_key", "same-lane09-value", "UNUSED")()
     assert redact_secrets("same-lane09-value") == "[secret alpha.api_key]"
 
 
@@ -194,10 +206,10 @@ def test_missing_or_empty_names_the_option_and_the_variable(
     monkeypatch.delenv("THREADS_TEST_CRED_UNSET", raising=False)
     for value in (None, ""):
         with pytest.raises(ConfigError) as raised:
-            credential("fake", "api_key", value, "THREADS_TEST_CRED_UNSET")
+            credential("fake", "api_key", value, "THREADS_TEST_CRED_UNSET")()
         assert raised.value.message == "fake: set api_key or THREADS_TEST_CRED_UNSET"
     with pytest.raises(ConfigError) as named:
-        credential("fake", "api_key", secret("THREADS_TEST_CRED_UNSET"), "OTHER")
+        credential("fake", "api_key", secret("THREADS_TEST_CRED_UNSET"), "OTHER")()
     assert named.value.message == "fake: set api_key or THREADS_TEST_CRED_UNSET"
 
 
@@ -232,3 +244,116 @@ def test_a_set_up_adapter_is_not_kept_alive_by_the_setup_memory() -> None:
     del model
     gc.collect()
     assert alive() is None
+
+
+def test_a_read_only_tool_that_echoes_a_key_never_stores_or_sends_it() -> None:
+    """C5 on every recorded result path, read_only included (it writes no effect events)."""
+    key = credential("fake", "api_key", "sk-lane09-read-only-4c1f", "UNUSED")()
+
+    async def peek(_args: NoInput, _ctx: RunContext[None]) -> str:
+        return f"key={key}"
+
+    reader = tool(name="peek", description="Peek.", input=NoInput, execute=peek, effect="read_only")
+    model = scripted_model({"responses": [use("peek", {}), say("ok")]})
+    bot = agent(model=model, tools=[reader], permissions=BYPASS)
+
+    async def main() -> str:
+        result = await bot.run("go", store=sqlite(":memory:"), deps=None)
+        timeline = await result.thread.timeline()
+        assert isinstance(timeline, Ok)
+        return "\n".join(e.event.model_dump_json() for e in timeline.value.entries)
+
+    stored = asyncio.run(main())
+    assert "[secret fake.api_key]" in stored
+    assert key not in stored
+    assert all(key.encode() not in r.body for r in model.sent)
+
+
+def test_a_credential_keeps_the_value_it_resolved_at_setup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("THREADS_TEST_KEPT", "kept-lane09-value")
+    key = credential("fake", "api_key", None, "THREADS_TEST_KEPT")
+    assert key() == "kept-lane09-value"
+    monkeypatch.delenv("THREADS_TEST_KEPT")
+    assert key() == "kept-lane09-value"
+
+
+def test_a_failed_credential_is_resolved_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("THREADS_TEST_LATE", raising=False)
+    key = credential("fake", "api_key", None, "THREADS_TEST_LATE")
+    with pytest.raises(ConfigError):
+        key()
+    monkeypatch.setenv("THREADS_TEST_LATE", "late-lane09-value")
+    assert key() == "late-lane09-value"
+
+
+class Slow(ScriptedModel):
+    """A scripted model whose setup takes a moment, so two checks overlap."""
+
+    def __init__(self, *, failing: bool = False) -> None:
+        super().__init__([], {})
+        self.setups = 0
+        self.failing = failing
+
+    async def setup(self) -> None:
+        self.setups += 1
+        await asyncio.sleep(0.01)
+        if self.failing:
+            raise ConfigError("missing_secret", "fake: set api_key or FAKE_KEY")
+
+
+def test_concurrent_checks_set_an_adapter_up_once() -> None:
+    model = Slow()
+    bot = agent(model=model)
+
+    async def main() -> None:
+        both = await asyncio.gather(bot.check(), bot.check())
+        assert both == [Ok(None), Ok(None)]
+
+    asyncio.run(main())
+    assert model.setups == 1
+
+
+def test_concurrent_checks_share_a_failed_setup_and_the_next_check_retries() -> None:
+    model = Slow(failing=True)
+    bot = agent(model=model)
+
+    async def main() -> None:
+        both = await asyncio.gather(bot.check(), bot.check())
+        assert [isinstance(c, Err) for c in both] == [True, True]
+        assert model.setups == 1
+        model.failing = False
+        assert await bot.check() == Ok(None)
+
+    asyncio.run(main())
+    assert model.setups == FAILED_THEN_SET_UP
+
+
+class Slotted:
+    """A custom model adapter whose class declares __slots__ without __weakref__."""
+
+    __slots__ = ("_inner",)
+
+    def __init__(self) -> None:
+        self._inner = scripted_model({"responses": []})
+
+    @property
+    def info(self) -> ModelInfo:
+        return self._inner.info
+
+    def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
+        return self._inner.send(request, context)
+
+    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
+        return await self._inner.lookup(request_id, context)
+
+    async def setup(self) -> None:
+        pass
+
+
+def test_an_adapter_with_setup_must_allow_weak_references() -> None:
+    checked = asyncio.run(agent(model=Slotted()).check())
+    assert isinstance(checked, Err)
+    assert checked.error.code == "invalid_config"
+    assert "__weakref__" in checked.error.message

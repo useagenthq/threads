@@ -60,7 +60,7 @@ class LiteLLMModel:
         self, info: ModelInfo, api_key: str | Secret | None, connect: Callable[[str], Complete]
     ) -> None:
         self._info = info
-        self._api_key = api_key
+        self._key = credential(ADAPTER, "api_key", api_key, API_KEY)
         self._connect = connect
         """Makes `acompletion` bound to a client for the resolved key, on the first send."""
         self._complete: Complete | None = None
@@ -73,9 +73,6 @@ class LiteLLMModel:
         """Resolves the key on the host. The client is made by the first send, on the run's
         own event loop."""
         self._key()
-
-    def _key(self) -> str:
-        return credential(ADAPTER, "api_key", self._api_key, API_KEY)
 
     def _completion(self) -> Complete:
         if self._complete is None:

@@ -29,13 +29,29 @@ export type McpServer = {
 /** The optional capability of a Model, Sandbox, MemoryProvider or KnowledgeProvider. */
 type SetsUp = { readonly setup?: () => Promise<void> };
 
-/** Objects whose setup succeeded in this process. */
+/** Objects whose setup succeeded in this process, held weakly. */
 const ready = new WeakSet<object>();
+/** Setups in flight: a concurrent check() or run waits for the same attempt and its outcome. */
+const running = new WeakMap<object, Promise<void>>();
 
 async function once(target: object, setup: () => Promise<void>): Promise<void> {
   if (ready.has(target)) return;
-  await setup();
-  ready.add(target);
+  const known = running.get(target);
+  if (known !== undefined) return known;
+  // Registered before setup starts, so even a setup that throws at once is shared and cleared.
+  const { promise, resolve, reject } = Promise.withResolvers<void>();
+  running.set(target, promise);
+  try {
+    await setup();
+    ready.add(target);
+    resolve();
+  } catch (error) {
+    reject(error);
+  } finally {
+    // Success is in `ready`; a failure is forgotten, so the next call tries again.
+    running.delete(target);
+  }
+  return promise;
 }
 
 async function extensionSetup<Deps>(e: Extension<Deps>): Promise<void> {

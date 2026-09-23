@@ -96,8 +96,12 @@ export function openai(options: OpenAIOptions): Model {
     // store is false, so nothing is retrievable afterwards.
     lookup: "none",
   };
-  const apiKey = (): string =>
-    credential("openai", "apiKey", options.apiKey, "OPENAI_API_KEY");
+  const apiKey = credential(
+    "openai",
+    "apiKey",
+    options.apiKey,
+    "OPENAI_API_KEY",
+  );
   return {
     info,
     setup: async () => {

@@ -11,7 +11,7 @@ registered here, and `redact_secrets` replaces it in tool-result text before it 
 """
 
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from threads.agents.config import ConfigError
@@ -52,11 +52,27 @@ def resolve(ref: Secret, env: Mapping[str, str] | None = None) -> str:
     return value
 
 
-def credential(factory: str, option: str, value: str | Secret | None, env: str) -> str:
-    """A single-account adapter's credential, resolved on the host at setup: an explicit string
-    as given, a `Secret` (default `secret(env)`) from the host environment. Either way the value
-    is registered for redaction as `<factory>.<option>`. Missing or empty is missing_secret
-    naming both."""
+def credential(
+    factory: str, option: str, value: str | Secret | None, env: str
+) -> Callable[[], str]:
+    """A single-account adapter's credential. Pure: nothing is read until the getter is called,
+    first by the adapter's setup. The first successful call resolves it on the host (an explicit
+    string as given, a `Secret`, default `secret(env)`, from the host environment), registers
+    it for redaction as `<factory>.<option>` and keeps it, so a client made later in the run
+    uses what setup resolved. A failed call keeps nothing and is retried by the next one.
+    Missing or empty is missing_secret naming the option and the variable."""
+    kept: str | None = None
+
+    def resolved() -> str:
+        nonlocal kept
+        if kept is None:
+            kept = _resolve(factory, option, value, env)
+        return kept
+
+    return resolved
+
+
+def _resolve(factory: str, option: str, value: str | Secret | None, env: str) -> str:
     given = secret(env) if value is None else value
     resolved = os.environ.get(given.name, "") if isinstance(given, Secret) else given
     if not resolved:

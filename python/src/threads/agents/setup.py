@@ -8,7 +8,7 @@ client: those belong to a run, on the run's own event loop. MCP is not part of i
 check() and each run opens its own sessions.
 """
 
-import contextlib
+import asyncio
 import weakref
 from collections.abc import Awaitable, Callable
 from functools import partial
@@ -33,15 +33,51 @@ _READY: weakref.WeakValueDictionary[int, object] = weakref.WeakValueDictionary()
 so a long-running host that builds agents per request keeps nothing alive, and a reused id
 never matches a dead object."""
 
+_RUNNING: dict[int, asyncio.Future[None]] = {}
+"""Setups in flight, by identity: a concurrent check() or run waits for the same attempt."""
+
 
 async def _once(target: object, setup: Callable[[], Awaitable[None]]) -> None:
-    if _READY.get(id(target)) is target:
-        return
-    await setup()
-    # An object without weak references (a custom adapter with __slots__) is simply set up
-    # again next time; setup is idempotent by contract.
-    with contextlib.suppress(TypeError):
-        _READY[id(target)] = target
+    """Runs `setup` once per object on success. A caller that finds an attempt in flight waits
+    for it: its failure is theirs too; if it was cancelled, the next caller tries again."""
+    while _READY.get(id(target)) is not target:
+        running = _RUNNING.get(id(target))
+        if running is None:
+            await _attempt(target, setup)
+        else:
+            await asyncio.shield(running)
+
+
+async def _attempt(target: object, setup: Callable[[], Awaitable[None]]) -> None:
+    _weakly_held(target)
+    key = id(target)
+    outcome = asyncio.get_running_loop().create_future()
+    _RUNNING[key] = outcome
+    try:
+        await setup()
+        _READY[key] = target
+    except Exception as error:
+        outcome.set_exception(error)
+        outcome.exception()  # marked retrieved: waiters re-raise it, and there may be none
+        raise
+    finally:
+        del _RUNNING[key]
+        if not outcome.done():
+            outcome.set_result(None)  # done or cancelled: waiters look at _READY again
+
+
+def _weakly_held(target: object) -> None:
+    """The setup memory holds objects weakly, so one without weak references can't be
+    remembered: it is refused rather than set up again on every run."""
+    try:
+        weakref.ref(target)
+    except TypeError as error:
+        name = type(target).__name__
+        raise ConfigError(
+            "invalid_config",
+            f"{name}: an adapter with setup must allow weak references; "
+            "add '__weakref__' to its __slots__",
+        ) from error
 
 
 async def _extension(e: Extension) -> None:

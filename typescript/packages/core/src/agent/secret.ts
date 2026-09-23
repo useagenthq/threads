@@ -54,11 +54,27 @@ export function secret(name: string): Secret {
 }
 
 /**
- * A single-account adapter's credential, resolved on the host at setup: an explicit string as
- * given, a Secret (default `secret(env)`) from the host env. Either way the value is registered
- * for redaction as `<factory>.<option>`. Missing or empty is missing_secret naming both.
+ * A single-account adapter's credential. Pure: nothing is read until the getter is called, first
+ * by the adapter's setup. The first successful call resolves it on the host (an explicit string
+ * as given, a Secret, default `secret(env)`, from the host env), registers it for redaction as
+ * `<factory>.<option>` and keeps it, so a client made later in the run uses what setup resolved.
+ * A failed call keeps nothing and is retried by the next one. Missing or empty is
+ * missing_secret naming the option and the variable.
  */
 export function credential(
+  factory: string,
+  option: string,
+  value: string | Secret | undefined,
+  env: string,
+): () => string {
+  let kept: string | undefined;
+  return () => {
+    kept ??= resolve(factory, option, value, env);
+    return kept;
+  };
+}
+
+function resolve(
   factory: string,
   option: string,
   value: string | Secret | undefined,

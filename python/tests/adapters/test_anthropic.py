@@ -223,3 +223,14 @@ def test_the_factory_declares_its_limits_and_no_lookup() -> None:
     assert made.info.params == {"max_tokens": 8192, "temperature": 0}
     assert made.info.lookup == "none"
     assert made.info.adapter.name == "anthropic"
+
+
+def test_the_client_uses_the_key_setup_resolved(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-lane09-at-setup")
+    declared = anthropic("claude-test", context_window=WINDOW, max_output_tokens=4096).info
+    script = Script([reply(begin(), start(0, TEXT), delta(0, "text", "ok"), stop(0), END)])
+    claude = AnthropicModel(declared, None, http=httpx2.MockTransport(script))
+    asyncio.run(claude.setup())
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    asyncio.run(collect(claude.send, one_turn(), FakeContext()))
+    assert script.sent[0].headers["x-api-key"] == "sk-lane09-at-setup"

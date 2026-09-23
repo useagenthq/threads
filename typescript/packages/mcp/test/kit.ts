@@ -1,13 +1,12 @@
 import { afterEach } from "bun:test";
 import {
   type McpServer,
-  type McpSession,
   openThread,
   type RunResult,
   type Tool,
   tool,
 } from "@threads/core";
-import type { ToolContext, ToolImpl } from "@threads/core/adapter";
+import type { McpSession, ToolContext, ToolImpl } from "@threads/core/adapter";
 
 type Principal = ToolContext["principal"];
 

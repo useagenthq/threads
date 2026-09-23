@@ -7,10 +7,10 @@ final lookup answers (`reconcilable`). Elapsed time and lease expiry prove nothi
 """
 
 import asyncio
-from collections.abc import Coroutine, Sequence
+from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Final, Literal
 
-from threads.log import ResultPart, TextPart, ToolSpec
+from threads.log import ToolSpec
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state
 from threads.loop.model import Found, NotFound
@@ -63,12 +63,13 @@ async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
 
 
 async def _commit(rt: Runtime, inv: Invocation, output: Output) -> Halt | None:
-    # Recorded redacted: a host secret the tool echoed never reaches the log (C5).
-    text, parts = redact_secrets(output.text), _redacted(output.content)
-    ref = await text_ref(rt, text)
+    # The committed artifact is stored too, so it is redacted like the result (C5).
+    ref = await text_ref(rt, redact_secrets(output.text))
     commit = draft("effect_commit", {"call_id": inv.call_id, "result_ref": ref})
     how = As("executed", output.is_error)
-    result = await result_draft(rt, inv.call_id, text, how, output.full_output, content=parts)
+    result = await result_draft(
+        rt, inv.call_id, output.text, how, output.full_output, content=output.content
+    )
     done = await rt.append(commit, result)
     return lost(done.error) if isinstance(done, Err) else None
 
@@ -160,9 +161,8 @@ async def _reconcile(
     if stale is not None:
         return stale
     match await rt.tools.lookup(inv):
-        case Found(value=found):
-            text = redact_secrets(found)
-            ref = await text_ref(rt, text)
+        case Found(value=text):
+            ref = await text_ref(rt, redact_secrets(text))
             data: dict[str, JsonValue] = {
                 "call_id": inv.call_id,
                 "outcome": "confirmed_success",
@@ -229,11 +229,3 @@ async def _materialize(rt: Runtime, state: CallState, how: As) -> Halt | None:
     )
     done = await rt.append(result)
     return lost(done.error) if isinstance(done, Err) else None
-
-
-def _redacted(parts: Sequence[ResultPart]) -> tuple[ResultPart, ...]:
-    """A result's own parts, text redacted like its output (C5)."""
-    return tuple(
-        p.model_copy(update={"text": redact_secrets(p.text)}) if isinstance(p, TextPart) else p
-        for p in parts
-    )

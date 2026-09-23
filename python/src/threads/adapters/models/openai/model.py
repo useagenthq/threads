@@ -54,7 +54,8 @@ class OpenAIModel:
         http: httpx2.AsyncBaseTransport | None = None,
     ) -> None:
         self._info = info
-        self._api_key, self._base_url, self._http = api_key, base_url, http
+        self._key = credential(ADAPTER, "api_key", api_key, API_KEY)
+        self._base_url, self._http = base_url, http
         self._client: sdk.AsyncOpenAI | None = None
 
     @property
@@ -65,9 +66,6 @@ class OpenAIModel:
         """Resolves the key on the host. The SDK client is made by the first send, on the
         run's own event loop."""
         self._key()
-
-    def _key(self) -> str:
-        return credential(ADAPTER, "api_key", self._api_key, API_KEY)
 
     def _sdk(self) -> sdk.AsyncOpenAI:
         if self._client is None:

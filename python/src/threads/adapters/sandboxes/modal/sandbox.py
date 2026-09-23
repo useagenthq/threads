@@ -59,7 +59,8 @@ class ModalSandbox:
         connect: Connect,
     ) -> None:
         self._settings = settings
-        self._tokens = tokens
+        self._token_id = credential("modal", "token_id", tokens[0], "MODAL_TOKEN_ID")
+        self._token_secret = credential("modal", "token_secret", tokens[1], "MODAL_TOKEN_SECRET")
         self._server_url = server_url
         self._connect = connect
         self._channels: dict[str, grpclib.client.Channel] = {}
@@ -145,12 +146,8 @@ class ModalSandbox:
         self._resolved()
 
     def _resolved(self) -> tuple[str, str]:
-        token_id, token_secret = self._tokens
         try:
-            return (
-                credential("modal", "token_id", token_id, "MODAL_TOKEN_ID"),
-                credential("modal", "token_secret", token_secret, "MODAL_TOKEN_SECRET"),
-            )
+            return self._token_id(), self._token_secret()
         except ConfigError as error:
             # One message for the pair: Modal needs both.
             raise ConfigError(

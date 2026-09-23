@@ -94,8 +94,12 @@ export function anthropic(options: AnthropicOptions): Model {
     // The Messages API has no retrieval by client request id.
     lookup: "none",
   };
-  const apiKey = (): string =>
-    credential("anthropic", "apiKey", options.apiKey, "ANTHROPIC_API_KEY");
+  const apiKey = credential(
+    "anthropic",
+    "apiKey",
+    options.apiKey,
+    "ANTHROPIC_API_KEY",
+  );
   return {
     info,
     setup: async () => {

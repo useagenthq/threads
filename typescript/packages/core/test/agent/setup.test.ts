@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { z } from "zod";
 import {
   agent,
   ConfigError,
   type Model,
+  openThread,
   scriptedModel,
   sqlite,
+  tool,
 } from "../../src";
 import { credential, redactSecrets } from "../../src/agent/secret";
 
@@ -106,21 +109,108 @@ describe("credential() and redaction (C5)", () => {
     delete process.env["THREADS_TEST_CRED_UNSET"];
     for (const value of [undefined, ""])
       expect(() =>
-        credential("fake", "apiKey", value, "THREADS_TEST_CRED_UNSET"),
+        credential("fake", "apiKey", value, "THREADS_TEST_CRED_UNSET")(),
       ).toThrow("fake: set apiKey or THREADS_TEST_CRED_UNSET");
   });
 
   test("a longer value is replaced whole even when a prefix was registered first", () => {
-    credential("short", "apiKey", "abc-lane09", "UNUSED");
-    credential("long", "apiKey", "abc-lane09-123", "UNUSED");
+    credential("short", "apiKey", "abc-lane09", "UNUSED")();
+    credential("long", "apiKey", "abc-lane09-123", "UNUSED")();
     expect(redactSecrets("x abc-lane09-123 y abc-lane09")).toBe(
       "x [secret long.apiKey] y [secret short.apiKey]",
     );
   });
 
   test("one value under two labels redacts to the smaller label", () => {
-    credential("zeta", "apiKey", "same-lane09-value", "UNUSED");
-    credential("alpha", "apiKey", "same-lane09-value", "UNUSED");
+    credential("zeta", "apiKey", "same-lane09-value", "UNUSED")();
+    credential("alpha", "apiKey", "same-lane09-value", "UNUSED")();
     expect(redactSecrets("same-lane09-value")).toBe("[secret alpha.apiKey]");
+  });
+});
+
+describe("lane 09 review fixes", () => {
+  test("a read_only tool that echoes a key never stores or sends it", async () => {
+    const key = credential("fake", "apiKey", "sk-lane09-read-only-4c1f", "U")();
+    const peek = tool({
+      name: "peek",
+      description: "Peek.",
+      input: z.object({}),
+      effect: "read_only",
+      execute: async () => `key=${key}`,
+    });
+    const sent: Uint8Array[] = [];
+    const model = scriptedModel({
+      responses: [
+        {
+          content: [
+            { type: "tool_use", call_id: "c1", name: "peek", input: {} },
+          ],
+          stop_reason: "tool_use",
+          usage,
+        },
+        say("ok"),
+      ],
+    });
+    const send = model.send;
+    // Kept in place: the model-request guard knows the scripted model by identity.
+    Object.assign(model, {
+      send: (...args: Parameters<Model["send"]>) => {
+        sent.push(args[0].body);
+        return send(...args);
+      },
+    });
+    const store = sqlite(":memory:");
+    const result = await agent({
+      model,
+      tools: [peek],
+      permissions: { mode: "bypass" },
+    }).run("go", { store });
+    const thread = await openThread(store, result.thread.id);
+    if (!thread.ok) throw new Error(thread.error.message);
+    const timeline = await thread.value.timeline();
+    if (!timeline.ok) throw new Error(timeline.error.message);
+    const stored = JSON.stringify(timeline.value.entries);
+    expect(stored).toContain("[secret fake.apiKey]");
+    expect(stored).not.toContain(key);
+    const requests = sent.map((b) => new TextDecoder().decode(b));
+    expect(requests.length).toBe(2);
+    for (const r of requests) expect(r).not.toContain(key);
+  });
+
+  test("a credential keeps the value it resolved; a failure is resolved again", () => {
+    process.env["THREADS_TEST_KEPT"] = "kept-lane09-value";
+    const kept = credential("fake", "apiKey", undefined, "THREADS_TEST_KEPT");
+    expect(kept()).toBe("kept-lane09-value");
+    delete process.env["THREADS_TEST_KEPT"];
+    expect(kept()).toBe("kept-lane09-value");
+    const late = credential("fake", "apiKey", undefined, "THREADS_TEST_LATE");
+    expect(() => late()).toThrow(ConfigError);
+    process.env["THREADS_TEST_LATE"] = "late-lane09-value";
+    expect(late()).toBe("late-lane09-value");
+    delete process.env["THREADS_TEST_LATE"];
+  });
+
+  test("concurrent checks share one setup, its failure included; the next check retries", async () => {
+    let broken = true;
+    let calls = 0;
+    const model: Model = Object.assign(scriptedModel({ responses: [] }), {
+      setup: async () => {
+        calls += 1;
+        await Bun.sleep(10);
+        if (broken)
+          throw new ConfigError(
+            "missing_secret",
+            "fake: set apiKey or FAKE_KEY",
+          );
+      },
+    });
+    const bot = agent({ model });
+    const failed = await Promise.all([bot.check(), bot.check()]);
+    expect(failed.map((c) => c.ok)).toEqual([false, false]);
+    expect(calls).toBe(1);
+    broken = false;
+    const both = await Promise.all([bot.check(), bot.check()]);
+    expect(both.map((c) => c.ok)).toEqual([true, true]);
+    expect(calls).toBe(2);
   });
 });

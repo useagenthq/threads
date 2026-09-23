@@ -72,8 +72,12 @@ export function daytona(options: DaytonaOptions = {}): ProviderSandbox {
   const blocked = (options.network ?? "blocked") === "blocked";
   const inner: Fetch = (input, init) =>
     (options.fetch ?? globalThis.fetch)(input, init);
-  const apiKey = (): string =>
-    credential("daytona", "apiKey", options.apiKey, "DAYTONA_API_KEY");
+  const apiKey = credential(
+    "daytona",
+    "apiKey",
+    options.apiKey,
+    "DAYTONA_API_KEY",
+  );
   let made: Clients | undefined;
   const driver = daytonaDriver({
     clients: () => {
