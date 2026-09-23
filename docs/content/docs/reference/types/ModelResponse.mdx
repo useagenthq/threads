@@ -1,0 +1,17 @@
+---
+title: "ModelResponse"
+description: "The ModelResponse type."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="content" type={"readonly OutputPart[]"} required />
+
+<Field name="stop_reason" type={"ModelResponseEvent.data.stop_reason"} required />
+
+<Field name="usage" type={"Usage"} required />
+
+<Field name="provider_request_id" type={"NonEmpty | null"} required>
+  The provider's id for this request, or null when it gives none. A found model lookup must carry it, since model_response_recovered records it.
+</Field>

@@ -1,0 +1,54 @@
+---
+title: E2B
+description: Run an agent's commands and files in an E2B cloud sandbox.
+icon: Cloud
+---
+
+[E2B](https://e2b.dev) runs each sandbox as a small cloud VM. Set `E2B_API_KEY` and pass `e2b()` as the agent's sandbox.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { e2b } from "@threads/e2b";
+
+const e2bSandbox = e2b({
+  template: "base",
+  timeoutMs: 10 * 60_000,
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.e2b import e2b
+
+e2b_sandbox = e2b(template="base", lifetime_ms=10 * 60_000)
+```
+
+</Tab>
+</Tabs>
+
+<Callout type="warn">
+In TypeScript, `@threads/e2b` runs on **Bun** only. On Node, the E2B SDK sends requests through a client threads can't safely wrap, so `e2b()` throws `ConfigError` `transport_fence_unsupported` instead of running with weaker crash safety.
+</Callout>
+
+## Options
+
+| TypeScript | Python | Default | What it does |
+|---|---|---|---|
+| `apiKey` | `api_key` | `E2B_API_KEY` | Authenticates threads' calls to E2B. Never enters the sandbox. |
+| `template` | `template` | `"base"` | The E2B template a new sandbox starts from. |
+| `timeoutMs` | `lifetime_ms` | 5 minutes (TS), 1 hour (Python) | How long a sandbox lives before E2B deletes it. |
+| `internet` | `allow_internet` | `false` | Opens the network. Also set `egress: "unenforced"` on the agent. |
+| `domain` | `domain` | E2B's | The E2B domain to connect to, for self-hosted E2B. |
+
+A custom template needs `/bin/sh` and the GNU tools `sed`, `find`, `stat` and `sha256sum`. E2B's `base` template has them.
+
+## Good to know
+
+- **No fork points yet.** threads doesn't take E2B snapshots today, so an E2B thread can't be [forked](/docs/evals/fork) at a sandbox state.
+- **Crashes park.** If the host crashes mid-command, threads can't prove E2B stopped the command's child processes, so the run parks for you instead of re-running it.
+
+See [Sandboxes](/docs/sandboxes/overview) for the tools an agent gets and how internet access works.

@@ -1,0 +1,296 @@
+---
+title: Tools
+description: Give an agent your own functions, with typed input and a clear promise about what happens if a call is interrupted.
+icon: Wrench
+---
+
+A tool is a function the model can call. You describe its input with a schema (Zod in TypeScript, Pydantic in Python). That one schema is what the model sees and what checks the model's arguments before your code runs, so they never drift apart.
+
+## Define a tool
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const getWeather = tool({
+  name: "get_weather",
+  description: "Get the current weather for a city.",
+  input: z.object({
+    city: z.string().describe("City name, e.g. Paris"),
+    unit: z.enum(["c", "f"]).default("c"),
+  }),
+  runs: "host",
+  effect: "read_only",
+  execute: async ({ city, unit }) => ({ city, unit, temperature: 21 }),
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+class WeatherInput(BaseModel):
+    city: str = Field(description="City name, e.g. Paris")
+    unit: Literal["c", "f"] = "c"
+
+
+async def get_weather(args: WeatherInput, ctx: RunContext[None]) -> dict[str, JsonValue]:
+    return {"city": args.city, "unit": args.unit, "temperature": 21}
+
+
+weather_tool = tool(
+    name="get_weather",
+    description="Get the current weather for a city.",
+    input=WeatherInput,
+    runs="host",
+    effect="read_only",
+    execute=get_weather,
+)
+```
+
+</Tab>
+</Tabs>
+
+Then pass it to an agent with `tools: [getWeather]` (`tools=[weather_tool]` in Python).
+
+<Field name="name" type="string" required>
+  Lowercase letters, digits and underscores. Unique within the agent.
+</Field>
+<Field name="description" type="string" required>
+  What the tool does. The model reads this to decide when to call it.
+</Field>
+<Field name="input" type="schema" required>
+  A Zod schema (TypeScript) or a Pydantic model class (Python). Unknown keys are rejected.
+</Field>
+<Field name="runs" type='"host"' required>
+  Where the tool runs. Tools run in your process today, so this is always `"host"`.
+</Field>
+<Field name="execute" type="(input, ctx) => Promise<Output>" required>
+  Your function. It gets the parsed input and a [run context](/docs/reference/types/RunContext) with your `deps`. A string result is shown to the model as is; anything else as JSON.
+</Field>
+<Field name="effect" type="string" default="unguarded">
+  What your tool does to the outside world. See below.
+</Field>
+<Field name="endsTurn" type="boolean" default="false">
+  `ends_turn` in Python. When the call succeeds, the turn ends without another model call.
+</Field>
+<Field name="output" type="Zod schema">
+  TypeScript only. A result that fails this schema is reported to the model as an error.
+</Field>
+
+## Errors go back to the model
+
+If the model sends arguments that don't match the schema, your function is never called and the model gets an error it can fix. If your function throws, the error message becomes the tool result and the run continues.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+execute: async ({ a, b }) => {
+  if (b === 0) throw new Error("b must not be zero");
+  return a / b;
+},
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def divide_numbers(args: DivideInput, ctx: RunContext[None]) -> float:
+    if args.b == 0:
+        raise ValueError("b must not be zero")
+    return args.a / args.b
+```
+
+</Tab>
+</Tabs>
+
+## Effects: what happens after a crash
+
+If your process dies in the middle of a tool call, threads has to decide whether it is safe to run that call again. The `effect` you declare answers that question. threads never retries a call that might already have happened unless you told it how to check.
+
+| `effect` | Use it when | After an interruption |
+|---|---|---|
+| `read_only` | The tool changes nothing anywhere (a lookup, a search) | Safe to run again |
+| `idempotent` | Your provider drops duplicate requests with the same key for a known time (Stripe-style idempotency keys) | Sent again with the same key while inside the window; parks after it |
+| `reconcilable` | You can ask your provider whether the call happened | threads calls your `reconcile.lookup` to find out |
+| `unguarded` (default) | Anything else, like sending an email | The run parks and a person decides |
+
+`effect` also sets the default permission: in the default mode, `read_only` tools run freely and every other tool asks for approval first. See [Permissions](/docs/control/permissions) to allow them.
+
+### Idempotent tools
+
+Send `ctx.effectKey` (`ctx.effect_key`) to your provider as the idempotency key, and declare how long the provider remembers it.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const charge = tool({
+  name: "charge_card",
+  description: "Charge the customer's card.",
+  input: z.object({ amount: z.int().positive() }),
+  runs: "host",
+  effect: "idempotent",
+  dedupWindowMs: 24 * 60 * 60 * 1000, // the provider dedups a key for 24 hours
+  execute: async ({ amount }, ctx) => payments.charge(amount, ctx.effectKey ?? ""),
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def charge(args: ChargeInput, ctx: RunContext[None]) -> str:
+    return await payments.charge(args.amount, ctx.effect_key or "")
+
+
+charge_card = tool(
+    name="charge_card",
+    description="Charge the customer's card.",
+    input=ChargeInput,
+    runs="host",
+    effect="idempotent",
+    dedup_window_ms=24 * 60 * 60 * 1000,  # the provider dedups a key for 24 hours
+    execute=charge,
+)
+```
+
+</Tab>
+</Tabs>
+
+### Reconcilable tools
+
+Give threads a `lookup` that answers "did the call with this key happen?". `finality: "final"` means a `not_found` answer proves it never happened, so threads may run it again. With `"nonfinal"`, a `not_found` is treated as "not yet known" and the call parks.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const chargeChecked = tool({
+  name: "charge_card_checked",
+  description: "Charge the customer's card.",
+  input: z.object({ amount: z.int().positive() }),
+  runs: "host",
+  effect: "reconcilable",
+  execute: async ({ amount }, ctx) => payments.charge(amount, ctx.effectKey ?? ""),
+  reconcile: {
+    finality: "final", // a not_found answer proves the charge never happened
+    lookup: async (effectKey): Promise<LookupResult<string>> => {
+      const id = await payments.find(effectKey);
+      return id === undefined ? { status: "not_found" } : { status: "found", value: id };
+    },
+  },
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.loop.model import Found, LookupResult, NotFound
+
+
+async def find_charge(effect_key: str, ctx: RunContext[None]) -> LookupResult[str]:
+    charge_id = await payments.find(effect_key)
+    return NotFound() if charge_id is None else Found(charge_id)
+
+
+charge_card_checked = tool(
+    name="charge_card_checked",
+    description="Charge the customer's card.",
+    input=ChargeInput,
+    runs="host",
+    effect="reconcilable",
+    execute=charge,
+    # "final": a not_found answer proves the charge never happened
+    reconcile=Reconcile(lookup=find_charge, finality="final"),
+)
+```
+
+</Tab>
+</Tabs>
+
+A lookup can also answer `unknown` (`LookupUnknown(reason)` in Python) when it can't tell. The call then parks.
+
+### Unguarded tools
+
+Leave `effect` out when you can't check or dedupe. If a call is interrupted, threads parks the run instead of guessing, and you settle it by hand. See [Durability](/docs/production/durability).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const sendEmail = tool({
+  name: "send_email",
+  description: "Send an email to a customer.",
+  input: z.object({ to: z.email(), body: z.string() }),
+  runs: "host",
+  execute: async ({ to, body }) => {
+    await mailer.send(to, body);
+    return "sent";
+  },
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def send(args: EmailInput, ctx: RunContext[None]) -> str:
+    await mailer.send(args.to, args.body)
+    return "sent"
+
+
+send_email = tool(
+    name="send_email",
+    description="Send an email to a customer.",
+    input=EmailInput,
+    runs="host",
+    execute=send,
+)
+```
+
+</Tab>
+</Tabs>
+
+## End the turn from a tool
+
+Set `endsTurn` (`ends_turn`) on a tool that means "I'm done". When it succeeds, the run completes without asking the model again. The run's `output` is the model's last text, which may be empty; the tool's result is in the log.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const finish = tool({
+  name: "finish",
+  description: "Call when the task is done.",
+  input: z.object({ summary: z.string() }),
+  runs: "host",
+  effect: "read_only",
+  endsTurn: true,
+  execute: async ({ summary }) => summary,
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+finish = tool(
+    name="finish",
+    description="Call when the task is done.",
+    input=FinishInput,
+    runs="host",
+    effect="read_only",
+    ends_turn=True,
+    execute=finish_run,
+)
+```
+
+</Tab>
+</Tabs>
+
+## Setup errors
+
+`tool()` checks its definition and raises `ConfigError` when it can't run: `dedupWindowMs` without `effect: "idempotent"` (or the reverse), `reconcile` without `effect: "reconcilable"` (or the reverse), or `runs: "sandbox"`, which isn't supported yet.

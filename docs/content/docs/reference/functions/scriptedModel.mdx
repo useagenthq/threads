@@ -1,0 +1,36 @@
+---
+title: "scriptedModel / scripted_model"
+description: "Test kit."
+icon: "SquareFunction"
+---
+
+Consumes the script in order, deterministic ids; a call past the end fails the run. The exact requests are in the log.
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function scriptedModel(script: ModelScript): Model
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def scripted_model(
+    script: ModelScript,
+) -> Model
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="script" type={"ModelScript"} required />
+
+## Returns
+
+[`Model`](/docs/reference/types/Model)

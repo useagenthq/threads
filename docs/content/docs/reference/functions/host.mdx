@@ -1,0 +1,69 @@
+---
+title: "host"
+description: "Bind agents to a store, channels and schedules."
+icon: "SquareFunction"
+---
+
+Starts nothing until ready().
+
+Import from `@threads/host` (TypeScript) or `threads.host` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function host(options: {
+  store: Store;
+  agents: Record<string, Agent<unknown, unknown>>;
+  channels?: Record<string, ChannelAdapter>;
+  ceiling?: Partial<Policy.permissions>;
+  schedules?: readonly Schedule[];
+  authenticate?: (request: Request) => Promise<Principal | null>;
+}): Host
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def host(
+    *,
+    store: Store,
+    agents: Mapping[str, Agent[object, object]],
+    channels: Mapping[str, ChannelAdapter] = {},
+    ceiling: Policy.permissions | None = None,
+    schedules: Sequence[Schedule] = (),
+    authenticate: Callable[[starlette.requests.Request], Awaitable[Principal | None]] | None = None,
+) -> Host
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="store" type={"Store"} required>
+  See [Store](/docs/reference/types/Store).
+</Field>
+
+<Field name="agents" type={"Record<string, Agent<unknown, unknown>>"} required>
+  Keyed by the name channels, schedules and the HTTP API use.
+</Field>
+
+<Field name="channels" type={"Record<string, ChannelAdapter>"}>
+  A channel thread's replies are derived from its log, whatever ran it: each end_turn reply and each open approval card is a host-issued channel_send, issued after every run of the thread and, for a crash in between, again after ready(). A send with a result or a parked effect is never issued twice.
+</Field>
+
+<Field name="ceiling" type={"Partial<Policy.permissions>"}>
+  The host ceiling every run this host starts or resumes is also decided under (Agent.run ceiling). Absent: no ceiling.
+</Field>
+
+<Field name="schedules" type={"readonly Schedule[]"} />
+
+<Field name="authenticate" type={"(request: Request) => Promise<Principal | null>"}>
+  Maps an HTTP API request to a principal, or null for 401. Absent: every /v1 route answers 401; channel webhooks still work.
+</Field>
+
+## Returns
+
+[`Host`](/docs/reference/types/Host)

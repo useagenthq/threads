@@ -1,0 +1,111 @@
+---
+title: "Comparison"
+description: "How threads compares to the OpenAI Agents SDK, Pydantic AI, LangChain Deep Agents, Strands Agents and the Claude Agent SDK."
+icon: Scale
+---
+
+import { Box, GitFork, Server, ShieldCheck } from "lucide-react";
+
+All six of these let you build an agent that calls tools in a loop. They differ in what they give you around that loop: how a run survives a crash, what is recorded, where code runs, and how much of the server side you have to build yourself.
+
+threads is built around one idea: every thread is an append-only log, and everything else (resume, approvals, forks, evals, the audit trail) is read from that log. It also ships the pieces most teams write by hand: sandboxes, chat channels, schedules and an HTTP API.
+
+<Callout type="warn">
+  threads is alpha. It is not on npm or PyPI yet and its APIs may change. The other five are released packages with larger ecosystems. Weigh that first.
+</Callout>
+
+## At a glance
+
+"—" means we could not confirm the answer from that project's docs.
+
+| | threads | OpenAI Agents SDK | Pydantic AI | Deep Agents | Strands Agents | Claude Agent SDK |
+|---|---|---|---|---|---|---|
+| **Languages** | TypeScript and Python, same behavior, one shared conformance suite | Python and TypeScript (separate SDKs) | Python | Python and TypeScript (deepagents.js) | Python and TypeScript | Python and TypeScript, both run the bundled Claude Code binary |
+| **Model providers** | Anthropic, OpenAI, plus AI SDK bridge (TS) or LiteLLM (Python) | OpenAI; others through LiteLLM or Any-LLM adapters (beta) | Many, built in | Any LangChain chat model | Bedrock, Anthropic, OpenAI, Gemini, LiteLLM, Ollama and more | Claude only |
+| **Sandboxes** | E2B, Daytona; Modal in Python only | Docker, Unix-local and hosted clients incl. E2B, Daytona, Modal, Vercel, Cloudflare (beta) | Modal, via the Harness package | LangSmith, Daytona, E2B, Modal, Runloop, Vercel, AgentCore and more | Docker, SSH, or your own | You run the SDK inside your own container |
+| **Where the agent runs** | Outside the sandbox, using it through tools; keys never enter it | In your process; the sandbox is its workspace | Outside, through capabilities | Either; outside is recommended | Outside, through sandbox tools | Inside the container, next to its tools |
+| **Crash recovery** | Built in: resume from the log; side effects are confirmed or parked, never silently repeated | Serializable run state; Temporal, Restate, DBOS, Dapr integrations | Integrations: Temporal, DBOS, Prefect, Restate and others | Checkpoints; another worker resumes a crashed run (LangSmith Deployment) | Session checkpoints to resume a conversation | Resume from session transcripts; optional `SessionStore` |
+| **Audit trail** | Append-only, hash-chained log; every model request stored byte for byte | Tracing, on by default, to the OpenAI Traces dashboard | OpenTelemetry, Logfire | LangSmith tracing | Tracing built in | OpenTelemetry export |
+| **Fork, replay, evals** | Fork a past step into a fresh sandbox; save a turn as a regression case | — | Pydantic Evals (separate package) | Rewind to checkpoints; LangSmith evaluation | Evals SDK | Fork a session's conversation; file checkpointing |
+| **Multi-agent** | Subagents, handoffs, teams with a shared task board | Handoffs, agents as tools | Subagents, delegation, pydantic-graph | Subagents, any LangGraph graph as a subagent | Agents as tools, swarm, graph, workflow, A2A | Subagents |
+| **Human approval** | Allow / ask / deny rules; a parked run waits and survives restarts | Tool approval, pause and resume | Deferred tools with approval | Approve, edit or reject tool calls | Interrupts | Permission rules and approval prompts |
+| **Multi-tenancy** | Principals and tenants on every call; memory scoped per tenant and user | — | — | Auth, RBAC, scoped memory and sandboxes (LangSmith Deployment) | — | Build it yourself (isolation guide) |
+| **Server** | Optional host: HTTP API with SSE, Slack, WhatsApp, GitHub, cron schedules, idempotent runs | — | Web chat, AG-UI and Vercel AI streams; A2A via fasta2a | Agent server via LangSmith Deployment | A2A server | None; you add the HTTP layer |
+| **Deployment** | Self-hosted, one process plus SQLite; no managed service | Your infrastructure | Your infrastructure | Managed Deep Agents (private preview), LangSmith Deployment, or self-host | Your infrastructure; guides for Lambda, Fargate, EKS, Bedrock AgentCore | Self-hosted; Managed Agents is a separate Anthropic product |
+| **License** | Apache-2.0 | MIT | MIT | MIT | Apache-2.0 | Anthropic Commercial Terms |
+| **Maturity** | Alpha, install from source | Released; sandbox agents in beta | Released | Released | Released | Released |
+
+## Key differences
+
+### Crash recovery is part of the core, not an integration
+
+Most frameworks save conversation state and let you resume it. That covers the model's side. The hard part is a tool that was halfway through charging a card or sending an email when the process died.
+
+In threads, every tool declares how its side effect behaves (`read_only`, `idempotent`, `reconcilable` and so on). Before a side effect runs, threads records that it is about to run. After a crash it retries only when that is provably safe, asks your `lookup` whether it happened, or parks the run for a person. It never quietly runs it twice. Only one process can drive a thread at a time, and a second one is refused. There is nothing extra to deploy for this; it works with the SQLite store.
+
+The OpenAI Agents SDK and Pydantic AI get durable execution by plugging into an engine such as Temporal, DBOS or Restate. Deep Agents gets it from LangGraph checkpoints, with automatic takeover on LangSmith Deployment. Those engines are proven at scale; threads' guarantee is narrower and built in. See [Durability & crash safety](/docs/production/durability).
+
+### The log is the audit trail
+
+A threads log records every input, model request, tool call, permission decision and result. Each model request is stored as the exact bytes that were sent, and each line carries the hash of the one before it, so an edited or missing line is detected. Tracing tools in the other frameworks are better for dashboards and latency; the threads log is better when you need to prove what an agent saw and did. See [How it works](/docs/how-it-works) and [Timeline](/docs/evals/timeline).
+
+### Sandboxes without your keys in them
+
+In threads the agent loop runs on your host and reaches the sandbox only through tools. Provider keys never enter it, and tools like `git_push` go through a gateway on the host so the token stays outside. Sandboxes start with no internet. Deep Agents recommends the same "sandbox as a tool" pattern and also supports running the agent inside the sandbox. The Claude Agent SDK runs the agent in the container where its tools run, and its hosting guide recommends a proxy to keep credentials out.
+
+threads supports fewer sandbox providers than the OpenAI Agents SDK or Deep Agents: E2B and Daytona in both languages, Modal in Python only. Only Daytona takes the snapshots that forks need today. See [Sandboxes](/docs/sandboxes/overview).
+
+### Same behavior in TypeScript and Python
+
+Several of these ship both languages. In threads both implementations follow one spec, pass the same conformance cases and write the same bytes, so a thread written by a TypeScript agent can be opened, inspected and forked from Python. Provider coverage still differs by language (see the table).
+
+### Forks and saved cases for evals
+
+`fork()` starts a new branch from a past step, restoring the sandbox into a fresh machine, so you can reproduce a production issue and try a fix without touching the original. `saveCase()` turns a real turn into a regression case you commit next to your code. The Claude Agent SDK's session fork branches the conversation but not the filesystem. See [Fork](/docs/evals/fork) and [Saved cases](/docs/evals/saved-cases).
+
+### Multi-agent is simpler than in some frameworks
+
+threads has [subagents](/docs/multi-agent/subagents), [handoffs](/docs/multi-agent/handoffs) and [teams](/docs/multi-agent/teams), where a lead and its members share a task board and a mailbox. Messaging between agents outside a team and the A2A protocol are planned, not built. Strands (swarm, graph, A2A) and Pydantic AI (graphs, A2A) offer more patterns today.
+
+### A host you run yourself
+
+The optional host turns agents into a server: a typed HTTP API with streaming, Slack, WhatsApp and GitHub webhooks, cron schedules, and runs that are safe to retry with an `Idempotency-Key`. Every call carries a principal and a tenant, and memory is scoped per tenant and user. It runs as one process with a SQLite store on one machine. There is no Postgres store and no managed service. If you want someone else to run it, Deep Agents (LangSmith) and Anthropic (Managed Agents) offer hosted options. See [Host server](/docs/host/overview) and [Deploying the host](/docs/production/deploying).
+
+## Which to choose
+
+**Choose threads if** you need side effects that are never silently repeated after a crash, a byte-exact record of what the agent did, forks and saved cases for evals, and sandboxes, channels and an HTTP API without building them yourself, in TypeScript, Python or both. Accept that it is alpha, self-hosted only and supports fewer providers.
+
+**Choose the OpenAI Agents SDK if** you are mostly on OpenAI models, want the widest choice of sandbox providers, voice and realtime agents, or already run Temporal, Restate or DBOS.
+
+**Choose Pydantic AI if** you work in Python, want typed agents on almost any model, and want its evals, graphs, UI streaming and Logfire observability.
+
+**Choose Deep Agents if** you are in the LangChain ecosystem, want LangGraph's graph runtime underneath, or want a managed deployment with multi-tenant auth built in.
+
+**Choose Strands Agents if** you deploy on AWS, want Bedrock as a first-class provider, or need swarm, graph and A2A multi-agent patterns.
+
+**Choose the Claude Agent SDK if** you want Claude Code's own loop, tools and settings in your app and only use Claude models.
+
+<Cards>
+  <Card title="Durability" icon={<ShieldCheck />} href="/docs/production/durability">
+    How a run resumes and what happens to side effects after a crash.
+  </Card>
+  <Card title="Sandboxes" icon={<Box />} href="/docs/sandboxes/overview">
+    Providers, network defaults and credentials.
+  </Card>
+  <Card title="Fork" icon={<GitFork />} href="/docs/evals/fork">
+    Branch a real thread and try a different input or fix.
+  </Card>
+  <Card title="Host server" icon={<Server />} href="/docs/host/overview">
+    HTTP API, channels and schedules.
+  </Card>
+</Cards>
+
+## Sources
+
+Checked on 2026-09-23. Other projects change quickly; follow the links for the current state.
+
+- OpenAI Agents SDK: [README](https://github.com/openai/openai-agents-python), [Sandbox clients](https://openai.github.io/openai-agents-python/sandbox/clients/), [Running agents (durable execution)](https://openai.github.io/openai-agents-python/running_agents/), [Models](https://openai.github.io/openai-agents-python/models/), [Tracing](https://openai.github.io/openai-agents-python/tracing/), [Human in the loop](https://openai.github.io/openai-agents-python/human_in_the_loop/), [JS/TS SDK](https://github.com/openai/openai-agents-js)
+- Pydantic AI: [README](https://github.com/pydantic/pydantic-ai), [Durable execution](https://pydantic.dev/docs/ai/capabilities/durable_execution/overview/), [Interfaces](https://pydantic.dev/docs/ai/overview/interfaces/), [Harness SDK](https://github.com/pydantic/pydantic-ai-harness)
+- LangChain Deep Agents: [README](https://github.com/langchain-ai/deepagents), [Comparison with Claude Agent SDK](https://docs.langchain.com/oss/python/deepagents/comparison), [Going to production](https://docs.langchain.com/oss/python/deepagents/going-to-production), [Sandboxes](https://docs.langchain.com/oss/python/deepagents/sandboxes)
+- Strands Agents: [README](https://github.com/strands-agents/harness-sdk), [SDK docs source (sandboxes, interrupts, multi-agent, deploy)](https://github.com/strands-agents/harness-sdk/tree/main/site/src/content/docs/user-guide/sdk), [Documentation](https://strandsagents.com/)
+- Claude Agent SDK: [Overview](https://code.claude.com/docs/en/agent-sdk/overview), [Hosting](https://code.claude.com/docs/en/agent-sdk/hosting), [Sessions](https://code.claude.com/docs/en/agent-sdk/sessions)

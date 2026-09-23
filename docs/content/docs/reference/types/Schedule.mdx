@@ -1,0 +1,21 @@
+---
+title: "Schedule"
+description: "The Schedule type."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="id" type={"Name"} required />
+
+<Field name="agent" type={"string"} required>
+  A key of host(&#123;agents&#125;).
+</Field>
+
+<Field name="cron" type={"string"} required />
+
+<Field name="timezone" type={"string"}>
+  IANA name.
+</Field>
+
+<Field name="input" type={"Input"} required />

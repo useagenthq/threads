@@ -1,0 +1,185 @@
+---
+title: "KnowledgeProvider"
+description: "The KnowledgeProvider type."
+icon: "Plug"
+---
+
+<Callout>A protocol: adapters implement it.</Callout>
+
+## Methods
+
+### ingest
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+ingest(scope: Scope, source: KnowledgeSource, key: string): Promise<Result<DocVersion>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def ingest(
+    scope: Scope,
+    source: KnowledgeSource,
+    key: str,
+) -> Ok[DocVersion] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="scope" type={"Scope"} required>
+  See [Scope](/docs/reference/types/Scope).
+</Field>
+
+<Field name="source" type={"KnowledgeSource"} required>
+  See [KnowledgeSource](/docs/reference/types/KnowledgeSource).
+</Field>
+
+<Field name="key" type={"string"} required />
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
+
+### remove
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+remove(scope: Scope, docId: string, key: string): Promise<Result<void>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def remove(
+    scope: Scope,
+    doc_id: str,
+    key: str,
+) -> Ok[None] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="scope" type={"Scope"} required>
+  See [Scope](/docs/reference/types/Scope).
+</Field>
+
+<Field name="docId / doc_id" type={"string"} required />
+
+<Field name="key" type={"string"} required />
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
+
+### search
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+search(scope: Scope, query: string, options?: {
+  k?: PosInt;
+  sources?: readonly string[];
+  asOf?: number;
+}): Promise<Result<readonly KnowledgeHit[]>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def search(
+    scope: Scope,
+    query: str,
+    *,
+    k: PosInt = 5,
+    sources: Sequence[str] | None = None,
+    as_of: int | None = None,
+) -> Ok[Sequence[KnowledgeHit]] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="scope" type={"Scope"} required>
+  See [Scope](/docs/reference/types/Scope).
+</Field>
+
+<Field name="query" type={"string"} required />
+
+<Field name="k" type={"PosInt"} default={"5"} />
+
+<Field name="sources" type={"readonly string[]"} />
+
+<Field name="asOf / as_of" type={"number"}>
+  Search as of this revision (a pinned fork).
+</Field>
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
+
+### get
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+get(scope: Scope, docId: string, version: string): Promise<Result<Doc>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def get(
+    scope: Scope,
+    doc_id: str,
+    version: str,
+) -> Ok[Doc] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="scope" type={"Scope"} required>
+  See [Scope](/docs/reference/types/Scope).
+</Field>
+
+<Field name="docId / doc_id" type={"string"} required />
+
+<Field name="version" type={"string"} required />
+
+**Returns an error value** with one of these codes: `not_found`, `unavailable`, `timeout`, `invalid`, `scope_violation`.
+
+### revision
+
+The store's current monotonic revision, recorded as snapshot.knowledge_revision at capture.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+revision(scope: Scope): Promise<Result<number>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def revision(
+    scope: Scope,
+) -> Ok[int] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="scope" type={"Scope"} required>
+  See [Scope](/docs/reference/types/Scope).
+</Field>
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`.

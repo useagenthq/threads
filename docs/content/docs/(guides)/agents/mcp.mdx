@@ -1,0 +1,143 @@
+---
+title: MCP
+description: Connect any Model Context Protocol server in one line, with its credentials kept on your side.
+icon: Plug
+---
+
+`mcp()` turns an MCP server's tools into agent tools. Pass it in `tools` next to your own tools.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { mcp } from "@threads/mcp";
+
+const docs = mcp({ name: "docs", url: "https://example.com/mcp" });
+
+const assistant = agent({ model, tools: [docs, github, files] });
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.mcp import mcp
+
+docs = mcp(name="docs", url="https://example.com/mcp")
+
+assistant = agent(model=model, tools=[docs, github, files])
+```
+
+</Tab>
+</Tabs>
+
+Python needs the `mcp` extra (`threads[mcp]`).
+
+Each server tool shows up as `mcp__<server>__<tool>`, for example `mcp__docs__search`. If the server offers resources, the agent also gets `mcp__<server>__read_resource`.
+
+## Remote servers
+
+Give a `url`. Headers can hold a `secret()`, which is read on your host when the connection opens and never reaches the log, the model or the sandbox.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const github = mcp({
+  name: "github",
+  url: "https://api.githubcopilot.com/mcp/",
+  headers: { Authorization: secret("GITHUB_MCP_TOKEN") },
+  tools: { allow: ["get_issue", "list_pull_requests"] },
+  effect: "read_only",
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+github = mcp(
+    name="github",
+    url="https://api.githubcopilot.com/mcp/",
+    headers={"Authorization": secret("GITHUB_MCP_TOKEN")},
+    tools={"allow": ["get_issue", "list_pull_requests"]},
+    effect="read_only",
+)
+```
+
+</Tab>
+</Tabs>
+
+threads speaks Streamable HTTP. TypeScript falls back to the older SSE transport when a server doesn't support it.
+
+## Local servers
+
+Give a `command` and `args` to start a stdio server as a child process on your host. It starts with only `PATH` and `HOME` from your environment plus the `env` you pass, so your other environment variables don't leak into it.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const files = mcp({
+  name: "files",
+  command: "npx",
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "./data"],
+  tools: { deny: ["write_file"] },
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+files = mcp(
+    name="files",
+    command="npx",
+    args=["-y", "@modelcontextprotocol/server-filesystem", "./data"],
+    tools={"deny": ["write_file"]},
+)
+```
+
+</Tab>
+</Tabs>
+
+<Callout>
+Running a stdio server inside the sandbox (`runs: "sandbox"`) is not supported yet and is a setup error. Servers run on the host.
+</Callout>
+
+## Options
+
+<Field name="name" type="string" required>
+  Lowercase letters, digits and underscores. Used in every tool name.
+</Field>
+<Field name="url" type="string">
+  A remote server. Give exactly one of `url` or `command`.
+</Field>
+<Field name="headers" type="Record<string, string | Secret>">
+  HTTP headers for a remote server.
+</Field>
+<Field name="command" type="string">
+  A local stdio server to start.
+</Field>
+<Field name="args" type="string[]">
+  Arguments for `command`.
+</Field>
+<Field name="env" type="Record<string, string | Secret>">
+  Extra environment variables for `command`.
+</Field>
+<Field name="tools" type="{ allow?: string[], deny?: string[] }">
+  Keep only these tools, or drop these, by the server's own tool names. Applied before the agent sees the list.
+</Field>
+<Field name="effect" type="string" default="unguarded">
+  What the server's tools do to the outside world, as for [your own tools](/docs/agents/tools#effects-what-happens-after-a-crash). `read_only` lets them run without approval in the default mode. The default, `unguarded`, means an interrupted call parks instead of being retried.
+</Field>
+
+<Callout>
+`effect: "idempotent"` with `dedupWindowMs` is TypeScript only. Python refuses `idempotent` for MCP servers.
+</Callout>
+
+## When servers connect
+
+The tool list is fetched when a run starts (or on `check()` in TypeScript), filtered, and fixed for the life of the thread. A server that can't be reached is a setup error, `ConfigError("mcp_unreachable")`, naming the server. The agent never runs with tools silently missing.
+
+In TypeScript, `mcp()` returns a handle with `close()` to end the connection and stop a stdio server.

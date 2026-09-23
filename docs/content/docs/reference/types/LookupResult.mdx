@@ -1,0 +1,29 @@
+---
+title: "LookupResult"
+description: "An adapter's answer about an operation it may have performed; each answer carries its own finality."
+icon: "Braces"
+---
+
+found: it happened (effect confirmed_success, model_response_recovered, ledger row live). not_found: final, the provider's contract proves nothing was created or sent (effect safe_to_retry, model attempt not_sent, ledger row released). not_found_nonfinal (not seen yet, may still appear) and unknown (lookup failed or can't answer) settle nothing: the effect parks, the model attempt is abandoned as unknown, the ledger row becomes unknown (resource_unknown). The runtime accepts not_found only from an operation whose declared LookupCapability is final and treats it as not_found_nonfinal otherwise; finality is never inferred from lookup being available.
+
+A union discriminated by `status`.
+
+### found
+
+<Field name="status" type={"\"found\""} required />
+
+<Field name="value" type={"T"} required />
+
+### not_found
+
+<Field name="status" type={"\"not_found\""} required />
+
+### not_found_nonfinal
+
+<Field name="status" type={"\"not_found_nonfinal\""} required />
+
+### unknown
+
+<Field name="status" type={"\"unknown\""} required />
+
+<Field name="reason" type={"string"} required />

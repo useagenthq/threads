@@ -2,8 +2,11 @@
 
 Stdlib only and deterministic: the same spec always writes the same bytes.
 
-    python3 docs/scripts/gen_api_ref.py          # write docs/reference/** and the Reference tab
+    python3 docs/scripts/gen_api_ref.py          # write content/docs/reference/** and openapi.json
     python3 docs/scripts/gen_api_ref.py --check  # exit 1 if anything is out of date
+
+The pages are Fumadocs MDX. The HTTP pages are generated from docs/openapi.json by
+docs/scripts/gen-openapi.ts.
 
 spec/api.json is the contract, and it also lists members that are not built yet. Those are
 kept out of the docs by NOT_BUILT, and members built in one language only are marked by
@@ -18,7 +21,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = ROOT / "spec"
 DOCS = ROOT / "docs"
-REF = DOCS / "reference"
+REF = DOCS / "content" / "docs" / "reference"
+OPENAPI = DOCS / "openapi.json"
 
 # (container, member): in spec/api.json, not in either implementation yet.
 NOT_BUILT = {
@@ -133,16 +137,15 @@ TYPE_GROUPS = [
     ),
 ]
 
-GENERATED_TABS = {"Reference", "API Reference", "HTTP API"}
-
+# Sidebar separator icons (lucide names, as Fumadocs resolves them).
 GROUP_ICONS = {
-    "Agents and runs": "bot",
-    "Threads and evals": "history",
-    "Host": "server",
-    "Model adapters": "cpu",
-    "Sandbox adapters": "box",
-    "Memory and knowledge adapters": "brain",
-    "Channel adapters": "message-circle",
+    "Agents and runs": "Bot",
+    "Threads and evals": "RotateCcwClock",
+    "Host": "Server",
+    "Model adapters": "Cpu",
+    "Sandbox adapters": "Box",
+    "Memory and knowledge adapters": "Brain",
+    "Channel adapters": "MessageCircle",
 }
 
 # ---------------------------------------------------------------- text
@@ -186,7 +189,7 @@ def ref_name(ref: str) -> tuple[str, str | None]:
     base, _, pointer = ref.partition("#")
     if not base:
         name = pointer.rsplit("/", 1)[-1]
-        return name, f"/reference/types/{name}"
+        return name, f"/docs/reference/types/{name}"
     parts = [p for p in pointer.split("/") if p not in ("", "$defs", "properties")]
     if parts and parts[0].startswith("ev_"):
         parts[0] = "".join(w.capitalize() for w in parts[0][3:].split("_")) + "Event"
@@ -385,12 +388,21 @@ def signature(name: str, spec: dict, lang: str, method: bool) -> str:
 
 
 def code_group(ts: str | None, py: str | None) -> str:
-    blocks = []
-    if ts is not None:
-        blocks.append(f"```ts TypeScript\n{ts}\n```")
-    if py is not None:
-        blocks.append(f"```python Python\n{py}\n```")
-    return "<CodeGroup>\n\n" + "\n\n".join(blocks) + "\n\n</CodeGroup>"
+    """Language tabs that stay in sync across the site (groupId "lang")."""
+    blocks = [
+        (LANG_LABEL[k], fence, code)
+        for k, fence, code in (("ts", "ts", ts), ("py", "python", py))
+        if code is not None
+    ]
+    if len(blocks) == 1:
+        label, fence, code = blocks[0]
+        return f'```{fence} title="{label}"\n{code}\n```'
+    items = ", ".join(json.dumps(label) for label, _, _ in blocks)
+    tabs = "\n".join(
+        f'<Tab value="{label}">\n\n```{fence}\n{code}\n```\n\n</Tab>'
+        for label, fence, code in blocks
+    )
+    return f'<Tabs items={{[{items}]}} groupId="lang" persist>\n{tabs}\n</Tabs>'
 
 
 def type_link(t: dict) -> str | None:
@@ -402,7 +414,7 @@ def type_link(t: dict) -> str | None:
     return None
 
 
-def param_fields(container: str, params: list[dict], tag: str = "ParamField") -> str:
+def param_fields(container: str, params: list[dict]) -> str:
     out = []
     for p in params:
         lang = p.get("lang")
@@ -413,8 +425,7 @@ def param_fields(container: str, params: list[dict], tag: str = "ParamField") ->
         if lang == "py":
             label = p["name"]
         render = Render(lang or "ts")
-        attrs = [f'body="{label}"' if tag == "ParamField" else f'name="{label}"',
-                 f"type={attr(render.expr(p['type']))}"]
+        attrs = [f'name="{label}"', f"type={attr(render.expr(p['type']))}"]
         if p.get("required"):
             attrs.append("required")
         if "default" in p and p["default"] not in ([], {}, None):
@@ -424,7 +435,7 @@ def param_fields(container: str, params: list[dict], tag: str = "ParamField") ->
         link = type_link(p["type"])
         if link:
             doc = (doc + " " if doc else "") + f"See [{ref_name(p['type'].get('$ref', '') or '')[0] or 'type'}]({link})." if "$ref" in p["type"] else doc
-        out.append(f"<{tag} {' '.join(attrs)}>\n  {mdx(doc) if doc else ' '}\n</{tag}>")
+        out.append(field(attrs, doc))
     return "\n\n".join(out)
 
 
@@ -447,6 +458,12 @@ def errors_line(spec: dict) -> str:
 
 
 # ---------------------------------------------------------------- pages
+
+
+def field(attrs: list[str], doc: str) -> str:
+    if not doc:
+        return f"<Field {' '.join(attrs)} />"
+    return f"<Field {' '.join(attrs)}>\n  {mdx(doc)}\n</Field>"
 
 
 def frontmatter(title: str, description: str, icon: str) -> str:
@@ -476,7 +493,7 @@ def function_page(api: dict, key: str, f: dict) -> str:
     desc = first_sentence(f.get("doc", "")) or f"The {f['ts']} function."
     body = [
         frontmatter(
-            f["ts"] if f["ts"] == f["py"] else f"{f['ts']} / {f['py']}", desc, "square-function"
+            f["ts"] if f["ts"] == f["py"] else f"{f['ts']} / {f['py']}", desc, "SquareFunction"
         ),
         mdx(after_first_sentence(f.get("doc", ""))),
         "",
@@ -510,7 +527,7 @@ def fields_section(container: str, fields: dict, casing: str) -> str:
         if spec.get("required", True):
             attrs.append("required")
         doc = member_doc(container, name, spec.get("doc"), lang)
-        items.append(f"<ResponseField {' '.join(attrs)}>\n  {mdx(doc) if doc else ' '}\n</ResponseField>")
+        items.append(field(attrs, doc))
     return "\n\n".join(items)
 
 
@@ -538,7 +555,7 @@ def type_page(name: str, t: dict) -> str:
     kind = t["kind"]
     role = t.get("role")
     desc = first_sentence(t.get("doc", "")) or f"The {name} type."
-    icon = {"protocol": "plug", "handle": "box", "opaque": "package"}.get(role or "", "braces")
+    icon = {"protocol": "Plug", "handle": "Box", "opaque": "Package"}.get(role or "", "Braces")
     body = [frontmatter(name, desc, icon)]
     doc = member_doc(name, None, after_first_sentence(t.get("doc", "")), None)
     if doc:
@@ -549,7 +566,7 @@ def type_page(name: str, t: dict) -> str:
         "opaque": "Opaque: build it with its factory and pass it on; it has no public members.",
     }
     if role in labels:
-        body += [f"<Note>{labels[role]}</Note>", ""]
+        body += [f"<Callout>{labels[role]}</Callout>", ""]
     casing = t.get("casing", "api")
     if kind == "alias":
         render = (Render("ts").expr(t["type"]), Render("py").expr(t["type"]))
@@ -579,17 +596,17 @@ def overview_page(api: dict, types_by_group: list[tuple[str, list[str]]]) -> str
         f"| {k} | `{p['ts']}` | `{p['py']}` |" for k, p in api["packages"].items()
     )
     fns = "\n".join(
-        f"| [`{f['ts']}`](/reference/functions/{f['ts']}) | `{f['py']}` | "
+        f"| [`{f['ts']}`](/docs/reference/functions/{f['ts']}) | `{f['py']}` | "
         f"{mdx(first_sentence(f.get('doc', '')))} |"
         for f in api["functions"].values()
     )
     groups = "\n\n".join(
-        f"**{g}:** " + ", ".join(f"[`{n}`](/reference/types/{n})" for n in names)
+        f"**{g}:** " + ", ".join(f"[`{n}`](/docs/reference/types/{n})" for n in names)
         for g, names in types_by_group
     )
     return (
         frontmatter(
-            "API reference", "Every public function and type, in TypeScript and Python.", "book-open"
+            "API reference", "Every public function and type, in TypeScript and Python.", "BookOpen"
         )
         + f"""
 This reference is generated from `spec/api.json`, the contract both implementations follow. Members
@@ -610,7 +627,7 @@ say so.
 {rows}
 
 Model, sandbox, channel and memory providers live in their own packages (`@threads/anthropic`, `threads.anthropic`, ...).
-See [Models](/agents/models), [Sandboxes](/sandboxes/overview), [Host server](/host/overview) and [Memory](/memory/memory).
+See [Models](/docs/agents/models), [Sandboxes](/docs/sandboxes/overview), [Host server](/docs/host/overview) and [Memory](/docs/memory/memory).
 
 ## Functions
 
@@ -624,7 +641,7 @@ See [Models](/agents/models), [Sandboxes](/sandboxes/overview), [Host server](/h
 
 ## HTTP API
 
-The host's HTTP API is documented from its OpenAPI file in the **HTTP API** tab.
+The host's HTTP API is documented from its OpenAPI file in the [HTTP API reference](/docs/http-api).
 """
     )
 
@@ -725,34 +742,24 @@ def outputs() -> dict[Path, str]:
     for name, t in api["types"].items():
         files[REF / "types" / f"{name}.mdx"] = type_page(name, t)
     files[REF / "overview.mdx"] = overview_page(api, type_groups)
-    files[REF / "openapi.json"] = json.dumps(bundle_openapi(), indent=2) + "\n"
+    files[OPENAPI] = json.dumps(bundle_openapi(), indent=2) + "\n"
 
-    config = json.loads((DOCS / "docs.json").read_text())
-    tabs = [t for t in config["navigation"]["tabs"] if t.get("tab") not in GENERATED_TABS]
-    api_tab = {
-        "tab": "API Reference",
-        "icon": "square-code",
-        "groups": [
-            {"group": "Overview", "icon": "book-open", "pages": ["reference/overview"]},
-            {
-                "group": "Functions",
-                "icon": "square-function",
-                "pages": [f"reference/functions/{f['ts']}" for f in api["functions"].values()],
-            },
-            *(
-                {"group": g, "icon": GROUP_ICONS.get(g, "braces"),
-                 "pages": [f"reference/types/{n}" for n in names]}
-                for g, names in type_groups
-            ),
-        ],
+    # The API Reference sidebar tab: a Fumadocs root folder, grouped by separators.
+    pages = [
+        "overview",
+        "---[SquareFunction]Functions---",
+        *(f"functions/{f['ts']}" for f in api["functions"].values()),
+    ]
+    for g, names in type_groups:
+        pages += [f"---[{GROUP_ICONS.get(g, 'Braces')}]{g}---", *(f"types/{n}" for n in names)]
+    meta = {
+        "title": "API Reference",
+        "description": "Functions and types",
+        "icon": "SquareCode",
+        "root": True,
+        "pages": pages,
     }
-    http_tab = {
-        "tab": "HTTP API",
-        "icon": "globe",
-        "groups": [{"group": "Host HTTP API", "icon": "globe", "openapi": "reference/openapi.json"}],
-    }
-    config["navigation"]["tabs"] = [*tabs, api_tab, http_tab]
-    files[DOCS / "docs.json"] = json.dumps(config, indent=2) + "\n"
+    files[REF / "meta.json"] = json.dumps(meta, indent=2) + "\n"
     return files
 
 

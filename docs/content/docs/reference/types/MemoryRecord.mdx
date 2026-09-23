@@ -1,0 +1,15 @@
+---
+title: "MemoryRecord"
+description: "The MemoryRecord type."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="text" type={"string"} required />
+
+<Field name="origin" type={"\"user\" | \"tool_output\" | \"model\" | \"host\""} required />
+
+<Field name="provenance" type={"{ thread_id: ThreadId; event_ids: readonly EventId[] }"} required />
+
+<Field name="binding" type={"Binding"} required />

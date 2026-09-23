@@ -1,0 +1,152 @@
+---
+title: "Introduction"
+description: "An agent framework for TypeScript and Python, built on an append-only event log."
+icon: BookOpen
+---
+
+import { Bot, Box, Brain, GitFork, MessageCircle, Rocket, ScrollText, Shield, ShieldCheck, Users, Wrench } from "lucide-react";
+
+Every team building agents writes the same pieces again: a sandbox, a Slack bot, a WhatsApp bot, hooks, a knowledge base, memory, evals. threads ships them built in, for **TypeScript and Python**. You write what your agent does and add your API keys.
+
+<Callout>
+  threads is alpha. It is not on npm or PyPI yet, and APIs may change. See [Installation](/docs/installation) to try it from source.
+</Callout>
+
+## What you write
+
+An agent is a model, instructions and tools. Running it is one call.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { anthropic } from "@threads/anthropic";
+import { agent, sqlite, tool } from "@threads/core";
+import { z } from "zod";
+
+const getWeather = tool({
+  name: "get_weather",
+  description: "Get the weather for a city.",
+  input: z.object({ city: z.string() }),
+  runs: "host",
+  effect: "read_only",
+  execute: async ({ city }) => `It is sunny in ${city}.`,
+});
+
+const weather = agent({
+  name: "weather",
+  instructions: "Answer questions about the weather.",
+  model: anthropic({
+    model: "claude-sonnet-5",
+    maxTokens: 8192,
+    contextWindow: 200_000,
+    maxOutputTokens: 8192,
+  }),
+  tools: [getWeather],
+});
+
+const result = await weather.run("What is the weather in Paris?", { store: sqlite(".threads") });
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from pydantic import BaseModel
+
+from threads import RunContext, agent, sqlite, tool
+from threads.anthropic import anthropic
+
+
+class WeatherInput(BaseModel):
+    city: str
+
+
+async def get_weather(args: WeatherInput, ctx: RunContext[None]) -> str:
+    return f"It is sunny in {args.city}."
+
+
+weather_tool = tool(
+    name="get_weather",
+    description="Get the weather for a city.",
+    input=WeatherInput,
+    runs="host",
+    effect="read_only",
+    execute=get_weather,
+)
+
+weather = agent(
+    name="weather",
+    instructions="Answer questions about the weather.",
+    model=anthropic("claude-sonnet-5", context_window=200_000, max_output_tokens=8192),
+    tools=[weather_tool],
+)
+
+result = await weather.run("What is the weather in Paris?", store=sqlite(".threads"), deps=None)
+```
+
+</Tab>
+</Tabs>
+
+The core is a plain library: no server needed. Channels, schedules and the HTTP API run in the optional [host](/docs/host/overview).
+
+## What's built in
+
+<Cards>
+  <Card title="Tools and MCP" icon={<Wrench />} href="/docs/agents/built-in-tools">
+    Shell, files, search, web, git, code intelligence, notebooks, computer use, and any MCP server.
+  </Card>
+  <Card title="Subagents, handoffs, teams" icon={<Users />} href="/docs/multi-agent/subagents">
+    Let one agent start others, hand off a conversation, or share a task board.
+  </Card>
+  <Card title="Sandboxes" icon={<Box />} href="/docs/sandboxes/overview">
+    E2B, Daytona and Modal. No internet by default; your keys stay on the host.
+  </Card>
+  <Card title="Channels" icon={<MessageCircle />} href="/docs/host/overview">
+    Slack, WhatsApp and GitHub, plus cron schedules and an HTTP API.
+  </Card>
+  <Card title="Memory and knowledge" icon={<Brain />} href="/docs/memory/memory">
+    Local memory, Supermemory or Zep, and a local knowledge base.
+  </Card>
+  <Card title="Hooks and approvals" icon={<ShieldCheck />} href="/docs/control/permissions">
+    Lifecycle hooks, permission rules, human approvals and budgets.
+  </Card>
+</Cards>
+
+## Why the log matters
+
+Every run is recorded as an append-only log of events: each input, each request the model saw, each tool call and result. That one record gives you three things.
+
+<Cards>
+  <Card title="Every step is recorded" icon={<ScrollText />}>
+    A full audit trail of what the agent saw, decided and did.
+  </Card>
+  <Card title="No double actions" icon={<Shield />}>
+    After a crash, an action that may already have happened is checked or handed to you, never blindly retried.
+  </Card>
+  <Card title="Safe to experiment" icon={<GitFork />}>
+    Fork any past step and try again in a separate sandbox, never against real customers.
+  </Card>
+</Cards>
+
+Read [How it works](/docs/how-it-works) for a short tour of the log.
+
+## Providers
+
+| | TypeScript | Python |
+|---|---|---|
+| Models | Anthropic, OpenAI, AI SDK bridge | Anthropic, OpenAI, LiteLLM |
+| Sandboxes | E2B (on Bun), Daytona | E2B, Daytona, Modal |
+| Channels | Slack, WhatsApp, GitHub | Slack, WhatsApp, GitHub |
+| Memory | local, Supermemory, Zep | local, Supermemory, Zep |
+
+## Next steps
+
+<Cards>
+  <Card title="Quickstart" icon={<Rocket />} href="/docs/quickstart">
+    Run an agent in a minute, with no API key.
+  </Card>
+  <Card title="Agents" icon={<Bot />} href="/docs/agents/agents">
+    Every agent option, grouped by what it does.
+  </Card>
+</Cards>

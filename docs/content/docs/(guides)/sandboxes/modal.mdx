@@ -1,0 +1,42 @@
+---
+title: Modal
+description: Run an agent's commands and files in a Modal sandbox (Python).
+icon: Cpu
+---
+
+<Callout>
+Python only. Modal is not available in TypeScript yet: Modal's JavaScript SDK sends commands over a connection threads can't safely wrap, so `modal()` from `@threads/modal` throws `ConfigError` `transport_fence_unsupported`.
+</Callout>
+
+[Modal](https://modal.com) runs each sandbox as a container from an image you built. Set `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` and pass the image id.
+
+```python title="Python"
+from threads import agent
+from threads.modal import modal
+
+worker = agent(
+    name="worker",
+    model=model,
+    sandbox=modal(image_id="im-abc123", lifetime_ms=30 * 60_000),
+)
+```
+
+`image_id` is a built Modal image (`im-...`). Build it once at setup, for example with `modal.Image.debian_slim().build(app)`. The image needs `/bin/sh` and the GNU tools `sed`, `find`, `stat` and `sha256sum`.
+
+## Options
+
+| Option | Default | What it does |
+|---|---|---|
+| `image_id` | required | The built Modal image new sandboxes start from. |
+| `token_id`, `token_secret` | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | Authenticate threads' calls to Modal. Never enter the sandbox. |
+| `app_name` | `"threads"` | The Modal app sandboxes run under. |
+| `environment` | your default | The Modal environment. |
+| `lifetime_ms` | 1 hour | How long a sandbox lives, from 1 second to 24 hours. |
+| `allow_internet` | `False` | Opens the network. Also set `egress="unenforced"` on the agent. |
+
+## Good to know
+
+- **No fork points yet.** threads doesn't take Modal snapshots today, so a Modal thread can't be [forked](/docs/evals/fork) at a sandbox state.
+- **Crashes park.** If the host crashes mid-command, threads can't prove the command stopped, so the run parks for you instead of re-running it.
+
+See [Sandboxes](/docs/sandboxes/overview) for the tools an agent gets and how internet access works.

@@ -1,0 +1,139 @@
+---
+title: HTTP API
+description: Start runs, stream their events and control threads from any language over HTTP.
+icon: Globe
+---
+
+Every host serves a typed JSON API under `/v1`. Use it from a web app, a backend in another language, or `curl`. Each route is a thin wrapper over a library method (`startRun`, `Thread.timeline`, `Thread.approve`, ...), so it behaves exactly like the code API.
+
+## Authenticate callers
+
+The API is closed by default: without `authenticate`, every `/v1` route answers `401`. Give the host a function that maps a request to a **principal** (who is calling, and which tenant they belong to), or `null` to reject it.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const app = host({
+  store: sqlite(":memory:"),
+  agents: { support },
+  authenticate: async (request) => {
+    const token = request.headers.get("authorization");
+    if (token !== `Bearer ${process.env["API_TOKEN"]}`) return null;
+    return { issuer: "api", tenant: "acme", subject: "alice" };
+  },
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+import os
+
+from starlette.requests import Request
+from threads.log import Principal
+
+
+async def authenticate(request: Request) -> Principal | None:
+    if request.headers.get("authorization") != f"Bearer {os.environ['API_TOKEN']}":
+        return None
+    return Principal(issuer="api", tenant="acme", subject="alice")
+
+
+app = host(store=sqlite(":memory:"), agents={"support": support}, authenticate=authenticate)
+```
+
+</Tab>
+</Tabs>
+
+Everything a caller does is scoped to their `tenant`: another tenant's thread answers `404`. Approvals and parked actions also check that the caller is allowed to decide them.
+
+## Start a run and stream it
+
+<Steps>
+  <Step>
+    ### Start a run
+
+    ```bash
+    curl -X POST http://localhost:8787/v1/runs \
+      -H "authorization: Bearer $API_TOKEN" \
+      -H "content-type: application/json" \
+      -H "idempotency-key: req-1" \
+      -d '{"agent": "support", "input": "Hello"}'
+    ```
+
+    The host answers `202` as soon as the input is safely stored, and the run continues in the background:
+
+    ```json
+    {"thread_id": "01a0cead-...", "branch_id": "01a0cead-...", "run_id": "01a0cead-..."}
+    ```
+
+    To continue an existing conversation, add `"thread_id"` (and optionally `"branch_id"`) to the body. You can also pass a `"budget"` for this run.
+  </Step>
+  <Step>
+    ### Stream its events
+
+    ```bash
+    curl -N http://localhost:8787/v1/threads/$THREAD_ID/runs/$RUN_ID/events \
+      -H "authorization: Bearer $API_TOKEN"
+    ```
+
+    The response is a Server-Sent Events stream. Each logged step arrives as an `event` message with its sequence number as the SSE id, and the stream ends with the run's `result`:
+
+    ```text
+    id: 2
+    data: {"kind":"event","event":{"seq":2,"type":"user_input", ...}}
+
+    id: 4
+    data: {"kind":"event","event":{"seq":4,"type":"model_response", ...}}
+
+    data: {"kind":"result","run_id":"01a0cead-...","result":{"status":"completed","output":"Hi! How can I help?", ...}}
+    ```
+
+    If the connection drops, reconnect with `Last-Event-ID` (browsers' `EventSource` does this for you) or `?after_seq=<n>` to resume after the last event you saw. Subscribing never starts or changes anything.
+  </Step>
+</Steps>
+
+## Retries are safe
+
+`POST /v1/runs` requires an `Idempotency-Key` header (1 to 255 characters). If a response is lost and you retry:
+
+| Retry | Result |
+|---|---|
+| Same key, same body, same caller | `202` with the original receipt. No second run. |
+| Same key, different body | `409 idempotency_key_reused` |
+| Same key, different caller | `409 idempotency_key_principal_mismatch` |
+
+## Routes
+
+| Method | Path | Does |
+|---|---|---|
+| `POST` | `/v1/runs` | Start a run (new or existing thread) |
+| `GET` | `/v1/threads/{thread_id}/runs/{run_id}/events` | Stream a run's events (SSE) |
+| `GET` | `/v1/threads/{thread_id}/timeline` | The thread's steps. See [Timeline](/docs/evals/timeline) |
+| `GET` | `/v1/threads/{thread_id}/branches` | List branches |
+| `GET` | `/v1/threads/{thread_id}/fork-points` | Where the thread can be forked |
+| `POST` | `/v1/threads/{thread_id}/forks` | Fork a branch. See [Fork](/docs/evals/fork) |
+| `GET` | `/v1/threads/{thread_id}/approvals` | Pending approvals |
+| `POST` | `/v1/threads/{thread_id}/approvals/{challenge_id}` | Approve or deny: `decision` is `grant` or `deny` |
+| `POST` | `/v1/threads/{thread_id}/parked/{effect_key}/resolve` | Resolve an uncertain action: `assume_done` or `assume_not_done` |
+| `POST` | `/v1/threads/{thread_id}/cancel` | Cancel the thread's current work |
+| `POST` | `/v1/threads/{thread_id}/settings` | Switch the thread's model |
+| `POST` | `/v1/threads/{thread_id}/mode` | Change the permission mode |
+| `GET`, `POST` | `/channels/{channel}/events` | Channel webhooks (no `authenticate`; verified per provider) |
+
+Errors are always `{"error": {"code": "...", "message": "..."}}`: `400 invalid_request`, `401 unauthenticated`, `403 forbidden`, `404 not_found`, and `409` for domain errors such as `branch_busy`. Most thread routes take an optional `?branch_id=` query parameter to act on a branch other than the main one.
+
+The full request and response schemas are in the [HTTP API reference](/docs/reference/overview), generated from the OpenAPI file at `spec/schema/host-api/openapi.json`.
+
+## From code
+
+The same two operations are methods on the host, for when you are already in-process:
+
+| TypeScript | Python |
+|---|---|
+| `app.startRun(request, { principal, idempotencyKey })` | `await app.start_run(request, principal=..., idempotency_key=...)` |
+| `app.subscribe(threadId, runId, { principal, afterSeq })` | `await app.subscribe(thread_id, run_id, principal=..., after_seq=...)` |
+
+Both return a result value (`ok` / `Ok`) instead of throwing for expected failures.

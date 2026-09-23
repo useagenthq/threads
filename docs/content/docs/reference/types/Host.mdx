@@ -1,0 +1,150 @@
+---
+title: "Host"
+description: "TS: supports await using (Symbol.asyncDispose calls stop)."
+icon: "Box"
+---
+
+Python: an async context manager (__aenter__ calls ready, __aexit__ calls stop).
+
+<Callout>A handle returned by the library.</Callout>
+
+## Properties
+
+<Field name="fetch" type={"(request: Request) => Promise<Response>"} required>
+  TypeScript only. Mount in Next, Hono, Bun.serve.
+</Field>
+
+<Field name="asgi" type={"starlette.types.ASGIApp"} required>
+  Python only. Mount in FastAPI or any ASGI server.
+</Field>
+
+<Field name="channels" type={"readonly string[]"} required>
+  The host(&#123;channels&#125;) keys; threads dev prints each one's webhook URL, /channels/&lt;key>/events.
+</Field>
+
+## Methods
+
+### startRun / start_run
+
+POST /v1/runs. Makes the user_input durable together with the idempotency key and returns; the run proceeds in the host. The key binds tenant, the full principal (issuer, tenant, subject), the operation and the request hash: the same key, principal and request replays the same receipt and starts nothing; a different request is idempotency_key_reused; a different principal in the same tenant is idempotency_key_principal_mismatch, and never sees the other principal's receipt.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+startRun(request: StartRunRequest, options: {
+  principal: Principal;
+  idempotencyKey: string;
+}): Promise<Result<RunAccepted>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def start_run(
+    request: StartRunRequest,
+    *,
+    principal: Principal,
+    idempotency_key: str,
+) -> Ok[RunAccepted] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="request" type={"StartRunRequest"} required />
+
+<Field name="principal" type={"Principal"} required>
+  The authenticated caller, never the local-operator default.
+</Field>
+
+<Field name="idempotencyKey / idempotency_key" type={"string"} required />
+
+**Returns an error value** with one of these codes: `forbidden`, `invalid_request`, `not_found`, `branch_busy`, `branch_not_runnable`, `idempotency_key_reused`, `idempotency_key_principal_mismatch`.
+
+### subscribe
+
+GET /v1/threads/&#123;thread_id&#125;/runs/&#123;run_id&#125;/events. Follows one run from the log: its stream events, then one result message naming run_id. Takes no input and starts nothing.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+subscribe(threadId: ThreadId, runId: EventId, options: {
+  principal: Principal;
+  afterSeq?: Int;
+}): Promise<Result<AsyncIterable<SseMessage>>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def subscribe(
+    thread_id: ThreadId,
+    run_id: EventId,
+    *,
+    principal: Principal,
+    after_seq: Int = 0,
+) -> Ok[AsyncIterator[SseMessage]] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="threadId / thread_id" type={"ThreadId"} required />
+
+<Field name="runId / run_id" type={"EventId"} required />
+
+<Field name="principal" type={"Principal"} required />
+
+<Field name="afterSeq / after_seq" type={"Int"} default={"0"}>
+  Resume after this seq (SSE Last-Event-ID).
+</Field>
+
+**Returns an error value** with one of these codes: `forbidden`, `not_found`.
+
+### ready
+
+Confirms bindings. Sends nothing, starts no run.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+ready(): Promise<void>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def ready() -> None
+```
+
+</Tab>
+</Tabs>
+
+**Throws** `ConfigError` for a definition that can't run.
+
+### stop
+
+Drains in-flight intake and releases leases.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+stop(): Promise<void>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def stop() -> None
+```
+
+</Tab>
+</Tabs>

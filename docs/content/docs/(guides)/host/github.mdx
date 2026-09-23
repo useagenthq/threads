@@ -1,0 +1,105 @@
+---
+title: GitHub
+description: Let your agent answer issues and pull requests, with approvals as plain comment replies.
+icon: GitPullRequest
+---
+
+Add `github()` to a host and each issue or pull request becomes a thread. A comment talks to the agent, and the agent answers with a comment on the same issue.
+
+## Setup
+
+<Steps>
+  <Step>
+    ### Create a GitHub App
+
+    Create a [GitHub App](https://github.com/settings/apps) with **Issues: read and write** (and **Pull requests: read and write** if you want PRs). Set its webhook URL to `https://<your-host>/channels/github/events`, pick a webhook secret, and subscribe to **Issue comment** events (TypeScript also handles **Issues** and **Pull request review comment**). Install it on your repositories.
+  </Step>
+  <Step>
+    ### Set the secrets
+
+    ```bash
+    export GITHUB_WEBHOOK_SECRET=...   # the App's webhook secret
+    export GITHUB_TOKEN=...            # an installation token or fine-grained token with issues write
+    ```
+    threads does not mint installation tokens from the App's private key; pass a token you manage.
+  </Step>
+  <Step>
+    ### Add the channel to your host
+
+    <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+    <Tab value="TypeScript">
+
+    ```ts
+    import { secret } from "@threads/core";
+    import { github } from "@threads/github";
+
+    const githubChannel = github({
+      agent: "support",
+      webhookSecret: secret("GITHUB_WEBHOOK_SECRET"),
+      token: secret("GITHUB_TOKEN"),
+      appSlug: "my-threads-app",
+    });
+    ```
+
+    </Tab>
+    <Tab value="Python">
+
+    ```python
+    from threads import secret
+    from threads.github import github
+
+    github_channel = github(
+        agent="support",
+        webhook_secret=secret("GITHUB_WEBHOOK_SECRET"),
+        token=secret("GITHUB_TOKEN"),
+    )
+    ```
+
+    </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+<Callout>Python: install the `github` extra (`uv sync --extra github`).</Callout>
+
+## Options
+
+<Field name="agent" type="string" required>
+  The host agent key this channel routes to.
+</Field>
+<Field name="webhookSecret / webhook_secret" type="Secret" required>
+  Verifies each webhook's `X-Hub-Signature-256`.
+</Field>
+<Field name="token" type="Secret" required>
+  Posts reply comments.
+</Field>
+<Field name="appSlug" type="string">
+  TypeScript only. The App's slug; comments by `<slug>[bot]` are ignored. (Python ignores every bot account.)
+</Field>
+<Field name="tenant" type="string | (installationId) => string | undefined">
+  TypeScript only. Tenant for an installation, default `github:<installation_id>`. Returning `undefined` refuses it.
+</Field>
+
+## What starts a conversation
+
+| Event | TypeScript | Python |
+|---|---|---|
+| New comment on an issue or PR (`issue_comment`, created) | Yes | Yes |
+| New issue opened (`issues`, opened): title and body | Yes | No |
+| New PR review comment (`pull_request_review_comment`, created) | Yes | No |
+
+Each issue or PR (`owner/repo#123`) is one thread. Comments from bots, including the agent's own replies, are ignored.
+
+## Approvals
+
+GitHub has no buttons, so when a tool call needs approval the agent's comment ends with a line like:
+
+```text
+Reply `/approve <id>` or `/deny <id>`.
+```
+
+A reply of exactly `/approve <id>` or `/deny <id>` decides it. By default only the person who started the run can approve; list others in the agent's `approvers` with issuer `github:<installation_id>` and their numeric GitHub user id as the subject. See [Human-in-the-loop](/docs/control/human-in-the-loop).
+
+<Callout type="idea">
+  To let the agent push branches and open pull requests itself, use the git tools rather than this channel. See [Built-in tools](/docs/agents/built-in-tools).
+</Callout>

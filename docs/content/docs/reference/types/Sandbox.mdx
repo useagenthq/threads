@@ -1,0 +1,213 @@
+---
+title: "Sandbox"
+description: "What a sandbox adapter (e2b(), daytona(), modal(), fakeSandbox()) returns."
+icon: "Plug"
+---
+
+Every create and restore carries an operation key written to the resource ledger first. Recovery and gc resolve a ledger row only with the adapter whose info.provider is the row's provider; any other adapter is refused before lookup or release, and the row stays unresolved for the right one.
+
+<Callout>A protocol: adapters implement it.</Callout>
+
+## Properties
+
+<Field name="info" type={"SandboxInfo"} required />
+
+## Methods
+
+### create
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+create(operationKey: string, context: SandboxContext): Promise<Result<SandboxSession>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def create(
+    operation_key: str,
+    context: SandboxContext,
+) -> Ok[SandboxSession] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="operationKey / operation_key" type={"string"} required />
+
+<Field name="context" type={"SandboxContext"} required>
+  See [SandboxContext](/docs/reference/types/SandboxContext).
+</Field>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `unavailable`, `timeout`.
+
+### restore
+
+Restore a snapshot into a new isolated sandbox and verify it: a restored file tree whose canonical manifest hash isn't manifest_hash is snapshot_manifest_mismatch, and the adapter releases the sandbox it created before returning that error.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+restore(snapshotId: string, manifestHash: Sha256, operationKey: string, context: SandboxContext): Promise<Result<SandboxSession>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def restore(
+    snapshot_id: str,
+    manifest_hash: Sha256,
+    operation_key: str,
+    context: SandboxContext,
+) -> Ok[SandboxSession] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="snapshotId / snapshot_id" type={"string"} required />
+
+<Field name="manifestHash / manifest_hash" type={"Sha256"} required>
+  The snapshot event's manifest_hash.
+</Field>
+
+<Field name="operationKey / operation_key" type={"string"} required />
+
+<Field name="context" type={"SandboxContext"} required>
+  See [SandboxContext](/docs/reference/types/SandboxContext).
+</Field>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `snapshot_expired`, `snapshot_missing`, `snapshot_restore_failed`, `snapshot_manifest_mismatch`, `unavailable`.
+
+### lookup
+
+Find a sandbox whose create or restore response was lost, by that call's operation key. Resolves the pending ledger row (LookupResult doc). Present when info.lookup.create is not none. A final not_found retires a pending row only when no older local dispatch for that operation_key can still reach the provider; every create and restore fences its SandboxContext at the provider boundary, so once the lease has moved a stale creator can't pass that fence.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+lookup(operationKey: string, context: SandboxContext): Promise<Result<LookupResult<SandboxSession>>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def lookup(
+    operation_key: str,
+    context: SandboxContext,
+) -> Ok[LookupResult[SandboxSession]] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="operationKey / operation_key" type={"string"} required />
+
+<Field name="context" type={"SandboxContext"} required>
+  See [SandboxContext](/docs/reference/types/SandboxContext).
+</Field>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`.
+
+### lookupSnapshot / lookup_snapshot
+
+Find a snapshot whose capture response was lost, by the snapshot call's operation key. Resolves the pending ledger row. Present when info.lookup.snapshot is not none.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+lookupSnapshot(operationKey: string, context: SandboxContext): Promise<Result<LookupResult<SnapshotEvent.data>>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def lookup_snapshot(
+    operation_key: str,
+    context: SandboxContext,
+) -> Ok[LookupResult[SnapshotEvent.data]] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="operationKey / operation_key" type={"string"} required />
+
+<Field name="context" type={"SandboxContext"} required>
+  See [SandboxContext](/docs/reference/types/SandboxContext).
+</Field>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`.
+
+### attach
+
+Reattach to a live ledger row's sandbox by its recorded ref, so a restarted host can terminate its processes and close it. not_found is final only when info.lookup.create is final; otherwise the answer is resource_unknown and the row becomes unknown.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+attach(ref: string, context: SandboxContext): Promise<Result<SandboxSession>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def attach(
+    ref: str,
+    context: SandboxContext,
+) -> Ok[SandboxSession] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="ref" type={"string"} required />
+
+<Field name="context" type={"SandboxContext"} required>
+  See [SandboxContext](/docs/reference/types/SandboxContext).
+</Field>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `not_found`, `resource_unknown`, `unavailable`.
+
+### release
+
+Release a snapshot by its durable ref (ledger row releasing). released or already_gone (the provider proves it no longer exists) → released. An error → release_failed, retried by the next gc, never dropped. Sandboxes are released with SandboxSession.close. v0.1 has no retention holds: a snapshot lives until the provider's declared expiry, and restoring an expired one is snapshot_expired.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+release(ref: string, context: SandboxContext): Promise<Result<"released" | "already_gone">>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def release(
+    ref: str,
+    context: SandboxContext,
+) -> Ok[Literal["released", "already_gone"]] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="ref" type={"string"} required />
+
+<Field name="context" type={"SandboxContext"} required>
+  See [SandboxContext](/docs/reference/types/SandboxContext).
+</Field>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `release_failed`, `unavailable`.

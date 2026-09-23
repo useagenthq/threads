@@ -1,0 +1,22 @@
+---
+title: "ConfigErrorCode"
+description: "The ConfigErrorCode type."
+icon: "Braces"
+---
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+type ConfigErrorCode = "invalid_config" | "missing_secret" | "unknown_preset" | "duplicate_name" | "capability_missing" | "mcp_unreachable" | "budget_unenforceable" | "permission_rule_invalid" | "hosted_tool_unsupported" | "egress_policy_unsupported" | "transport_fence_unsupported";
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+type ConfigErrorCode = Literal["invalid_config", "missing_secret", "unknown_preset", "duplicate_name", "capability_missing", "mcp_unreachable", "budget_unenforceable", "permission_rule_invalid", "hosted_tool_unsupported", "egress_policy_unsupported", "transport_fence_unsupported"]
+```
+
+</Tab>
+</Tabs>

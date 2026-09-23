@@ -1,0 +1,38 @@
+---
+title: "sqlite"
+description: "The one log and artifact store."
+icon: "SquareFunction"
+---
+
+Opens lazily: no I/O until first use.
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function sqlite(path: string): Store
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def sqlite(
+    path: str,
+) -> Store
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="path" type={"string"} required>
+  ":memory:" for a throwaway store (tests).
+</Field>
+
+## Returns
+
+[`Store`](/docs/reference/types/Store)
