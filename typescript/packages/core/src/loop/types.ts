@@ -172,7 +172,7 @@ export type Team = {
   /** Applies a member's team tool call in one append to the lead's log. */
   readonly act: (
     member: string,
-    call: EventOf<"tool_call">,
+    call: EventOf<"tool_call">["data"],
   ) => { readonly isError: boolean; readonly output: string };
   /** Messages to `member` (or to every member) from anyone else, oldest first. */
   readonly inbox: (

@@ -36,10 +36,10 @@ export function teamOf(s: Session): Team {
   };
 }
 
-function act(s: Session, member: string, call: Call): Answer {
-  const key = `${member}/${call.data.call_id}`;
-  const { input } = call.data;
-  switch (call.data.name) {
+function act(s: Session, member: string, call: Call["data"]): Answer {
+  const key = `${member}/${call.call_id}`;
+  const { input } = call;
+  switch (call.name) {
     case "team_task_create":
       return create(s, key, TeamTaskCreateInput.parse(input));
     case "team_task_claim":
@@ -49,7 +49,7 @@ function act(s: Session, member: string, call: Call): Answer {
     case "send_message":
       return send(s, member, key, SendMessageInput.parse(input));
     default:
-      throw new Error(`${call.data.name} is not a team tool`);
+      throw new Error(`${call.name} is not a team tool`);
   }
 }
 
@@ -133,7 +133,7 @@ export function teamTool(s: Session, call: Call): Halt | undefined {
   const answer =
     agents === undefined
       ? no("this agent has no team")
-      : (agents.team ?? teamOf(s)).act(agents.name, call);
+      : (agents.team ?? teamOf(s)).act(agents.name, call.data);
   return s.append(
     draft.toolResult(
       {
