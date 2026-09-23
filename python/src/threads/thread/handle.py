@@ -1,17 +1,23 @@
 """`open_thread` and the `Thread` handle (spec/api.json, ): a thread positioned at
 one branch. Every method reads or appends through the store; none needs the agent in memory."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
+from threads._generated.host_api_v1 import BranchInfo, PendingApproval, SettingsChange
 from threads.agents.store import HOLDER, Store, now_ms, open_store
 from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
     BranchId,
+    CallId,
     Event,
     EventId,
     ParseError,
+    PermissionMode,
+    PermissionRule,
+    Principal,
     SnapshotData,
     SnapshotEvent,
     ThreadId,
@@ -22,11 +28,10 @@ from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import VerifiedLog
 from threads.store.lines import uuid7
+from threads.thread import approvals, control
 from threads.thread.case import CaseExpectation, CaseRequest, SavedCase, save_case
+from threads.thread.control import LOCAL_OPERATOR, Controlled
 from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +79,11 @@ class Thread:
     sandbox: Sandbox | None = field(default=None, kw_only=True, compare=False, repr=False)
     """The adapter this thread's snapshots restore into: `fork` needs it, and `save_case`
     checks its egress."""
+    approvers: tuple[Principal, ...] = field(
+        default=(LOCAL_OPERATOR,), kw_only=True, compare=False, repr=False
+    )
+    """Who may answer approvals and resolve parked effects: the agent's approver policy as it
+    stands now."""
 
     async def timeline(self) -> Ok[Timeline] | Err[ParseError]:
         """Every step, with the fork points marked (F13.1)."""
@@ -146,6 +156,86 @@ class Thread:
                 child = e.data.child_thread_id
                 children[child] = Child(child, e.data.status)
         return Ok(tuple(children.values()))
+
+    async def branches(self) -> tuple[BranchInfo, ...]:
+        """The thread's visible branches; a forking or failed fork is never listed."""
+        rows = await (await open_store(self.store)).tables.branches(self.id)
+        return tuple(
+            BranchInfo.model_validate(
+                {"branch_id": r.branch_id, "mode": "live", "runnable": r.state == "ready"}
+                | ({} if r.parent_branch_id is None else {"parent_branch_id": r.parent_branch_id})
+                | ({} if r.fork_at_seq is None else {"fork_at_seq": r.fork_at_seq})
+            )
+            for r in rows
+        )
+
+    async def pending_approvals(self) -> Ok[tuple[PendingApproval, ...]] | Err[ParseError]:
+        """Open challenges on this branch, with the rules an approver may keep."""
+        read = await self._read()
+        return read if isinstance(read, Err) else Ok(approvals.pending(read.value.fold))
+
+    async def approve(
+        self,
+        challenge_id: str,
+        principal: Principal,
+        *,
+        remember_rule: PermissionRule | None = None,
+    ) -> Controlled:
+        """approval_granted, single-use, by an approver."""
+        at = (self.id, self.branch)
+        return await approvals.decide(
+            self.store,
+            at,
+            challenge_id,
+            principal,
+            "granted",
+            approvers=self.approvers,
+            remember_rule=remember_rule,
+        )
+
+    async def deny(
+        self, challenge_id: str, principal: Principal, *, reason: str | None = None
+    ) -> Controlled:
+        """approval_denied, single-use, by an approver."""
+        at = (self.id, self.branch)
+        return await approvals.decide(
+            self.store,
+            at,
+            challenge_id,
+            principal,
+            "denied",
+            approvers=self.approvers,
+            reason=reason,
+        )
+
+    async def answer(
+        self, call_id: CallId, answer: str | Sequence[str], principal: Principal
+    ) -> Controlled:
+        """Answers an open ask_user question."""
+        return await control.answer(self.store, self.branch, call_id, answer, principal)
+
+    async def resolve_parked(
+        self,
+        effect_key: str,
+        resolution: Literal["assume_done", "assume_not_done"],
+        principal: Principal,
+    ) -> Controlled:
+        """A human settles a parked effect; assume_not_done accepts duplicate risk."""
+        return await control.resolve_parked(
+            self.store, self.branch, effect_key, resolution, principal, approvers=self.approvers
+        )
+
+    async def cancel(self, principal: Principal) -> Controlled:
+        """Durable cancel_requested; unsettled effects park."""
+        return await control.cancel(self.store, self.branch, principal)
+
+    async def set_model(self, settings: SettingsChange, principal: Principal) -> Controlled:
+        """settings_changed{reason: user}."""
+        return await control.set_model(self.store, self.branch, settings, principal)
+
+    async def set_mode(self, mode: PermissionMode, principal: Principal) -> Controlled:
+        """mode_changed."""
+        return await control.set_mode(self.store, self.branch, mode, principal)
 
     async def _read(self) -> Ok[VerifiedLog] | Err[ParseError]:
         sq = await open_store(self.store)

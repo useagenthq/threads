@@ -7,7 +7,7 @@ from pydantic import JsonValue
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
 from threads.hooks.extension import Extension, extension_tools
-from threads.log import Budget, Context, Permissions, Retry, ToolSpec
+from threads.log import Budget, Context, Permissions, Principal, Retry, ToolSpec
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.loop.calls import FINAL_OUTPUT
@@ -49,6 +49,9 @@ class Definition[D]:
     allowed: frozenset[str] | None = None
     """A subagent's tools are its own filtered to these, its parent's pinned names: a child only
     narrows. final_output is exempt."""
+    approvers: tuple[Principal, ...] | None = None
+    """Who may answer this agent's approval challenges. None: the local
+    operator for a run, nobody for a channel thread. Host policy, never pinned."""
 
     def policy(self) -> dict[str, JsonValue]:
         """The resolved runtime policy: each section absent (ADR defaults) or complete."""

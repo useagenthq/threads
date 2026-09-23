@@ -41,7 +41,7 @@ async def _a_refusing_companion_rolls_the_append_back_and_the_writer_goes_on() -
     assert isinstance(await writer.append([user("hi")]), Ok)
     read = await sq.read(BRANCH, T0)
     assert isinstance(read, Ok)
-    assert read.value.fold.seq == 2
+    assert read.value.fold.seq == writer.fold.seq
 
 
 def test_an_approval_requested_append_opens_its_single_use_row() -> None:
@@ -107,7 +107,7 @@ async def _a_redelivered_batch_inserts_nothing_and_maps_one_thread() -> None:
     rows = await sq.tables.inbox_rows()
     assert [r.item_key for r in rows] == ["Ev1#0", "Ev1#1"]
     (thread,) = first
-    assert len(await sq.tables.pending(thread)) == 2
+    assert await sq.tables.pending(thread) == rows
     conversation = await sq.tables.conversation(thread)
     assert conversation == inbox.Conversation("slack", "T1", "C1")
     assert await sq.scoped("other").tables.inbox_rows() == ()

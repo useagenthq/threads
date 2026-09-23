@@ -3,13 +3,14 @@ continued one; then record the input. A launched thread (a subagent child or a h
 is pinned with its parent link, and gets only the inputs its parent sent that it lacks."""
 
 from collections.abc import Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
 from threads.agents.handoff import launch as handoff_launch
 from threads.agents.handoff import target
+from threads.agents.intake import Intake
 from threads.agents.launch import Launch, open_launched
 from threads.agents.results import Failed, HandedOff, RunError, RunResult, Thread
 from threads.agents.scope import Scope
@@ -27,7 +28,8 @@ from threads.loop import gates
 from threads.loop.drafts import draft
 from threads.loop.drive import drive
 from threads.loop.recovery import recover
-from threads.loop.runtime import Halt, Idle, Runtime, lost
+from threads.loop.runtime import LOST, Halt, Idle, Runtime, lost
+from threads.loop.runtime import Failed as HaltFailed
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import SqliteStore, Writer
@@ -93,21 +95,53 @@ def wants_input(rt: Runtime, launch: Launch | None) -> bool:
     return sum(1 for e in rt.events if isinstance(e, UserInputEvent)) < launch.inputs
 
 
-async def record_input(
-    rt: Runtime, input: Input, principal: Principal, budget: Budget | None, launch: Launch | None
-) -> Halt | None:
-    """The input, recorded with the principal that sent it."""
-    source = "api" if launch is None else launch.source
+@dataclass(frozen=True, slots=True)
+class Recorded:
+    """A run's input and how it came: its sender, run budget, launch and host intake."""
+
+    input: Input | None
+    """None: nothing to record; the run continues the thread."""
+    principal: Principal
+    budget: Budget | None
+    launch: Launch | None
+    intake: Intake | None = None
+
+
+async def record_input(rt: Runtime, recorded: Recorded) -> Halt | None:
+    """The input, recorded with the principal that sent it. A host intake's delivery event and
+    host rows go in the same append; a refused companion records nothing."""
+    input, principal, budget, launch, intake = (
+        recorded.input,
+        recorded.principal,
+        recorded.budget,
+        recorded.launch,
+        recorded.intake,
+    )
+    source = intake.source if intake is not None else "api" if launch is None else launch.source
     data: dict[str, JsonValue] = {"source": source}
+    if input is None:
+        raise AssertionError("a run without an input records none")
     if isinstance(input, str):
         data["text"] = input
     else:
         data["content"] = [to_json(part) for part in input]
     if budget is not None:
         data["budget"] = to_json(budget)
+    if intake is not None and intake.delivery_event_id is not None:
+        data["delivery_event_id"] = intake.delivery_event_id
     actor: dict[str, JsonValue] = {"kind": "user", "principal": to_json(principal)}
-    done = await rt.append(replace(draft("user_input", data), actor=actor))
-    return lost(done.error) if isinstance(done, Err) else None
+    drafts = [
+        *(() if intake is None else intake.before),
+        replace(draft("user_input", data), actor=actor),
+    ]
+    done = await rt.append_with(drafts, None if intake is None else intake.companion)
+    if isinstance(done, Err):
+        if intake is not None and done.error.code not in LOST:
+            return HaltFailed("branch_not_runnable", done.error.message)
+        return lost(done.error)
+    if intake is not None:
+        intake.recorded.set_result(done.value[-1])
+    return None
 
 
 async def handed_off[D](

@@ -17,7 +17,7 @@ from threads.agents.definition import Definition
 from threads.agents.results import RunResult, StreamEvent
 from threads.agents.run import Input, RunOptions, execute
 from threads.hooks.extension import Extension
-from threads.log import Budget, Context, Permissions, Retry
+from threads.log import Budget, Context, Permissions, Principal, Retry
 from threads.loop.model import Model
 from threads.memory.authority import MemoryWrite
 from threads.memory.protocol import KnowledgeProvider, MemoryProvider
@@ -49,6 +49,9 @@ class AgentOptions(TypedDict, total=False):
     """Agents spawn_agent may start, by name; the team tools come with them."""
     handoffs: "Sequence[Agent[None]]"
     """Agents this one may hand the conversation to, pinned as policy.handoffs."""
+    approvers: Sequence[Principal]
+    """Who may answer approval challenges; default the local operator for run(), nobody for
+    channel-started threads."""
 
 
 class ServerAgentOptions(AgentOptions, total=False):
@@ -182,6 +185,8 @@ def _definition[T](
         tuple(replace(a.definition, member=True) for a in options.get("subagents", ())),
         tuple(a.definition for a in options.get("handoffs", ())),
     )
+    if "approvers" in options:
+        definition = replace(definition, approvers=tuple(options["approvers"]))
     pinned = frozenset(s.name for s in definition.specs())
     children = tuple(replace(c, allowed=pinned) for c in definition.subagents)
     definition = replace(definition, subagents=children)

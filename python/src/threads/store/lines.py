@@ -31,6 +31,9 @@ class Draft:
     actor: Mapping[str, JsonValue] = field(default_factory=lambda: {"kind": "host"})
     critical: bool = True
     """Pinned per known type by the schema; a mismatch fails the line's schema."""
+    event_id: str | None = None
+    """Set when a later draft of the same append must name this event (a resumed's cause, a
+    user_input's delivery); otherwise the writer mints a UUIDv7."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +95,7 @@ def event_line(draft: Draft, at: Position) -> Ok[tuple[StoredEvent, bytes]] | Er
         "critical": draft.critical,
         "data": dict(draft.data),
         "epoch": at.epoch,
-        "event_id": uuid7(at.now),
+        "event_id": draft.event_id or uuid7(at.now),
         "prev_hash": sha256_hex(at.prev_line),
         "seq": at.seq,
         "thread_id": at.thread_id,

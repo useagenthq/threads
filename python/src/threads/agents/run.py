@@ -7,13 +7,14 @@ import uuid
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
-from typing import Final, TypedDict
+from typing import TypedDict
 
 from threads.agents.bindings import AppTool, AppTools, Fence, capped
 from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
 from threads.agents.context import RunContext
 from threads.agents.definition import Definition
 from threads.agents.framework import Agents
+from threads.agents.intake import Intake
 from threads.agents.launch import Launch
 from threads.agents.outcome import result
 from threads.agents.results import (
@@ -26,23 +27,37 @@ from threads.agents.results import (
     Thread,
 )
 from threads.agents.scope import Execute, Scope
-from threads.agents.start import handed_off, launched, prepare, record_input, wants_input
-from threads.agents.store import Store, now_ms, open_store, sqlite
+from threads.agents.start import (
+    Recorded,
+    handed_off,
+    launched,
+    prepare,
+    record_input,
+    wants_input,
+)
+from threads.agents.store import LIVE, Store, now_ms, open_store, sqlite
 from threads.hooks.extension import bind, extension_tools
 from threads.hooks.observers import ObserverPump
-from threads.log import BranchId, Budget, InputPart, ParseError, Principal, ThreadId
+from threads.log import (
+    BranchId,
+    Budget,
+    InputPart,
+    ParseError,
+    Principal,
+    ThreadId,
+    ThreadStartedEvent,
+)
 from threads.loop import gates
 from threads.loop.drive import drive
-from threads.loop.runtime import Idle, RunErrorCode, Runtime
+from threads.loop.runtime import Halt, Idle, RunErrorCode, Runtime
 from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, memory_scope, provider_tools
 from threads.result import Err, Ok
 from threads.store import SqliteStore, StoredEvent, Writer
 from threads.store.lines import uuid7
+from threads.thread.control import LOCAL_OPERATOR
 from threads.tools import ReadResults
 
-LOCAL_OPERATOR: Final = Principal(issuer="api", tenant="local", subject="operator")
-"""The default principal of a local run."""
 RENEW_EVERY_S = 10.0
 """Lease renewal interval, a third of the TTL."""
 
@@ -75,11 +90,12 @@ class _Stream:
 
 async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launched
     definition: Definition[D],
-    input: Input,
+    input: Input | None,
     options: RunOptions[D],
     deps: D,
     emit: Emit,
     launch: Launch | None = None,
+    intake: Intake | None = None,
 ) -> RunResult[str]:
     thread = options.get("thread")
     store = options.get("store") or (thread.store if thread is not None else sqlite(".threads"))
@@ -91,13 +107,16 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         handle = thread or Thread(ThreadId(uuid7(now_ms())), BranchId(uuid7(now_ms())), store)
         return Failed(RunError(_refusal(opened.error), opened.error.message), handle)
     writer, fresh = opened.value
+    if intake is not None and intake.servers:
+        definition = replace(definition, servers=(*definition.servers, *intake.servers))
     async with _held(writer), AsyncExitStack() as servers:
         definition = await with_servers(definition, servers, writer)
         thread_id = writer.fold.thread_id
         if thread_id is None:
             raise AssertionError("an acquired branch has a thread")
         sandbox = definition.sandbox or (None if thread is None else thread.sandbox)
-        handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox)
+        approvers = definition.approvers or (LOCAL_OPERATOR,)
+        handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox, approvers=approvers)
         principal = options.get("principal", LOCAL_OPERATOR) if launch is None else launch.principal
         ctx = RunContext(deps, handle.id, handle.branch, principal)
         observers = {e.name: e.on for e in definition.extensions}
@@ -140,11 +159,9 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
             budgets=() if launch is None else launch.budgets,
             framework=agents,
         )
-        halt = await prepare(rt, definition, fresh=fresh, launch=launch)
         moved = rt.fold.handed_off
-        if halt is None and not moved and wants_input(rt, launch):
-            halt = await record_input(rt, input, principal, options.get("budget"), launch)
-        halt = halt or await drive(rt)
+        recorded = Recorded(input, principal, options.get("budget"), launch, intake)
+        halt = await _turn(rt, definition, recorded, fresh=fresh)
         await agents.finish(rt)
         if isinstance(halt, Idle) and box is not None and builtins is not None and shared is None:
             revision = None if provided is None else await provided.knowledge_revision()
@@ -153,6 +170,23 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         if rt.fold.handed_off:
             return await handed_off(frame, rt, handle, again=moved)
         return result(rt, halt, handle)
+
+
+async def _turn[D](
+    rt: Runtime, definition: Definition[D], recorded: Recorded, *, fresh: bool
+) -> Halt:
+    """Pins or recovers the thread, records the input unless the branch can't take one, and
+    drives the loop to its halt; then a host intake's after-turn work. Without an input the run
+    only continues what the log holds (a host resuming a thread its control unparked)."""
+    launch, intake = recorded.launch, recorded.intake
+    halt = await prepare(rt, definition, fresh=fresh, launch=launch)
+    takes = recorded.input is not None and not rt.fold.handed_off and wants_input(rt, launch)
+    if halt is None and takes:
+        halt = await record_input(rt, recorded)
+    halt = halt or await drive(rt)
+    if intake is not None and intake.after is not None:
+        halt = await intake.after(rt, halt)
+    return halt
 
 
 @asynccontextmanager
@@ -168,9 +202,11 @@ async def _held(writer: Writer) -> AsyncGenerator[None]:
                 return
 
     task = asyncio.create_task(beat())
+    LIVE[writer.branch_id] = writer
     try:
         yield
     finally:
+        LIVE.pop(writer.branch_id, None)
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
@@ -193,7 +229,11 @@ async def _open(
     acquired = await sq.acquire(thread.branch, holder, now_ms)
     if isinstance(acquired, Err) and acquired.error.code == "branch_not_runnable":
         acquired = await sq.repair_torn(thread.branch, holder, now_ms)
-    return acquired if isinstance(acquired, Err) else Ok((acquired.value, False))
+    if isinstance(acquired, Err):
+        return acquired
+    # A branch the host created for a new thread has no pin yet: this run starts it.
+    events = acquired.value.fold.events
+    return Ok((acquired.value, not any(isinstance(e, ThreadStartedEvent) for e in events)))
 
 
 def fenced(writer: Writer) -> Fence:

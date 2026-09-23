@@ -29,6 +29,7 @@ from threads.reduce import Fold
 from threads.render.artifacts import read_verified
 from threads.result import Err, Ok
 from threads.store import Clock, Draft, SqliteStore, StoredEvent, Writer
+from threads.store.companion import Companion
 
 type Authorize = Callable[[Fold, ToolCallData, ToolSpec], Decision]
 """The permission fold for one call, against the current policy and mode."""
@@ -142,7 +143,13 @@ class Runtime:
 
     async def append(self, *drafts: Draft) -> Ok[tuple[StoredEvent, ...]] | Err[ParseError]:
         """Appends one durable batch. Nothing is dispatched on its account until this returns."""
-        done = await self.writer.append(drafts)
+        return await self.append_with(drafts, None)
+
+    async def append_with(
+        self, drafts: Sequence[Draft], companion: Companion | None
+    ) -> Ok[tuple[StoredEvent, ...]] | Err[ParseError]:
+        """`append`, with host rows bound to the same transaction."""
+        done = await self.writer.append(drafts, companion)
         if isinstance(done, Ok):
             self.observe(done.value)
         return done
@@ -181,9 +188,13 @@ async def fence(rt: Runtime) -> Failed | None:
     return lost(held.error) if isinstance(held, Err) else None
 
 
+LOST: Final = frozenset({"stale_epoch", "seq_conflict", "writer_poisoned"})
+"""Append failures that mean this run no longer owns the branch."""
+
+
 def lost(error: ParseError) -> Failed:
     """An append that failed: a lost lease or moved head is branch_busy; anything else is a
     bug in what the loop wrote, which validate_next refused."""
-    if error.code in ("stale_epoch", "seq_conflict", "writer_poisoned"):
+    if error.code in LOST:
         return Failed("branch_busy", error.message)
     raise AssertionError(f"the loop wrote an invalid event: {error.code}: {error.message}")
