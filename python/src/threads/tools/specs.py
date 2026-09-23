@@ -76,22 +76,26 @@ class Writes:
     dedup_window_ms: int | None = None
 
 
+def agent_tools(*, spawn: bool, team: bool, handoffs: bool) -> frozenset[str]:
+    """spawn_agent with subagents, the team tools in a team, handoff with handoff targets."""
+    wanted = (("spawn_agent", spawn), ("handoff", handoffs))
+    chosen = frozenset(n for n, on in wanted if on)
+    return chosen | TEAM if team else chosen
+
+
 def specs(
     *,
     sandbox: bool,
     egress_denied: bool,
     memory: Writes | None = None,
     knowledge: bool = False,
-    spawn: bool = False,
-    team: bool = False,
-    handoffs: bool = False,
+    framework: frozenset[str] = frozenset(),
 ) -> tuple[ToolSpec, ...]:
     """The pinned built-ins, sorted by name. bash is sandbox_local only under deny-all egress;
     with any outbound path a command may change state elsewhere. todo_write
-    is always offered; spawn_agent with subagents, the team tools in a team, handoff with
-    handoff targets."""
-    wanted = (("todo_write", True), ("spawn_agent", spawn), ("handoff", handoffs))
-    offered: set[str] = {name for name, on in wanted if on} | (TEAM if team else frozenset())
+    is always offered; `framework` names the other framework tools this agent is offered
+   ."""
+    offered = framework | {"todo_write"}
     out: list[ToolSpec] = []
     for entry in _ENTRIES:
         name = entry["name"]

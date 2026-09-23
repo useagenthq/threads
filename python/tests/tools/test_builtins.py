@@ -18,7 +18,7 @@ from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertai
 from threads.result import Ok
 from threads.store import SqliteStore
 from threads.tools import SandboxTools, specs
-from threads.tools.specs import Writes
+from threads.tools.specs import Writes, agent_tools
 
 LIMITS = Spill(threshold_bytes=64, head_bytes=16, tail_bytes=8, request_budget_bytes=4096)
 DAY_MS = 86_400_000
@@ -27,9 +27,7 @@ ALL = specs(
     egress_denied=True,
     memory=Writes(),
     knowledge=True,
-    spawn=True,
-    team=True,
-    handoffs=True,
+    framework=agent_tools(spawn=True, team=True, handoffs=True),
 )
 SPECS = {s.name: s for s in ALL}
 

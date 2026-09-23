@@ -18,6 +18,7 @@ from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.sandbox.protocol import Sandbox
 from threads.tools import specs
+from threads.tools.specs import agent_tools
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,9 +71,11 @@ class Definition[D]:
             egress_denied=egress_denied(self.egress),
             memory=writes(self.memory),
             knowledge=self.knowledge is not None,
-            spawn=bool(self.subagents),
-            team=bool(self.subagents) or self.member,
-            handoffs=bool(self.handoffs),
+            framework=agent_tools(
+                spawn=bool(self.subagents),
+                team=bool(self.subagents) or self.member,
+                handoffs=bool(self.handoffs),
+            ),
         )
         ext = extension_tools(self.extensions)
         return (*builtins, *(t.spec() for t in self.tools), *(t.spec() for t in ext))
