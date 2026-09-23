@@ -91,6 +91,30 @@ def test_a_saved_memory_is_recalled_in_a_later_run_as_an_untrusted_reference() -
     asyncio.run(main())
 
 
+def test_a_shared_thread_renders_recalled_memory_only_to_the_principal_who_recalled_it() -> None:
+    bob = Principal(issuer="api", tenant="acme", subject="bob")
+    secret = "Alice salary is 250k"
+
+    async def main() -> None:
+        store, memory = sqlite(":memory:"), local_memory()
+        save = [use("save_memory", {"text": secret}), text("Saved.")]
+        await bot(save, memory).run("remember my salary", store=store, principal=ALICE)
+        recall = [use("search_memory", {"query": "salary"}), text("ok")]
+        shared = await bot(recall, memory).run("my salary?", store=store, principal=ALICE)
+        assert isinstance(shared, Completed)
+        model = scripted_model({"responses": [text("hi bob"), text("hi alice")]})
+        b = agent(
+            model=model, memory=memory, memory_write="allow", permissions=ALLOW, name="support"
+        )
+        await b.run("what did you recall?", store=store, principal=bob, thread=shared.thread)
+        assert secret not in model.sent[-1].body.decode()
+        # Alice continuing her own thread still sees what she recalled.
+        await b.run("and now?", store=store, principal=ALICE, thread=shared.thread)
+        assert secret in model.sent[-1].body.decode()
+
+    asyncio.run(main())
+
+
 def test_another_tenant_never_recalls_it() -> None:
     async def main() -> None:
         store, memory = sqlite(":memory:"), local_memory()

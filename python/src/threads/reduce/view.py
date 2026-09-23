@@ -17,10 +17,12 @@ from threads.log import (
     EventId,
     HookDecisionEvent,
     HostedToolPart,
+    InjectedEvent,
     ModelRequestEvent,
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
     OutputPart,
+    Principal,
     ReasoningPart,
     SettingsChangedEvent,
     Span,
@@ -29,6 +31,7 @@ from threads.log import (
     ToolResultLateEvent,
     ToolsChangedEvent,
     ToolUsePart,
+    UserInputEvent,
 )
 
 
@@ -49,6 +52,8 @@ class RenderView:
     host_calls: frozenset[CallId]
     """Calls no model response proposed (a host's channel_send reply): their results render
     nothing, since the model never asked for them."""
+    withheld: frozenset[EventId] = frozenset()
+    """Recalled memory from a turn another principal started: memory is per principal, so in a shared thread it renders only while that principal's input is current."""
 
 
 @dataclass(slots=True)
@@ -63,8 +68,16 @@ class _Builder:
     )
     proposed: set[CallId] = field(default_factory=set[CallId])
     calls: list[CallId] = field(default_factory=list[CallId])
+    principal: Principal | None = None
+    recalled: list[tuple[EventId, Principal | None]] = field(
+        default_factory=list[tuple[EventId, Principal | None]]
+    )
 
     def add(self, event: Event) -> None:
+        if isinstance(event, UserInputEvent):
+            self.principal = event.actor.principal
+        elif isinstance(event, InjectedEvent) and event.data.source == "memory":
+            self.recalled.append((event.event_id, self.principal))
         if isinstance(event, ModelResponseEvent | ModelResponseRecoveredEvent):
             self.proposed.update(
                 p.call_id for p in event.data.content if isinstance(p, ToolUsePart)
@@ -111,6 +124,7 @@ def render_view(events: Sequence[Event]) -> RenderView:
         frozenset(b.cleared),
         dict(b.redactions),
         frozenset(c for c in b.calls if c not in b.proposed),
+        frozenset(i for i, by in b.recalled if by != b.principal),
     )
 
 
@@ -143,7 +157,8 @@ def walk(view: RenderView, events: Sequence[Event]) -> Iterator[Event]:
     for event in events:
         compacted = next((c for c in view.ranges if covers(c, event.seq)), None)
         if compacted is None:
-            if not isinstance(event, CompactedEvent) and not _host_result(view, event):
+            hidden = _host_result(view, event) or event.event_id in view.withheld
+            if not isinstance(event, CompactedEvent) and not hidden:
                 yield event
         elif event.seq == compacted.data.from_seq:
             yield compacted
