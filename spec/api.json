@@ -2284,10 +2284,13 @@
         "lookup": {
           "ts": "lookup",
           "py": "lookup",
-          "doc": "Recover a response after a crash by client request id. Present when info.lookup is not none.",
+          "doc": "Recover a response after a crash by client request id. Present when info.lookup is not none. Fenced like send: context.fence() at the real network send point; a found response's reasoning and hosted tool bytes are put() before their parts name them.",
           "async": true,
           "optional": true,
-          "params": [{"name": "request_id", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "params": [
+            {"name": "request_id", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/ModelContext"}, "required": true}
+          ],
           "returns": {"$ref": "#/types/LookupResult", "args": [{"$ref": "#/types/ModelResponse"}]}
         },
         "countTokens": {
@@ -2339,7 +2342,7 @@
           "returns": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"}
         }
       },
-      "doc": "What the loop hands an adapter for one attempt: the fencing pair it re-checks at its real send point, and artifact access, since Render v1 carries refs, not bytes.",
+      "doc": "What the loop hands an adapter for one send or lookup: the fencing pair it re-checks at its real send point, and artifact access, since Render v1 carries refs, not bytes. Bound to the writer that created it: fence, read and put always act for that branch_id and epoch, and nothing on it selects another.",
       "source": ""
     },
     "ModelInfo": {
