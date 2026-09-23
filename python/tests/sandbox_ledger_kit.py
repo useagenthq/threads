@@ -74,7 +74,7 @@ type Body = Callable[[World], Awaitable[None]]
 
 async def run_ledger(body: Body, make: Make) -> None:
     backend = FakeBackend.scripted()
-    async with make(backend, "under-test") as sandbox:
+    async with make(backend, "under_test") as sandbox:
         opened = await SqliteStore.open()
         assert isinstance(opened, Ok)
         store = opened.value

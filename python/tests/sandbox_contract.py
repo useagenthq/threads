@@ -38,7 +38,7 @@ type Check = Callable[[Harness], Awaitable[None]]
 
 async def run_check(check: Check, make: Make, secrets: tuple[str, ...]) -> None:
     backend = FakeBackend.scripted()
-    async with make(backend, "under-test") as sandbox:
+    async with make(backend, "under_test") as sandbox:
         await check(Harness(backend, sandbox, secrets))
 
 
