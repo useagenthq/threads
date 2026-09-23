@@ -47,3 +47,12 @@ export {
   StaleEpochError,
   staleEpoch,
 } from "./model/transport";
+export type {
+  Sandbox,
+  SandboxContext,
+  SandboxInfo,
+  SandboxSession,
+  Stale,
+} from "./sandbox";
+/** The remote sandbox kit a sandbox provider package builds on. */
+export * from "./sandbox/remote";
