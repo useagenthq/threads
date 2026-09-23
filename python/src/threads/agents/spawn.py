@@ -18,7 +18,7 @@ from threads.agents.bindings import permissions
 from threads.agents.children import finished, shown
 from threads.agents.definition import Definition
 from threads.agents.launch import Launch, Team
-from threads.agents.results import Parked, RunResult
+from threads.agents.results import Failed, Parked, RunResult
 from threads.agents.scope import Scope
 from threads.hooks.runner import STOP, SWITCH, decision_draft
 from threads.log import (
@@ -34,6 +34,7 @@ from threads.loop.drive import open_cancel
 from threads.loop.gates import MAX_STOP_CONTINUES, said, verdict
 from threads.loop.history import CallState
 from threads.loop.results import As, result_draft, text_ref
+from threads.loop.runtime import Failed as HaltFailed
 from threads.loop.runtime import Halt, Runtime, lost
 from threads.result import Err
 from threads.store.lines import uuid7
@@ -64,11 +65,20 @@ async def spawn[D](scope: Scope[D], rt: Runtime, state: CallState, tasks: Tasks)
     if spawned.data.mode == "background":
         start_background(scope, rt, spawned, tasks)
         return None
-    ended = await _outcome(scope, rt, spawned, child, args.prompt)
+    return await _foreground(rt, spawned, await _outcome(scope, rt, spawned, child, args.prompt))
+
+
+async def _foreground(
+    rt: Runtime, spawned: AgentSpawnedEvent, ended: Ended | Parked | HaltFailed
+) -> Halt | None:
+    """A foreground child's end: its agent_finished and the call's result, or the park."""
+    if isinstance(ended, HaltFailed):
+        return ended
     if isinstance(ended, Parked):
         return await stops.park(rt, spawned, ended)
     data, text = ended
-    result = await result_draft(rt, call_id, text, As("executed", data["status"] != "completed"))
+    status = As("executed", data["status"] != "completed")
+    result = await result_draft(rt, spawned.data.call_id, text, status)
     done = await rt.append(draft("agent_finished", data), result)
     return lost(done.error) if isinstance(done, Err) else None
 
@@ -155,6 +165,9 @@ def start_background[D](
 
     async def body() -> None:
         ended = await _outcome(scope, rt, spawned, child, prompt.prompt)
+        # ponytail: a busy background child is left unfinished for the next run to restart.
+        if isinstance(ended, HaltFailed):
+            return
         if isinstance(ended, Parked):
             await stops.park(rt, spawned, ended)
             return
@@ -169,7 +182,7 @@ def start_background[D](
 
 async def _outcome[D](
     scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, child: Definition[None], prompt: str
-) -> Ended | Parked:
+) -> Ended | Parked | HaltFailed:
     """The child's terminal record, or its park. Under the parent's barrier the child is barred
     before it runs on, and one whose thread was never created is recorded cancelled."""
     barrier = open_cancel(rt.events)
@@ -189,7 +202,7 @@ async def once[D](scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent) -> R
 
 async def _run[D](
     scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, child: Definition[None], prompt: str
-) -> Ended | Parked:
+) -> Ended | Parked | HaltFailed:
     """The child to its terminal result, or its park; subagent_stop may send it on, at most
     MAX_STOP_CONTINUES times, counted from the parent's log. A cancel is final: a cancelled
     child, or one whose parent is under a barrier, is never sent on."""
@@ -200,6 +213,9 @@ async def _run[D](
         result = await scope.execute(child, text, _launch(scope, rt, spawned, len(reasons) + 1))
         if isinstance(result, Parked):
             return result
+        halt = busy(result)
+        if halt is not None:
+            return halt
         data, output = await finished(scope.sq, spawned.data.child_thread_id, result)
         data["output_ref"] = await text_ref(rt, output)
         final = data["status"] == "cancelled" or len(reasons) >= MAX_STOP_CONTINUES
@@ -216,6 +232,14 @@ async def _run[D](
         barred = open_cancel(rt.events) is not None
         if barred or all(verdict(r, "stop") != "continue" for r in ran):
             return data, shown(str(data["status"]), output)
+
+
+def busy(result: RunResult[str]) -> HaltFailed | None:
+    """A child whose lease another process holds (or took) is not finished: the parent halts
+    branch_busy and a later run collects it."""
+    if isinstance(result, Failed) and result.error.code == "branch_busy":
+        return HaltFailed("branch_busy", result.error.message)
+    return None
 
 
 def _continues(rt: Runtime, call_id: str) -> list[str]:

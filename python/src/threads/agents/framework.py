@@ -9,7 +9,7 @@ from threads.agents import stops
 from threads.agents.handoff import handoff
 from threads.agents.results import Parked
 from threads.agents.scope import Scope
-from threads.agents.spawn import Tasks, once, spawn, start_background
+from threads.agents.spawn import Tasks, busy, once, spawn, start_background
 from threads.agents.team import deliver, team_tool
 from threads.log import AgentSpawnedEvent, ParkAddress
 from threads.loop.drafts import draft
@@ -58,8 +58,12 @@ class Agents[D]:
             barrier = open_cancel(rt.events)
             if barrier is not None:
                 await stops.bar(self._scope, spawned, barrier)
-            if isinstance(await once(self._scope, rt, spawned), Parked):
+            again = await once(self._scope, rt, spawned)
+            if isinstance(again, Parked):
                 continue
+            halt = busy(again)
+            if halt is not None:
+                return halt
             data: dict[str, JsonValue] = {
                 "address": to_json(at),
                 "cause_event_id": spawned.event_id,

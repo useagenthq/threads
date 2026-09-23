@@ -14,6 +14,7 @@ from threads import (
     Cancelled,
     Completed,
     EventItem,
+    Failed,
     Parked,
     RunContext,
     Thread,
@@ -24,6 +25,7 @@ from threads import (
     tool,
 )
 from threads.agents.run import execute
+from threads.agents.store import now_ms, open_store
 from threads.hooks.types import StopGate
 from threads.log import (
     AgentFinishedData,
@@ -125,6 +127,43 @@ def test_a_child_that_parks_parks_its_parent_and_resumes_it_once_settled() -> No
         resumed = next(e for e in after if isinstance(e, ResumedEvent))
         assert (resumed.data.address, resumed.data.cause_event_id) == (address, spawned.event_id)
         (finished,) = [e for e in after if isinstance(e, AgentFinishedEvent)]
+        assert finished.data.status == "completed"
+
+    asyncio.run(main())
+    assert sent == ["x"]
+
+
+def test_a_busy_child_lease_halts_the_parent_without_finishing_the_child() -> None:
+    """Another process holding the child's lease is transient: the parent's run ends
+    branch_busy, records no agent_finished, and a later run collects the child."""
+    sent: list[str] = []
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        lead = team(sent, [use("send", {"text": "x"}), text("Sent.")], [SPAWN, text("All done.")])
+        parked = await lead.run("go", store=store, deps=None)
+        assert isinstance(parked, Parked), parked
+        spawned = next(
+            e for e in await events_of(parked.thread) if isinstance(e, AgentSpawnedEvent)
+        )
+        child = await open_thread(store, spawned.data.child_thread_id)
+        assert isinstance(child, Ok)
+        zombie = await (await open_store(store)).acquire(child.value.branch, "zombie", now_ms)
+        assert isinstance(zombie, Ok)
+        busy = await execute(lead.definition, None, {"thread": parked.thread}, None, _drop)
+        assert isinstance(busy, Failed), busy
+        assert busy.error.code == "branch_busy"
+        events = await events_of(parked.thread)
+        assert not any(isinstance(e, AgentFinishedEvent) for e in events)
+        await zombie.value.release()
+        pending = await child.value.pending_approvals()
+        assert isinstance(pending, Ok)
+        (challenge,) = pending.value
+        assert isinstance(await child.value.approve(challenge.challenge_id, LOCAL_OPERATOR), Ok)
+        done = await execute(lead.definition, None, {"thread": parked.thread}, None, _drop)
+        assert isinstance(done, Completed), done
+        events = await events_of(parked.thread)
+        (finished,) = [e for e in events if isinstance(e, AgentFinishedEvent)]
         assert finished.data.status == "completed"
 
     asyncio.run(main())
