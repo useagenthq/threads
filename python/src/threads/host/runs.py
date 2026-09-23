@@ -212,14 +212,19 @@ class Runner:
         """Continues a thread a control unparked (or cancelled). It records nothing new; the
         loop takes up what the log holds. A run still in flight (unwinding from the park the
         control answered) is followed by the resume once it ends. A control on a subagent's
-        thread resumes the root of its tree, which runs the child on. Returns the run it
-        started, if any."""
+        thread resumes the root of its tree, which runs the child on. Returns the run that
+        carries it: the one it started, or the live run it is queued behind (whose end starts
+        it), if any."""
         root = await tree.root_of(store, thread_id)
         if root is not None and root[0] != thread_id:
             thread_id, branch = root
-        if self.running(branch):
-            self._again.add(branch)
+        # A resume a stop overtook starts nothing, and queues nothing behind a fresh run either.
+        if since is not None and since != self._generation:
             return None
+        live = self._tasks.get(branch)
+        if live is not None and not live.done():
+            self._again.add(branch)
+            return live
         bound = await self.bound(store, thread_id)
         if bound is None:
             return None
@@ -242,8 +247,8 @@ class Runner:
         """A restarted host: a channel thread whose run a crash cut short (its turn still open,
         not parked) runs on from the log, and one whose log holds a reply it never sent (a crash
         after the turn ended) runs again to send it. A thread that handed off moves its
-        conversation to the target, whose replies are sent from there. Returns the run it
-        started, if any: a thread with a run in flight here is left to that run."""
+        conversation to the target, whose replies are sent from there. Returns the run that
+        carries it (see `resume`), if any."""
         target = await self.follow(store, thread_id)
         if target is not None:
             return await self.redeliver(store, target)
@@ -308,8 +313,9 @@ class Runner:
             await asyncio.wait(tasks)
 
     async def through(self, run: RunTask) -> None:
-        """Until `run` has ended, and each follow-on resume it queued and the run that started;
-        other runs, of its branch too, are not waited on."""
+        """Until `run` has ended, and each follow-on resume it queued and the run that carried
+        it on: the one the follow-on started, or a later live run it was queued behind. No
+        other run is waited on."""
         current: RunTask | None = run
         while current is not None:
             await asyncio.wait({current})

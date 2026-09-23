@@ -18,6 +18,7 @@ from threads.host import start as host_start
 from threads.host.runs import Bound, Runner
 from threads.log import BranchId, Principal, ThreadId, UserInputEvent
 from threads.result import Err, Ok
+from threads.thread import tree
 from threads.thread.handle import Thread
 
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
@@ -194,6 +195,70 @@ def test_stop_drains_every_follow_on_of_a_branch_and_none_runs_after_restart() -
         for _ in range(20):
             await asyncio.sleep(0)
         assert launched == []
+
+    asyncio.run(main())
+
+
+def test_a_resume_from_before_stop_queues_nothing_behind_a_fresh_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Codex #372 HIGH: a Host.resume() from before a stop that finds a fresh run on its branch
+    after the restart must not queue a follow-on behind it: that would start a third run."""
+
+    async def main() -> None:
+        started, hold, release_fresh = [0], asyncio.Event(), asyncio.Event()
+        entered = asyncio.Event()
+
+        async def counted(_source: object, _ctx: RunContext[None]) -> Sequence[str]:
+            started[0] += 1
+            if hold.is_set() and not release_fresh.is_set():
+                entered.set()
+                await release_fresh.wait()
+            return ()
+
+        replies = [text("one"), text("two"), text("three")]
+        bot = agent(
+            model=scripted_model({"responses": replies}),
+            extensions=[extension(name="counted", hooks={"session_start": counted})],
+        )
+        served = host(store=sqlite(":memory:"), agents={"bot": bot})
+        await served.ready()
+        first = await served.start_run(_ask("a"), principal=ALICE, idempotency_key="k1")
+        assert isinstance(first, Ok)
+        thread, branch = first.value.thread_id, first.value.branch_id
+        runner = served._runner  # pyright: ignore[reportPrivateUsage] - what runs here
+        while runner.running(branch):
+            await asyncio.sleep(0.01)
+        # The old resume, held in its root lookup across a stop and a restart.
+        in_lookup, release = asyncio.Event(), asyncio.Event()
+        root_of = tree.root_of
+
+        async def held(*args: object, **kwargs: object) -> object:
+            if not kwargs and not release.is_set():
+                in_lookup.set()
+                await release.wait()
+            return await root_of(*args, **kwargs)  # pyright: ignore[reportArgumentType] - a spy
+
+        monkeypatch.setattr(tree, "root_of", held)
+        tenant = runner.store(ALICE.tenant)
+        old = asyncio.ensure_future(served.resume(Thread(thread, branch, tenant)))
+        await in_lookup.wait()
+        await served.stop()
+        await served.ready()
+        # A fresh run on the branch, held in session_start, when the old resume goes on.
+        hold.set()
+        fresh = asyncio.ensure_future(
+            served.start_run(_ask("c", thread), principal=ALICE, idempotency_key="k3")
+        )
+        await entered.wait()
+        release.set()
+        await old
+        release_fresh.set()
+        assert isinstance(await fresh, Ok)
+        await runner.settled()
+        # The first run and the fresh one: the old resume started nothing, now or queued.
+        assert started[0] == len(("first", "fresh"))
+        await served.stop()
 
     asyncio.run(main())
 
