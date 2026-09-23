@@ -2,7 +2,7 @@
 
 Rules for anyone (human or agent) writing code in this repo. Read `README.md` first for the design.
 
-Repo layout: `spec/` (source of truth: JSON Schema + conformance cases), `typescript/`, `python/`.
+Repo layout: `spec/` (source of truth: JSON Schema, conformance cases and the public API contract), `typescript/`, `python/`, `scripts/`.
 
 ## Design idea (both languages)
 
