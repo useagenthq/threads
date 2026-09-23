@@ -35,8 +35,9 @@ _WEBHOOK: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 
 @dataclass(frozen=True, slots=True)
 class FakeChannel:
-    """Verifies a webhook by its JSON envelope (the case's installation is the tenant) and
-    keys each item by its provider id, else `<delivery_id>#<index>`."""
+    """Verifies a webhook by its JSON envelope unless it is `forged`; the tenant and each
+    sender's issuer are `<channel>:<installation_id>`, and each item is keyed by its provider
+    id, else `<delivery_id>#<index>` (spec/conformance/README.md, intake)."""
 
     name: str
     agent: str = "bot"
@@ -44,14 +45,19 @@ class FakeChannel:
         default_factory=lambda: ChannelCapabilities("none", False, False, False, False)
     )
     limits: Mapping[str, int] = field(default_factory=dict[str, int])
-    credentials: Mapping[str, Secret] = field(default_factory=dict[str, Secret])
+    secrets: Mapping[str, Secret] = field(default_factory=dict[str, Secret])
 
     def verify(self, raw: RawRequest) -> Ok[VerifiedDelivery] | Err[ParseError]:
         hook = _WEBHOOK.validate_json(raw.body)
+        if hook.get("forged") is True:
+            return Err(ParseError("unverified", "forged"))
         installation, delivery = hook["installation_id"], hook["delivery_id"]
         assert isinstance(installation, str)
         assert isinstance(delivery, str)
-        return Ok(VerifiedDelivery(installation, installation, delivery))
+        return Ok(VerifiedDelivery(self.tenant(installation), installation, delivery))
+
+    def tenant(self, installation: str) -> str:
+        return f"{self.name}:{installation}"
 
     def parse(self, raw: RawRequest) -> Ok[Sequence[Inbound]] | Err[ParseError]:
         hook = _WEBHOOK.validate_json(raw.body)
@@ -60,11 +66,8 @@ class FakeChannel:
         parsed: list[Inbound] = []
         for index, item in enumerate(items):
             assert isinstance(item, dict)
-            sender = Principal(
-                issuer=f"{self.name}:{hook['installation_id']}",
-                tenant=str(hook["installation_id"]),
-                subject=str(item["sender"]),
-            )
+            tenant = self.tenant(str(hook["installation_id"]))
+            sender = Principal(issuer=tenant, tenant=tenant, subject=str(item["sender"]))
             key = item.get("item_id") or f"{hook['delivery_id']}#{index}"
             parsed.append(
                 Message(
@@ -88,7 +91,7 @@ class FakeChannel:
     ) -> DeliveryOutcome:
         return DeliveryError("permanent", "definite_not_sent")
 
-    async def lookup(self, effect_key: str) -> LookupResult[str]:
+    async def lookup(self, effect_key: str, op: JsonObject) -> LookupResult[str]:
         return LookupUnknown("fake")
 
 
@@ -104,7 +107,7 @@ def test_intake_case(name: str) -> None:
     bot = agent(model=scripted_model({"responses": replies}))
     store = sqlite(":memory:")
 
-    async def main() -> tuple[list[int], list[JsonValue]]:
+    async def main() -> tuple[list[int], list[JsonValue], int]:
         served = host(
             store=store, agents={"bot": bot}, channels={c: FakeChannel(c) for c in channels}
         )
@@ -115,18 +118,23 @@ def test_intake_case(name: str) -> None:
                 raw = RawRequest({}, json.dumps(hook).encode())
                 answered = await served.receive(str(hook["channel"]), raw)
                 statuses.append(answered.value.status if isinstance(answered, Ok) else 401)
+                assert isinstance(answered, Ok) or answered.error.code == "unverified"
         sq = await open_store(store)
         rows = await sq.run(
-            lambda c: c.execute("SELECT channel, item_key FROM inbox ORDER BY inbox_id").fetchall()
+            lambda c: c.execute(
+                "SELECT channel, item_key, thread_id FROM inbox ORDER BY inbox_id"
+            ).fetchall()
         )
         inbox: list[JsonValue] = [
-            {"channel": text_of(ch), "item_key": text_of(key)} for ch, key in rows
+            {"channel": text_of(ch), "item_key": text_of(key)} for ch, key, _ in rows
         ]
-        return statuses, inbox
+        return statuses, inbox, len({text_of(thread) for _, _, thread in rows})
 
-    statuses, inbox = asyncio.run(main())
+    statuses, inbox, threads = asyncio.run(main())
     assert statuses == expected["responses"]
     assert inbox == expected["inbox"]
+    if "threads" in expected:
+        assert threads == expected["threads"]
 
 
 def text_reply() -> JsonValue:

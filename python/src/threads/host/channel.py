@@ -7,7 +7,7 @@ lookup reach the provider and report what is known about delivery.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Annotated, Literal, Protocol
+from typing import Annotated, Literal, Protocol, runtime_checkable
 
 from pydantic import Field
 
@@ -131,8 +131,10 @@ class ChannelAdapter(Protocol):
         ...
 
     @property
-    def credentials(self) -> Mapping[str, Secret]:
-        """The secrets perform needs, resolved by the host at each send and never logged."""
+    def secrets(self) -> Mapping[str, Secret]:
+        """The credentials perform needs, by name. The host resolves them at ready()
+        (missing_secret) and passes their values as perform's credentials; they never reach a
+        sandbox, the log or a prompt."""
         ...
 
     def verify(self, raw: RawRequest) -> Ok[VerifiedDelivery] | Err[ParseError]:
@@ -156,6 +158,15 @@ class ChannelAdapter(Protocol):
         through a transport that checks the run's fence at its send point."""
         ...
 
-    async def lookup(self, effect_key: str) -> LookupResult[str]:
-        """found carries the platform_ref."""
+    async def lookup(self, effect_key: str, op: JsonObject) -> LookupResult[str]:
+        """found carries the platform_ref. `op` is what perform was given for this key (its
+        recorded tool_call), since a platform lookup is scoped to its conversation."""
         ...
+
+
+@runtime_checkable
+class Challenged(Protocol):
+    """The optional `challenge` of a ChannelAdapter: a provider's GET subscription check on the
+    webhook URL (WhatsApp's hub.challenge). Pure; unverified answers 401."""
+
+    def challenge(self, query: Mapping[str, str]) -> Ok[RawResponse] | Err[ParseError]: ...

@@ -75,3 +75,17 @@ def webhook(host: Host) -> Handler:
         return Response(reply.body, reply.status, headers=dict(reply.headers))
 
     return handle
+
+
+def challenge(host: Host) -> Handler:
+    """A provider's GET subscription check on the webhook URL; not bearer-authenticated."""
+
+    async def handle(request: Request) -> Response:
+        query = dict(request.query_params)
+        answered = host.challenge(request.path_params["channel"], query)
+        if isinstance(answered, Err):
+            return failed(answered.error)
+        reply = answered.value
+        return Response(reply.body, reply.status, headers=dict(reply.headers))
+
+    return handle

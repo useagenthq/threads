@@ -1,6 +1,7 @@
 """`whatsapp()` (extra `whatsapp`, ): the WhatsApp Cloud API.
 
-A webhook is verified by `X-Hub-Signature-256` over the raw bytes with the app secret. The
+A webhook is verified by `X-Hub-Signature-256` over the raw bytes with the app secret, and the
+URL's GET subscription check by the verify token, compared in constant time. The
 WhatsApp Business Account is the tenant. One webhook may batch several messages, each keyed by
 its own `wamid`, so none is dropped as a duplicate of a neighbor. Outbound sends carry the
 effect key as `biz_opaque_callback_data`. The Cloud API has no lookup by that key, so an
@@ -9,6 +10,7 @@ API is called through the fenced httpx client.
 """
 
 import hashlib
+import hmac
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final
@@ -78,6 +80,7 @@ class _Webhook(Loose):
 class WhatsAppChannel:
     app_secret: Secret
     access_token: Secret
+    verify_token: Secret
     phone_number_id: str
     agent: str
     api: str = API
@@ -88,7 +91,7 @@ class WhatsAppChannel:
     limits: Mapping[str, int] = field(default_factory=lambda: {"message_bytes": 4096})
 
     @property
-    def credentials(self) -> Mapping[str, Secret]:
+    def secrets(self) -> Mapping[str, Secret]:
         return {"access_token": self.access_token}
 
     def verify(self, raw: RawRequest) -> Ok[VerifiedDelivery] | Err[ParseError]:
@@ -101,6 +104,16 @@ class WhatsAppChannel:
         account = hook.entry[0].id
         # Meta sends no delivery id: the signed bytes identify the delivery.
         return Ok(VerifiedDelivery(account, account, hashlib.sha256(raw.body).hexdigest()))
+
+    def challenge(self, query: Mapping[str, str]) -> Ok[RawResponse] | Err[ParseError]:
+        """Meta's subscription check: hub.verify_token must equal the verify token (constant
+        time), then hub.challenge is echoed."""
+        token = query.get("hub.verify_token", "")
+        expected = resolve(self.verify_token)
+        if query.get("hub.mode") != "subscribe" or not hmac.compare_digest(token, expected):
+            return unverified("the WhatsApp verify token does not match")
+        body = query.get("hub.challenge", "").encode()
+        return Ok(RawResponse(200, {"content-type": "text/plain"}, body))
 
     def parse(self, raw: RawRequest) -> Ok[Sequence[Inbound]] | Err[ParseError]:
         hook = _webhook(raw)
@@ -143,7 +156,7 @@ class WhatsAppChannel:
         ref = first.get("id") if isinstance(first, dict) else None
         return Sent(ref if isinstance(ref, str) else "")
 
-    async def lookup(self, effect_key: str) -> LookupResult[str]:
+    async def lookup(self, effect_key: str, op: JsonObject) -> LookupResult[str]:
         return LookupUnknown("the WhatsApp Cloud API has no lookup by effect key")
 
 
@@ -170,10 +183,13 @@ def whatsapp(  # noqa: PLR0913 - the Cloud API's settings
     *,
     app_secret: Secret,
     access_token: Secret,
+    verify_token: Secret,
     phone_number_id: str,
     agent: str,
     api: str = API,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> WhatsAppChannel:
-    """A WhatsApp channel for host(channels=...). Secrets are resolved on the host at use."""
-    return WhatsAppChannel(app_secret, access_token, phone_number_id, agent, api, transport)
+    """A WhatsApp channel for host(channels=...). Secrets are resolved on the host."""
+    return WhatsAppChannel(
+        app_secret, access_token, verify_token, phone_number_id, agent, api, transport
+    )

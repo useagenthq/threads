@@ -7,7 +7,7 @@ otherwise it is unguarded, so an unknown outcome parks and is never re-sent. The
 fenced: the adapter's transport checks the run's lease where the request's first byte leaves.
 """
 
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import Final
@@ -17,17 +17,17 @@ from pydantic import BaseModel, Field, JsonValue, ValidationError
 from threads.agents.bindings import AppTool, Fence
 from threads.agents.context import RunContext
 from threads.agents.intake import After
+from threads.agents.store import Store, now_ms, open_store
 from threads.host.channel import ChannelAdapter, DeliveryError, Sent
-from threads.log import CallId, JsonObject, ModelResponseEvent, ToolSpec
+from threads.log import BranchId, CallId, JsonObject, ModelResponseEvent, ToolSpec
 from threads.log.jcs import canonicalize
 from threads.loop import calls
 from threads.loop.drafts import draft
-from threads.loop.model import LookupResult, NotFound, NotFoundNonfinal
+from threads.loop.model import LookupResult, LookupUnknown, NotFound, NotFoundNonfinal
 from threads.loop.runtime import Halt, Idle, Runtime, lost
 from threads.loop.tools import Dispatched, NotSent, Output, Uncertain
 from threads.memory.fence import bound, refused
 from threads.result import Err, Ok
-from threads.secrets import resolve
 from threads.store import Draft
 
 NAME: Final = "channel_send"
@@ -40,20 +40,30 @@ class SendInput(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
-class ChannelSend:
-    """The send tool of one conversation: the address comes from the host's mapping of the
-    thread, never from the model."""
+class Conversation:
+    """Where a channel thread's sends go: the adapter, the conversation the host mapped the
+    thread to (never chosen by the model), and the credentials the host resolved at ready()."""
 
     adapter: ChannelAdapter
     address: str
+    credentials: Mapping[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class ChannelSend:
+    """The send tool of one conversation."""
+
+    to: Conversation
     fence: Fence
+    store: Store
+    """The run's store: a lookup after a crash reads the op its tool_call recorded."""
 
     @property
     def name(self) -> str:
         return NAME
 
     def spec(self) -> ToolSpec:
-        caps = self.adapter.capabilities
+        caps = self.to.adapter.capabilities
         data: dict[str, JsonValue] = {
             "name": NAME,
             "description": "Send a message to this conversation.",
@@ -80,11 +90,10 @@ class ChannelSend:
     async def run(self, input: JsonObject, ctx: RunContext[object]) -> Dispatched:
         if ctx.effect_key is None:
             raise AssertionError("a tool runs under its effect key")
-        op: JsonObject = {**input, "address": self.address}
-        credentials = {k: resolve(v) for k, v in self.adapter.credentials.items()}
+        op: JsonObject = {**input, "address": self.to.address}
         try:
             with bound(self.fence):
-                outcome = await self.adapter.perform(op, ctx.effect_key, credentials)
+                outcome = await self.to.adapter.perform(op, ctx.effect_key, self.to.credentials)
         except Exception as error:
             if refused(error):
                 # Refused at the send point: no byte of the request was written.
@@ -101,12 +110,22 @@ class ChannelSend:
                 return Uncertain("transport_error")
 
     async def lookup(self, effect_key: str, ctx: RunContext[object]) -> LookupResult[str]:
+        op = await self._recorded(ctx.branch_id, ctx.call_id)
+        if op is None:
+            return LookupUnknown("the send's tool_call is not in the log")
         with bound(self.fence):
-            answer = await self.adapter.lookup(effect_key)
-        if isinstance(answer, NotFound) and self.adapter.capabilities.lookup != "final":
+            answer = await self.to.adapter.lookup(effect_key, op)
+        if isinstance(answer, NotFound) and self.to.adapter.capabilities.lookup != "final":
             # Finality is the channel's declared capability, never inferred from an answer.
             return NotFoundNonfinal()
         return answer
+
+    async def _recorded(self, branch: BranchId, call_id: CallId | None) -> JsonObject | None:
+        read = await (await open_store(self.store)).read(branch, now_ms())
+        if not isinstance(read, Ok) or call_id is None:
+            return None
+        call = read.value.fold.calls.get(call_id)
+        return None if call is None else {**call.data.input, "address": self.to.address}
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,8 +133,8 @@ class SendServer:
     """A tool server with the one send tool, connected per run so the tool carries the run's
     fence (the same path as MCP tools, so it is pinned in thread_started)."""
 
-    adapter: ChannelAdapter
-    address: str
+    to: Conversation
+    store: Store
 
     @property
     def name(self) -> str:
@@ -126,7 +145,7 @@ class SendServer:
 
     @asynccontextmanager
     async def _connected(self, fence: Fence) -> AsyncGenerator[Sequence[AppTool[object]]]:
-        yield (ChannelSend(self.adapter, self.address, fence),)
+        yield (ChannelSend(self.to, fence, self.store),)
 
 
 def deliver_final(adapter: ChannelAdapter) -> After:

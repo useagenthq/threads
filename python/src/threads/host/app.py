@@ -18,7 +18,7 @@ from threads.agents.agent import Agent
 from threads.agents.config import ConfigError
 from threads.agents.store import Store, open_store
 from threads.host import start, stream
-from threads.host.channel import ChannelAdapter, RawRequest, RawResponse
+from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
 from threads.host.intake import ChannelIntake
 from threads.host.runs import Runner
 from threads.host.schedules import Schedule, Scheduler
@@ -60,8 +60,9 @@ class Host:
         self._asgi: ASGIApp | None = None
 
     @property
-    def channels(self) -> Mapping[str, ChannelAdapter]:
-        return self._channels
+    def channels(self) -> tuple[str, ...]:
+        """The host(channels=...) keys; each is served at /channels/<key>/events."""
+        return tuple(self._channels)
 
     def sandboxes(self) -> tuple[Sandbox, ...]:
         """One sandbox adapter per provider the agents use: what `threads gc` releases with."""
@@ -82,11 +83,13 @@ class Host:
         return self._asgi
 
     async def ready(self) -> None:
-        """Confirms the bindings: every channel and schedule names a host agent. Sends nothing."""
+        """Confirms the bindings: every channel and schedule names a host agent, and every
+        channel secret resolves (missing_secret). Sends nothing."""
         for name, adapter in self._channels.items():
             if adapter.agent not in self._agents:
                 raise ConfigError("invalid_config", f"channel {name}: no agent {adapter.agent}")
         self._scheduler.check(self._runner.agent)
+        self._runner.resolve_secrets()
         await open_store(self._store)
         if self._ticking is None:
             self._ticking = asyncio.get_running_loop().create_task(self._tick())
@@ -151,6 +154,15 @@ class Host:
     async def resume(self, thread: Thread) -> None:
         """After a control: continue the thread if it can move on."""
         await self._runner.resume(thread.store, thread.id, thread.branch)
+
+    def challenge(
+        self, channel: str, query: Mapping[str, str]
+    ) -> Ok[RawResponse] | Err[ParseError]:
+        """A provider's GET subscription check: the adapter's challenge, if it has one."""
+        adapter = self._channels.get(channel)
+        if not isinstance(adapter, Challenged):
+            return Err(ParseError("not_found", f"no channel {channel} with a challenge"))
+        return adapter.challenge(query)
 
     async def receive(self, channel: str, raw: RawRequest) -> Ok[RawResponse] | Err[ParseError]:
         """A channel webhook: verified, its whole batch durable in the inbox, then answered."""

@@ -3,10 +3,9 @@
 A webhook is verified by `X-Hub-Signature-256` with the webhook secret; the App installation is
 the tenant and `X-GitHub-Delivery` the delivery id. A new comment by a person becomes one item
 keyed `<delivery>#0`; bots' comments (the app's own included) are ignored. A reply is a comment
-carrying the effect key in a hidden marker, which lookup finds through code search. Search is
-eventually consistent, so its not_found is never final and an uncertain send that it can't find
-parks. GitHub publishes no official Python SDK; the REST API is called through the fenced httpx
-client.
+carrying the effect key in a hidden marker, which lookup finds by listing that issue's comments.
+The channel declares its lookup nonfinal, so an uncertain send it can't find parks. GitHub
+publishes no official Python SDK; the REST API is called through the fenced httpx client.
 """
 
 from collections.abc import Mapping, Sequence
@@ -14,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Final
 
 import httpx
-from pydantic import JsonValue, ValidationError
+from pydantic import JsonValue, RootModel, ValidationError
 
 from threads.adapters.channels.common import (
     Loose,
@@ -39,12 +38,14 @@ from threads.host.channel import (
     VerifiedDelivery,
 )
 from threads.log import Event, JsonObject, ParseError, Principal
-from threads.loop.model import Found, LookupResult, LookupUnknown, NotFoundNonfinal
+from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound
 from threads.memory.fence import check
 from threads.result import Err, Ok
 from threads.secrets import Secret, resolve
 
 API: Final = "https://api.github.com"
+_PER_PAGE: Final = 100
+_PAGES: Final = 10
 _ACCEPT: Final = {"accept": "application/vnd.github+json", "x-github-api-version": "2022-11-28"}
 
 
@@ -67,6 +68,15 @@ class _Issue(Loose):
 
 class _Comment(Loose):
     body: str = ""
+
+
+class _Posted(Loose):
+    id: int
+    body: str = ""
+
+
+class _Comments(RootModel[tuple[_Posted, ...]]):
+    pass
 
 
 class _Hook(Loose):
@@ -95,7 +105,7 @@ class GitHubChannel:
     limits: Mapping[str, int] = field(default_factory=lambda: {"message_bytes": 65_536})
 
     @property
-    def credentials(self) -> Mapping[str, Secret]:
+    def secrets(self) -> Mapping[str, Secret]:
         return {"token": self.token}
 
     def verify(self, raw: RawRequest) -> Ok[VerifiedDelivery] | Err[ParseError]:
@@ -140,26 +150,33 @@ class GitHubChannel:
         created = body_of(response).get("id")
         return Sent(str(created) if isinstance(created, int) else "")
 
-    async def lookup(self, effect_key: str) -> LookupResult[str]:
-        """The comment carrying the key's marker, by search; absence is never final."""
+    async def lookup(self, effect_key: str, op: JsonObject) -> LookupResult[str]:
+        """The comment on the op's issue that carries the key's marker. The channel declares
+        nonfinal, so a not_found parks the send rather than proving it absent."""
         await check()
+        repo, _, number = str(op["address"]).rpartition("#")
         headers = _ACCEPT | {"authorization": f"Bearer {resolve(self.token)}"}
-        query = {"q": f'"{marker(effect_key)}" in:comments'}
-        try:
-            async with client(self.transport) as http:
-                response = await http.get(
-                    f"{self.api}/search/issues", headers=headers, params=query
-                )
-        except httpx.HTTPError as error:
-            return LookupUnknown(f"search failed: {type(error).__name__}")
-        if refused(response) is not None:
-            return LookupUnknown(f"search answered {response.status_code}")
-        items = body_of(response).get("items")
-        if isinstance(items, list) and items:
-            first = items[0]
-            url = first.get("html_url") if isinstance(first, dict) else None
-            return Found(url if isinstance(url, str) else effect_key)
-        return NotFoundNonfinal()
+        url = f"{self.api}/repos/{repo}/issues/{number}/comments"
+        wanted = marker(effect_key)
+        async with client(self.transport) as http:
+            for page in range(1, _PAGES + 1):
+                try:
+                    response = await http.get(url, headers=headers, params=_page(page))
+                except httpx.HTTPError as error:
+                    return LookupUnknown(f"listing failed: {type(error).__name__}")
+                if refused(response) is not None:
+                    return LookupUnknown(f"listing answered {response.status_code}")
+                comments = _Comments.model_validate_json(response.content or b"[]").root
+                found = next((c for c in comments if wanted in c.body), None)
+                if found is not None:
+                    return Found(str(found.id))
+                if len(comments) < _PER_PAGE:
+                    return NotFound()
+        return LookupUnknown(f"more than {_PAGES * _PER_PAGE} comments")
+
+
+def _page(page: int) -> dict[str, str]:
+    return {"per_page": str(_PER_PAGE), "page": str(page)}
 
 
 def _hook(raw: RawRequest) -> _Hook | None:

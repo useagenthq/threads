@@ -7,12 +7,13 @@ import hashlib
 import hmac
 import json
 import time
+from http import HTTPStatus
 
 import httpx
 import pytest
 from pydantic import JsonValue
 
-from threads import agent, scripted_model, sqlite
+from threads import ConfigError, agent, scripted_model, sqlite
 from threads.agents.store import open_store, scoped
 from threads.host import RawRequest, host
 from threads.log import (
@@ -27,6 +28,7 @@ from threads.result import Ok
 from threads.secrets import secret
 from threads.slack import slack
 from threads.store import StoredEvent
+from threads.whatsapp import whatsapp
 
 SECRET = "shh"  # noqa: S105 - a test signing secret
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
@@ -121,7 +123,8 @@ def test_an_unknown_send_outcome_parks_and_is_never_resent() -> None:
         raise httpx.ReadTimeout("slow", request=request)
 
     _, events = asyncio.run(deliver(httpx.MockTransport(timeout), signed(event("Ev02"))))
-    assert len(attempts) == 1
+    # One send; then a lookup of the key in the conversation, which can't answer: it parks.
+    assert [a.method for a in attempts] == ["POST", "GET"]
     assert any(isinstance(e, EffectUnknownEvent) for e in events)
     parked = [e for e in events if isinstance(e, ParkedEvent)]
     assert [p.data.address.kind for p in parked] == ["effect"]
@@ -134,3 +137,59 @@ def test_an_unverified_webhook_is_401_and_stores_nothing() -> None:
         deliver(httpx.MockTransport(lambda _r: httpx.Response(500)), forged)
     )
     assert (statuses, events) == ([401], [])
+
+
+def test_the_webhook_url_answers_a_subscription_check_only_for_a_channel_that_has_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WA_APP", "a")
+    monkeypatch.setenv("WA_TOKEN", "t")
+    monkeypatch.setenv("WA_VERIFY", "hub-token")
+    phone = whatsapp(
+        app_secret=secret("WA_APP"),
+        access_token=secret("WA_TOKEN"),
+        verify_token=secret("WA_VERIFY"),
+        phone_number_id="p",
+        agent="support",
+    )
+    talk = slack(
+        signing_secret=secret("SLACK_SIGNING_SECRET"),
+        bot_token=secret("SLACK_BOT_TOKEN"),
+        agent="support",
+    )
+    bot = agent(model=scripted_model({"responses": []}))
+    channels = {"whatsapp": phone, "slack": talk}
+
+    async def main() -> list[tuple[int, str]]:
+        served = host(store=sqlite(":memory:"), agents={"support": bot}, channels=channels)
+        assert served.channels == ("whatsapp", "slack")
+        answers: list[tuple[int, str]] = []
+        async with served:
+            transport = httpx.ASGITransport(app=served.asgi)
+            async with httpx.AsyncClient(transport=transport, base_url="http://h") as client:
+                check = {"hub.mode": "subscribe", "hub.challenge": "42"}
+                for path, token in (("whatsapp", "hub-token"), ("whatsapp", "no"), ("slack", "x")):
+                    params = check | {"hub.verify_token": token}
+                    got = await client.get(f"/channels/{path}/events", params=params)
+                    answers.append((got.status_code, got.text))
+        return answers
+
+    ok, forged, unsupported = asyncio.run(main())
+    assert ok == (200, "42")
+    assert forged[0] == HTTPStatus.UNAUTHORIZED
+    assert '"unverified"' in forged[1]
+    assert unsupported[0] == HTTPStatus.NOT_FOUND
+
+
+def test_ready_refuses_a_channel_whose_secret_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SLACK_BOT_TOKEN")
+    talk = slack(
+        signing_secret=secret("SLACK_SIGNING_SECRET"),
+        bot_token=secret("SLACK_BOT_TOKEN"),
+        agent="support",
+    )
+    bot = agent(model=scripted_model({"responses": []}))
+    served = host(store=sqlite(":memory:"), agents={"support": bot}, channels={"slack": talk})
+    with pytest.raises(ConfigError) as refused:
+        asyncio.run(served.ready())
+    assert refused.value.code == "missing_secret"

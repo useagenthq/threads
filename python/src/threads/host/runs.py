@@ -18,9 +18,10 @@ from threads.agents.results import Failed, RunResult, StreamEvent
 from threads.agents.run import Emit, Input, RunOptions, execute
 from threads.agents.store import Store, open_store, scoped
 from threads.host.channel import ChannelAdapter
-from threads.host.send import SendServer, deliver_final
+from threads.host.send import Conversation, SendServer, deliver_final
 from threads.log import BranchId, Budget, Principal, ThreadId, ThreadStartedEvent, UserInputEvent
 from threads.result import Ok
+from threads.secrets import resolve
 from threads.thread.control import LOCAL_OPERATOR
 from threads.thread.handle import Thread
 
@@ -35,16 +36,16 @@ class Bound:
 
     definition: Definition[None]
     approvers: tuple[Principal, ...]
-    channel: tuple[ChannelAdapter, str] | None = None
-    """The adapter and the conversation address of a channel thread."""
+    channel: Conversation | None = None
+    """Where a channel thread's replies go."""
 
-    def intake(self, intake: Intake | None) -> Intake | None:
+    def intake(self, intake: Intake | None, store: Store) -> Intake | None:
         """A channel thread's runs carry the send tool and deliver their final response."""
         if self.channel is None:
             return intake
-        adapter, address = self.channel
         base = intake or Intake("channel", asyncio.get_running_loop().create_future())
-        return replace(base, servers=(SendServer(adapter, address),), after=deliver_final(adapter))
+        server = SendServer(self.channel, store)
+        return replace(base, servers=(server,), after=deliver_final(self.channel.adapter))
 
 
 class Runner:
@@ -58,6 +59,7 @@ class Runner:
         self._agents = agents
         self._channels = channels
         self._stores: dict[str, Store] = {}
+        self._credentials: dict[str, Mapping[str, str]] = {}
         self._tasks: dict[BranchId, asyncio.Task[RunResult[str]]] = {}
         self._wake: dict[BranchId, asyncio.Event] = {}
         self._again: set[BranchId] = set()
@@ -79,7 +81,12 @@ class Runner:
     def agent(self, key: str) -> Agent[None] | None:
         return self._agents.get(key)
 
-    def bound_to(self, key: str, *, channel: tuple[ChannelAdapter, str] | None = None) -> Bound:
+    def resolve_secrets(self) -> None:
+        """ready(): every channel's secrets, resolved once on the host (missing_secret)."""
+        for name, adapter in self._channels.items():
+            self._credentials[name] = {k: resolve(v) for k, v in adapter.secrets.items()}
+
+    def bound_to(self, key: str, *, channel: Conversation | None = None) -> Bound:
         """An agent key's binding. A channel thread's approvers default to nobody (): approval then comes through the host API."""
         definition = self._agents[key].definition
         default = () if channel is not None else None
@@ -94,7 +101,11 @@ class Runner:
             adapter = self._channels.get(conversation.channel)
             if adapter is None or adapter.agent not in self._agents:
                 return None
-            return self.bound_to(adapter.agent, channel=(adapter, conversation.address))
+            if conversation.channel not in self._credentials:
+                self.resolve_secrets()
+            credentials = self._credentials[conversation.channel]
+            to = Conversation(adapter, conversation.address, credentials)
+            return self.bound_to(adapter.agent, channel=to)
         root = await sq.root(thread_id)
         read = None if not isinstance(root, Ok) else await sq.read(root.value, 0)
         if read is None or not isinstance(read, Ok):
@@ -125,7 +136,7 @@ class Runner:
         options["principal"] = principal
         if budget is not None:
             options["budget"] = budget
-        how = bound.intake(intake)
+        how = bound.intake(intake, thread.store)
         branch = thread.branch
         run = execute(bound.definition, input, options, None, self._emit(branch), None, how)
         task = asyncio.get_running_loop().create_task(run)

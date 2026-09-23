@@ -1,9 +1,10 @@
 """Retention: explicit deletion and the artifact sweep, never automatic.
 
 Deleting a thread removes its log rows and projections together, every branch at once, so no
-child loses the chain it forks from, and moves the thread's live provider resources to
-`releasing` for the next gc. The resource ledger is never deleted with log rows: it owns
-cleanup. The artifact sweep keeps every artifact any stored line or branch row names.
+child loses the chain it forks from, moves the thread's live provider resources to `releasing`
+for the next gc, and writes a tombstone, all in one transaction. The resource ledger is never
+deleted with log rows: it owns cleanup. The artifact sweep keeps every artifact any stored line
+or branch row names.
 """
 
 import re
@@ -28,8 +29,9 @@ def threads_of(conn: sqlite3.Connection, tenant_id: str) -> tuple[ThreadId, ...]
     return tuple(ThreadId(text_of(t)) for (t,) in rows)
 
 
-def delete_thread(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId) -> int:
-    """Deletes one thread of the tenant; the number of branches it had (0: no such thread)."""
+def delete_thread(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, now: int) -> int:
+    """Deletes one thread of the tenant and writes its tombstone, the audit of the deletion;
+    the number of branches it had (0: no such thread, nothing written)."""
     with transaction(conn):
         rows: list[tuple[object]] = conn.execute(
             "SELECT branch_id FROM branches WHERE thread_id = ? AND tenant_id = ?",
@@ -53,9 +55,15 @@ def delete_thread(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId)
         conn.execute(
             "DELETE FROM branches WHERE thread_id = ? AND tenant_id = ?", (thread_id, tenant_id)
         )
-        conn.execute(
+        gone = conn.execute(
             "DELETE FROM threads WHERE thread_id = ? AND tenant_id = ?", (thread_id, tenant_id)
         )
+        if gone.rowcount:
+            conn.execute(
+                "INSERT INTO tombstones (thread_id, tenant_id, deleted_at) VALUES (?, ?, ?)"
+                " ON CONFLICT DO NOTHING",
+                (thread_id, tenant_id, now),
+            )
     return len(branches)
 
 

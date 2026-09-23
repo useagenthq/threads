@@ -1,5 +1,5 @@
 """Live gate: one real send per channel adapter. Skipped unless THREADS_LIVE=1 and that
-channel's credentials and destination are set; never part of the offline suite.
+channel's secrets and destination are set; never part of the offline suite.
 
     THREADS_LIVE=1 \\
     SLACK_BOT_TOKEN=... THREADS_LIVE_SLACK_CHANNEL=C123 \\
@@ -44,7 +44,7 @@ def _send(channel: ChannelAdapter, address: str, token_name: str) -> DeliveryOut
     async def run() -> DeliveryOutcome:
         with bound(allowed):
             op = {"text": "threads live gate", "address": address}
-            credentials = dict.fromkeys(channel.credentials, os.environ[token_name])
+            credentials = dict.fromkeys(channel.secrets, os.environ[token_name])
             return await channel.perform(op, f"live:{uuid.uuid4().hex}", credentials)
 
     return asyncio.run(run())
@@ -66,6 +66,7 @@ def test_whatsapp_sends() -> None:
     channel = whatsapp(
         app_secret=secret("WHATSAPP_APP_SECRET"),
         access_token=secret("WHATSAPP_ACCESS_TOKEN"),
+        verify_token=secret("WHATSAPP_VERIFY_TOKEN"),
         phone_number_id=phone,
         agent="a",
     )

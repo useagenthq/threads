@@ -55,7 +55,7 @@ class ItemsChannel:
         default_factory=lambda: ChannelCapabilities("none", True, False, False, False)
     )
     limits: Mapping[str, int] = field(default_factory=dict[str, int])
-    credentials: Mapping[str, Secret] = field(default_factory=dict[str, Secret])
+    secrets: Mapping[str, Secret] = field(default_factory=dict[str, Secret])
 
     def verify(self, raw: RawRequest) -> Ok[VerifiedDelivery] | Err[ParseError]:
         return Ok(VerifiedDelivery(TEAM, TEAM, raw.headers["delivery"]))
@@ -75,7 +75,7 @@ class ItemsChannel:
         self.sent.append(op)
         return Sent(f"ts{len(self.sent)}")
 
-    async def lookup(self, effect_key: str) -> LookupResult[str]:
+    async def lookup(self, effect_key: str, op: JsonObject) -> LookupResult[str]:
         return LookupUnknown("fake")
 
 

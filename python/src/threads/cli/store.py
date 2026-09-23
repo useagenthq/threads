@@ -75,22 +75,23 @@ async def repair(path: str, tenant: str, branch: str) -> int:
 
 
 async def delete(path: str, tenant: str, thread: str | None) -> int:
-    """One thread, or with no thread every thread of the tenant."""
+    """One thread, or with no thread every thread of the tenant; each leaves a tombstone."""
     sq = await open_store(_store(path, tenant))
     chosen = (
         (ThreadId(thread),) if thread else await sq.run(lambda c: retention.threads_of(c, tenant))
     )
+    now = now_ms()
     for one in chosen:
-        count = await sq.run(lambda c, t=one: retention.delete_thread(c, tenant, t))
+        count = await sq.run(lambda c, t=one: retention.delete_thread(c, tenant, t, now))
         if count == 0:
             return _fail(f"not_found: no thread {one}")
         print(f"deleted {one} ({count} branches)")
     return 0
 
 
-async def gc(path: str, module: str | None) -> int:
-    """Releases what the ledger says to release through each agent's sandbox adapter, then
-    sweeps unreferenced artifacts past the grace period."""
+async def gc(path: str, module: str | None, grace_days: float) -> int:
+    """Releases what the ledger says to release through each agent's sandbox adapter (the
+    host module's), then sweeps unreferenced artifacts older than the grace period."""
     root = sqlite(path)
     sq = await open_store(root)
     if module is not None:
@@ -102,6 +103,6 @@ async def gc(path: str, module: str | None) -> int:
             for tenant in tenants:
                 await release(await open_store(scoped(root, tenant)), sandbox, now_ms)
     keep = await sq.run(retention.referenced)
-    removed = retention.sweep(Path(path) / "artifacts", keep)
+    removed = retention.sweep(Path(path) / "artifacts", keep, grace_days * 86_400)
     print(f"removed {len(removed)} unreferenced artifacts")
     return 0

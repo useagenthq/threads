@@ -7,8 +7,8 @@ API. Serving needs the `host` extra.
     threads export <branch_id>              the branch's JSONL export on stdout
     threads import <file>                   verify an export and store its bytes
     threads repair <branch_id>              make a torn import runnable (log_repaired)
-    threads delete <thread_id> | --all      delete a thread, or every thread of the tenant
-    threads gc [module]                     release ledger rows, sweep unreferenced artifacts
+    threads delete <thread_id> | --tenant <tenant_id>   delete a thread, or a tenant's threads
+    threads gc [--grace-days <n>] [module]  release ledger rows, sweep unreferenced artifacts
 
 `module` is `module`, `module:attribute` or `file.py[:attribute]`, default `app`. The store is
 `--store` (default `.threads`) scoped to `--tenant` (default `local`).
@@ -41,10 +41,10 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser("repair", help="repair a torn import").add_argument("branch_id")
     removal = commands.add_parser("delete", help="delete a thread or a tenant's threads")
     removal.add_argument("thread_id", nargs="?")
-    removal.add_argument("--all", action="store_true", help="every thread of --tenant")
-    commands.add_parser("gc", help="release resources, sweep artifacts").add_argument(
-        "module", nargs="?"
-    )
+    removal.add_argument("--tenant", dest="all_of", help="delete every thread of this tenant")
+    collect = commands.add_parser("gc", help="release resources, sweep artifacts")
+    collect.add_argument("module", nargs="?", help="the host module whose sandboxes release")
+    collect.add_argument("--grace-days", type=float, default=7.0)
     return parser
 
 
@@ -53,8 +53,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     command = str(args.command)
     if command in ("dev", "start"):
         return _serve(command, str(args.module), int(args.port))
-    if command == "delete" and (args.thread_id is None) != bool(args.all):
-        print("delete needs a thread_id or --all", file=sys.stderr)
+    if command == "delete" and (args.thread_id is None) == (args.all_of is None):
+        print("delete needs a thread_id or --tenant <tenant_id>", file=sys.stderr)
         return 2
     return asyncio.run(_command(command, args))
 
@@ -71,8 +71,8 @@ def _command(command: str, args: argparse.Namespace) -> Coroutine[object, object
         "export": lambda: store.export(path, tenant, str(args.branch_id)),
         "import": lambda: store.import_(path, tenant, str(args.file)),
         "repair": lambda: store.repair(path, tenant, str(args.branch_id)),
-        "delete": lambda: store.delete(path, tenant, optional("thread_id")),
-        "gc": lambda: store.gc(path, optional("module")),
+        "delete": lambda: store.delete(path, optional("all_of") or tenant, optional("thread_id")),
+        "gc": lambda: store.gc(path, optional("module"), float(args.grace_days)),
     }
     return commands[command]()
 

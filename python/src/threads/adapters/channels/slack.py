@@ -4,8 +4,8 @@ Inbound requests are verified with the official SDK's signing-secret check (slac
 the raw bytes and the request timestamp. A message event becomes one item keyed
 `<event_id>#0`; the bot's own messages and edits are ignored. A button press carries only a
 challenge id (`grant:<id>` / `deny:<id>`), so it approves nothing without the host's check.
-Outbound `chat.postMessage` carries the effect key in the message metadata. Slack has no lookup
-by that key, so an uncertain send parks.
+Outbound `chat.postMessage` carries the effect key in the message metadata, which lookup finds in
+the conversation's recent history; only recent history is read, so a miss parks the send.
 """
 
 import time
@@ -15,7 +15,7 @@ from typing import Final
 from urllib.parse import parse_qs
 
 import httpx
-from pydantic import JsonValue, ValidationError
+from pydantic import Field, JsonValue, ValidationError
 from slack_sdk.signature import Clock, SignatureVerifier
 
 from threads.adapters.channels.common import (
@@ -41,7 +41,8 @@ from threads.host.channel import (
     VerifiedDelivery,
 )
 from threads.log import Event, JsonObject, ParseError, Principal
-from threads.loop.model import LookupResult, LookupUnknown
+from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound
+from threads.memory.fence import check
 from threads.result import Err, Ok
 from threads.secrets import Secret, resolve
 
@@ -92,6 +93,20 @@ class _SlackClock(Clock):
         return self._now()
 
 
+class _Metadata(Loose):
+    event_payload: Mapping[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
+
+
+class _Posted(Loose):
+    ts: str = ""
+    metadata: _Metadata | None = None
+
+
+class _History(Loose):
+    ok: bool = False
+    messages: tuple[_Posted, ...] = ()
+
+
 type Payload = _Envelope | _Interaction
 
 
@@ -104,12 +119,12 @@ class SlackChannel:
     transport: httpx.AsyncBaseTransport | None = None
     clock: Callable[[], float] = time.time
     capabilities: ChannelCapabilities = field(
-        default_factory=lambda: ChannelCapabilities("none", True, True, True, True)
+        default_factory=lambda: ChannelCapabilities("nonfinal", True, True, True, True)
     )
     limits: Mapping[str, int] = field(default_factory=lambda: dict(_LIMITS))
 
     @property
-    def credentials(self) -> Mapping[str, Secret]:
+    def secrets(self) -> Mapping[str, Secret]:
         return {"bot_token": self.bot_token}
 
     def verify(self, raw: RawRequest) -> Ok[VerifiedDelivery] | Err[ParseError]:
@@ -179,8 +194,31 @@ class SlackChannel:
             return DeliveryError(kind, "definite_not_sent")
         return Sent(f"{answer.get('channel', channel)}:{answer.get('ts', '')}")
 
-    async def lookup(self, effect_key: str) -> LookupResult[str]:
-        return LookupUnknown("Slack has no lookup by effect key")
+    async def lookup(self, effect_key: str, op: JsonObject) -> LookupResult[str]:
+        """The conversation's recent message whose metadata carries the key. Only recent
+        history is read, so the channel declares nonfinal and a miss parks the send."""
+        await check()
+        channel, _, thread_ts = str(op["address"]).partition(":")
+        method = "conversations.replies" if thread_ts else "conversations.history"
+        query = {"channel": channel, "limit": "200", "include_all_metadata": "true"}
+        if thread_ts:
+            query["ts"] = thread_ts
+        headers = {"authorization": f"Bearer {resolve(self.bot_token)}"}
+        try:
+            async with client(self.transport) as http:
+                response = await http.get(f"{self.api}/{method}", headers=headers, params=query)
+        except httpx.HTTPError as error:
+            return LookupUnknown(f"history failed: {type(error).__name__}")
+        history = _History.model_validate_json(response.content or b"{}")
+        if refused(response) is not None or not history.ok:
+            return LookupUnknown(f"{method} answered {response.status_code}")
+        for posted in history.messages:
+            if (
+                posted.metadata is not None
+                and posted.metadata.event_payload.get("effect_key") == effect_key
+            ):
+                return Found(f"{channel}:{posted.ts}")
+        return NotFound()
 
 
 def _payload(raw: RawRequest) -> Payload | None:

@@ -28,6 +28,7 @@ def app(host: Host) -> Starlette:
             "/v1/threads/{thread_id}/runs/{run_id}/events", runs.subscribe(host), methods=["GET"]
         ),
         Route("/channels/{channel}/events", runs.webhook(host), methods=["POST"]),
+        Route("/channels/{channel}/events", runs.challenge(host), methods=["GET"]),
         *threads.routes(host),
     ]
     return Starlette(routes=routes, lifespan=lifespan)
