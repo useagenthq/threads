@@ -7,25 +7,14 @@ or a `ConfigError` raises.
 from dataclasses import dataclass
 from typing import Literal
 
-from threads.agents.store import Store
 from threads.log import (
-    BranchId,
     BudgetExceededData,
     EventId,
     ParkAddress,
-    ThreadId,
 )
 from threads.loop.runtime import RunErrorCode
 from threads.store import StoredEvent
-
-
-@dataclass(frozen=True, slots=True)
-class Thread:
-    """A handle on one thread's branch. Pass it back to `run` to continue the thread."""
-
-    thread_id: ThreadId
-    branch_id: BranchId
-    store: Store
+from threads.thread.handle import Thread
 
 
 @dataclass(frozen=True, slots=True)

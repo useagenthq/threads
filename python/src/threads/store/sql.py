@@ -134,6 +134,15 @@ def segments(conn: sqlite3.Connection, found: Branch, through: int) -> bytes:
     return ancestors + found.header_line + b"\n" + own
 
 
+def root(conn: sqlite3.Connection, thread_id: ThreadId, tenant_id: str) -> BranchId | None:
+    row: tuple[object] | None = conn.execute(
+        "SELECT branch_id FROM branches WHERE thread_id = ? AND tenant_id = ?"
+        " AND parent_branch_id IS NULL",
+        (thread_id, tenant_id),
+    ).fetchone()
+    return None if row is None else BranchId(text_of(row[0]))
+
+
 def mark_repaired(conn: sqlite3.Connection, branch_id: BranchId) -> None:
     """A torn import becomes runnable once its log_repaired is committed."""
     with transaction(conn):

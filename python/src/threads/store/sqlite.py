@@ -20,7 +20,7 @@ from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
 from threads.store.forking import Forking, forking, start_child
-from threads.store.lines import Draft, header_line
+from threads.store.lines import Draft, head_line, header_line
 from threads.store.resources import Ledger
 from threads.store.spill import Spill
 from threads.store.verify import VerifiedLog, verify_export
@@ -134,6 +134,25 @@ class SqliteStore:
             return Ok(lines)
         tail = await self._worker.call(lambda _: self._artifacts.get(dropped))
         return tail if isinstance(tail, Err) else Ok(lines + tail.value)
+
+    async def export_through(self, branch_id: BranchId, seq: int) -> Ok[bytes] | Err[ParseError]:
+        """The export of a branch's resolved chain through its own line `seq`, with a head
+        checkpoint there: what a saved case restores."""
+        found = await self._owned(branch_id)
+        if isinstance(found, Err):
+            return found
+        if not (found.value.fork_at_seq or 0) < seq <= found.value.head_seq:
+            return Err(ParseError("seq_mismatch", f"branch {branch_id} has no own line {seq}"))
+        lines = await self._worker.call(lambda c: sql.prefix(c, branch_id, seq))
+        last = lines.removesuffix(b"\n").rsplit(b"\n", 1)[-1]
+        return Ok(lines + head_line(branch_id, seq, sha256_hex(last)) + b"\n")
+
+    async def root(self, thread_id: ThreadId) -> Ok[BranchId] | Err[ParseError]:
+        """The thread's main branch: its root."""
+        found = await self._worker.call(lambda c: sql.root(c, thread_id, self._tenant))
+        if found is None:
+            return Err(ParseError("not_found", f"no thread {thread_id}"))
+        return Ok(found)
 
     async def read(self, branch_id: BranchId, now: int) -> Ok[VerifiedLog] | Err[ParseError]:
         """Reads a branch back through the same boundary as an import: storage is untrusted."""

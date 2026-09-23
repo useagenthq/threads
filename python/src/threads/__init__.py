@@ -38,17 +38,30 @@ from threads.loop.model import (  # noqa: E402
     ModelResponse,
 )
 from threads.loop.scripted import scripted_model  # noqa: E402
+from threads.sandbox import (  # noqa: E402
+    ExecOutput,
+    ExecResult,
+    Sandbox,
+    SandboxInfo,
+    SandboxSession,
+    fake_sandbox,
+)
+from threads.thread.case import CaseExpectation, SavedCase  # noqa: E402
+from threads.thread.handle import open_thread  # noqa: E402
 
 __all__ = [
     "VERSION",
     "Agent",
     "BudgetExhausted",
     "Cancelled",
+    "CaseExpectation",
     "Completed",
     "ConfigError",
     "ConfigErrorCode",
     "DeltaItem",
     "EventItem",
+    "ExecOutput",
+    "ExecResult",
     "Failed",
     "HandedOff",
     "LookupResult",
@@ -64,6 +77,10 @@ __all__ = [
     "RunError",
     "RunResult",
     "RunStream",
+    "Sandbox",
+    "SandboxInfo",
+    "SandboxSession",
+    "SavedCase",
     "StatusItem",
     "Store",
     "StreamEvent",
@@ -71,6 +88,8 @@ __all__ = [
     "Tool",
     "__version__",
     "agent",
+    "fake_sandbox",
+    "open_thread",
     "scripted_model",
     "sqlite",
     "tool",

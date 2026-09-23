@@ -2,8 +2,6 @@
 whatever a crash left, record the input, drive the loop, and read the result off the log."""
 
 import asyncio
-import time
-import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final, TypedDict
@@ -21,7 +19,7 @@ from threads.agents.results import (
     StreamEvent,
     Thread,
 )
-from threads.agents.store import Store, open_store, sqlite
+from threads.agents.store import HOLDER, Store, now_ms, open_store, sqlite
 from threads.log import BranchId, Budget, InputPart, ParseError, Principal, ThreadId
 from threads.loop.drafts import draft
 from threads.loop.drive import drive
@@ -35,8 +33,6 @@ from threads.store.lines import uuid7
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-HOLDER: Final = uuid.uuid4().hex
-"""This process's lease holder id."""
 LOCAL_OPERATOR: Final = Principal(issuer="api", tenant="local", subject="operator")
 """The default principal of a local run."""
 
@@ -50,10 +46,6 @@ class RunOptions[D](TypedDict, total=False):
     deps: D
     budget: Budget
     principal: Principal
-
-
-def now_ms() -> int:
-    return time.time_ns() // 1_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,9 +75,10 @@ async def execute[D](
     thread_id = writer.fold.thread_id
     if thread_id is None:
         raise AssertionError("an acquired branch has a thread")
-    handle = Thread(thread_id, writer.branch_id, store)
+    sandbox = None if thread is None else thread.sandbox
+    handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox)
     principal = options.get("principal", LOCAL_OPERATOR)
-    ctx = RunContext(deps, handle.thread_id, handle.branch_id, principal)
+    ctx = RunContext(deps, handle.id, handle.branch, principal)
     stream = _Stream(emit)
     tools = AppTools(definition.tools, ctx)
     rt = Runtime(
@@ -117,9 +110,9 @@ async def _open(
             return created
         acquired = await sq.acquire(branch_id, HOLDER, now_ms)
         return acquired if isinstance(acquired, Err) else Ok((acquired.value, True))
-    acquired = await sq.acquire(thread.branch_id, HOLDER, now_ms)
+    acquired = await sq.acquire(thread.branch, HOLDER, now_ms)
     if isinstance(acquired, Err) and acquired.error.code == "branch_not_runnable":
-        acquired = await sq.repair_torn(thread.branch_id, HOLDER, now_ms)
+        acquired = await sq.repair_torn(thread.branch, HOLDER, now_ms)
     return acquired if isinstance(acquired, Err) else Ok((acquired.value, False))
 
 

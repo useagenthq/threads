@@ -1,7 +1,10 @@
 """`sqlite()` (spec/api.json): the one log and artifact store, opened lazily on first use."""
 
+import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 from weakref import WeakKeyDictionary
 
 from threads.agents.config import ConfigError
@@ -14,6 +17,15 @@ class Store:
     """The SQLite log and artifact store (spec/api.json `Store`). Sealed: no public methods."""
 
     path: str
+
+
+HOLDER: Final = uuid.uuid4().hex
+"""This process's lease holder id: runs and forks share it, so a run can
+continue a branch this process just forked."""
+
+
+def now_ms() -> int:
+    return time.time_ns() // 1_000_000
 
 
 _OPENED: WeakKeyDictionary[Store, SqliteStore] = WeakKeyDictionary()

@@ -91,7 +91,7 @@ async def _restorable(
     snap = eligible.value
     if sandbox is None or sandbox.info.provider != snap.data.provider:
         message = f"no sandbox adapter for provider {snap.data.provider}"
-        return Err(ParseError("capability_missing", message, snap.seq))
+        return Err(ParseError("sandbox_required", message, snap.seq))
     return Ok((snap, sandbox))
 
 

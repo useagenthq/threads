@@ -51,7 +51,7 @@ class FakeSession:
         close: Callable[["FakeSession"], Ok[None] | Err[SandboxError]],
     ) -> None:
         self._id = ident
-        self.files = dict(files)
+        self.files: dict[str, bytes] = dict(files)
         self._tools = tools
         self._capture = capture
         self._close = close

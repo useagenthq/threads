@@ -17,16 +17,19 @@ type LogLine = Header | Head | Event | UnknownEvent
 checkpoint. Unknown critical events never parse: they refuse the log."""
 
 
+type ApiCode = Literal[
+    "branch_not_found", "branch_exists", "sandbox_required", "invalid_request", "not_found"
+]
+"""branch_not_found: a branch that is absent or another tenant's. branch_exists: a thread
+another tenant owns. sandbox_required: a fork with no sandbox adapter for its snapshot's
+provider. invalid_request: a malformed call. not_found: a thread with no such branch."""
+
+
 @dataclass(frozen=True, slots=True)
 class ParseError:
-    code: (
-        ErrorCode
-        | Literal["branch_not_found", "branch_exists", "capability_missing", "invalid_request"]
-    )
+    code: ErrorCode | ApiCode
     """A wire ErrorCode, or an ApiErrorCode (spec/schema/api.schema.json) the store returns and
-    never logs: branch_not_found for a branch that is absent or another tenant's,
-    branch_exists for a thread another tenant owns, capability_missing for a fork with no
-    sandbox adapter for its snapshot's provider, invalid_request for a malformed call."""
+    never logs."""
     message: str
     seq: int | None = None
     """The line's seq when it has a readable one; 0 for a header (schema README wire rule 8)."""
