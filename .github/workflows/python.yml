@@ -18,12 +18,14 @@ jobs:
         with:
           working-directory: python
       - run: uv sync --locked --all-extras
+      - name: Generate code from spec/
+        working-directory: .
+        run: ./scripts/generate.sh py
       - run: uv run pyright
       - run: uv run pyright --verifytypes threads --ignoreexternal
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pytest
-      - run: uv run python tools/regen_models.py --check
       - name: Spec tooling is strictly typed and fixtures are current
         run: |
           uv run pyright ../spec/tools
@@ -31,7 +33,6 @@ jobs:
           uv run ruff format --check ../spec/tools
           uv run python ../spec/tools/gen_fixtures.py --check
           uv run python ../spec/tools/check_api.py
-          uv run python ../spec/tools/gen_store_sql.py --check
       - name: No file over 400 lines
         working-directory: .
         run: ./scripts/check-file-size.sh python

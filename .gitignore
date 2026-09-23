@@ -22,3 +22,7 @@ __pycache__/
 *.pyc
 .ruff_cache/
 .pytest_cache/
+
+# Generated from spec/ by scripts/generate.sh; never committed
+python/src/threads/_generated/
+typescript/packages/core/src/store/generated/

@@ -18,7 +18,7 @@ Repo layout: `spec/` (source of truth: JSON Schema + conformance cases), `typesc
 ### Spec-first workflow
 
 1. A feature starts in `spec/`: schema change plus conformance cases, before code in either language.
-2. Change the Zod schema, re-export to `spec/schema/`, regenerate the Pydantic models. Commit the generated output; CI fails if it is stale. Never hand-edit generated files.
+2. Change the Zod schema, re-export to `spec/schema/` (committed: it is the contract). Code generated from `spec/` (Python models, embedded SQL) is **not** committed: run `scripts/generate.sh` after a clone, a pull or a spec change; `bun run check` and CI run it first. Never hand-edit generated files.
 3. Implement in both languages until `spec/conformance/` passes in each.
 
 ### Wire format
