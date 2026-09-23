@@ -23,6 +23,7 @@ from threads.agents.scope import Scope
 from threads.hooks.runner import STOP, SWITCH, decision_draft
 from threads.log import (
     AgentFinishedData,
+    AgentFinishedEvent,
     AgentSpawnedEvent,
     CallId,
     HookDecisionEvent,
@@ -52,7 +53,7 @@ async def spawn[D](scope: Scope[D], rt: Runtime, state: CallState, tasks: Tasks)
     spawned = _spawned(rt, call_id)
     if spawned is None:
         child = _child(scope, args.agent)
-        why = _refusal(scope, child, args)
+        why = _refusal(scope, child, args) or _running(rt, args.agent)
         if why is not None or child is None:
             return await _close(rt, call_id, why or f"unknown agent {args.agent}")
         halt = await _start(scope, rt, state, child, args)
@@ -108,6 +109,18 @@ def _refusal[D](
     if wanted == "shared_sandbox" and scope.shared is None:
         return "shared_sandbox needs the parent's sandbox"
     return None
+
+
+def _running(rt: Runtime, name: str) -> str | None:
+    """A member is its agent name: never two unfinished instances of one name (spec, Team tools)."""
+    ended = {e.data.child_thread_id for e in rt.events if isinstance(e, AgentFinishedEvent)}
+    live = any(
+        isinstance(e, AgentSpawnedEvent)
+        and e.data.agent_name == name
+        and e.data.child_thread_id not in ended
+        for e in rt.events
+    )
+    return f"member_active: {name} is still running" if live else None
 
 
 def _isolation(child: Definition[None], args: SpawnAgentInput) -> str:
