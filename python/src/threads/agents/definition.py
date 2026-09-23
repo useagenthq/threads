@@ -8,6 +8,7 @@ from pydantic import JsonValue
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
 from threads.agents.catalog import NO_CATALOG, Catalog
+from threads.agents.skills import Skill, listing, pinned
 from threads.hooks.extension import Extension, extension_tools
 from threads.log import Budget, Context, Permissions, Principal, Retry, ToolSpec
 from threads.log.digest import sha256_hex
@@ -52,6 +53,8 @@ class Definition[D]:
     """A subagent's tools are its own filtered to these, its parent's pinned names: a child only
     narrows. final_output is exempt."""
     catalog: Catalog = NO_CATALOG
+    skills: tuple[Skill, ...] = ()
+    """Host-pinned skills; keyword only, like catalog)."""
     """The capabilities configured: web, git, computer use and lsp."""
     on_unknown_usage: Literal["upper_bound", "stop"] | None = None
     """Pinned as policy.on_unknown_usage when set; "stop" lets a limit with no per-attempt bound
@@ -93,6 +96,7 @@ class Definition[D]:
                 handoffs=bool(self.handoffs),
             ),
             gated=self.catalog.gated(),
+            skills=bool(self.skills),
         )
         ext = extension_tools(self.extensions)
         mine = (*builtins, *(t.spec() for t in self.tools), *(t.spec() for t in ext))
@@ -103,9 +107,11 @@ class Definition[D]:
 
     @property
     def full_instructions(self) -> str:
-        """Base instructions, then each extension's, in declaration order, then the agents this
-        one may start and hand off to: all line 0, so pinned per thread (C7)."""
+        """Base instructions, then each extension's, in declaration order, then the skill listing,
+        then the agents this one may start and hand off to: all line 0, so pinned per thread
+        (C7)."""
         parts = [self.instructions, *(e.instructions for e in self.extensions)]
+        parts.append(listing(self.skills))
         if self.subagents:
             names = ", ".join(a.name for a in self.subagents)
             parts.append(f"Subagents you can start with spawn_agent: {names}.")
@@ -133,6 +139,8 @@ class Definition[D]:
         config: dict[str, JsonValue] = dict(data)
         if self.extensions:
             config["extensions"] = self.manifests()
+        if self.skills:
+            config["skills"] = pinned(self.skills)
         if self.memory is not None:
             # Write authority is config: a changed policy is a changed pin.
             config["memory_write"] = self.memory_write

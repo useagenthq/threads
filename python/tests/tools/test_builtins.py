@@ -29,6 +29,7 @@ ALL = specs(
     knowledge=True,
     framework=agent_tools(spawn=True, team=True, handoffs=True),
     gated=GATED,
+    skills=True,
 )
 SPECS = {s.name: s for s in ALL}
 
@@ -85,10 +86,7 @@ def test_specs_are_the_shared_catalog_and_read_tool_result_is_always_there() -> 
         {"name": s.name, "description": s.description, "input_schema": s.input_schema}
         for s in SPECS.values()
     ]
-    # Skills are not in Python yet: parity issue for load_skill.
-    assert isinstance(catalog, list)
-    listed = [e for e in catalog if isinstance(e, dict) and e["name"] != "load_skill"]
-    assert json.loads(json.dumps(pinned)) == listed
+    assert json.loads(json.dumps(pinned)) == catalog
     bare = specs(sandbox=False, egress_denied=True)
     assert [s.name for s in bare] == ["read_tool_result", "todo_write"]
 

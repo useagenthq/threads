@@ -26,6 +26,7 @@ from threads.agents.results import (  # noqa: E402
     StreamEvent,
     Thread,
 )
+from threads.agents.skills import Skill  # noqa: E402
 from threads.agents.store import Store, sqlite  # noqa: E402
 from threads.agents.tool import Reconcile, Tool, tool  # noqa: E402
 from threads.hooks.extension import Extension, extension  # noqa: E402
@@ -114,6 +115,7 @@ __all__ = [
     "SavedCase",
     "Scope",
     "Secret",
+    "Skill",
     "StatusItem",
     "Store",
     "StreamEvent",

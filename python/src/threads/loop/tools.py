@@ -25,9 +25,10 @@ class Invocation:
 class Reference:
     """Recalled memory or retrieved knowledge: one `injected{trust: untrusted_reference}` event
     appended right after the call's result, so the model sees it only inside the reference
-    wrapper and replay reads it from the log."""
+    wrapper and replay reads it from the log. A loaded skill rides the
+    same way but is `trusted_instruction`: its body is host-pinned config."""
 
-    source: Literal["memory", "knowledge"]
+    source: Literal["memory", "knowledge", "skill"]
     id: str
     version: str
     text: str

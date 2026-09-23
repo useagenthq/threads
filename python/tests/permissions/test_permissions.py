@@ -150,3 +150,24 @@ def test_a_directory_deny_covers_what_the_same_allow_covers(path: str) -> None:
     call = Call("edit", "edit", {"path": path})
     got = decide(perms(["edit(secret/)"], ["edit(secret/)"]), WORKSPACE, "default", call)
     assert got.decision == "deny"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "cat x >'.threads/skills/a.md'",
+        'cp a ".threads"',
+        "tee --output=.threads/hooks.json",
+        "C:\\repo\\.threads\\x",
+        {"files": [{"path": "a/.threads/b"}]},
+    ],
+)
+def test_self_config_guard_sees_quoted_and_nested_words(value: JsonValue) -> None:
+    got = decide(perms(["bash"]), WORKSPACE, "bypass", Call("bash", "other", {"x": value}))
+    assert (got.decision, got.source) == ("deny", "self_config_guard")
+
+
+@pytest.mark.parametrize("value", ["notes/.threads.md", "x.threads/y", "..threads", "threads/a"])
+def test_self_config_guard_needs_a_whole_segment(value: str) -> None:
+    got = decide(perms(["bash"]), WORKSPACE, "bypass", Call("bash", "other", {"command": value}))
+    assert got.source != "self_config_guard"

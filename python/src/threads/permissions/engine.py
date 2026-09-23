@@ -1,8 +1,9 @@
 """The permission fold: the first decisive step wins.
 
-Deny rules, plan mode, protected paths, ask rules, allow rules, then the mode default. In
-`dont_ask` every ask from the later steps becomes deny. Hooks and the principal's authority
-fold in afterwards, in the loop; nothing here can turn a deny into an allow.
+The self-config guard, deny rules, plan mode, protected paths, ask rules, allow rules, then the
+mode default. In `dont_ask` every ask from the later steps becomes deny. Hooks and the
+principal's authority fold in afterwards, in the loop; nothing here can turn a deny into an
+allow.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -14,6 +15,7 @@ from pydantic import JsonValue
 from threads.log import PermissionMode, PermissionRuleAddedData, Permissions
 from threads.permissions import rules, shell
 from threads.permissions.rules import Rule, family, parse_rule
+from threads.permissions.self_config import touches_config
 from threads.result import Ok
 
 type Category = Literal["read_only", "edit", "other"]
@@ -74,6 +76,8 @@ def decide(
     *,
     thread_rules: Sequence[PermissionRuleAddedData] = (),
 ) -> Decision:
+    if call.category != "read_only" and touches_config(call.input):
+        return Decision("deny", "self_config_guard")
     decided = _fold(permissions, mode, _prepare(workspace, call), thread_rules)
     if mode == "dont_ask" and decided.decision == "ask":
         return Decision("deny", decided.source, decided.rule)

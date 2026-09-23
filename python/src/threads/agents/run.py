@@ -29,6 +29,7 @@ from threads.agents.results import (
     Thread,
 )
 from threads.agents.scope import Execute, Scope
+from threads.agents.skills import SkillLoader
 from threads.agents.start import (
     Recorded,
     handed_off,
@@ -63,6 +64,7 @@ from threads.store import SqliteStore, StoredEvent, Writer
 from threads.store.lines import uuid7
 from threads.thread.control import LOCAL_OPERATOR
 from threads.tools import ReadResults, SandboxTools
+from threads.tools.specs import SKILL
 
 RENEW_EVERY_S = 10.0
 """Lease renewal interval, a third of the TTL."""
@@ -142,6 +144,8 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         hook_ctx = RunContext(None, handle.id, handle.branch, principal)
         ext = AppTools(extension_tools(definition.extensions), hook_ctx)
         routes = gateways(definition.catalog, builtins, sq, fenced(writer))
+        if definition.skills:
+            routes[SKILL] = SkillLoader(definition.skills)
         app = AppTools(definition.tools, ctx)
         tools = stub_mode(
             Routed(builtins, results, app, provided, ext, gateways=routes),

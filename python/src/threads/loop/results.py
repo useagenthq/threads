@@ -42,7 +42,8 @@ async def text_ref(rt: Runtime, text: str) -> JsonValue:
 
 
 def reference_drafts(references: Sequence[Reference]) -> list[Draft]:
-    """One untrusted `injected` per recalled item, appended with the result that carries it."""
+    """One `injected` per recalled item or loaded skill, appended with the result that carries
+    it; only a skill is trusted."""
     out: list[Draft] = []
     for r in references:
         origin: dict[str, JsonValue] = {"id": r.id, "version": r.version}
@@ -50,7 +51,7 @@ def reference_drafts(references: Sequence[Reference]) -> list[Draft]:
             origin["location"] = r.location
         data: dict[str, JsonValue] = {
             "source": r.source,
-            "trust": "untrusted_reference",
+            "trust": "trusted_instruction" if r.source == "skill" else "untrusted_reference",
             "origin": origin,
             "text": r.text,
         }

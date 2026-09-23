@@ -34,6 +34,7 @@ MODELS: Final[Mapping[str, type[StrictModel]]] = {
     "grep": tools_v1.GrepInput,
     "handoff": tools_v1.HandoffInput,
     "ls": tools_v1.LsInput,
+    "load_skill": tools_v1.LoadSkillInput,
     "lsp": tools_v1.LspInput,
     "notebook_edit": tools_v1.NotebookEditInput,
     "open_pull_request": tools_v1.OpenPullRequestInput,
@@ -72,6 +73,8 @@ _EFFECTS: Final[Mapping[str, EffectClass]] = {
 }
 HOST: Final = frozenset({"read_tool_result"})
 """Built-ins that run on the host: offered with or without a sandbox."""
+SKILL: Final = "load_skill"
+"""Host-side over the pinned skills; pinned only when the agent has skills."""
 TEAM: Final = frozenset({"send_message", "team_task_claim", "team_task_create", "team_task_update"})
 """Offered to a team: an agent with subagents, and every child it spawns."""
 FRAMEWORK: Final = TEAM | {"todo_write", "handoff", "spawn_agent"}
@@ -83,7 +86,7 @@ GIT: Final = frozenset({"git_clone", "git_fetch", "git_push", "open_pull_request
 GATED: Final = WEB | GIT | {"computer", "computer_screenshot", "lsp"}
 """Pinned only when their capability is configured."""
 NAMES: Final = frozenset(MODELS)
-SANDBOXED: Final = NAMES - HOST - FRAMEWORK - WEB - GIT
+SANDBOXED: Final = NAMES - HOST - FRAMEWORK - WEB - GIT - {SKILL}
 PROVIDED: Final[Mapping[str, type[StrictModel]]] = {
     "forget_memory": tools_v1.ForgetMemoryInput,
     "save_memory": tools_v1.SaveMemoryInput,
@@ -118,11 +121,13 @@ def specs(  # noqa: PLR0913 - one flag per configured capability
     knowledge: bool = False,
     framework: frozenset[str] = frozenset(),
     gated: frozenset[str] = frozenset(),
+    skills: bool = False,
 ) -> tuple[ToolSpec, ...]:
     """The pinned built-ins, sorted by name. bash is sandbox_local only under deny-all egress;
     with any outbound path a command may change state elsewhere. todo_write
     is always offered; `framework` names the other framework tools this agent is offered, and
-    `gated` the GATED tools whose capability is configured."""
+    `gated` the GATED tools whose capability is configured.
+    load_skill needs `skills`."""
     offered = framework | {"todo_write"}
     out: list[ToolSpec] = []
     for entry in _ENTRIES:
@@ -131,8 +136,10 @@ def specs(  # noqa: PLR0913 - one flag per configured capability
             effect = "read_only" if name in offered else None
         else:
             effect = _effect(name, sandbox=sandbox, egress_denied=egress_denied, memory=memory)
-        unset = (name == "search_knowledge" and not knowledge) or (
-            name in GATED and name not in gated
+        unset = (
+            (name == "search_knowledge" and not knowledge)
+            or (name == SKILL and not skills)
+            or (name in GATED and name not in gated)
         )
         if effect is None or unset:
             continue  # a capability that isn't configured
@@ -151,7 +158,7 @@ def specs(  # noqa: PLR0913 - one flag per configured capability
 def _effect(
     name: str, *, sandbox: bool, egress_denied: bool, memory: Writes | None
 ) -> EffectClass | None:
-    if name == "search_knowledge":
+    if name in {"search_knowledge", SKILL}:
         return "read_only"
     if name in PROVIDED:
         if memory is None:

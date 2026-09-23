@@ -75,15 +75,8 @@ def _decide(given: PolicyInput, call: PolicyCall) -> Decision:
     return decide_capped(given.permissions, given.ceiling, given.workspace, call.mode, request)
 
 
-PARITY_PENDING = {
-    "skills-write-denied-all-paths": "the self-config guard (F4.2) is TypeScript-only so far",
-}
-
-
 @pytest.mark.parametrize("name", POLICY_CASES)
 def test_policy_case(name: str) -> None:
-    if name in PARITY_PENDING:
-        pytest.skip(PARITY_PENDING[name])
     case = CASES / name
     meta = PolicyCase.model_validate_json((case / "case.json").read_bytes())
     expected = PolicyExpected.model_validate_json((case / "expected.json").read_bytes())

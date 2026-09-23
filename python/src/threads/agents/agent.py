@@ -17,6 +17,7 @@ from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
 from threads.agents.results import RunResult, StreamEvent
 from threads.agents.run import Input, RunOptions, execute
+from threads.agents.skills import Skill, checked
 from threads.hooks.extension import Extension
 from threads.log import Budget, Context, Permissions, Principal, Retry
 from threads.loop.model import Model
@@ -49,6 +50,8 @@ class AgentOptions(TypedDict, total=False):
     """Write authority for save_memory and forget_memory; default "ask"."""
     knowledge: KnowledgeProvider
     """search_knowledge over host-ingested sources."""
+    skills: Sequence[Skill]
+    """Host-pinned skills: listed in line 0, a body loaded on demand."""
     subagents: "Sequence[Agent[None]]"
     """Agents spawn_agent may start, by name; the team tools come with them."""
     handoffs: "Sequence[Agent[None]]"
@@ -197,6 +200,7 @@ def _definition[T](
         servers,
         tuple(replace(a.definition, member=True) for a in options.get("subagents", ())),
         tuple(a.definition for a in options.get("handoffs", ())),
+        skills=checked(options.get("skills", ())),
         catalog=catalog(
             sandbox,
             web=options.get("web"),
