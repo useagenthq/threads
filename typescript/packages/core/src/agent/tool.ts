@@ -31,7 +31,7 @@ export type ToolDefinition<Input, Output, Deps = undefined> = {
   readonly description: string;
   readonly input: z.ZodType<Input>;
   readonly output?: z.ZodType<Output>;
-  /** Defaults to "host", the only value that runs in this release. Not pinned. */
+  /** Defaults to "host". "sandbox" is reserved: setup fails with capability_missing. Not pinned. */
   readonly runs?: "host" | "sandbox";
   readonly execute?: (input: Input, ctx: RunContext<Deps>) => Promise<Output>;
   /**. Undeclared tools are unguarded: uncertainty always parks. */

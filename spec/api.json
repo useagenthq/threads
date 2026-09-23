@@ -440,7 +440,7 @@
           "type": {"enum": ["host", "sandbox"]},
           "required": false,
           "default": "host",
-          "doc": "Where execute runs. Not pinned: host and an omitted runs give the same ToolSpec and config_hash. sandbox is capability_missing in this release."
+          "doc": "Where execute runs. host (the default) runs it in the host process. sandbox is reserved and not supported in this release: a sandbox tool fails setup with ConfigError capability_missing (Python at tool(), TypeScript at agent check() or the first run) and never executes. Not pinned: host and an omitted runs give the same ToolSpec and config_hash."
         },
         {
           "name": "execute",

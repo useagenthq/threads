@@ -67,16 +67,28 @@ describe("tool() runs", () => {
     expect(hash).toBe(await hashOf(host));
   });
 
-  test("runs sandbox is still capability_missing", () => {
-    const sandboxed = tool({ ...base, runs: "sandbox" });
-    expect(() => sandboxed.spec()).toThrow(ConfigError);
-    try {
-      sandboxed.spec();
-    } catch (error) {
-      expect(error instanceof ConfigError && error.code).toBe(
-        "capability_missing",
-      );
-    }
+  test("runs sandbox is reserved: setup fails and execute never runs", async () => {
+    let executed = false;
+    const sandboxed = tool({
+      ...base,
+      runs: "sandbox",
+      execute: async ({ text }) => {
+        executed = true;
+        return text;
+      },
+    });
+    const bot = agent({
+      model: scriptedModel({ responses: [use("hello"), say("done")] }),
+      tools: [sandboxed],
+    });
+    expect(await bot.check()).toMatchObject({
+      ok: false,
+      error: { code: "capability_missing" },
+    });
+    await expect(
+      bot.run("echo", { store: sqlite(":memory:") }),
+    ).rejects.toThrow(ConfigError);
+    expect(executed).toBe(false);
     // @ts-expect-error runs only accepts "host" or "sandbox"
     tool({ ...base, runs: "elsewhere" });
   });
