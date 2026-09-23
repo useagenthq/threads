@@ -183,10 +183,9 @@ class ChannelIntake:
         )
         task = self._runner.launch(bound, item.content, thread, item.principal, intake=intake)
         await asyncio.wait({recorded, task}, return_when=asyncio.FIRST_COMPLETED)
-        if not recorded.done():
-            return False
-        await asyncio.wait({task})
-        return True
+        # Once the input is durable the run goes on alone: a later answer or cancel reaches it
+        # through its writer, and the run's end drains what waited.
+        return recorded.done()
 
     async def _control(
         self, bound: Bound, thread: Thread, row: inbox.Row, item: Decision | Control

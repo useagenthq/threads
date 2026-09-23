@@ -1,12 +1,13 @@
-"""A channel answer that arrives while another process holds the branch (review M3, decision 5):
-the press stays durable in the inbox, is applied once the lease frees, and presses are applied in
-the order they arrived."""
+"""Channel answers and controls never wait behind a run or a lease (spec/schema/README.md, "Channel
+replies"): a press that meets another process's lease stays durable in the inbox and is applied,
+in arrival order, once the lease frees; a cancel reaches the run in flight."""
 
 import asyncio
 
 from pydantic import JsonValue
 from test_channel_approvals import (
     APPROVER,
+    REQUESTER,
     TEAM,
     USAGE,
     ItemsChannel,
@@ -94,3 +95,55 @@ def test_presses_while_the_branch_is_busy_wait_and_apply_in_order() -> None:
 
     assert asyncio.run(main()) == ["denied"]
     assert runs == []
+
+
+def test_a_cancel_reaches_the_run_in_flight() -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def slow(_args: Note, _ctx: RunContext[None]) -> str:
+        started.set()
+        await release.wait()
+        return "done"
+
+    use: JsonValue = {
+        "content": [{"type": "tool_use", "call_id": "c1", "name": "slow", "input": {"text": "x"}}],
+        "stop_reason": "tool_use",
+        "usage": USAGE,
+    }
+    slow_tool = tool(
+        name="slow", description="Slow.", input=Note, runs="host", execute=slow, effect="read_only"
+    )
+    bot = agent(model=scripted_model({"responses": [use, text("finished")]}), tools=[slow_tool])
+    cancel: JsonValue = {
+        "kind": "control",
+        "principal": REQUESTER.model_dump(),
+        "address": "C1",
+        "item_key": "k-cancel",
+        "command": "cancel",
+    }
+    store = sqlite(":memory:")
+
+    async def main() -> None:
+        async with host(store=store, agents={"bot": bot}, channels={"fake": ItemsChannel()}) as h:
+            sq = await open_store(scoped(store, TEAM))
+            await h.receive("fake", webhook("d1", message("m1", "go")))
+            await asyncio.wait_for(started.wait(), 5)
+            await h.receive("fake", webhook("d2", cancel))
+
+            async def cancelled() -> bool | None:
+                rows = await sq.tables.inbox_rows()
+                root = await sq.root(rows[0].thread_id)
+                assert isinstance(root, Ok)
+                read = await sq.read(root.value, 0)
+                assert isinstance(read, Ok)
+                kinds = [e.type for e in read.value.fold.events]
+                return True if "cancel_requested" in kinds else None
+
+            # The cancel is durable while the tool still runs, not after the turn ends.
+            try:
+                await until(cancelled)
+            finally:
+                release.set()
+
+    asyncio.run(main())

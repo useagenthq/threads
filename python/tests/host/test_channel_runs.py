@@ -14,7 +14,7 @@ import pytest
 from pydantic import JsonValue
 
 from threads import ConfigError, agent, scripted_model, sqlite
-from threads.agents.store import open_store, scoped
+from threads.agents.store import Store, open_store, scoped
 from threads.host import RawRequest, host
 from threads.log import (
     ChannelDeliveryEvent,
@@ -59,8 +59,10 @@ def event(event_id: str) -> JsonValue:
 
 
 async def deliver(
-    transport: httpx.MockTransport, *requests: RawRequest
+    transport: httpx.MockTransport, *requests: RawRequest, settled: type[StoredEvent] | None = None
 ) -> tuple[list[int], list[StoredEvent]]:
+    """The webhooks' answers and the conversation's log once it holds a `settled` event: a
+    run goes on after its input is durable, and stopping the host would end it."""
     store = sqlite(":memory:")
     channel = slack(
         signing_secret=secret("SLACK_SIGNING_SECRET"),
@@ -74,15 +76,25 @@ async def deliver(
         for request in requests:
             answered = await served.receive("slack", request)
             statuses.append(answered.value.status if isinstance(answered, Ok) else 401)
+        for _ in range(200):
+            events = await _events(store)
+            if settled is None or any(isinstance(e, settled) for e in events):
+                return statuses, events
+            await asyncio.sleep(0.01)
+    raise AssertionError("the run never settled")
+
+
+async def _events(store: Store) -> list[StoredEvent]:
     sq = await open_store(scoped(store, "slack:T1"))
     rows = await sq.tables.inbox_rows()
     if not rows:
-        return statuses, []
+        return []
     root = await sq.root(rows[0].thread_id)
-    assert isinstance(root, Ok)
+    if not isinstance(root, Ok):
+        return []
     read = await sq.read(root.value, 0)
     assert isinstance(read, Ok)
-    return statuses, list(read.value.fold.events)
+    return list(read.value.fold.events)
 
 
 def test_a_redelivered_webhook_runs_once_and_its_reply_is_one_fenced_effect() -> None:
@@ -93,7 +105,9 @@ def test_a_redelivered_webhook_runs_once_and_its_reply_is_one_fenced_effect() ->
         return httpx.Response(200, json={"ok": True, "channel": "C1", "ts": "171.1"})
 
     first = signed(event("Ev01"))
-    statuses, events = asyncio.run(deliver(httpx.MockTransport(post), first, first))
+    statuses, events = asyncio.run(
+        deliver(httpx.MockTransport(post), first, first, settled=EffectCommitEvent)
+    )
     assert statuses == [200, 200]
     (delivery,) = [e for e in events if isinstance(e, ChannelDeliveryEvent)]
     assert delivery.data.item_key == "Ev01#0"
@@ -122,7 +136,9 @@ def test_an_unknown_send_outcome_parks_and_is_never_resent() -> None:
         attempts.append(request)
         raise httpx.ReadTimeout("slow", request=request)
 
-    _, events = asyncio.run(deliver(httpx.MockTransport(timeout), signed(event("Ev02"))))
+    _, events = asyncio.run(
+        deliver(httpx.MockTransport(timeout), signed(event("Ev02")), settled=ParkedEvent)
+    )
     # One send; then a lookup of the key in the conversation, which can't answer: it parks.
     assert [a.method for a in attempts] == ["POST", "GET"]
     assert any(isinstance(e, EffectUnknownEvent) for e in events)
