@@ -5,6 +5,7 @@ or the app tools by name."""
 from collections.abc import Sequence
 from typing import Literal
 
+from threads.agents.bindings import AppTools
 from threads.log import JsonObject, ParseError, ToolSpec
 from threads.loop.defaults import context
 from threads.loop.model import LookupResult
@@ -78,7 +79,8 @@ async def snapshot_turn_end(  # noqa: PLR0913 - the corpus revision rides with t
 
 class Routed:
     """Sandbox built-ins go to the sandbox, read_tool_result to the host reader, memory and
-    knowledge tools to their providers, every other name to the app tools."""
+    knowledge tools to their providers, extension tools to theirs, every other name to the app
+    tools."""
 
     def __init__(
         self,
@@ -86,11 +88,13 @@ class Routed:
         results: ReadResults,
         app: ToolRunner,
         provided: ToolRunner | None = None,
+        ext: AppTools[None] | None = None,
     ) -> None:
         self._sandbox = sandbox
         self._results = results
         self._app = app
         self._provided = provided
+        self._ext = ext
 
     def _for(self, name: str) -> ToolRunner:
         if name in HOST:
@@ -99,6 +103,8 @@ class Routed:
             return self._provided
         if name in SANDBOXED and self._sandbox is not None:
             return self._sandbox
+        if self._ext is not None and name in self._ext.names:
+            return self._ext
         return self._app
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:

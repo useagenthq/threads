@@ -6,7 +6,7 @@ from pydantic import JsonValue
 
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
-from threads.hooks.extension import Extension
+from threads.hooks.extension import Extension, extension_tools
 from threads.log import Budget, Context, Permissions, Retry, ToolSpec
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
@@ -55,14 +55,15 @@ class Definition[D]:
     def specs(self) -> tuple[ToolSpec, ...]:
         """Built-ins sorted by name (read_tool_result always, the sandbox tools with a
         sandbox, memory and knowledge tools with a provider), then app tools in declared order
-        and MCP tools sorted by name."""
+        and MCP tools sorted by name, then extension tools sorted by namespaced name ()."""
         builtins = specs(
             sandbox=self.sandbox is not None,
             egress_denied=egress_denied(self.egress),
             memory=writes(self.memory),
             knowledge=self.knowledge is not None,
         )
-        return (*builtins, *(t.spec() for t in self.tools))
+        ext = extension_tools(self.extensions)
+        return (*builtins, *(t.spec() for t in self.tools), *(t.spec() for t in ext))
 
     @property
     def full_instructions(self) -> str:

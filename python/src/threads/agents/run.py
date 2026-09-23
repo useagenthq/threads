@@ -25,7 +25,7 @@ from threads.agents.results import (
     Thread,
 )
 from threads.agents.store import Store, now_ms, open_store, sqlite
-from threads.hooks.extension import bind
+from threads.hooks.extension import bind, extension_tools
 from threads.hooks.observers import ObserverPump
 from threads.log import (
     BranchId,
@@ -117,7 +117,9 @@ async def execute[D](
         providers = Providers(definition.memory, definition.knowledge)
         lent = RunBinding(now_ms, fenced(writer), lambda: writer.fold.events)
         provided = await provider_tools(sq, providers, scope, lent)
-        tools = Routed(builtins, results, AppTools(definition.tools, ctx), provided)
+        hook_ctx = RunContext(None, handle.id, handle.branch, principal)
+        ext = AppTools(extension_tools(definition.extensions), hook_ctx)
+        tools = Routed(builtins, results, AppTools(definition.tools, ctx), provided, ext)
         rt = Runtime(
             sq,
             writer,
@@ -128,9 +130,7 @@ async def execute[D](
             stream.wait_until,
             observe=stream.observe,
             read_file=None if builtins is None else builtins.read_file,
-            hooks=bind(
-                definition.extensions, RunContext(None, handle.id, handle.branch, principal)
-            ),
+            hooks=bind(definition.extensions, hook_ctx),
         )
         halt = await _prepare(rt, definition, fresh=fresh)
         if halt is None:

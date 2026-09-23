@@ -76,6 +76,10 @@ class AppTools[D]:
         self._tools: Mapping[str, AppTool[D]] = {t.name: t for t in tools}
         self._ctx = ctx
 
+    @property
+    def names(self) -> frozenset[str]:
+        return frozenset(self._tools)
+
     def _context(self, call: Invocation) -> RunContext[D]:
         c = self._ctx
         return RunContext(

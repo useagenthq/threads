@@ -8,11 +8,14 @@ from typing import Final, Required, TypedDict, Unpack
 
 from pydantic import JsonValue
 
+from threads.agents.bindings import AppTool
 from threads.agents.config import ConfigError
 from threads.agents.context import RunContext
 from threads.hooks.runner import Bound, Call, HookRunner
 from threads.hooks.types import HookName, Hooks, wire_name
-from threads.log import Event
+from threads.log import Event, JsonObject, ToolSpec
+from threads.loop.model import LookupResult
+from threads.loop.tools import Output
 
 type Observer = Callable[[Event], Awaitable[None]]
 
@@ -22,6 +25,8 @@ DEFAULT_TIMEOUT_MS: Final = 5000
 
 class ExtensionOptions(TypedDict, total=False):
     name: Required[str]
+    tools: Sequence[AppTool[None]]
+    """Namespaced `<name>__<tool>`. Like hooks, they see no deps."""
     instructions: str
     hooks: Hooks
     on: Mapping[str, Observer]
@@ -39,6 +44,7 @@ class Extension:
     on: Mapping[str, Observer] = field(default_factory=dict[str, Observer])
     setup: Callable[[], Awaitable[None]] | None = None
     hook_timeout_ms: int = DEFAULT_TIMEOUT_MS
+    tools: tuple[AppTool[None], ...] = ()
 
     def manifest(self) -> JsonValue:
         """What the config pin covers: which hooks and observers this
@@ -52,6 +58,32 @@ class Extension:
             "observers": observers,
             "hook_timeout_ms": self.hook_timeout_ms,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class Namespaced:
+    """An extension's tool under its pinned `<ext>__<tool>` name."""
+
+    name: str
+    tool: AppTool[None]
+
+    def spec(self) -> ToolSpec:
+        return self.tool.spec().model_copy(update={"name": self.name})
+
+    def invalid(self, input: JsonObject) -> str | None:
+        return self.tool.invalid(input)
+
+    async def run(self, input: JsonObject, ctx: RunContext[None]) -> Output:
+        return await self.tool.run(input, ctx)
+
+    async def lookup(self, effect_key: str, ctx: RunContext[None]) -> LookupResult[str]:
+        return await self.tool.lookup(effect_key, ctx)
+
+
+def extension_tools(extensions: Sequence[Extension]) -> tuple[Namespaced, ...]:
+    """Every extension's tools, namespaced and sorted by that name."""
+    tools = [Namespaced(f"{e.name}__{t.name}", t) for e in extensions for t in e.tools]
+    return tuple(sorted(tools, key=lambda t: t.name))
 
 
 def _names(hooks: Hooks) -> list[HookName]:
@@ -84,8 +116,7 @@ _ALL: Final[tuple[HookName, ...]] = (
 
 def extension(**options: Unpack[ExtensionOptions]) -> Extension:
     """spec/api.json `extension`. Pure. Raises ConfigError for a name the wire can't hold or a
-    non-positive timeout. ponytail: extension tools (`<ext>__<tool>`) aren't taken yet; app
-    tools go to agent(tools=...)."""
+    non-positive timeout."""
     name = options["name"]
     if _NAME.fullmatch(name) is None:
         raise ConfigError("invalid_config", f"extension name {name!r} is not a wire Name")
@@ -99,6 +130,7 @@ def extension(**options: Unpack[ExtensionOptions]) -> Extension:
         dict(options.get("on", {})),
         options.get("setup"),
         timeout,
+        tuple(options.get("tools", ())),
     )
 
 
