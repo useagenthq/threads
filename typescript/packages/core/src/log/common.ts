@@ -216,14 +216,20 @@ export const Span: Strict<{ start: typeof Int; end: typeof Int }> = z
       "Half-open range [start, end) in UTF-8 BYTE offsets of the referenced text or artifact bytes. Both ends fall on character boundaries. Python and TypeScript convert from their native string indices; a span never means code units.",
   });
 
-const PARK_KINDS = ["approval", "effect", "input", "resource"] as const;
+const PARK_KINDS = [
+  "approval",
+  "effect",
+  "input",
+  "resource",
+  "child",
+] as const;
 export const ParkAddress: Strict<{
   kind: EnumOf<typeof PARK_KINDS>;
   id: typeof NonEmpty;
 }> = z.strictObject({ kind: z.enum(PARK_KINDS), id: NonEmpty }).meta({
   id: "ParkAddress",
   description:
-    "What a parked branch waits on; resumed must name the same address. For kind effect, id is the derived effect key.",
+    "What a parked branch waits on; resumed must name the same address. For kind effect, id is the derived effect key; for kind child, the parked subagent's child_thread_id.",
 });
 
 const PERMISSION_MODES = [

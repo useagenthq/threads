@@ -1,0 +1,9 @@
+{
+  "name": "child-parks-parent",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "A foreground child that parks (here on an approval) records no agent_finished: the parent parks on {kind: child, id: <child_thread_id>} with the child's reason, its spawn call stays pending and the child is still running.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

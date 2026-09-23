@@ -29,6 +29,8 @@ def build(root: pathlib.Path) -> None:
     _background(root)
     _terminal(root)
     _child_budget(root)
+    _cancel_tree(root)
+    _child_parks(root)
     _team(root)
     _malformed_todos(root)
 
@@ -175,6 +177,54 @@ def _child_budget(root: pathlib.Path) -> None:
             FAM,
             "A child that hit its budget ends budget_exhausted; its call gets an error result "
             "and the parent continues its turn to end_turn.",
+        ),
+        log,
+        {"children": children(log)},
+    )
+
+
+def _cancel_tree(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, SPAWN)
+    user(log, "Have the worker do it.")
+    _spawn(log, "call_1", KIDS[0])
+    cr = log.add("cancel_requested", {"scope": "thread"}, actor="user", principal=ALICE)
+    _finish(log, KIDS[0], "cancelled", b"cancelled")
+    result(log, "call_1", "cancelled: cancelled", is_error=True)
+    log.add("cancelled", {"request_event_id": cr["event_id"]})
+    log.add("turn_completed", {"reason": "cancelled"})
+    reduce_case(
+        root,
+        (
+            "cancel-accepted-then-stopped",
+            "cancellation_resume",
+            "A parent cancelled while its foreground child runs: cancel_requested is the "
+            "barrier; the child (sent cancel_requested{scope: tree}) ends cancelled and its one "
+            "agent_finished and call result are recorded before the parent's cancelled and "
+            "turn_completed{cancelled}. The thread reduces cancelled.",
+        ),
+        log,
+        {"children": children(log)},
+    )
+
+
+def _child_parks(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, SPAWN)
+    user(log, "Have the worker send it.")
+    _spawn(log, "call_1", KIDS[0])
+    log.add(
+        "parked",
+        {"address": {"kind": "child", "id": KIDS[0]}, "reason": "awaiting_approval"},
+    )
+    reduce_case(
+        root,
+        (
+            "child-parks-parent",
+            FAM,
+            "A foreground child that parks (here on an approval) records no agent_finished: "
+            "the parent parks on {kind: child, id: <child_thread_id>} with the child's reason, "
+            "its spawn call stays pending and the child is still running.",
         ),
         log,
         {"children": children(log)},

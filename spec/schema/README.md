@@ -165,6 +165,21 @@ A team tool call changes the lead's log through the lead's writer. `<member>` is
 
 A member receives each `team_message` addressed to it or to `*` (and not from itself) once, before its next turn request, as `injected{source: agent, trust: untrusted_reference, origin: {id: message_id}, text: "<from>: <text>"}`; one already injected with that `origin.id` is never injected again.
 
+## Subagent cancellation and parking
+
+- **Tree-wide cancel.** `Thread.cancel` appends the thread's own `cancel_requested` (the barrier), then, for every child its log has an `agent_spawned` for and no `agent_finished`, appends `cancel_requested{scope: tree, reason: "ancestor cancelled"}` (actor `host`, principal the canceller) to that child's thread, recursively through the child's children. A child whose thread doesn't exist yet gets nothing: it is never started.
+- **Nothing new after a barrier.** A run that finds `cancel_requested` in its open turn dispatches nothing new: calls that never began close `not_executed` (rule 8), and an in-doubt effect settles through recovery or parks (rule 11). A pending `spawn_agent` call whose child hasn't finished is not closed `not_executed`: the parent runs the child to its end (a child with no thread is recorded `cancelled` without being created; a child without a barrier in its open turn gets `cancel_requested{scope: tree}` first), records the child's one `agent_finished` and the call's result, and only then its own `cancelled` and `turn_completed{cancelled}` (`cancel-accepted-then-stopped`). A background child is cancelled the same way; its result arrives as `tool_result_late`.
+- **A child that parks parks its parent.** A child run that ends parked records no `agent_finished`. The parent appends `parked{address: {kind: child, id: <child_thread_id>}, reason: <the child's last park reason>}` once, the spawn call stays pending, and the parent's run ends `parked`, never `failed` (`child-parks-parent`). Each time the parent runs again it first runs every child it is parked on; for one that no longer ends parked it appends `resumed{address, cause_event_id: <that child's agent_spawned event_id>}` and continues: the call's re-dispatch runs the child again (which appends nothing new) and records its `agent_finished`. A host resumes the root thread after any control on a descendant. Under a cancel, a parked child parks the parent the same way, so `cancelled` never precedes a descendant's unsettled effect.
+
+## Channel replies
+
+A channel thread's outbound ops are derived from its log, never from how its run started (a channel item, the host API, a control, a restart).
+
+- **Sources:** the last turn response (`model_response` or `model_response_recovered`) of each turn that ended `turn_completed{end_turn}`, and each `approval_requested` whose challenge is open (not answered, not expired).
+- **Calls:** op `i` of `adapter.render(source)` is the host call `channel_send` with call_id `send_<source seq>_<i>`. Its input is the op plus `address`, `installation_id` and `last_inbound_at`: the `time` of the last `channel_delivery` before the source.
+- **When:** after every run of the thread, and for every channel thread once the host is ready (from its first tick, never inside `ready()`), the host issues each derived call the log lacks. A call begun and unsettled is reconciled through the effect path, never re-sent blindly; a call with a result, or whose effect is parked, is left alone. So a crash between `turn_completed` and the reply's `tool_call` loses no reply and never sends one twice.
+- **Approvals:** a card carries only its challenge id. A `decision` item answers that challenge only from a principal the agent's approver policy names (none configured: refused), in the conversation's own thread, and only once (`approval_duplicate` after). Free text is a message, never a decision.
+
 ## Semantic rules
 
 Checked by readers and writers (`validate_next`) on top of the schema, except rules 14 and 15: they need artifacts, so import checks them in step 3, request verification (spec/conformance/README.md, `render`), and the adapter guard re-checks them before dispatch. This is the complete list of non-exportable rules: a hand-written check that isn't in this table is a CI error (AGENTS.md). Every rule has at least one conformance case.

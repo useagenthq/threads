@@ -1,0 +1,9 @@
+{
+  "name": "cancel-accepted-then-stopped",
+  "family": "cancellation_resume",
+  "kind": "reduce",
+  "description": "A parent cancelled while its foreground child runs: cancel_requested is the barrier; the child (sent cancel_requested{scope: tree}) ends cancelled and its one agent_finished and call result are recorded before the parent's cancelled and turn_completed{cancelled}. The thread reduces cancelled.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

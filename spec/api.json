@@ -810,7 +810,15 @@
           "kind": "option",
           "type": {"map": {"$ref": "#/types/ChannelAdapter"}},
           "required": false,
-          "default": {}
+          "default": {},
+          "doc": "A channel thread's replies are derived from its log, whatever ran it (spec/schema/README.md, Channel replies): each end_turn reply and each open approval card is a host-issued channel_send, issued after every run of the thread and, for a crash in between, again after ready(). A send with a result or a parked effect is never issued twice."
+        },
+        {
+          "name": "ceiling",
+          "kind": "option",
+          "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}},
+          "required": false,
+          "doc": "The host ceiling every run this host starts or resumes is also decided under (Agent.run ceiling). Absent: no ceiling."
         },
         {
           "name": "schedules",
@@ -900,6 +908,13 @@
               "doc": "The verified sender of this input."
             },
             {
+              "name": "ceiling",
+              "kind": "option",
+              "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}},
+              "required": false,
+              "doc": "The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Absent: no ceiling."
+            },
+            {
               "name": "signal",
               "kind": "option",
               "type": {"native": {"ts": "AbortSignal"}},
@@ -959,6 +974,13 @@
               "required": false,
               "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
               "doc": "The verified sender of this input."
+            },
+            {
+              "name": "ceiling",
+              "kind": "option",
+              "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}},
+              "required": false,
+              "doc": "The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Absent: no ceiling."
             },
             {
               "name": "signal",
@@ -1152,7 +1174,14 @@
               },
               "required": true
             },
-            {"name": "mode", "kind": "option", "type": {"enum": ["live", "stub"]}, "required": false, "default": "live"},
+            {
+              "name": "mode",
+              "kind": "option",
+              "type": {"enum": ["live", "stub"]},
+              "required": false,
+              "default": "live",
+              "doc": "stub runs the branch under . A stub-mode run whose settings epoch model is a live model (not a test kit) declaring hosted tools is refused before recovery or any dispatch with ConfigError hosted_tool_unsupported, because hosted calls can't be stubbed."
+            },
             {
               "name": "knowledge",
               "kind": "option",
@@ -1258,7 +1287,7 @@
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
-            "errors": ["forbidden", "not_found", "approval_mismatch", "approval_expired", "approval_duplicate"]
+            "errors": ["forbidden", "not_found", "approval_mismatch", "approval_expired", "approval_duplicate", "branch_busy"]
           }
         },
         "deny": {
@@ -1282,7 +1311,7 @@
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
-            "errors": ["forbidden", "not_found", "approval_mismatch", "approval_expired", "approval_duplicate"]
+            "errors": ["forbidden", "not_found", "approval_mismatch", "approval_expired", "approval_duplicate", "branch_busy"]
           }
         },
         "answer": {
@@ -1312,7 +1341,7 @@
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
-            "errors": ["forbidden", "no_open_question"]
+            "errors": ["forbidden", "no_open_question", "branch_busy"]
           }
         },
         "resolveParked": {
@@ -1335,12 +1364,12 @@
               "required": true
             }
           ],
-          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "not_parked"]}
+          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "not_parked", "branch_busy"]}
         },
         "cancel": {
           "ts": "cancel",
           "py": "cancel",
-          "doc": "Durable cancel_requested; unsettled effects park.",
+          "doc": "Durable cancel_requested; unsettled effects park. Tree-wide: every descendant subagent without agent_finished gets cancel_requested{scope: tree} too, recursively, and the parent records each child's agent_finished{cancelled} before its own cancelled (spec/schema/README.md, Subagent cancellation and parking). A control appends through the run's own writer when this process runs the branch; otherwise it takes the branch lease for the one append. A lease another process holds is branch_busy and nothing is appended.",
           "async": true,
           "params": [
             {
@@ -1351,7 +1380,7 @@
               "doc": "Who takes this action; recorded as the event's actor and authorized by the host."
             }
           ],
-          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden"]}
+          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "branch_busy"]}
         },
         "compact": {
           "ts": "compact",
@@ -1396,7 +1425,7 @@
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
-            "errors": ["forbidden", "invalid_transition"]
+            "errors": ["forbidden", "invalid_transition", "branch_busy"]
           }
         },
         "setOutputStyle": {
@@ -1438,7 +1467,7 @@
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
-            "errors": ["forbidden", "invalid_transition"]
+            "errors": ["forbidden", "invalid_transition", "branch_busy"]
           }
         },
         "usage": {

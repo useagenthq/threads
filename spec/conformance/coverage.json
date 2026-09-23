@@ -858,7 +858,7 @@
         {
           "kind": "case",
           "ref": "cancel-accepted-then-stopped",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -885,6 +885,11 @@
         {
           "kind": "case",
           "ref": "agent-finished-twice-rejected",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "child-parks-parent",
           "status": "implemented"
         }
       ]

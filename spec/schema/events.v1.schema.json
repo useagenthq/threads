@@ -943,7 +943,7 @@
     },
     "ParkAddress": {
       "additionalProperties": false,
-      "description": "What a parked branch waits on; resumed must name the same address. For kind effect, id is the derived effect key.",
+      "description": "What a parked branch waits on; resumed must name the same address. For kind effect, id is the derived effect key; for kind child, the parked subagent's child_thread_id.",
       "properties": {
         "id": {
           "$ref": "#/$defs/NonEmpty"
@@ -953,7 +953,8 @@
             "approval",
             "effect",
             "input",
-            "resource"
+            "resource",
+            "child"
           ]
         }
       },

@@ -54,27 +54,27 @@
       },
       "DecideApprovalError": {
         "description": "Typed failure of decideApproval.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "approval_mismatch", "approval_expired", "approval_duplicate"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "approval_mismatch", "approval_expired", "approval_duplicate", "branch_busy"] } } } } }] } } }
       },
       "AnswerQuestionError": {
         "description": "Typed failure of answerQuestion.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "no_open_question"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "no_open_question", "branch_busy"] } } } } }] } } }
       },
       "ResolveParkedError": {
         "description": "Typed failure of resolveParked.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "not_parked"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "not_parked", "branch_busy"] } } } } }] } } }
       },
       "CancelError": {
         "description": "Typed failure of cancel.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "branch_busy"] } } } } }] } } }
       },
       "SetModelError": {
         "description": "Typed failure of setModel.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition", "branch_busy"] } } } } }] } } }
       },
       "SetModeError": {
         "description": "Typed failure of setMode.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition", "branch_busy"] } } } } }] } } }
       },
       "Appended": {
         "description": "Recorded.",
@@ -180,7 +180,7 @@
       "post": {
         "operationId": "decideApproval",
         "x-api": ["Thread.approve", "Thread.deny"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "approval_mismatch", "approval_expired", "approval_duplicate"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "approval_mismatch", "approval_expired", "approval_duplicate", "branch_busy"],
         "parameters": [
           { "$ref": "#/components/parameters/thread_id" },
           { "name": "challenge_id", "in": "path", "required": true, "schema": { "$ref": "../events.v1.schema.json#/$defs/Uuid" } }
@@ -193,7 +193,7 @@
       "post": {
         "operationId": "answerQuestion",
         "x-api": ["Thread.answer"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "no_open_question"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "no_open_question", "branch_busy"],
         "parameters": [
           { "$ref": "#/components/parameters/thread_id" },
           { "$ref": "#/components/parameters/branch_id" },
@@ -207,7 +207,7 @@
       "post": {
         "operationId": "resolveParked",
         "x-api": ["Thread.resolveParked"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "not_parked"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "not_parked", "branch_busy"],
         "parameters": [
           { "$ref": "#/components/parameters/thread_id" },
           { "$ref": "#/components/parameters/branch_id" },
@@ -221,7 +221,7 @@
       "post": {
         "operationId": "cancel",
         "x-api": ["Thread.cancel"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "branch_busy"],
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/CancelError" } }
       }
@@ -230,7 +230,7 @@
       "post": {
         "operationId": "setModel",
         "x-api": ["Thread.setModel"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition", "branch_busy"],
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/SettingsChange" } } } },
         "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/SetModelError" } }
@@ -240,7 +240,7 @@
       "post": {
         "operationId": "setMode",
         "x-api": ["Thread.setMode"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "invalid_transition", "branch_busy"],
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/ModeChange" } } } },
         "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/SetModeError" } }
