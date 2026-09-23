@@ -23,6 +23,13 @@ import { requireCapabilities } from "../tools/gated";
 import { checkEnforceable } from "./enforceable";
 import { ConfigError } from "./errors";
 import { type Extension, hookNames } from "./extension";
+import {
+  checkSkills,
+  type Skill,
+  skillListing,
+  skillPins,
+  skillSpecs,
+} from "./skills";
 import { jsonSchema, type Tool } from "./tool";
 
 // The resolved, secret-free config an agent pins in thread_started: line 0's
@@ -54,6 +61,8 @@ export type PinOptions = {
   readonly memory: MemoryProvider | undefined;
   readonly memoryWrite: MemoryWrite;
   readonly knowledge: KnowledgeProvider | undefined;
+  /** From the host store, listed in line 0 and pinned by config_hash. */
+  readonly skills: readonly Skill[];
 };
 
 type ThreadStarted = Extract<EventDraft, { type: "thread_started" }>["data"];
@@ -85,6 +94,7 @@ export function pin(
   const o = within === undefined ? options : { ...options, sandbox: undefined };
   // A child runs without a sandbox and within its parent's tools, which were checked already.
   if (within === undefined) requireCapabilities(o.capabilities, o.sandbox);
+  checkSkills(o.skills);
   // Built-ins (the framework and provider tools among them) sorted by name, then app tools,
   // then extension and MCP tools sorted by namespaced name.
   const all = [
@@ -93,6 +103,7 @@ export function pin(
       ...agentTools(o, within !== undefined).map(frameworkSpec),
       ...(o.memory === undefined ? [] : memorySpecs(o.memory)),
       ...(o.knowledge === undefined ? [] : knowledgeSpecs()),
+      ...skillSpecs(o.skills),
     ].toSorted(byName),
     ...o.tools.map((t) => t.spec()),
     ...extensionTools(o.extensions, o.mcp).map((t) => t.spec()),
@@ -153,6 +164,7 @@ export function pin(
 function hashedOnly(o: PinOptions): Record<string, unknown> {
   return {
     ...(o.memory === undefined ? {} : { memory_write: o.memoryWrite }),
+    ...(o.skills.length === 0 ? {} : { skills: skillPins(o.skills) }),
     ...(o.extensions.length === 0
       ? {}
       : {
@@ -178,7 +190,7 @@ function hashedOnly(o: PinOptions): Record<string, unknown> {
 
 /**
  * the base instructions, then each extension's, in declaration order, then the
- * agents spawn_agent and handoff may name.
+ * skill listing, then the agents spawn_agent and handoff may name.
  */
 function instructions(o: PinOptions): string {
   const listed = (label: string, names: readonly string[]): string[] =>
@@ -186,6 +198,7 @@ function instructions(o: PinOptions): string {
   return [
     o.instructions,
     ...o.extensions.flatMap((e) => e.instructions ?? []),
+    ...skillListing(o.skills),
     ...listed("Subagents you can start with spawn_agent", o.subagents),
     ...listed("Agents you can hand the conversation to", o.handoffs),
   ]

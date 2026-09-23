@@ -10,8 +10,8 @@ import {
   workspacePath,
 } from "./match";
 
-// the evaluation order. Step 1 (the self-config guard) and thread rules
-// (item 7) come later, with the host config store and permission_rule_added.
+// the evaluation order. Thread rules (item 7) come later, with
+// permission_rule_added.
 
 type Policy = z.infer<typeof PermissionsPolicy>;
 type Mode = z.infer<typeof PermissionMode>;
@@ -78,6 +78,8 @@ export function decide(
   workspace: string,
   call: PermissionCall,
 ): Decision {
+  if (writesSelfConfig(call))
+    return { decision: "deny", source: "self_config_guard" };
   const shell = shellOf(call);
   const denied = anyMatch(permissions.deny, call, workspace, shell);
   if (denied !== undefined)
@@ -91,6 +93,32 @@ export function decide(
   return call.mode === "dont_ask" && later.decision === "ask"
     ? { ...later, decision: "deny" }
     : later;
+}
+
+// Step 1: config, skills, hooks and schedules load only from the host store,
+// which no sandbox path reaches; .threads is where an agent would look for them. A call that
+// isn't read_only and names such a path in any argument word is denied: file tools, bash, MCP,
+// git and a subagent's task alike. A shell can't be told read from write, so bash is denied too.
+// ponytail: a word scan, not a shell evaluator: an obfuscated name (".thr''eads") passes, and
+// the host store stays unchanged regardless.
+const SELF_CONFIG = /(^|\/)\.threads(\/|$)/;
+const WORD_BREAK = /[\s'"`=<>|;&()]+/;
+
+function writesSelfConfig(call: PermissionCall): boolean {
+  return (
+    call.category !== "read_only" &&
+    strings(call.input).some((s) =>
+      s.split(WORD_BREAK).some((w) => SELF_CONFIG.test(w)),
+    )
+  );
+}
+
+function strings(value: unknown): readonly string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(strings);
+  if (typeof value === "object" && value !== null)
+    return Object.values(value).flatMap(strings);
+  return [];
 }
 
 function laterSteps(

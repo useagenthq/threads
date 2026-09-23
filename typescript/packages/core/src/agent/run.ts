@@ -36,6 +36,7 @@ import {
   type ThreadRef,
 } from "./result";
 import type { Setup } from "./setup";
+import { skillTools } from "./skills";
 import { snapshotTurn } from "./snapshot";
 import { openStore, type Store, sqlite } from "./sqlite";
 import type { Tool } from "./tool";
@@ -211,7 +212,11 @@ export async function execute<Deps, Output>(
           observers.poke();
         },
       },
-      builtin: [...builtin.tools, ...providers.tools],
+      builtin: [
+        ...builtin.tools,
+        ...providers.tools,
+        ...skillTools(def.skills),
+      ],
       events: () => knownEvents(writer.chain),
       ceilings: ceilingsOf(plan),
       ...(plan.chain === undefined ? {} : { chain: plan.chain }),

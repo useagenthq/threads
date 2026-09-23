@@ -18,6 +18,7 @@ export type { RunResult, ThreadRef } from "./result";
 export type { RunOptions } from "./run";
 export { type Secret, secret } from "./secret";
 export type { McpServer } from "./setup";
+export type { Skill } from "./skills";
 export { type Store, sqlite } from "./sqlite";
 export {
   type RunContext,

@@ -54,10 +54,8 @@ describe("policy conformance", () => {
   test("the corpus has policy cases", () => {
     expect(policyCases.length).toBeGreaterThanOrEqual(4);
   });
-  // Removed by the change that implements it; skipped by name, never silently.
-  const pending = new Set(["skills-write-denied-all-paths"]);
   for (const name of policyCases) {
-    test.skipIf(pending.has(name))(name, () => {
+    test(name, () => {
       const { input } = PolicyCase.parse(read(name, "case.json"));
       const { decisions } = Expected.parse(read(name, "expected.json"));
       const got = input.calls.map((call) =>

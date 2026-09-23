@@ -23,6 +23,7 @@ import { register } from "./registry";
 import type { RunResult } from "./result";
 import { type Resolved, type RunOptions, run } from "./run";
 import { isMcp, type McpServer, once } from "./setup";
+import type { Skill } from "./skills";
 import type { Tool } from "./tool";
 
 // agent() (spec/api.json): pure. It does no I/O, reads no env and opens no sockets; its setup
@@ -69,6 +70,8 @@ export type AgentOptions<Deps, Output> = {
   readonly memoryWrite?: MemoryWrite;
   /** Retrieval over host-admitted sources: localKnowledge({paths}) or an adapter. */
   readonly knowledge?: KnowledgeProvider;
+  /** Skills from the host store: listed in line 0, loaded with load_skill. */
+  readonly skills?: readonly Skill[];
   /**
    * Who may answer this agent's approval challenges through a host. Absent:
    * the host API's authenticated principals of the thread's tenant, and nobody over a channel.
@@ -155,6 +158,7 @@ function build<Deps, Output>(
     memory: options.memory,
     memoryWrite: options.memoryWrite ?? "ask",
     knowledge: options.knowledge,
+    skills: options.skills ?? [],
     setup: once(options.extensions ?? [], servers, [
       options.memory,
       options.knowledge,
