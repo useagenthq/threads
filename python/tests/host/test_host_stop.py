@@ -165,7 +165,7 @@ def test_stop_cancels_a_follow_on_resume_so_a_restart_runs_nothing_old() -> None
             return await bound(store, thread)
 
         runner.bound = stalled  # pyright: ignore[reportAttributeAccessIssue] - the barrier
-        follow_ons = runner._pending  # pyright: ignore[reportPrivateUsage] - what stop owns
+        follow_ons = runner._pending.values()  # pyright: ignore[reportPrivateUsage] - what stop owns
         hold.set()
         await reached.wait()
         await runner.stop()
@@ -197,7 +197,7 @@ def test_recovered_waits_for_the_follow_on_its_own_recovery_owns() -> None:
         assert channel.hold is not None
         channel.hold.set()
         await asyncio.wait_for(recovered(served), STOP_S)
-        follow_ons = runner._pending  # pyright: ignore[reportPrivateUsage] - what recovery owns
+        follow_ons = runner._pending.values()  # pyright: ignore[reportPrivateUsage] - what recovery owns
         assert follow_ons
         assert all(t.done() for t in follow_ons)
         assert not runner.running(branch)
@@ -237,11 +237,11 @@ def test_a_send_past_the_fence_keeps_its_lease_until_it_settles() -> None:
         assert not done
         hold.set()
         await asyncio.wait_for(stopping, STOP_S)
-        # It landed before the lease was released. The cancelled run records no outcome, so the
-        # effect stays begun, and the next start's lookup finds the send instead of repeating it.
+        # It landed before the lease was released, and its known outcome is recorded before the
+        # run unwinds: settled, nothing left in doubt for the next start.
         assert [op["text"] for op in channel.sent] == ["hi"]
         types = [e.type for e in await _events(store)]
-        assert "effect_begin" in types
+        assert "effect_commit" in types
         assert "effect_resolved" not in types
 
     asyncio.run(main())

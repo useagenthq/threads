@@ -6,6 +6,8 @@ gone (`sandbox_local`), the provider dedups a re-send inside its window (`idempo
 final lookup answers (`reconcilable`). Elapsed time and lease expiry prove nothing.
 """
 
+import asyncio
+from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Final, Literal
 
 from threads.log import ToolSpec
@@ -44,13 +46,8 @@ async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
     if stale is not None:
         return stale
     match await rt.tools.dispatch(inv):
-        case Output(text=text, is_error=is_error, full_output=full, content=parts):
-            ref = await text_ref(rt, text)
-            commit = draft("effect_commit", {"call_id": inv.call_id, "result_ref": ref})
-            how = As("executed", is_error)
-            result = await result_draft(rt, inv.call_id, text, how, full, content=parts)
-            done = await rt.append(commit, result)
-            return lost(done.error) if isinstance(done, Err) else None
+        case Output() as output:
+            return await _settled(_commit(rt, inv, output))
         case Uncertain(reason=reason):
             unknown = await rt.append(
                 draft("effect_unknown", {"call_id": inv.call_id, "reason": reason})
@@ -62,6 +59,29 @@ async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
             return await settle(rt, fresh, spec, reason, "host")
         case NotSent(unmatched=unmatched):
             return await _not_sent(rt, inv, unmatched=unmatched)
+
+
+async def _commit(rt: Runtime, inv: Invocation, output: Output) -> Halt | None:
+    ref = await text_ref(rt, output.text)
+    commit = draft("effect_commit", {"call_id": inv.call_id, "result_ref": ref})
+    how = As("executed", output.is_error)
+    result = await result_draft(
+        rt, inv.call_id, output.text, how, output.full_output, content=output.content
+    )
+    done = await rt.append(commit, result)
+    return lost(done.error) if isinstance(done, Err) else None
+
+
+async def _settled(record: Coroutine[object, object, Halt | None]) -> Halt | None:
+    """Records a known outcome even if the run is cancelled meanwhile (a stopping host): the
+    effect happened, so it is settled under this lease before the run unwinds, never left in
+    doubt for a lookup or a human."""
+    recording = asyncio.ensure_future(record)
+    try:
+        return await asyncio.shield(recording)
+    except asyncio.CancelledError:
+        await recording
+        raise
 
 
 async def _not_sent(rt: Runtime, inv: Invocation, *, unmatched: bool) -> Halt | None:

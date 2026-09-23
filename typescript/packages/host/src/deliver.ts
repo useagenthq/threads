@@ -23,7 +23,10 @@ type Send = {
   readonly callId: string;
   readonly op: Op;
   readonly key: string;
-  /** The host stopping: no send begins after it, and none is waited on past it. */
+  /**
+   * The host stopping: no send begins after it, and one that never reached the fence is not
+   * waited on. One that passed the fence is waited on, under its lease, until it settles.
+   */
   readonly stopping: AbortSignal;
 };
 

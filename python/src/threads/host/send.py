@@ -130,8 +130,10 @@ class ChannelSend:
 async def _sent[T](fence: Fence, perform: Coroutine[object, object, T]) -> T:
     """`perform` under `fence`, riding out the run's cancellation (a stopping host) once one of
     its requests passed the fence: it may still land, so the run keeps its lease until it
-    settles; released, a lookup elsewhere could find nothing and send again. One cancelled
-    before that is closed at the fence and stays begun, for the next run to reconcile."""
+    settles; released, a lookup elsewhere could find nothing and send again. Its outcome is
+    then returned, for the loop to record, with the cancellation requested again so the run
+    stops right after. One cancelled before the fence is closed there and stays begun, for the
+    next run to reconcile."""
     closed = False
     passed = False
 
@@ -158,7 +160,10 @@ async def _sent[T](fence: Fence, perform: Coroutine[object, object, T]) -> T:
         while not sending.done():
             with contextlib.suppress(asyncio.CancelledError):
                 await asyncio.shield(sending)
-        raise
+        stopping = asyncio.current_task()
+        if stopping is not None:
+            stopping.cancel()
+        return sending.result()
 
 
 @dataclass(frozen=True, slots=True)

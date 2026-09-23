@@ -258,7 +258,7 @@ def test_settled_waits_for_a_follow_on_resume_a_recovered_run_scheduled() -> Non
         await runner.resume(tenant, thread_id, root.value)
         hold.set()
         await runner.settled()
-        follow_ons = runner._pending  # pyright: ignore[reportPrivateUsage] - what settled covers
+        follow_ons = runner._pending.values()  # pyright: ignore[reportPrivateUsage] - what settled covers
         assert follow_ons
         assert all(t.done() for t in follow_ons)
         assert not runner.running(root.value)

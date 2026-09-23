@@ -157,7 +157,7 @@ A host is also an ordinary request handler, so you can mount it next to your exi
 |---|---|
 | `host({...})` | Builds the host. Starts nothing. |
 | `ready()` | Checks every channel and schedule points at a host agent and every secret resolves. Starts the scheduler and resumes work a restart left behind. Sends nothing by itself. |
-| `stop()` | Cancels runs, starts nothing new, then waits for work in flight and releases the threads this process owns. A reply already on its way is finished first, so it is never sent twice. `stop()` has no timeout: put deadlines on your tools and providers. |
+| `stop()` | Cancels runs, starts nothing new, then waits for work in flight and releases the threads this process owns. A reply already on its way keeps its claim on the thread until it finishes, so no other process sends it again while it may still arrive. A reply whose outcome stays unknown is checked with the channel later, or held for a person, never resent blindly. `stop()` has no timeout: put deadlines on your tools and providers. |
 
 ## How channel conversations map to threads
 
