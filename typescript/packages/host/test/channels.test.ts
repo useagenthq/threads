@@ -138,23 +138,6 @@ describe("intake", () => {
   });
 });
 
-describe("stop()", () => {
-  test("drains the in-flight item to its reply, then releases every lease", async () => {
-    const { h, slack } = setup([say("Hello back")]);
-    await h.host.ready();
-    await post(h, hook("E1", [message("hi", "E1#0")]));
-    await h.host.stop();
-    expect(slack.performed).toHaveLength(1);
-    expect((await inbox(h))[0]?.consumed_seq).toBeGreaterThan(0);
-    const { db } = await storeConnection(h.store);
-    const leases = z
-      .array(z.strictObject({ expires_at: z.int() }))
-      .parse(db.all("SELECT expires_at FROM leases", []));
-    expect(leases.length).toBeGreaterThan(0);
-    expect(leases.every((l) => l.expires_at <= Date.now())).toBe(true);
-  });
-});
-
 describe("a message runs once and its reply is an effect", () => {
   test("channel_delivery, user_input, then channel_send committed with the platform ref", async () => {
     const { h, slack } = setup([say("Hello back")]);

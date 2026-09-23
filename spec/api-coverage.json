@@ -102,7 +102,8 @@
   },
   "Host.stop": {
     "ts": [
-      "packages/host/test/channels.test.ts > stop() > drains the in-flight item to its reply, then releases every lease"
+      "packages/host/test/send-stop.test.ts > stop() with a send in flight > a send past the fence keeps its lease until it settles",
+      "packages/host/test/send-stop.test.ts > stop() with a send in flight > a send not yet at the fence is refused there once the host stops"
     ],
     "py": [
       "tests/host/test_channel_recovery.py::test_the_same_host_started_again_waits_for_its_new_recovery_pass"
