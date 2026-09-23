@@ -112,9 +112,10 @@ def field_state(owner: object, name: str) -> State:
 
 def _attribute_state(cls: type, name: str) -> State:
     """An instance annotation (not a ClassVar) is required unless the class gives it a default;
-    a property is required; a plain class attribute is only a default, so optional."""
+    a property is required; a plain class attribute is only a default, so optional. An
+    annotation that can't be resolved fails closed: the member counts as undeclared."""
     annotated = [a[name] for a in map(_own_annotations, inspect.getmro(cls)) if name in a]
-    if annotated and _is_class_var(annotated[0]):
+    if annotated and (annotated[0] is UNRESOLVED or _is_class_var(annotated[0])):
         return "absent"
     if isinstance(inspect.getattr_static(cls, name, None), property):
         return "required"
@@ -123,18 +124,19 @@ def _attribute_state(cls: type, name: str) -> State:
     return "optional" if hasattr(cls, name) else "absent"
 
 
+UNRESOLVED = object()
+
+
 def _own_annotations(cls: type) -> Mapping[str, object]:
-    """One class's own annotations (Python 3.14 evaluates them lazily). One that can't be
-    evaluated counts as undeclared, which fails the gate rather than passing it."""
+    """One class's own annotations, resolved (postponed string annotations and aliases such as
+    `ClassVar as CV` included). If they can't be resolved, every name maps to UNRESOLVED."""
     try:
-        return inspect.get_annotations(cls)
-    except NameError:
-        return {}
+        return inspect.get_annotations(cls, eval_str=True)
+    except Exception:  # any failure to evaluate an annotation fails closed
+        return dict.fromkeys(inspect.get_annotations(cls), UNRESOLVED)
 
 
 def _is_class_var(annotation: object) -> bool:
-    if isinstance(annotation, str):
-        return annotation.partition("[")[0] in ("ClassVar", "typing.ClassVar")
     return annotation is typing.ClassVar or typing.get_origin(annotation) is typing.ClassVar
 
 

@@ -17,6 +17,7 @@ from surface_kit import (
     installed,
 )
 
+CV = ClassVar  # an alias the postponed-annotation probes resolve through
 ENTRIES = {"core": ROOT, "host": f"{ROOT}.host"}
 
 
@@ -292,3 +293,35 @@ def test_a_capability_exported_elsewhere_still_needs_the_method() -> None:
         host=host_members() | {"LooksUp": LooksUpNothing},
     )
     assert found[0].startswith("surface gate: Model.lookup (py) is missing")
+
+
+def test_a_postponed_aliased_class_variable_is_not_a_field() -> None:
+    # A string annotation naming ClassVar through an alias, as `from __future__ import
+    # annotations` with `from typing import ClassVar as CV` writes it.
+    class Aliased:
+        __annotations__ = {"name": "CV[str]", "note": "str"}
+        note = ""
+
+    Aliased.__module__ = __name__
+    found = problems(core=core_members() | {"Skill": Aliased})
+    assert found[0].startswith("surface gate: Skill.name (py) is missing")
+
+
+def test_an_annotation_that_cannot_be_resolved_fails_closed() -> None:
+    class Unresolved:
+        __annotations__ = {"name": "NoSuchType", "note": "str"}
+        note = ""
+
+    found = problems(core=core_members() | {"Skill": Unresolved})
+    assert found[0].startswith("surface gate: Skill.name (py) is missing")
+
+
+def test_a_postponed_aliased_class_variable_protocol_property_fails() -> None:
+    class InfoOnClass(Protocol):
+        __annotations__ = {"info": "CV[str]"}
+
+        def send(self) -> None: ...
+
+    InfoOnClass.__module__ = __name__
+    found = problems(core=core_members() | {"Model": InfoOnClass})
+    assert found[0].startswith("surface gate: Model.info (py) is missing")
