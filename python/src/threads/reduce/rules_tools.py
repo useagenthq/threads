@@ -23,13 +23,13 @@ from threads.log import (
     ParseError,
     PermissionDecisionEvent,
     ResumedEvent,
-    TextPart,
     ToolCallEvent,
     ToolResultEvent,
     ToolResultLateEvent,
 )
 from threads.reduce.fold import EffectStatus, Fold, Result, reject
 from threads.reduce.handlers import Handler, on
+from threads.reduce.redaction import span_error, text_part
 
 type EffectEvent = EffectBeginEvent | EffectCommitEvent | EffectUnknownEvent | EffectResolvedEvent
 
@@ -139,33 +139,10 @@ def _context_edited(fold: Fold, event: ContextEditedEvent) -> ParseError | None:
 
 
 def _redaction_error(edit: Edit, result: Result) -> str | None:
-    text = _text_part(result, edit.part)
+    text = text_part(result, edit.part)
     if text is None:
         return "a redaction's part must be a text part of the result"
-    raw = text.encode("utf-8")
-    for span in () if edit.spans is MISSING else edit.spans:
-        if not (0 <= span.start <= span.end <= len(raw)):
-            return "a redaction span lies outside its part"
-        if not (_on_boundary(raw, span.start) and _on_boundary(raw, span.end)):
-            return "a redaction span splits a character"
-    return None
-
-
-def _text_part(result: Result, part: int | MISSING) -> str | None:
-    if part is MISSING:
-        return None
-    if result.content is MISSING:
-        # Without content the model sees one text part: the preview (Render v1).
-        return result.preview if part == 0 else None
-    if part >= len(result.content):
-        return None
-    chosen = result.content[part]
-    return chosen.text if isinstance(chosen, TextPart) else None
-
-
-def _on_boundary(raw: bytes, offset: int) -> bool:
-    # A UTF-8 continuation byte is 0b10xxxxxx; any other byte starts a character.
-    return offset == len(raw) or raw[offset] & 0xC0 != 0x80  # noqa: PLR2004
+    return span_error(text, () if edit.spans is MISSING else edit.spans)
 
 
 def _cancel_requested(fold: Fold, event: CancelRequestedEvent) -> None:

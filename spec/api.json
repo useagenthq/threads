@@ -1828,14 +1828,14 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the call is refused and never runs. It closes as a denied tool_result the model sees, and permission_denied observers are told."},
-                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and the permission_decision. TypeScript shows it to the model in the denied result (denied: reason); Python shows a fixed text."}
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. TypeScript shows it to the model in the denied tool_result (denied: reason); Python shows the fixed text denied by policy."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
                       "decision": {"type": {"literal": "ask"}, "required": true, "doc": "ask: the call needs approval. permission_request hooks may answer it; otherwise it opens an approval challenge and parks until an approver decides. In dont_ask mode an ask is a deny."},
-                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "A permission rule to show with the ask, such as bash(git push *). TypeScript records it as the decision's reason; Python ignores it. Omitted: the ask carries no rule."}
+                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "A permission rule to show with the ask, such as bash(git push *). It is recorded as the permission_decision's reason. Omitted: the ask carries no reason."}
                     },
                     "casing": "wire"
                   }
@@ -1872,14 +1872,14 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the programmatic approver refuses the call; it closes as a denied tool_result the model sees."},
-                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and the permission_decision. TypeScript shows it to the model in the denied result; Python shows a fixed text."}
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. TypeScript shows it to the model in the denied tool_result (denied: reason); Python shows the fixed text denied by policy."}
                     },
                     "casing": "wire"
                   },
                   {
                     "object": {
                       "decision": {"type": {"literal": "ask"}, "required": true, "doc": "ask: the hook doesn't answer, so the call opens an approval challenge and parks until a person decides."},
-                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "A permission rule to show with the ask. TypeScript records it as the decision's reason; Python ignores it. Omitted: the ask carries no rule."}
+                      "rule": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"}, "required": false, "doc": "Not used: an ask answers nothing, so the earlier decision and its reason stand. Omit it."}
                     },
                     "casing": "wire"
                   }
@@ -1982,7 +1982,7 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "redact"}, "required": true, "doc": "redact: the listed spans are hidden from every later request, recorded as context_edited guardrail. The raw result stays in the log."},
-                      "spans": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}}, "required": true, "doc": "The byte ranges to hide, as UTF-8 offsets into the result's text (start inclusive, end exclusive). At least one. In TypeScript a span outside the text, or not on a character boundary, clears the whole result instead."}
+                      "spans": {"type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Span"}}, "required": true, "doc": "The byte ranges to hide, as UTF-8 offsets into the result's text (start inclusive, end exclusive); give at least one. An empty list, a span outside the text or a span that splits a character counts as a failed hook, so the whole result is cleared instead."}
                     },
                     "casing": "wire"
                   },
@@ -1998,7 +1998,7 @@
             }
           },
           "required": false,
-          "doc": "Guards each executed tool result before later requests render it. Return proceed, redact with byte spans of the result's text to hide, or deny to clear it; the raw result stays in the log either way, and a throw, timeout or out-of-range span clears it. Omit it and results are rendered as recorded."
+          "doc": "Guards each executed tool result before later requests render it. Return proceed, redact with byte spans of the result's text to hide, or deny to clear it; the raw result stays in the log either way, and a throw, a timeout, an empty span list or a span outside the text clears it. Omit it and results are rendered as recorded."
         },
         "after_tool_batch": {
           "type": {
@@ -2222,7 +2222,7 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "continue"}, "required": true, "doc": "continue: the subagent runs again with reason as its next input. After 3 continues, or when the subagent was cancelled, its result stands."},
-                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "The subagent's next input, as any text. It is recorded on the hook_decision."}
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "The subagent's next input, as any text. It is recorded on the hook_decision. When the continue can't take effect, TypeScript records a stop instead (reason cancelled, or continuation limit after 3 continues); Python records this continue and its reason even when the subagent was cancelled, and after 3 continues doesn't call the hook at all."}
                     },
                     "casing": "wire"
                   }
@@ -2268,7 +2268,7 @@
             }
           },
           "required": false,
-          "doc": "Gates a change of model settings (Thread.setModel) before it takes effect. Return allow, or deny with a reason to keep the current model; a throw or timeout denies. Omit it and every switch is allowed."
+          "doc": "Gates an automatic switch to a fallback model, made after repeated overloaded rejections (retry.fallback_after). Return allow, or deny with a reason to stay on the current model; a throw or timeout denies. Thread.setModel is not gated. Omit it and every fallback switch is allowed."
         },
         "after_model_switch": {
           "type": {

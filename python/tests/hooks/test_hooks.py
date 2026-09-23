@@ -81,15 +81,25 @@ class Box:
         return f"echo {args.text} SECRET=hunter2"
 
 
+class Accent(Box):
+    """An echo whose result starts with a two-byte character."""
+
+    async def run(self, args: Echo, _ctx: RunContext[None]) -> str:
+        return "\u00e9" + await super().run(args, _ctx)
+
+
 async def run(
-    hooks: Hooks, responses: Sequence[JsonValue], box: Box | None = None, **more: object
+    hooks: Hooks,
+    responses: Sequence[JsonValue],
+    box: Box | None = None,
+    permissions: Permissions = ALLOW,
 ) -> tuple[RunResult[str], list[Event]]:
     box = box or Box()
     echo = tool(name="echo", description="Echo.", input=Echo, runs="host", execute=box.run)
     bot = agent(
         model=scripted_model({"responses": list(responses)}),
         tools=[echo],
-        permissions=ALLOW,
+        permissions=permissions,
         extensions=[extension(name="ops", hooks=hooks, hook_timeout_ms=50)],
     )
     result = await bot.run("go", store=sqlite(":memory:"), deps=None)
@@ -116,9 +126,56 @@ def test_before_tool_deny_is_folded_into_the_permission_decision_and_nothing_run
     assert box.runs == 0
     at = kinds(events).index("hook_decision")
     assert kinds(events)[at : at + 3] == ["hook_decision", "permission_decision", "tool_result"]
-    permission = events[at + 1]
-    assert json.loads(permission.data.model_dump_json())["source"] == "hook"
+    permission = json.loads(events[at + 1].data.model_dump_json())
+    assert (permission["source"], permission["reason"]) == ("hook", "no echo today")
     assert decisions(events) == [("before_tool", "deny")]
+
+
+def test_before_tool_runs_even_when_the_policy_denies() -> None:
+    async def allow(_call: ToolCallData, _ctx: RunContext[None]) -> ToolGate:
+        return {"decision": "allow"}
+
+    policy = ALLOW.model_copy(update={"allow": [], "deny": ["echo"]})
+    _result, events = asyncio.run(run({"before_tool": allow}, [use(), text("ok")], None, policy))
+    assert decisions(events) == [("before_tool", "allow")]
+    permission = next(e for e in events if e.type == "permission_decision")
+    assert json.loads(permission.data.model_dump_json())["decision"] == "deny"
+
+
+def test_a_permission_request_deny_keeps_its_reason() -> None:
+    async def refuse(_call: ToolCallData, _ctx: RunContext[None]) -> ToolGate:
+        return {"decision": "deny", "reason": "on-call said no"}
+
+    policy = ALLOW.model_copy(update={"allow": [], "ask": ["echo"]})
+    _result, events = asyncio.run(
+        run({"permission_request": refuse}, [use(), text("ok")], None, policy)
+    )
+    permission = next(e for e in events if e.type == "permission_decision")
+    data = json.loads(permission.data.model_dump_json())
+    assert (data["decision"], data["source"], data["reason"]) == ("deny", "hook", "on-call said no")
+
+
+def test_a_permission_request_ask_leaves_the_policy_decision() -> None:
+    async def unsure(_call: ToolCallData, _ctx: RunContext[None]) -> ToolGate:
+        return {"decision": "ask", "rule": "echo(*)"}
+
+    policy = ALLOW.model_copy(update={"allow": [], "ask": ["echo"]})
+    _result, events = asyncio.run(
+        run({"permission_request": unsure}, [use(), text("ok")], None, policy)
+    )
+    permission = next(e for e in events if e.type == "permission_decision")
+    data = json.loads(permission.data.model_dump_json())
+    assert (data["decision"], data["source"], "reason" in data) == ("ask", "policy", False)
+
+
+def test_a_before_tool_ask_records_its_rule_as_the_reason() -> None:
+    async def ask(_call: ToolCallData, _ctx: RunContext[None]) -> ToolGate:
+        return {"decision": "ask", "rule": "echo(*)"}
+
+    _result, events = asyncio.run(run({"before_tool": ask}, [use(), text("ok")]))
+    permission = next(e for e in events if e.type == "permission_decision")
+    data = json.loads(permission.data.model_dump_json())
+    assert (data["decision"], data["reason"]) == ("ask", "echo(*)")
 
 
 @pytest.mark.parametrize("how", ["raise", "timeout", "garbage"])
@@ -198,6 +255,25 @@ def test_before_tool_result_redaction_hides_the_span_from_later_requests() -> No
         edited = next(e for e in events if e.type == "context_edited")
         assert json.loads(edited.data.model_dump_json())["reason"] == "guardrail"
         assert decisions(events) == [("before_tool_result", "redact")]
+
+    asyncio.run(main())
+
+
+@pytest.mark.parametrize(
+    "spans", [[], [Span(start=0, end=10_000)], [Span(start=1, end=2)]], ids=["none", "out", "split"]
+)
+def test_a_bad_redaction_clears_the_result_instead_of_crashing(spans: list[Span]) -> None:
+    async def redact(_c: ToolCallData, _r: ToolResultData, _ctx: RunContext[None]) -> ResultGate:
+        return {"decision": "redact", "spans": spans}
+
+    async def main() -> None:
+        # The echo result starts with a two-byte character: offset 1 splits it.
+        result, events = await run({"before_tool_result": redact}, [use(), text("ok")], Accent())
+        assert isinstance(result, Completed)
+        assert decisions(events) == [("before_tool_result", "failed")]
+        edited = next(e for e in events if e.type == "context_edited")
+        edits = json.loads(edited.data.model_dump_json())["edits"]
+        assert edits == [{"call_id": "call_1", "action": "clear"}]
 
     asyncio.run(main())
 
