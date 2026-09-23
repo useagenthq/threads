@@ -109,6 +109,12 @@ class ChannelIntake:
         """Consumes the thread's items in arrival order. A message waits while the thread can't
         take input (a run in flight, a park), and every later message waits behind it; answers
         and controls never wait, since the answer a park needs may be queued behind a message."""
+        target = await self._runner.follow(store, thread_id)
+        if target is not None:
+            # The conversation handed off: its items and replies are the target's now.
+            await self._runner.redeliver(store, target)
+            self.consume(store, target)
+            return
         lock = self._locks.setdefault(thread_id, asyncio.Lock())
         async with lock:
             tables = (await open_store(store)).tables

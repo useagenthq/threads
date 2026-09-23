@@ -23,6 +23,7 @@ from threads.host.send import Conversation, SendServer
 from threads.log import (
     BranchId,
     Budget,
+    HandoffEvent,
     Permissions,
     Principal,
     ThreadId,
@@ -31,6 +32,7 @@ from threads.log import (
 )
 from threads.result import Ok
 from threads.secrets import resolve
+from threads.store import SqliteStore
 from threads.thread import tree
 from threads.thread.authority import Checked
 from threads.thread.handle import Thread
@@ -116,17 +118,27 @@ class Runner:
             to = Conversation(
                 adapter, conversation.address, credentials, conversation.installation_id
             )
-            return self.bound_to(adapter.agent, channel=to)
-        root = await sq.root(thread_id)
-        read = None if not isinstance(root, Ok) else await sq.read(root.value, 0)
-        if read is None or not isinstance(read, Ok):
-            return None
-        started = next(
-            (e for e in read.value.fold.events if isinstance(e, ThreadStartedEvent)), None
-        )
-        name = None if started is None else started.data.agent_name
+            # After a handoff the conversation's thread runs the target the channel agent names.
+            name = await _agent_name(sq, thread_id)
+            base = self._agents[adapter.agent].definition
+            found = base if name is None else _named(base, name)
+            return None if found is None else Bound(found, to)
+        name = await _agent_name(sq, thread_id)
         key = next((k for k, a in self._agents.items() if a.definition.name == name), None)
         return None if key is None else self.bound_to(key)
+
+    async def follow(self, store: Store, thread_id: ThreadId) -> ThreadId | None:
+        """The thread a channel conversation handed off to, with the route moved there (one
+        conditional update; another process may have moved it first). None: no handoff."""
+        sq = await open_store(store)
+        root = await sq.root(thread_id)
+        read = None if not isinstance(root, Ok) else await sq.read(root.value, 0)
+        if read is None or not isinstance(read, Ok) or not read.value.fold.handed_off:
+            return None
+        moved = next(e for e in reversed(read.value.fold.events) if isinstance(e, HandoffEvent))
+        target = ThreadId(moved.data.to_thread_id)
+        await sq.tables.move(thread_id, target)
+        return target
 
     async def authority(self, store: Store, thread_id: ThreadId) -> Checked:
         """Approval authority on a thread: its root run's agent's approvers, through subagent
@@ -196,7 +208,12 @@ class Runner:
 
     async def redeliver(self, store: Store, thread_id: ThreadId) -> None:
         """A restarted host: a channel thread whose log holds a reply it never sent (a crash
-        after the turn ended) runs again to send it."""
+        after the turn ended) runs again to send it. A thread that handed off moves its
+        conversation to the target, whose replies are sent from there."""
+        target = await self.follow(store, thread_id)
+        if target is not None:
+            await self.redeliver(store, target)
+            return
         bound = await self.bound(store, thread_id)
         sq = await open_store(store)
         root = await sq.root(thread_id)
@@ -249,3 +266,21 @@ class Runner:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def _agent_name(sq: SqliteStore, thread_id: ThreadId) -> str | None:
+    """The agent a thread pinned at its start; None before it started."""
+    root = await sq.root(thread_id)
+    read = None if not isinstance(root, Ok) else await sq.read(root.value, 0)
+    if read is None or not isinstance(read, Ok):
+        return None
+    events = read.value.fold.events
+    started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
+    return None if started is None else started.data.agent_name
+
+
+def _named(definition: Definition[None], name: str) -> Definition[None] | None:
+    """The agent, or a handoff target reachable from it, with this name."""
+    if definition.name == name:
+        return definition
+    return next((d for h in definition.handoffs if (d := _named(h, name)) is not None), None)

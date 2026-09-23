@@ -57,6 +57,9 @@ class Tables:
     async def conversation(self, thread_id: ThreadId) -> inbox.Conversation | None:
         return await self._worker.call(lambda c: inbox.conversation(c, self.tenant_id, thread_id))
 
+    async def move(self, source: ThreadId, target: ThreadId) -> bool:
+        return await self._worker.call(lambda c: inbox.move(c, self.tenant_id, source, target))
+
     async def claim(self, schedule_id: str, at: int, thread_id: ThreadId, now: int) -> bool:
         tenant = self.tenant_id
         return await self._worker.call(

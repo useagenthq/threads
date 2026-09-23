@@ -159,6 +159,23 @@ def conversation(
     return None if row is None else Conversation(*(text_of(v) for v in row))
 
 
+def move(conn: sqlite3.Connection, tenant_id: str, source: ThreadId, target: ThreadId) -> bool:
+    """A handoff moves the conversation (spec/schema/README.md, "Channel replies"): its route and
+    its unconsumed items, keyed on (tenant, source thread). False when another process moved it
+    first; the caller re-reads the route, never overwrites it."""
+    with transaction(conn):
+        moved = conn.execute(
+            "UPDATE channel_threads SET thread_id = ? WHERE tenant_id = ? AND thread_id = ?",
+            (target, tenant_id, source),
+        ).rowcount
+        conn.execute(
+            "UPDATE inbox SET thread_id = ? WHERE tenant_id = ? AND thread_id = ?"
+            " AND consumed_seq IS NULL",
+            (target, tenant_id, source),
+        )
+    return moved == 1
+
+
 def consume(inbox_id: int) -> Companion:
     """Marks the item consumed by the append's first event, once."""
 

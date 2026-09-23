@@ -9,7 +9,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import TypedDict
 
-from threads.agents.bindings import AppTool, AppTools, Fence, capped
+from threads.agents.bindings import AppTool, AppTools, Fence, ToolServer, capped
 from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
 from threads.agents.catalog import gateways
 from threads.agents.context import RunContext
@@ -116,7 +116,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         return Failed(RunError(_refusal(opened.error), opened.error.message), handle)
     writer, fresh = opened.value
     if intake is not None and intake.servers:
-        definition = replace(definition, servers=(*definition.servers, *intake.servers))
+        definition = _serving(definition, intake.servers)
     async with _held(writer), AsyncExitStack() as servers:
         definition = await with_servers(definition, servers, writer)
         thread_id = writer.fold.thread_id
@@ -308,6 +308,13 @@ def _child_runner(store: Store, stubs: tuple[Stub, ...] | None) -> Execute:
         return await execute(definition, text, {"store": store}, None, _drop, how)
 
     return run
+
+
+def _serving[T](definition: Definition[T], servers: tuple[ToolServer, ...]) -> Definition[T]:
+    """A host's servers (a channel's send tool) go with the conversation: a handoff target
+    pins them too, so the host can run it on when the conversation moves there."""
+    handoffs = tuple(_serving(h, servers) for h in definition.handoffs)
+    return replace(definition, servers=(*definition.servers, *servers), handoffs=handoffs)
 
 
 def _drop(_item: StreamEvent) -> None:
