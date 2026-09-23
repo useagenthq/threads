@@ -5,8 +5,6 @@ the same loop over the same log (invariant 1)."""
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, assert_never
 
-from pydantic.experimental.missing_sentinel import MISSING
-
 from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
@@ -35,13 +33,12 @@ from threads.log import (
     ToolResultLateEvent,
     TurnCompletedEvent,
 )
-from threads.loop import calls, gates, retries, tool_gates
+from threads.loop import calls, gates, output, retries, tool_gates
 from threads.loop.defaults import context, max_pauses
 from threads.loop.drafts import draft
 from threads.loop.history import CONTINUE_TEXT, continuations, pauses, step, turn_events
 from threads.loop.runtime import Halt, Idle, Parked, Runtime, lost
 from threads.loop.turn import complete, request
-from threads.reduce.fold import policy
 from threads.result import Err
 
 if TYPE_CHECKING:
@@ -178,7 +175,8 @@ async def _after_response(
     stop = response.data.stop_reason
     match stop:
         case "end_turn" | "stop_sequence" | "refusal" | "tool_use":
-            return await gates.end_turn(rt)
+            # Under an output schema the turn ends through final_output, never in plain text.
+            return await (output.ask(rt) if output.pinned(rt.fold) else gates.end_turn(rt))
         case "max_tokens":
             return await _continue_output(rt)
         case "context_window_exceeded":
@@ -207,9 +205,8 @@ async def _continue_output(rt: Runtime) -> Halt | None:
 
 
 async def _after_results(rt: Runtime) -> Halt | None:
-    """A successful `ends_turn` result ends the turn with no further model call; too many
-    rejected output candidates end it output_invalid. Results pass their
-    guardrail first (before_tool_result)."""
+    """A successful `ends_turn` result ends the turn with no further model call. Results pass
+    their guardrail first (before_tool_result)."""
     gated = await tool_gates.before_results(rt)
     if gated is not None:
         return None if gated == gates.AGAIN else gated
@@ -221,12 +218,6 @@ async def _after_results(rt: Runtime) -> Halt | None:
         spec = rt.fold.tools.get(names.get(event.data.call_id, ""))
         if spec is not None and spec.ends_turn is True and not event.data.is_error:
             return await gates.end_turn(rt)
-    pinned = policy(rt.fold)
-    rejected = sum(
-        1 for e in turn if isinstance(e, OutputValidatedEvent) and e.data.outcome == "rejected"
-    )
-    if pinned is not None and pinned.output is not MISSING and rejected > pinned.output.max_retries:
-        return await complete(rt, "output_invalid")
     gated = await tool_gates.after_batch(rt)
     if gated is not None:
         return None if gated == gates.AGAIN else gated

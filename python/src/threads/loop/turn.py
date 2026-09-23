@@ -1,14 +1,18 @@
 """The two ways a step ends the loop's current decision: a turn request, or the turn's end."""
 
-from threads.loop import attempt, gates, ladder, limits, todos
+from threads.loop import attempt, gates, ladder, limits, switch, todos
 from threads.loop.drafts import draft
 from threads.loop.runtime import Failed, Halt, Runtime, lost
 from threads.result import Err
 
 
 async def request(rt: Runtime, attempt_no: int) -> Halt | None:
-    """A turn request, once its input and model gates passed and its budget
-    reservation fits."""
+    """A turn request, once a turn-scoped fallback owed a revert has had it, its input and
+    model gates passed and its budget reservation fits. Every path to a turn's model call runs
+    through here after its user_input is durable, fresh or recovered."""
+    reverted = await switch.revert(rt)
+    if reverted is not None:
+        return reverted
     refused = await limits.check(rt)
     if refused is not None or not rt.fold.in_turn:
         return refused

@@ -285,6 +285,36 @@ Checked by readers and writers (`validate_next`) on top of the schema, except ru
 | 28 | `event_id` is unique along the resolved chain, checked on append and on import. SQLite's `(branch_id, event_id)` index is physical only; the writer and importer also check every ancestor segment through its fork point | `invalid_transition` | `event-id-duplicate-across-fork-rejected` |
 
 
+### Output schemas (rule 20)
+
+Both readers check `policy.output.schema` with their own evaluator of one keyword set, defined here, never with a library's reading of JSON Schema. A writer records a candidate `accepted` only if its agent's validator **and** this check pass it; otherwise it is `rejected` and the model tries again. An output model whose schema uses any other keyword is refused at setup (`ConfigError invalid_config`, naming the keyword).
+
+- **Annotations** (never constrain): `title`, `description`, `default`, `examples`, `$defs`, `$schema`, `$comment`.
+- **Structure**: `type`, `properties`, `required`, `additionalProperties`, `items`, `minProperties`, `enum`, `const`, `allOf`, `anyOf`, `oneOf`, `not`, `if`/`then`/`else`; `$ref` is `#` (the whole schema) or `#/$defs/<name>` that exists, recursion included, but no chain of `$ref`s through `allOf`, `anyOf`, `oneOf`, `not`, `if`, `then` or `else` may come back to where it started without reaching into the value through `properties`, `additionalProperties` or `items` (`{"$ref": "#"}` is refused). A reader given such a schema in an imported log fails closed: the value doesn't satisfy it (`output-schema-ref-cycle-rejected`). A property is the object's own key: a name like `toString` is never found on a prototype (`output-schema-required-own-key-rejected`, `output-schema-additional-own-key-rejected`).
+- **Equality** (`const`, `enum`): a boolean equals only the same boolean; numbers compare by value (`1` equals `1.0`); strings and `null` exactly; arrays item by item in order; objects key by key, in any key order (`vectors/json-equal.json`).
+- **Numbers**: `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum` (number form); `multipleOf` (positive) is exact in decimal: each number is read as its shortest round-trip decimal `d × 10^e`, and `value` is a multiple when, scaled to the smaller exponent, the value's digits are divisible by the divisor's (`0.3` is a multiple of `0.1`; `0.35` is not).
+- **Lengths**: `minLength`/`maxLength` count Unicode code points; `minItems`/`maxItems` count items.
+- **`pattern`**: searched (not anchored) in a string, written in this portable subset of ECMA-262 and meaning the same in both readers (`vectors/pattern.json`). Anything else is unsupported: refused at setup, failed closed by a reader.
+  - Characters other than `\ ^ $ . | ? * + ( ) [ ] { }` match themselves; `\` before one of those or `/` or `-` makes it literal; `\t \n \v \f \r` are those controls.
+  - `\d` is `[0-9]`, `\w` is `[A-Za-z0-9_]`, `\s` is `[\t\n\v\f\r ]`, and `\D \W \S` their complements; `\b` is a position between a `\w` character and a non-`\w` character or an edge of the string, and `\B` any other position (so `^\B$` matches the empty string).
+  - `.` is any code point but `\n`, `\r`, U+2028 and U+2029 (an emoji is one); `^` is the start and `$` the very end of the string (a trailing `\n` is not skipped).
+  - Groups `( )` and `(?: )`, lookaheads `(?= )` and `(?! )` (never repeated), alternation `|`; quantifiers `* + ? {n} {n,} {n,m}` after something repeatable, each optionally lazy with `?`.
+  - Classes `[ ]` and `[^ ]` are non-empty; members are single characters (`[` escaped), `\d \D \w \W \s` and the escapes above, and ranges between two single characters, either of which may be an escaped character (`[A-\]]`, `[\t-\r]`) but never a set like `\d`; `-` is a literal only first or last, and a range's end never starts another range.
+  - Limits, the same in every engine: at most 1000 code points in the pattern, quantifier bounds up to 1000, groups nested at most 32 deep.
+  - Unsupported, among others: named groups, lookbehind, back-references, inline flags, `\p`, `\u`, `\x`, `\c`, `\0`, `\S` inside a class, possessive quantifiers, unescaped `{`, `}` or `]`.
+- **`format`** constrains strings only; any name but these is unsupported:
+
+| Format | A string matches when |
+|---|---|
+| `date` | `YYYY-MM-DD` (ASCII digits), month 01–12, day 01 to the month's length (Gregorian leap years) |
+| `time` | `HH:MM:SS`, optional `.` and fraction digits, then `Z`/`z` or `±HH:MM`; hour 00–23, minute and second 00–59 (no leap second), offset hour 00–23 and minute 00–59 |
+| `date-time` | a `date`, `T` or `t`, then a `time` |
+| `email` | one or more characters other than `@` and ASCII whitespace, `@`, then two or more dot-separated labels of characters other than `@`, `.` and ASCII whitespace |
+| `uri` | a scheme (`A-Za-z` then `A-Za-z0-9+.-`), `:`, then characters other than ASCII whitespace |
+| `uuid` | `8-4-4-4-12` hex digits, either case, any version |
+
+Cases: `output-schema-constraints-accepted`, `output-schema-formats-accepted`, and one `output-schema-<keyword>-rejected` per keyword and format.
+
 **Structural errors** (import stage 2, checked on each line before `seq`, `prev_hash` and `validate_next`):
 
 | Structure | Error | Case |

@@ -1,0 +1,17 @@
+{
+  "description": "multipleOf in output schemas (spec/schema/README.md, Output schemas): exact in decimal. Each number is read as its shortest round-trip decimal; value is a multiple when its digits, scaled to the smaller exponent, are divisible by the divisor's. Float division would get 0.3 / 0.1 wrong.",
+  "cases": [
+    {"value": 0.3, "divisor": 0.1, "multiple": true},
+    {"value": 0.35, "divisor": 0.1, "multiple": false},
+    {"value": 19.99, "divisor": 0.01, "multiple": true},
+    {"value": 1.005, "divisor": 0.01, "multiple": false},
+    {"value": 1e-7, "divisor": 1e-8, "multiple": true},
+    {"value": 1.5e20, "divisor": 0.5, "multiple": true},
+    {"value": 7.1, "divisor": 0.25, "multiple": false},
+    {"value": 7.25, "divisor": 0.25, "multiple": true},
+    {"value": -6, "divisor": 3, "multiple": true},
+    {"value": 0, "divisor": 0.7, "multiple": true},
+    {"value": 45, "divisor": 15, "multiple": true},
+    {"value": 50, "divisor": 15, "multiple": false}
+  ]
+}

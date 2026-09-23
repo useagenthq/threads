@@ -1,0 +1,9 @@
+{
+  "name": "output-schema-formats-accepted",
+  "family": "tools_streaming",
+  "kind": "reduce",
+  "description": "The pinned output schema is what a Pydantic model writes (formats), with titles and a default (annotations, never constraints). An accepted value that satisfies every keyword, at every depth, is valid.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

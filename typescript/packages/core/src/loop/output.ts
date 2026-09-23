@@ -1,5 +1,6 @@
 import type { EventOf } from "../fold/state";
 import { canonicalize } from "../log";
+import { conforms } from "../validate/json-schema";
 import { draft, TOOL } from "./drafts";
 import { endTurn } from "./request";
 import { parseErrors } from "./schema";
@@ -37,7 +38,13 @@ export function validateCandidate(
       code: "output_invalid",
       message: "no validator for the pinned output schema",
     };
-  const errors = parseErrors(schema, call.data.input);
+  // The log's own check (semantic rule 20) must pass too, whatever the agent's schema lets
+  // through: an accepted value never fails the reader.
+  const errors =
+    parseErrors(schema, call.data.input) ??
+    (conforms(output.schema, call.data.input)
+      ? undefined
+      : "the value fails the pinned output schema (its formats and bounds)");
   const common = {
     source_event_id: call.event_id,
     schema_sha256: output.schema_sha256,

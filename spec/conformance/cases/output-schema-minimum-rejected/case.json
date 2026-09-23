@@ -1,0 +1,9 @@
+{
+  "name": "output-schema-minimum-rejected",
+  "family": "tools_streaming",
+  "kind": "reduce",
+  "description": "output_validated{accepted} whose hours breaks only the minimum rule of the pinned output schema (spec/schema/README.md, Output schemas): invalid_transition. Every keyword is checked, never skipped.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

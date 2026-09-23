@@ -229,8 +229,8 @@ All options are optional except `model`. Names are camelCase in TypeScript and s
     - `instructions`: the system prompt. It stays the same for the life of the thread.
     - `name`: shows in the log and is how other agents refer to this one. Default `"agent"`.
     - `retry`: retry policy for provider errors. See [Models](/docs/agents/models#retries).
-    - `fallback`: backup models, tried in order. TypeScript only.
-    - `output`, `outputRetries`: typed final output. TypeScript only. See [Structured output](/docs/agents/structured-output).
+    - `fallback`: backup models, tried in order. See [Fallback models](/docs/agents/models#fallback-models).
+    - `output`, `outputRetries` (`output_retries`): typed final output. See [Structured output](/docs/agents/structured-output).
     - `context`: when to clear old tool output and compact long threads. Sensible defaults apply.
   </Accordion>
   <Accordion title="Tools">

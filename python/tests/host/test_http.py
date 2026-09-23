@@ -44,7 +44,7 @@ class Note(BaseModel):
     text: str
 
 
-def sender(sent: list[str]) -> Agent[None]:
+def sender(sent: list[str]) -> Agent[None, str]:
     async def send(args: Note, _ctx: RunContext[None]) -> str:
         sent.append(args.text)
         return "sent"
@@ -56,7 +56,7 @@ def sender(sent: list[str]) -> Agent[None]:
 
 @asynccontextmanager
 async def served(
-    bot: Agent[None], *, auth: bool = True, store: Store | None = None
+    bot: Agent[None, str], *, auth: bool = True, store: Store | None = None
 ) -> AsyncGenerator[httpx.AsyncClient]:
     served_host = host(
         store=sqlite(":memory:") if store is None else store,

@@ -1,0 +1,17 @@
+{
+  "description": "JSON equality for const and enum in output schemas (spec/schema/README.md, Output schemas): a boolean equals only the same boolean, numbers compare by value (1 equals 1.0), strings and null exactly, arrays item by item in order, objects key by key regardless of key order.",
+  "cases": [
+    {"a": 1, "b": 1.0, "equal": true},
+    {"a": true, "b": 1, "equal": false},
+    {"a": false, "b": 0, "equal": false},
+    {"a": [true], "b": [1], "equal": false},
+    {"a": {"x": true}, "b": {"x": 1}, "equal": false},
+    {"a": {"x": 1.0}, "b": {"x": 1}, "equal": true},
+    {"a": {"x": 1, "y": [2]}, "b": {"y": [2.0], "x": 1}, "equal": true},
+    {"a": [1, 2], "b": [2, 1], "equal": false},
+    {"a": {"x": 1}, "b": {"x": 1, "y": 2}, "equal": false},
+    {"a": null, "b": false, "equal": false},
+    {"a": "1", "b": 1, "equal": false},
+    {"a": [], "b": {}, "equal": false}
+  ]
+}

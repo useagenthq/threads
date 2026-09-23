@@ -1,0 +1,10 @@
+{
+  "name": "structured-output-plain-text-asks",
+  "family": "tools_streaming",
+  "kind": "recover",
+  "description": "A turn that ends in plain text while an output schema is pinned is a failed candidate: the runner injects a trusted ask for final_output and requests again. The next candidate is accepted, its result previews the value as canonical JSON, and final_output ends the turn.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

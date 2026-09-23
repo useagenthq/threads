@@ -101,7 +101,8 @@ async def run_case(case: Path) -> Outcome:
         rt = Runtime(
             store,
             writer,
-            _model(model),
+            # One scripted model plays every settings epoch a case names (fallbacks included).
+            lambda _ref: _model(model),
             _tools(tools),
             conformance_allow,
             clock,

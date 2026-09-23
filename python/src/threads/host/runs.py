@@ -63,7 +63,7 @@ class Runner:
     def __init__(
         self,
         root: Store,
-        agents: Mapping[str, Agent[None]],
+        agents: Mapping[str, Agent[None, object]],
         channels: Mapping[str, ChannelAdapter],
         ceiling: Permissions | None = None,
     ) -> None:
@@ -91,7 +91,7 @@ class Runner:
             found = self._stores[tenant] = scoped(self._root, tenant)
         return found
 
-    def agent(self, key: str) -> Agent[None] | None:
+    def agent(self, key: str) -> Agent[None, object] | None:
         return self._agents.get(key)
 
     def resolve_secrets(self) -> None:

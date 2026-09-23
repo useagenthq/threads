@@ -15,11 +15,13 @@ from threads.log import (
     ArtifactRef,
     BranchId,
     Event,
+    ModelRef,
     ParkAddress,
     ParseError,
     ToolCallData,
     ToolSpec,
 )
+from threads.loop import epoch
 from threads.loop.covering import Covering
 from threads.loop.history import CallState
 from threads.loop.model import Model
@@ -33,6 +35,22 @@ from threads.store.companion import Companion
 
 type Authorize = Callable[[Fold, ToolCallData, ToolSpec], Decision]
 """The permission fold for one call, against the current policy and mode."""
+
+type Models = Callable[[ModelRef], Model | None]
+"""The adapter serving a settings epoch's model; None: this run has none for it."""
+
+
+def serving(*models: Model) -> Models:
+    """The models a run was given, found by the (provider, name) their epoch names."""
+    return lambda ref: next(
+        (
+            m
+            for m in models
+            if (m.info.model.provider, m.info.model.name) == (ref.provider, ref.name)
+        ),
+        None,
+    )
+
 
 type RunErrorCode = Literal[
     "model_unavailable",
@@ -112,7 +130,9 @@ class Framework(Protocol):
 class Runtime:
     store: SqliteStore
     writer: Writer
-    model: Model
+    models: Models
+    """Every model this thread may use, the primary and its fallbacks: each request goes to
+    the current settings epoch's."""
     tools: ToolRunner
     authorize: Authorize
     clock: Clock
@@ -180,6 +200,11 @@ class WriterContext:
     async def put(self, data: bytes, media_type: str) -> ArtifactRef:
         sha = await self.rt.store.put_artifact(data)
         return ArtifactRef(sha256=sha, bytes=len(data), media_type=media_type)
+
+
+def epoch_model(rt: Runtime) -> Model | None:
+    """The adapter for the current settings epoch."""
+    return rt.models(epoch.current(rt.fold).model)
 
 
 async def fence(rt: Runtime) -> Failed | None:

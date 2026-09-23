@@ -50,7 +50,7 @@ class Host:
     def __init__(  # noqa: PLR0913 - spec/api.json host's options
         self,
         store: Store,
-        agents: Mapping[str, Agent[None]],
+        agents: Mapping[str, Agent[None, object]],
         channels: Mapping[str, ChannelAdapter],
         schedules: Sequence[Schedule],
         authenticate: Authenticate | None,
@@ -196,7 +196,7 @@ class Host:
 def host(  # noqa: PLR0913 - spec/api.json host's options
     *,
     store: Store,
-    agents: Mapping[str, Agent[None]],
+    agents: Mapping[str, Agent[None, object]],
     channels: Mapping[str, ChannelAdapter] | None = None,
     schedules: Sequence[Schedule] = (),
     authenticate: Authenticate | None = None,

@@ -3,6 +3,8 @@
 from collections.abc import Sequence
 from typing import assert_never
 
+from pydantic.experimental.missing_sentinel import MISSING
+
 from threads.agents.results import (
     BudgetExhausted,
     Cancelled,
@@ -18,10 +20,14 @@ from threads.log import (
     Event,
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
+    OutputValidatedEvent,
     TextPart,
 )
+from threads.log.jcs import canonicalize
 from threads.loop import runtime
+from threads.loop.history import turn_events
 from threads.loop.runtime import FAILED_CODES, Halt
+from threads.result import Ok
 
 
 def result(rt: runtime.Runtime, halt: Halt, thread: Thread) -> RunResult[str]:
@@ -45,11 +51,27 @@ def ended(events: Sequence[Event], reason: str, thread: Thread) -> RunResult[str
     code = FAILED_CODES.get(reason)
     if code is not None:
         return Failed(RunError(code, f"the turn ended {reason}"), thread)
-    return Completed(final_text(events), thread)
+    return Completed(output_text(events), thread)
 
 
-def final_text(events: Sequence[Event]) -> str:
-    """The text of the turn's last response: the output of an agent without an output type."""
+def output_text(events: Sequence[Event]) -> str:
+    """The run's output as text: the turn's accepted final_output value as canonical JSON
+    (what a parent sees of a structured subagent, and what `Agent.run` parses into its output
+    type), else the text of the turn's last response."""
+    turn = turn_events(events)
+    accepted = next(
+        (
+            e
+            for e in reversed(turn)
+            if isinstance(e, OutputValidatedEvent) and e.data.outcome == "accepted"
+        ),
+        None,
+    )
+    if accepted is not None and accepted.data.value is not MISSING:
+        text = canonicalize(accepted.data.value)
+        if not isinstance(text, Ok):
+            raise AssertionError("a recorded value always canonicalizes")
+        return text.value
     for event in reversed(events):
         if isinstance(event, ModelResponseEvent | ModelResponseRecoveredEvent):
             return "".join(p.text for p in event.data.content if isinstance(p, TextPart))

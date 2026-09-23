@@ -1,7 +1,7 @@
-import { z } from "zod";
 import type { EventOf, Fold } from "../fold/state";
 import { sha256Hex } from "../hash";
 import { canonicalize, JsonValue } from "../log";
+import { conforms } from "./json-schema";
 import { invalid, type Violation } from "./violation";
 
 // Rules 17, 20 and 27.
@@ -25,18 +25,9 @@ export function checkOutput(
   if (output === undefined || output.schema_sha256 !== e.data.schema_sha256)
     return invalid("output_validated names a schema other than policy.output");
   if (e.data.outcome === "rejected") return undefined;
-  return satisfies(output.schema, e.data.value)
+  return conforms(output.schema, e.data.value)
     ? undefined
     : invalid("the accepted value fails policy.output.schema");
-}
-
-function satisfies(schema: Record<string, unknown>, value: unknown): boolean {
-  try {
-    return z.fromJSONSchema(schema).safeParse(value).success;
-  } catch {
-    // A schema Zod can't compile can't prove the value valid.
-    return false;
-  }
 }
 
 /** Rule 27: from is the current mode; bypass needs allow_bypass. */

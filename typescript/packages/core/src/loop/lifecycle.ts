@@ -1,11 +1,13 @@
 import type { EventOf } from "../fold/state";
 import type { SessionSource } from "../hooks/types";
 import type { KnownEvent } from "../log";
+import type { EventDraft } from "../store";
 import { draft } from "./drafts";
 import {
   context,
   decision,
   defining,
+  type HookKey,
   instruction,
   observe,
   recorded,
@@ -83,32 +85,33 @@ export async function sessionStart(
     : got;
 }
 
-/** before_model_switch gates a settings_changed: a deny or failure keeps the current model. */
+/**
+ * before_model_switch gates a settings_changed: the decisions to record with it, and whether
+ * every hook allowed. A deny or failure keeps the current model; the caller appends the
+ * decisions in the same batch as the change, or alone.
+ */
 export async function switchGate(
   s: Session,
   settings: EventOf<"settings_changed">["data"]["settings"],
-): Promise<Halt | boolean> {
+  key: HookKey = {},
+): Promise<{
+  readonly decisions: readonly EventDraft[];
+  readonly allowed: boolean;
+}> {
+  const decisions: EventDraft[] = [];
   for (const ext of defining(s, "before_model_switch")) {
     const out = await run(ext, "before_model_switch", [settings]);
+    const hook = "before_model_switch";
     const denied =
       out.kind === "failed"
-        ? decision(ext.name, "before_model_switch", "failed", {}, out.reason)
+        ? decision(ext.name, hook, "failed", key, out.reason)
         : out.value.decision === "deny"
-          ? decision(
-              ext.name,
-              "before_model_switch",
-              "deny",
-              {},
-              out.value.reason,
-            )
+          ? decision(ext.name, hook, "deny", key, out.value.reason)
           : undefined;
-    const stopped = s.append(
-      denied ?? decision(ext.name, "before_model_switch", "allow"),
-    );
-    if (stopped !== undefined) return stopped;
-    if (denied !== undefined) return false;
+    decisions.push(denied ?? decision(ext.name, hook, "allow", key));
+    if (denied !== undefined) return { decisions, allowed: false };
   }
-  return true;
+  return { decisions, allowed: true };
 }
 
 /** Turn endings that are a run error: stop_failure fires for them, never on_stop. */

@@ -5,7 +5,7 @@ from pydantic import JsonValue, ValidationError
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._generated.events_v1 import BudgetExceededData
-from threads._strict_model import holds
+from threads._json_schema import holds
 
 THREAD = "0192a000-0000-7000-8000-000000000001"
 RULE_IF: JsonValue = {
@@ -55,7 +55,7 @@ def test_holds(schema: JsonValue, value: object, *, expected: bool) -> None:
 
 def test_unsupported_keyword_is_a_bug() -> None:
     with pytest.raises(TypeError, match="unsupported schema keyword"):
-        holds({"pattern": "^a$"}, "a")
+        holds({"propertyNames": {}}, {})
 
 
 def test_an_explicit_missing_sentinel_is_rejected() -> None:

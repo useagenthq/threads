@@ -18,7 +18,7 @@ from threads.agents.store import HOLDER, Store, now_ms, open_store, sqlite
 from threads.log import BranchId, ForkEvent, SnapshotEvent, ThreadId
 from threads.loop.drafts import draft
 from threads.loop.drive import drive
-from threads.loop.runtime import Runtime
+from threads.loop.runtime import Runtime, serving
 from threads.loop.scripted import scripted_model
 from threads.result import Err, Ok
 from threads.sandbox import FakeSandbox, SandboxSession, fake_sandbox
@@ -174,7 +174,9 @@ async def turn(w: World, reply: str) -> None:
     """One recorded turn after the snapshot: the input and the model's reply."""
     clock = Clock(now_ms())
     model = scripted_model({"responses": [text(reply)]})
-    rt = Runtime(w.sq, w.writer, model, Tools({}, clock), allow_all, now_ms, clock.wait_until)
+    rt = Runtime(
+        w.sq, w.writer, serving(model), Tools({}, clock), allow_all, now_ms, clock.wait_until
+    )
     user = replace(draft("user_input", {"source": "api", "text": "again"}), actor=USER)
     assert isinstance(await rt.append(user), Ok)
     await drive(rt)

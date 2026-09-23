@@ -88,7 +88,7 @@ The examples use the [scripted model](/docs/evals/testing) so they run offline; 
   `false` waits for the subagent and returns its final answer as the call's result. `true` returns at once, so the parent keeps working while the subagent runs; the answer arrives later in the parent's conversation. The parent's run doesn't return until its background subagents have finished or stopped to wait.
 </Field>
 
-A subagent with [structured output](/docs/agents/structured-output) (TypeScript only) hands the parent its value as JSON text.
+A subagent with [structured output](/docs/agents/structured-output) hands the parent its value as canonical JSON text.
 
 ## What a subagent may do
 

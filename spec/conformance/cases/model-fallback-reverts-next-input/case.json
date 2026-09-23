@@ -1,0 +1,10 @@
+{
+  "name": "model-fallback-reverts-next-input",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Turn 1 fell back to the small model. With fallback_scope turn, turn 2's user_input is followed by settings_changed{reason: revert} back to the primary settings, caused by that input, before its first model_request, which declares the primary's line 0.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

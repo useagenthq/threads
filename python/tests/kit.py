@@ -12,7 +12,7 @@ from pydantic import JsonValue
 from threads.log import BranchId, JsonObject, ThreadId, ToolCallData, ToolSpec
 from threads.loop.drafts import draft
 from threads.loop.model import LookupResult, LookupUnknown, Model
-from threads.loop.runtime import Runtime
+from threads.loop.runtime import Runtime, serving
 from threads.loop.tools import Dispatched, Invocation, Termination, ToolRunner
 from threads.permissions import Decision
 from threads.reduce import Fold
@@ -102,7 +102,7 @@ async def start(
     thread, branch = ThreadId(uuid7(clock())), BranchId(uuid7(clock()))
     assert await store.create(thread, branch, clock()) == Ok(None)
     writer = await acquire(store, branch, "first", clock)
-    rt = Runtime(store, writer, model, tools, allow_all, clock, clock.wait_until)
+    rt = Runtime(store, writer, serving(model), tools, allow_all, clock, clock.wait_until)
     started: dict[str, JsonValue] = {
         "agent_name": "test",
         "config_hash": "0" * 64,

@@ -57,7 +57,9 @@ async def results_of(thread: Thread) -> list[ToolResultEvent]:
     return [e for e in events if isinstance(e, ToolResultEvent)]
 
 
-def sender(sent: list[str], responses: Sequence[JsonValue], name: str = "agent") -> Agent[None]:
+def sender(
+    sent: list[str], responses: Sequence[JsonValue], name: str = "agent"
+) -> Agent[None, str]:
     async def send(args: Note, _ctx: RunContext[None]) -> str:
         sent.append(args.text)
         return "sent"
@@ -87,7 +89,7 @@ def test_a_run_ceiling_denies_what_the_agent_allows() -> None:
 
 
 def test_a_handoff_target_is_capped_by_the_runs_ceiling_not_the_source_policy() -> None:
-    def front(target: Agent[None]) -> Agent[None]:
+    def front(target: Agent[None, str]) -> Agent[None, str]:
         handoff = call("handoff", {"agent": "billing"})
         return agent(
             model=scripted_model({"responses": [handoff]}),

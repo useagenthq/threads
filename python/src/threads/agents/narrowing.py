@@ -6,6 +6,8 @@ the one exception: it runs under its own pinned policy, capped by the principal 
 when a subagent hands off, by that subagent's ceilings too (spec/schema/README.md, Handoff
 scope)."""
 
+from itertools import product
+
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
 from threads.log import Budget
@@ -33,14 +35,16 @@ def _narrows[D](parent: Definition[D], child: Definition[None]) -> None:
 def enforceable[D](definition: Definition[D], covering: tuple[Budget, ...] = ()) -> None:
     """budget_unenforceable (spec/schema/README.md, Budget enforcement): every limit covering an
     agent's threads (its own budget, and every budget over the agents that start it) needs a
-    per-attempt bound from its model, unless that agent stops on unknown usage."""
+    per-attempt bound from each model it may use, its fallbacks included, unless that agent
+    stops on unknown usage."""
     over = covering if definition.budget is None else (*covering, definition.budget)
-    info = definition.model.info
-    for budget in over if definition.on_unknown_usage != "stop" else ():
+    budgets = over if definition.on_unknown_usage != "stop" else ()
+    for budget, model in product(budgets, (definition.model, *definition.fallback)):
+        info = model.info
         limit = unbounded(budget, info.limits, info.params.get("max_tokens"))
         if limit is not None:
-            why = f"agent {definition.name}: its model has no per-attempt bound for {limit}"
-            raise ConfigError("budget_unenforceable", why)
+            why = f"agent {definition.name}: model {info.model.name} has no per-attempt bound"
+            raise ConfigError("budget_unenforceable", f"{why} for {limit}")
     for child in (*definition.subagents, *definition.handoffs):
         enforceable(child, over)
 

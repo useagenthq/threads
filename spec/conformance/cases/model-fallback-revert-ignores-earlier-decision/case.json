@@ -1,0 +1,10 @@
+{
+  "name": "model-fallback-revert-ignores-earlier-decision",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "A before_model_switch deny names turn 2's input but was recorded before it. Only a decision after the input settles its revert, so recovery reverts to the primary as if there were none.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

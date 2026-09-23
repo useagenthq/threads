@@ -1,0 +1,89 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 1,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 90,
+      "output_tokens": 10,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-00000000000a"
+      },
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-00000000000d"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 13,
+      "hash": "b35ce35fac06002f4ac23f9b47e045f553ac016bcb2c0742176ffc825977e051"
+    }
+  },
+  "appended": [
+    {
+      "type": "settings_changed",
+      "actor_kind": "host",
+      "data": {
+        "reason": "revert",
+        "settings": {
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "reasoning_carryover": "keep"
+        },
+        "cause_event_id": "0192e000-0000-7000-8000-00000000000d"
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1,
+        "declared_prefix": {
+          "bytes": 386,
+          "sha256": "862106e35a5b98c8953a59e6e4e8e547992d3931eb45cc87eb7aadf1ad3af715"
+        }
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ]
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ]
+}

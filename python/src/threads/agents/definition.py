@@ -3,19 +3,20 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import JsonValue
+from pydantic import BaseModel, JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
 from threads.agents.catalog import NO_CATALOG, Catalog
 from threads.agents.skills import Skill, listing, pinned
+from threads.agents.tool import json_schema
 from threads.hooks.extension import Extension, extension_tools
 from threads.log import Budget, Context, Permissions, Principal, Retry, ToolSpec
-from threads.log.digest import sha256_hex
+from threads.log.digest import canonical_sha256, sha256_hex
 from threads.log.jcs import canonicalize
-from threads.loop.calls import FINAL_OUTPUT
 from threads.loop.model import Model
+from threads.loop.output import FINAL_OUTPUT
 from threads.memory.authority import MemoryWrite
 from threads.memory.protocol import KnowledgeProvider, MemoryProvider
 from threads.memory.setup import writes
@@ -63,14 +64,24 @@ class Definition[D]:
     approvers: tuple[Principal, ...] | None = None
     """Who may answer this agent's approval challenges. None: the local
     operator for a run, nobody for a channel thread. Host policy, never pinned."""
+    output: type[BaseModel] | None = None
+    """The structured final output, taken through final_output; None: the final text."""
+    output_retries: int = 2
+    """Failed candidates per turn before the turn ends output_invalid."""
+    fallback: tuple[Model, ...] = ()
+    """Models to fall back to, in order, when the current one stays overloaded."""
 
     def policy(self) -> dict[str, JsonValue]:
-        """The resolved runtime policy: each section absent (ADR defaults) or complete."""
-        limits = self.model.info.limits
-        pinned: dict[str, JsonValue] = {"models": [to_json(limits)]}
-        if limits.price is not MISSING:
+        """The resolved runtime policy: each section absent (ADR defaults) or complete. An
+        agent without output or fallback pins no section for them, so its config is unchanged."""
+        pinned: dict[str, JsonValue] = {"models": self._models()}
+        if any(m.info.limits.price is not MISSING for m in (self.model, *self.fallback)):
             # Prices are nano-USD (spec/schema/README.md); without a currency cost() is None.
             pinned["currency"] = "USD"
+        if self.fallback:
+            pinned["fallback"] = [_settings(m) for m in self.fallback]
+        if self.output is not None:
+            pinned["output"] = _output_policy(self.output, self.output_retries)
         if self.permissions is not None:
             pinned["permissions"] = to_json(self.permissions)
         if self.budget is not None:
@@ -85,11 +96,19 @@ class Definition[D]:
             pinned["handoffs"] = [h.name for h in self.handoffs]
         return pinned
 
+    def _models(self) -> list[JsonValue]:
+        """Every model this thread may use, primary first, once per (provider, name)."""
+        limits: dict[tuple[str, str], JsonValue] = {}
+        for model in (self.model, *self.fallback):
+            info = model.info.limits
+            limits.setdefault((info.provider, info.name), to_json(info))
+        return list(limits.values())
+
     def specs(self) -> tuple[ToolSpec, ...]:
         """Built-ins sorted by name (read_tool_result always, the sandbox tools with a
         sandbox, memory and knowledge tools with a provider, framework tools as offered), then
         app tools in declared order and MCP tools sorted by name, then extension tools sorted by
-        namespaced name."""
+        namespaced name. final_output comes last, after a subagent's narrowing."""
         builtins = specs(
             sandbox=self.sandbox is not None,
             egress_denied=egress_denied(self.egress),
@@ -106,9 +125,9 @@ class Definition[D]:
         ext = extension_tools(self.extensions)
         mine = (*builtins, *(t.spec() for t in self.tools), *(t.spec() for t in ext))
         allowed = self.allowed
-        if allowed is None:
-            return mine
-        return tuple(s for s in mine if s.name in allowed or s.name == FINAL_OUTPUT)
+        if allowed is not None:
+            mine = tuple(s for s in mine if s.name in allowed)
+        return mine if self.output is None else (*mine, _final_output(self.output))
 
     @property
     def full_instructions(self) -> str:
@@ -165,3 +184,36 @@ class Definition[D]:
     def thread_started(self) -> dict[str, JsonValue]:
         """The pinned, secret-free config. Everything model-visible in it is line 0."""
         return self.pin()[0]
+
+
+def _settings(model: Model) -> dict[str, JsonValue]:
+    """A fallback's settings epoch; like the primary's, its reasoning carries over as recorded."""
+    info = model.info
+    return {
+        "model": to_json(info.model),
+        "model_params": dict(info.params),
+        "adapter": to_json(info.adapter),
+        "reasoning_carryover": "keep",
+    }
+
+
+def _output_policy(output: type[BaseModel], retries: int) -> dict[str, JsonValue]:
+    """policy.output: the model's schema and its hash. native is reserved on the wire; v0.1
+    offers tool mode only."""
+    schema = json_schema(output)
+    digest = canonical_sha256(schema)
+    if not isinstance(digest, Ok):
+        raise AssertionError("a Pydantic JSON Schema always canonicalizes")
+    return {"schema": schema, "schema_sha256": digest.value, "mode": "tool", "max_retries": retries}
+
+
+def _final_output(output: type[BaseModel]) -> ToolSpec:
+    """Tool mode: final_output takes the output schema and ends the turn."""
+    data: dict[str, JsonValue] = {
+        "name": FINAL_OUTPUT,
+        "description": "Return the final structured result.",
+        "input_schema": json_schema(output),
+        "effect_class": "read_only",
+        "ends_turn": True,
+    }
+    return ToolSpec.model_validate(data)

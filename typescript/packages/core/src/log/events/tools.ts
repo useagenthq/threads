@@ -130,7 +130,7 @@ export const HookDecisionData: Strict<{
   request_event_id: EventId.optional(),
   call_id: CallId.optional(),
   input_event_id: EventId.describe(
-    "before_input: the user_input or steer decided on. A deny or failed decision means that input renders nothing.",
+    "before_input: the user_input or steer decided on. A deny or failed decision means that input renders nothing. before_model_switch for a revert: the input that caused it.",
   ).optional(),
 });
 export const HookDecision: EventDef<

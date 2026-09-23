@@ -78,7 +78,9 @@ def _drop(_item: object) -> None:
     pass
 
 
-def team(sent: list[str], worker: Sequence[JsonValue], lead: Sequence[JsonValue]) -> Agent[None]:
+def team(
+    sent: list[str], worker: Sequence[JsonValue], lead: Sequence[JsonValue]
+) -> Agent[None, str]:
     """A lead whose worker sends through a host tool that needs approval; a child only has
     tools its parent has too."""
 

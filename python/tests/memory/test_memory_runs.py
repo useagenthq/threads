@@ -52,7 +52,7 @@ def use(name: str, args: JsonValue, call_id: str = "call_1") -> JsonValue:
 
 def bot(
     responses: list[JsonValue], memory: MemoryProvider, write: MemoryWrite = "allow"
-) -> Agent[None]:
+) -> Agent[None, str]:
     model = scripted_model({"responses": responses})
     return agent(model=model, memory=memory, memory_write=write, permissions=ALLOW, name="support")
 

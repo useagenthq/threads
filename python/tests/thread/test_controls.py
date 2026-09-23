@@ -56,7 +56,7 @@ def _drop(_item: object) -> None:
     pass
 
 
-async def _parked(sent: list[str]) -> tuple[Thread, Agent[None]]:
+async def _parked(sent: list[str]) -> tuple[Thread, Agent[None, str]]:
     async def send(args: Note, _ctx: RunContext[None]) -> str:
         sent.append(args.text)
         return "sent"

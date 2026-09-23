@@ -68,7 +68,7 @@ def unpriced(*replies: ModelResponse) -> ScriptedModel:
     return ScriptedModel(list(replies), {})
 
 
-async def run(store: Store, model: Model, subagents: Sequence[Agent[None]] = ()) -> Thread:
+async def run(store: Store, model: Model, subagents: Sequence[Agent[None, str]] = ()) -> Thread:
     result = await agent(name="lead", model=model, subagents=list(subagents)).run(
         "Go.", store=store
     )

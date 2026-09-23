@@ -1,0 +1,34 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Yes, it is fixed."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 60,
+        "output_tokens": 6
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "call_1",
+          "name": "final_output",
+          "input": {
+            "fixed": true
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 60,
+        "output_tokens": 8
+      }
+    }
+  ]
+}

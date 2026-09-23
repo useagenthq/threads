@@ -20,6 +20,7 @@ import type { EventDraft } from "../store";
 import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
+import { unchecked } from "../validate/json-schema";
 import { checkEnforceable } from "./enforceable";
 import { ConfigError } from "./errors";
 import { type Extension, hookNames } from "./extension";
@@ -95,6 +96,7 @@ export function pin(
   // A child runs without a sandbox and within its parent's tools, which were checked already.
   if (within === undefined) requireCapabilities(o.capabilities, o.sandbox);
   checkSkills(o.skills);
+  checkRetries(o.outputRetries);
   // Built-ins (the framework and provider tools among them) sorted by name, then app tools,
   // then extension and MCP tools sorted by namespaced name.
   const all = [
@@ -300,11 +302,27 @@ function policy(o: PinOptions): Policy {
   };
 }
 
+/** outputRetries counts failed candidates: a non-negative integer. */
+function checkRetries(n: number): void {
+  if (!Number.isSafeInteger(n) || n < 0)
+    throw new ConfigError(
+      "invalid_config",
+      `outputRetries must be an integer from 0 to 2**53 - 1, got ${n}`,
+    );
+}
+
 function outputPolicy(
   schema: z.ZodType,
   maxRetries: number,
 ): NonNullable<Policy["output"]> {
   const exported = jsonSchema("output", schema);
+  // Refused here, never by a run that has an answer to record: the log checks every keyword.
+  const why = unchecked(exported);
+  if (why !== undefined)
+    throw new ConfigError(
+      "invalid_config",
+      `output: ${why}; use a bound, a length, a pattern, an enum or a format the log checks`,
+    );
   const text = canonicalize(exported);
   if (!text.ok) throw new ConfigError("invalid_config", text.error.message);
   return {
