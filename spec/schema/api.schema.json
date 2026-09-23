@@ -18,10 +18,11 @@
     "packages": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["core", "host"],
+      "required": ["core", "host", "mcp"],
       "properties": {
         "core": { "$ref": "#/$defs/Package" },
-        "host": { "$ref": "#/$defs/Package" }
+        "host": { "$ref": "#/$defs/Package" },
+        "mcp": { "$ref": "#/$defs/Package" }
       }
     },
     "choices": {
@@ -132,7 +133,7 @@
       "properties": {
         "ts": { "$ref": "#/$defs/TsName" },
         "py": { "$ref": "#/$defs/PyName" },
-        "package": { "enum": ["core", "host"] },
+        "package": { "enum": ["core", "host", "mcp"] },
         "doc": { "$ref": "#/$defs/Doc" },
         "source": { "description": "The ADR or brief item that requires it.", "$ref": "#/$defs/Doc" },
         "async": { "description": "true: TS returns Promise<returns>, Python is async def.", "type": "boolean" },

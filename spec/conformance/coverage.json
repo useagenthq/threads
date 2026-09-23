@@ -90,7 +90,7 @@
         {
           "kind": "case",
           "ref": "mcp-server-one-line",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -112,7 +112,7 @@
         {
           "kind": "case",
           "ref": "mcp-tool-no-auto-retry",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -437,7 +437,7 @@
         {
           "kind": "case",
           "ref": "memory-save-recall-untrusted",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -448,7 +448,7 @@
         {
           "kind": "case",
           "ref": "memory-write-is-effect",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -1730,7 +1730,7 @@
         {
           "kind": "case",
           "ref": "knowledge-ingest-cite-version",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
@@ -1741,7 +1741,7 @@
         {
           "kind": "case",
           "ref": "knowledge-refresh-replay-preserved",
-          "status": "planned"
+          "status": "implemented"
         },
         {
           "kind": "case",
@@ -1795,7 +1795,7 @@
         {
           "kind": "case",
           "ref": "knowledge-injection-is-reference",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },

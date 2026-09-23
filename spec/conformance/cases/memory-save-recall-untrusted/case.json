@@ -1,0 +1,9 @@
+{
+  "name": "memory-save-recall-untrusted",
+  "family": "memory",
+  "kind": "render",
+  "description": "Run A saved a fact through save_memory: an effect with a key (effect_begin, effect_commit, then the result). A later search_memory recalls it: the hit is appended as injected{source: memory, trust: untrusted_reference, origin: {id, version}} with its result, before the next request, which renders it inside the reference wrapper after the declared prefix, never in the system text.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

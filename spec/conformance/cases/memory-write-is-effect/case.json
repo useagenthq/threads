@@ -1,0 +1,11 @@
+{
+  "name": "memory-write-is-effect",
+  "family": "memory",
+  "kind": "recover",
+  "description": "A crash after effect_begin of save_memory, whose provider declares idempotent writes keyed by the effect key. Recovery settles it by provider dedup inside the window and re-sends the SAME key: the provider answers with the record it already wrote, so there is no second memory. The same key with the same content is a no-op.",
+  "clock": {
+    "now": 1790000067000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

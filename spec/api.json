@@ -21,6 +21,11 @@
       "ts": "@threads/host",
       "py": "threads.host",
       "doc": "Channels, schedules, the HTTP API (spec/schema/host-api/) and the CLI."
+    },
+    "mcp": {
+      "ts": "@threads/mcp",
+      "py": "threads.mcp",
+      "doc": "The MCP client (official MCP SDK) and a JSON Schema validator for server-declared tool inputs. Core has no general JSON Schema evaluator, so both stay out of it."
     }
   },
   "choices": [
@@ -63,8 +68,8 @@
     {
       "id": "mcp-one-function",
       "open": "spells mcp({url}) and mcp.stdio({command}).",
-      "choice": "One mcp({name, url | command, ...}); exactly one of url or command.",
-      "why": "mcp.stdio has no plain Python equivalent; one function is smaller."
+      "choice": "One mcp({name, url | command, ...}); exactly one of url or command. It lives in the mcp package; core only knows the opaque McpServer it returns.",
+      "why": "mcp.stdio has no plain Python equivalent; one function is smaller. The MCP SDK and a JSON Schema validator would break core's single-dependency rule."
     },
     {
       "id": "local-provider-names",
@@ -574,7 +579,7 @@
     "mcp": {
       "ts": "mcp",
       "py": "mcp",
-      "package": "core",
+      "package": "mcp",
       "doc": "An MCP server in one line. The host owns the connection and credentials; an unreachable server is a ConfigError naming it.",
       "source": "",
       "async": false,
@@ -2862,6 +2867,14 @@
           "returns": {"result": {"prim": "void"}, "errors": ["unavailable", "timeout", "invalid", "scope_violation"]}
         }
       },
+      "properties": {
+        "write_effect": {
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EffectClass"},
+          "required": false,
+          "doc": "The effect class of save_memory and forget_memory with this provider. Absent: unguarded. idempotent requires dedup_window_ms: the provider dedups on the key within it."
+        },
+        "dedup_window_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false}
+      },
       "source": ""
     },
     "KnowledgeSource": {
@@ -2975,6 +2988,16 @@
             "result": {"$ref": "#/types/Doc"},
             "errors": ["not_found", "unavailable", "timeout", "invalid", "scope_violation"]
           }
+        },
+        "revision": {
+          "ts": "revision",
+          "py": "revision",
+          "doc": "The store's current monotonic revision, recorded as snapshot.knowledge_revision at capture.",
+          "async": true,
+          "params": [
+            {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true}
+          ],
+          "returns": {"result": {"prim": "integer"}, "errors": ["unavailable", "timeout"]}
         }
       },
       "source": ""

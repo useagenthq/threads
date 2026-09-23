@@ -1,0 +1,9 @@
+{
+  "name": "knowledge-ingest-cite-version",
+  "family": "knowledge",
+  "kind": "render",
+  "description": "A search_knowledge result records each excerpt as injected{source: knowledge, origin: {id: source id, version, location: start-end}} before the request that uses it (C6). The answer cites [doc:id@version#start-end], which resolves to that recorded version and span; the next request replays the recorded excerpt.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

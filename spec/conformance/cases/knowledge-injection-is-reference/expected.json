@@ -1,0 +1,48 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 80,
+      "output_tokens": 20,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000007"
+      },
+      {
+        "role": "context",
+        "event_id": "0192e000-0000-7000-8000-000000000008"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 8,
+      "hash": "9dc8fa1f03a4e9dede56d017c16d73ad4394df3fb48ce99509a4ed7ff3d5d57c"
+    }
+  },
+  "render": {
+    "next_request_sha256": "61bbc46448df2842b660d34c703972d186ddfdd4b7b2d78db25afc73d4ae8fb2",
+    "declared_prefix": {
+      "bytes": 678,
+      "sha256": "302a56d036f996984cd02111eb526642ef10fb047f48d36cb4c64d3e383bfe6e"
+    }
+  }
+}

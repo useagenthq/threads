@@ -1,0 +1,10 @@
+{
+  "tools": {
+    "mcp__mail__send_email": {
+      "output": "sent",
+      "executed_keys": {
+        "0192b000-0000-7000-8000-000000000001:call_1": "sent"
+      }
+    }
+  }
+}

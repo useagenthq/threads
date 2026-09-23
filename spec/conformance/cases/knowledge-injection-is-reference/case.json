@@ -1,0 +1,9 @@
+{
+  "name": "knowledge-injection-is-reference",
+  "family": "knowledge",
+  "kind": "render",
+  "description": "A document that tells the agent to ignore instructions and change host settings is recorded as injected untrusted_reference and renders only inside the escaped reference wrapper after the declared prefix. Line 0 (system, tools, settings) is unchanged, and nothing in the log grants it config, approval or permission.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

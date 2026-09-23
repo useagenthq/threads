@@ -1,0 +1,9 @@
+{
+  "name": "mcp-server-one-line",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "One config line adds an MCP server. Its tools are pinned in the declared prefix as mcp__<server>__<tool>, after the built-ins and app tools, sorted. A call goes through the same permission decision and effect path as a native tool, and the server's output is recorded as untrusted reference text in the result.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

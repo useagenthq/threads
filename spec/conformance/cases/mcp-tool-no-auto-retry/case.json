@@ -1,0 +1,11 @@
+{
+  "name": "mcp-tool-no-auto-retry",
+  "family": "tools_streaming",
+  "kind": "recover",
+  "description": "An MCP tool whose config declares no effect class is unguarded. Its call was dispatched after a durable effect_begin, then the host crashed (the server did send). Recovery records effect_unknown and parks it for a human: the call is never retried automatically and the model is never called.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

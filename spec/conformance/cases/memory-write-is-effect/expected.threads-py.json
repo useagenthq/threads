@@ -1,0 +1,126 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [
+      "call_1"
+    ],
+    "effects": [
+      {
+        "effect_key": "0192b000-0000-7000-8000-000000000001:call_1",
+        "call_id": "call_1",
+        "status": "begun"
+      }
+    ],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 90,
+      "output_tokens": 20,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 7,
+      "hash": "5d07f4a956ae457cdbeac67406a1fc32f14fe842ca1004751bba4cf685d38b60"
+    }
+  },
+  "appended": [
+    {
+      "type": "effect_unknown",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "reason": "crash_after_begin"
+      }
+    },
+    {
+      "type": "effect_resolved",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "outcome": "safe_to_retry",
+        "by": "provider_dedup"
+      }
+    },
+    {
+      "type": "effect_begin",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "attempt": 2
+      }
+    },
+    {
+      "type": "effect_commit",
+      "data": {
+        "call_id": "call_1",
+        "result_ref": {
+          "sha256": "e9b9e46d920331e0780d7800a32b7b95bc3b1c0fdd2fcb0411cbef5730b1b73a",
+          "bytes": 54,
+          "media_type": "text/plain"
+        }
+      }
+    },
+    {
+      "type": "tool_result",
+      "actor_kind": "tool",
+      "data": {
+        "call_id": "call_1",
+        "is_error": false,
+        "origin": "executed",
+        "preview": "{\"id\": \"mem_fc9d7550ed0c6673fa9d86d4\", \"version\": \"1\"}"
+      }
+    },
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "sandbox": {
+    "dispatches": {
+      "save_memory": 1
+    },
+    "new_executions": {
+      "save_memory": 0
+    }
+  }
+}

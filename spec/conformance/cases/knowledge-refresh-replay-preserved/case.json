@@ -1,0 +1,9 @@
+{
+  "name": "knowledge-refresh-replay-preserved",
+  "family": "knowledge",
+  "kind": "render",
+  "description": "The source was edited and refreshed between two searches: the new search records the new version. Every recorded request still re-renders byte-equal from the log, with the old version's excerpt where it was seen: replay never re-queries the corpus and never substitutes today's document into yesterday's request.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

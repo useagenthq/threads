@@ -24,6 +24,7 @@ from . import (
     host,
     integrity,
     ladder,
+    memory,
     models,
     open_turn,
     policy,
@@ -62,6 +63,7 @@ FAMILIES = (
     structure,
     guards,
     summaries,
+    memory,
 )
 
 
