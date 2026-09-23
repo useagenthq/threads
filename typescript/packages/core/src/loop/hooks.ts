@@ -63,7 +63,7 @@ export function decision(
   decided: Data["decision"],
   key: HookKey = {},
   reason?: string,
-): EventDraft {
+): Extract<EventDraft, { type: "hook_decision" }> {
   return {
     type: "hook_decision",
     type_version: 1,

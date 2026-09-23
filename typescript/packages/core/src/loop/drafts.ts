@@ -1,3 +1,4 @@
+import { CallId } from "../log";
 import type { EventDraft } from "../store";
 
 // Typed drafts for the events the loop appends. Every one here is critical (schema-pinned).
@@ -155,6 +156,18 @@ export const draft = {
     type: "compaction_failed",
     actor: HOST,
     data: d,
+  }),
+  preflightBlocked: (d: Data<"context_preflight_blocked">): EventDraft => ({
+    ...base,
+    type: "context_preflight_blocked",
+    actor: HOST,
+    data: d,
+  }),
+  heartbeat: (running: readonly string[]): EventDraft => ({
+    ...base,
+    type: "heartbeat",
+    actor: HOST,
+    data: { running_call_ids: running.map((id) => CallId.parse(id)) },
   }),
   budgetExceeded: (d: Data<"budget_exceeded">): EventDraft => ({
     ...base,

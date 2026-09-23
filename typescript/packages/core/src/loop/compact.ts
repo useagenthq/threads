@@ -1,15 +1,19 @@
 import { assertNever } from "../assert-never";
+import type { Outcome } from "../hooks/invoke";
 import type { KnownEvent } from "../log";
 import { refReader, render } from "../render";
+import type { EventDraft } from "../store";
 import { attempt } from "./attempt";
 import { draft } from "./drafts";
+import { decision, defining, run } from "./hooks";
 import { contextPolicy, tokens } from "./policy";
+import { restore } from "./restore";
 import type { Session } from "./session";
+import { stepEvents } from "./turn";
 import type { Halt } from "./types";
 
-// (clear old results) and L2 (summary compaction), run by L5 on a prompt_too_long
-// rejection. Threshold-driven runs, L3 restore and L4 preflight need the token estimate and
-// come with long-session support.
+// (clear old results) and L2 (summary compaction, then L3 restore), run on a
+// threshold by the ladder (ladder.ts) or reactively by L4 and L5.
 
 export type Compaction =
   | { readonly kind: "compacted" }
@@ -17,6 +21,13 @@ export type Compaction =
   | { readonly kind: "halt"; readonly halt: Halt };
 
 type Reason = "threshold" | "compaction_fallback";
+
+/** L5's once-per-step guard, shared with L4: this step already compacted or failed to. */
+export function reactiveSpent(s: Session): boolean {
+  return stepEvents(s.events, s.fold).some(
+    (e) => e.type === "compacted" || e.type === "compaction_failed",
+  );
+}
 
 export async function compact(
   s: Session,
@@ -27,6 +38,8 @@ export async function compact(
   if (cleared !== undefined) return { kind: "halt", halt: cleared };
   const range = compactRange(s);
   if (range === undefined) return failed(s, "still_over_threshold");
+  const gated = await beforeCompact(s);
+  if (gated !== undefined) return gated;
   let got = await attempt(s, "compaction", 1);
   if (got.kind === "rejected" && got.rejection.reason === "prompt_too_long") {
     // The side request itself is too long: clear everything clearable and retry it once.
@@ -81,12 +94,12 @@ function failed(
     : { kind: "halt", halt: stopped };
 }
 
-function summarized(
+async function summarized(
   s: Session,
   range: readonly [KnownEvent, KnownEvent],
   text: string,
   trigger: "reactive" | "threshold",
-): Compaction {
+): Promise<Compaction> {
   const [from, to] = range;
   const side = s.events.findLast((e) => e.type === "model_request");
   if (side === undefined) throw new Error("a summary answers a side request");
@@ -101,16 +114,69 @@ function summarized(
       trigger,
     }),
   );
-  return stopped === undefined
+  if (stopped !== undefined) return { kind: "halt", halt: stopped };
+  const done = s.events.at(-1);
+  if (done?.type !== "compacted")
+    throw new Error("compacted was just appended");
+  const restored = await restore(s, done);
+  return restored === undefined
     ? { kind: "compacted" }
-    : { kind: "halt", halt: stopped };
+    : { kind: "halt", halt: restored };
+}
+
+/**
+ * before_compact gates the side request: a deny or failure is
+ * compaction_failed{stage: hook}; a guide is recorded with its text, which the side request's
+ * instruction line carries (Render v1).
+ */
+async function beforeCompact(s: Session): Promise<Compaction | undefined> {
+  for (const ext of defining(s, "before_compact")) {
+    const out = await run(ext, "before_compact", [s.state()]);
+    const recorded = compactDecision(ext.name, out);
+    const denied =
+      recorded.data.decision !== "proceed" &&
+      recorded.data.decision !== "guide";
+    const stopped = denied
+      ? s.append(
+          recorded,
+          draft.compactionFailed({ stage: "hook", reason: "hook_denied" }),
+        )
+      : s.append(recorded);
+    if (stopped !== undefined) return { kind: "halt", halt: stopped };
+    if (denied) return { kind: "failed" };
+  }
+  return undefined;
+}
+
+function compactDecision(
+  ext: string,
+  out: Outcome<"before_compact">,
+): Extract<EventDraft, { type: "hook_decision" }> {
+  const hook = "before_compact";
+  if (out.kind === "failed")
+    return decision(ext, hook, "failed", {}, out.reason);
+  const v = out.value;
+  switch (v.decision) {
+    case "proceed":
+      return decision(ext, hook, "proceed");
+    case "guide":
+      return decision(ext, hook, "guide", {}, v.text);
+    case "deny":
+      return decision(ext, hook, "deny", {}, v.reason);
+    default:
+      return assertNever(v);
+  }
 }
 
 /**
  * L1: every result rendered in an earlier turn request, except the `keep` newest and those
  * already cleared, is replaced by the fixed placeholder.
  */
-function clear(s: Session, keep: number, reason: Reason): Halt | undefined {
+export function clear(
+  s: Session,
+  keep: number,
+  reason: Reason,
+): Halt | undefined {
   const events = s.events;
   const ctx = contextPolicy(s.fold.policy);
   const lastRequest = events.findLast(
@@ -179,7 +245,7 @@ function compactRange(
 }
 
 /** W: the epoch model's context window minus reserve_tokens. */
-function windowTokens(s: Session): number {
+export function windowTokens(s: Session): number {
   const model = s.fold.model;
   const listed = s.fold.policy?.models?.find(
     (m) => m.provider === model?.provider && m.name === model.name,

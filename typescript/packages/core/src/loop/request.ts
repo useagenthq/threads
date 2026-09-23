@@ -3,7 +3,7 @@ import type { EventOf } from "../fold/state";
 import type { KnownEvent } from "../log";
 import { attempt } from "./attempt";
 import { refusal } from "./budget";
-import { compact } from "./compact";
+import { compact, reactiveSpent } from "./compact";
 import { draft } from "./drafts";
 import {
   batchGate,
@@ -12,6 +12,7 @@ import {
   modelGate,
   resultsGate,
 } from "./gates";
+import { breakerOpen, ladder } from "./ladder";
 import { switchGate } from "./lifecycle";
 import { retryPolicy } from "./policy";
 import type { Session } from "./session";
@@ -83,6 +84,7 @@ async function gates(s: Session): Promise<Gated> {
     (await inputGate(s)) ??
     (await resultsGate(s)) ??
     (await batchGate(s)) ??
+    (await ladder(s)) ??
     (await modelGate(s))
   );
 }
@@ -191,11 +193,9 @@ async function schedule(
  * again. A second rejection, an open breaker or a failed compaction ends the turn.
  */
 async function reactive(s: Session): Promise<Halt | undefined> {
-  const step = stepEvents(s.events, s.fold);
-  const tried = step.some(
-    (e) => e.type === "compacted" || e.type === "compaction_failed",
-  );
-  if (tried) return endTurn(s, "context_exhausted");
+  // Once per step, and never past an open breaker.
+  if (reactiveSpent(s) || breakerOpen(s))
+    return endTurn(s, "context_exhausted");
   const done = await compact(s, "reactive");
   if (done.kind === "halt") return done.halt;
   return done.kind === "compacted"
