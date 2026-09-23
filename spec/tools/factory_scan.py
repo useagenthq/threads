@@ -19,7 +19,7 @@ from collections import Counter
 from typing import TYPE_CHECKING
 
 from api_factories import expanded_errors, langs
-from config_error_uses import unclassified_uses, without_comments
+from config_error_uses import CALLS, HELPERS, unclassified_uses, without_comments
 
 if TYPE_CHECKING:
     import pathlib
@@ -30,19 +30,6 @@ if TYPE_CHECKING:
 CONSTRUCTED = re.compile(r"ConfigError\(\s*(?:code\s*=\s*)?[\"'](\w+)[\"']")
 ANY_CONSTRUCTION = re.compile(r"\bConfigError\(")
 UNREADABLE = "<unreadable>"
-# Core helpers an adapter calls that raise a ConfigError code on its behalf.
-HELPERS: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
-    "ts": (
-        (re.compile(r"\.reveal\(\)"), "missing_secret"),
-        (re.compile(r"\bcredential\("), "missing_secret"),
-        (re.compile(r"\bcheckHostedTools\("), "hosted_tool_unsupported"),
-    ),
-    "py": (
-        (re.compile(r"(?<![\w.])(?:secrets\.)?resolve\("), "missing_secret"),
-        (re.compile(r"\bcredential\("), "missing_secret"),
-        (re.compile(r"\bcheck_hosted_tools\("), "hosted_tool_unsupported"),
-    ),
-}
 SUFFIX = {"ts": ".ts", "py": ".py"}
 
 
@@ -66,8 +53,8 @@ def raised_codes(source: str, lang: str) -> Counter[str]:
     unreadable += unclassified_uses(source, lang)
     if unreadable:
         found[UNREADABLE] = unreadable
-    for pattern, code in HELPERS[lang]:
-        found[code] += len(pattern.findall(code_text))
+    for helper, code in HELPERS[lang].items():
+        found[code] += len(CALLS[lang][helper].findall(code_text))
     return +found
 
 

@@ -131,8 +131,12 @@ def test_the_scan_counts_direct_codes_and_core_helpers() -> None:
         "invalid_config": 1,
         "hosted_tool_unsupported": 1,
     }
-    py = 'resolve(k)\nsystem_resolve(h)\nself.resolve(x)\nraise ConfigError("unknown_preset", "m")'
+    py = 'resolve(k)\nsystem_resolve(h)\nraise ConfigError("unknown_preset", "m")'
     assert raised_codes(py, "py") == {"missing_secret": 1, "unknown_preset": 1}
+    # However a helper call is qualified, it counts; an unrelated method of the same name
+    # over-counts (red, never hidden).
+    qualified_all = "import threads.secrets\nthreads.secrets.resolve(k)\nself.resolve(x)\n"
+    assert raised_codes(qualified_all, "py") == {"missing_secret": 2}
     assert raised_codes('credential("exa", "apiKey", k, "EXA")', "ts") == {"missing_secret": 1}
     assert raised_codes('credential("exa", "api_key", k, "EXA")', "py") == {"missing_secret": 1}
     qualified = "secrets.resolve(k)\nraise ConfigError(code='invalid_config', message='m')"
@@ -174,6 +178,10 @@ THROW = 'throw new E("missing_secret", "m");'
         ("get = credential\nget('x', 'api_key', k, 'X')\n", "py"),
         ("const show = key.reveal;\nshow();\n", "ts"),
         ("from threads.secrets import resolve as r\nr(k)\n", "py"),
+        (
+            'import { credential as /* note */ c } from "@threads/core/adapter";\nc(a, b, k, d);',
+            "ts",
+        ),
     ],
     ids=[
         "py-import-as",
@@ -198,6 +206,7 @@ THROW = 'throw new E("missing_secret", "m");'
         "py-credential-assign",
         "ts-reveal-reference",
         "py-resolve-alias",
+        "ts-alias-with-comment",
     ],
 )
 def test_an_alias_of_config_error_or_a_refusing_helper_is_unreadable(
