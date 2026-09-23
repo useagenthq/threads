@@ -148,7 +148,9 @@ class Host:
         """The principal's tenant's thread at the branch (default main), with its agent's
         approvers and sandbox. Another tenant's thread is not_found."""
         store = self._runner.store(principal.tenant)
-        bound = await self._runner.bound(store, thread_id)
+        # A subagent's thread is governed by the agent at the root of its tree.
+        root = await self._runner.root_of(store, thread_id)
+        bound = None if root is None else await self._runner.bound(store, root[0])
         sandbox = None if bound is None else bound.definition.sandbox
         opened = await open_thread(store, thread_id, branch_id=branch_id, sandbox=sandbox)
         if isinstance(opened, Err):
