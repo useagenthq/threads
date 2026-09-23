@@ -11,16 +11,26 @@ import hashlib
 import hmac
 from collections.abc import Mapping
 from http import HTTPStatus
-from typing import Final
+from typing import ClassVar, Final
 
 import httpx
-from pydantic import JsonValue, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter, ValidationError
 
 from threads.adapters.memories.http import fenced_client
 from threads.host.channel import DeliveryError, DeliveryOutcome
 from threads.log import Event as LogEvent
 from threads.log import ModelResponseEvent, ParseError, TextPart
 from threads.result import Err, Ok
+
+
+class Loose(BaseModel):
+    """A provider payload: it carries more than an adapter reads, so only the fields an adapter
+    declares are checked, and unknown ones are ignored."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="ignore", frozen=True, populate_by_name=True
+    )
+
 
 _OBJECT: Final[TypeAdapter[dict[str, JsonValue]]] = TypeAdapter(dict[str, JsonValue])
 _BEFORE_SEND = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)

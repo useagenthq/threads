@@ -15,10 +15,18 @@ from typing import Final
 from urllib.parse import parse_qs
 
 import httpx
-from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
+from pydantic import JsonValue, ValidationError
 from slack_sdk.signature import Clock, SignatureVerifier
 
-from threads.adapters.channels.common import body_of, client, final_text, refused, send, unverified
+from threads.adapters.channels.common import (
+    Loose,
+    body_of,
+    client,
+    final_text,
+    refused,
+    send,
+    unverified,
+)
 from threads.host.channel import (
     ChannelCapabilities,
     Decision,
@@ -41,13 +49,7 @@ API: Final = "https://slack.com/api"
 _LIMITS: Final = {"message_bytes": 40_000}
 
 
-class _Loose(BaseModel):
-    """Provider payloads carry more than we read; only the fields below are checked."""
-
-    model_config = ConfigDict(extra="ignore", frozen=True)
-
-
-class _Event(_Loose):
+class _Event(Loose):
     type: str
     user: str | None = None
     text: str = ""
@@ -57,7 +59,7 @@ class _Event(_Loose):
     thread_ts: str | None = None
 
 
-class _Envelope(_Loose):
+class _Envelope(Loose):
     type: str
     team_id: str | None = None
     event_id: str | None = None
@@ -65,16 +67,16 @@ class _Envelope(_Loose):
     event: _Event | None = None
 
 
-class _Id(_Loose):
+class _Id(Loose):
     id: str
 
 
-class _Action(_Loose):
+class _Action(Loose):
     value: str = ""
     action_ts: str = ""
 
 
-class _Interaction(_Loose):
+class _Interaction(Loose):
     type: str
     team: _Id
     user: _Id

@@ -14,9 +14,10 @@ from dataclasses import dataclass, field
 from typing import Final
 
 import httpx
-from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
+from pydantic import JsonValue, ValidationError
 
 from threads.adapters.channels.common import (
+    Loose,
     body_of,
     client,
     final_text,
@@ -47,32 +48,28 @@ API: Final = "https://api.github.com"
 _ACCEPT: Final = {"accept": "application/vnd.github+json", "x-github-api-version": "2022-11-28"}
 
 
-class _Loose(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
-
-
-class _Installation(_Loose):
+class _Installation(Loose):
     id: int
 
 
-class _User(_Loose):
+class _User(Loose):
     login: str
     type: str = "User"
 
 
-class _Repository(_Loose):
+class _Repository(Loose):
     full_name: str
 
 
-class _Issue(_Loose):
+class _Issue(Loose):
     number: int
 
 
-class _Comment(_Loose):
+class _Comment(Loose):
     body: str = ""
 
 
-class _Hook(_Loose):
+class _Hook(Loose):
     action: str | None = None
     installation: _Installation | None = None
     sender: _User | None = None

@@ -14,9 +14,10 @@ from dataclasses import dataclass, field
 from typing import Final
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
+from pydantic import Field, JsonValue, ValidationError
 
 from threads.adapters.channels.common import (
+    Loose,
     body_of,
     client,
     final_text,
@@ -45,35 +46,31 @@ from threads.secrets import Secret, resolve
 API: Final = "https://graph.facebook.com/v21.0"
 
 
-class _Loose(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
-
-
-class _Text(_Loose):
+class _Text(Loose):
     body: str
 
 
-class _Message(_Loose):
+class _Message(Loose):
     id: str
     sender: str = Field(alias="from")
     type: str
     text: _Text | None = None
 
 
-class _Value(_Loose):
+class _Value(Loose):
     messages: tuple[_Message, ...] = ()
 
 
-class _Change(_Loose):
+class _Change(Loose):
     value: _Value
 
 
-class _Entry(_Loose):
+class _Entry(Loose):
     id: str
     changes: tuple[_Change, ...] = ()
 
 
-class _Webhook(_Loose):
+class _Webhook(Loose):
     entry: tuple[_Entry, ...]
 
 
