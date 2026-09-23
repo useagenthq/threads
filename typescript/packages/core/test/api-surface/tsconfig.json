@@ -1,0 +1,17 @@
+{
+  // Compiles generated/surface.ts (spec/tools/gen_api_surface.py) against the public entries.
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    // The MCP SDK's own .d.ts doesn't compile under exactOptionalPropertyTypes; our code does.
+    "skipLibCheck": true,
+    "noEmit": true,
+    // Core doesn't depend on host or mcp, so the entries are mapped to their sources here.
+    "paths": {
+      "@threads/core": ["../../src/index.ts"],
+      "@threads/host": ["../../../host/src/index.ts"],
+      "@threads/mcp": ["../../../mcp/src/index.ts"]
+    }
+  },
+  "include": ["generated/surface.ts"]
+}

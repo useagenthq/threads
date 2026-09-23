@@ -94,8 +94,9 @@ reportUnknownLambdaType = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
 venvPath = "."
 venv = ".venv"
-# docs/scripts/gen_api_ref.py imports its sibling api_ref package, which imports spec/tools/api_docs.py.
-executionEnvironments = [{ root = "../docs/scripts" }]
+# docs/scripts/gen_api_ref.py imports its sibling api_ref package, which imports spec/tools/api_docs.py;
+# the spec tools import each other.
+executionEnvironments = [{ root = "../docs/scripts" }, { root = "../spec/tools" }]
 
 [tool.ruff]
 target-version = "py312"

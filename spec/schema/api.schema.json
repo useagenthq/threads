@@ -94,6 +94,8 @@
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
     "PyName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
     "FieldName": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "TypeName": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+    "TypePackage": { "description": "The package entry that exports the type in each language; other public entries may re-export it. Absent: core.", "enum": ["core", "host", "mcp"] },
     "Doc": { "type": "string", "minLength": 1 },
     "Package": {
       "type": "object",
@@ -138,6 +140,8 @@
         "doc": { "$ref": "#/$defs/Doc" },
         "async": { "description": "true: TS returns Promise<returns>, Python is async def.", "type": "boolean" },
         "optional": { "description": "Protocol methods only: an implementation may omit it; the flag named in doc says so.", "type": "boolean" },
+        "capability": { "description": "Required when optional is true (check_api.py): the Python capability protocol that declares the method, e.g. LooksUp. TypeScript spells the capability as an optional property of the base type.", "$ref": "#/$defs/TypeName" },
+        "lang": { "description": "Present only when the callable exists in one language.", "enum": ["ts", "py"] },
         "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
         "params": { "type": "array", "items": { "$ref": "#/$defs/Param" } },
         "returns": { "$ref": "#/$defs/TypeExpr" },
@@ -202,6 +206,7 @@
           "required": ["kind", "casing", "fields"],
           "properties": {
             "kind": { "const": "object" },
+            "package": { "$ref": "#/$defs/TypePackage" },
             "casing": { "enum": ["api", "wire"] },
             "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
             "fields": { "$ref": "#/$defs/Fields" },
@@ -215,6 +220,7 @@
           "required": ["kind", "discriminator", "variants"],
           "properties": {
             "kind": { "const": "union" },
+            "package": { "$ref": "#/$defs/TypePackage" },
             "discriminator": { "$ref": "#/$defs/FieldName" },
             "casing": { "enum": ["api", "wire"] },
             "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
@@ -228,6 +234,7 @@
           "required": ["kind", "type"],
           "properties": {
             "kind": { "const": "alias" },
+            "package": { "$ref": "#/$defs/TypePackage" },
             "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
             "type": { "$ref": "#/$defs/TypeExpr" },
             "doc": { "$ref": "#/$defs/Doc" }
@@ -240,6 +247,7 @@
           "required": ["kind", "role"],
           "properties": {
             "kind": { "const": "interface" },
+            "package": { "$ref": "#/$defs/TypePackage" },
             "role": { "enum": ["handle", "protocol", "opaque"] },
             "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
             "properties": { "$ref": "#/$defs/Fields" },

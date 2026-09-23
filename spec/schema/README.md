@@ -25,6 +25,10 @@ Cross-field rules that Zod has no form for (`if`/`then`/`else`, `not`, `oneOf` o
 
 Rules that JSON Schema can't express at all are allowed only when they are listed under [Semantic rules](#semantic-rules) with a conformance case. Both languages implement them by hand.
 
+## The API surface gate
+
+Both packages are checked against `../api.json` in CI. TypeScript: `tools/gen_api_surface.py` emits type-level assertions that `tsc` compiles (`bun run typecheck`). Python: `tools/check_surface.py --lang py` imports the package and inspects it. Each checks every function, option and its required flag, type (from its declared `package` entry), required property and method; an `optional` method is an optional property of the base type in TypeScript and a `@runtime_checkable` protocol named by `capability` in Python, never a member of the base protocol. Anything either language lacks is listed in `../api-surface-gaps.json`, the one registry of what isn't built (the docs reference reads it too), with its owning lane. The registry only shrinks: a listed gap that is fixed fails until its entry is deleted, and a PR may add an entry only for a member its own contract change introduces (compared against the base commit's `api.json`). It must be empty at the release gate (`--release`). `../api-coverage.json` names, for every function, required method and required option in each language that has it, a test that must pass in the same CI run's JUnit report. That proves a named, reviewed test exists and passed; that it exercises the member is a reviewed claim, not something CI checks.
+
 ## One contract for storage and interchange
 
 SQLite is the storage engine. JSONL is the interchange, export and conformance format. They hold **the same bytes**:

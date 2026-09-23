@@ -24,3 +24,7 @@ __pycache__/
 # Generated from spec/ by scripts/generate.sh; never committed
 python/src/threads/_generated/
 typescript/packages/core/src/store/generated/
+typescript/packages/core/test/api-surface/generated/
+
+# JUnit reports the API surface gate reads (bun run test, pytest --junitxml)
+junit.xml

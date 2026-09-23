@@ -292,6 +292,39 @@ async def deny(
 
 **Returns an error value** with one of these codes: `forbidden`, `not_found`, `approval_mismatch`, `approval_expired`, `approval_duplicate`, `branch_busy`.
 
+### answer
+
+No built-in tool asks the user a question yet (ask_user is not built), so there is no open question to answer.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+answer(callId: CallId, answer: string | readonly string[], principal: Principal): Promise<Result<Appended>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def answer(
+    call_id: CallId,
+    answer: str | Sequence[str],
+    principal: Principal,
+) -> Ok[Appended] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="callId / call_id" type={"CallId"} required />
+
+<Field name="answer" type={"string | readonly string[]"} required />
+
+<Field name="principal" type={"Principal"} required />
+
+**Returns an error value** with one of these codes: `forbidden`, `no_open_question`, `branch_busy`.
+
 ### resolveParked / resolve_parked
 
 A person settles a side effect whose outcome is unknown and that parked the branch, then the branch resumes. Use it when the effect can't be checked automatically.

@@ -1,0 +1,9 @@
+[
+  { "name": "Absent", "lang": "ts", "kind": "placement", "lane": "unassigned" },
+  {
+    "name": "Model.close",
+    "lang": "ts",
+    "kind": "missing",
+    "lane": "unassigned"
+  }
+]

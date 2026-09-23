@@ -183,26 +183,11 @@ async def get(
 
 ### revision
 
-The store's current monotonic revision, recorded as snapshot.knowledge_revision at capture.
+TypeScript only. The store's current monotonic revision, recorded as snapshot.knowledge_revision at capture.
 
-<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
-<Tab value="TypeScript">
-
-```ts
+```ts title="TypeScript"
 revision(scope: Scope): Promise<Result<number>>
 ```
-
-</Tab>
-<Tab value="Python">
-
-```python
-async def revision(
-    scope: Scope,
-) -> Ok[int] | Err[Failure]
-```
-
-</Tab>
-</Tabs>
 
 <Field name="scope" type={"Scope"} required>
   The scope asking, issued by the host. local_knowledge keeps one revision for the whole store and ignores it. See [Scope](/docs/reference/types/Scope).
