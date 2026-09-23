@@ -171,7 +171,7 @@ describe("streaming", () => {
     ]);
     expect(chunks.at(-1)).toEqual({
       kind: "done",
-      stop_reason: "other",
+      stop_reason: "pause_turn",
       usage: {
         input_tokens: null,
         output_tokens: 1,

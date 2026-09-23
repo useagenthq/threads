@@ -52,12 +52,16 @@ const KNOWN = new Set<string>(Event.options.map((o) => o.shape.type.value));
 const Tagged = z.object({ type: z.string() });
 
 type Stop = Extract<ModelChunk, { kind: "done" }>["stop_reason"];
-// pause_turn and model_context_window_exceeded have no wire equivalent: "other".
-const STOPS = new Map<string, Stop>(
-  (
-    ["end_turn", "tool_use", "max_tokens", "stop_sequence", "refusal"] as const
-  ).map((s) => [s, s]),
-);
+// A reason the SDK doesn't list yet is "other", which ends the turn with error, never success.
+const STOPS = new Map<string, Stop>([
+  ["end_turn", "end_turn"],
+  ["tool_use", "tool_use"],
+  ["max_tokens", "max_tokens"],
+  ["stop_sequence", "stop_sequence"],
+  ["refusal", "refusal"],
+  ["pause_turn", "pause_turn"],
+  ["model_context_window_exceeded", "context_window_exceeded"],
+]);
 
 type Open = { block: { [key: string]: Json }; json: string };
 
