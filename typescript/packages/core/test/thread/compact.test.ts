@@ -97,6 +97,29 @@ describe("Thread.compact", () => {
     expect(unwrap(await thread.replay())).toBeUndefined();
   });
 
+  test("a budget refusal of the summary records its failure with budget_exceeded", async () => {
+    const { bot, ref, thread } = await finished([say("Hi.")], {
+      budget: { max_model_requests: 1 },
+    });
+    unwrap(await thread.compact(operator));
+    const next = await bot.run("next", { store: ref.store, thread: ref });
+    expect(next.status).toBe("budget_exhausted");
+    const log = await events(ref);
+    const tail = log.slice(log.findIndex((e) => e.type === "budget_exceeded"));
+    expect(tail.map((e) => e.type)).toEqual([
+      "budget_exceeded",
+      "compaction_failed",
+      "turn_completed",
+    ]);
+    expect(tail[1]).toMatchObject({
+      data: {
+        reason: "model_error",
+        cause_event_id: last(log, "compaction_requested").event_id,
+      },
+    });
+    expect(log.filter((e) => e.type === "model_request")).toHaveLength(1);
+  });
+
   test("a second request before the run is invalid_transition; after the outcome one is accepted", async () => {
     const { bot, ref, thread } = await finished([
       say("Hi."),

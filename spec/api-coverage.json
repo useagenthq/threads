@@ -374,6 +374,11 @@
       "tests/agents/test_subagents.py::test_a_foreground_child_runs_in_its_own_thread_and_feeds_the_call_result"
     ]
   },
+  "Thread.compact": {
+    "ts": [
+      "packages/core/test/thread/compact.test.ts > Thread.compact > records a request; the next run summarizes up to it, then answers the new input"
+    ]
+  },
   "Thread.cost": {
     "ts": [
       "packages/core/test/thread/cost-tree.test.ts > the tree merge > adds the child and grandchild from their own logs"
@@ -412,6 +417,11 @@
     ],
     "py": [
       "tests/thread/test_controls.py::test_an_approval_is_single_use_and_resumes_the_run"
+    ]
+  },
+  "Thread.replay": {
+    "ts": [
+      "packages/core/test/thread/replay.test.ts > Thread.replay > a recorded thread reproduces: Ok, no model request, nothing appended"
     ]
   },
   "Thread.resolveParked": {
@@ -460,6 +470,11 @@
     ],
     "py": [
       "tests/thread/test_controls.py::test_controls_record_their_principal_and_refuse_other_tenants"
+    ]
+  },
+  "Thread.setOutputStyle": {
+    "ts": [
+      "packages/core/test/thread/output-style.test.ts > Thread.setOutputStyle > appends the pinned text; line 0 and the earlier request bytes are kept"
     ]
   },
   "Thread.timeline": {

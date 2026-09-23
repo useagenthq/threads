@@ -1,12 +1,11 @@
 import type { z } from "zod";
-import type { EventOf, ParkAddress } from "../fold/state";
+import type { ParkAddress } from "../fold/state";
 import type {
   BranchId,
   EventId,
   JsonObject,
   KnownEvent,
   ModelRef,
-  PermissionRule,
   Principal,
 } from "../log";
 import { principalKey } from "../log";
@@ -19,7 +18,6 @@ import {
   type Writer,
 } from "../store";
 import type { ChainEvent, LogError } from "../verify";
-import { suggestedRules } from "./pending";
 
 // The Thread control methods (spec/api.json Thread): each appends the actor's
 // event through the run's own writer when this process runs the branch, else under a short lease
