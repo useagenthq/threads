@@ -1306,14 +1306,14 @@
       "step1": false,
       "evidence": [
         {
-          "kind": "case",
+          "kind": "test",
           "ref": "schedule-dst-nonexistent",
-          "status": "planned"
+          "status": "implemented"
         },
         {
-          "kind": "case",
+          "kind": "test",
           "ref": "schedule-dst-ambiguous",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },
