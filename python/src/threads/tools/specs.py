@@ -53,6 +53,8 @@ def specs(*, sandbox: bool, egress_denied: bool) -> tuple[ToolSpec, ...]:
     out: list[ToolSpec] = []
     for entry in _ENTRIES:
         name = entry["name"]
+        if name not in NAMES:
+            continue  # an framework tool, pinned with its feature
         if name not in HOST and not sandbox:
             continue
         effect = "unguarded" if name == "bash" and not egress_denied else _EFFECTS[name]

@@ -1,5 +1,14 @@
 import { z } from "zod";
 import type { Opt, Strict } from "../log/zod-types";
+import {
+  HandoffInput,
+  SendMessageInput,
+  SpawnAgentInput,
+  TeamTaskClaimInput,
+  TeamTaskCreateInput,
+  TeamTaskUpdateInput,
+  TodoWriteInput,
+} from "./agent-inputs";
 
 // The built-in tool catalog: each tool's name, description and input schema,
 // authored once here. `bun run schema:export` writes spec/schema/tools.v1.schema.json and the
@@ -112,7 +121,7 @@ export type CatalogEntry = {
   readonly input: z.ZodType;
 };
 
-/** Sorted by name. */
+/** Sorted by name: the sandbox tools, read_tool_result and the tools. */
 export const CATALOG: readonly CatalogEntry[] = [
   {
     name: "bash",
@@ -139,6 +148,12 @@ export const CATALOG: readonly CatalogEntry[] = [
     input: GrepInput,
   },
   {
+    name: "handoff",
+    description:
+      "Hand this conversation to another agent. It continues in a new thread with the history forwarded; this thread ends.",
+    input: HandoffInput,
+  },
+  {
     name: "ls",
     description: "List the entries of a sandbox directory.",
     input: LsInput,
@@ -155,6 +170,41 @@ export const CATALOG: readonly CatalogEntry[] = [
     input: ReadToolResultInput,
   },
   {
+    name: "send_message",
+    description:
+      "Send a message to a team member, or to * for every member. It arrives before their next model call.",
+    input: SendMessageInput,
+  },
+  {
+    name: "spawn_agent",
+    description:
+      "Run a subagent in its own thread with prompt as its task. In the foreground its final result is this call's result; in the background the call returns at once and the result arrives later.",
+    input: SpawnAgentInput,
+  },
+  {
+    name: "team_task_claim",
+    description:
+      "Claim an open team task whose blockers are all completed. A claim is atomic: one member wins.",
+    input: TeamTaskClaimInput,
+  },
+  {
+    name: "team_task_create",
+    description:
+      "Add a task to the team's shared list. The result is its task id.",
+    input: TeamTaskCreateInput,
+  },
+  {
+    name: "team_task_update",
+    description: "Complete, fail or release a team task you claimed.",
+    input: TeamTaskUpdateInput,
+  },
+  {
+    name: "todo_write",
+    description:
+      "Replace your todo list with todos, the complete new list. Use it to plan and track multi-step work.",
+    input: TodoWriteInput,
+  },
+  {
     name: "write",
     description: "Create or overwrite a file in the sandbox.",
     input: WriteInput,
@@ -167,3 +217,14 @@ export function entry(name: string): CatalogEntry {
   if (found === undefined) throw new Error(`no built-in ${name}`);
   return found;
 }
+
+/** The entries: pinned with subagents, handoffs and todos, and run by the loop. */
+export const AGENT_TOOLS: ReadonlySet<string> = new Set([
+  "handoff",
+  "send_message",
+  "spawn_agent",
+  "team_task_claim",
+  "team_task_create",
+  "team_task_update",
+  "todo_write",
+]);

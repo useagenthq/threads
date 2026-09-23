@@ -96,6 +96,20 @@
       ],
       "type": "object"
     },
+    "HandoffInput": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "description": "A handoff target listed in your instructions.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent"
+      ],
+      "type": "object"
+    },
     "LsInput": {
       "additionalProperties": false,
       "properties": {
@@ -158,6 +172,163 @@
         "call_id",
         "offset",
         "length"
+      ],
+      "type": "object"
+    },
+    "SendMessageInput": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "to": {
+          "description": "A member's agent name, or * for every member.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "text"
+      ],
+      "type": "object"
+    },
+    "SpawnAgentInput": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "description": "A subagent name listed in your instructions.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "background": {
+          "description": "Default false: wait for the result.",
+          "type": "boolean"
+        },
+        "isolation": {
+          "description": "Default none.",
+          "enum": [
+            "none",
+            "shared_sandbox",
+            "worktree",
+            "forked_sandbox"
+          ],
+          "type": "string"
+        },
+        "prompt": {
+          "description": "The task; the subagent sees nothing else.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent",
+        "prompt"
+      ],
+      "type": "object"
+    },
+    "TeamTaskClaimInput": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "type": "object"
+    },
+    "TeamTaskCreateInput": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked_by": {
+          "description": "Task ids that must complete before this one can be claimed.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "subject": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject"
+      ],
+      "type": "object"
+    },
+    "TeamTaskUpdateInput": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "description": "released returns a claimed task to the open pool.",
+          "enum": [
+            "completed",
+            "failed",
+            "released"
+          ],
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "TodoWriteInput": {
+      "additionalProperties": false,
+      "properties": {
+        "todos": {
+          "description": "The complete new list; ids are unique.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active_form": {
+                "description": "Present tense, shown while in_progress.",
+                "type": "string"
+              },
+              "content": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "in_progress",
+                  "completed"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "content",
+              "status"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "todos"
       ],
       "type": "object"
     },

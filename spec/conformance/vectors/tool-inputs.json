@@ -1,6 +1,6 @@
 {
   "description": "Built-in tool inputs: each case is parsed with the tool's catalog schema (Zod in TypeScript, the generated Pydantic model in Python) and must be accepted exactly when valid. catalog_sha256 is the SHA-256 of spec/schema/tools.v1.catalog.json, the canonical catalog both runtimes pin.",
-  "catalog_sha256": "218d9f90a29811d412b1f63dffc6d3acc75015d8d166d40a701c9c902f23837e",
+  "catalog_sha256": "fe720a2c92b124353c6c4ce52d80b0f8748851abcdb21dcdcb60f27343747aca",
   "cases": [
     {
       "tool": "bash",
@@ -333,6 +333,236 @@
         "call_id": "",
         "offset": 0,
         "length": 1
+      },
+      "valid": false
+    },
+    {
+      "tool": "todo_write",
+      "input": {
+        "todos": []
+      },
+      "valid": true
+    },
+    {
+      "tool": "todo_write",
+      "input": {
+        "todos": [
+          {
+            "id": "1",
+            "content": "Fix it",
+            "status": "pending"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "tool": "todo_write",
+      "input": {
+        "todos": [
+          {
+            "id": "1",
+            "content": "Fix",
+            "status": "pending",
+            "active_form": "Fixing"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "tool": "todo_write",
+      "input": {
+        "todos": [
+          {
+            "id": "1",
+            "content": "Fix",
+            "status": "done"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "tool": "todo_write",
+      "input": {
+        "todos": [
+          {
+            "id": "",
+            "content": "Fix",
+            "status": "pending"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "tool": "todo_write",
+      "input": {
+        "todos": [
+          {
+            "id": "1",
+            "status": "pending"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "tool": "todo_write",
+      "input": {
+        "todos": "1. Fix"
+      },
+      "valid": false
+    },
+    {
+      "tool": "spawn_agent",
+      "input": {
+        "agent": "reviewer",
+        "prompt": "Review the diff."
+      },
+      "valid": true
+    },
+    {
+      "tool": "spawn_agent",
+      "input": {
+        "agent": "scanner",
+        "prompt": "Scan.",
+        "background": true,
+        "isolation": "none"
+      },
+      "valid": true
+    },
+    {
+      "tool": "spawn_agent",
+      "input": {
+        "agent": "reviewer",
+        "prompt": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "spawn_agent",
+      "input": {
+        "agent": "reviewer",
+        "prompt": "x",
+        "isolation": "vm"
+      },
+      "valid": false
+    },
+    {
+      "tool": "spawn_agent",
+      "input": {
+        "agent": "reviewer",
+        "prompt": "x",
+        "background": "yes"
+      },
+      "valid": false
+    },
+    {
+      "tool": "handoff",
+      "input": {
+        "agent": "billing"
+      },
+      "valid": true
+    },
+    {
+      "tool": "handoff",
+      "input": {
+        "agent": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "handoff",
+      "input": {
+        "agent": "billing",
+        "forwarded": "none"
+      },
+      "valid": false
+    },
+    {
+      "tool": "send_message",
+      "input": {
+        "to": "*",
+        "text": "Schema is up."
+      },
+      "valid": true
+    },
+    {
+      "tool": "send_message",
+      "input": {
+        "to": "bob",
+        "text": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "team_task_create",
+      "input": {
+        "subject": "Write the runner",
+        "blocked_by": [
+          "t1"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "tool": "team_task_create",
+      "input": {
+        "subject": "Write the schema",
+        "description": "v1"
+      },
+      "valid": true
+    },
+    {
+      "tool": "team_task_create",
+      "input": {
+        "subject": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "team_task_create",
+      "input": {
+        "subject": "x",
+        "task_id": "t9"
+      },
+      "valid": false
+    },
+    {
+      "tool": "team_task_claim",
+      "input": {
+        "task_id": "t1"
+      },
+      "valid": true
+    },
+    {
+      "tool": "team_task_claim",
+      "input": {},
+      "valid": false
+    },
+    {
+      "tool": "team_task_update",
+      "input": {
+        "task_id": "t1",
+        "status": "completed"
+      },
+      "valid": true
+    },
+    {
+      "tool": "team_task_update",
+      "input": {
+        "task_id": "t1",
+        "status": "released"
+      },
+      "valid": true
+    },
+    {
+      "tool": "team_task_update",
+      "input": {
+        "task_id": "t1",
+        "status": "claimed"
       },
       "valid": false
     }

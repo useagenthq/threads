@@ -20,9 +20,16 @@ MODELS = {
     "edit": tools_v1.EditInput,
     "glob": tools_v1.GlobInput,
     "grep": tools_v1.GrepInput,
+    "handoff": tools_v1.HandoffInput,
     "ls": tools_v1.LsInput,
     "read": tools_v1.ReadInput,
     "read_tool_result": tools_v1.ReadToolResultInput,
+    "send_message": tools_v1.SendMessageInput,
+    "spawn_agent": tools_v1.SpawnAgentInput,
+    "team_task_claim": tools_v1.TeamTaskClaimInput,
+    "team_task_create": tools_v1.TeamTaskCreateInput,
+    "team_task_update": tools_v1.TeamTaskUpdateInput,
+    "todo_write": tools_v1.TodoWriteInput,
     "write": tools_v1.WriteInput,
 }
 
