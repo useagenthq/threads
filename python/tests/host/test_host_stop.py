@@ -9,6 +9,7 @@ import json
 from collections.abc import Mapping, Sequence
 
 from host.test_channel_recovery import (
+    CONTROL_AND_FOLLOW_ON,
     TEAM,
     USER,
     Replies,
@@ -165,9 +166,10 @@ def test_stop_cancels_a_follow_on_resume_so_a_restart_runs_nothing_old() -> None
             return await bound(store, thread)
 
         runner.bound = stalled  # pyright: ignore[reportAttributeAccessIssue] - the barrier
-        follow_ons = runner._pending.values()  # pyright: ignore[reportPrivateUsage] - what stop owns
         hold.set()
         await reached.wait()
+        follow_ons = list(runner._pending)  # pyright: ignore[reportPrivateUsage] - what stop owns
+        assert follow_ons
         await runner.stop()
         assert all(t.done() for t in follow_ons)
         # Started again at once: the old generation's resume launches nothing.
@@ -192,16 +194,58 @@ def test_recovered_waits_for_the_follow_on_its_own_recovery_owns() -> None:
         await served.ready()
         await channel.sending.wait()
         tenant, thread_id, branch = await _root(runner)
+        resumed: list[BranchId] = []
+        resume = runner.resume
+
+        async def counted(*args: object, **kwargs: object) -> object:
+            resumed.append(branch)
+            return await resume(*args, **kwargs)  # pyright: ignore[reportArgumentType] - a spy
+
+        runner.resume = counted  # pyright: ignore[reportAttributeAccessIssue] - a spy
         # A control while recovery's run is mid-send: its resume follows once that run ends.
         await runner.resume(tenant, thread_id, branch)
         assert channel.hold is not None
         channel.hold.set()
         await asyncio.wait_for(recovered(served), STOP_S)
-        follow_ons = runner._pending.values()  # pyright: ignore[reportPrivateUsage] - what recovery owns
-        assert follow_ons
-        assert all(t.done() for t in follow_ons)
+        # The control's resume, then the follow-on it queued: both over, none left in flight.
+        assert len(resumed) == CONTROL_AND_FOLLOW_ON
+        assert not runner._pending  # pyright: ignore[reportPrivateUsage] - finished follow-ons go
         assert not runner.running(branch)
         await served.stop()
+
+    asyncio.run(main())
+
+
+def test_recovered_does_not_wait_on_a_later_run_of_the_same_branch() -> None:
+    """Codex #344: once recovery's own runs are over, a new run on that branch is not its."""
+    store = sqlite(":memory:")
+
+    async def main() -> None:
+        later, entered = asyncio.Event(), asyncio.Event()
+
+        async def gated(_source: object, _ctx: RunContext[None]) -> Sequence[str]:
+            if later.is_set():
+                entered.set()
+                await asyncio.Event().wait()
+            return ()
+
+        bot = agent(
+            model=scripted_model({"responses": [text("Hi there."), text("later")]}),
+            extensions=[extension(name="gated", hooks={"session_start": gated})],
+        )
+        # A host that died right after its turn ended: the reply is owed.
+        channels = {"fake": Replies(crash=True)}
+        async with host(store=store, agents={"bot": bot}, channels=channels) as first:
+            await first.receive("fake", webhook("d1", "m1", "hello"))
+            await until(lambda: _consumed(store))
+        served = host(store=store, agents={"bot": bot}, channels={"fake": Replies()})
+        await served.ready()
+        await asyncio.wait_for(recovered(served), STOP_S)
+        later.set()
+        await served.receive("fake", webhook("d2", "m2", "again"))
+        await asyncio.wait_for(entered.wait(), STOP_S)
+        await asyncio.wait_for(recovered(served), STOP_S)
+        await asyncio.wait_for(served.stop(), STOP_S)
 
     asyncio.run(main())
 

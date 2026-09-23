@@ -34,6 +34,8 @@ TEAM = "T1"
 USER = Principal(issuer="fake:T1", tenant=TEAM, subject="U1")
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 _ITEMS: TypeAdapter[list[Inbound]] = TypeAdapter(list[Inbound])
+CONTROL_AND_FOLLOW_ON = 2
+"""Resumes for a control answered mid-run: the control's own, then the follow-on it queued."""
 
 
 class _CrashError(Exception):
@@ -254,13 +256,21 @@ def test_settled_waits_for_a_follow_on_resume_a_recovered_run_scheduled() -> Non
         assert isinstance(root, Ok)
         await runner.redeliver(tenant, thread_id)
         await channel.sending.wait()
+        resumed: list[object] = []
+        resume = runner.resume
+
+        async def counted(*args: object, **kwargs: object) -> object:
+            resumed.append(args)
+            return await resume(*args, **kwargs)  # pyright: ignore[reportArgumentType] - a spy
+
+        runner.resume = counted  # pyright: ignore[reportAttributeAccessIssue] - a spy
         # A control while the recovered run is in flight: its resume follows once that run ends.
         await runner.resume(tenant, thread_id, root.value)
         hold.set()
         await runner.settled()
-        follow_ons = runner._pending.values()  # pyright: ignore[reportPrivateUsage] - what settled covers
-        assert follow_ons
-        assert all(t.done() for t in follow_ons)
+        # The control's resume and the follow-on it queued have both run; none is left.
+        assert len(resumed) == CONTROL_AND_FOLLOW_ON
+        assert not runner._pending  # pyright: ignore[reportPrivateUsage] - what settled covers
         assert not runner.running(root.value)
         await runner.stop()
 

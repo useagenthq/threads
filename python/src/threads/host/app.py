@@ -21,7 +21,7 @@ from threads.agents.store import Store, open_store
 from threads.host import start, stream
 from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
 from threads.host.intake import ChannelIntake
-from threads.host.runs import Runner
+from threads.host.runs import Runner, RunTask
 from threads.host.schedules import Schedule, Scheduler
 from threads.host.stream import Message
 from threads.log import BranchId, EventId, ParseError, Permissions, Principal, ThreadId
@@ -39,11 +39,11 @@ type Authenticate = Callable[["Request"], Awaitable[Principal | None]]
 """Maps an HTTP API request to its principal, or None for 401."""
 
 
-_RECOVERY: "WeakKeyDictionary[Host, tuple[asyncio.Event, list[BranchId], Runner]]" = (
+_RECOVERY: "WeakKeyDictionary[Host, tuple[asyncio.Event, list[RunTask], Runner]]" = (
     WeakKeyDictionary()
 )
-"""Each host's start-up recovery pass (set once it has finished), the branches it started runs
-on and the runner running them: what the `recovered` seam waits on, never an unrelated run."""
+"""Each host's start-up recovery pass (set once it has finished), the runs it started and the
+runner that follows them: what the `recovered` seam waits on, never an unrelated run."""
 
 
 class Host:
@@ -121,9 +121,9 @@ class Host:
             # in a table if hosts carry many conversations.
             for tenant, thread in await sq.tables.channel_threads():
                 if (tenant, thread) not in waiting:
-                    branch = await self._runner.redeliver(self._runner.store(tenant), thread)
-                    if branch is not None:
-                        _RECOVERY[self][1].append(branch)
+                    run = await self._runner.redeliver(self._runner.store(tenant), thread)
+                    if run is not None:
+                        _RECOVERY[self][1].append(run)
         finally:
             _RECOVERY[self][0].set()
         await self._scheduler.run()
@@ -227,7 +227,7 @@ async def recovered(served: Host) -> None:
     asserts what recovery did or didn't do without sleeping. Python recovers once per start
     (each start, including a restart of the same host), not on a timer as TS does, so there is
     no later pass to wait for. Internal: not exported."""
-    done, branches, runner = _RECOVERY[served]
+    done, runs, runner = _RECOVERY[served]
     await done.wait()
-    for branch in branches:
-        await runner.settled_on(branch)
+    for run in runs:
+        await runner.through(run)

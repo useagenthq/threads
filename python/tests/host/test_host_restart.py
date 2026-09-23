@@ -4,17 +4,19 @@ review #332: a start_run() or a control's resume() held before its run was regis
 stop() and ready() and launched afterwards."""
 
 import asyncio
+from collections.abc import Sequence
 
 import pytest
 from host.test_channel_recovery import text
 
-from threads import agent, scripted_model, sqlite
+from threads import agent, extension, scripted_model, sqlite
 from threads._generated.host_api_v1 import StartRunRequest
+from threads.agents.context import RunContext
 from threads.agents.store import Store, open_store
 from threads.host import host
 from threads.host import start as host_start
-from threads.host.runs import Bound
-from threads.log import Principal, ThreadId, UserInputEvent
+from threads.host.runs import Bound, Runner
+from threads.log import BranchId, Principal, ThreadId, UserInputEvent
 from threads.result import Err, Ok
 from threads.thread.handle import Thread
 
@@ -93,6 +95,114 @@ def test_a_resume_held_across_stop_and_restart_starts_nothing() -> None:
         await served.stop()
 
     asyncio.run(main())
+
+
+def test_a_refused_old_request_leaves_the_live_run_on_its_branch_tracked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Codex #344 HIGH 1: a refused request from before a stop must not replace the record of the
+    run now going on its branch, or stop() would miss that run."""
+
+    async def main() -> None:
+        hold, entered = asyncio.Event(), asyncio.Event()
+
+        async def gated(_source: object, _ctx: RunContext[None]) -> Sequence[str]:
+            if hold.is_set():
+                entered.set()
+                await asyncio.Event().wait()
+            return ()
+
+        replies = [text("one"), text("two"), text("three")]
+        bot = agent(
+            model=scripted_model({"responses": replies}),
+            extensions=[extension(name="gated", hooks={"session_start": gated})],
+        )
+        served = host(store=sqlite(":memory:"), agents={"bot": bot})
+        await served.ready()
+        first = await served.start_run(_ask("a"), principal=ALICE, idempotency_key="k1")
+        assert isinstance(first, Ok)
+        thread, branch = first.value.thread_id, first.value.branch_id
+        runner = served._runner  # pyright: ignore[reportPrivateUsage] - what stop() tracks
+        while runner.running(branch):
+            await asyncio.sleep(0.01)
+        # An old request held before its run registers, then a stop and a restart.
+        entered_old, release = asyncio.Event(), asyncio.Event()
+        target = host_start._target  # pyright: ignore[reportPrivateUsage] - the barrier
+
+        async def held(*args: object) -> object:
+            entered_old.set()
+            await release.wait()
+            return await target(*args)  # pyright: ignore[reportArgumentType] - a spy
+
+        monkeypatch.setattr(host_start, "_target", held)
+        old = asyncio.ensure_future(
+            served.start_run(_ask("b", thread), principal=ALICE, idempotency_key="k2")
+        )
+        await entered_old.wait()
+        await served.stop()
+        await served.ready()
+        monkeypatch.setattr(host_start, "_target", target)
+        # A fresh run on the same branch, held in session_start.
+        hold.set()
+        current = asyncio.ensure_future(
+            served.start_run(_ask("c", thread), principal=ALICE, idempotency_key="k3")
+        )
+        await entered.wait()
+        release.set()
+        refused = await old
+        assert isinstance(refused, Err)
+        assert refused.error.code == "branch_busy"
+        # The live run is still the branch's run, so stop() ends it.
+        assert runner.running(branch)
+        await asyncio.wait_for(served.stop(), 2.0)
+        assert not runner.running(branch)
+        # Ended by the stop before it recorded its input: refused, retryable.
+        stopped = await asyncio.wait_for(current, 2.0)
+        assert isinstance(stopped, Err)
+
+    asyncio.run(main())
+
+
+def test_stop_drains_every_follow_on_of_a_branch_and_none_runs_after_restart() -> None:
+    """Codex #344 HIGH 2: a second follow-on on a branch must not hide the first from stop()."""
+
+    async def main() -> None:
+        runner = Runner(sqlite(":memory:"), {}, {})
+        branch = BranchId("01a0cf30-3d8e-7bb8-b294-1dcc47b62a40")
+        thread_id = ThreadId("01a0cf30-3969-7caf-adb4-abbec478caa6")
+        thread = Thread(thread_id, branch, runner.store("acme"))
+        gate, launched = asyncio.Event(), list[int]()
+
+        async def held(*_args: object, **_kwargs: object) -> None:
+            await gate.wait()
+            launched.append(1)
+
+        runner.resume = held  # the barrier
+
+        async def ended() -> None:
+            return None
+
+        for _ in range(2):
+            run = asyncio.ensure_future(ended())
+            await run
+            runner._again.add(branch)  # pyright: ignore[reportPrivateUsage] - a queued control
+            runner._ended(thread, run)  # pyright: ignore[reportPrivateUsage, reportArgumentType] - a run that ended
+        await asyncio.sleep(0)
+        await runner.stop()
+        runner.open()
+        gate.set()
+        for _ in range(20):
+            await asyncio.sleep(0)
+        assert launched == []
+
+    asyncio.run(main())
+
+
+def _ask(words: str, thread: ThreadId | None = None) -> StartRunRequest:
+    body: dict[str, object] = {"agent": "bot", "input": words}
+    if thread is not None:
+        body["thread_id"] = thread
+    return StartRunRequest.model_validate(body)
 
 
 async def _inputs(_thread: object, store: Store) -> list[UserInputEvent]:
