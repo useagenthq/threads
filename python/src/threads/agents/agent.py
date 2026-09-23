@@ -5,7 +5,7 @@ store, the principal and the deps.
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack
 from dataclasses import replace
 from functools import partial
@@ -79,6 +79,9 @@ class AgentOptions(TypedDict, total=False):
     """computer_screenshot and computer; needs a sandbox with a desktop."""
     lsp: LspOptions
     """lsp for these languages, served by the sandbox image."""
+    output_styles: Mapping[str, str]
+    """Named instructions an operator can switch a thread to with Thread.set_output_style.
+    Pinned with the config; keys and texts non-empty."""
     approvers: Sequence[Principal]
     """Who may answer approval challenges and resolve parked effects for runs this agent roots,
     its subagents and handoff targets included. Unset: the root run's originating principal
@@ -272,6 +275,18 @@ def _retries(options: AgentOptions) -> int:
     return retries
 
 
+def _styles(styles: Mapping[str, str]) -> tuple[tuple[str, str], ...]:
+    return tuple(_style(name, text) for name, text in styles.items())
+
+
+def _style(name: object, text: object) -> tuple[str, str]:
+    # Checked at runtime: the pin is wire JSON whatever the caller's types said.
+    if not (isinstance(name, str) and name and isinstance(text, str) and text):
+        why = f"output_styles[{name!r}] needs a non-empty name and a non-empty text"
+        raise ConfigError("invalid_config", why)
+    return name, text
+
+
 def _definition[T](
     options: AgentOptions,
     tools: tuple[AppTool[T], ...],
@@ -314,6 +329,7 @@ def _definition[T](
         output=output,
         output_retries=_retries(options),
         fallback=tuple(options.get("fallback", ())),
+        output_styles=_styles(options.get("output_styles", {})),
     )
     if "approvers" in options:
         definition = replace(definition, approvers=tuple(options["approvers"]))

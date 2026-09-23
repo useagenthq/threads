@@ -27,6 +27,7 @@ from threads.log import (
 )
 from threads.log.digest import canonical_sha256
 from threads.log.jcs import MAX_SAFE_INTEGER
+from threads.reduce import rules_requested
 from threads.reduce.fold import Fold, policy, reject
 from threads.reduce.handlers import Handler, on, to_json
 from threads.result import Ok
@@ -60,6 +61,8 @@ def _user_input(fold: Fold, event: UserInputEvent) -> ParseError | None:
         return reject(event, "user_input while a turn is open; input during a turn is steer")
     fold.in_turn = True
     fold.over_budget = False
+    if fold.first_input is None:
+        fold.first_input = event
     return None
 
 
@@ -74,9 +77,15 @@ def _model_request(fold: Fold, event: ModelRequestEvent) -> ParseError | None:
         return reject(event, "the thread handed off; it makes no more model requests")
     if fold.over_budget:
         return reject(event, "model_request after budget_exceeded, before a new user_input")
-    fold.open_requests.add(event.event_id)
+    cause = event.data.cause_event_id
     if event.data.purpose == "compaction":
+        error = rules_requested.cause_error(fold, event, cause)
+        if error is not None:
+            return error
         fold.compaction_requests.add(event.event_id)
+        if cause is not MISSING:
+            fold.causes[event.event_id] = cause
+    fold.open_requests.add(event.event_id)
     return None
 
 

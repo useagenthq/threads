@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 
 from threads.log import Event, Header, ParseError, UnknownEvent
-from threads.reduce import rules_misc, rules_tools, rules_turns
+from threads.reduce import rules_misc, rules_requested, rules_tools, rules_turns
 from threads.reduce.fold import Fold, reject
 from threads.reduce.handlers import Handler
 
@@ -11,6 +11,7 @@ _HANDLERS: Mapping[type, Handler] = {
     **rules_turns.HANDLERS,
     **rules_tools.HANDLERS,
     **rules_misc.HANDLERS,
+    **rules_requested.HANDLERS,
 }
 
 

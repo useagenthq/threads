@@ -56,13 +56,24 @@ def forbidden(why: str) -> Err[ParseError]:
     return Err(ParseError("forbidden", why))
 
 
+BUSY: Final = "the thread has a turn in progress; try again when it ends"
+
+
 async def append(
-    store: Store, branch: BranchId, build: Build, companion: Companion | None = None
+    store: Store,
+    branch: BranchId,
+    build: Build,
+    companion: Companion | None = None,
+    *,
+    idle: bool = False,
 ) -> Controlled:
     """Builds the drafts from the committed branch and appends them as one transaction. The
-    first draft is the control's durable record."""
+    first draft is the control's durable record. `idle`: only between turns (a turn parked on an
+    approval, a question or an effect is still open), so never through a live run's writer."""
 
     async def under(writer: Writer) -> Controlled:
+        if idle and writer.fold.in_turn:
+            return Err(ParseError("branch_busy", BUSY))
         drafts = build(writer.fold)
         if isinstance(drafts, Err):
             return drafts
@@ -77,7 +88,7 @@ async def append(
 
     live = LIVE.get(branch)
     if live is not None:
-        return await under(live)
+        return Err(ParseError("branch_busy", BUSY)) if idle else await under(live)
     sq = await open_store(store)
     taken = await sq.acquire(branch, uuid.uuid4().hex, now_ms)
     if isinstance(taken, Err):

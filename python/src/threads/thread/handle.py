@@ -39,7 +39,7 @@ from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import VerifiedLog
 from threads.store.lines import uuid7
-from threads.thread import approvals, control, tree
+from threads.thread import approvals, control, style, tree
 from threads.thread.authority import Checked, refused
 from threads.thread.case import (
     CaseExpectation,
@@ -315,6 +315,24 @@ class Thread:
     async def set_mode(self, mode: PermissionMode, principal: Principal) -> Controlled:
         """mode_changed."""
         return await control.set_mode(self.store, self.branch, mode, principal)
+
+    async def replay(self) -> Ok[None] | Err[ParseError]:
+        """Re-renders every recorded model request of this branch from the log and checks it
+        byte for byte: no model or tool calls, no appends. The first failure names its seq.
+        Run it over real threads in CI to prove an upgrade still reproduces them."""
+        read = await read_log(self.store, self.branch)
+        if isinstance(read, Err):
+            return read
+        return await (await open_store(self.store)).verify_requests(read.value.fold.events)
+
+    async def compact(self, principal: Principal, *, instructions: str | None = None) -> Controlled:
+        """Records a compaction request while the thread is idle; its next run summarizes
+        everything up to it first. The outcome is in the timeline, not an error here."""
+        return await style.compact(self.store, self.branch, principal, instructions)
+
+    async def set_output_style(self, name: str, principal: Principal) -> Controlled:
+        """Switches later replies to one of the agent's pinned output styles, while idle."""
+        return await style.set_output_style(self.store, self.branch, name, principal)
 
     async def _read(self) -> Ok[VerifiedLog] | Err[ParseError]:
         sq = await open_store(self.store)

@@ -22,6 +22,7 @@ from threads.log import (
     TodosUpdatedEvent,
 )
 from threads.log.digest import sha256_hex
+from threads.reduce import rules_requested
 from threads.reduce.fold import Fold, Task, reject
 from threads.reduce.handlers import Handler, on
 
@@ -42,7 +43,11 @@ def _compacted(fold: Fold, event: CompactedEvent) -> ParseError | None:
     error = _summary_error(fold, event)
     if error is not None:
         return reject(event, error)
+    requested = rules_requested.compacted_error(fold, event)
+    if requested is not None:
+        return requested
     fold.ranges.append((start, end))
+    rules_requested.answer(fold, event.data.cause_event_id)
     return None
 
 

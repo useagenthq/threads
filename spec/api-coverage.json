@@ -377,6 +377,9 @@
   "Thread.compact": {
     "ts": [
       "packages/core/test/thread/compact.test.ts > Thread.compact > records a request; the next run summarizes up to it, then answers the new input"
+    ],
+    "py": [
+      "tests/thread/test_compact.py::test_the_next_run_summarizes_up_to_the_request_first"
     ]
   },
   "Thread.cost": {
@@ -422,6 +425,9 @@
   "Thread.replay": {
     "ts": [
       "packages/core/test/thread/replay.test.ts > Thread.replay > a recorded thread reproduces: Ok, no model request, nothing appended"
+    ],
+    "py": [
+      "tests/thread/test_thread_replay.py::test_replay_reproduces_every_request_without_a_model_or_an_append"
     ]
   },
   "Thread.resolveParked": {
@@ -475,6 +481,9 @@
   "Thread.setOutputStyle": {
     "ts": [
       "packages/core/test/thread/output-style.test.ts > Thread.setOutputStyle > appends the pinned text; line 0 and the earlier request bytes are kept"
+    ],
+    "py": [
+      "tests/thread/test_output_style.py::test_a_style_is_an_instruction_after_the_prefix_and_keeps_the_cache"
     ]
   },
   "Thread.timeline": {

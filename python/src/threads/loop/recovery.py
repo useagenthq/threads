@@ -12,11 +12,14 @@ Recovery is idempotent: a second pass over its own output finds nothing to decid
 
 from typing import TYPE_CHECKING
 
+from pydantic.experimental.missing_sentinel import MISSING
+
 from threads.log import EventId, ModelRequestEvent, SteerEvent, UserInputEvent
 from threads.loop import calls, effects
 from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
 from threads.loop.history import CallState, call_state
+from threads.loop.manual import settle_requested
 from threads.loop.model import Found, NotFound
 from threads.loop.runtime import Halt, Runtime, WriterContext, epoch_model, fence, lost
 from threads.result import Err
@@ -43,7 +46,7 @@ async def recover(rt: Runtime) -> Halt | None:
         halt = await _call(rt, call_state(rt.events, call_id))
         if halt is not None:
             return halt
-    return None
+    return await settle_requested(rt)
 
 
 def _open_turn_to_close(rt: Runtime) -> bool:
@@ -54,7 +57,11 @@ def _open_turn_to_close(rt: Runtime) -> bool:
         return False
     inputs = [i for i, e in enumerate(rt.events) if isinstance(e, UserInputEvent | SteerEvent)]
     start = inputs[-1] if inputs else 0
-    return any(isinstance(e, ModelRequestEvent) for e in rt.events[start:])
+    # A requested compaction's side request is cut before the input, so it never sent it.
+    return any(
+        isinstance(e, ModelRequestEvent) and e.data.cause_event_id is MISSING
+        for e in rt.events[start:]
+    )
 
 
 async def _model(rt: Runtime, request_id: EventId) -> Halt | None:

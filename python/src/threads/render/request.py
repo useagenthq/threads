@@ -12,7 +12,9 @@ from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import (
+    CompactionRequestedEvent,
     Event,
+    EventId,
     HookDecisionEvent,
     ModelRequestEvent,
     ModelSettings,
@@ -76,16 +78,24 @@ def epoch_line0(events: Sequence[Event]) -> Ok[bytes] | Err[ParseError]:
 
 
 def render(
-    events: Sequence[Event], read: ReadArtifact, *, compaction: bool = False
+    events: Sequence[Event],
+    read: ReadArtifact,
+    *,
+    compaction: bool = False,
+    cause: EventId | None = None,
 ) -> Ok[Rendered] | Err[ParseError]:
     """The request after `events`, every artifact its parts reference read and verified.
-    `compaction` renders the summarizer side request."""
+    `compaction` renders the summarizer side request; with `cause`, the one a
+    compaction_requested asked for, whose history ends at that request."""
     head = epoch_line0(events)
     if isinstance(head, Err):
         return head
     out = [head.value]
     view = render_view(events)
-    for event in walk(view, events):
+    request = _requested(events, cause)
+    # A requested compaction's history ends at its request, each line rendered as it is now.
+    history = events if request is None else [e for e in events if e.seq <= request.seq]
+    for event in walk(view, history):
         built = build(view, read, event)
         if isinstance(built, Err):
             return built
@@ -98,20 +108,40 @@ def render(
                 return verified
         out.append(jsonl(line.value))
     if compaction:
-        out.append(jsonl(user_line(compact_instruction(events))))
+        out.append(jsonl(user_line(compact_instruction(events, request))))
     return Ok(Rendered(b"".join(out), head.value))
 
 
-def compact_instruction(events: Sequence[Event]) -> str:
-    """The fixed instruction, plus the before_compact guides since the previous request."""
-    guides: list[str] = []
-    for event in reversed(events):
-        if isinstance(event, ModelRequestEvent):
-            break
-        if isinstance(event, HookDecisionEvent):
-            d = event.data
-            if d.hook == "before_compact" and d.decision == "guide" and d.reason is not MISSING:
-                guides.append(d.reason)
-    if not guides:
-        return COMPACT_INSTRUCTION
-    return COMPACT_INSTRUCTION + GUIDE_PREFIX + "\n".join(reversed(guides))
+def _requested(events: Sequence[Event], cause: EventId | None) -> CompactionRequestedEvent | None:
+    return next(
+        (e for e in events if isinstance(e, CompactionRequestedEvent) and e.event_id == cause),
+        None,
+    )
+
+
+def compact_instruction(
+    events: Sequence[Event], request: CompactionRequestedEvent | None = None
+) -> str:
+    """The fixed instruction, plus the before_compact guides since the previous request. For a
+    requested compaction: the request's instructions, then the guides appended after it."""
+    if request is None:
+        since = max(
+            (i for i, e in enumerate(events) if isinstance(e, ModelRequestEvent)), default=-1
+        )
+        extra = _guides(events[since + 1 :])
+    else:
+        asked = request.data.instructions
+        after = [e for e in events if e.seq > request.seq]
+        extra = ([] if asked is MISSING else [asked]) + _guides(after)
+    return COMPACT_INSTRUCTION + (GUIDE_PREFIX + "\n".join(extra) if extra else "")
+
+
+def _guides(events: Sequence[Event]) -> list[str]:
+    return [
+        e.data.reason
+        for e in events
+        if isinstance(e, HookDecisionEvent)
+        and e.data.hook == "before_compact"
+        and e.data.decision == "guide"
+        and e.data.reason is not MISSING
+    ]

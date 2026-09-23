@@ -76,16 +76,19 @@ class HookRunner:
     def has(self, hook: HookName) -> bool:
         return any(hook in b.hooks for b in self._bound)
 
-    async def run[T](self, hook: HookName, parse: TypeAdapter[T], *args: object) -> list[Ran[T]]:
-        """Every extension's hook, `before*` in declaration order and `after*` reversed, one at a
-        time: a later hook sees the log the earlier one led to."""
+    def defining(self, hook: HookName) -> tuple[Bound, ...]:
+        """The extensions defining `hook`, `before*` in declaration order and `after*` reversed."""
         order = reversed(self._bound) if hook.startswith("after") else iter(self._bound)
-        return [await _one(b, hook, parse, args) for b in order if hook in b.hooks]
+        return tuple(b for b in order if hook in b.hooks)
+
+    async def run[T](self, hook: HookName, parse: TypeAdapter[T], *args: object) -> list[Ran[T]]:
+        """Every extension's hook in `defining` order, one at a time: a later hook sees the log
+        the earlier one led to."""
+        return [await run_one(b, hook, parse, *args) for b in self.defining(hook)]
 
 
-async def _one[T](
-    bound: Bound, hook: HookName, parse: TypeAdapter[T], args: tuple[object, ...]
-) -> Ran[T]:
+async def run_one[T](bound: Bound, hook: HookName, parse: TypeAdapter[T], *args: object) -> Ran[T]:
+    """One extension's hook, bounded by its timeout."""
     task = asyncio.ensure_future(bound.hooks[hook](*args))
     await asyncio.wait({task}, timeout=bound.timeout_ms / 1000)
     if not task.done():

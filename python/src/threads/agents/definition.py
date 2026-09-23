@@ -70,6 +70,8 @@ class Definition[D]:
     """Failed candidates per turn before the turn ends output_invalid."""
     fallback: tuple[Model, ...] = ()
     """Models to fall back to, in order, when the current one stays overloaded."""
+    output_styles: tuple[tuple[str, str], ...] = ()
+    """Named instructions Thread.set_output_style switches to, pinned as policy.output_styles."""
 
     def policy(self) -> dict[str, JsonValue]:
         """The resolved runtime policy: each section absent (ADR defaults) or complete. An
@@ -82,18 +84,19 @@ class Definition[D]:
             pinned["fallback"] = [_settings(m) for m in self.fallback]
         if self.output is not None:
             pinned["output"] = _output_policy(self.output, self.output_retries)
-        if self.permissions is not None:
-            pinned["permissions"] = to_json(self.permissions)
-        if self.budget is not None:
-            pinned["budget"] = to_json(self.budget)
+        sections = (
+            ("permissions", self.permissions),
+            ("budget", self.budget),
+            ("retry", self.retry),
+            ("context", self.context),
+        )
+        pinned |= {name: to_json(value) for name, value in sections if value is not None}
         if self.on_unknown_usage is not None:
             pinned["on_unknown_usage"] = self.on_unknown_usage
-        if self.retry is not None:
-            pinned["retry"] = to_json(self.retry)
-        if self.context is not None:
-            pinned["context"] = to_json(self.context)
         if self.handoffs:
             pinned["handoffs"] = [h.name for h in self.handoffs]
+        if self.output_styles:
+            pinned["output_styles"] = dict(self.output_styles)
         return pinned
 
     def _models(self) -> list[JsonValue]:
