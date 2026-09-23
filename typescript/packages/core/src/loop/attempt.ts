@@ -3,7 +3,7 @@ import { type EventOf, responseText } from "../fold/state";
 import { sha256Hex } from "../hash";
 import type { OutputPart, Usage } from "../log";
 import { assertModelAllowed, type Model, type ModelChunk } from "../model";
-import { unsupported } from "../model/capabilities";
+import { type Unsupported, unsupported } from "../model/capabilities";
 import { parseRender } from "../model/render-lines";
 import { compactionInstruction, refReader, render } from "../render";
 import { draft } from "./drafts";
@@ -19,6 +19,8 @@ export type Attempted =
   | { readonly kind: "response"; readonly text: string }
   | { readonly kind: "rejected"; readonly rejection: Rejection }
   | { readonly kind: "broken" }
+  /** Refused before any model_request. */
+  | { readonly kind: "unsupported"; readonly refused: Unsupported }
   | { readonly kind: "halt"; readonly halt: Halt };
 
 type Collected =
@@ -57,7 +59,7 @@ export async function attempt(
     );
   const { bytes, prefix } = rendered.value;
   const refused = unsupported(parseRender(bytes), model.info);
-  if (refused !== undefined) return { kind: "halt", halt: refused };
+  if (refused !== undefined) return { kind: "unsupported", refused };
   const stopped = s.append(
     draft.modelRequest({
       attempt: number,

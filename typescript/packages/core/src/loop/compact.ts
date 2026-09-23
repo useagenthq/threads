@@ -49,6 +49,7 @@ export async function compact(
           : "model_error",
       );
     case "broken":
+    case "unsupported":
       return failed(s, "model_error");
     default:
       return assertNever(got);

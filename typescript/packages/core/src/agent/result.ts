@@ -71,6 +71,9 @@ export function runResult<Output>(
   const done = turn.findLast((e) => e.type === "turn_completed");
   if (done?.type !== "turn_completed")
     throw new Error("an idle run ended its turn");
+  // A typed error end (the capability pre-check) reports its own code.
+  if (done.data.code !== undefined)
+    return failed(done.data.code, done.data.reason, thread);
   return ended(done.data.reason, turn, thread, decode);
 }
 

@@ -52,9 +52,10 @@ describe("capability pre-check before dispatch", () => {
     };
     const writer = unwrap(h.store.acquire(ROOT, "owner"));
     const end = await resume(writer, h.artifacts, h.config(), { input });
-    expect(end).toMatchObject({
-      kind: "halted",
-      halt: { code: "content_unsupported" },
+    expect(end).toEqual({ kind: "idle" });
+    expect(events(writer).at(-1)).toMatchObject({
+      type: "turn_completed",
+      data: { reason: "error", code: "content_unsupported" },
     });
     expect(requests(writer)).toBe(0);
     expect(h.model.remaining()).toBe(1);
@@ -94,9 +95,10 @@ describe("capability pre-check before dispatch", () => {
     const end = await resume(writer, h.artifacts, h.config(), {
       input: userInput("again"),
     });
-    expect(end).toMatchObject({
-      kind: "halted",
-      halt: { code: "continuation_unsupported" },
+    expect(end).toEqual({ kind: "idle" });
+    expect(events(writer).at(-1)).toMatchObject({
+      type: "turn_completed",
+      data: { reason: "error", code: "continuation_unsupported" },
     });
     expect(requests(writer)).toBe(1);
     expect(h.model.remaining()).toBe(1);

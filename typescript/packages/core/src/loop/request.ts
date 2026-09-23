@@ -57,6 +57,8 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
       return undefined;
     case "rejected":
       return rejected(s, got.rejection.reason);
+    case "unsupported":
+      return s.append(draft.turnCompleted("error", got.refused.code));
     default:
       return assertNever(got);
   }

@@ -117,11 +117,14 @@ export const draft = {
     actor: HOST,
     data: d,
   }),
-  turnCompleted: (reason: Data<"turn_completed">["reason"]): EventDraft => ({
+  turnCompleted: (
+    reason: Data<"turn_completed">["reason"],
+    code?: NonNullable<Data<"turn_completed">["code"]>,
+  ): EventDraft => ({
     ...base,
     type: "turn_completed",
     actor: HOST,
-    data: { reason },
+    data: code === undefined ? { reason } : { reason, code },
   }),
   injected: (d: Data<"injected">): EventDraft => ({
     ...base,
