@@ -28,6 +28,9 @@ from threads.loop.tools import Dispatched, NotSent, Output, Uncertain
 from threads.render.framing import reference
 
 CALL_TIMEOUT: Final = timedelta(seconds=120)
+_TIMEOUT: Final = frozenset({HTTPStatus.REQUEST_TIMEOUT, -32001})
+"""The request-timeout codes of the Python (408) and TS (-32001) SDKs. A local timeout and a
+server that sends either code look alike, so both are uncertain in both languages."""
 READ_RESOURCE: Final = "read_resource"
 READ_RESOURCE_SCHEMA: Final[dict[str, JsonValue]] = {
     "type": "object",
@@ -87,13 +90,15 @@ class McpTool:
         match error.error.code:
             case code if code == FENCE_REFUSED:
                 return NotSent()
-            case code if code == HTTPStatus.REQUEST_TIMEOUT:
+            case code if code in _TIMEOUT:
                 return Uncertain("timeout")
             case code if code == CONNECTION_CLOSED:
                 return Uncertain("transport_error")
             case code:
-                # The server answered with an error: a final answer the model sees.
-                return Output(f"{self.name}: error {code}: {error.error.message}", True)
+                # The server answered with an error: a final answer the model sees, and its
+                # text is the server's, so it is data, never instructions.
+                body = f"error {code}: {error.error.message}"
+                return Output(reference("mcp", self.name, body), is_error=True)
 
     async def lookup(self, effect_key: str, ctx: RunContext[object]) -> LookupResult[str]:
         return LookupUnknown(f"{self.name} has no reconcile contract")
