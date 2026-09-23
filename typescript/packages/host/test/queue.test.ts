@@ -9,6 +9,7 @@ import {
 } from "@threads/core/host";
 import { z } from "zod";
 import { host } from "../src";
+import { hostTicked } from "../src/host";
 import {
   authenticate,
   eventsOf,
@@ -196,7 +197,7 @@ describe("channel queue", () => {
     await post(serving, hook("E1", say_("hi")));
     await other.ready();
     // Past the other host's first tick, which sweeps every pending row.
-    await Bun.sleep(1_500);
+    await hostTicked(other);
     const { db } = await storeConnection(store);
     expect(db.all("SELECT consumed_seq FROM inbox", [])).toEqual([
       { consumed_seq: null },
@@ -205,6 +206,45 @@ describe("channel queue", () => {
     await until(async () => slack.performed.length === 1, 5_000);
     await other.stop();
     await serving.stop();
+  });
+
+  test("an item for a thread pinned to another config stays queued for the host that has it", async () => {
+    const store = sqlite(":memory:");
+    const support = (instructions: string, text: string) =>
+      agent({
+        name: "support",
+        instructions,
+        model: scriptedModel({ responses: [say(text)] }),
+      });
+    const first = fakeChannel("support");
+    const serving = host({
+      store,
+      authenticate,
+      agents: { support: support("Be brief.", "first") },
+      channels: { slack: first },
+    });
+    await serving.ready();
+    await post(serving, hook("E1", say_("hi")));
+    await until(async () => first.performed.length === 1);
+    await serving.stop();
+    // Same agent name, another config: this host can't continue the thread.
+    const other = fakeChannel("support");
+    const changed = host({
+      store,
+      authenticate,
+      agents: { support: support("Be verbose.", "second") },
+      channels: { slack: other },
+    });
+    await changed.ready();
+    await post(changed, hook("E2", say_("again")));
+    await hostTicked(changed);
+    await hostTicked(changed);
+    const { db } = await storeConnection(store);
+    expect(
+      db.all("SELECT consumed_seq FROM inbox WHERE item_key = 'E2#0'", []),
+    ).toEqual([{ consumed_seq: null }]);
+    expect(other.performed).toHaveLength(0);
+    await changed.stop();
   });
 
   test("a stop_when_idle sent mid-run is appended with its consumption and cancels no child", async () => {

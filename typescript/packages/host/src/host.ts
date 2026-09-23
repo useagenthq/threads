@@ -18,6 +18,7 @@ import { type RunAccepted, type StartRunCode, startRun } from "./runs";
 import { bindSchedules, type Schedule, tick } from "./schedules";
 import type { StartRunRequest } from "./schemas";
 import { type SseMessage, subscribe } from "./subscribe";
+import { Watch } from "./watch";
 
 // host() (spec/api.json): binds agents to a store, channels
 // and schedules. It starts nothing until ready(), which confirms the bindings, sends nothing and
@@ -98,11 +99,7 @@ export function host(options: HostOptions): Host {
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking: Promise<void> | undefined;
   let tickWaiters: (() => void)[] = [];
-  /**
-   * Channel threads not yet seen settled: every one a crash may have left mid-run or owing
-   * replies (from the first tick), and every one this host consumed an item on since.
-   */
-  const unreplied = new Map<string, { tenant: string; id: ThreadId }>();
+  const watch = new Watch();
   let seeded = false;
 
   /** One consumer per thread in this process; a kick while one runs is picked up by it. */
@@ -118,7 +115,7 @@ export function host(options: HostOptions): Host {
         consuming.delete(threadId);
         // Watched until settled: another host's short lease can take the branch between an
         // input's append and its run's own lease, and then no process runs the open turn.
-        unreplied.set(threadId, { tenant, id });
+        watch.add(tenant, id);
       }
     })();
     consuming.set(threadId, running);
@@ -152,24 +149,28 @@ export function host(options: HostOptions): Host {
   const recoverReplies = async (): Promise<void> => {
     if (!seeded) {
       const { db } = await storeConnection(ctx.store);
-      for (const r of channelThreads(db))
-        unreplied.set(r.thread_id, { tenant: r.tenant_id, id: r.thread_id });
+      for (const r of channelThreads(db)) watch.add(r.tenant_id, r.thread_id);
       seeded = true;
     }
-    for (const [key, t] of unreplied) {
-      const { log } = await ctx.open(t.tenant);
-      const main = log.mainBranch(t.id);
-      const done =
-        !main.ok ||
-        (await ctx.recover(t.tenant, { id: t.id, branch: main.value })) ===
-          "done";
-      if (done) unreplied.delete(key);
-    }
+    // Side by side: one thread's slow reply never holds up another's recovery.
+    await Promise.all(
+      watch.entries().map(async ({ thread: t, settled }) => {
+        const { log } = await ctx.open(t.tenant);
+        const main = log.mainBranch(t.id);
+        const done =
+          !main.ok ||
+          (await ctx.recover(t.tenant, { id: t.id, branch: main.value })) ===
+            "done";
+        if (done) settled();
+      }),
+    );
   };
 
   const stop = async (): Promise<void> => {
     clearInterval(timer);
     timer = undefined;
+    // Runs are aborted first: a tick or a consumer may be waiting on one.
+    ctx.abort();
     await ticking;
     await Promise.all(consuming.values());
     await ctx.stop();

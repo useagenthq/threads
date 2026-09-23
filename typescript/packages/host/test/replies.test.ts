@@ -166,7 +166,7 @@ describe("a run lost after its input is durable", () => {
     hosts.push(h);
     await h.ready();
     // Past the first tick, which looks only at the conversations that existed at startup.
-    await Bun.sleep(1_200);
+    await hostTicked(h);
     // Another host's short lease takes the branch between the user_input's append and the run's
     // own lease, once: the turn stays open, and no run is going on it anywhere.
     const { log } = await openStore(tenantStore(store, TENANT));

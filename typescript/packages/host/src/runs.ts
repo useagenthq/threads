@@ -4,7 +4,6 @@ import {
   type EventDraft,
   type EventId,
   err,
-  type KnownEvent,
   knownEvents,
   type LogError,
   type LogStore,
@@ -17,7 +16,7 @@ import {
   ThreadId,
   uuidv7,
 } from "@threads/core/host";
-import type { HostContext, HostedAgent } from "./context";
+import { type HostContext, type HostedAgent, samePin } from "./context";
 import type { Failure } from "./errors";
 import { findReceipt, insertReceipt, type Keyed } from "./receipts";
 import type { StartRunRequest } from "./schemas";
@@ -223,20 +222,6 @@ async function branchFor(
 function mainOf(log: LogStore, threadId: ThreadId): BranchId | undefined {
   const main = log.mainBranch(threadId);
   return main.ok ? main.value : undefined;
-}
-
-/** A pin never changes in place: continuing a thread needs the config it started with. */
-async function samePin(
-  events: readonly KnownEvent[],
-  hosted: HostedAgent,
-): Promise<boolean> {
-  const started = events.find((e) => e.type === "thread_started");
-  const pinned = await hosted.runner.started();
-  return (
-    started?.type === "thread_started" &&
-    pinned.type === "thread_started" &&
-    started.data.config_hash === pinned.data.config_hash
-  );
 }
 
 function leaseCode(error: LogError): StartRunCode {

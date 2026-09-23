@@ -14,7 +14,7 @@ import {
   type ThreadId,
   uuidv7,
 } from "@threads/core/host";
-import type { HostContext, HostedAgent } from "./context";
+import { type HostContext, type HostedAgent, samePin } from "./context";
 import {
   type Conversation,
   consumed,
@@ -91,10 +91,11 @@ async function target(
   const events = read?.ok === true ? knownEvents(read.value) : [];
   // A root another host just made has no thread_started yet: it pins no agent, like no root.
   // Read as "no host agent", the item would be discarded and the message lost (F9.6 drill).
-  const hosted = events.some((e) => e.type === "thread_started")
-    ? ctx.agentOf(events)
-    : ctx.agents.get(adapter.agent);
-  if (hosted === undefined) return undefined;
+  const started = events.some((e) => e.type === "thread_started");
+  const hosted = started ? ctx.agentOf(events) : ctx.agents.get(adapter.agent);
+  // An agent of the pinned name but another config can't continue the thread: another host may.
+  if (hosted === undefined || (started && !(await samePin(events, hosted))))
+    return undefined;
   const conversation = {
     tenant,
     channel: next.channel,

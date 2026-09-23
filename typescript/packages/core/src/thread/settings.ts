@@ -50,8 +50,9 @@ export function cancel(
 }
 
 /**
- * A channel's soft stop: finish what is in flight, start nothing new. It releases nothing the
- * branch waits on and stops no child.
+ * A channel's soft stop, recorded as the reserved stop_when_idle event. The reducer gives it no
+ * effect yet, so the run goes on; unlike cancel it releases nothing the branch waits on and
+ * stops no child.
  */
 export function stopWhenIdle(
   principal: Principal,
