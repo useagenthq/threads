@@ -24,7 +24,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.types import PaginatedRequestParams, Tool
 from pydantic import JsonValue, TypeAdapter, ValidationError
 
-from threads.adapters.mcp.tool import McpTool
+from threads.adapters.mcp.tool import READ_RESOURCE, READ_RESOURCE_SCHEMA, McpTool
 from threads.adapters.mcp.transport import Fence, FencedTransport, Streams, stdio
 from threads.agents.config import ConfigError
 from threads.log import EffectClass
@@ -92,8 +92,9 @@ class McpServer:
                     self._streams(fence, headers, env) as streams,
                     ClientSession(*streams) as session,
                 ):
-                    await session.initialize()
-                    ready.set_result(self._pin(session, await _listed(session)))
+                    init = await session.initialize()
+                    offers = init.capabilities.resources is not None
+                    ready.set_result(self._pin(session, await _listed(session), resources=offers))
                     await stop.wait()
             except Exception as error:
                 if not ready.done():
@@ -125,17 +126,28 @@ class McpServer:
             raise AssertionError("mcp() requires url or command")
         return _http(self.url, self.http or httpx.AsyncHTTPTransport(), fence, headers)
 
-    def _pin(self, session: ClientSession, listed: Sequence[Tool]) -> tuple[McpTool, ...]:
+    def _pin(
+        self, session: ClientSession, listed: Sequence[Tool], *, resources: bool
+    ) -> tuple[McpTool, ...]:
         kept = [
             t
             for t in listed
             if (self.allow is None or t.name in self.allow) and t.name not in self.deny
         ]
         tools = [self._tool(session, t) for t in kept]
+        if resources:
+            tools.append(self._reader(session))
         names = [t.name for t in tools]
         if len(set(names)) != len(names):
             raise ConfigError("invalid_config", f"MCP server {self.name}: tool names collide")
         return tuple(sorted(tools, key=lambda t: t.name))
+
+    def _reader(self, session: ClientSession) -> McpTool:
+        name = f"mcp__{self.name}__{READ_RESOURCE}"
+        description = f"Read a resource of the {self.name} MCP server by URI."
+        return McpTool(
+            name, READ_RESOURCE, description, READ_RESOURCE_SCHEMA, "read_only", session, True
+        )
 
     def _tool(self, session: ClientSession, tool: Tool) -> McpTool:
         name = f"mcp__{self.name}__{re.sub(r'[^a-z0-9_]', '_', tool.name.lower())}"

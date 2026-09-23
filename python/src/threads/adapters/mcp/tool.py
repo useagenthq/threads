@@ -11,8 +11,14 @@ from jsonschema import Draft202012Validator, validate
 from jsonschema import ValidationError as SchemaValidationError
 from mcp import ClientSession
 from mcp.shared.exceptions import McpError
-from mcp.types import CONNECTION_CLOSED, CallToolResult, TextContent
-from pydantic import JsonValue
+from mcp.types import (
+    CONNECTION_CLOSED,
+    CallToolResult,
+    ReadResourceResult,
+    TextContent,
+    TextResourceContents,
+)
+from pydantic import AnyUrl, JsonValue
 
 from threads.adapters.mcp.transport import FENCE_REFUSED
 from threads.agents.context import RunContext
@@ -22,6 +28,13 @@ from threads.loop.tools import Dispatched, NotSent, Output, Uncertain
 from threads.render.framing import reference
 
 CALL_TIMEOUT: Final = timedelta(seconds=120)
+READ_RESOURCE: Final = "read_resource"
+READ_RESOURCE_SCHEMA: Final[dict[str, JsonValue]] = {
+    "type": "object",
+    "properties": {"uri": {"type": "string", "minLength": 1}},
+    "required": ["uri"],
+    "additionalProperties": False,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +48,8 @@ class McpTool:
     input_schema: dict[str, JsonValue]
     effect: EffectClass
     session: ClientSession
+    resource: bool = False
+    """mcp__<server>__read_resource: reads a resource by URI."""
 
     def spec(self) -> ToolSpec:
         return ToolSpec.model_validate(
@@ -55,6 +70,9 @@ class McpTool:
 
     async def run(self, input: JsonObject, ctx: RunContext[object]) -> Dispatched:
         try:
+            if self.resource:
+                read = await self.session.read_resource(AnyUrl(str(input["uri"])))
+                return _contents(self.name, read)
             result = await self.session.call_tool(self.remote, dict(input), CALL_TIMEOUT)
         except McpError as error:
             return self._answered(error)
@@ -88,3 +106,11 @@ def _output(name: str, result: CallToolResult) -> Output:
         for c in result.content
     ]
     return Output(reference("mcp", name, "\n".join(parts)), is_error=result.isError)
+
+
+def _contents(name: str, result: ReadResourceResult) -> Output:
+    parts = [
+        c.text if isinstance(c, TextResourceContents) else "[blob content omitted]"
+        for c in result.contents
+    ]
+    return Output(reference("mcp", name, "\n".join(parts)), is_error=False)

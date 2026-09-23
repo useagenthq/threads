@@ -62,9 +62,13 @@ def test_a_stdio_server_in_one_line_pins_sorted_namespaced_tools_and_records_cal
             "read_tool_result",
             "todo_write",
             "mcp__kit__echo",
+            "mcp__kit__read_resource",
             "mcp__kit__sendemail",
         ]
-        assert {t.effect_class for t in started.data.tools[2:]} == {"unguarded"}
+        # FastMCP always advertises the resources capability, so read_resource is offered.
+        effects = {t.name: t.effect_class for t in started.data.tools[2:]}
+        assert effects.pop("mcp__kit__read_resource") == "read_only"
+        assert set(effects.values()) == {"unguarded"}
         (done,) = [e for e in got if isinstance(e, ToolResultEvent)]
         assert 'untrusted="true"' in done.data.preview
         assert "echo: hi" in done.data.preview
@@ -189,5 +193,28 @@ def test_a_stdio_write_is_fenced_and_a_refused_request_is_never_written() -> Non
         with pytest.raises(ConfigError, match="stale_epoch"):
             async with kit.connect(stale):
                 pass
+
+    asyncio.run(main())
+
+
+def test_a_server_with_resources_offers_a_read_only_read_resource_tool() -> None:
+    app = server(resources=True)
+    asgi = TracedAsgi(app)
+    allow = ALLOW.model_copy(update={"allow": [*ALLOW.allow, "mcp__kit__read_resource"]})
+
+    async def main() -> None:
+        async with app.session_manager.run():
+            kit = replace(mcp(name="kit", url="http://127.0.0.1:8000/mcp"), http=asgi)
+            script = [use("mcp__kit__read_resource", {"uri": "kit://greeting"}), text("Done.")]
+            bot = agent(model=scripted_model({"responses": script}), tools=[kit], permissions=allow)
+            result = await bot.run("read it", store=sqlite(":memory:"))
+            assert isinstance(result, Completed), result
+            got = await events(result.thread)
+            started = next(e for e in got if isinstance(e, ThreadStartedEvent))
+            read = next(t for t in started.data.tools if t.name == "mcp__kit__read_resource")
+            assert read.effect_class == "read_only"
+            (done,) = [e for e in got if isinstance(e, ToolResultEvent)]
+            assert 'untrusted="true"' in done.data.preview
+            assert "hello from kit" in done.data.preview
 
     asyncio.run(main())

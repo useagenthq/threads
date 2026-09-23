@@ -11,8 +11,15 @@ from mcp.server.fastmcp import FastMCP
 SEEN_HEADERS: list[Mapping[str, str]] = []
 
 
-def server() -> FastMCP:
+def server(*, resources: bool = False) -> FastMCP:
     app = FastMCP("kit", stateless_http=True, json_response=True)
+
+    if resources:
+
+        @app.resource("kit://greeting")
+        def greeting() -> str:
+            """A greeting resource."""
+            return "hello from kit"
 
     @app.tool()
     def echo(text: str) -> str:
