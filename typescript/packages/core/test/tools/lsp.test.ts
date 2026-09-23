@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -10,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agent, fakeSandbox, scriptedModel } from "../../src";
 import { answered, lspText, lspWith } from "../../src/tools/lsp";
+import { LSP_SEARCH_PATH } from "../../src/tools/lsp-driver";
 import { bound, localSession } from "./kit";
 
 // lsp (F1.19): the in-sandbox driver against a scripted language server; a
@@ -125,6 +127,31 @@ describe("lsp through the in-sandbox driver", () => {
       isError: false,
     });
   }, 30_000);
+
+  test("an env-shebang launcher finds its interpreter on the fixed system PATH", async () => {
+    // typescript-language-server and pyright-langserver start with `#!/usr/bin/env node`: the
+    // server needs a PATH, and it must be exactly the fixed system dirs, never the host's.
+    writeFileSync(join(root, "server.py"), SERVER);
+    const launcher = join(root, "opt/launcher");
+    mkdirSync(join(root, "opt"), { recursive: true });
+    writeFileSync(
+      launcher,
+      [
+        "#!/usr/bin/env python3",
+        "import os, sys",
+        `if os.environ.get("PATH") != ${JSON.stringify(LSP_SEARCH_PATH)}: sys.exit("PATH is not the fixed dirs")`,
+        `os.execvp("python3", ["python3", ${JSON.stringify(join(root, "server.py"))}])`,
+        "",
+      ].join("\n"),
+    );
+    chmodSync(launcher, 0o755);
+    expect(
+      await tool([launcher]).run({ operation: "symbols", path: "app.fake" }),
+    ).toMatchObject({
+      output: "Box (kind 5) line 1\n  open (kind 6) line 4",
+      isError: false,
+    });
+  }, 60_000);
 
   test("a missing server, an undeclared file type, or a missing position is an error result", async () => {
     const lsp = tool(["threads-no-such-language-server"]);

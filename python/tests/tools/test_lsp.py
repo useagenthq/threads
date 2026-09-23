@@ -18,6 +18,7 @@ from threads.result import Ok
 from threads.store import SqliteStore
 from threads.tools import SandboxTools, specs
 from threads.tools.lsp import render
+from threads.tools.lsp_driver import SEARCH
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
@@ -89,6 +90,23 @@ def test_a_server_given_by_absolute_path_runs_from_outside_the_searched_dirs(
         {"operation": "symbols", "path": "app.py"},
         {"python": (str(opt / "server-python"), FAKE)},
     )
+    assert isinstance(got, Output)
+    assert not got.is_error, got.text
+
+
+def test_an_env_shebang_launcher_finds_its_interpreter_on_the_fixed_path(tmp_path: Path) -> None:
+    # pyright-langserver and typescript-language-server start with `#!/usr/bin/env node`: the
+    # server needs a PATH, and it must be exactly the fixed system dirs, never the host's.
+    launcher = tmp_path / "opt" / "launcher"
+    launcher.parent.mkdir()
+    launcher.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, sys\n"
+        f"if os.environ.get('PATH') != {SEARCH!r}: sys.exit('PATH is not the fixed dirs')\n"
+        f"os.execvp('python3', ['python3', {FAKE!r}])\n"
+    )
+    launcher.chmod(0o755)
+    got = ask(tmp_path, {"operation": "symbols", "path": "app.py"}, {"python": (str(launcher),)})
     assert isinstance(got, Output)
     assert not got.is_error, got.text
 
