@@ -3,6 +3,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { Sandbox as SandboxDto } from "@daytona/api-client";
 import { quote, type SandboxDriver } from "@threads/core/adapter";
 import { type Clients, statusOf } from "./clients";
+import { framed, unhex } from "./framing";
 import { follow, type OpenSocket } from "./logs";
 
 // The remote kit's driver over Daytona's API clients. A sandbox is named by its operation key,
@@ -209,13 +210,16 @@ function sessions(
       await box.process.createSession({ sessionId: session });
       const { cmdId } = (
         await box.process.sessionExecuteCommand(session, {
-          command: `sh -c ${quote(script)}`,
+          command: `sh -c ${quote(framed(script))}`,
           runAsync: true,
         })
       ).data;
       const url = `${box.base.replace(/^http/, "ws")}/process/session/${session}/command/${cmdId}/logs?follow=true`;
       const finish = async () => {
-        await follow(options.open, url, options.clients.headers, sinks);
+        await follow(options.open, url, options.clients.headers, {
+          stdout: unhex(sinks.stdout).push,
+          stderr: unhex(sinks.stderr).push,
+        });
         const exit = await exitOf(box, session, cmdId);
         await unless404(() => box.process.deleteSession(session));
         return exit;

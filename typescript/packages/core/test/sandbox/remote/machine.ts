@@ -121,7 +121,7 @@ export class Machine {
   private ticks = 0;
 
   /**
-   * The test commands: echo, printenv, cat (stdin), fail, write <path> <text>, sleep (runs
+   * The test commands: echo, printenv, cat (stdin), bytes <out hex> <err hex>, fail, write <path> <text>, sleep (runs
    * until killed), spawn (sleeps, and leaves a descendant the provider doesn't track) and
    * writer (keeps writing the tree).
    */
@@ -143,6 +143,11 @@ export class Machine {
         return { exit: Promise.resolve(0) };
       case "cat":
         sinks.stdout(input);
+        return { exit: Promise.resolve(0) };
+      case "bytes":
+        // bytes <stdout hex> <stderr hex>: exactly those bytes on each stream.
+        sinks.stdout(Uint8Array.fromHex(args[0] ?? ""));
+        sinks.stderr(Uint8Array.fromHex(args[1] ?? ""));
         return { exit: Promise.resolve(0) };
       case "fail":
         sinks.stderr(utf8.encode("boom\n"));

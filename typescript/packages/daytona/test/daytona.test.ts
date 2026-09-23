@@ -8,6 +8,7 @@ import { losesAfter } from "../../core/test/sandbox/remote/kit";
 import { World } from "../../core/test/sandbox/remote/world";
 import { code, unwrap } from "../../core/test/store/helpers";
 import { daytona } from "../src";
+import { framed, unhex } from "../src/framing";
 import { demux } from "../src/logs";
 import { API, daytonaBackend } from "./backend";
 
@@ -68,6 +69,61 @@ describe("daytona snapshots are cold", () => {
     expect(traffic.indexOf(`/sandbox/${box.id}/snapshot`)).toBeLessThan(
       traffic.indexOf(`/sandbox/${box.id}/start`),
     );
+  });
+});
+
+describe("exec output is exact bytes", () => {
+  async function exact(out: Uint8Array, err: Uint8Array) {
+    const { sandbox } = adapter(new World());
+    const box = unwrap(await sandbox.create("op", CTX));
+    const output = unwrap(
+      await box.exec(["bytes", out.toHex(), err.toHex()], CTX, {
+        processKey: "k",
+      }),
+    );
+    const [stdout, stderr] = await Promise.all([
+      Array.fromAsync(output.stdout),
+      Array.fromAsync(output.stderr),
+    ]);
+    expect(await output.exit_code).toBe(0);
+    expect([...stdout.flatMap((c) => [...c])]).toEqual([...out]);
+    expect([...stderr.flatMap((c) => [...c])]).toEqual([...err]);
+  }
+
+  test("marker bytes inside real output survive", async () => {
+    await exact(
+      new Uint8Array([65, 2, 2, 2, 66]),
+      new Uint8Array([1, 1, 1, 67, 2, 2]),
+    );
+  });
+
+  test("every byte value, in any order, on both streams", async () => {
+    const all = Uint8Array.from({ length: 256 }, (_, i) => i);
+    for (const seed of [1, 7, 31]) {
+      const shuffled = all.toSorted(
+        (a, b) => ((a * seed) % 257) - ((b * seed) % 257),
+      );
+      await exact(shuffled, shuffled.toReversed());
+    }
+  });
+});
+
+describe("the framing wrapper, in a real shell", () => {
+  test("hex-frames each stream, keeps the exit code, and decodes back exactly", () => {
+    const all = Uint8Array.from({ length: 256 }, (_, i) => i);
+    const script = `printf '${[...all].map((b) => `\\${b.toString(8).padStart(3, "0")}`).join("")}'; printf 'A\\002\\002\\002B' >&2; exit 7`;
+    const ran = Bun.spawnSync(["sh", "-c", framed(script)]);
+    const decode = (bytes: Uint8Array) => {
+      const out: number[] = [];
+      const split = unhex((b) => out.push(...b));
+      // Split mid-pair to prove a digit pair across chunks is held.
+      split.push(bytes.subarray(0, 7));
+      split.push(bytes.subarray(7));
+      return out;
+    };
+    expect(ran.exitCode).toBe(7);
+    expect(decode(ran.stdout)).toEqual([...all]);
+    expect(decode(ran.stderr)).toEqual([65, 2, 2, 2, 66]);
   });
 });
 

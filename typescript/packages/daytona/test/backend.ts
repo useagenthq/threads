@@ -140,10 +140,27 @@ export function daytonaBackend(world: World): DaytonaBackend {
     const { command } = ExecBody.parse(await req.json());
     serial += 1;
     const cmdId = `cmd-${serial}`;
-    const script = shellWords(command)[2] ?? "";
+    // sh -c '<framed wrapper>', whose `sh -c '<script>' > …` line runs the kit's script with
+    // each stream hex-encoded by od, as the wrapper does in a real sandbox.
+    const wrapper = shellWords(command)[2] ?? "";
+    const inner = wrapper.slice(wrapper.indexOf("\nsh -c ") + 1);
+    const script = shellWords(inner)[2] ?? "";
+    const od = (bytes: Uint8Array) =>
+      new TextEncoder().encode(
+        `${[...bytes].map((b) => ` ${b.toString(16).padStart(2, "0")}`).join("")}\n`,
+      );
     commands.set(
       `${box}/${session}/${cmdId}`,
-      new Command((sinks) => world.machine(box).start(script, sinks, session)),
+      new Command((sinks) =>
+        world.machine(box).start(
+          script,
+          {
+            stdout: (b) => sinks.stdout(od(b)),
+            stderr: (b) => sinks.stderr(od(b)),
+          },
+          session,
+        ),
+      ),
     );
     return json(200, { cmdId });
   };
