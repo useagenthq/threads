@@ -58,7 +58,7 @@ ALLOW = Permissions(
 )
 
 
-def _anthropic(key: str | None) -> Agent[None]:
+def _anthropic(key: str | None) -> Agent[None, str]:
     model = (
         anthropic("claude-test", context_window=1000, max_output_tokens=8)
         if key is None
@@ -67,7 +67,7 @@ def _anthropic(key: str | None) -> Agent[None]:
     return agent(name="spare", model=model)
 
 
-def _openai(key: str | None) -> Agent[None]:
+def _openai(key: str | None) -> Agent[None, str]:
     model = (
         openai("gpt-test", context_window=1000, max_output_tokens=8)
         if key is None
@@ -76,7 +76,7 @@ def _openai(key: str | None) -> Agent[None]:
     return agent(name="spare", model=model)
 
 
-def _litellm(key: str | None) -> Agent[None]:
+def _litellm(key: str | None) -> Agent[None, str]:
     model = (
         litellm("openai/gpt-test", context_window=1000, max_output_tokens=8)
         if key is None
@@ -85,26 +85,26 @@ def _litellm(key: str | None) -> Agent[None]:
     return agent(name="spare", model=model)
 
 
-def _e2b(key: str | None) -> Agent[None]:
+def _e2b(key: str | None) -> Agent[None, str]:
     return agent(name="spare", model=scripted_model({"responses": []}), sandbox=e2b(api_key=key))
 
 
-def _daytona(key: str | None) -> Agent[None]:
+def _daytona(key: str | None) -> Agent[None, str]:
     box = daytona(api_key=key)
     return agent(name="spare", model=scripted_model({"responses": []}), sandbox=box)
 
 
-def _modal(key: str | None) -> Agent[None]:
+def _modal(key: str | None) -> Agent[None, str]:
     box = modal(image_id="im-x", token_id=key, token_secret=None if key is None else f"{key}-s")
     return agent(name="spare", model=scripted_model({"responses": []}), sandbox=box)
 
 
-def _supermemory(key: str | None) -> Agent[None]:
+def _supermemory(key: str | None) -> Agent[None, str]:
     memory = supermemory(api_key=key)
     return agent(name="spare", model=scripted_model({"responses": []}), memory=memory)
 
 
-def _zep(key: str | None) -> Agent[None]:
+def _zep(key: str | None) -> Agent[None, str]:
     return agent(name="spare", model=scripted_model({"responses": []}), memory=zep(api_key=key))
 
 
@@ -115,11 +115,11 @@ class Case:
     message: str
     label: str
     """What a given key is redacted to."""
-    spare: Callable[[str | None], Agent[None]]
+    spare: Callable[[str | None], Agent[None, str]]
     """A handoff target holding the adapter, built with this key (None: the default)."""
 
 
-def _one(factory: str, env: str, spare: Callable[[str | None], Agent[None]]) -> Case:
+def _one(factory: str, env: str, spare: Callable[[str | None], Agent[None, str]]) -> Case:
     return Case(factory, (env,), f"{factory}: set api_key or {env}", f"{factory}.api_key", spare)
 
 
@@ -146,7 +146,7 @@ class NoInput(BaseModel):
     pass
 
 
-def _parent(spare: Agent[None], echoed: str = "") -> Agent[None]:
+def _parent(spare: Agent[None, str], echoed: str = "") -> Agent[None, str]:
     async def echo(_args: NoInput, _ctx: RunContext[None]) -> str:
         return f"value={echoed}"
 
@@ -207,7 +207,7 @@ def test_a_fixed_environment_is_picked_up_by_the_same_agent(
     asyncio.run(main())
 
 
-async def _echoed(bot: Agent[None]) -> tuple[str, str]:
+async def _echoed(bot: Agent[None, str]) -> tuple[str, str]:
     """The recorded tool result's text, and every stored event as JSON."""
     result = await bot.run("go", store=sqlite(":memory:"), deps=None)
     timeline = await result.thread.timeline()

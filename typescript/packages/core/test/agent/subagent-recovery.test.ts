@@ -72,19 +72,27 @@ describe("recovery after a crash mid-subagent", () => {
         model: scriptedModel({ responses }),
         subagents: [child],
       });
-    // The process dies as the child is about to start: nothing of it is recorded.
+    // The process dies as the child is about to start: nothing of it is recorded. (A failing
+    // setup can't stand in: a parent sets its subagents up before its own first run.)
     const crashing = agent({
       name: "reviewer",
       model: scriptedModel({ responses: [] }),
     });
     const real = childFactory(crashing);
     const target = targetFactory(crashing);
+    const enforce = enforcement(crashing);
     const setup = setupOf(crashing);
-    if (real === undefined || target === undefined || setup === undefined)
+    if (
+      real === undefined ||
+      target === undefined ||
+      enforce === undefined ||
+      setup === undefined
+    )
       throw new Error("agent() registers every handle");
     register(crashing, {
       setup,
       target,
+      enforce,
       child: (env) => ({
         ...real(env),
         run: async () => {

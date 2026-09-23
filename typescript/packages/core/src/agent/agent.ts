@@ -166,7 +166,7 @@ function build<Deps, Output>(
     memoryWrite: options.memoryWrite ?? "ask",
     knowledge: options.knowledge,
     skills: options.skills ?? [],
-    setup: () =>
+    setup: (walked) =>
       setUp(
         options.extensions ?? [],
         [
@@ -177,6 +177,7 @@ function build<Deps, Output>(
           options.knowledge,
         ],
         [...(options.subagents ?? []), ...(options.handoffs ?? [])],
+        walked,
       ),
     servers,
     decode,

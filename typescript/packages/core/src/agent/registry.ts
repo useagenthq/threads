@@ -52,8 +52,8 @@ export type TargetFactory = (
 export type Enforcement = (covering: readonly z.infer<typeof Budget>[]) => void;
 
 type Entry = {
-  /** The agent's setup (agent/setup.ts), run by a parent's setup too. */
-  readonly setup: () => Promise<void>;
+  /** The agent's setup (agent/setup.ts), run by a parent's setup too, with the agents it walked. */
+  readonly setup: (walked?: Set<object>) => Promise<void>;
   readonly child: ChildFactory;
   readonly target: TargetFactory;
   readonly enforce: Enforcement;
@@ -66,7 +66,9 @@ export function register(agent: object, entry: Entry): void {
   AGENTS.set(agent, entry);
 }
 
-export function setupOf(agent: object): (() => Promise<void>) | undefined {
+export function setupOf(
+  agent: object,
+): ((walked?: Set<object>) => Promise<void>) | undefined {
   return AGENTS.get(agent)?.setup;
 }
 

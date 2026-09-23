@@ -1,5 +1,4 @@
 [
-  {"name": "Agent.check", "lang": "py", "kind": "missing", "lane": "09-env-defaults"},
   {"name": "ChannelAdapter", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
   {"name": "ChannelAdapter.challenge", "lang": "py", "kind": "missing", "lane": "02-protocol-optionality"},
   {"name": "ChannelCapabilities", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},

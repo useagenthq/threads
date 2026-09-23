@@ -62,7 +62,7 @@ export type Resolved<Deps, Output> = Omit<PinOptions, "mcp"> & {
   readonly bindable: readonly Tool<unknown, unknown, Deps>[];
   readonly hookable: readonly Extension<Deps>[];
   /** Setup of this agent and those it may start (agent/setup.ts); retried after a failure. */
-  readonly setup: () => Promise<void>;
+  readonly setup: (walked?: Set<object>) => Promise<void>;
   /** MCP servers: each check() and each run opens its own sessions. */
   readonly servers: readonly McpServer[];
   readonly decode: Decode<Output>;

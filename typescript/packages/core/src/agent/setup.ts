@@ -94,12 +94,15 @@ async function extensionSetup<Deps>(e: Extension<Deps>): Promise<void> {
 
 /**
  * Sets up the extensions, then the adapters (models, sandbox, memory, knowledge) in order, then
- * the agents this one may start. Each object once, however many agents share it.
+ * the agents this one may start. Each object once, however many agents share it. `walked` holds
+ * the agents this setup already reached, so an agent in its own tree (a list it was added to
+ * later) is not walked again.
  */
 export async function setUp<Deps>(
   extensions: readonly Extension<Deps>[],
   adapters: readonly (SetsUp | undefined)[],
   agents: readonly object[],
+  walked: Set<object> = new Set(),
 ): Promise<void> {
   for (const e of extensions) await once(e, () => extensionSetup(e));
   for (const a of adapters)
@@ -107,7 +110,11 @@ export async function setUp<Deps>(
       await once(a, () =>
         redactedSetup(async () => a.setup?.(), "adapter setup failed"),
       );
-  for (const agent of agents) await setupOf(agent)?.();
+  for (const agent of agents) {
+    if (walked.has(agent)) continue;
+    walked.add(agent);
+    await setupOf(agent)?.(walked);
+  }
 }
 
 /** One session per server, closed together; a failed connect closes those already open. */
