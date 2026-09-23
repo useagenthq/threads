@@ -37,6 +37,7 @@ from threads.agents.start import (
     wants_input,
 )
 from threads.agents.store import LIVE, Store, now_ms, open_store, sqlite
+from threads.agents.stubbed import stub_mode
 from threads.hooks.extension import bind, extension_tools
 from threads.hooks.observers import ObserverPump
 from threads.log import (
@@ -52,6 +53,7 @@ from threads.log import (
 from threads.loop import gates
 from threads.loop.drive import drive
 from threads.loop.runtime import Halt, Idle, Parked, RunErrorCode, Runtime
+from threads.loop.stubs import Stub
 from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, memory_scope, provider_tools
 from threads.result import Err, Ok
@@ -141,13 +143,17 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         ext = AppTools(extension_tools(definition.extensions), hook_ctx)
         routes = gateways(definition.catalog, builtins, sq, fenced(writer))
         app = AppTools(definition.tools, ctx)
-        tools = Routed(builtins, results, app, provided, ext, gateways=routes)
+        tools = stub_mode(
+            Routed(builtins, results, app, provided, ext, gateways=routes),
+            _stubs(thread, launch),
+            definition.model.info,
+        )
         frame = Scope(
             definition,
             principal,
             store,
             sq,
-            _child_runner(store),
+            _child_runner(store, _stubs(thread, launch)),
             _ceilings(options, launch),
             builtins,
             None if launch is None else launch.team,
@@ -287,11 +293,20 @@ def _refusal(error: ParseError) -> RunErrorCode:
     return "branch_busy" if error.code in ("branch_busy", "stale_epoch") else "branch_not_runnable"
 
 
-def _child_runner(store: Store) -> Execute:
-    """How this run starts a launched thread: the same pipeline, in the same store."""
+def _stubs(thread: Thread | None, launch: Launch | None) -> tuple[Stub, ...] | None:
+    """Stub mode comes with the thread handle, or with the launch of a stub run's child."""
+    if thread is not None:
+        return thread.stubs
+    return None if launch is None else launch.stubs
+
+
+def _child_runner(store: Store, stubs: tuple[Stub, ...] | None) -> Execute:
+    """How this run starts a launched thread: the same pipeline, in the same store, in the same
+    mode (a stub run's children never go live either)."""
 
     async def run(definition: Definition[None], text: str, launch: Launch) -> RunResult[str]:
-        return await execute(definition, text, {"store": store}, None, _drop, launch)
+        how = replace(launch, stubs=stubs)
+        return await execute(definition, text, {"store": store}, None, _drop, how)
 
     return run
 

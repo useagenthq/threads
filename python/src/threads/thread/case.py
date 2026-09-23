@@ -155,7 +155,7 @@ def _files(
         files[f"expected.{impl}.json"] = _json({"outcome": "ok", "state": log.value[1]})
     files["case.json"] = _json(_case(request, fold.now, text))
     files["model.json"] = _json({"responses": _responses(fold, snap.seq)})
-    files["stubs.json"] = _json({"stubs": _stubs(fold, snap.seq)})
+    files["stubs.json"] = _json({"stubs": recorded_stubs(fold, snap.seq)})
     return Ok(files)
 
 
@@ -188,7 +188,7 @@ def _responses(fold: Fold, after: int) -> list[JsonValue]:
     ]
 
 
-def _stubs(fold: Fold, after: int) -> list[JsonValue]:
+def recorded_stubs(fold: Fold, after: int) -> list[JsonValue]:
     """Each recorded tool result after the snapshot, keyed as stub mode matches it: tool,
     args_hash and occurrence."""
     stubs: list[JsonValue] = []

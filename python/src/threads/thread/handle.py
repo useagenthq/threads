@@ -24,14 +24,21 @@ from threads.log import (
     Todo,
     TodosUpdatedEvent,
 )
+from threads.loop.stubs import Stub, parse_stubs
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import VerifiedLog
 from threads.store.lines import uuid7
 from threads.thread import approvals, control, tree
-from threads.thread.case import CaseExpectation, CaseRequest, SavedCase, save_case
+from threads.thread.case import (
+    CaseExpectation,
+    CaseRequest,
+    SavedCase,
+    recorded_stubs,
+    save_case,
+)
 from threads.thread.control import LOCAL_OPERATOR, Controlled
-from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch
+from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch, fork_point
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +91,9 @@ class Thread:
     )
     """Who may answer approvals and resolve parked effects: the agent's approver policy as it
     stands now."""
+    stubs: tuple[Stub, ...] | None = field(default=None, kw_only=True, compare=False, repr=False)
+    """Stub mode: a run of this handle answers every mediated operation from these,
+    never live. None: live."""
 
     async def timeline(self) -> Ok[Timeline] | Err[ParseError]:
         """Every step, with the fork points marked (F13.1)."""
@@ -102,11 +112,23 @@ class Thread:
         return read if isinstance(read, Err) else Ok(_fork_points(read.value))
 
     async def fork(
-        self, point: EventId | ForkPoint, *, knowledge: KnowledgePolicy = "pinned"
+        self,
+        point: EventId | ForkPoint,
+        *,
+        mode: Literal["live", "stub"] = "live",
+        knowledge: KnowledgePolicy = "pinned",
     ) -> Ok["Thread"] | Err[ParseError]:
         """A new branch restored into an isolated sandbox. Continue it with
-        `agent.run(input, thread=child)`."""
+        `agent.run(input, thread=child)`. In stub mode that run answers every mediated
+        operation from what this branch recorded after the point; it needs a sandbox
+        that enforces deny-all egress."""
         event_id = point if isinstance(point, str) else point.event_id
+        stubs = None
+        if mode == "stub":
+            recorded = await self._recorded_after(event_id)
+            if isinstance(recorded, Err):
+                return recorded
+            stubs = recorded.value
         child = BranchId(uuid7(now_ms()))
         at = ForkAt(self.branch, event_id, child, knowledge)
         sq = await open_store(self.store)
@@ -115,7 +137,20 @@ class Thread:
             return forked
         # Done with the child: hand its lease back so a run (its own holder) takes it at once.
         await forked.value.release()
-        return Ok(Thread(self.id, child, self.store, sandbox=self.sandbox))
+        return Ok(Thread(self.id, child, self.store, sandbox=self.sandbox, stubs=stubs))
+
+    async def _recorded_after(self, point: EventId) -> Ok[tuple[Stub, ...]] | Err[ParseError]:
+        """The stubs a stub fork at `point` replays: this branch's recorded results after it."""
+        if self.sandbox is not None and self.sandbox.info.egress != "enforced":
+            why = f"{self.sandbox.info.provider} can't enforce deny-all egress"
+            return Err(ParseError("egress_policy_unsupported", why))
+        read = await self._read()
+        if isinstance(read, Err):
+            return read
+        at = fork_point(read.value.fold, point)
+        if isinstance(at, Err):
+            return at
+        return Ok(parse_stubs({"stubs": recorded_stubs(read.value.fold, at.value.seq)}))
 
     async def save_case(
         self,
