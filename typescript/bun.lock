@@ -57,6 +57,9 @@
         "@daytona/toolbox-api-client": "0.216.0",
         "@threads/core": "workspace:*",
       },
+      "devDependencies": {
+        "zod": "^4.6.5",
+      },
     },
     "packages/e2b": {
       "name": "@threads/e2b",
@@ -64,6 +67,9 @@
       "dependencies": {
         "@threads/core": "workspace:*",
         "e2b": "2.51.0",
+      },
+      "devDependencies": {
+        "zod": "^4.6.5",
       },
     },
     "packages/modal": {

@@ -8,5 +8,8 @@
   "dependencies": {
     "@threads/core": "workspace:*",
     "e2b": "2.51.0"
+  },
+  "devDependencies": {
+    "zod": "^4.6.5"
   }
 }
