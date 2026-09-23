@@ -332,7 +332,22 @@
           "kind": "option",
           "type": {"object": {"credential": {"type": {"$ref": "#/types/Secret"}, "required": true}}},
           "required": false,
-          "doc": "Enables the git gateway tools."
+          "doc": "Enables the git gateway tools git_clone, git_fetch, git_push and open_pull_request. The forge is GitHub; the credential is revealed only on the host and never enters the sandbox."
+        },
+        {
+          "name": "computer",
+          "kind": "option",
+          "type": {"prim": "boolean"},
+          "required": false,
+          "default": false,
+          "doc": "Pins computer_screenshot (read_only) and computer (actions, unguarded). Needs a sandbox whose info.desktop is native or image; otherwise a setup error capability_missing."
+        },
+        {
+          "name": "lsp",
+          "kind": "option",
+          "type": {"object": {"languages": {"type": {"array": {"prim": "string"}}, "required": true}}},
+          "required": false,
+          "doc": "Pins lsp for these languages (typescript, python, go, rust), run in the sandbox image's language servers. Needs a sandbox; an unknown language is unknown_preset. A server that isn't installed or ready answers unavailable at run time."
         },
         {
           "name": "browser",

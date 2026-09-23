@@ -1,6 +1,6 @@
 {
   "description": "Built-in tool inputs: each case is parsed with the tool's catalog schema (Zod in TypeScript, the generated Pydantic model in Python) and must be accepted exactly when valid. catalog_sha256 is the SHA-256 of spec/schema/tools.v1.catalog.json, the canonical catalog both runtimes pin.",
-  "catalog_sha256": "1c190839755dfac3912891179eb9d59551cfc497c83c2e972c3d6fe934bdafa6",
+  "catalog_sha256": "543c8ae8305da7ffef0d42423c60a2142bcaec9ce0ebf372601bfebd0aaafced",
   "cases": [
     {
       "tool": "bash",
@@ -681,6 +681,483 @@
       "input": {
         "task_id": "t1",
         "status": "claimed"
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "click",
+        "x": 640,
+        "y": 400
+      },
+      "valid": true
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "drag",
+        "x": 0,
+        "y": 0,
+        "to_x": 10,
+        "to_y": 10
+      },
+      "valid": true
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "scroll",
+        "x": 1,
+        "y": 1,
+        "direction": "down",
+        "amount": 50
+      },
+      "valid": true
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "type",
+        "text": "hello"
+      },
+      "valid": true
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "screenshot"
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "launch"
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "click",
+        "x": -1,
+        "y": 0
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "click",
+        "x": 1.5,
+        "y": 0
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "scroll",
+        "direction": "sideways"
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "scroll",
+        "amount": 51
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "type",
+        "text": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer",
+      "input": {
+        "action": "click",
+        "coordinate": [
+          1,
+          2
+        ]
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer_screenshot",
+      "input": {},
+      "valid": true
+    },
+    {
+      "tool": "computer_screenshot",
+      "input": {
+        "x": 0,
+        "y": 0,
+        "to_x": 100,
+        "to_y": 50,
+        "wait_ms": 60000
+      },
+      "valid": true
+    },
+    {
+      "tool": "computer_screenshot",
+      "input": {
+        "wait_ms": 60001
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer_screenshot",
+      "input": {
+        "wait_ms": 0
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer_screenshot",
+      "input": {
+        "x": -1
+      },
+      "valid": false
+    },
+    {
+      "tool": "computer_screenshot",
+      "input": {
+        "action": "screenshot"
+      },
+      "valid": false
+    },
+    {
+      "tool": "web_fetch",
+      "input": {
+        "url": "https://example.com/a?b=1"
+      },
+      "valid": true
+    },
+    {
+      "tool": "web_fetch",
+      "input": {
+        "url": "http://example.com"
+      },
+      "valid": true
+    },
+    {
+      "tool": "web_fetch",
+      "input": {
+        "url": "ftp://example.com"
+      },
+      "valid": false
+    },
+    {
+      "tool": "web_fetch",
+      "input": {
+        "url": "https://exa mple.com"
+      },
+      "valid": false
+    },
+    {
+      "tool": "web_fetch",
+      "input": {
+        "url": "https://example.com",
+        "prompt": "summarize"
+      },
+      "valid": false
+    },
+    {
+      "tool": "web_search",
+      "input": {
+        "query": "bun sqlite"
+      },
+      "valid": true
+    },
+    {
+      "tool": "web_search",
+      "input": {
+        "query": "x",
+        "allowed_domains": [
+          "bun.sh"
+        ],
+        "blocked_domains": [
+          "example.com"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "tool": "web_search",
+      "input": {
+        "query": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "web_search",
+      "input": {
+        "query": "x",
+        "allowed_domains": [
+          ""
+        ]
+      },
+      "valid": false
+    },
+    {
+      "tool": "web_search",
+      "input": {
+        "query": "x",
+        "allowed_domains": "bun.sh"
+      },
+      "valid": false
+    },
+    {
+      "tool": "git_clone",
+      "input": {
+        "repo": "acme/api"
+      },
+      "valid": true
+    },
+    {
+      "tool": "git_clone",
+      "input": {
+        "repo": "acme/api.v2",
+        "ref": "main",
+        "path": "api"
+      },
+      "valid": true
+    },
+    {
+      "tool": "git_clone",
+      "input": {
+        "repo": "https://github.com/acme/api"
+      },
+      "valid": false
+    },
+    {
+      "tool": "git_clone",
+      "input": {
+        "repo": "acme"
+      },
+      "valid": false
+    },
+    {
+      "tool": "git_clone",
+      "input": {
+        "repo": "acme/api",
+        "ref": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "git_fetch",
+      "input": {
+        "repo": "acme/api"
+      },
+      "valid": true
+    },
+    {
+      "tool": "git_fetch",
+      "input": {
+        "repo": "acme/api",
+        "ref": "main"
+      },
+      "valid": true
+    },
+    {
+      "tool": "git_fetch",
+      "input": {
+        "repo": "acme/api/x"
+      },
+      "valid": false
+    },
+    {
+      "tool": "git_push",
+      "input": {
+        "repo": "acme/api",
+        "branch": "fix-1"
+      },
+      "valid": true
+    },
+    {
+      "tool": "git_push",
+      "input": {
+        "repo": "acme/api",
+        "branch": "fix-1",
+        "path": "api"
+      },
+      "valid": true
+    },
+    {
+      "tool": "git_push",
+      "input": {
+        "repo": "acme/api"
+      },
+      "valid": false
+    },
+    {
+      "tool": "git_push",
+      "input": {
+        "repo": "acme/api",
+        "branch": "fix-1",
+        "force": true
+      },
+      "valid": false
+    },
+    {
+      "tool": "open_pull_request",
+      "input": {
+        "repo": "acme/api",
+        "head": "fix-1",
+        "base": "main",
+        "title": "Fix"
+      },
+      "valid": true
+    },
+    {
+      "tool": "open_pull_request",
+      "input": {
+        "repo": "acme/api",
+        "head": "fix-1",
+        "base": "main",
+        "title": "Fix",
+        "body": ""
+      },
+      "valid": true
+    },
+    {
+      "tool": "open_pull_request",
+      "input": {
+        "repo": "acme/api",
+        "head": "fix-1",
+        "base": "main"
+      },
+      "valid": false
+    },
+    {
+      "tool": "open_pull_request",
+      "input": {
+        "repo": "acme/api",
+        "head": "",
+        "base": "main",
+        "title": "Fix"
+      },
+      "valid": false
+    },
+    {
+      "tool": "lsp",
+      "input": {
+        "operation": "symbols",
+        "path": "src/a.ts"
+      },
+      "valid": true
+    },
+    {
+      "tool": "lsp",
+      "input": {
+        "operation": "hover",
+        "path": "a.py",
+        "line": 1,
+        "character": 1
+      },
+      "valid": true
+    },
+    {
+      "tool": "lsp",
+      "input": {
+        "operation": "rename",
+        "path": "a.py"
+      },
+      "valid": false
+    },
+    {
+      "tool": "lsp",
+      "input": {
+        "operation": "hover",
+        "path": "a.py",
+        "line": 0,
+        "character": 1
+      },
+      "valid": false
+    },
+    {
+      "tool": "lsp",
+      "input": {
+        "operation": "hover",
+        "path": "",
+        "line": 1,
+        "character": 1
+      },
+      "valid": false
+    },
+    {
+      "tool": "notebook_edit",
+      "input": {
+        "path": "a.ipynb",
+        "cell_id": "c1",
+        "new_source": "x = 1"
+      },
+      "valid": true
+    },
+    {
+      "tool": "notebook_edit",
+      "input": {
+        "path": "a.ipynb",
+        "cell_id": "c1",
+        "new_source": "# Title",
+        "cell_type": "markdown",
+        "mode": "insert"
+      },
+      "valid": true
+    },
+    {
+      "tool": "notebook_edit",
+      "input": {
+        "path": "a.ipynb",
+        "cell_id": "c1",
+        "new_source": "",
+        "mode": "delete"
+      },
+      "valid": true
+    },
+    {
+      "tool": "notebook_edit",
+      "input": {
+        "path": "a.ipynb",
+        "cell_id": "",
+        "new_source": "x"
+      },
+      "valid": false
+    },
+    {
+      "tool": "notebook_edit",
+      "input": {
+        "path": "a.ipynb",
+        "cell_id": "c1"
+      },
+      "valid": false
+    },
+    {
+      "tool": "notebook_edit",
+      "input": {
+        "path": "a.ipynb",
+        "cell_id": "c1",
+        "new_source": "x",
+        "mode": "move"
+      },
+      "valid": false
+    },
+    {
+      "tool": "notebook_edit",
+      "input": {
+        "path": "a.ipynb",
+        "cell_id": "c1",
+        "new_source": "x",
+        "cell_type": "raw"
       },
       "valid": false
     }

@@ -17,12 +17,20 @@ VECTOR: dict[str, JsonValue] = json.loads(
 CATALOG = (SPEC / "schema" / "tools.v1.catalog.json").read_bytes()
 MODELS = {
     "bash": tools_v1.BashInput,
+    "computer": tools_v1.ComputerInput,
+    "computer_screenshot": tools_v1.ComputerScreenshotInput,
     "edit": tools_v1.EditInput,
     "forget_memory": tools_v1.ForgetMemoryInput,
+    "git_clone": tools_v1.GitCloneInput,
+    "git_fetch": tools_v1.GitFetchInput,
+    "git_push": tools_v1.GitPushInput,
     "glob": tools_v1.GlobInput,
     "grep": tools_v1.GrepInput,
     "handoff": tools_v1.HandoffInput,
     "ls": tools_v1.LsInput,
+    "lsp": tools_v1.LspInput,
+    "notebook_edit": tools_v1.NotebookEditInput,
+    "open_pull_request": tools_v1.OpenPullRequestInput,
     "read": tools_v1.ReadInput,
     "read_tool_result": tools_v1.ReadToolResultInput,
     "save_memory": tools_v1.SaveMemoryInput,
@@ -34,6 +42,8 @@ MODELS = {
     "team_task_create": tools_v1.TeamTaskCreateInput,
     "team_task_update": tools_v1.TeamTaskUpdateInput,
     "todo_write": tools_v1.TodoWriteInput,
+    "web_fetch": tools_v1.WebFetchInput,
+    "web_search": tools_v1.WebSearchInput,
     "write": tools_v1.WriteInput,
 }
 

@@ -20,6 +20,109 @@
       ],
       "type": "object"
     },
+    "ComputerInput": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "click",
+            "double_click",
+            "right_click",
+            "move",
+            "drag",
+            "scroll",
+            "type",
+            "key"
+          ],
+          "type": "string"
+        },
+        "amount": {
+          "description": "scroll clicks; default 3.",
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "direction": {
+          "description": "scroll direction.",
+          "enum": [
+            "up",
+            "down",
+            "left",
+            "right"
+          ],
+          "type": "string"
+        },
+        "text": {
+          "description": "type: the text. key: a combination such as ctrl+s.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "to_x": {
+          "description": "drag: the end point.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "to_y": {
+          "description": "drag: the end point.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x": {
+          "description": "Screenshot pixels: required for click, double_click, right_click, move, drag and scroll.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y": {
+          "description": "Screenshot pixels, with x.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "ComputerScreenshotInput": {
+      "additionalProperties": false,
+      "properties": {
+        "to_x": {
+          "description": "Zoom: the region's right edge.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "to_y": {
+          "description": "Zoom: the region's bottom edge.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "wait_ms": {
+          "description": "Wait this long before capturing.",
+          "maximum": 60000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "x": {
+          "description": "Zoom: the region's left edge; give all four or none.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y": {
+          "description": "Zoom: the region's top edge.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "EditInput": {
       "additionalProperties": false,
       "properties": {
@@ -62,6 +165,79 @@
       },
       "required": [
         "id"
+      ],
+      "type": "object"
+    },
+    "GitCloneInput": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "The clone's directory, relative to /workspace; default the repo name.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "ref": {
+          "description": "Branch, tag or commit; default the default branch.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "repo": {
+          "description": "owner/name on the configured forge.",
+          "pattern": "^[A-Za-z0-9_.-]+[/][A-Za-z0-9_.-]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "type": "object"
+    },
+    "GitFetchInput": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "The clone's directory, relative to /workspace; default the repo name.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "ref": {
+          "description": "Fetch only this ref; default every branch.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "repo": {
+          "description": "owner/name on the configured forge.",
+          "pattern": "^[A-Za-z0-9_.-]+[/][A-Za-z0-9_.-]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "type": "object"
+    },
+    "GitPushInput": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "description": "The local branch; it is pushed to the same name.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "description": "The clone's directory, relative to /workspace; default the repo name.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "repo": {
+          "description": "owner/name on the configured forge.",
+          "pattern": "^[A-Za-z0-9_.-]+[/][A-Za-z0-9_.-]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "branch"
       ],
       "type": "object"
     },
@@ -134,6 +310,119 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "LspInput": {
+      "additionalProperties": false,
+      "properties": {
+        "character": {
+          "description": "1-based column; required with line.",
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "line": {
+          "description": "1-based; required for definition, references and hover.",
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "enum": [
+            "diagnostics",
+            "definition",
+            "references",
+            "hover",
+            "symbols"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "description": "Relative to /workspace, or absolute.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "path"
+      ],
+      "type": "object"
+    },
+    "NotebookEditInput": {
+      "additionalProperties": false,
+      "properties": {
+        "cell_id": {
+          "description": "The nbformat cell id; insert adds the new cell after it.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "cell_type": {
+          "description": "Required for insert; replace keeps the type when absent.",
+          "enum": [
+            "code",
+            "markdown"
+          ],
+          "type": "string"
+        },
+        "mode": {
+          "default": "replace",
+          "enum": [
+            "replace",
+            "insert",
+            "delete"
+          ],
+          "type": "string"
+        },
+        "new_source": {
+          "description": "The cell's new source; ignored by delete.",
+          "type": "string"
+        },
+        "path": {
+          "description": "An .ipynb file, relative to /workspace.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "cell_id",
+        "new_source"
+      ],
+      "type": "object"
+    },
+    "OpenPullRequestInput": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "description": "The branch to merge into.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "head": {
+          "description": "The pushed branch.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "repo": {
+          "description": "owner/name on the configured forge.",
+          "pattern": "^[A-Za-z0-9_.-]+[/][A-Za-z0-9_.-]+$",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "head",
+        "base",
+        "title"
+      ],
       "type": "object"
     },
     "ReadInput": {
@@ -403,6 +692,49 @@
       },
       "required": [
         "todos"
+      ],
+      "type": "object"
+    },
+    "WebFetchInput": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "description": "An http or https URL, printable ASCII (percent-encode the rest).",
+          "pattern": "^https?:[/][/][!-~]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "WebSearchInput": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_domains": {
+          "description": "Hosts; a subdomain of a listed host matches too.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "blocked_domains": {
+          "description": "Hosts; a subdomain of a listed host matches too.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "query": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
       ],
       "type": "object"
     },

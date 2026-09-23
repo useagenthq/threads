@@ -73,6 +73,7 @@ describe("built-in sandbox tools", () => {
       "glob:read_only",
       "grep:read_only",
       "ls:read_only",
+      "notebook_edit:sandbox_local",
       "read:read_only",
       "read_tool_result:read_only",
       "todo_write:read_only",

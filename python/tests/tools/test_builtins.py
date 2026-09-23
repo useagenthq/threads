@@ -71,7 +71,22 @@ def test_specs_are_the_shared_catalog_and_read_tool_result_is_always_there() -> 
         {"name": s.name, "description": s.description, "input_schema": s.input_schema}
         for s in SPECS.values()
     ]
-    assert json.loads(json.dumps(pinned)) == catalog
+    # The catalog additions the Python builder adopts next (parity: TS pins them).
+    pending = {
+        "computer",
+        "computer_screenshot",
+        "git_clone",
+        "git_fetch",
+        "git_push",
+        "lsp",
+        "notebook_edit",
+        "open_pull_request",
+        "web_fetch",
+        "web_search",
+    }
+    assert isinstance(catalog, list)
+    expected = [e for e in catalog if isinstance(e, dict) and e["name"] not in pending]
+    assert json.loads(json.dumps(pinned)) == expected
     bare = specs(sandbox=False, egress_denied=True)
     assert [s.name for s in bare] == ["read_tool_result", "todo_write"]
 
