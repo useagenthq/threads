@@ -1,6 +1,10 @@
+import { containsSecret } from "../redact";
+import { knownEvents } from "../reduce";
+import { refReader, verifyRequests } from "../render";
 import { err, ok, type Result } from "../result";
-import type { Segment, VerifiedLog } from "../verify";
+import { type Segment, type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
+import type { ArtifactStore } from "./artifacts";
 import type { SqliteDriver } from "./driver";
 import {
   eventLines,
@@ -9,6 +13,28 @@ import {
   insertEvents,
   threadOwner,
 } from "./tables";
+
+/**
+ * An export verified for import: its chain, and every model request replayed from the log and
+ * the artifacts already stored (C7, Render v1). Imported bytes are stored exactly as exported,
+ * torn tail included, so one holding a registered value is refused (C5).
+ */
+export function verifiedImport(
+  bytes: Uint8Array,
+  artifacts: ArtifactStore,
+): Result<VerifiedLog, LogError> {
+  if (containsSecret(bytes))
+    return err(
+      logError(
+        "secret_in_stored_bytes",
+        "the export holds a registered secret; nothing imported",
+      ),
+    );
+  const log = verifyExport(bytes);
+  if (!log.ok) return log;
+  const replayed = verifyRequests(knownEvents(log.value), refReader(artifacts));
+  return replayed.ok ? log : replayed;
+}
 
 /** Whose rows an import writes, and the artifact holding a torn tail's bytes, if any. */
 export type ImportTarget = {

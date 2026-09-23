@@ -12,6 +12,7 @@
     "@daytona/toolbox-api-client": "0.216.0"
   },
   "devDependencies": {
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@threads/adapter-testkit": "workspace:*"
   }
 }

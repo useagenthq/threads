@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { storeConnection } from "@threads/core/host";
+import { credential } from "@threads/core/adapter";
+import { openStore, storeConnection } from "@threads/core/host";
 import { z } from "zod";
 import {
   eventsOf,
@@ -215,6 +216,29 @@ describe("a message runs once and its reply is an effect", () => {
     expect(slack.performed).toHaveLength(1);
     const parked = (await threadEvents(h)).findLast((e) => e.type === "parked");
     expect(parked?.["data"]).toMatchObject({ reason: "effect_unknown" });
+  });
+
+  test("a receipt holding a registered value is stored redacted (#328 HIGH 9)", async () => {
+    const key = credential("fake", "apiKey", "sk-l9-receipt-5c6d", "U")();
+    const { h, slack } = setup([say("Hello back")]);
+    slack.outcomes.push({ status: "sent", platform_ref: `msg ${key}` });
+    await h.host.ready();
+    await post(h, hook("E1", [message("hi", "E1#0")]));
+    await until(async () =>
+      (await threadEvents(h)).some((e) => e.type === "effect_commit"),
+    );
+    const commit = (await threadEvents(h)).find(
+      (e) => e.type === "effect_commit",
+    );
+    const { result_ref } = z
+      .object({ result_ref: z.object({ sha256: z.string() }) })
+      .parse(commit?.["data"]);
+    const { artifacts } = await openStore(h.store);
+    const stored = artifacts.get(result_ref.sha256);
+    if (!stored.ok) throw new Error(stored.error.message);
+    expect(new TextDecoder().decode(stored.value)).toBe(
+      "msg [secret fake.apiKey]",
+    );
   });
 
   test("definite_not_sent transient is re-sent under the same key", async () => {

@@ -7,7 +7,6 @@ the fenced client with its retries off. Scope is still enforced by the host's bi
 
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Final
 
@@ -27,23 +26,35 @@ from threads.memory.types import (
     Scope,
 )
 from threads.result import Err, Ok
-from threads.secrets import Secret, resolve, secret
+from threads.secrets import Secret, credential
 
 API_KEY: Final = "ZEP_API_KEY"
 _ONCE: Final = RequestOptions(max_retries=0)
 
 
-@dataclass(frozen=True, slots=True)
 class Zep:
-    api_key: Secret
-    base_url: str | None = None
-    http: httpx.AsyncBaseTransport | None = None
-    """The transport under the fence; None opens real connections. Tests pass one."""
+    """spec/api.json `MemoryProvider` on Zep Cloud (module docstring)."""
+
+    def __init__(
+        self,
+        api_key: str | Secret | None = None,
+        base_url: str | None = None,
+        http: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.api_key = api_key
+        self.base_url = base_url
+        self.http = http
+        """The transport under the fence; None opens real connections. Tests pass one."""
+        self._key = credential("zep", "api_key", api_key, API_KEY)
+
+    async def setup(self) -> None:
+        """Resolves the key on the host, once: a missing key fails here, not mid-run."""
+        self._key()
 
     @asynccontextmanager
     async def _client(self) -> AsyncGenerator[AsyncZep]:
         async with fenced_client(self.http) as http:
-            yield AsyncZep(api_key=resolve(self.api_key), base_url=self.base_url, httpx_client=http)
+            yield AsyncZep(api_key=self._key(), base_url=self.base_url, httpx_client=http)
 
     async def remember(self, scope: Scope, record: MemoryRecord, key: str) -> Outcome[RecordRef]:
         graph = container(scope)
@@ -109,6 +120,6 @@ class Zep:
         return Ok(None)
 
 
-def zep(*, api_key: Secret | None = None, base_url: str | None = None) -> Zep:
-    """Pure: the key is resolved on the host when a call is made."""
-    return Zep(api_key or secret(API_KEY), base_url)
+def zep(*, api_key: str | Secret | None = None, base_url: str | None = None) -> Zep:
+    """Pure. `api_key` defaults to `secret("ZEP_API_KEY")`, resolved on the host at setup."""
+    return Zep(api_key, base_url)

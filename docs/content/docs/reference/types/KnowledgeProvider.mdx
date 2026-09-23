@@ -10,6 +10,29 @@ A provider only stores and searches: the host ingests documents at run setup, an
 
 ## Methods
 
+### setup
+
+Resolve credentials and check configuration on the host. Called by check() or the first run, before anything is pinned; never at import or construction. Creates no connection or client: those belong to a run. Retried on the next check() or run after a failure.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+setup(): Promise<void>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def setup() -> None
+```
+
+</Tab>
+</Tabs>
+
+**Throws** `ConfigError` for a definition that can't run.
+
 ### ingest
 
 Admit one document version into the scope and return it with the new store revision. The same key with the same content returns the earlier version; the same key with other content is invalid.

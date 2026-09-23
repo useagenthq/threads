@@ -6,10 +6,12 @@ import type {
   ModelContext,
   ModelInfo,
   ModelRequest,
+  Secret,
 } from "@threads/core/adapter";
 import {
   ConfigError,
   checkHostedTools,
+  credential,
   fencedFetch,
   parseRender,
   rejectionFor,
@@ -41,8 +43,8 @@ export type OpenAIOptions = {
   readonly price?: ModelInfo["limits"]["price"];
   /** Provider-executed tools (web_search, file_search, ...), sent as recorded here. */
   readonly hostedTools?: readonly JsonObject[];
-  /** Defaults to the SDK's OPENAI_API_KEY. Never pinned or logged. */
-  readonly apiKey?: string;
+  /** Defaults to secret("OPENAI_API_KEY"), resolved at setup. Never pinned or logged. */
+  readonly apiKey?: string | Secret;
   readonly baseURL?: string;
   readonly fetch?: Fetch;
 };
@@ -94,15 +96,25 @@ export function openai(options: OpenAIOptions): Model {
     // store is false, so nothing is retrievable afterwards.
     lookup: "none",
   };
+  const apiKey = credential(
+    "openai",
+    "apiKey",
+    options.apiKey,
+    "OPENAI_API_KEY",
+  );
   return {
     info,
+    setup: async () => {
+      apiKey();
+    },
     send: (request, context, sendOptions) =>
-      send(options, request, context, sendOptions?.signal),
+      send(options, apiKey, request, context, sendOptions?.signal),
   };
 }
 
 async function* send(
   options: OpenAIOptions,
+  apiKey: () => string,
   request: ModelRequest,
   context: ModelContext,
   signal: AbortSignal | undefined,
@@ -115,7 +127,7 @@ async function* send(
     return;
   }
   const client = new OpenAI({
-    ...(options.apiKey === undefined ? {} : { apiKey: options.apiKey }),
+    apiKey: apiKey(),
     ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
     maxRetries: 0,
     fetch: fencedFetch(context, options.fetch ?? fetch),

@@ -10,7 +10,8 @@ import { follow, type OpenSocket } from "./logs";
 // so a lost create is found by name. Every wait polls the control plane, each poll fenced.
 
 export type DriverOptions = {
-  readonly clients: Clients;
+  /** Made on first use, after setup resolved the key. */
+  readonly clients: () => Clients;
   readonly open: OpenSocket;
   /** The Daytona snapshot new sandboxes start from; undefined: Daytona's default. */
   readonly image: string | undefined;
@@ -53,12 +54,13 @@ async function unless404<T>(call: () => Promise<T>): Promise<T | undefined> {
 }
 
 export function daytonaDriver(options: DriverOptions): SandboxDriver {
-  const { sandboxes, snapshots } = options.clients;
+  const sandboxes = () => options.clients().sandboxes;
+  const snapshots = () => options.clients().snapshots;
   const proxies = new Map<string, string>();
   const exec = sessions(options, (id) => toolbox(id));
 
   const get = (id: string) =>
-    unless404(async () => (await sandboxes.getSandbox(id)).data);
+    unless404(async () => (await sandboxes().getSandbox(id)).data);
 
   /** Polls until the sandbox reaches `state` (undefined: it is gone). */
   const until = async (id: string, state: string | undefined) => {
@@ -85,18 +87,18 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
   const toolbox = async (id: string) => {
     const known = proxies.get(id);
     if (known !== undefined)
-      return { base: known, ...options.clients.toolbox(known) };
+      return { base: known, ...options.clients().toolbox(known) };
     const dto = await get(id);
     if (dto === undefined) throw new Error(`no sandbox ${id}`);
     const base = proxies.get(remember(dto)) ?? "";
-    return { base, ...options.clients.toolbox(base) };
+    return { base, ...options.clients().toolbox(base) };
   };
 
   const snapshotReady = async (name: string) => {
     const deadline = Date.now() + options.waitMs;
     while (Date.now() < deadline) {
       const state = (
-        await unless404(async () => (await snapshots.getSnapshot(name)).data)
+        await unless404(async () => (await snapshots().getSnapshot(name)).data)
       )?.state;
       if (state === "active") return;
       if (state === "error" || state === "build_failed")
@@ -112,7 +114,7 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
       return await unless404(
         async () =>
           (
-            await sandboxes.createSandbox({
+            await sandboxes().createSandbox({
               name: nameOf(key),
               ...(image === undefined ? {} : { snapshot: image }),
               env: {},
@@ -166,7 +168,7 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
     },
     kill: async (id) => {
       proxies.delete(id);
-      const deleted = await unless404(() => sandboxes.deleteSandbox(id));
+      const deleted = await unless404(() => sandboxes().deleteSandbox(id));
       if (deleted === undefined) return "already_gone";
       // Daytona deletes asynchronously; the kill counts once it is destroyed.
       await until(id, undefined);
@@ -181,15 +183,15 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
       quiescence: "stopped",
       take: async (id, key) => {
         const name = nameOf(key);
-        await sandboxes.stopSandbox(id);
+        await sandboxes().stopSandbox(id);
         await until(id, "stopped");
         try {
-          await sandboxes.createSandboxSnapshot(id, { name });
+          await sandboxes().createSandboxSnapshot(id, { name });
           await until(id, "stopped");
           await snapshotReady(name);
         } finally {
           proxies.delete(id);
-          await sandboxes.startSandbox(id);
+          await sandboxes().startSandbox(id);
           await until(id, "started");
         }
         // Daytona keeps a snapshot until it is removed.
@@ -198,10 +200,10 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
     },
     deleteSnapshot: async (ref) => {
       const dto = await unless404(
-        async () => (await snapshots.getSnapshot(ref)).data,
+        async () => (await snapshots().getSnapshot(ref)).data,
       );
       if (dto === undefined) return "already_gone";
-      return (await unless404(() => snapshots.removeSnapshot(dto.id))) ===
+      return (await unless404(() => snapshots().removeSnapshot(dto.id))) ===
         undefined
         ? "already_gone"
         : "released";
@@ -255,7 +257,7 @@ function sessions(
       ).data;
       const url = `${box.base.replace(/^http/, "ws")}/process/session/${session}/command/${cmdId}/logs?follow=true`;
       const finish = async () => {
-        await follow(options.open, url, options.clients.headers, {
+        await follow(options.open, url, options.clients().headers, {
           stdout: unhex(sinks.stdout).push,
           stderr: unhex(sinks.stderr).push,
         });

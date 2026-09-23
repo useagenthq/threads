@@ -1,10 +1,9 @@
 import type { Principal } from "../log";
 import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
-import { pin } from "./pin";
 import type { RunResult, ThreadRef } from "./result";
 import type { Hooks, RunOptions } from "./run";
-import { execute, type Resolved } from "./run";
+import { execute, pinnedAfterSetup, type Resolved } from "./run";
 import type { Store } from "./sqlite";
 
 // What the host (@threads/host) needs from an agent handle beyond run(): the thread_started a new
@@ -40,7 +39,7 @@ export function hosted<Deps, Output>(
   approvers: readonly Principal[] | undefined,
 ): HostRunner {
   return {
-    started: async () => pin({ ...def, mcp: await def.setup() }).started,
+    started: async () => (await pinnedAfterSetup(def)).started,
     execute: (plan, inputs, hooks = {}) => execute(def, plan, inputs, hooks),
     approvers,
     sandbox: def.sandbox,

@@ -9,7 +9,7 @@
     "async": "async true: TS returns a Promise, Python is async def. A stream is TS AsyncIterable, Python AsyncIterator.",
     "refs": "urn:threads:schema:events:v1 is spec/schema/events.v1.schema.json, urn:threads:schema:host-api:v1 is spec/schema/host-api/host-api.v1.schema.json, urn:threads:schema:conformance:v1 is spec/conformance/case.schema.json. #/types/X is a type in this file.",
     "generics": "Deps defaults to null (TS undefined, Python None); Output defaults to string (the final text). Agent<Deps, Output> carries both into RunContext and RunResult.",
-    "adapters": "Model, Sandbox, MemoryProvider, KnowledgeProvider, ChannelAdapter and SearchBackend are protocols. Concrete factories (anthropic(), e2b(), mem0(), slack(), ...) live in adapter packages, take a secret() for credentials and return one of these."
+    "adapters": "Model, Sandbox, MemoryProvider, KnowledgeProvider, ChannelAdapter and SearchBackend are protocols. Concrete factories (anthropic(), e2b(), mem0(), slack(), ...) live in adapter packages, take a secret() for credentials and return one of these. Credentials: a single-account adapter (model, sandbox, memory provider) takes its credential as an option that defaults to secret(\"<ENV>\"), with the env name documented per factory. It is resolved in the adapter's setup (check() or the first run), never by the factory. A missing value is missing_secret, and the message names the option and the env variable. An explicit value is registered for redaction exactly as a revealed Secret is, under the same rules (at least 8 characters, not a schema literal). Channel adapters, search backends and MCP servers take every secret explicitly. Credential values are never pinned, logged, rendered or passed into a sandbox (invariant 4)."
   },
   "packages": {
     "core": {
@@ -658,7 +658,7 @@
       "ts": "secret",
       "py": "secret",
       "package": "core",
-      "doc": "A reference to a host secret, resolved only in the host. Values never reach the log, prompts or the sandbox.",
+      "doc": "A reference to a host secret, resolved only in the host. Values never reach the log, prompts or the sandbox. A resolved value must be at least 8 characters and not a literal of the event schema, or resolving it is ConfigError invalid_config (spec/schema/README.md, Secret redaction).",
       "async": false,
       "params": [{"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The name of the host environment variable that holds the value. It is read only when host code needs it; an unset or empty variable is a setup error missing_secret."}],
       "returns": {"$ref": "#/types/Secret"}
@@ -980,7 +980,7 @@
         "check": {
           "ts": "check",
           "py": "check",
-          "doc": "Validate the definition and resolve setup (secrets, MCP handshakes, capabilities) without starting a run.",
+          "doc": "Validate the definition and resolve setup (secrets, MCP handshakes, capabilities) without starting a run. Returns every setup failure as an error value (it never throws them); a failed check can be retried on the same agent after fixing the environment. Connections it opens are closed before it returns.",
           "async": true,
           "params": [],
           "returns": {
@@ -995,7 +995,8 @@
               "budget_unenforceable",
               "permission_rule_invalid",
               "hosted_tool_unsupported",
-              "egress_policy_unsupported"
+              "egress_policy_unsupported",
+              "transport_fence_unsupported"
             ]
           }
         }
@@ -2389,6 +2390,17 @@
       "role": "protocol",
       "properties": {"info": {"type": {"$ref": "#/types/ModelInfo"}, "required": true, "doc": "What this model is and can do: its name, adapter, params, limits, accepted inputs, hosted tools and lookup capability. Read when the agent is pinned."}},
       "methods": {
+        "setup": {
+          "ts": "setup",
+          "py": "setup",
+          "doc": "Resolve credentials and check configuration on the host. Called by check() or the first run, before anything is pinned; never at import or construction. Creates no connection or client: those belong to a run. Retried on the next check() or run after a failure.",
+          "async": true,
+          "optional": true,
+          "capability": "SetsUp",
+          "params": [],
+          "returns": {"prim": "void"},
+          "throws": ["ConfigError"]
+        },
         "send": {
           "ts": "send",
           "py": "send",
@@ -2597,6 +2609,17 @@
       "role": "protocol",
       "properties": {"info": {"type": {"$ref": "#/types/SandboxInfo"}, "required": true, "doc": "What this sandbox provider is and can do: its provider name, egress enforcement, snapshot capture classes, browser and desktop support, lookup capabilities and termination. Read when the agent is pinned."}},
       "methods": {
+        "setup": {
+          "ts": "setup",
+          "py": "setup",
+          "doc": "Resolve credentials and check configuration on the host. Called by check() or the first run, before anything is pinned; never at import or construction. Creates no connection or client: those belong to a run. Retried on the next check() or run after a failure.",
+          "async": true,
+          "optional": true,
+          "capability": "SetsUp",
+          "params": [],
+          "returns": {"prim": "void"},
+          "throws": ["ConfigError"]
+        },
         "create": {
           "ts": "create",
           "py": "create",
@@ -2935,6 +2958,17 @@
       "kind": "interface",
       "role": "protocol",
       "methods": {
+        "setup": {
+          "ts": "setup",
+          "py": "setup",
+          "doc": "Resolve credentials and check configuration on the host. Called by check() or the first run, before anything is pinned; never at import or construction. Creates no connection or client: those belong to a run. Retried on the next check() or run after a failure.",
+          "async": true,
+          "optional": true,
+          "capability": "SetsUp",
+          "params": [],
+          "returns": {"prim": "void"},
+          "throws": ["ConfigError"]
+        },
         "remember": {
           "ts": "remember",
           "py": "remember",
@@ -3044,6 +3078,17 @@
       "kind": "interface",
       "role": "protocol",
       "methods": {
+        "setup": {
+          "ts": "setup",
+          "py": "setup",
+          "doc": "Resolve credentials and check configuration on the host. Called by check() or the first run, before anything is pinned; never at import or construction. Creates no connection or client: those belong to a run. Retried on the next check() or run after a failure.",
+          "async": true,
+          "optional": true,
+          "capability": "SetsUp",
+          "params": [],
+          "returns": {"prim": "void"},
+          "throws": ["ConfigError"]
+        },
         "ingest": {
           "ts": "ingest",
           "py": "ingest",

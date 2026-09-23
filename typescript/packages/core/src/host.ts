@@ -3,7 +3,6 @@
 export type { HostRunner } from "./agent/hosted";
 export { hostRunner } from "./agent/registry";
 export { type RunResult, runResult, type ThreadRef } from "./agent/result";
-export { redactSecrets } from "./agent/secret";
 export {
   openStore,
   type Store,
@@ -35,6 +34,7 @@ export {
   Uuid,
 } from "./log";
 export { turnEvents } from "./loop/turn";
+export { redactSecrets } from "./redact";
 export { knownEvents } from "./reduce";
 export { err, ok, type Result } from "./result";
 export { collect, type Sandbox } from "./sandbox";

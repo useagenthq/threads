@@ -1,8 +1,10 @@
 import {
   ConfigError,
+  credential,
   type Fetch,
   type ProviderSandbox,
   remoteSandbox,
+  type Secret,
 } from "@threads/core/adapter";
 import { e2bDriver } from "./driver";
 import { fenceable, networkFetch } from "./transport";
@@ -24,8 +26,11 @@ import { fenceable, networkFetch } from "./transport";
 //   as UTF-8; bytes that aren't UTF-8 arrive as U+FFFD. Files move as raw bytes.
 
 export type E2bOptions = {
-  /** Defaults to the SDK's E2B_API_KEY. Used by the host only, never passed into a sandbox. */
-  readonly apiKey?: string;
+  /**
+   * Defaults to secret("E2B_API_KEY"), resolved at setup. Used by the host only, never passed
+   * into a sandbox.
+   */
+  readonly apiKey?: string | Secret;
   /** The template a new sandbox starts from. Defaults to "base". */
   readonly template?: string;
   /** How long a sandbox lives before E2B kills it. Defaults to 5 minutes. */
@@ -47,17 +52,18 @@ export function e2b(options: E2bOptions = {}): ProviderSandbox {
     );
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const internet = options.internet ?? false;
+  const apiKey = credential("e2b", "apiKey", options.apiKey, "E2B_API_KEY");
   const driver = e2bDriver({
-    connection: {
-      ...(options.apiKey === undefined ? {} : { apiKey: options.apiKey }),
+    connection: () => ({
+      apiKey: apiKey(),
       ...(options.domain === undefined ? {} : { domain: options.domain }),
-    },
+    }),
     template: options.template ?? "base",
     timeoutMs,
     internet,
     fetch: options.fetch ?? networkFetch,
   });
-  return remoteSandbox(
+  const sandbox = remoteSandbox(
     driver,
     {
       provider: "e2b",
@@ -67,4 +73,10 @@ export function e2b(options: E2bOptions = {}): ProviderSandbox {
     },
     { sandboxMs: timeoutMs, snapshotMs: null },
   );
+  return {
+    ...sandbox,
+    setup: async () => {
+      apiKey();
+    },
+  };
 }

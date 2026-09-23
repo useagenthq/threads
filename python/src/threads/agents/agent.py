@@ -6,6 +6,7 @@ store, the principal and the deps.
 
 import asyncio
 from collections.abc import AsyncIterator, Callable, Sequence
+from contextlib import AsyncExitStack
 from dataclasses import replace
 from functools import partial
 from typing import Final, Literal, Required, TypedDict, Unpack, overload
@@ -17,10 +18,11 @@ from threads.agents import narrowing
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress
 from threads.agents.catalog import GitOptions, LspOptions, WebOptions, catalog
-from threads.agents.config import ConfigError
+from threads.agents.config import ConfigError, Failure
 from threads.agents.definition import Definition
 from threads.agents.results import Completed, RunResult, StreamEvent
-from threads.agents.run import Emit, Input, RunOptions, execute
+from threads.agents.run import Emit, Input, RunOptions, execute, with_servers
+from threads.agents.setup import set_up
 from threads.agents.skills import Skill, checked
 from threads.agents.tool import json_schema
 from threads.hooks.extension import Extension
@@ -28,6 +30,7 @@ from threads.log import Budget, Context, Permissions, Principal, Retry
 from threads.loop.model import Model
 from threads.memory.authority import MemoryWrite
 from threads.memory.protocol import KnowledgeProvider, MemoryProvider
+from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 
 
@@ -184,6 +187,20 @@ class Agent[D, O]:
             return Completed(self._decode(done.output), done.thread)
         return done
 
+    async def check(self) -> Ok[None] | Err[Failure]:
+        """spec/api.json `Agent.check`: resolves setup (credentials, MCP handshakes) without
+        starting a run. Every setup failure comes back as a value, never raised; fix the
+        environment and check again on the same agent. MCP sessions it opens are closed before
+        it returns."""
+        try:
+            await set_up(self._definition)
+            async with AsyncExitStack() as sessions:
+                pinned = await with_servers(self._definition, sessions, _outside_any_branch)
+                pinned.pin()
+        except ConfigError as error:
+            return Err(Failure(error.code, error.message))
+        return Ok(None)
+
 
 def _drop(_item: StreamEvent) -> None:
     pass
@@ -191,6 +208,11 @@ def _drop(_item: StreamEvent) -> None:
 
 def _text(text: str) -> str:
     return text
+
+
+async def _outside_any_branch() -> bool:
+    """check() lists tools for no branch, so there is no lease to lose."""
+    return True
 
 
 @overload

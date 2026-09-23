@@ -149,6 +149,11 @@ export type SandboxSession = {
 /** What a sandbox adapter returns. Every create and restore carries a ledgered operation key. */
 export type Sandbox = {
   readonly info: SandboxInfo;
+  /**
+   * Resolves credentials and checks configuration on the host, at check() or the first run.
+   * Opens no connection; a throw is a ConfigError, retried on the next check() or run.
+   */
+  readonly setup?: () => Promise<void>;
   readonly create: (
     operationKey: string,
     context: SandboxContext,

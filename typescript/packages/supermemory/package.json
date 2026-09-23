@@ -10,5 +10,8 @@
     "@threads/core": "workspace:*",
     "supermemory": "4.25.4",
     "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@threads/adapter-testkit": "workspace:*"
   }
 }

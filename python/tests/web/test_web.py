@@ -325,7 +325,7 @@ def test_search_backends_send_the_key_on_the_host_and_parse_hits() -> None:
             assert len(canned.requests) == 1
 
     monkey = pytest.MonkeyPatch()
-    monkey.setenv(env_key, "sk-test")
+    monkey.setenv(env_key, "sk-test-search")
     try:
         asyncio.run(main())
     finally:

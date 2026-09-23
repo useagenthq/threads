@@ -1,56 +1,155 @@
-import type { KnowledgeProvider, MemoryProvider } from "../memory/protocol";
+import { redactSecrets } from "../redact";
 import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
+import { setupOf } from "./registry";
 import type { Tool } from "./tool";
 
-// Setup: what check() or the first run resolves before anything is pinned.
-// Extension setups, provider setup checks, and MCP handshakes, each once per agent. A failure
-// is a ConfigError; the agent never starts with part of its config silently missing.
+// Setup: what check() or the first run resolves before anything is pinned: extension setups and
+// each adapter's setup (credentials, configuration), for this agent and every agent it may
+// start. A setup is remembered per object on success only, so a failure is retried by the next
+// check() or run. MCP is never part of it: each check() and each run opens its own sessions.
+
+/** One MCP connection's tools, bound to that connection until the session closes. */
+export type McpSession = {
+  readonly tools: readonly Tool<unknown, unknown, unknown>[];
+  readonly close: () => Promise<void>;
+  readonly [Symbol.asyncDispose]: () => Promise<void>;
+};
 
 /**
- * spec/api.json McpServer: an MCP server binding, built by mcp() in @threads/mcp. Core only
- * connects it at setup and pins the tools it lists, named mcp__<name>__<tool>.
+ * spec/api.json McpServer: an MCP server binding, built by mcp() in @threads/mcp. Core opens a
+ * session for each check() and each run and pins the tools it lists, named mcp__<name>__<tool>.
  */
 export type McpServer = {
   readonly kind: "mcp";
   readonly name: string;
   /** Connects, lists and filters the tools. An unreachable server throws mcp_unreachable. */
-  readonly connect: () => Promise<readonly Tool<unknown, unknown, unknown>[]>;
+  readonly connect: () => Promise<McpSession>;
 };
 
-export type Setup = () => Promise<readonly Tool<unknown, unknown, unknown>[]>;
+/** The optional capability of a Model, Sandbox, MemoryProvider or KnowledgeProvider. */
+type SetsUp = { readonly setup?: () => Promise<void> };
 
-export function once<Deps>(
+/** Objects whose setup succeeded in this process, held weakly. */
+const ready = new WeakSet<object>();
+/** Setups in flight: a concurrent check() or run waits for the same attempt and its outcome. */
+const running = new WeakMap<object, Promise<void>>();
+
+async function once(target: object, setup: () => Promise<void>): Promise<void> {
+  if (ready.has(target)) return;
+  const known = running.get(target);
+  if (known !== undefined) return known;
+  // Registered before setup starts, so even a setup that throws at once is shared and cleared.
+  const { promise, resolve, reject } = Promise.withResolvers<void>();
+  running.set(target, promise);
+  try {
+    await setup();
+    ready.add(target);
+    resolve();
+  } catch (error) {
+    reject(error);
+  } finally {
+    // Success is in `ready`; a failure is forgotten, so the next call tries again.
+    running.delete(target);
+  }
+  return promise;
+}
+
+/**
+ * A setup failure as check() returns it and a run throws it: always a ConfigError, its message
+ * redacted. An unexpected exception becomes `fallback`, naming what failed.
+ */
+function redacted(
+  error: unknown,
+  fallback: ConfigError["code"],
+  what: string,
+): ConfigError {
+  if (error instanceof ConfigError)
+    return new ConfigError(error.code, redactSecrets(error.message));
+  const why = error instanceof Error ? error.message : String(error);
+  return new ConfigError(fallback, redactSecrets(`${what}: ${why}`));
+}
+
+async function redactedSetup(
+  setup: () => Promise<void>,
+  what: string,
+): Promise<void> {
+  try {
+    await setup();
+  } catch (error) {
+    throw redacted(error, "invalid_config", what);
+  }
+}
+
+async function extensionSetup<Deps>(e: Extension<Deps>): Promise<void> {
+  try {
+    await e.setup?.();
+  } catch (error) {
+    throw new ConfigError(
+      "invalid_config",
+      `extension ${e.name}: setup failed: ${redactSecrets(String(error))}`,
+    );
+  }
+}
+
+/**
+ * Sets up the extensions, then the adapters (models, sandbox, memory, knowledge) in order, then
+ * the agents this one may start. Each object once, however many agents share it. `walked` holds
+ * the agents this setup already reached, so an agent in its own tree (a list it was added to
+ * later) is not walked again.
+ */
+export async function setUp<Deps>(
   extensions: readonly Extension<Deps>[],
-  servers: readonly McpServer[],
-  providers: readonly (MemoryProvider | KnowledgeProvider | undefined)[],
-): Setup {
-  let done: Promise<readonly Tool<unknown, unknown, unknown>[]> | undefined;
-  const all = async (): Promise<readonly Tool<unknown, unknown, unknown>[]> => {
-    for (const e of extensions) {
-      try {
-        await e.setup?.();
-      } catch (error) {
-        throw new ConfigError(
-          "invalid_config",
-          `extension ${e.name}: setup failed: ${String(error)}`,
-        );
-      }
-    }
-    for (const p of providers) await p?.setup?.();
-    const names = servers.map((s) => s.name);
-    const twice = names.find((n, i) => names.indexOf(n) !== i);
-    if (twice !== undefined)
-      throw new ConfigError(
-        "duplicate_name",
-        `two MCP servers are named ${twice}`,
+  adapters: readonly (SetsUp | undefined)[],
+  agents: readonly object[],
+  walked: Set<object> = new Set(),
+): Promise<void> {
+  for (const e of extensions) await once(e, () => extensionSetup(e));
+  for (const a of adapters)
+    if (a?.setup !== undefined)
+      await once(a, () =>
+        redactedSetup(async () => a.setup?.(), "adapter setup failed"),
       );
-    const tools = await Promise.all(servers.map((s) => s.connect()));
-    return tools.flat();
+  for (const agent of agents) {
+    if (walked.has(agent)) continue;
+    walked.add(agent);
+    await setupOf(agent)?.(walked);
+  }
+}
+
+/** One session per server, closed together; a failed connect closes those already open. */
+export async function connectAll(
+  servers: readonly McpServer[],
+): Promise<McpSession> {
+  const names = servers.map((s) => s.name);
+  const twice = names.find((n, i) => names.indexOf(n) !== i);
+  if (twice !== undefined)
+    throw new ConfigError(
+      "duplicate_name",
+      `two MCP servers are named ${twice}`,
+    );
+  // async: a connect that throws before returning a promise is a rejection like any other.
+  const opened = await Promise.allSettled(
+    servers.map(async (s) => s.connect()),
+  );
+  const sessions = opened.flatMap((o) =>
+    o.status === "fulfilled" ? [o.value] : [],
+  );
+  // Best effort: a failed close never replaces the error, or the result, a run or check ends with.
+  const close = async (): Promise<void> => {
+    await Promise.allSettled(sessions.map(async (s) => s.close()));
   };
-  return () => {
-    done ??= all();
-    return done;
+  const failed = opened.findIndex((o) => o.status === "rejected");
+  const reason = opened[failed];
+  if (reason?.status === "rejected") {
+    await close();
+    const name = servers[failed]?.name ?? "";
+    throw redacted(reason.reason, "mcp_unreachable", `mcp server ${name}`);
+  }
+  return {
+    tools: sessions.flatMap((s) => s.tools),
+    close,
+    [Symbol.asyncDispose]: close,
   };
 }
 

@@ -106,7 +106,8 @@ async function reconcile(
     call.data.input,
   );
   if (answer.status === "found") {
-    const ref = s.store(answer.value, "text/plain");
+    const shown = recordOutput(s, callId, answer.value);
+    const ref = shown.ref ?? s.store(shown.text, "text/plain");
     // The resolution and its result commit together.
     return s.append(
       draft.effectResolved(
@@ -118,7 +119,13 @@ async function reconcile(
         },
         actor,
       ),
-      terminalResult(callId, "confirmed_success", answer.value, actor),
+      terminalResult(
+        callId,
+        "confirmed_success",
+        shown.preview,
+        actor,
+        shown.ref,
+      ),
     );
   }
   // A not_found settles only when the tool's declared finality makes it final.

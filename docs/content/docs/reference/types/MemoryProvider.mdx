@@ -20,6 +20,29 @@ A provider only stores and searches: the framework issues bindings, checks scope
 
 ## Methods
 
+### setup
+
+Resolve credentials and check configuration on the host. Called by check() or the first run, before anything is pinned; never at import or construction. Creates no connection or client: those belong to a run. Retried on the next check() or run after a failure.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+setup(): Promise<void>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def setup() -> None
+```
+
+</Tab>
+</Tabs>
+
+**Throws** `ConfigError` for a definition that can't run.
+
 ### remember
 
 Store one record in the scope and return its id and version. The same key with the same record is a no-op that returns the same reference; the same key with a different record is invalid.

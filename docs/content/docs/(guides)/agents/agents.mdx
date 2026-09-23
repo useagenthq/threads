@@ -274,13 +274,27 @@ To cancel a thread durably, from any process, use the thread's `cancel()`. See [
 
 ## Check setup before running
 
-<Callout>
-TypeScript only. `check()` connects MCP servers and validates the whole setup without starting a thread. Python reports the same errors on the first run.
-</Callout>
+`check()` reads your API keys, connects MCP servers and validates the whole setup without starting a thread. A problem comes back as a value that says what to set, and nothing stays connected afterwards.
 
-```ts title="TypeScript"
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
 const checked = await support.check();
-if (!checked.ok) console.error(checked.error.code, checked.error.message);
+if (!checked.ok) console.error(checked.error.message);
+// anthropic: set apiKey or ANTHROPIC_API_KEY
 ```
 
-Setup problems (a duplicate tool name, a sandbox that can't enforce the egress you asked for, an unreachable MCP server) are thrown as `ConfigError` with a `code`. Everything that can go wrong during a run comes back as a result instead.
+</Tab>
+<Tab value="Python">
+
+```python
+checked = await support.check()
+if isinstance(checked, Err):
+    print(checked.error.message)  # anthropic: set api_key or ANTHROPIC_API_KEY
+```
+
+</Tab>
+</Tabs>
+
+Fix the environment and call `check()` again on the same agent: it picks the change up. A run that hits the same problem throws it as `ConfigError` with a `code` before it records anything (a missing key, a duplicate tool name, a sandbox that can't enforce the egress you asked for, an unreachable MCP server). Everything that can go wrong during a run comes back as a result instead.

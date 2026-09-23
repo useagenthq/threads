@@ -23,6 +23,7 @@ from threads.memory.local_memory import LocalMemory
 from threads.memory.protocol import DeclaresWrites, KnowledgeProvider, MemoryProvider
 from threads.memory.tools import ProviderTools
 from threads.memory.types import Scope
+from threads.redaction import contains_secret
 from threads.result import Err
 from threads.store import Clock, SqliteStore
 from threads.tools.specs import Writes
@@ -115,6 +116,9 @@ async def _ingest(corpus: ScopedKnowledge, paths: Sequence[str]) -> None:
             content = Path(path).read_bytes()
         except OSError as error:
             raise ConfigError("invalid_config", f"knowledge path {path}: {error}") from error
+        if contains_secret(content):
+            # Byte-exact (its digest is its version): a source holding a value is refused.
+            raise ConfigError("invalid_config", f"knowledge path {path}: holds a registered secret")
         media_type = mimetypes.guess_type(path)[0] or "text/plain"
         key = f"{path}@{hashlib.sha256(content).hexdigest()}"
         done = await corpus.ingest(path, media_type, content, path, key)

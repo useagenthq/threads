@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agent, scriptedModel, secret, sqlite } from "@threads/core";
 import { mcp } from "../src";
-import { bound, ctx, eventsOf, handles, say, server, use } from "./kit";
+import { bound, ctx, eventsOf, say, server, use } from "./kit";
 import type { Call } from "./server";
 
 // The fence at the real transport (HTTP fetch, stdio writes) and credentials that stay on the
@@ -29,7 +29,6 @@ describe("the fence at the real transport", () => {
       args: [join(import.meta.dir, "server.ts")],
       env: { CALLS_FILE: file },
     });
-    handles.push(h);
     const impl = await bound(h, "mcp__local__search");
     expect(await impl.run({ query: "x" }, ctx(true))).toEqual({
       kind: "not_sent",

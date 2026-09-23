@@ -6,7 +6,6 @@ with the default ":memory:" path is the in-memory store tests use: the same code
 
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import JsonValue
@@ -14,6 +13,7 @@ from pydantic import JsonValue
 from threads import VERSION
 from threads.log import BranchId, Event, ParseError, ThreadId
 from threads.log.digest import sha256_hex
+from threads.redaction import SecretInStoredBytesError, published
 from threads.render import Rendered, render
 from threads.render.verify import verify_requests
 from threads.result import Err, Ok
@@ -23,23 +23,14 @@ from threads.store.bindings import Bindings, Kind
 from threads.store.budgets import BudgetLedger
 from threads.store.context import CleanupContext, OwnerContext
 from threads.store.cursors import ObserverCursors
-from threads.store.forking import Forking, forking, start_child
-from threads.store.lines import Draft, head_line, header_line
+from threads.store.forking import Forking, ForkRequest, forking, publish_fork, start_child
+from threads.store.lines import Draft, head_line, header_line, imported_bytes
 from threads.store.resources import Ledger, Resource
 from threads.store.spill import Spill
 from threads.store.tables import Tables
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
-
-
-@dataclass(frozen=True, slots=True)
-class ForkRequest:
-    parent: BranchId
-    at_seq: int
-    child: BranchId
-    data: Mapping[str, JsonValue]
-    """The fork payload (reason, sandbox_id, knowledge_policy) minus the derived parent link."""
 
 
 class SqliteStore:
@@ -87,10 +78,22 @@ class SqliteStore:
         """Host-issued memory or knowledge bindings."""
         return Bindings(self._worker, kind)
 
-    async def run[T](self, statement: Callable[[sqlite3.Connection], T]) -> T:
+    async def run[T](
+        self, statement: Callable[[sqlite3.Connection], T], *, publishing: bytes | None = None
+    ) -> T:
         """A built-in provider's statement on the store's own thread (local_memory,
-        local_knowledge keep their tables in the run's store)."""
-        return await self._worker.call(statement)
+        local_knowledge keep their tables in the run's store). With `publishing`, those bytes
+        are stored as an artifact first, in the same step with registration paused: a
+        registered value in them writes nothing (SecretInStoredBytesError, C5)."""
+        if publishing is None:
+            return await self._worker.call(statement)
+        data = publishing
+
+        def both(conn: sqlite3.Connection) -> T:
+            self._artifacts.put(data)
+            return statement(conn)
+
+        return await self._worker.call(lambda c: published(data, lambda: both(c)))
 
     @property
     def cursors(self) -> ObserverCursors:
@@ -150,11 +153,17 @@ class SqliteStore:
             dropped = artifacts.put(log.dropped) if log.dropped else None
             return sql.import_segments(conn, log, tenant, dropped)
 
-        return _result(await self._worker.call(store))
+        try:
+            # Imported bytes are stored exactly as exported, torn tail included (C5).
+            data = imported_bytes(log)
+            return _result(await self._worker.call(lambda c: published(data, lambda: store(c))))
+        except SecretInStoredBytesError:
+            message = "the export holds a registered secret; nothing imported"
+            return Err(ParseError("secret_in_stored_bytes", message))
 
     async def put_artifact(self, data: bytes) -> str:
         """Stores bytes content-addressed and returns their sha256 once they are durable."""
-        return await self._worker.call(lambda _: self._artifacts.put(data))
+        return await self._worker.call(lambda _: published(data, lambda: self._artifacts.put(data)))
 
     async def spill(self) -> Spill:
         """A new artifact written a chunk at a time, never held whole in memory."""
@@ -309,7 +318,7 @@ class SqliteStore:
         if isinstance(built, Err):
             return built
         start, held = built.value, started.owner.lease
-        error = await self._worker.call(lambda c: lease.finish_fork(c, start.row, start.fork, held))
+        error = await self._worker.call(lambda c: publish_fork(c, start, held))
         if error is not None:
             return Err(error)
         if not start.runnable:

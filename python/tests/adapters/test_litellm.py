@@ -14,14 +14,14 @@ import pytest
 from fakes import FakeContext, Script, collect, golden, line, render_case
 from pydantic import JsonValue
 
-from threads.adapters.models.litellm.model import ACOMPLETION, LiteLLMModel
+from threads.adapters.models.litellm.model import ACOMPLETION, Complete, LiteLLMModel
 from threads.agents.config import ConfigError
 from threads.litellm import litellm
 from threads.log import CallId, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, ModelRequest, PartChunk, Rejected
 
 ROUTE = "openai/gpt-test"
-INFO = litellm(ROUTE, context_window=128_000, max_output_tokens=4096, api_key="k").info
+INFO = litellm(ROUTE, context_window=128_000, max_output_tokens=4096, api_key="sk-test-1").info
 
 
 @dataclass
@@ -51,11 +51,16 @@ def one_turn() -> bytes:
     return line(head) + line({"role": "user", "content": [{"type": "text", "text": "hi"}]})
 
 
+def bridged(complete: Complete) -> LiteLLMModel:
+    """The model over `complete`, whatever key it is given."""
+    return LiteLLMModel(INFO, "sk-test-1", lambda _key: complete)
+
+
 def through_litellm(script: Script) -> LiteLLMModel:
     """LiteLLM's real OpenAI route, its SDK client sending to the scripted transport."""
     http = httpx2.AsyncClient(transport=httpx2.MockTransport(script))
-    sdk = openai.AsyncOpenAI(api_key="k", max_retries=0, http_client=http)
-    return LiteLLMModel(INFO, partial(ACOMPLETION, client=sdk))
+    sdk = openai.AsyncOpenAI(api_key="sk-test-1", max_retries=0, http_client=http)
+    return bridged(partial(ACOMPLETION, client=sdk))
 
 
 def run(model: LiteLLMModel, body: bytes, context: FakeContext | None = None) -> list[ModelChunk]:
@@ -81,7 +86,7 @@ def delta(value: JsonValue, finish: str | None = None) -> JsonValue:
 def test_a_render_case_maps_to_its_golden_arguments(case: str) -> None:
     body, context = render_case(case, "litellm", "litellm")
     recorder = Recorder()
-    run(LiteLLMModel(INFO, recorder), body, context)
+    run(bridged(recorder), body, context)
     (call,) = recorder.calls
     golden(f"litellm/{case}.json", json.loads(json.dumps(call)))
 
@@ -94,7 +99,7 @@ def test_the_bridge_carries_no_continuation_and_no_media_results() -> None:
     for case, refused in cases:
         body, context = render_case(case, "litellm", "litellm")
         recorder = Recorder()
-        assert run(LiteLLMModel(INFO, recorder), body, context) == [refused]
+        assert run(bridged(recorder), body, context) == [refused]
         assert recorder.calls == []
 
 
@@ -262,7 +267,7 @@ def closing(stream: Closing) -> LiteLLMModel:
     async def complete(**_: object) -> Closing:
         return stream
 
-    return LiteLLMModel(INFO, complete)
+    return bridged(complete)
 
 
 def test_a_failing_close_never_replaces_the_stream_error() -> None:

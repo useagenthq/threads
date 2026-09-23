@@ -19,7 +19,6 @@ What Modal 1.5.5 supports here, and nothing broader (#170):
   unenforced.
 """
 
-import os
 from typing import Literal
 
 import grpclib.client
@@ -42,6 +41,7 @@ from threads.sandbox.protocol import (
     SandboxInfo,
     SandboxSession,
 )
+from threads.secrets import Secret, credential
 
 SERVER_URL = "https://api.modal.com"
 _MIN_LIFETIME_MS, _MAX_LIFETIME_MS = 1000, 24 * 3600 * 1000
@@ -49,8 +49,18 @@ _CREATE_ERRORS = ("stale_epoch", "cleanup_claim_lost", "timeout")
 
 
 class ModalSandbox:
-    def __init__(self, settings: Settings, *, name: str, server_url: str, connect: Connect) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        tokens: tuple[str | Secret | None, str | Secret | None],
+        *,
+        name: str,
+        server_url: str,
+        connect: Connect,
+    ) -> None:
         self._settings = settings
+        self._token_id = credential("modal", "token_id", tokens[0], "MODAL_TOKEN_ID")
+        self._token_secret = credential("modal", "token_secret", tokens[1], "MODAL_TOKEN_SECRET")
         self._server_url = server_url
         self._connect = connect
         self._channels: dict[str, grpclib.client.Channel] = {}
@@ -131,6 +141,20 @@ class ModalSandbox:
     ) -> Ok[Literal["released", "already_gone"]] | Err[SandboxError]:
         return Err(SandboxError("unavailable", f"modal: no snapshots here ({ref})"))
 
+    async def setup(self) -> None:
+        """Resolves both tokens on the host. Channels are opened on first use, in the run."""
+        self._resolved()
+
+    def _resolved(self) -> tuple[str, str]:
+        try:
+            return self._token_id(), self._token_secret()
+        except ConfigError as error:
+            # One message for the pair: Modal needs both.
+            raise ConfigError(
+                "missing_secret",
+                "modal: set token_id/token_secret or MODAL_TOKEN_ID/MODAL_TOKEN_SECRET",
+            ) from error
+
     async def aclose(self) -> None:
         for channel in self._channels.values():
             channel.close()
@@ -141,7 +165,8 @@ class ModalSandbox:
 
     def _control_plane(self) -> Control:
         if self._control is None:
-            self._control = Control(self._channel(self._server_url), self._settings)
+            channel = self._channel(self._server_url)
+            self._control = Control(channel, self._settings, self._resolved())
         return self._control
 
     def _router(self, url: str, task_id: str, jwt: str) -> Router:
@@ -161,8 +186,8 @@ def _name(operation_key: str) -> str:
 def modal(  # noqa: PLR0913 - the options a Modal sandbox is configured by
     *,
     image_id: str,
-    token_id: str | None = None,
-    token_secret: str | None = None,
+    token_id: str | Secret | None = None,
+    token_secret: str | Secret | None = None,
     app_name: str = "threads",
     environment: str = "",
     lifetime_ms: int = 3_600_000,
@@ -173,24 +198,20 @@ def modal(  # noqa: PLR0913 - the options a Modal sandbox is configured by
 ) -> ModalSandbox:
     """A Modal sandbox provider (extra `modal`). `image_id` is a built Modal image (`im-...`,
     for example `modal.Image.debian_slim().build(app)` once at setup); it needs /bin/sh, sed,
-    find, sha256sum and stat. Tokens fall back to MODAL_TOKEN_ID / MODAL_TOKEN_SECRET and go
-    only to Modal's control plane. `name` is SandboxInfo.provider: rows of another name are
-    never touched."""
-    token_id = token_id or os.environ.get("MODAL_TOKEN_ID")
-    token_secret = token_secret or os.environ.get("MODAL_TOKEN_SECRET")
-    if not token_id or not token_secret:
-        raise ConfigError("missing_secret", "modal: MODAL_TOKEN_ID and MODAL_TOKEN_SECRET")
+    find, sha256sum and stat. The tokens default to `secret("MODAL_TOKEN_ID")` and
+    `secret("MODAL_TOKEN_SECRET")`, are resolved at setup and go only to Modal's control plane.
+    `name` is SandboxInfo.provider: rows of another name are never touched."""
     if not image_id:
         raise ConfigError("invalid_config", "modal: image_id is required")
     if not _MIN_LIFETIME_MS <= lifetime_ms <= _MAX_LIFETIME_MS:
         raise ConfigError("invalid_config", f"modal: lifetime_ms {lifetime_ms} out of range")
     settings = Settings(
-        token_id,
-        token_secret,
         app_name,
         image_id,
         lifetime_ms // 1000,
         environment,
         allow_internet,
     )
-    return ModalSandbox(settings, name=name, server_url=server_url, connect=connect)
+    return ModalSandbox(
+        settings, (token_id, token_secret), name=name, server_url=server_url, connect=connect
+    )

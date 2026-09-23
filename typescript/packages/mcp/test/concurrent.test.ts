@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { agent, scriptedModel, sqlite, tool } from "@threads/core";
 import { z } from "zod";
-import { bound, say, server } from "./kit";
+import { bound, say, server, session } from "./kit";
 
 // Parallel tool calls: an MCP tool is never concurrent, so it runs alone between two
 // concurrent app reads (spec/schema/README.md, Parallel tool calls).
@@ -9,7 +9,7 @@ import { bound, say, server } from "./kit";
 describe("MCP tools and tool.concurrent", () => {
   test("an MCP binding is never concurrent", async () => {
     const h = server();
-    for (const t of await h.connect())
+    for (const t of (await session(h)).tools)
       expect((await bound(h, t.name)).concurrent).toBeUndefined();
   });
 

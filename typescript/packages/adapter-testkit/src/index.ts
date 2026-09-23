@@ -10,6 +10,8 @@ import {
   memoryContext,
 } from "@threads/core/adapter";
 
+export { type CredentialCase, credentialCases } from "./credentials";
+
 // Shared by the model adapter tests: Render v1 bodies, conformance render cases and a recording
 // fetch. Nothing here touches the network.
 

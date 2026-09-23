@@ -1,4 +1,5 @@
 import type { ArtifactRef } from "../log";
+import { redactSecrets } from "../redact";
 import { contextPolicy } from "./policy";
 import type { Session } from "./session";
 
@@ -29,7 +30,8 @@ export function recordOutput(
   callId: string,
   output: string,
 ): Recorded {
-  const text = s.config.redact?.(output) ?? output;
+  // Stored as an artifact beside the event, so redacted here (the writer redacts events).
+  const text = redactSecrets(output);
   const bytes = encoder.encode(text);
   const spill = contextPolicy(s.fold.policy).spill;
   if (bytes.length <= spill.threshold_bytes) return { text, preview: text };

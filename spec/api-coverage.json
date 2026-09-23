@@ -1,7 +1,11 @@
 {
   "Agent.check": {
     "ts": [
-      "packages/core/test/agent/extension.test.ts > extension() > setup runs once; a throw is a ConfigError from check()"
+      "packages/core/test/agent/extension.test.ts > extension() > setup runs once; a throw is a ConfigError from check()",
+      "packages/core/test/agent/redaction-r6.test.ts > setup failures of any kind are redacted values (#328 HIGH 5) > an adapter setup that throws a plain Error"
+    ],
+    "py": [
+      "tests/adapters/test_redaction_r6.py::test_setup_failures_of_any_kind_are_redacted_values"
     ]
   },
   "Agent.run": {

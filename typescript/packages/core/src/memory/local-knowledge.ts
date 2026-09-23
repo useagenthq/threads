@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sha256Hex } from "../hash";
+import { containsSecret } from "../redact";
 import { err, ok, type Result } from "../result";
 import type { Failure } from "../sandbox/protocol";
 import type { ArtifactStore } from "../store/artifacts";
@@ -14,6 +15,7 @@ import type {
   ProviderError,
   Scope,
 } from "./protocol";
+import { rebuildIndex } from "./rebuild";
 
 // localKnowledge() (spec/api.json): admitted versions stored as artifacts,
 // an FTS5 index over their passages, and one monotonic revision. Versions are immutable and
@@ -78,11 +80,10 @@ const DocRow = z.object({
   namespace: z.string(),
   record_id: z.string(),
 });
-const IndexRow = z.object({ rowid: z.int(), content_sha256: z.string() });
 
 type Local = KnowledgeProvider & {
-  /** Drops the index and refills it from the admitted artifacts (F14.3). */
-  readonly rebuild: () => void;
+  /** Drops the index and refills it from the admitted artifacts (`rebuildIndex`). */
+  readonly rebuild: () => Result<void, ProviderError>;
 };
 
 export type LocalKnowledgeOptions = { readonly paths: readonly string[] };
@@ -259,6 +260,12 @@ function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
       guard(() => {
         const text = parsed(source);
         if (!text.ok) return text;
+        // Byte-exact (its digest is its version): a source holding a registered value is refused.
+        if (containsSecret(source.content))
+          return err({
+            code: "invalid",
+            message: `${source.source_id}: holds a registered secret; not ingested`,
+          });
         // The admitted bytes are durable before the row that references them.
         artifacts.put(source.content);
         return db.transaction(() => admit(scope, source, key, text.value));
@@ -342,20 +349,6 @@ function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
         });
       }),
     revision: async () => guard(() => ok(revision())),
-    rebuild: () => {
-      db.run("DELETE FROM local_knowledge_fts", []);
-      const rows = IndexRow.array().parse(
-        db.all("SELECT rowid, content_sha256 FROM local_knowledge_docs", []),
-      );
-      for (const r of rows) {
-        const got = artifacts.get(r.content_sha256);
-        const text = got.ok ? decodeText(got.value) : undefined;
-        if (text === undefined)
-          throw new Error(
-            `an admitted version's artifact is gone: ${r.content_sha256}`,
-          );
-        index(r.rowid, text);
-      }
-    },
+    rebuild: () => rebuildIndex(db, artifacts, index),
   };
 }

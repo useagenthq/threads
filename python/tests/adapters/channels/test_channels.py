@@ -21,13 +21,13 @@ from threads.secrets import secret
 from threads.slack import slack
 from threads.whatsapp import whatsapp
 
-SECRET = "shh"  # noqa: S105 - a test signing secret
+SECRET = "shh-signing"  # noqa: S105 - a test signing secret
 
 
 @pytest.fixture(autouse=True)
 def secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SIGNING", SECRET)
-    monkeypatch.setenv("TOKEN", "tok")
+    monkeypatch.setenv("TOKEN", "tok-test-1")
     monkeypatch.setenv("VERIFY", "hub-token")
 
 

@@ -6,6 +6,7 @@ import { assertModelAllowed, type Model, type ModelChunk } from "../model";
 import { type Unsupported, unsupported } from "../model/capabilities";
 import type { ProviderRejection } from "../model/protocol";
 import { parseRender } from "../model/render-lines";
+import { redactStream, SecretInProviderOutput } from "../redact";
 import { compactionInstruction, refReader, render } from "../render";
 import { draft } from "./drafts";
 import { reserve, settleOpen } from "./ledger";
@@ -25,6 +26,11 @@ export type Attempted =
   | { readonly kind: "broken" }
   /** Refused before sending, by the loop's pre-check or the adapter (8). */
   | { readonly kind: "unsupported"; readonly refused: Unsupported }
+  /**
+   * The response held a registered secret in provider material that can't be redacted (C5):
+   * nothing of it is stored, and the turn has ended with secret_in_provider_output.
+   */
+  | { readonly kind: "leaked" }
   /** A covering budget refused the reservation; budget_exceeded is recorded. */
   | { readonly kind: "budget" }
   | { readonly kind: "halt"; readonly halt: Halt };
@@ -37,7 +43,8 @@ type Collected =
       readonly usage: Usage;
     }
   | { readonly kind: "rejected"; readonly rejection: Rejection }
-  | { readonly kind: "broken" };
+  | { readonly kind: "broken" }
+  | { readonly kind: "leaked" };
 
 const halt = (code: Halt["code"], message: string): Attempted => ({
   kind: "halt",
@@ -101,6 +108,7 @@ async function collect(
 ): Promise<Collected> {
   assertModelAllowed(model);
   const parts: OutputPart[] = [];
+  const shown = redactStream();
   const request = { request_id: `${s.branchId}:${requestId}`, body };
   const options =
     s.config.signal === undefined ? {} : { signal: s.config.signal };
@@ -108,12 +116,13 @@ async function collect(
     for await (const chunk of model.send(request, s.modelContext(), options)) {
       switch (chunk.kind) {
         case "delta":
-          s.config.onDelta?.(requestId, chunk.text);
+          delta(s, requestId, shown.feed(chunk.text));
           break;
         case "part":
           parts.push(chunk.part);
           break;
         case "done":
+          delta(s, requestId, shown.end());
           return {
             kind: "done",
             parts,
@@ -126,11 +135,17 @@ async function collect(
           assertNever(chunk);
       }
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof SecretInProviderOutput) return { kind: "leaked" };
     // A transport failure after dispatch: the attempt may have been billed.
     return { kind: "broken" };
   }
   return { kind: "broken" };
+}
+
+/** A delta shown to a streaming caller: redacted, never logged. */
+function delta(s: Session, requestId: string, text: string): void {
+  if (text !== "") s.config.onDelta?.(requestId, text);
 }
 
 function record(s: Session, requestId: string, c: Collected): Attempted {
@@ -146,7 +161,11 @@ function record(s: Session, requestId: string, c: Collected): Attempted {
         }),
       );
       if (stopped !== undefined) return { kind: "halt", halt: stopped };
-      return { kind: "response", text: responseText([...c.parts]) };
+      // As recorded (redacted): a summary made from it is stored too.
+      const recorded = s.events.at(-1);
+      if (recorded?.type !== "model_response")
+        throw new Error("model_response was just appended");
+      return { kind: "response", text: responseText(recorded.data.content) };
     }
     case "rejected":
       return rejected(s, requestId, c.rejection);
@@ -157,6 +176,19 @@ function record(s: Session, requestId: string, c: Collected): Attempted {
           provider_outcome: "unknown",
           reason: "stream_broken",
         }),
+      );
+      return stopped === undefined ? c : { kind: "halt", halt: stopped };
+    }
+    case "leaked": {
+      // The response arrived (it may be billed) but none of it is kept. The abandonment and
+      // the turn's end are one batch: a crash between them can't leave the turn open.
+      const stopped = s.append(
+        draft.abandoned({
+          request_event_id: requestId,
+          provider_outcome: "unknown",
+          reason: "provider_error",
+        }),
+        draft.turnCompleted("error", "secret_in_provider_output"),
       );
       return stopped === undefined ? c : { kind: "halt", halt: stopped };
     }

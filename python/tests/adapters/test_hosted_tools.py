@@ -11,9 +11,7 @@ from fakes import FakeContext, Script, collect, line, sse
 from pydantic import JsonValue
 
 from threads.adapters.models.anthropic.model import AnthropicModel
-from threads.adapters.models.anthropic.model import client as anthropic_client
 from threads.adapters.models.openai.model import OpenAIModel
-from threads.adapters.models.openai.model import client as openai_client
 from threads.agents.config import ConfigError
 from threads.anthropic import anthropic
 from threads.log import CitationPart, HostedToolPart, TextPart
@@ -58,7 +56,7 @@ def test_openai_refuses_effectful_hosted_tools_at_setup(kind: str) -> None:
             hosted_tools=[{"type": kind}],
             context_window=1,
             max_output_tokens=1,
-            api_key="k",
+            api_key="sk-test-1",
         )
     assert raised.value.code == "hosted_tool_unsupported"
 
@@ -73,7 +71,7 @@ def test_allowed_hosted_tools_are_pinned_in_adapter_settings() -> None:
         hosted_tools=[{"type": "web_search"}],
         context_window=1,
         max_output_tokens=1,
-        api_key="k",
+        api_key="sk-test-1",
     )
     assert oa.info.hosted_tools == ("web_search",)
     plain = anthropic("c", context_window=1, max_output_tokens=1)
@@ -136,9 +134,13 @@ def test_anthropic_server_tool_blocks_become_hosted_parts_and_replay_exactly() -
     ]
     script = Script([_reply(events)])
     declared = anthropic(
-        "m", hosted_tools=[WEB_SEARCH], context_window=1, max_output_tokens=1, api_key="k"
+        "m",
+        hosted_tools=[WEB_SEARCH],
+        context_window=1,
+        max_output_tokens=1,
+        api_key="sk-test-1",
     ).info
-    model = AnthropicModel(declared, anthropic_client("k", http=httpx2.MockTransport(script)))
+    model = AnthropicModel(declared, "sk-test-1", http=httpx2.MockTransport(script))
     context = FakeContext()
     chunks = asyncio.run(
         collect(model.send, _head("anthropic", "anthropic", [WEB_SEARCH]), context)
@@ -166,7 +168,7 @@ def test_anthropic_server_tool_blocks_become_hosted_parts_and_replay_exactly() -
     )
     body += line({"role": "user", "content": [{"type": "text", "text": "more"}]})
     again = Script([_reply([events[0], events[-2], events[-1]])])
-    replay = AnthropicModel(declared, anthropic_client("k", http=httpx2.MockTransport(again)))
+    replay = AnthropicModel(declared, "sk-test-1", http=httpx2.MockTransport(again))
     asyncio.run(collect(replay.send, body, context))
     sent = again.bodies()[0]
     assert isinstance(sent, dict)
@@ -197,9 +199,9 @@ def test_openai_hosted_items_become_hosted_parts() -> None:
         hosted_tools=[{"type": "web_search"}],
         context_window=1,
         max_output_tokens=1,
-        api_key="k",
+        api_key="sk-test-1",
     ).info
-    model = OpenAIModel(declared, openai_client("k", http=httpx2.MockTransport(script)))
+    model = OpenAIModel(declared, "sk-test-1", http=httpx2.MockTransport(script))
     context = FakeContext()
     chunks = asyncio.run(
         collect(model.send, _head("openai", "openai", [{"type": "web_search"}]), context)

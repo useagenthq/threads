@@ -7,7 +7,6 @@ bindings, not by the container.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 import httpx
@@ -24,7 +23,7 @@ from threads.memory.types import (
     Scope,
 )
 from threads.result import Err, Ok
-from threads.secrets import Secret, resolve, secret
+from threads.secrets import Secret, credential
 
 if TYPE_CHECKING:
     from supermemory._types import SequenceNotStr
@@ -32,16 +31,28 @@ if TYPE_CHECKING:
 API_KEY: Final = "SUPERMEMORY_API_KEY"
 
 
-@dataclass(frozen=True, slots=True)
 class Supermemory:
-    api_key: Secret
-    base_url: str | None = None
-    http: httpx.AsyncBaseTransport | None = None
-    """The transport under the fence; None opens real connections. Tests pass one."""
+    """spec/api.json `MemoryProvider` on Supermemory (module docstring)."""
+
+    def __init__(
+        self,
+        api_key: str | Secret | None = None,
+        base_url: str | None = None,
+        http: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.api_key = api_key
+        self.base_url = base_url
+        self.http = http
+        """The transport under the fence; None opens real connections. Tests pass one."""
+        self._key = credential("supermemory", "api_key", api_key, API_KEY)
+
+    async def setup(self) -> None:
+        """Resolves the key on the host, once: a missing key fails here, not mid-run."""
+        self._key()
 
     def _client(self) -> AsyncSupermemory:
         return AsyncSupermemory(
-            api_key=resolve(self.api_key),
+            api_key=self._key(),
             base_url=self.base_url,
             http_client=fenced_client(self.http),
             max_retries=0,
@@ -83,6 +94,7 @@ class Supermemory:
         return Ok(None)
 
 
-def supermemory(*, api_key: Secret | None = None, base_url: str | None = None) -> Supermemory:
-    """Pure: the key is resolved on the host when a call is made."""
-    return Supermemory(api_key or secret(API_KEY), base_url)
+def supermemory(*, api_key: str | Secret | None = None, base_url: str | None = None) -> Supermemory:
+    """Pure. `api_key` defaults to `secret("SUPERMEMORY_API_KEY")`, resolved on the host at
+    setup."""
+    return Supermemory(api_key, base_url)

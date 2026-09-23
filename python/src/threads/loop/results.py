@@ -12,6 +12,7 @@ from threads.loop.defaults import context
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.runtime import Runtime
 from threads.loop.tools import Reference
+from threads.redaction import redact_secrets
 from threads.reduce.handlers import to_json
 from threads.store import Draft
 
@@ -35,8 +36,9 @@ class As:
 
 
 async def text_ref(rt: Runtime, text: str) -> JsonValue:
-    """Stores text as a durable artifact and returns its ref."""
-    raw = text.encode("utf-8")
+    """Stores text as a durable artifact and returns its ref. Every text artifact the loop
+    stores (a result, a commit, a child's output, a handoff transcript) is redacted here (C5)."""
+    raw = redact_secrets(text).encode("utf-8")
     sha = await rt.store.put_artifact(raw)
     return {"sha256": sha, "bytes": len(raw), "media_type": "text/plain"}
 
@@ -68,8 +70,10 @@ async def result_draft(  # noqa: PLR0913 - the result's parts ride with it
     *,
     content: Sequence[ResultPart] = (),
 ) -> Draft:
-    """The result the model sees. Spilled bytes are a durable artifact before this draft;
-    `full` is output the source already spilled, and the text is then its bounded preview."""
+    """The result the model sees. Spilled bytes are a durable artifact before this draft, and
+    redacted (C5): the writer redacts the event itself. `full` is output the source already
+    spilled, and the text is then its bounded preview."""
+    text = redact_secrets(text)
     data: dict[str, JsonValue] = {
         "call_id": call_id,
         "completeness": "complete",

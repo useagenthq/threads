@@ -8,6 +8,7 @@ import type { McpServer, Secret, Tool } from "@threads/core";
 import {
   ConfigError,
   type Fetch,
+  type McpSession,
   sandboxFetch,
   within,
 } from "@threads/core/adapter";
@@ -17,8 +18,9 @@ import { clientTransport } from "./transport";
 // mcp() (spec/api.json): an MCP server in one line, by URL
 // (Streamable HTTP, SSE as the legacy fallback) or by stdio command. The host owns the
 // connection and the credentials: secret() values are resolved here, on the host, and never
-// reach the log, a prompt or the sandbox. The tool list is resolved at setup, filtered, and
-// pinned; an unreachable server is a setup error naming it, never silently missing tools.
+// reach the log, a prompt or the sandbox. Each check() and each run opens its own session: its
+// tools are listed, filtered and pinned, and call through that session's connection until it
+// closes. An unreachable server is a setup error naming it, never silently missing tools.
 
 export type McpOptions = {
   /** Tools are named mcp__<name>__<tool>. */
@@ -41,11 +43,6 @@ export type McpOptions = {
   readonly dedupWindowMs?: number;
   /** The HTTP client's fetch (a proxy, a test server); the fence wraps it either way. */
   readonly fetch?: Fetch;
-};
-
-export type McpHandle = McpServer & {
-  /** Closes the connection (and ends a stdio server's process). */
-  readonly close: () => Promise<void>;
 };
 
 /** Setup runs outside any branch: its handshake and listing pass the fence. */
@@ -161,36 +158,44 @@ async function connected(o: McpOptions, client: () => Client): Promise<Client> {
   );
 }
 
-export function mcp(options: McpOptions): McpHandle {
-  let open: Client | undefined;
-  const connect = async (): Promise<
-    readonly Tool<unknown, unknown, unknown>[]
-  > => {
+/** The connected client's filtered tools, bound to it. */
+async function listed(
+  options: McpOptions,
+  client: Client,
+  effect: Effect,
+): Promise<readonly Tool<unknown, unknown, unknown>[]> {
+  const got = await within(SETUP, () => listAll(client));
+  if (!got.ok)
+    throw new ConfigError(
+      "mcp_unreachable",
+      `mcp server ${options.name}: tools/list failed: ${String(got.error.error)}`,
+    );
+  return serverTools(
+    options.name,
+    client,
+    got.value.filter((t) => allowed(options, t)),
+    effect,
+  );
+}
+
+export function mcp(options: McpOptions): McpServer {
+  const connect = async (): Promise<McpSession> => {
     const effect = effectOf(options);
-    open = await connected(
+    const client = await connected(
       options,
       () => new Client({ name: "threads", version: "0.0.0" }),
     );
-    const client = open;
-    const listed = await within(SETUP, () => listAll(client));
-    if (!listed.ok)
-      throw new ConfigError(
-        "mcp_unreachable",
-        `mcp server ${options.name}: tools/list failed: ${String(listed.error.error)}`,
-      );
-    return serverTools(
-      options.name,
-      client,
-      listed.value.filter((t) => allowed(options, t)),
-      effect,
-    );
+    // Ends the connection (and a stdio server's process): the session's tools die with it.
+    const close = async (): Promise<void> => {
+      await client.close();
+    };
+    try {
+      const tools = await listed(options, client, effect);
+      return { tools, close, [Symbol.asyncDispose]: close };
+    } catch (error) {
+      await close();
+      throw error;
+    }
   };
-  return {
-    kind: "mcp",
-    name: options.name,
-    connect,
-    close: async () => {
-      await open?.close();
-    },
-  };
+  return { kind: "mcp", name: options.name, connect };
 }

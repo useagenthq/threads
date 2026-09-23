@@ -19,7 +19,7 @@ from threads.sandbox.protocol import (
 )
 from threads.store.spill import Spill as Sink
 
-_MARKER = "\n[output truncated: {n} bytes in all; the full output is in full_output]\n"
+_MARKER = "\n[output truncated: {n} bytes in all]\n"
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,10 +103,12 @@ async def run_exec(
     truncated = out.truncated or err.truncated
     full = None
     if truncated:
-        size = out.total + err.total
-        full = ArtifactRef(
-            sha256=await spill.commit(), bytes=size, media_type="application/octet-stream"
-        )
+        sha = await spill.commit()
+        # A value registered mid-stream dropped the spill: the previews stand alone.
+        if sha is not None:
+            full = ArtifactRef(
+                sha256=sha, bytes=spill.written, media_type="application/octet-stream"
+            )
     else:
         await spill.discard()
     return Ok(ExecResult(code, out.text(), err.text(), truncated, full))

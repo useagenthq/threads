@@ -6,11 +6,11 @@ import {
   bound,
   ctx,
   eventsOf,
-  handles,
   note,
   P,
   say,
   server,
+  session,
   URL_,
   use,
 } from "./kit";
@@ -91,7 +91,7 @@ describe("one line of config (F1.8)", () => {
     const h = server({
       tools: { allow: ["search", "Send-Email"], deny: ["Send-Email"] },
     });
-    const names = (await h.connect()).map((t) => t.name);
+    const names = (await session(h)).tools.map((t) => t.name);
     expect(names).toEqual(["mcp__docs__search", "mcp__docs__read_resource"]);
   });
 
@@ -120,7 +120,7 @@ describe("one line of config (F1.8)", () => {
   });
 
   test("resources are read through mcp__<server>__read_resource", async () => {
-    const tools = await server().connect();
+    const { tools } = await session(server());
     const read = tools.find((t) => t.name === "mcp__docs__read_resource");
     const impl = read?.bind({
       deps: undefined,
@@ -162,7 +162,6 @@ describe("an unreachable server is a setup error naming it (F1.9)", () => {
 
   test("stdio command that doesn't start", async () => {
     const h = mcp({ name: "gone", command: "/nonexistent/threads-mcp-server" });
-    handles.push(h);
     const checked = await agent({
       model: scriptedModel({ responses: [] }),
       tools: [h],

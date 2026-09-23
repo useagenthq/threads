@@ -1,11 +1,9 @@
+import { register } from "../redact";
 import { ConfigError } from "./errors";
 
 // secret() (spec/api.json): a reference to a host secret. The object holds only
 // the name; the value is read from the host env when host code reveals it, so it never reaches
 // the pin, a prompt, the log or the sandbox (invariant 4).
-
-/** Values revealed in this host process, by value, so results can be scrubbed (C5). */
-const revealed = new Map<string, string>();
 
 export class Secret {
   readonly name: string;
@@ -19,7 +17,7 @@ export class Secret {
     const value = process.env[this.name];
     if (value === undefined || value === "")
       throw new ConfigError("missing_secret", `secret ${this.name} is not set`);
-    revealed.set(value, this.name);
+    register(value, this.name);
     return value;
   }
 
@@ -36,10 +34,41 @@ export function secret(name: string): Secret {
   return new Secret(name);
 }
 
-/** Replaces every revealed secret value in `text` with its name (the gateway's redaction, C5). */
-export function redactSecrets(text: string): string {
-  let out = text;
-  for (const [value, name] of revealed)
-    out = out.replaceAll(value, `[secret ${name}]`);
-  return out;
+/**
+ * A single-account adapter's credential. Pure: nothing is read until the getter is called, first
+ * by the adapter's setup. The first successful call resolves it on the host (an explicit string
+ * as given, a Secret, default `secret(env)`, from the host env), registers it for redaction as
+ * `<factory>.<option>` and keeps it, so a client made later in the run uses what setup resolved.
+ * A failed call keeps nothing and is retried by the next one. Missing or empty is
+ * missing_secret naming the option and the variable.
+ */
+export function credential(
+  factory: string,
+  option: string,
+  value: string | Secret | undefined,
+  env: string,
+): () => string {
+  let kept: string | undefined;
+  return () => {
+    kept ??= resolve(factory, option, value, env);
+    return kept;
+  };
+}
+
+function resolve(
+  factory: string,
+  option: string,
+  value: string | Secret | undefined,
+  env: string,
+): string {
+  const given = value ?? secret(env);
+  const resolved =
+    typeof given === "string" ? given : (process.env[given.name] ?? "");
+  if (resolved === "")
+    throw new ConfigError(
+      "missing_secret",
+      `${factory}: set ${option} or ${typeof given === "string" ? env : given.name}`,
+    );
+  register(resolved, `${factory}.${option}`);
+  return resolved;
 }

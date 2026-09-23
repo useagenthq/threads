@@ -19,11 +19,11 @@ import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
 import { target } from "./handoff";
 import { hosted } from "./hosted";
-import { type MemoryWrite, type PinOptions, pin } from "./pin";
+import type { MemoryWrite, PinOptions } from "./pin";
 import { register } from "./registry";
 import type { RunResult } from "./result";
-import { type Resolved, type RunOptions, run } from "./run";
-import { isMcp, type McpServer, once } from "./setup";
+import { pinnedAfterSetup, type Resolved, type RunOptions, run } from "./run";
+import { isMcp, type McpServer, setUp } from "./setup";
 import type { Skill } from "./skills";
 import type { Tool } from "./tool";
 
@@ -166,10 +166,20 @@ function build<Deps, Output>(
     memoryWrite: options.memoryWrite ?? "ask",
     knowledge: options.knowledge,
     skills: options.skills ?? [],
-    setup: once(options.extensions ?? [], servers, [
-      options.memory,
-      options.knowledge,
-    ]),
+    setup: (walked) =>
+      setUp(
+        options.extensions ?? [],
+        [
+          options.model,
+          ...(options.fallback ?? []),
+          options.sandbox,
+          options.memory,
+          options.knowledge,
+        ],
+        [...(options.subagents ?? []), ...(options.handoffs ?? [])],
+        walked,
+      ),
+    servers,
     decode,
     ...agentsOf(options),
   };
@@ -179,7 +189,7 @@ function build<Deps, Output>(
     stream: (input, runOptions = {}) => stream(def, input, runOptions),
     check: async () => {
       try {
-        pin({ ...def, mcp: await def.setup() });
+        await pinnedAfterSetup(def);
         checkTree(def);
         return { ok: true, value: undefined };
       } catch (error) {
@@ -192,6 +202,7 @@ function build<Deps, Output>(
     },
   };
   register(handle, {
+    setup: def.setup,
     child: subagent(def),
     target: target(def),
     enforce: (covering) => checkTree(def, covering),

@@ -12,6 +12,7 @@ from pydantic import JsonValue
 from threads.log import AdapterRef, ModelRef, Price
 from threads.log import Model as ModelLimits
 from threads.loop.model import ModelInfo
+from threads.secrets import Secret
 
 ACCEPTS: Final = ("text", "image_ref", "document_ref")
 """Every adapter here encodes images and documents; none takes recorded audio."""
@@ -23,8 +24,8 @@ class ModelOptions(TypedDict, total=False):
     params: NotRequired[Mapping[str, JsonValue]]
     """Provider request fields, pinned in Render v1 line 0 over the adapter's defaults."""
     price: NotRequired[Price]
-    api_key: NotRequired[str]
-    """Falls back to the SDK's environment variable."""
+    api_key: NotRequired[str | Secret]
+    """Defaults to the factory's `secret("<ENV>")`, resolved at setup. Never pinned or logged."""
     base_url: NotRequired[str]
 
 

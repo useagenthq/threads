@@ -1,6 +1,7 @@
 import { assertNever } from "../assert-never";
 import type { ArtifactRef } from "../log";
 import type { ToolRun } from "../loop/types";
+import { redactingSink } from "../redact";
 import { err, ok, type Result } from "../result";
 import type { ArtifactStore } from "../store/artifacts";
 import type {
@@ -148,7 +149,8 @@ async function collect(
   artifacts: ArtifactStore,
   keep: number,
 ): Promise<Result<ExecResult, ExecFailure>> {
-  const sink = artifacts.sink();
+  // The full output is recorded, so it is redacted as it streams in (C5).
+  const sink = redactingSink(artifacts.sink());
   const out = new Preview(keep);
   const errs = new Preview(keep);
   try {
@@ -173,6 +175,8 @@ async function collect(
     return ok(base);
   }
   const full = sink.finish();
+  // A value registered mid-stream dropped the spill: the previews stand alone.
+  if (full === undefined) return ok(base);
   return ok({
     ...base,
     full_output: { ...full, media_type: "application/octet-stream" },

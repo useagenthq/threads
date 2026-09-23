@@ -17,6 +17,7 @@ from threads.log.digest import sha256_hex
 from threads.loop.tools import Dispatched, Output, Uncertain
 from threads.result import Err, Ok
 from threads.sandbox.protocol import ExecResult, SandboxContext, SandboxError, SandboxSession
+from threads.secrets import credential
 from threads.tools.desktop import act, invalid_action, invalid_screenshot, png_size, screenshot
 
 
@@ -67,6 +68,17 @@ class _Desktop:
 
 def ok(stdout: str = "", code: int = 0, stderr: str = "") -> Ok[ExecResult]:
     return Ok(ExecResult(code, stdout, stderr, False))
+
+
+def test_a_capture_holding_a_registered_value_is_refused_never_stored() -> None:
+    """#328 HIGH 8: an image is byte-exact, so a text chunk holding a value is refused."""
+    key = credential("fake", "api_key", "sk-l9-shot-3a4b", "U")()
+    desktop = _Desktop(ok("x:1 y:1"), png(1280, 800) + f"tEXt {key}".encode())
+    got = asyncio.run(screenshot(desktop, ComputerScreenshotInput.model_validate({}), "b:c1"))
+    assert isinstance(got, Output)
+    assert got.is_error
+    assert "registered secret" in got.text
+    assert desktop.stored == []
 
 
 def test_a_screenshot_is_an_image_ref_part_with_its_size() -> None:

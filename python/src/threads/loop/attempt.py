@@ -7,6 +7,7 @@ persist-before-dispatch guarantee for model calls.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import JsonValue
@@ -19,6 +20,7 @@ from threads.loop.capabilities import mismatch
 from threads.loop.drafts import draft
 from threads.loop.model import Done, Model, ModelRequest, ModelResponse, PartChunk, Rejected
 from threads.loop.runtime import Failed, Runtime, WriterContext, epoch_model, fence, lost
+from threads.redaction import SecretInProviderOutputError
 from threads.reduce.handlers import to_json
 from threads.result import Err
 from threads.store import Draft
@@ -85,8 +87,15 @@ async def _dispatch(
     return None if _refused(outcome) else event.event_id
 
 
-type Outcome = ModelResponse | Rejected | None
-"""A response, a rejection before any content, or None when the outcome is unknown."""
+@dataclass(frozen=True, slots=True)
+class Leaked:
+    """The response held a registered secret in provider material that can't be redacted
+    (C5): nothing of it is stored, and the turn ends with secret_in_provider_output."""
+
+
+type Outcome = ModelResponse | Rejected | Leaked | None
+"""A response, a rejection before any content, a refused leak, or None when the outcome is
+unknown."""
 
 
 async def _collect(rt: Runtime, model: Model, req: ModelRequest) -> Outcome:
@@ -104,6 +113,8 @@ async def _collect(rt: Runtime, model: Model, req: ModelRequest) -> Outcome:
                     pass
     except AssertionError:
         raise
+    except SecretInProviderOutputError:
+        return Leaked()
     except Exception:
         # After dispatch every adapter failure is uncertainty, never a plain error.
         return None
@@ -131,6 +142,15 @@ def outcome_drafts(rt: Runtime, request_id: EventId, outcome: Outcome) -> Sequen
             return [draft("model_attempt_abandoned", data), draft("turn_completed", ended)]
         case Rejected():
             return [draft("model_attempt_abandoned", _rejection(request_id, outcome))]
+        case Leaked():
+            # The response arrived (it may be billed) but none of it is kept.
+            data = {
+                "request_event_id": request_id,
+                "provider_outcome": "unknown",
+                "reason": "provider_error",
+            }
+            ended = {"reason": "error", "code": "secret_in_provider_output"}
+            return [draft("model_attempt_abandoned", data), draft("turn_completed", ended)]
         case None:
             data: dict[str, JsonValue] = {
                 "request_event_id": request_id,
@@ -141,11 +161,15 @@ def outcome_drafts(rt: Runtime, request_id: EventId, outcome: Outcome) -> Sequen
 
 
 def _refused(outcome: Outcome) -> bool:
-    """A send-time refusal already ended the turn with its code."""
-    return isinstance(outcome, Rejected) and outcome.reason in (
-        "content_unsupported",
-        "continuation_unsupported",
-        "transport_fence_unsupported",
+    """A send-time refusal or a refused leak already ended the turn with its code."""
+    return isinstance(outcome, Leaked) or (
+        isinstance(outcome, Rejected)
+        and outcome.reason
+        in (
+            "content_unsupported",
+            "continuation_unsupported",
+            "transport_fence_unsupported",
+        )
     )
 
 

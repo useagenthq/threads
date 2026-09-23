@@ -16,6 +16,29 @@ Every create and restore carries an operation key written to the resource ledger
 
 ## Methods
 
+### setup
+
+Resolve credentials and check configuration on the host. Called by check() or the first run, before anything is pinned; never at import or construction. Creates no connection or client: those belong to a run. Retried on the next check() or run after a failure.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+setup(): Promise<void>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def setup() -> None
+```
+
+</Tab>
+</Tabs>
+
+**Throws** `ConfigError` for a definition that can't run.
+
 ### create
 
 Create a new isolated sandbox and return its session. Await context.fence() at the provider call; a failed fence returns its code and creates nothing.

@@ -30,8 +30,10 @@ from threads.loop.model import (
     ModelResponse,
     Rejected,
 )
+from threads.secrets import Secret, credential
 
 ADAPTER = "openai"
+API_KEY = "OPENAI_API_KEY"
 VERSION = "1"
 _STREAM_ERRORS: Mapping[str, Rejected] = {
     "rate_limit_exceeded": Rejected("rate_limited"),
@@ -44,13 +46,31 @@ class OpenAIModel:
     """spec/api.json `Model` for the OpenAI Responses API. No response lookup: a stateless
     request can't be found by client request id, so recovery re-sends under its budget."""
 
-    def __init__(self, info: ModelInfo, client: sdk.AsyncOpenAI) -> None:
+    def __init__(
+        self,
+        info: ModelInfo,
+        api_key: str | Secret | None = None,
+        base_url: str | None = None,
+        http: httpx2.AsyncBaseTransport | None = None,
+    ) -> None:
         self._info = info
-        self._client = client
+        self._key = credential(ADAPTER, "api_key", api_key, API_KEY)
+        self._base_url, self._http = base_url, http
+        self._client: sdk.AsyncOpenAI | None = None
 
     @property
     def info(self) -> ModelInfo:
         return self._info
+
+    async def setup(self) -> None:
+        """Resolves the key on the host. The SDK client is made by the first send, on the
+        run's own event loop."""
+        self._key()
+
+    def _sdk(self) -> sdk.AsyncOpenAI:
+        if self._client is None:
+            self._client = client(self._key(), self._base_url, self._http)
+        return self._client
 
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         prepared = await prepare(request.body, ADAPTER, context, build)
@@ -60,7 +80,7 @@ class OpenAIModel:
         rendered, body = prepared
         try:
             with transport.attempt(context):
-                response = await self._client.post(
+                response = await self._sdk().post(
                     "/responses",
                     body=body,
                     cast_to=httpx2.Response,
@@ -110,7 +130,7 @@ def _web(kind: str) -> bool:
 def openai(name: str, **options: Unpack[OpenAIOptions]) -> OpenAIModel:
     """An OpenAI model (the `openai()` of spec/api.json conventions.adapters).
     `max_output_tokens` is pinned as the request's cap; other `params` are Responses API
-    fields. `api_key` falls back to OPENAI_API_KEY."""
+    fields. `api_key` defaults to `secret("OPENAI_API_KEY")`, resolved at setup."""
     settings, hosted = declare(options.get("hosted_tools", ()), _web, "type")
     declared = info(
         ModelRef(provider=PROVIDER, name=name),
@@ -119,11 +139,11 @@ def openai(name: str, **options: Unpack[OpenAIOptions]) -> OpenAIModel:
         {"max_output_tokens": options["max_output_tokens"]},
         hosted,
     )
-    return OpenAIModel(declared, client(options.get("api_key"), options.get("base_url")))
+    return OpenAIModel(declared, options.get("api_key"), options.get("base_url"))
 
 
 def client(
-    api_key: str | None = None,
+    api_key: str,
     base_url: str | None = None,
     http: httpx2.AsyncBaseTransport | None = None,
 ) -> sdk.AsyncOpenAI:

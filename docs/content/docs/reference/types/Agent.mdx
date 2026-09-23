@@ -162,10 +162,23 @@ def stream(
 
 ### check
 
-TypeScript only. Validate the definition and resolve setup (secrets, MCP handshakes, capabilities) without starting a run.
+Validate the definition and resolve setup (secrets, MCP handshakes, capabilities) without starting a run. Returns every setup failure as an error value (it never throws them); a failed check can be retried on the same agent after fixing the environment. Connections it opens are closed before it returns.
 
-```ts title="TypeScript"
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
 check(): Promise<Result<void>>
 ```
 
-**Returns an error value** with one of these codes: `invalid_config`, `missing_secret`, `unknown_preset`, `duplicate_name`, `capability_missing`, `mcp_unreachable`, `budget_unenforceable`, `permission_rule_invalid`, `hosted_tool_unsupported`, `egress_policy_unsupported`.
+</Tab>
+<Tab value="Python">
+
+```python
+async def check() -> Ok[None] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+**Returns an error value** with one of these codes: `invalid_config`, `missing_secret`, `unknown_preset`, `duplicate_name`, `capability_missing`, `mcp_unreachable`, `budget_unenforceable`, `permission_rule_invalid`, `hosted_tool_unsupported`, `egress_policy_unsupported`, `transport_fence_unsupported`.

@@ -35,8 +35,10 @@ from threads.loop.model import (
     ModelResponse,
     Rejected,
 )
+from threads.secrets import Secret, credential
 
 ADAPTER = "litellm"
+API_KEY = "OPENAI_API_KEY"
 VERSION = "1"
 PROVIDER = "litellm"
 
@@ -54,13 +56,28 @@ class LiteLLMModel:
     ponytail: one route. Add another when its HTTP client can be supplied and fenced.
     """
 
-    def __init__(self, info: ModelInfo, complete: Complete) -> None:
+    def __init__(
+        self, info: ModelInfo, api_key: str | Secret | None, connect: Callable[[str], Complete]
+    ) -> None:
         self._info = info
-        self._complete = complete
+        self._key = credential(ADAPTER, "api_key", api_key, API_KEY)
+        self._connect = connect
+        """Makes `acompletion` bound to a client for the resolved key, on the first send."""
+        self._complete: Complete | None = None
 
     @property
     def info(self) -> ModelInfo:
         return self._info
+
+    async def setup(self) -> None:
+        """Resolves the key on the host. The client is made by the first send, on the run's
+        own event loop."""
+        self._key()
+
+    def _completion(self) -> Complete:
+        if self._complete is None:
+            self._complete = self._connect(self._key())
+        return self._complete
 
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         prepared = await prepare(request.body, ADAPTER, context, build)
@@ -70,7 +87,7 @@ class LiteLLMModel:
         _, body = prepared
         try:
             with transport.attempt(context):
-                stream = await self._complete(**body, num_retries=0, max_retries=0)
+                stream = await self._completion()(**body, num_retries=0, max_retries=0)
         except sdk.APIError as error:
             if transport.stale(error):
                 yield Rejected("stale_epoch")
@@ -135,8 +152,8 @@ def _is_stream(value: object) -> TypeGuard[_Stream]:
 
 def litellm(name: str, **options: Unpack[ModelOptions]) -> LiteLLMModel:
     """A model behind LiteLLM's `openai/` route (any OpenAI-compatible endpoint via `base_url`).
-    `params` are completion fields; `max_tokens` defaults to `max_output_tokens`. Credentials
-    come from `api_key` or `OPENAI_API_KEY`. Other routes raise ConfigError
+    `params` are completion fields; `max_tokens` defaults to `max_output_tokens`. `api_key`
+    defaults to `secret("OPENAI_API_KEY")`, resolved at setup. Other routes raise ConfigError
     `transport_fence_unsupported` (module docstring)."""
     if not name.startswith("openai/"):
         raise ConfigError(
@@ -149,11 +166,13 @@ def litellm(name: str, **options: Unpack[ModelOptions]) -> LiteLLMModel:
         options,
         {"max_tokens": options["max_output_tokens"]},
     )
-    # LiteLLM sends this route through the OpenAI SDK client it is given: ours, fenced.
-    sdk_client = sdk.AsyncOpenAI(
-        api_key=options.get("api_key"),
-        base_url=options.get("base_url"),
-        max_retries=0,
-        http_client=transport.client(),
-    )
-    return LiteLLMModel(declared, partial(ACOMPLETION, client=sdk_client))
+    base_url = options.get("base_url")
+
+    def connect(key: str) -> Complete:
+        # LiteLLM sends this route through the OpenAI SDK client it is given: ours, fenced.
+        client = sdk.AsyncOpenAI(
+            api_key=key, base_url=base_url, max_retries=0, http_client=transport.client()
+        )
+        return partial(ACOMPLETION, client=client)
+
+    return LiteLLMModel(declared, options.get("api_key"), connect)

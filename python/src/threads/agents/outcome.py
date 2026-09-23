@@ -22,11 +22,12 @@ from threads.log import (
     ModelResponseRecoveredEvent,
     OutputValidatedEvent,
     TextPart,
+    TurnCompletedEvent,
 )
 from threads.log.jcs import canonicalize
 from threads.loop import runtime
 from threads.loop.history import turn_events
-from threads.loop.runtime import FAILED_CODES, FAILED_MESSAGES, Halt
+from threads.loop.runtime import FAILED_CODES, FAILED_MESSAGES, Halt, RunErrorCode
 from threads.result import Ok
 
 
@@ -48,10 +49,17 @@ def ended(events: Sequence[Event], reason: str, thread: Thread) -> RunResult[str
     if reason == "budget_exhausted":
         exceeded = next(e for e in reversed(events) if isinstance(e, BudgetExceededEvent))
         return BudgetExhausted(exceeded.data, thread)
-    code = FAILED_CODES.get(reason)
+    code = _turn_code(events) if reason == "error" else None
+    code = code or FAILED_CODES.get(reason)
     if code is not None:
         return Failed(RunError(code, FAILED_MESSAGES[reason]), thread)
     return Completed(output_text(events), thread)
+
+
+def _turn_code(events: Sequence[Event]) -> RunErrorCode | None:
+    """The typed code an error turn ended with (turn_completed.code), when it has one."""
+    ended = next((e for e in reversed(events) if isinstance(e, TurnCompletedEvent)), None)
+    return None if ended is None or ended.data.code is MISSING else ended.data.code
 
 
 def output_text(events: Sequence[Event]) -> str:

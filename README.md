@@ -191,7 +191,7 @@ import { e2b } from "@threads/e2b";
 import { daytona } from "@threads/daytona";
 
 sandbox: e2b({ template: "base" }),                          // E2B_API_KEY (runs on Bun)
-sandbox: daytona({ apiKey: process.env["DAYTONA_API_KEY"] ?? "" }),
+sandbox: daytona(),                                          // DAYTONA_API_KEY
 // Modal: Python only for now (its JS SDK's transport can't be fenced yet)
 ```
 
@@ -262,14 +262,14 @@ app = host(
 <summary><b>Memory, knowledge and MCP</b></summary>
 
 ```ts
-import { localKnowledge, localMemory, secret } from "@threads/core";
+import { localKnowledge, localMemory } from "@threads/core";
 import { mcp } from "@threads/mcp";
 import { supermemory } from "@threads/supermemory";
 import { zep } from "@threads/zep";
 
 memory: localMemory(),                                          // SQLite, in the run's store
-memory: supermemory({ apiKey: secret("SUPERMEMORY_API_KEY") }),
-memory: zep({ apiKey: secret("ZEP_API_KEY") }),
+memory: supermemory(),                                          // SUPERMEMORY_API_KEY
+memory: zep(),                                                  // ZEP_API_KEY
 knowledge: localKnowledge({ paths: ["./docs"] }),
 tools: [mcp({ name: "docs", url: "https://example.com/mcp" })],
 ```

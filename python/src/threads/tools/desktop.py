@@ -17,6 +17,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 from threads._generated.tools_v1 import ComputerInput, ComputerScreenshotInput
 from threads.log import ImagePart, ImageRef, ResultPart, TextPart
 from threads.loop.tools import Dispatched, NotSent, Output
+from threads.redaction import contains_secret
 from threads.result import Err
 from threads.tools.control import Control
 
@@ -89,6 +90,9 @@ async def screenshot(tools: Control, args: ComputerScreenshotInput, key: str) ->
     size = None if isinstance(got, Err) else png_size(got.value)
     if isinstance(got, Err) or size is None:
         return Output("unavailable: the screenshot is not a PNG", True)
+    if contains_secret(got.value):
+        # Byte-exact: an image holding a registered value (a text chunk) is refused, never stored.
+        return Output("refused: the capture holds a registered secret; not stored", True)
     ref = await tools.put(got.value, "image/png")
     image = ImageRef(sha256=ref.sha256, bytes=ref.bytes, media_type="image/png")
     text = f"Screenshot {size[0]}x{size[1]}; cursor {ran.value.stdout.strip()}."

@@ -34,7 +34,7 @@ class ExtensionOptions(TypedDict, total=False):
     hook_timeout_ms: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, weakref_slot=True)
 class Extension:
     """spec/api.json `Extension`. Build it with `extension()`."""
 

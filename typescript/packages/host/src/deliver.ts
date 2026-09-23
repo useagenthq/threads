@@ -5,6 +5,7 @@ import {
   type EventDraft,
   type Fence,
   type JsonObject,
+  redactSecrets,
   type Writer,
   within,
 } from "@threads/core/host";
@@ -219,7 +220,8 @@ function commit(
   platformRef: string,
   by: "adapter" | "reconcile",
 ): void {
-  const bytes = new TextEncoder().encode(platformRef);
+  // Stored text, so redacted like any result (C5); the event's copy is redacted by the writer.
+  const bytes = new TextEncoder().encode(redactSecrets(platformRef));
   const ref = {
     sha256: s.artifacts.put(bytes),
     bytes: bytes.length,

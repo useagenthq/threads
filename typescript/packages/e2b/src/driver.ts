@@ -23,7 +23,8 @@ export type Connection = {
 };
 
 export type DriverOptions = {
-  readonly connection: Connection;
+  /** Read per call: the key is resolved at setup, after the factory. */
+  readonly connection: () => Connection;
   readonly template: string;
   readonly timeoutMs: number;
   readonly internet: boolean;
@@ -42,7 +43,6 @@ async function exitOf(handle: CommandHandle): Promise<number> {
 }
 
 export function e2bDriver(options: DriverOptions): SandboxDriver {
-  const { connection } = options;
   const send = <T>(call: () => Promise<T>): Promise<T> =>
     through(options.fetch, call);
   const boxes = new Map<string, Sandbox>();
@@ -50,7 +50,7 @@ export function e2bDriver(options: DriverOptions): SandboxDriver {
   const box = async (id: string): Promise<Sandbox> => {
     const known = boxes.get(id);
     if (known !== undefined) return known;
-    const connected = await Sandbox.connect(id, connection);
+    const connected = await Sandbox.connect(id, options.connection());
     boxes.set(id, connected);
     return connected;
   };
@@ -60,7 +60,7 @@ export function e2bDriver(options: DriverOptions): SandboxDriver {
       send(async () => {
         try {
           const made = await Sandbox.create(snapshot ?? options.template, {
-            ...connection,
+            ...options.connection(),
             metadata: { [OPERATION_KEY]: key },
             envs: {},
             timeoutMs: options.timeoutMs,
@@ -79,7 +79,7 @@ export function e2bDriver(options: DriverOptions): SandboxDriver {
     find: (key) =>
       send(async () => {
         const page = await Sandbox.list({
-          ...connection,
+          ...options.connection(),
           query: {
             metadata: { [OPERATION_KEY]: key },
             state: ["running", "paused"],
@@ -93,7 +93,7 @@ export function e2bDriver(options: DriverOptions): SandboxDriver {
     exists: (id) =>
       send(async () => {
         try {
-          await Sandbox.getInfo(id, connection);
+          await Sandbox.getInfo(id, options.connection());
           return true;
         } catch (error) {
           if (error instanceof NotFoundError) return false;
@@ -103,7 +103,9 @@ export function e2bDriver(options: DriverOptions): SandboxDriver {
     kill: (id) =>
       send(async () => {
         boxes.delete(id);
-        return (await Sandbox.kill(id, connection)) ? "killed" : "already_gone";
+        return (await Sandbox.kill(id, options.connection()))
+          ? "killed"
+          : "already_gone";
       }),
     run: (id, script, sinks, processKey) =>
       send(async () => {
@@ -153,7 +155,7 @@ export function e2bDriver(options: DriverOptions): SandboxDriver {
     },
     deleteSnapshot: (ref) =>
       send(async () =>
-        (await Sandbox.deleteSnapshot(ref, connection))
+        (await Sandbox.deleteSnapshot(ref, options.connection()))
           ? "released"
           : "already_gone",
       ),

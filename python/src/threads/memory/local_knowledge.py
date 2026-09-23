@@ -24,6 +24,7 @@ from threads.memory.types import (
     ProviderError,
     Scope,
 )
+from threads.redaction import SecretInStoredBytesError, contains_secret, published
 from threads.result import Err, Ok
 from threads.store import SqliteStore
 
@@ -60,6 +61,9 @@ WHERE local_knowledge_fts MATCH ? AND {_LIVE}
 """
 _UNBOUND: Final = Err(ProviderError("unavailable", "local_knowledge isn't bound to a store"))
 _TEXT: Final = ("text/", "application/json")
+_REBUILD_ATTEMPTS: Final = 3
+"""A rebuild reads its sources outside the transaction; an ingest in between means reading
+again, a few times, before giving up with unavailable."""
 
 type _Row = tuple[str, str, int, int, str, str, str, float]
 
@@ -119,10 +123,19 @@ class LocalKnowledge:
             text = source.content.decode("utf-8")
         except UnicodeDecodeError:
             return Err(ProviderError("invalid", f"{source.source_id}: not UTF-8 text"))
+        if contains_secret(source.content):
+            # Byte-exact (its digest is its version): a source holding a value is refused.
+            message = f"{source.source_id}: holds a registered secret; not ingested"
+            return Err(ProviderError("invalid", message))
         digest = hashlib.sha256(source.content).hexdigest()
-        # The admitted bytes are durable before the row that references them.
-        await self.store.put_artifact(source.content)
-        return await self.store.run(transaction(_admit(scope, source, key, digest, text)))
+        admit = transaction(_admit(scope, source, key, digest, text))
+        try:
+            # The bytes are durable before the rows (and passages) that reference them, and a
+            # value registered after the check above can't slip in between.
+            return await self.store.run(admit, publishing=source.content)
+        except SecretInStoredBytesError:
+            message = f"{source.source_id}: holds a registered secret; not ingested"
+            return Err(ProviderError("invalid", message))
 
     async def remove(self, scope: Scope, doc_id: str, key: str) -> Outcome[None]:
         if self.store is None:
@@ -200,21 +213,44 @@ class LocalKnowledge:
             )
         )
 
-    async def rebuild_index(self) -> None:
-        """Drops the index and refills it from the admitted artifacts (F14.3)."""
+    async def rebuild_index(self) -> Outcome[None]:
+        """Drops the index and refills it from the admitted artifacts (F14.3), in one step. A
+        source holding a value registered since it was admitted refuses the rebuild before
+        anything is cleared: the index stays as it was (C5)."""
         store = self.store
         if store is None:
-            return
+            return _UNBOUND
 
-        def rows(conn: sqlite3.Connection) -> list[tuple[int, str]]:
-            conn.execute("DELETE FROM local_knowledge_fts")
-            return conn.execute("SELECT rowid, content_sha256 FROM local_knowledge_docs").fetchall()
+        for _ in range(_REBUILD_ATTEMPTS):
+            try:
+                if await _rebuilt(store):
+                    return Ok(None)
+            except SecretInStoredBytesError:
+                return Err(
+                    ProviderError("invalid", "a source holds a registered secret; index kept")
+                )
+        return Err(ProviderError("unavailable", "sources kept changing during the rebuild"))
 
-        for rowid, sha in await store.run(rows):
-            got = await store.get_artifact(sha)
-            if isinstance(got, Err):
-                raise AssertionError(f"an admitted version's artifact is gone: {sha}")
-            await store.run(_reindex(rowid, got.value.decode("utf-8")))
+
+async def _rebuilt(store: SqliteStore) -> bool:
+    """One rebuild attempt: reads the admitted sources, then checks them and refills the index
+    in one transaction, with registration paused through its commit. False when an ingest
+    moved the rows."""
+    read = await store.run(_admitted)
+    sources: list[tuple[int, bytes]] = []
+    for rowid, sha in read:
+        got = await store.get_artifact(sha)
+        if isinstance(got, Err):
+            raise AssertionError(f"an admitted version's artifact is gone: {sha}")
+        sources.append((rowid, got.value))
+    pieces = [content for _, content in sources]
+
+    def refill(conn: sqlite3.Connection) -> bool:
+        # Registration stays paused until the transaction has committed, not only while the
+        # rows are written: the check covers the index until it is durable.
+        return published(pieces, lambda: transaction(lambda c: _refill(c, read, sources))(conn))
+
+    return await store.run(refill)
 
 
 def _insert(
@@ -284,8 +320,23 @@ def _admit(
     return write
 
 
-def _reindex(rowid: int, text: str) -> Callable[[sqlite3.Connection], None]:
-    return lambda conn: _index(conn, rowid, text)
+def _admitted(conn: sqlite3.Connection) -> list[tuple[int, str]]:
+    return conn.execute(
+        "SELECT rowid, content_sha256 FROM local_knowledge_docs ORDER BY rowid"
+    ).fetchall()
+
+
+def _refill(
+    conn: sqlite3.Connection, read: list[tuple[int, str]], sources: Sequence[tuple[int, bytes]]
+) -> bool:
+    """Clears and refills the index, in the caller's transaction, only if the admitted rows are
+    still the ones `sources` was read from: an ingest in between would be dropped (False)."""
+    if _admitted(conn) != read:
+        return False
+    conn.execute("DELETE FROM local_knowledge_fts")
+    for rowid, content in sources:
+        _index(conn, rowid, content.decode("utf-8"))
+    return True
 
 
 def _version(doc_id: str, version: str, digest: str, revision: int) -> DocVersion:

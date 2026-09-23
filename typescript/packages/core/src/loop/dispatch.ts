@@ -244,7 +244,7 @@ function settle(
             ? {}
             : { provider_receipt: run.receipt }),
         }),
-        resultOf(callId, run.isError, shown, contentOf(s, run)),
+        resultOf(callId, run.isError, shown, contentOf(run)),
         ...injections(run),
       );
     }
@@ -288,19 +288,15 @@ function result(
     callId,
     run.isError,
     recordOutput(s, callId, run.output),
-    contentOf(s, run),
+    contentOf(run),
   );
 }
 
-/** A result's own ordered parts, text redacted like the output (C5). */
+/** A result's own ordered parts (the writer redacts them with the event). */
 function contentOf(
-  s: Session,
   run: Extract<ToolRun, { kind: "done" }>,
 ): readonly ResultPart[] | undefined {
-  const redact = s.config.redact ?? ((text: string) => text);
-  return run.content?.map((part) =>
-    part.type === "text" ? { ...part, text: redact(part.text) } : part,
-  );
+  return run.content;
 }
 
 /** The context a result brings, after it and before the next request (C6). */

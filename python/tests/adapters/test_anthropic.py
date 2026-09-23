@@ -9,7 +9,7 @@ import pytest
 from fakes import FakeContext, Script, collect, golden, line, render_case, sse
 from pydantic import JsonValue
 
-from threads.adapters.models.anthropic.model import AnthropicModel, client
+from threads.adapters.models.anthropic.model import AnthropicModel
 from threads.anthropic import anthropic
 from threads.log import CallId, ReasoningPart, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
@@ -52,7 +52,7 @@ def reply(*events: Ev) -> httpx2.Response:
 
 def model(script: Script) -> AnthropicModel:
     declared = anthropic("claude-test", context_window=WINDOW, max_output_tokens=4096).info
-    return AnthropicModel(declared, client("key", http=httpx2.MockTransport(script)))
+    return AnthropicModel(declared, "sk-test-1", http=httpx2.MockTransport(script))
 
 
 def one_turn() -> bytes:
@@ -197,7 +197,7 @@ def _raises(error: type[httpx2.TransportError]) -> AnthropicModel:
         raise error("down", request=request)
 
     info = anthropic("claude-test", context_window=WINDOW, max_output_tokens=10).info
-    return AnthropicModel(info, client("k", http=httpx2.MockTransport(handle)))
+    return AnthropicModel(info, "sk-test-1", http=httpx2.MockTransport(handle))
 
 
 def test_a_refused_connection_is_server_error_and_a_broken_read_is_uncertain() -> None:
@@ -223,3 +223,14 @@ def test_the_factory_declares_its_limits_and_no_lookup() -> None:
     assert made.info.params == {"max_tokens": 8192, "temperature": 0}
     assert made.info.lookup == "none"
     assert made.info.adapter.name == "anthropic"
+
+
+def test_the_client_uses_the_key_setup_resolved(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-lane09-at-setup")
+    declared = anthropic("claude-test", context_window=WINDOW, max_output_tokens=4096).info
+    script = Script([reply(begin(), start(0, TEXT), delta(0, "text", "ok"), stop(0), END)])
+    claude = AnthropicModel(declared, None, http=httpx2.MockTransport(script))
+    asyncio.run(claude.setup())
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    asyncio.run(collect(claude.send, one_turn(), FakeContext()))
+    assert script.sent[0].headers["x-api-key"] == "sk-lane09-at-setup"

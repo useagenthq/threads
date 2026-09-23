@@ -30,6 +30,7 @@ from threads.loop.drive import drive
 from threads.loop.recovery import recover
 from threads.loop.runtime import LOST, Halt, Idle, Runtime, lost
 from threads.loop.runtime import Failed as HaltFailed
+from threads.redaction import contains_secret
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import SqliteStore, Writer
@@ -56,6 +57,10 @@ async def prepare[D](
 ) -> Halt | None:
     """A new thread pins its config; a continued one first recovers and finishes an open turn."""
     started, config = definition.pin()
+    if contains_secret(config):
+        # The config artifact is byte-exact (config_hash names it): one holding a registered
+        # value is never pinned.
+        raise ConfigError("invalid_config", "the resolved config holds a registered secret")
     if fresh:
         # The resolved config, hooks included, is durable in the content-addressed store under
         # its config_hash before the pin that names it.

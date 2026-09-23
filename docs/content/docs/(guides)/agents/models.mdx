@@ -123,7 +123,7 @@ In Python, `openai()` needs the key when you call it (the OpenAI SDK checks at c
     )
     ```
 
-    Only the `openai/` route is supported; other routes raise `ConfigError("transport_fence_unsupported")`. Credentials come from `api_key` or `OPENAI_API_KEY`.
+    Only the `openai/` route is supported; other routes raise `ConfigError("transport_fence_unsupported")`. The key comes from `api_key`, or from `OPENAI_API_KEY` when you don't pass one.
   </Tab>
 </Tabs>
 
@@ -136,7 +136,7 @@ In Python, `openai()` needs the key when you call it (the OpenAI SDK checks at c
 | `params` | Provider request fields (temperature, reasoning, thinking, ...). Fields threads sets itself, like `model` or `tools`, are refused |
 | `price` | Price per token, for cost budgets: `{ input, output, cache_read?, cache_write? }` in nano-dollars (USD 3 per million tokens is `3000`) |
 | `hostedTools` / `hosted_tools` | Provider-run tools. Only web search (both) and web fetch (Anthropic) are accepted |
-| `apiKey` / `api_key` | Overrides the environment variable. Never logged |
+| `apiKey` / `api_key` | A string or a `secret()`. Default: the provider's environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`), read at `check()` or the first run. Never logged, and redacted from tool results |
 | `baseURL` / `base_url` | A proxy or compatible endpoint |
 
 Model settings are fixed for the life of a thread, which keeps the prompt prefix identical on every request so provider caches keep hitting.

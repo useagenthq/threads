@@ -1,16 +1,17 @@
 """The single writer of one branch: `validate_next`, then the fenced conditional append."""
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from threads.log import BranchId, ParseError
 from threads.log.digest import sha256_hex
+from threads.redaction import SecretInStoredBytesError, published
 from threads.reduce import Fold, apply
 from threads.reduce.state import HeadRef, ReducedState, reduced_state
 from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.companion import Companion
-from threads.store.lines import Draft, Position, event_line
+from threads.store.lines import Draft, Position, event_line, stored_secret
 from threads.store.verify import StoredEvent, verify_export
 from threads.store.worker import Clock, Worker
 
@@ -81,11 +82,11 @@ class Writer:
             if isinstance(built, Err):
                 await self._reload(now)
                 return built
-            rows = built.value
+            rows, content = built.value
             if not rows:
                 return Ok(())
             batch = lease.Batch(expected, rows, sha256_hex(rows[-1][1]))
-            error = await self._commit(batch, now, companion)
+            error = await self._commit(batch, content, now, companion)
             if isinstance(error, lease.Refused):
                 await self._reload(now)
                 return Err(error.error)
@@ -94,20 +95,28 @@ class Writer:
             return Ok(tuple(event for event, _ in rows))
 
     async def _commit(
-        self, batch: lease.Batch, now: int, companion: Companion | None
+        self, batch: lease.Batch, content: bytes, now: int, companion: Companion | None
     ) -> ParseError | lease.Refused | None:
         """Runs the append to settlement even if the caller is cancelled: the statement can't
         be recalled once queued, and the fold already holds the batch. Until it settles the
         writer is poisoned, so a second cancellation leaves it poisoned, never out of step."""
         self._poisoned = True
         op = asyncio.ensure_future(
-            self._worker.call(lambda c: lease.append(c, self._lease, now, batch, companion))
+            self._worker.call(
+                lambda c: _published(
+                    content, lambda: lease.append(c, self._lease, now, batch, companion)
+                )
+            )
         )
         try:
             error = await asyncio.shield(op)
         except asyncio.CancelledError:
-            if await op is None:
+            settled = await op
+            if settled is None:
                 self._settled(batch)
+            elif isinstance(settled, lease.Refused):
+                # Nothing was written: fold the committed log again, as append does.
+                await self._reload(now)
             raise
         if error is None:
             self._settled(batch)
@@ -119,8 +128,10 @@ class Writer:
 
     def _build(
         self, drafts: Sequence[Draft], now: int
-    ) -> Ok[list[tuple[StoredEvent, bytes]]] | Err[ParseError]:
+    ) -> Ok[tuple[list[tuple[StoredEvent, bytes]], bytes]] | Err[ParseError]:
+        """The drafts' rows, and their content's canonical bytes (one per line)."""
         rows: list[tuple[StoredEvent, bytes]] = []
+        content: list[bytes] = []
         prev = self._last_line
         thread = self._fold.thread_id
         if thread is None:
@@ -133,9 +144,11 @@ class Writer:
             error = apply(self._fold, built.value[0])
             if error is not None:
                 return Err(error)
-            rows.append(built.value)
-            prev = built.value[1]
-        return Ok(rows)
+            event, line, stored = built.value
+            rows.append((event, line))
+            content.append(stored)
+            prev = line
+        return Ok((rows, b"\n".join(content)))
 
     async def _reload(self, now: int) -> None:
         # A rejected draft may leave earlier drafts of its batch folded in; the committed
@@ -176,3 +189,15 @@ class Writer:
             return Err(renewed)
         self._lease = renewed
         return Ok(None)
+
+
+def _published(
+    content: bytes, append: Callable[[], ParseError | lease.Refused | None]
+) -> ParseError | lease.Refused | None:
+    """The append, unless a value registered since `event_line` checked it is in the content:
+    registration is paused until the rows are durable (C5). Refused, like a companion's
+    refusal: nothing was written, so the writer reloads and goes on."""
+    try:
+        return published(content, append)
+    except SecretInStoredBytesError:
+        return lease.Refused(stored_secret())

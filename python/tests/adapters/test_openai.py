@@ -9,7 +9,7 @@ import pytest
 from fakes import FakeContext, Script, collect, golden, line, render_case, sse
 from pydantic import JsonValue
 
-from threads.adapters.models.openai.model import OpenAIModel, client
+from threads.adapters.models.openai.model import OpenAIModel
 from threads.log import CallId, ReasoningPart, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
 from threads.openai import openai
@@ -46,8 +46,10 @@ def end(kind: str = "response.completed", **response: JsonValue) -> Ev:
 
 
 def model(script: Script) -> OpenAIModel:
-    declared = openai("gpt-test", context_window=WINDOW, max_output_tokens=4096, api_key="k").info
-    return OpenAIModel(declared, client("key", http=httpx2.MockTransport(script)))
+    declared = openai(
+        "gpt-test", context_window=WINDOW, max_output_tokens=4096, api_key="sk-test-1"
+    ).info
+    return OpenAIModel(declared, "sk-test-1", http=httpx2.MockTransport(script))
 
 
 def one_turn() -> bytes:
@@ -193,7 +195,7 @@ def test_a_failure_before_content_is_a_rejection_and_after_content_uncertain() -
 
 
 def test_the_factory_declares_its_limits_and_no_lookup() -> None:
-    made = openai("gpt-test", context_window=WINDOW, max_output_tokens=8192, api_key="k")
+    made = openai("gpt-test", context_window=WINDOW, max_output_tokens=8192, api_key="sk-test-1")
     assert made.info.limits.context_window == WINDOW
     assert made.info.params == {"max_output_tokens": 8192}
     assert made.info.lookup == "none"

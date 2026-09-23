@@ -11,6 +11,7 @@
     "e2b": "2.51.0"
   },
   "devDependencies": {
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@threads/adapter-testkit": "workspace:*"
   }
 }

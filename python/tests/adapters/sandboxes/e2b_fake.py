@@ -13,7 +13,6 @@ import httpx
 from connectrpc.code import Code
 from connectrpc.errors import ConnectError
 from connectrpc.request import Headers, RequestContext
-from e2b.connection_config import ConnectionConfig
 from e2b.envd.client_shared import ENVD_JSON_CODEC
 from e2b.envd.process import process_connect, process_pb
 from protobuf import Oneof
@@ -199,14 +198,18 @@ def _response(event: _Event) -> process_pb.StartResponse:
 
 def adapter(backend: FakeBackend, name: str, handle: Handler | None = None) -> E2BSandbox:
     """The adapter over `backend`; `handle` replaces the REST API (for broken answers)."""
-    config = ConnectionConfig(
-        api_key=API_KEY, domain=DOMAIN, api_url=f"https://api.{DOMAIN}", retries=0
-    )
     app = process_connect.ProcessASGIApplication(Processes(backend), codecs=[ENVD_JSON_CODEC])
     rest = TracedTransport(backend, handle or control(backend))
     transports = Transports(rest, ASGITransport(app))
     return E2BSandbox(
-        config, transports, template=TEMPLATE, lifetime_ms=600_000, internet=False, name=name
+        API_KEY,
+        transports,
+        template=TEMPLATE,
+        lifetime_ms=600_000,
+        internet=False,
+        name=name,
+        domain=DOMAIN,
+        api_url=f"https://api.{DOMAIN}",
     )
 
 

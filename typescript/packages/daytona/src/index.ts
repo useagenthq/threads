@@ -1,10 +1,12 @@
 import {
   ConfigError,
+  credential,
   type Fetch,
   type ProviderSandbox,
   remoteSandbox,
+  type Secret,
 } from "@threads/core/adapter";
-import { clients } from "./clients";
+import { type Clients, clients } from "./clients";
 import { daytonaDriver } from "./driver";
 import type { OpenSocket } from "./logs";
 
@@ -29,8 +31,11 @@ import type { OpenSocket } from "./logs";
 //   the guest relies on the proxy and runner stripping it (README.md).
 
 export type DaytonaOptions = {
-  /** Used only to authenticate the host's requests; never passed into a sandbox. */
-  readonly apiKey: string;
+  /**
+   * Defaults to secret("DAYTONA_API_KEY"), resolved at setup. Used only to authenticate the
+   * host's requests; never passed into a sandbox.
+   */
+  readonly apiKey?: string | Secret;
   /** Defaults to https://app.daytona.io/api. */
   readonly apiUrl?: string;
   /** The Daytona snapshot new sandboxes start from. Defaults to Daytona's default. */
@@ -56,7 +61,7 @@ export type DaytonaOptions = {
 const openSocket: OpenSocket = (url, headers) =>
   new WebSocket(url, { headers: { ...headers } });
 
-export function daytona(options: DaytonaOptions): ProviderSandbox {
+export function daytona(options: DaytonaOptions = {}): ProviderSandbox {
   const ttlMinutes = options.ttlMinutes ?? 60;
   const autoStopMinutes = options.autoStopMinutes ?? 60;
   if (!Number.isInteger(autoStopMinutes) || autoStopMinutes <= 0)
@@ -67,12 +72,22 @@ export function daytona(options: DaytonaOptions): ProviderSandbox {
   const blocked = (options.network ?? "blocked") === "blocked";
   const inner: Fetch = (input, init) =>
     (options.fetch ?? globalThis.fetch)(input, init);
+  const apiKey = credential(
+    "daytona",
+    "apiKey",
+    options.apiKey,
+    "DAYTONA_API_KEY",
+  );
+  let made: Clients | undefined;
   const driver = daytonaDriver({
-    clients: clients(
-      options.apiUrl ?? "https://app.daytona.io/api",
-      options.apiKey,
-      inner,
-    ),
+    clients: () => {
+      made ??= clients(
+        options.apiUrl ?? "https://app.daytona.io/api",
+        apiKey(),
+        inner,
+      );
+      return made;
+    },
     open: options.openSocket ?? openSocket,
     image: options.image,
     ttlMinutes,
@@ -81,7 +96,7 @@ export function daytona(options: DaytonaOptions): ProviderSandbox {
     pollMs: options.pollMs ?? 1000,
     waitMs: options.waitMs ?? 300_000,
   });
-  return remoteSandbox(
+  const sandbox = remoteSandbox(
     driver,
     {
       provider: "daytona",
@@ -91,4 +106,10 @@ export function daytona(options: DaytonaOptions): ProviderSandbox {
     },
     { sandboxMs: ttlMinutes * 60_000, snapshotMs: null },
   );
+  return {
+    ...sandbox,
+    setup: async () => {
+      apiKey();
+    },
+  };
 }

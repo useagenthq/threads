@@ -16,7 +16,7 @@ def test_a_secret_serializes_and_prints_as_its_name_only() -> None:
 
 
 def test_resolve_reads_the_host_environment_only_when_called() -> None:
-    assert resolve(secret("API_KEY"), {"API_KEY": "v"}) == "v"
+    assert resolve(secret("API_KEY"), {"API_KEY": "value-123"}) == "value-123"
 
 
 @pytest.mark.parametrize("env", [{}, {"API_KEY": ""}])

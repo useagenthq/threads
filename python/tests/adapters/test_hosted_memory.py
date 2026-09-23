@@ -69,7 +69,7 @@ async def roundtrip(
 def test_supermemory_stores_the_binding_and_drops_foreign_items(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("SUPERMEMORY_API_KEY", "sm-key")
+    monkeypatch.setenv("SUPERMEMORY_API_KEY", "sm-test-key")
     stored: dict[str, JsonValue] = {}
 
     def results() -> JsonValue:
@@ -111,13 +111,13 @@ def test_supermemory_stores_the_binding_and_drops_foreign_items(
     assert [h.id for h in recalled.value] == ["doc1"]  # doc2's binding isn't ours
     add = body(seen[0])
     assert add["containerTag"] != A.tenant_id  # a digest, never scope text
-    assert seen[0].headers["authorization"] == "Bearer sm-key"
+    assert seen[0].headers["authorization"] == "Bearer sm-test-key"
 
 
 def test_zep_creates_the_scope_graph_once_and_parses_episodes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("ZEP_API_KEY", "z-key")
+    monkeypatch.setenv("ZEP_API_KEY", "zep-test-key")
     created: list[str] = []
     stored: dict[str, JsonValue] = {}
 
@@ -150,7 +150,7 @@ def test_zep_creates_the_scope_graph_once_and_parses_episodes(
 def test_a_stale_fence_writes_nothing_and_is_proven_not_sent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("SUPERMEMORY_API_KEY", "sm-key")
+    monkeypatch.setenv("SUPERMEMORY_API_KEY", "sm-test-key")
     seen, mock = recorder({})
     provider = supermemory()
     provider = type(provider)(provider.api_key, "http://sm.test", mock)

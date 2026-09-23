@@ -140,6 +140,7 @@ const TURN_ERROR_CODES = [
   "content_unsupported",
   "continuation_unsupported",
   "transport_fence_unsupported",
+  "secret_in_provider_output",
 ] as const;
 const TURN_COMPLETED_DATA_RULE = {
   if: { required: ["code"] },
@@ -157,7 +158,7 @@ export const TurnCompletedData: Ruled<
     code: z
       .enum(TURN_ERROR_CODES)
       .describe(
-        "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried).",
+        "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried); or the response held a registered secret in provider material that is replayed byte-exact and so can't be redacted (secret_in_provider_output: nothing of it is stored, never retried).",
       )
       .optional(),
   }),

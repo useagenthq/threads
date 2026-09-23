@@ -1,6 +1,7 @@
 """A child branch in two steps: `forking` with its header and lease, then its
 `fork` event and final state once whatever it restores is in hand."""
 
+import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -8,10 +9,12 @@ from pydantic import JsonValue
 
 from threads.log import BranchId, Header, ParseError
 from threads.log.digest import sha256_hex
+from threads.redaction import SecretInStoredBytesError, published
 from threads.reduce import Fold, apply, enter_segment
 from threads.result import Err, Ok
+from threads.store import lease
 from threads.store.lease import TTL_MS, Lease, Owner
-from threads.store.lines import Draft, Position, event_line, header_line
+from threads.store.lines import Draft, Position, event_line, header_line, stored_secret
 from threads.store.sql import Branch
 from threads.store.verify import StoredEvent, VerifiedLog
 
@@ -51,11 +54,22 @@ def forking(
 
 
 @dataclass(frozen=True, slots=True)
+class ForkRequest:
+    parent: BranchId
+    at_seq: int
+    child: BranchId
+    data: Mapping[str, JsonValue]
+    """The fork payload (reason, sandbox_id, knowledge_policy) minus the derived parent link."""
+
+
+@dataclass(frozen=True, slots=True)
 class ChildStart:
     row: Branch
     fork: tuple[StoredEvent, bytes]
     fold: Fold
     """The child's resolved chain, folded through its fork event."""
+    content: bytes
+    """The fork event's content bytes, checked again as the store's thread publishes it."""
 
     @property
     def runnable(self) -> bool:
@@ -97,4 +111,16 @@ def start_child(
         at.seq,
         sha256_hex(built.value[1]),
     )
-    return Ok(ChildStart(row, built.value, fold))
+    event, line, content = built.value
+    return Ok(ChildStart(row, (event, line), fold, content))
+
+
+def publish_fork(conn: sqlite3.Connection, start: ChildStart, held: Lease) -> ParseError | None:
+    """Step 4 on the store's thread, unless a value registered since `start_child` checked the
+    fork event is in its content: registration is paused until it is durable (C5)."""
+    try:
+        return published(
+            start.content, lambda: lease.finish_fork(conn, start.row, start.fork, held)
+        )
+    except SecretInStoredBytesError:
+        return stored_secret()
