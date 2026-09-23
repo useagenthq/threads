@@ -10,16 +10,19 @@ from pydantic import BaseModel, JsonValue
 
 from threads import RunContext, Store, agent, scripted_model, sqlite, tool
 from threads._generated.host_api_v1 import RunAccepted, StartRunRequest
+from threads.agents.results import Completed, Failed, RunError, RunResult
 from threads.agents.store import open_store, scoped
-from threads.host import Host, host
+from threads.host import Host, app, host
 from threads.host.app import recovered
 from threads.log import (
+    BranchId,
     EffectBeginEvent,
     Event,
     ModelRequestEvent,
     ModelResponseEvent,
     Permissions,
     Principal,
+    ThreadId,
     TurnCompletedEvent,
     UserInputEvent,
 )
@@ -28,9 +31,11 @@ from threads.loop.model import (
     ModelContext,
     ModelRequest,
 )
+from threads.loop.runtime import RunErrorCode
 from threads.loop.scripted import ScriptedModel
 from threads.reduce import Fold
 from threads.result import Ok
+from threads.thread.handle import Thread
 
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
 EVE = Principal(issuer="api", tenant="other", subject="eve")
@@ -323,3 +328,56 @@ def test_a_stalled_host_that_lost_the_run_never_answers_for_it() -> None:
 async def _ended(served: Host, run: RunAccepted) -> bool:
     runner = served._runner  # pyright: ignore[reportPrivateUsage] - the stalled host's run
     return not runner.running(run.branch_id)
+
+
+def test_an_earlier_runs_late_failure_never_answers_for_the_run_after_it() -> None:
+    """A run's end callback can run after the next run on its branch launched: its failure is
+    no answer for that newer run."""
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        runner = support(store, answering())._runner  # pyright: ignore[reportPrivateUsage] - the callback order
+        thread = Thread(ThreadId("t"), BranchId("b"), store)
+
+        async def failed() -> RunResult[str]:
+            return Failed(RunError("model_unavailable", "down"), thread)
+
+        async def later() -> RunResult[str]:
+            await asyncio.Event().wait()
+            raise AssertionError
+
+        old = asyncio.ensure_future(failed())
+        await asyncio.wait({old})
+        new = asyncio.ensure_future(later())
+        runner._tasks[thread.branch] = new  # pyright: ignore[reportPrivateUsage] - launched next
+        runner._ended(thread, old)  # pyright: ignore[reportPrivateUsage] - its late callback
+        assert thread.branch not in runner.last
+        new.cancel()
+
+    asyncio.run(main())
+
+
+def test_only_a_lost_lease_is_retried() -> None:
+    async def main() -> None:
+        gave_up = app._gave_up  # pyright: ignore[reportPrivateUsage] - the retry rule
+        thread = Thread(ThreadId("t"), BranchId("b"), sqlite(":memory:"))
+        row = ("acme", thread.id, thread.branch)
+
+        async def ended(code: RunErrorCode | None) -> RunResult[str]:
+            if code is None:
+                return Completed("done", thread)
+            return Failed(RunError(code, "x"), thread)
+
+        async def pending() -> RunResult[str]:
+            await asyncio.Event().wait()
+            raise AssertionError
+
+        busy, down, done = (
+            asyncio.ensure_future(ended(c)) for c in ("branch_busy", "model_unavailable", None)
+        )
+        live = asyncio.ensure_future(pending())
+        await asyncio.wait({busy, down, done})
+        assert [gave_up(row, t) for t in (busy, down, done, live)] == [False, True, False, False]
+        live.cancel()
+
+    asyncio.run(main())

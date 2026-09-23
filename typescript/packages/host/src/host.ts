@@ -158,9 +158,10 @@ export function host(options: HostOptions): Host {
       for (const r of channelThreads(db)) watch.add(r.tenant_id, r.thread_id);
       // ponytail: API runs are found at start only; a live peer's crash waits for a restart.
       const runs = unfinishedRuns(db);
-      // A row that fails its schema fails the tick, which logs it and seeds again next time.
-      if (!runs.ok) throw new Error(runs.error.message);
-      for (const r of runs.value)
+      // Said once, and the rest of the tick goes on: channel recovery and intake don't wait on it.
+      if (!runs.ok)
+        console.error("threads host: API runs not recovered", runs.error);
+      for (const r of runs.ok ? runs.value : [])
         watch.add(r.tenant_id, r.thread_id, r.branch_id);
       seeded = true;
     }

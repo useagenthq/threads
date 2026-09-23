@@ -290,9 +290,11 @@ class Runner:
     def _ended(self, thread: Thread, task: RunTask) -> None:
         branch = thread.branch
         self._live.discard(task)
-        if self._tasks.get(branch) is task:
+        # A run launched since (this callback may run after it) owns the branch's answer now.
+        current = self._tasks.get(branch) is task
+        if current:
             del self._tasks[branch]
-        if not task.cancelled() and task.exception() is None:
+        if current and not task.cancelled() and task.exception() is None:
             result = task.result()
             # A run that lost the branch is no answer: the run holding it answers from the log.
             if isinstance(result, Failed) and result.error.code != "branch_busy":

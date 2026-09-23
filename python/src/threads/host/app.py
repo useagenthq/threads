@@ -9,6 +9,7 @@ entering calls `ready` and leaving calls `stop`. Mount `asgi` in any ASGI server
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from types import TracebackType
 from typing import TYPE_CHECKING, Self
@@ -17,6 +18,7 @@ from weakref import WeakKeyDictionary
 from threads._generated.host_api_v1 import RunAccepted, StartRunRequest
 from threads.agents.agent import Agent
 from threads.agents.config import ConfigError
+from threads.agents.results import Failed
 from threads.agents.store import Store, open_store
 from threads.host import start, stream
 from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
@@ -37,6 +39,8 @@ if TYPE_CHECKING:
 
 type OpenRun = tuple[str, ThreadId, BranchId]
 """(tenant, thread, branch) of an API run a crash may have left open."""
+
+_log = logging.getLogger(__name__)
 
 REOPEN_S = 1.0
 """How often a host looks again at an API run it could not resume yet."""
@@ -118,7 +122,7 @@ class Host:
             self._ticking = asyncio.get_running_loop().create_task(self._tick())
 
     async def _tick(self) -> None:
-        still_open: set[OpenRun] = set()
+        still_open: dict[OpenRun, RunTask] = {}
         try:
             sq = await open_store(self._runner.store(LOCAL_TENANT))
             waiting = await sq.tables.unconsumed_threads()
@@ -136,7 +140,7 @@ class Host:
                 run = await self._reopen(row)
                 if run is not None:
                     _RECOVERY[self][1].append(run)
-                    still_open.add(row)
+                    still_open[row] = run
         finally:
             _RECOVERY[self][0].set()
         await asyncio.gather(self._scheduler.run(), self._reopening(still_open))
@@ -145,14 +149,26 @@ class Host:
         tenant, thread, branch = row
         return await self._runner.reopen(self._runner.store(tenant), thread, branch)
 
-    async def _reopening(self, still_open: set[OpenRun]) -> None:
+    async def _reopening(self, still_open: dict[OpenRun, RunTask]) -> None:
         """Looks at each API run left open again every second until it closes or parks: a
-        crashed host's lease refuses a resume until it runs out."""
+        crashed host's lease refuses a resume until it runs out. Only that is retried: a run
+        that failed another way is logged and left for a control or the next start."""
         while still_open:
             await asyncio.sleep(REOPEN_S)
-            for row in tuple(still_open):
-                if await self._reopen(row) is None:
-                    still_open.discard(row)
+            for row, run in tuple(still_open.items()):
+                again = None if _gave_up(row, run) else await self._reopen_logged(row)
+                if again is None:
+                    del still_open[row]
+                else:
+                    still_open[row] = again
+
+    async def _reopen_logged(self, row: OpenRun) -> RunTask | None:
+        try:
+            return await self._reopen(row)
+        # One branch's store error must not stop the host's pass.
+        except Exception:
+            _log.exception("threads host: reopening %s failed", row[2])
+            return None
 
     async def stop(self) -> None:
         """Aborts first: every run and follow-on resume is cancelled and none starts, so no
@@ -249,11 +265,25 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
 
 async def recovered(served: Host) -> None:
     """After the recovery pass the latest `ready()` began has finished and the runs it started
-    to redeliver replies have ended, with each follow-on resume one of them queued, so a test
-    asserts what recovery did or didn't do without sleeping. Python recovers once per start
-    (each start, including a restart of the same host), not on a timer as TS does, so there is
-    no later pass to wait for. Internal: not exported."""
+    to redeliver replies or reopen API runs have ended, with each follow-on resume one of them
+    queued, so a test asserts what recovery did or didn't do without sleeping. It covers that
+    first pass only: an API run another lease refused then is looked at again each second
+    (`_reopening`), which this doesn't wait for. Internal: not exported."""
     done, runs, runner = _RECOVERY[served]
     await done.wait()
     for run in runs:
         await runner.through(run)
+
+
+def _gave_up(row: OpenRun, run: RunTask) -> bool:
+    """The last reopen ended in a way a retry won't change (anything but losing the lease)."""
+    if not run.done() or run.cancelled():
+        return False
+    error = run.exception()
+    result = None if error is not None else run.result()
+    if isinstance(result, Failed) and result.error.code == "branch_busy":
+        return False
+    failed = error is not None or isinstance(result, Failed)
+    if failed:
+        _log.warning("threads host: resuming API run on %s failed: %s", row[2], error or result)
+    return failed
