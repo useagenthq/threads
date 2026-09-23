@@ -4,7 +4,7 @@
 
 Teams building agents keep rebuilding the same pieces: a sandbox, a Slack bot, a WhatsApp bot, hooks, a knowledge base, memory, evals. threads brings those pieces into one framework for **TypeScript and Python**. You write what your agent does and connect your accounts.
 
-> **Status: alpha, not yet published.** Every feature below is built in both languages and covered by tests, but the packages aren't on npm or PyPI yet and the APIs may still change. Install from source (below) to try it.
+> **Status: alpha, not yet published.** Every feature below is built and covered by tests (provider coverage per language is in the table below), but the packages aren't on npm or PyPI yet and the APIs may still change. Install from source (below) to try it.
 
 ## What you get
 
@@ -29,7 +29,7 @@ const openPullRequest = tool({
   description: "Open a pull request with the fix.",
   input: z.object({ title: z.string(), branch: z.string() }),
   runs: "host",
-  execute: async ({ title, branch }) => myForge.openPr(title, branch),
+  execute: async ({ title, branch }) => myForge.openPr(title, branch), // myForge: your own code
 });
 
 const fixer = agent({
@@ -59,7 +59,7 @@ class PrInput(BaseModel):
     branch: str
 
 async def open_pr(args: PrInput, ctx) -> str:
-    return await my_forge.open_pr(args.title, args.branch)
+    return await my_forge.open_pr(args.title, args.branch)  # my_forge: your own code
 
 open_pull_request = tool(
     name="open_pull_request",
