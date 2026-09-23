@@ -259,10 +259,3 @@ def test_a_log_stream_the_proxy_drops_after_its_close_frame_ended_normally(
             assert await collect(ran.value) == (0, b"hi\n", b"")
 
     asyncio.run(main())
-
-
-def test_a_missing_key_is_a_setup_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
-    with pytest.raises(ConfigError) as refused:
-        daytona()
-    assert refused.value.code == "missing_secret"

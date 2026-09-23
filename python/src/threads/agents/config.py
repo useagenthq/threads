@@ -1,5 +1,6 @@
 """`ConfigError` (spec/api.json): the one failure that raises, only at setup."""
 
+from dataclasses import dataclass
 from typing import Literal
 
 type ConfigErrorCode = Literal[
@@ -24,3 +25,12 @@ class ConfigError(Exception):
         super().__init__(f"{code}: {message}")
         self.code: ConfigErrorCode = code
         self.message = message
+
+
+@dataclass(frozen=True, slots=True)
+class Failure:
+    """A setup failure as a value (spec/api.json conventions.results): what `Agent.check`
+    returns where a run raises `ConfigError`."""
+
+    code: ConfigErrorCode
+    message: str

@@ -1,9 +1,12 @@
 """A local MCP server for the adapter tests, on the SDK's FastMCP: run as a stdio script, or
 served in process over Streamable HTTP through an ASGI transport. No network either way."""
 
+import atexit
 import os
+import signal
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -54,5 +57,23 @@ class TracedAsgi(httpx.AsyncBaseTransport):
         return await self._inner.handle_async_request(request)
 
 
+def _log_connection(path: str) -> None:
+    """One process is one connection: "open" when it starts, "closed" when it exits, however."""
+
+    def log(line: str) -> None:
+        with Path(path).open("a") as f:
+            f.write(f"{line}\n")
+
+    def stop(_signum: int, _frame: object) -> None:
+        sys.exit(0)
+
+    log("open")
+    atexit.register(log, "closed")
+    signal.signal(signal.SIGTERM, stop)
+
+
 if __name__ == "__main__":
+    connections = os.environ.get("CONNECTIONS_FILE")
+    if connections is not None:
+        _log_connection(connections)
     server().run("stdio")

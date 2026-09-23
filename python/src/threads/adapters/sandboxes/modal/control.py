@@ -18,8 +18,6 @@ _TASK_POLLS = 120
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    token_id: str
-    token_secret: str
     app_name: str
     image_id: str
     lifetime_s: int
@@ -36,15 +34,17 @@ class RouterAccess:
 
 
 class Control:
-    def __init__(self, channel: grpclib.client.Channel, settings: Settings) -> None:
+    def __init__(
+        self, channel: grpclib.client.Channel, settings: Settings, tokens: tuple[str, str]
+    ) -> None:
         self._stub = api_grpc.ModalClientStub(fenced(channel))
         self._settings = settings
         self._meta = {
             "x-modal-client-version": version("modal"),
             "x-modal-client-type": str(api_pb2.CLIENT_TYPE_CLIENT),
             "x-modal-python-version": platform.python_version(),
-            "x-modal-token-id": settings.token_id,
-            "x-modal-token-secret": settings.token_secret,
+            "x-modal-token-id": tokens[0],
+            "x-modal-token-secret": tokens[1],
         }
         self._app_id: str | None = None
 

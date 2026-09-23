@@ -80,12 +80,8 @@ def test_invalid_responses_are_typed_never_a_crash() -> None:
     asyncio.run(main())
 
 
-def test_setup_refuses_missing_tokens_and_bad_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
-    monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
-    with pytest.raises(ConfigError) as missing:
-        modal(image_id="im-x")
-    assert missing.value.code == "missing_secret"
+def test_the_factory_refuses_bad_config() -> None:
+    """Missing tokens are a setup error at check() or the first run (test_credentials.py)."""
     with pytest.raises(ConfigError) as bad:
         modal(image_id="im-x", token_id=TOKEN_ID, token_secret=TOKEN_SECRET, lifetime_ms=0)
     assert bad.value.code == "invalid_config"

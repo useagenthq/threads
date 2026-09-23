@@ -9,7 +9,7 @@ __version__: Final[str] = VERSION
 
 # The public surface imports the store, which reads VERSION above: keep these after it.
 from threads.agents.agent import Agent, RunStream, agent  # noqa: E402
-from threads.agents.config import ConfigError, ConfigErrorCode  # noqa: E402
+from threads.agents.config import ConfigError, ConfigErrorCode, Failure  # noqa: E402
 from threads.agents.context import RunContext  # noqa: E402
 from threads.agents.results import (  # noqa: E402
     BudgetExhausted,
@@ -26,6 +26,7 @@ from threads.agents.results import (  # noqa: E402
     StreamEvent,
     Thread,
 )
+from threads.agents.setup import SetsUp  # noqa: E402
 from threads.agents.skills import Skill  # noqa: E402
 from threads.agents.store import Store, sqlite  # noqa: E402
 from threads.agents.tool import Reconcile, Tool, tool  # noqa: E402
@@ -86,6 +87,7 @@ __all__ = [
     "ExecResult",
     "Extension",
     "Failed",
+    "Failure",
     "HandedOff",
     "Hooks",
     "KnowledgeHit",
@@ -115,6 +117,7 @@ __all__ = [
     "SavedCase",
     "Scope",
     "Secret",
+    "SetsUp",
     "Skill",
     "StatusItem",
     "Store",

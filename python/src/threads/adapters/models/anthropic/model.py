@@ -31,8 +31,10 @@ from threads.loop.model import (
     ModelResponse,
     Rejected,
 )
+from threads.secrets import Secret, credential
 
 ADAPTER = "anthropic"
+API_KEY = "ANTHROPIC_API_KEY"
 VERSION = "1"
 _STREAM_ERRORS: Mapping[str, Rejected] = {
     "overloaded_error": Rejected("overloaded"),
@@ -45,13 +47,33 @@ class AnthropicModel:
     """spec/api.json `Model` for the Anthropic Messages API. No response lookup: the API has no
     way to find a response by client request id, so recovery re-sends under its budget."""
 
-    def __init__(self, info: ModelInfo, client: sdk.AsyncAnthropic) -> None:
+    def __init__(
+        self,
+        info: ModelInfo,
+        api_key: str | Secret | None = None,
+        base_url: str | None = None,
+        http: httpx2.AsyncBaseTransport | None = None,
+    ) -> None:
         self._info = info
-        self._client = client
+        self._api_key, self._base_url, self._http = api_key, base_url, http
+        self._client: sdk.AsyncAnthropic | None = None
 
     @property
     def info(self) -> ModelInfo:
         return self._info
+
+    async def setup(self) -> None:
+        """Resolves the key on the host. The SDK client is made by the first send, on the
+        run's own event loop."""
+        self._key()
+
+    def _key(self) -> str:
+        return credential(ADAPTER, "api_key", self._api_key, API_KEY)
+
+    def _sdk(self) -> sdk.AsyncAnthropic:
+        if self._client is None:
+            self._client = client(self._key(), self._base_url, self._http)
+        return self._client
 
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         prepared = await prepare(request.body, ADAPTER, context, build)
@@ -61,7 +83,7 @@ class AnthropicModel:
         rendered, body = prepared
         try:
             with transport.attempt(context):
-                response = await self._client.post(
+                response = await self._sdk().post(
                     "/v1/messages",
                     body=body.json,
                     cast_to=httpx2.Response,
@@ -110,7 +132,7 @@ def _web(kind: str) -> bool:
 def anthropic(name: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel:
     """An Anthropic model (the `anthropic()` of spec/api.json conventions.adapters).
     `max_tokens` defaults to `max_output_tokens`; other `params` are Messages API fields.
-    `api_key` falls back to ANTHROPIC_API_KEY."""
+    `api_key` defaults to `secret("ANTHROPIC_API_KEY")`, resolved at setup."""
     settings, hosted = declare(options.get("hosted_tools", ()), _web, "name")
     if options.get("citations"):
         settings["citations"] = True
@@ -121,11 +143,11 @@ def anthropic(name: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel:
         {"max_tokens": options["max_output_tokens"]},
         hosted,
     )
-    return AnthropicModel(declared, client(options.get("api_key"), options.get("base_url")))
+    return AnthropicModel(declared, options.get("api_key"), options.get("base_url"))
 
 
 def client(
-    api_key: str | None = None,
+    api_key: str,
     base_url: str | None = None,
     http: httpx2.AsyncBaseTransport | None = None,
 ) -> sdk.AsyncAnthropic:

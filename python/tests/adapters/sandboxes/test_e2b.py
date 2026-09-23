@@ -18,8 +18,6 @@ from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
 from threads.adapters.sandboxes import fence
 from threads.adapters.sandboxes.e2b.transport import FencedHttpx, http_transport
-from threads.agents.config import ConfigError
-from threads.e2b import e2b
 from threads.loop.model import LookupUnknown
 from threads.result import Err, Ok
 
@@ -48,14 +46,6 @@ def test_fork_case(name: str) -> None:
             assert_expected(name, got)
 
     asyncio.run(main())
-
-
-def test_a_missing_key_is_a_setup_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("E2B_API_KEY", raising=False)
-    with pytest.raises(ConfigError) as refused:
-        e2b()
-    assert refused.value.code == "missing_secret"
-    assert e2b(api_key="k").info.provider == "e2b"
 
 
 def test_invalid_provider_responses_are_typed_failures() -> None:

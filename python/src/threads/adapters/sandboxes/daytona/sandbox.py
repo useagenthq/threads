@@ -28,7 +28,6 @@ What this adapter declares (Daytona 0.216, container sandboxes):
 """
 
 import asyncio
-import os
 import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
@@ -54,11 +53,13 @@ from threads.sandbox.protocol import (
     SandboxInfo,
     SandboxSession,
 )
+from threads.secrets import Secret, credential
 
 if TYPE_CHECKING:
     from threads.sandbox.manifest import ManifestEntry
 
 DEFAULT_API = "https://app.daytona.io/api"
+API_KEY = "DAYTONA_API_KEY"
 _PROVIDER = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _PUMP_GRACE_S = 0.25
 
@@ -68,7 +69,7 @@ class DaytonaSandbox:
 
     def __init__(  # noqa: PLR0913 - the factory's options
         self,
-        api_key: str,
+        api_key: str | Secret | None,
         *,
         api_url: str = DEFAULT_API,
         snapshot: str | None = None,
@@ -91,7 +92,7 @@ class DaytonaSandbox:
         self._placed = Placement(
             target, ttl, auto_stop_minutes=auto_stop_minutes, block_network=not allow_internet
         )
-        self._key, self._api_url, self._base = api_key, api_url, snapshot
+        self._api_key, self._api_url, self._base = api_key, api_url, snapshot
         self._name, self._poll_s, self._wait_s, self._traces = name, poll_s, wait_s, traces
         self._session: aiohttp.ClientSession | None = None
         self._control: Control | None = None
@@ -108,6 +109,14 @@ class DaytonaSandbox:
             lookup=LookupSupport(create="nonfinal", snapshot="none"),
             termination="unconfirmed",
         )
+
+    async def setup(self) -> None:
+        """Resolves the key on the host. The HTTP session is opened on first use, in the run
+        and on its event loop."""
+        self._key()
+
+    def _key(self) -> str:
+        return credential("daytona", "api_key", self._api_key, API_KEY)
 
     async def aclose(self) -> None:
         """Closes the session, then the exec streams still reading it. The session goes first:
@@ -227,7 +236,7 @@ class DaytonaSandbox:
 
     def _http(self) -> aiohttp.ClientSession:
         if self._session is None:
-            self._session = transport.session(self._key, self._traces)
+            self._session = transport.session(self._key(), self._traces)
         return self._session
 
     def _controls(self) -> Control:
@@ -239,7 +248,7 @@ class DaytonaSandbox:
 
 def daytona(  # noqa: PLR0913 - the provider's options
     *,
-    api_key: str | None = None,
+    api_key: str | Secret | None = None,
     api_url: str = DEFAULT_API,
     snapshot: str | None = None,
     target: str | None = None,
@@ -249,12 +258,10 @@ def daytona(  # noqa: PLR0913 - the provider's options
     name: str = "daytona",
 ) -> DaytonaSandbox:
     """A Daytona sandbox provider (the `daytona()` of spec/api.json conventions.adapters).
-    `api_key` falls back to DAYTONA_API_KEY; `snapshot` is the base snapshot to create from."""
-    key = api_key or os.environ.get("DAYTONA_API_KEY")
-    if not key:
-        raise ConfigError("missing_secret", "daytona needs api_key or DAYTONA_API_KEY")
+    `api_key` defaults to `secret("DAYTONA_API_KEY")`, resolved at setup; `snapshot` is the
+    base snapshot to create from."""
     return DaytonaSandbox(
-        key,
+        api_key,
         api_url=api_url,
         snapshot=snapshot,
         target=target,

@@ -15,7 +15,6 @@ What it declares, and why:
 - the sandbox dies on its own `lifetime_ms` after create (E2B's timeout): the declared expiry.
 """
 
-import os
 from typing import Literal
 
 from e2b.api import AsyncApiClient
@@ -26,7 +25,6 @@ from threads.adapters.sandboxes.e2b.envd import Envd, Transports
 from threads.adapters.sandboxes.e2b.session import E2BSession, Owner, call
 from threads.adapters.sandboxes.e2b.transport import FencedHttpx, http_transport, rpc_transport
 from threads.adapters.sandboxes.e2b.wire import Sandbox as Described
-from threads.agents.config import ConfigError
 from threads.log import SnapshotData
 from threads.loop.model import Found, LookupResult, LookupUnknown, NotFoundNonfinal
 from threads.result import Err, Ok
@@ -38,24 +36,28 @@ from threads.sandbox.protocol import (
     SandboxInfo,
     SandboxSession,
 )
+from threads.secrets import Secret, credential
 
 HOUR_MS = 3_600_000
+API_KEY = "E2B_API_KEY"
 
 
 class E2BSandbox:
     def __init__(  # noqa: PLR0913 - one provider's settings
         self,
-        config: ConnectionConfig,
+        api_key: str | Secret | None,
         transports: Transports,
         *,
         template: str,
         lifetime_ms: int,
         internet: bool,
         name: str,
+        domain: str | None = None,
+        api_url: str | None = None,
     ) -> None:
-        client = AsyncApiClient(config, transport=FencedHttpx(transports.http))
-        self._owner = Owner(name, Control(client))
-        self._config = config
+        self._api_key, self._domain, self._api_url = api_key, domain, api_url
+        self._name = name
+        self._plane: tuple[ConnectionConfig, Owner] | None = None
         self._transports = transports
         self._template = template
         self._internet = internet
@@ -74,6 +76,27 @@ class E2BSandbox:
     @property
     def info(self) -> SandboxInfo:
         return self._info
+
+    async def setup(self) -> None:
+        """Resolves the key on the host. The control-plane client is made on first use, in the
+        run."""
+        self._key()
+
+    def _key(self) -> str:
+        return credential("e2b", "api_key", self._api_key, API_KEY)
+
+    def _connection(self) -> tuple[ConnectionConfig, Owner]:
+        if self._plane is None:
+            config = ConnectionConfig(
+                api_key=self._key(), domain=self._domain, api_url=self._api_url, retries=0
+            )
+            client = AsyncApiClient(config, transport=FencedHttpx(self._transports.http))
+            self._plane = (config, Owner(self._name, Control(client)))
+        return self._plane
+
+    @property
+    def _owner(self) -> Owner:
+        return self._connection()[1]
 
     async def create(
         self, operation_key: str, context: SandboxContext
@@ -143,32 +166,31 @@ class E2BSandbox:
         return Ok(None if made.value is None else self._session(made.value))
 
     def _session(self, described: Described) -> E2BSession:
-        domain = described.domain or self._config.domain
-        url = self._config.get_sandbox_url(described.sandbox_id, domain)
+        config = self._connection()[0]
+        domain = described.domain or config.domain
+        url = config.get_sandbox_url(described.sandbox_id, domain)
         envd = Envd(described, url, self._transports)
         return E2BSession(SandboxId(described.sandbox_id), envd, self._owner)
 
 
 def e2b(  # noqa: PLR0913 - the provider's settings
     *,
-    api_key: str | None = None,
+    api_key: str | Secret | None = None,
     template: str = "base",
     lifetime_ms: int = HOUR_MS,
     allow_internet: bool = False,
     name: str = "e2b",
     domain: str | None = None,
 ) -> E2BSandbox:
-    """An E2B sandbox provider (spec/api.json conventions.adapters). `api_key` falls back to
-    E2B_API_KEY; it authenticates the control plane only and never enters a sandbox.
+    """An E2B sandbox provider (spec/api.json conventions.adapters). `api_key` defaults to
+    `secret("E2B_API_KEY")`, resolved at setup; it authenticates the control plane only and
+    never enters a sandbox.
     `template` must carry /bin/sh, sed, find, stat and sha256sum (E2B's base does)."""
-    key = api_key or os.environ.get("E2B_API_KEY")
-    if not key:
-        raise ConfigError("missing_secret", "e2b: set api_key or E2B_API_KEY")
-    config = ConnectionConfig(api_key=key, domain=domain, retries=0)
     transports = Transports(http_transport(), rpc_transport())
     return E2BSandbox(
-        config,
+        api_key,
         transports,
+        domain=domain,
         template=template,
         lifetime_ms=lifetime_ms,
         internet=allow_internet,

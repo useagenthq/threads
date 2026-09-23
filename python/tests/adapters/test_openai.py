@@ -9,7 +9,7 @@ import pytest
 from fakes import FakeContext, Script, collect, golden, line, render_case, sse
 from pydantic import JsonValue
 
-from threads.adapters.models.openai.model import OpenAIModel, client
+from threads.adapters.models.openai.model import OpenAIModel
 from threads.log import CallId, ReasoningPart, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
 from threads.openai import openai
@@ -47,7 +47,7 @@ def end(kind: str = "response.completed", **response: JsonValue) -> Ev:
 
 def model(script: Script) -> OpenAIModel:
     declared = openai("gpt-test", context_window=WINDOW, max_output_tokens=4096, api_key="k").info
-    return OpenAIModel(declared, client("key", http=httpx2.MockTransport(script)))
+    return OpenAIModel(declared, "key", http=httpx2.MockTransport(script))
 
 
 def one_turn() -> bytes:

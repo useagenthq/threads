@@ -11,7 +11,7 @@ import pytest
 from fakes import FakeContext, collect, line
 
 from threads.adapters.models import transport
-from threads.adapters.models.anthropic.model import AnthropicModel, client
+from threads.adapters.models.anthropic.model import AnthropicModel
 from threads.anthropic import anthropic
 from threads.litellm import litellm
 from threads.loop.model import Done, Model, ModelChunk, Rejected
@@ -36,7 +36,7 @@ _CHAT = (
 
 def _claude(url: str) -> Model:
     info = anthropic("claude-test", context_window=1000, max_output_tokens=8).info
-    return AnthropicModel(info, client("key", url))
+    return AnthropicModel(info, "key", url)
 
 
 def _bridged(url: str) -> Model:

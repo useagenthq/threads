@@ -14,6 +14,7 @@ from threads.agents import narrowing
 from threads.agents.bindings import AppTool, AppTools, Fence, ToolServer, capped
 from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
 from threads.agents.catalog import gateways
+from threads.agents.config import ConfigError
 from threads.agents.context import RunContext
 from threads.agents.definition import Definition
 from threads.agents.framework import Agents
@@ -30,6 +31,7 @@ from threads.agents.results import (
     Thread,
 )
 from threads.agents.scope import Execute, Scope
+from threads.agents.setup import set_up
 from threads.agents.skills import SkillLoader
 from threads.agents.start import (
     Recorded,
@@ -110,7 +112,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
     launch: Launch | None = None,
     intake: Intake | None = None,
 ) -> RunResult[str]:
-    narrowing.run_budget(definition, options.get("budget"))
+    await _set_up(definition, options.get("budget"))
     thread = options.get("thread")
     store = options.get("store") or (thread.store if thread is not None else sqlite(".threads"))
     sq = await open_store(store)
@@ -124,7 +126,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
     if intake is not None and intake.servers:
         definition = _serving(definition, intake.servers)
     async with _held(writer), AsyncExitStack() as servers:
-        definition = await with_servers(definition, servers, writer)
+        definition = await with_servers(definition, servers, fenced(writer))
         thread_id = writer.fold.thread_id
         if thread_id is None:
             raise AssertionError("an acquired branch has a thread")
@@ -193,6 +195,12 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         if rt.fold.handed_off:
             return await handed_off(frame, rt, handle, again=moved)
         return result(rt, halt, handle)
+
+
+async def _set_up[D](definition: Definition[D], budget: Budget | None) -> None:
+    """Setup, before the store is touched: a failure raises ConfigError and appends nothing."""
+    narrowing.run_budget(definition, budget)
+    await set_up(definition)
 
 
 async def _turn[D](
@@ -276,18 +284,23 @@ def fenced(writer: Writer) -> Fence:
 
 
 async def with_servers[D](
-    definition: Definition[D], stack: AsyncExitStack, writer: Writer
+    definition: Definition[D], stack: AsyncExitStack, fence: Fence
 ) -> Definition[D]:
-    """The definition with its tool servers' tools, connected for this run and fenced by its
-    writer: app tools in declared order, then server tools sorted by name."""
+    """The definition with its tool servers' tools, on sessions `stack` closes: app tools in
+    declared order, then server tools sorted by name. A run fences them by its writer; check()
+    lists them outside any branch. A server tool named like another tool is duplicate_name."""
     if not definition.servers:
         return definition
 
     found: list[AppTool[object]] = []
     for server in definition.servers:
-        found.extend(await stack.enter_async_context(server.connect(fenced(writer))))
+        found.extend(await stack.enter_async_context(server.connect(fence)))
     extra = sorted(found, key=lambda t: t.name)
-    return replace(definition, tools=(*definition.tools, *extra))
+    connected = replace(definition, tools=(*definition.tools, *extra))
+    names = [s.name for s in connected.specs()]
+    if len(set(names)) != len(names):
+        raise ConfigError("duplicate_name", f"tool names repeat: {names}")
+    return connected
 
 
 def _ceilings[D](options: RunOptions[D], launch: Launch | None) -> tuple[Permissions, ...]:
