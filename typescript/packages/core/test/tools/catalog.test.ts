@@ -5,7 +5,12 @@ import { z } from "zod";
 import { fakeSandbox } from "../../src";
 import { sha256Hex } from "../../src/hash";
 import { builtins } from "../../src/tools";
-import { AGENT_TOOLS, CATALOG, entry } from "../../src/tools/catalog";
+import {
+  AGENT_TOOLS,
+  CATALOG,
+  entry,
+  PROVIDER_TOOLS,
+} from "../../src/tools/catalog";
 
 // The shared built-in tool vector (spec/conformance/vectors/tool-inputs.json): every catalog
 // input accepts and rejects exactly as authored, and what the agent pins is the catalog.
@@ -55,7 +60,9 @@ describe("built-in tool catalog", () => {
       input_schema: b.spec.input_schema,
     }));
     expect<unknown>(pinned).toEqual(
-      listed.filter((e) => !AGENT_TOOLS.has(e.name)),
+      listed.filter(
+        (e) => !AGENT_TOOLS.has(e.name) && !PROVIDER_TOOLS.has(e.name),
+      ),
     );
     expect(CATALOG.map((e) => e.name)).toEqual(listed.map((e) => e.name));
   });

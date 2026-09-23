@@ -1,6 +1,6 @@
 {
   "description": "Built-in tool inputs: each case is parsed with the tool's catalog schema (Zod in TypeScript, the generated Pydantic model in Python) and must be accepted exactly when valid. catalog_sha256 is the SHA-256 of spec/schema/tools.v1.catalog.json, the canonical catalog both runtimes pin.",
-  "catalog_sha256": "fe720a2c92b124353c6c4ce52d80b0f8748851abcdb21dcdcb60f27343747aca",
+  "catalog_sha256": "1c190839755dfac3912891179eb9d59551cfc497c83c2e972c3d6fe934bdafa6",
   "cases": [
     {
       "tool": "bash",
@@ -333,6 +333,124 @@
         "call_id": "",
         "offset": 0,
         "length": 1
+      },
+      "valid": false
+    },
+    {
+      "tool": "save_memory",
+      "input": {
+        "text": "prefers tabs"
+      },
+      "valid": true
+    },
+    {
+      "tool": "save_memory",
+      "input": {
+        "text": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "save_memory",
+      "input": {
+        "text": "x",
+        "origin": "user"
+      },
+      "valid": false
+    },
+    {
+      "tool": "search_memory",
+      "input": {
+        "query": "tabs"
+      },
+      "valid": true
+    },
+    {
+      "tool": "search_memory",
+      "input": {
+        "query": "tabs",
+        "k": 20
+      },
+      "valid": true
+    },
+    {
+      "tool": "search_memory",
+      "input": {
+        "query": "tabs",
+        "k": 21
+      },
+      "valid": false
+    },
+    {
+      "tool": "search_memory",
+      "input": {
+        "query": "tabs",
+        "k": 0
+      },
+      "valid": false
+    },
+    {
+      "tool": "search_memory",
+      "input": {
+        "query": "tabs",
+        "scope": "other"
+      },
+      "valid": false
+    },
+    {
+      "tool": "forget_memory",
+      "input": {
+        "id": "m1"
+      },
+      "valid": true
+    },
+    {
+      "tool": "forget_memory",
+      "input": {
+        "id": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "search_knowledge",
+      "input": {
+        "query": "refund"
+      },
+      "valid": true
+    },
+    {
+      "tool": "search_knowledge",
+      "input": {
+        "query": "refund",
+        "k": 3,
+        "sources": [
+          "handbook"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "tool": "search_knowledge",
+      "input": {
+        "query": "refund",
+        "sources": [
+          ""
+        ]
+      },
+      "valid": false
+    },
+    {
+      "tool": "search_knowledge",
+      "input": {
+        "query": "refund",
+        "tenant_id": "b"
+      },
+      "valid": false
+    },
+    {
+      "tool": "search_knowledge",
+      "input": {
+        "query": ""
       },
       "valid": false
     },

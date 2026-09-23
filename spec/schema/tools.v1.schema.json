@@ -51,6 +51,20 @@
       ],
       "type": "object"
     },
+    "ForgetMemoryInput": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "The id of a recalled memory.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
     "GlobInput": {
       "additionalProperties": false,
       "properties": {
@@ -172,6 +186,66 @@
         "call_id",
         "offset",
         "length"
+      ],
+      "type": "object"
+    },
+    "SaveMemoryInput": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "description": "The fact to remember, self-contained.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "SearchKnowledgeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "k": {
+          "description": "Most hits to return. Default 5.",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sources": {
+          "description": "Only these source ids.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "SearchMemoryInput": {
+      "additionalProperties": false,
+      "properties": {
+        "k": {
+          "description": "Most hits to return. Default 5.",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
       ],
       "type": "object"
     },

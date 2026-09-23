@@ -4,6 +4,7 @@ generated input models parse the model's arguments. Only the effect class is dec
 
 import json
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Final, TypedDict
 
 from pydantic import JsonValue, TypeAdapter
@@ -45,18 +46,61 @@ HOST: Final = frozenset({"read_tool_result"})
 """Built-ins that run on the host: offered with or without a sandbox."""
 NAMES: Final = frozenset(MODELS)
 SANDBOXED: Final = NAMES - HOST
+PROVIDED: Final[Mapping[str, type[StrictModel]]] = {
+    "forget_memory": tools_v1.ForgetMemoryInput,
+    "save_memory": tools_v1.SaveMemoryInput,
+    "search_knowledge": tools_v1.SearchKnowledgeInput,
+    "search_memory": tools_v1.SearchMemoryInput,
+}
+"""Host tools pinned only with a memory or knowledge provider."""
+_WRITES: Final = frozenset({"save_memory", "forget_memory"})
 
 
-def specs(*, sandbox: bool, egress_denied: bool) -> tuple[ToolSpec, ...]:
+@dataclass(frozen=True, slots=True)
+class Writes:
+    """The effect class a memory provider declares for its writes. A provider that
+    declares nothing is unguarded: an uncertain write parks, it is never retried blindly."""
+
+    effect: EffectClass = "unguarded"
+    dedup_window_ms: int | None = None
+
+
+def specs(
+    *,
+    sandbox: bool,
+    egress_denied: bool,
+    memory: Writes | None = None,
+    knowledge: bool = False,
+) -> tuple[ToolSpec, ...]:
     """The pinned built-ins, sorted by name. bash is sandbox_local only under deny-all egress;
     with any outbound path a command may change state elsewhere."""
     out: list[ToolSpec] = []
     for entry in _ENTRIES:
         name = entry["name"]
-        if name not in NAMES:
-            continue  # an framework tool, pinned with its feature
-        if name not in HOST and not sandbox:
-            continue
-        effect = "unguarded" if name == "bash" and not egress_denied else _EFFECTS[name]
-        out.append(ToolSpec.model_validate({**entry, "effect_class": effect}))
+        effect = _effect(name, sandbox=sandbox, egress_denied=egress_denied, memory=memory)
+        if effect is None or (name == "search_knowledge" and not knowledge):
+            continue  # an framework tool, or a capability that isn't configured
+        data: dict[str, JsonValue] = {
+            "name": name,
+            "description": entry["description"],
+            "input_schema": entry["input_schema"],
+            "effect_class": effect,
+        }
+        if effect == "idempotent" and memory is not None and name in _WRITES:
+            data["dedup_window_ms"] = memory.dedup_window_ms
+        out.append(ToolSpec.model_validate(data))
     return tuple(out)
+
+
+def _effect(
+    name: str, *, sandbox: bool, egress_denied: bool, memory: Writes | None
+) -> EffectClass | None:
+    if name == "search_knowledge":
+        return "read_only"
+    if name in PROVIDED:
+        if memory is None:
+            return None
+        return memory.effect if name in _WRITES else "read_only"
+    if name not in NAMES or (name not in HOST and not sandbox):
+        return None
+    return "unguarded" if name == "bash" and not egress_denied else _EFFECTS[name]

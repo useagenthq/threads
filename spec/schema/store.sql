@@ -3,8 +3,8 @@
 -- Both implementations embed this file byte for byte: spec/tools/gen_store_sql.py writes the
 -- constants, and CI runs it with --check. Change this file, then regenerate.
 --
--- Tables for later features are added with those features: inbox, approvals,
--- schedule_occurrences, knowledge_* and memory_*.
+-- Tables for later features are added with those features: inbox, approvals and
+-- schedule_occurrences.
 --
 -- Connection settings, set by each driver before this script runs:
 --   PRAGMA journal_mode = WAL;
@@ -120,6 +120,40 @@ CREATE TABLE IF NOT EXISTS budget_ledger (
   amount INTEGER NOT NULL CHECK (amount >= 0),
   state TEXT NOT NULL CHECK (state IN ('reserved', 'settled')),
   PRIMARY KEY (budget_id, limit_name, attempt_key)
+) STRICT;
+
+-- Host-issued memory and knowledge bindings. At every memory write or
+-- knowledge ingest the host issues (namespace, record_id) and records which scope owns it; the
+-- provider stores the binding opaquely. A returned item is used only when its binding is a row
+-- here for the calling (tenant_id, agent, scope). A provider's own scope labels prove nothing.
+CREATE TABLE IF NOT EXISTS memory_bindings (
+  namespace TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  agent TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  PRIMARY KEY (namespace, record_id)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS knowledge_bindings (
+  namespace TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  agent TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  PRIMARY KEY (namespace, record_id)
+) STRICT;
+
+-- The host's audit of provider misbehavior: an item with an unknown or foreign binding was
+-- dropped, never injected. Audit only: the log never depends on it.
+CREATE TABLE IF NOT EXISTS provider_audit (
+  audit_id INTEGER PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('memory', 'knowledge')),
+  code TEXT NOT NULL CHECK (code IN ('scope_violation')),
+  namespace TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  at INTEGER NOT NULL
 ) STRICT;
 
 PRAGMA user_version = 1;
