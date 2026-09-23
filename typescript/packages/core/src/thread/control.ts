@@ -73,6 +73,9 @@ export function resumed(address: ParkAddress, cause: EventId): EventDraft {
   };
 }
 
+/** Host rows written in the same transaction as a control's record (a consumed inbox item). */
+export type Alongside = Parameters<Writer["append"]>[1];
+
 /**
  * Appends the plan's events in one transaction, through the live run's writer or under a lease
  * taken and handed back here.
@@ -85,11 +88,12 @@ export async function control(
     events: readonly KnownEvent[],
     writer: Writer,
   ) => Result<Plan, ControlError>,
+  alongside?: Alongside,
 ): Promise<Controlled> {
   if (principal.tenant !== log.tenant)
     return fail("forbidden", "the principal is not of this thread's tenant");
   const live = liveWriter(branchId);
-  if (live !== undefined) return appendPlan(live, plan);
+  if (live !== undefined) return appendPlan(live, plan, alongside);
   const writer = log.acquire(branchId, HOLDER);
   if (!writer.ok)
     return fail(
@@ -97,7 +101,7 @@ export async function control(
       writer.error.message,
     );
   try {
-    return appendPlan(writer.value, plan);
+    return appendPlan(writer.value, plan, alongside);
   } finally {
     writer.value.release();
   }
@@ -109,12 +113,13 @@ function appendPlan(
     events: readonly KnownEvent[],
     writer: Writer,
   ) => Result<Plan, ControlError>,
+  alongside?: Alongside,
 ): Controlled {
   const planned = plan(knownEvents(writer.chain), writer);
   if (!planned.ok) return planned;
   const { record, after } = planned.value;
   const done = writer.fenced(() => {
-    const first = writer.append([record]);
+    const first = writer.append([record], alongside);
     if (!first.ok || after === undefined) return first;
     const id = eventIdOf(first.value[0]);
     const rest = writer.append(after(id));

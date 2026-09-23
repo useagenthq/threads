@@ -31,6 +31,8 @@ export type HostRunner = {
   readonly approvers: readonly Principal[] | undefined;
   /** The provider fork() restores snapshots with. */
   readonly sandbox: Sandbox | undefined;
+  /** agent({handoffs}): a channel conversation continues with the target after a handoff. */
+  readonly targets: readonly { readonly name: string }[];
 };
 
 export function hosted<Deps, Output>(
@@ -42,5 +44,6 @@ export function hosted<Deps, Output>(
     execute: (plan, inputs, hooks = {}) => execute(def, plan, inputs, hooks),
     approvers,
     sandbox: def.sandbox,
+    targets: def.targets,
   };
 }

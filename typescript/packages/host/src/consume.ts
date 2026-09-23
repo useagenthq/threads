@@ -1,9 +1,15 @@
-import { type ChannelAdapter, openThread } from "@threads/core";
+import type { ChannelAdapter } from "@threads/core";
 import {
+  type Alongside,
   assertNever,
   BranchId,
+  cancel,
+  cancelChildren,
+  control,
+  decide,
   type EventDraft,
   type EventId,
+  knownEvents,
   storeConnection,
   type ThreadId,
   uuidv7,
@@ -16,13 +22,16 @@ import {
   pendingItems,
 } from "./inbox";
 
-// The run side of channel intake: items leave the inbox under the
-// branch lease, a message as channel_delivery then user_input{source: channel}, a decision as
-// an approval by an authorized approver, a control as a cancel. Each item is consumed once.
+// The run side of channel intake (step 6; spec/schema/README.md, "Channel
+// replies"): items leave the inbox under the branch lease, a message as channel_delivery then
+// user_input{source: channel}, a decision as an approval by a principal with approval
+// authority, a control as a cancel. An item is consumed in the transaction that applies it, so a
+// busy branch leaves it queued; a decision or control never waits behind a message the branch
+// can't take yet.
 
 type Message = InboxItem & { readonly item: { readonly kind: "message" } };
 
-/** Consumes the thread's items in order until none is left or its branch is busy. */
+/** Consumes the thread's items until none can go now. */
 export async function consume(
   ctx: HostContext,
   tenant: string,
@@ -31,28 +40,35 @@ export async function consume(
   const { db } = await storeConnection(ctx.store);
   for (;;) {
     const pending = pendingItems(db, tenant, threadId);
-    const next = pending.ok ? pending.value[0] : undefined;
-    if (next === undefined) return;
-    const adapter = ctx.channels.get(next.channel);
-    const hosted =
-      adapter === undefined ? undefined : ctx.agents.get(adapter.agent);
-    if (adapter === undefined || hosted === undefined) {
-      consumed(db, next.inbox_id, 0);
-      continue;
-    }
-    const conversation = {
-      tenant,
-      channel: next.channel,
-      installation: next.installation_id,
-      address: next.item.address,
-    };
-    const going = await item(
-      ctx,
-      { adapter, hosted, conversation, threadId },
-      next,
-    );
-    if (going === "busy") return;
+    if (!pending.ok || !(await step(ctx, tenant, threadId, pending.value)))
+      return;
   }
+}
+
+/**
+ * Applies the first item that can go: messages in order until one is busy, then decisions and
+ * controls in order until one is busy. True when one was consumed (the list is read again).
+ */
+async function step(
+  ctx: HostContext,
+  tenant: string,
+  threadId: ThreadId,
+  items: readonly InboxItem[],
+): Promise<boolean> {
+  const { db } = await storeConnection(ctx.store);
+  let messagesWait = false;
+  for (const next of items) {
+    if (next.item.kind === "message" && messagesWait) continue;
+    const t = await target(ctx, tenant, threadId, next);
+    if (t === undefined) {
+      consumed(db, next.inbox_id, 0);
+      return true;
+    }
+    if ((await item(ctx, t, next)) === "done") return true;
+    if (next.item.kind !== "message") return false;
+    messagesWait = true;
+  }
+  return false;
 }
 
 type Target = {
@@ -61,6 +77,32 @@ type Target = {
   readonly conversation: Conversation;
   readonly threadId: ThreadId;
 };
+
+/** The thread's agent: the one its log pins (a handoff target too), else the channel's. */
+async function target(
+  ctx: HostContext,
+  tenant: string,
+  threadId: ThreadId,
+  next: InboxItem,
+): Promise<Target | undefined> {
+  const adapter = ctx.channels.get(next.channel);
+  if (adapter === undefined) return undefined;
+  const { log } = await ctx.open(tenant);
+  const main = log.mainBranch(threadId);
+  const read = main.ok ? log.read(main.value) : undefined;
+  const hosted =
+    read?.ok === true
+      ? ctx.agentOf(knownEvents(read.value))
+      : ctx.agents.get(adapter.agent);
+  if (hosted === undefined) return undefined;
+  const conversation = {
+    tenant,
+    channel: next.channel,
+    installation: next.installation_id,
+    address: next.item.address,
+  };
+  return { adapter, hosted, conversation, threadId };
+}
 
 async function item(
   ctx: HostContext,
@@ -73,8 +115,7 @@ async function item(
       return message(ctx, t, { ...next, item });
     case "decision":
     case "control":
-      await control(ctx, t, next);
-      return "done";
+      return applied(ctx, t, next);
     default:
       return assertNever(item);
   }
@@ -167,55 +208,72 @@ function input(next: Message, cause: EventId): EventDraft {
 }
 
 /**
- * A decision answers a challenge only from an approver the agent's policy names, arriving in
- * the conversation's own installation (its thread); without configured approvers, channel
- * approvals are refused. A control cancels. Either is consumed once.
+ * A decision from a principal with approval authority on the root run, or a cancel, appended
+ * with the item's consumption in one transaction. branch_busy keeps the item queued; any other
+ * refusal is final and consumes it with nothing appended.
  */
-async function control(
-  ctx: HostContext,
-  t: Target,
-  next: InboxItem,
-): Promise<void> {
-  const { tenant } = t.conversation;
-  const { db } = await storeConnection(ctx.store);
-  consumed(db, next.inbox_id, 0);
-  const thread = await openThread(ctx.storeFor(tenant), t.threadId);
-  if (!thread.ok) return;
-  const { item } = next;
-  const done = await applied(ctx, t, thread.value, item);
-  if (!done) return;
-  await ctx.resume(t.hosted, tenant, item.principal, {
-    id: thread.value.id,
-    branch: thread.value.branch,
-  });
-}
-
-type Thread = Extract<
-  Awaited<ReturnType<typeof openThread>>,
-  { ok: true }
->["value"];
-
 async function applied(
   ctx: HostContext,
   t: Target,
-  thread: Thread,
+  next: InboxItem,
+): Promise<"busy" | "done"> {
+  const { tenant } = t.conversation;
+  const { db } = await storeConnection(ctx.store);
+  const { item } = next;
+  const { log } = await ctx.open(tenant);
+  const main = log.mainBranch(t.threadId);
+  const plan = await planOf(ctx, t, item);
+  if (!main.ok || plan === undefined) {
+    consumed(db, next.inbox_id, 0);
+    return "done";
+  }
+  const alongside: Alongside = (added) => {
+    const record = added[0];
+    if (record?.kind === "event") consumed(db, next.inbox_id, record.event.seq);
+    return { ok: true, value: undefined };
+  };
+  const done = await control(log, main.value, item.principal, plan, alongside);
+  if (!done.ok) {
+    if (done.error.code === "branch_busy") return "busy";
+    consumed(db, next.inbox_id, 0);
+    return "done";
+  }
+  if (item.kind === "control")
+    await cancelChildren(log, t.threadId, item.principal);
+  await ctx.resume(t.hosted, tenant, item.principal, {
+    id: t.threadId,
+    branch: main.value,
+  });
+  return "done";
+}
+
+type PlanOf = Parameters<typeof control>[3];
+
+async function planOf(
+  ctx: HostContext,
+  t: Target,
   item: InboxItem["item"],
-): Promise<boolean> {
+): Promise<PlanOf | undefined> {
+  const { log } = await ctx.open(t.conversation.tenant);
   switch (item.kind) {
     case "decision": {
-      if (!ctx.mayApprove(t.hosted, item.principal, "channel")) return false;
-      const done =
-        item.decision === "grant"
-          ? await thread.approve(item.challenge_id, item.principal)
-          : await thread.deny(item.challenge_id, item.principal);
-      return done.ok;
+      const may = await ctx.mayApprove(
+        t.conversation.tenant,
+        t.threadId,
+        item.principal,
+      );
+      if (!may) return undefined;
+      return decide(
+        item.challenge_id,
+        item.principal,
+        log.now(),
+        item.decision === "grant" ? { grant: true } : { grant: false },
+      );
     }
     case "control":
-      return (
-        item.command === "cancel" && (await thread.cancel(item.principal)).ok
-      );
+      return item.command === "cancel" ? cancel(item.principal) : undefined;
     case "message":
-      return false;
+      return undefined;
     default:
       return assertNever(item);
   }

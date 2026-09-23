@@ -5,6 +5,7 @@ import {
   hostRunner,
   JsonValue,
   type KnownEvent,
+  knownEvents,
   openStore,
   type Principal,
   principalKey,
@@ -27,7 +28,7 @@ export type HostCeiling = NonNullable<
 
 export type HostedAgent = {
   readonly key: string;
-  readonly agent: Agent<never, unknown>;
+  readonly name: string;
   readonly runner: HostRunner;
 };
 
@@ -56,7 +57,7 @@ export class HostContext {
         const runner = hostRunner(agent);
         if (runner === undefined)
           throw new Error(`host agent ${key} was not made by agent()`);
-        return [key, { key, agent, runner }];
+        return [key, { key, name: agent.name, runner }];
       }),
     );
     this.channels = new Map(Object.entries(channels));
@@ -67,13 +68,28 @@ export class HostContext {
     return tenantStore(this.store, tenant);
   }
 
-  /** The agent a thread was started with, by its pinned agent_name. */
+  /**
+   * The agent a thread was started with, by its pinned agent_name: a host agent, else a handoff
+   * target one of them names (directly or through other targets), so a channel conversation that
+   * was handed off continues with the target.
+   */
   agentOf(events: readonly KnownEvent[]): HostedAgent | undefined {
     const started = events.find((e) => e.type === "thread_started");
     if (started?.type !== "thread_started") return undefined;
-    return [...this.agents.values()].find(
-      (a) => a.agent.name === started.data.agent_name,
-    );
+    const name = started.data.agent_name;
+    const queue = [...this.agents.values()];
+    const seen = new Set<HostRunner>();
+    for (const hosted of queue) {
+      if (hosted.name === name) return hosted;
+      if (seen.has(hosted.runner)) continue;
+      seen.add(hosted.runner);
+      for (const target of hosted.runner.targets) {
+        const runner = hostRunner(target);
+        if (runner !== undefined)
+          queue.push({ key: hosted.key, name: target.name, runner });
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -95,6 +111,9 @@ export class HostContext {
       const abort = new AbortController();
       this.#aborts.add(abort);
       try {
+        // A reply begun before a crash is reconciled through the channel's lookup first: the
+        // agent's recovery has no channel_send tool and would park it.
+        await this.#reply(tenant, thread);
         const result = await hosted.runner.execute(
           {
             store,
@@ -153,17 +172,45 @@ export class HostContext {
     await Promise.all(this.#lanes.values());
   }
 
-  /** Whether `principal` may answer this agent's challenges. */
-  mayApprove(
-    hosted: HostedAgent | undefined,
+  /**
+   * Whether `principal` has approval authority on this thread (spec/schema/README.md, "Approval
+   * authority"): the root run's approver set, reached by following thread_started.parent, so a
+   * descendant's own route never widens it. Unconfigured, only the root's originating principal.
+   */
+  async mayApprove(
+    tenant: string,
+    threadId: ThreadId,
     principal: Principal,
-    via: "api" | "channel",
-  ): boolean {
-    const approvers = hosted?.runner.approvers;
-    // Unconfigured: the host API's authenticated principals, and nobody over a channel.
-    if (approvers === undefined) return via === "api";
+  ): Promise<boolean> {
+    const root = await this.#root(tenant, threadId);
+    if (root === undefined) return false;
     const key = principalKey(principal);
-    return approvers.some((a) => principalKey(a) === key);
+    const approvers = this.agentOf(root)?.runner.approvers;
+    if (approvers !== undefined)
+      return approvers.some((a) => principalKey(a) === key);
+    const origin = root.findLast((e) => e.type === "user_input")?.actor
+      .principal;
+    return origin !== undefined && principalKey(origin) === key;
+  }
+
+  async #root(
+    tenant: string,
+    threadId: ThreadId,
+  ): Promise<readonly KnownEvent[] | undefined> {
+    const { log } = await this.open(tenant);
+    const main = log.mainBranch(threadId);
+    let branch = main.ok ? main.value : undefined;
+    while (branch !== undefined) {
+      const read = log.read(branch);
+      if (!read.ok) return undefined;
+      const events = knownEvents(read.value);
+      const started = events.find((e) => e.type === "thread_started");
+      const parent =
+        started?.type === "thread_started" ? started.data.parent : undefined;
+      if (parent === undefined) return events;
+      branch = parent.branch_id;
+    }
+    return undefined;
   }
 
   async open(tenant: string): Promise<Awaited<ReturnType<typeof openStore>>> {

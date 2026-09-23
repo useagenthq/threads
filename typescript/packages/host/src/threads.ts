@@ -167,6 +167,21 @@ const DECIDE_CODES = [
   "branch_busy",
 ];
 
+/** forbidden unless the caller has approval authority on the thread's root run. */
+async function authority(
+  call: Call,
+  thread: Thread,
+): Promise<Response | undefined> {
+  const may = await call.ctx.mayApprove(
+    call.principal.tenant,
+    thread.id,
+    call.principal,
+  );
+  return may
+    ? undefined
+    : failure("forbidden", "this principal may not approve for this run");
+}
+
 export async function decide(call: Call): Promise<Response> {
   const challenge = Uuid.safeParse(call.params["challenge_id"]);
   if (!challenge.success)
@@ -175,16 +190,8 @@ export async function decide(call: Call): Promise<Response> {
   if (o instanceof Response) return o;
   const body = await parsed(call, ApprovalDecision);
   if (body instanceof Response) return body;
-  const { log } = await call.ctx.open(call.principal.tenant);
-  const read = log.read(o.thread.branch);
-  const hosted = read.ok
-    ? call.ctx.agentOf(knownEvents(read.value))
-    : undefined;
-  if (!call.ctx.mayApprove(hosted, call.principal, "api"))
-    return failure(
-      "forbidden",
-      "this principal may not approve for this agent",
-    );
+  const refused = await authority(call, o.thread);
+  if (refused !== undefined) return refused;
   const done =
     body.decision === "grant"
       ? await o.thread.approve(challenge.data, call.principal, {
@@ -229,6 +236,9 @@ export async function resolveParked(call: Call): Promise<Response> {
   if (o instanceof Response) return o;
   const body = await parsed(call, ParkedResolution);
   if (body instanceof Response) return body;
+  // Either resolution accepts duplicate risk, so it needs approval authority.
+  const refused = await authority(call, o.thread);
+  if (refused !== undefined) return refused;
   const done = await o.thread.resolveParked(
     key,
     body.resolution,

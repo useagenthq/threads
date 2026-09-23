@@ -77,6 +77,15 @@ const ROUTES: readonly Route[] = [
   { method: "POST", path: new RegExp(`^${T}/mode$`), handler: threads.setMode },
 ];
 
+/** A path parameter's text, or undefined when a %-escape is malformed (client input). */
+function pathParam(raw: string): string | undefined {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function api(
   ctx: HostContext,
   authenticate: Authenticate | undefined,
@@ -93,8 +102,12 @@ export async function api(
   if (found === undefined)
     return failure("not_found", `no route ${url.pathname}`);
   const params: Record<string, string> = {};
-  for (const [k, v] of Object.entries(found.m?.groups ?? {}))
-    params[k] = decodeURIComponent(v);
+  for (const [k, v] of Object.entries(found.m?.groups ?? {})) {
+    const decoded = pathParam(v);
+    if (decoded === undefined)
+      return failure("invalid_request", `malformed escape in ${k}`);
+    params[k] = decoded;
+  }
   const call: threads.Call = {
     ctx,
     principal: principal.data,

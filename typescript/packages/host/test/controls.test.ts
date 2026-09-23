@@ -102,6 +102,16 @@ describe("controls and run authority", () => {
     expect(sent).toEqual(["bob"]);
   });
 
+  test("a malformed %-escape in a path parameter is 400 invalid_request", async () => {
+    h = harness({ agents: { support: mailer({ responses: [] }) } });
+    const r = await h.call("POST", "/v1/threads/%E0%A4%A/parked/k/resolve", {
+      as: alice,
+      body: { resolution: "assume_done" },
+    });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error.code).toBe("invalid_request");
+  });
+
   test("the host ceiling caps every run it starts", async () => {
     const sent: string[] = [];
     h = harness({

@@ -72,12 +72,26 @@ async function handOver(
 ): Promise<"done" | "busy"> {
   const moved = knownEvents(read).findLast((e) => e.type === "handoff");
   if (moved?.type !== "handoff") return "done";
+  const to = ThreadId.parse(moved.data.to_thread_id);
   const { db } = await storeConnection(ctx.store);
-  db.run(
-    "UPDATE channel_threads SET thread_id = ? WHERE tenant_id = ? AND thread_id = ?",
-    [moved.data.to_thread_id, tenant, threadId],
-  );
-  return reply(ctx, tenant, ThreadId.parse(moved.data.to_thread_id));
+  // The route and the items queued behind it move together; 0 rows means another process
+  // moved the route first, so it is re-read, never overwritten.
+  const routed = db.transaction(() => {
+    const rows = db.all(
+      `UPDATE channel_threads SET thread_id = ? WHERE tenant_id = ? AND thread_id = ?
+        RETURNING thread_id`,
+      [to, tenant, threadId],
+    );
+    if (rows.length > 0)
+      db.run(
+        `UPDATE inbox SET thread_id = ? WHERE tenant_id = ? AND thread_id = ?
+          AND consumed_seq IS NULL`,
+        [to, tenant, threadId],
+      );
+    return rows.length > 0;
+  });
+  if (!routed && conversationOf(db, tenant, to) === undefined) return "done";
+  return reply(ctx, tenant, to);
 }
 
 /** The derived calls with no result whose effect isn't parked. */

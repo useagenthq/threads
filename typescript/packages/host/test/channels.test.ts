@@ -282,14 +282,19 @@ describe("approvals over a channel", () => {
     expect(types.filter((t) => t === "approval_granted")).toHaveLength(1);
   });
 
-  test("without configured approvers a channel approval is refused", async () => {
+  test("without configured approvers only the run's originating sender approves", async () => {
     const { h, challenge } = await parked();
-    await post(h, hook("E2", [decision(challenge, "E2#0")]));
+    await post(h, hook("E2", [decision(challenge, "E2#0", mallory)]));
     await until(async () =>
       (await inbox(h)).every((r) => r.consumed_seq !== null),
     );
-    const types = (await threadEvents(h)).map((e) => e.type);
-    expect(types).not.toContain("approval_granted");
+    expect((await threadEvents(h)).map((e) => e.type)).not.toContain(
+      "approval_granted",
+    );
+    await post(h, hook("E3", [decision(challenge, "E3#0")]));
+    await until(async () =>
+      (await threadEvents(h)).some((e) => e.type === "approval_granted"),
+    );
   });
 
   test("a sender who is not an approver approves nothing", async () => {
