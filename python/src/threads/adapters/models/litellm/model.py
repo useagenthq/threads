@@ -91,13 +91,25 @@ class LiteLLMModel:
             async for raw in stream:
                 for chunk in assembler.feed(raw):
                     yield chunk
-        finally:
-            await stream.aclose()
+        except BaseException as outcome:
+            await _close(stream, outcome)
+            raise
+        await _close(stream, None)
         for chunk in assembler.finish():
             yield chunk
 
     async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
         return LookupUnknown("LiteLLM has no lookup by client request id")
+
+
+async def _close(stream: "_Stream", outcome: BaseException | None) -> None:
+    """Closes the stream without letting a close failure replace what the stream decided: an
+    error keeps its own type (the failure is noted on it), and a completed stream stays done."""
+    try:
+        await stream.aclose()
+    except Exception as failure:
+        if outcome is not None:
+            outcome.add_note(f"closing the stream also failed: {failure!r}")
 
 
 def _headers(error: sdk.APIStatusError) -> Mapping[str, str]:

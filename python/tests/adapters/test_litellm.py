@@ -239,3 +239,42 @@ def test_a_consumer_that_stops_early_closes_the_stream() -> None:
         assert body.closed
 
     asyncio.run(main())
+
+
+class Closing:
+    """A LiteLLM stream stand-in whose iteration and close can each fail."""
+
+    def __init__(self, items: list[JsonValue], fail: Exception | None = None) -> None:
+        self.items = items
+        self.fail = fail
+
+    async def __aiter__(self) -> AsyncIterator[JsonValue]:
+        for item in self.items:
+            yield item
+        if self.fail is not None:
+            raise self.fail
+
+    async def aclose(self) -> None:
+        raise OSError("close failed")
+
+
+def closing(stream: Closing) -> LiteLLMModel:
+    async def complete(**_: object) -> Closing:
+        return stream
+
+    return LiteLLMModel(INFO, complete)
+
+
+def test_a_failing_close_never_replaces_the_stream_error() -> None:
+    stopped: list[JsonValue] = [{"choices": [{"delta": {"content": "Hi"}, "finish_reason": None}]}]
+    model = closing(Closing(stopped, RuntimeError("mid-stream")))
+    with pytest.raises(RuntimeError, match="mid-stream") as raised:
+        run(model, one_turn())
+    assert any("close failed" in note for note in raised.value.__notes__)
+
+
+def test_a_failing_close_never_turns_a_completed_stream_into_an_error() -> None:
+    done: list[JsonValue] = [{"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]}]
+    chunks = run(closing(Closing(done)), one_turn())
+    assert chunks[0] == Delta("ok")
+    assert isinstance(chunks[-1], Done)
