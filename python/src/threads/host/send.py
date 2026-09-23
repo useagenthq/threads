@@ -7,7 +7,9 @@ otherwise it is unguarded, so an unknown outcome parks and is never re-sent. The
 fenced: the adapter's transport checks the run's lease where the request's first byte leaves.
 """
 
-from collections.abc import AsyncGenerator, Mapping, Sequence
+import asyncio
+import contextlib
+from collections.abc import AsyncGenerator, Coroutine, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import Final
@@ -88,8 +90,9 @@ class ChannelSend:
             raise AssertionError("a tool runs under its effect key")
         op: JsonObject = {**input, "address": self.to.address}
         try:
-            with bound(self.fence):
-                outcome = await self.to.adapter.perform(op, ctx.effect_key, self.to.credentials)
+            outcome = await _sent(
+                self.fence, self.to.adapter.perform(op, ctx.effect_key, self.to.credentials)
+            )
         except Exception as error:
             if refused(error):
                 # Refused at the send point: no byte of the request was written.
@@ -122,6 +125,40 @@ class ChannelSend:
             return None
         call = read.value.fold.calls.get(call_id)
         return None if call is None else {**call.data.input, "address": self.to.address}
+
+
+async def _sent[T](fence: Fence, perform: Coroutine[object, object, T]) -> T:
+    """`perform` under `fence`, riding out the run's cancellation (a stopping host) once one of
+    its requests passed the fence: it may still land, so the run keeps its lease until it
+    settles; released, a lookup elsewhere could find nothing and send again. One cancelled
+    before that is closed at the fence and stays begun, for the next run to reconcile."""
+    closed = False
+    passed = False
+
+    async def gate() -> bool:
+        nonlocal passed
+        # Closed is read after the lease check, so a stop during it still closes the gate.
+        if not await fence() or closed:
+            return False
+        passed = True
+        return True
+
+    async def fenced() -> T:
+        with bound(gate):
+            return await perform
+
+    sending = asyncio.ensure_future(fenced())
+    try:
+        return await asyncio.shield(sending)
+    except asyncio.CancelledError:
+        closed = True
+        if not passed:
+            sending.cancel()
+            raise
+        while not sending.done():
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.shield(sending)
+        raise
 
 
 @dataclass(frozen=True, slots=True)

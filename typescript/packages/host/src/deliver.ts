@@ -146,15 +146,17 @@ async function perform(s: Send): Promise<Performed> {
   const credentials: Record<string, string> = {};
   for (const [name, secret] of Object.entries(s.adapter.secrets))
     credentials[name] = secret.reveal();
-  // A begun send the host stops waiting on stays begun, so potentially sent: the next host
-  // reconciles it through the channel's lookup, never assumes it unsent.
-  const done = await untilStopped(
-    s.stopping,
-    dispatched(fenceOf(s.writer), () =>
-      s.adapter.perform(s.op, s.key, credentials),
-    ),
+  const gate = sendFence(s);
+  const sending = dispatched(gate.fence, () =>
+    s.adapter.perform(s.op, s.key, credentials),
   );
-  if (done === "stopped") return done;
+  const first = await untilStopped(s.stopping, sending);
+  // A send that never reached the fence is abandoned: the fence refuses it from now on, and it
+  // stays begun for the next host to reconcile. One that passed it may still land, so it keeps
+  // this writer's lease until it settles: released, a lookup elsewhere could find nothing and
+  // send again while this request is still on its way.
+  if (first === "stopped" && !gate.passed()) return first;
+  const done = first === "stopped" ? await sending : first;
   // A refused fence means this writer lost its lease: it appends and sends nothing more.
   if (done.refused) return "stale";
   if (!done.outcome.ok)
@@ -309,6 +311,31 @@ function fenceOf(writer: Writer): Fence {
             error: { code: "stale_epoch", message: live.error.message },
           };
     },
+  };
+}
+
+/**
+ * A send's fence: the lease's, closed once the host stops, and remembering whether a request
+ * passed it. Checked and marked in one step, so no request passes unseen after stop is decided.
+ */
+function sendFence(s: Send): { readonly fence: Fence; passed: () => boolean } {
+  const lease = fenceOf(s.writer);
+  let passed = false;
+  return {
+    fence: {
+      fence: async () => {
+        const live = await lease.fence();
+        if (!live.ok) return live;
+        if (s.stopping.aborted)
+          return {
+            ok: false,
+            error: { code: "stale_epoch", message: "the host is stopping" },
+          };
+        passed = true;
+        return live;
+      },
+    },
+    passed: () => passed,
   };
 }
 

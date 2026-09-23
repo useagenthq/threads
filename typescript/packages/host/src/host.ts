@@ -23,9 +23,12 @@ import { Watch } from "./watch";
 // host() (spec/api.json): binds agents to a store, channels
 // and schedules. It starts nothing until ready(), which confirms the bindings, sends nothing and
 // starts no run; after it, the host consumes durable intake and fires due schedules. stop()
-// first aborts: runs get their abort signal, no send begins, and no begun send or lookup is
-// waited on (it stays potentially sent, for the next host to reconcile). Then it waits for the
-// work in flight to return and releases leases.
+// first aborts: runs get their abort signal, and no send begins. A send whose request never
+// reached the transport fence is abandoned (it stays potentially sent, for the next host to
+// reconcile); one that passed the fence keeps its lease until it settles. Then stop() waits for
+// the work in flight to return and releases leases. It has no deadline of its own: a tool that
+// ignores its signal is waited on, since returning while it can still act would break the
+// fence. Deadlines belong at the tool or provider boundary.
 
 export type HostOptions = {
   readonly store: Store;
