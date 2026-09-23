@@ -1,5 +1,5 @@
 import { assertNever } from "../assert-never";
-import type { KnownEvent, Principal } from "../log";
+import { type KnownEvent, keyPart, type Principal } from "../log";
 import type { Authorization, ToolImpl } from "../loop/types";
 import { admitPaths } from "../memory/admit";
 import { principalAuthored } from "../memory/context";
@@ -30,13 +30,31 @@ type Config = {
   readonly knowledge: KnowledgeProvider | undefined;
 };
 
-/** Memory is per principal: never mixed across tenants, agents or users (C8). */
+/**
+ * Memory is per principal: never mixed across tenants, agents or users (C8). The parts are
+ * escaped, so ("a/b", "c") and ("a", "b/c") never share a scope.
+ */
 export function memoryScope(agent: string, principal: Principal): Scope {
   return {
     tenant_id: principal.tenant,
     agent,
-    scope: `${principal.issuer}/${principal.subject}`,
+    scope: `${keyPart(principal.issuer)}/${keyPart(principal.subject)}`,
   };
+}
+
+/**
+ * The scope a memory call acts in: the current input's principal (the latest user_input or
+ * steer), else the run's. In a shared thread each input is answered from its sender's memory.
+ */
+export function inputMemoryScope(
+  agent: string,
+  fallback: Principal,
+  events: readonly KnownEvent[],
+): Scope {
+  const input = events.findLast(
+    (e) => e.type === "user_input" || e.type === "steer",
+  );
+  return memoryScope(agent, input?.actor.principal ?? fallback);
 }
 
 /** Knowledge is the agent's corpus within the tenant. */
@@ -76,7 +94,15 @@ export async function bindProviders(
     tools: [
       ...(memory === undefined
         ? []
-        : memoryTools(memory, env(memoryScope(def.name, principal)))),
+        : memoryTools(memory, {
+            threadId: run.threadId,
+            bindings,
+            events: run.events,
+            // Read at each call: the current input's principal changes within a thread.
+            get scope(): Scope {
+              return inputMemoryScope(def.name, principal, run.events());
+            },
+          })),
       ...(knowledge === undefined
         ? []
         : knowledgeTools(knowledge, env(kScope))),

@@ -9,7 +9,7 @@ import {
   sqlite,
   tool,
 } from "../../src";
-import { memoryScope } from "../../src/agent/providers";
+import { inputMemoryScope, memoryScope } from "../../src/agent/providers";
 import { memoryProviderSuite } from "../../src/memory/conformance";
 import { bindMemory } from "../../src/memory/local-memory";
 import { err, ok } from "../../src/result";
@@ -270,6 +270,31 @@ describe("provider swap and provider errors (F3.5, F3.6)", () => {
       return typesOf(await eventsOf(b)).filter((t) => t !== "hook_decision");
     };
     expect(await run(listMemory().provider)).toEqual(await run(localMemory()));
+  });
+
+  test("the scope string escapes % and / so no two principals share one", () => {
+    const scope = (issuer: string, subject: string) =>
+      memoryScope("a", { issuer, tenant: "t", subject }).scope;
+    expect(scope("a/b", "c")).toBe("a%2Fb/c");
+    expect(scope("a", "b/c")).toBe("a/b%2Fc");
+    expect(scope("a%2Fb", "c")).toBe("a%252Fb/c");
+    expect(scope("api", "alice")).toBe("api/alice");
+  });
+
+  test("a memory call acts in the scope of the current input's principal", async () => {
+    // Alice's run: her input is current. A resume by another principal (an approver) doesn't
+    // change whose memory the turn uses.
+    const run = await saver(localMemory(), "allow", [say("hi")]).run("hi", {
+      store: sqlite(":memory:"),
+      principal: ALICE,
+    });
+    const events = await eventsOf(run);
+    expect(inputMemoryScope("agent", MALLORY, events)).toEqual(
+      memoryScope("agent", ALICE),
+    );
+    expect(inputMemoryScope("agent", MALLORY, [])).toEqual(
+      memoryScope("agent", MALLORY),
+    );
   });
 
   test("a provider can't declare its writes read_only: a write is an effect", async () => {

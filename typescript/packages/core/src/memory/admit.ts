@@ -42,7 +42,13 @@ export async function admitPaths(
         `knowledge path ${path}: ${String(error)}`,
       );
     }
-    const key = `${path}@${sha256Hex(content)}`;
+    // The provider key is the binding's record_id, per scope: another agent or tenant adding the
+    // same file is another ingest (spec/schema/README.md, "Knowledge ingest key").
+    const binding = bindings.issue(
+      "knowledge",
+      scope,
+      `${path}@${sha256Hex(content)}`,
+    );
     const done = await provider.ingest(
       scope,
       {
@@ -50,9 +56,9 @@ export async function admitPaths(
         media_type: TYPES[extname(path).toLowerCase()] ?? "text/plain",
         content,
         location: path,
-        binding: bindings.issue("knowledge", scope, key),
+        binding,
       },
-      key,
+      binding.record_id,
     );
     if (!done.ok)
       throw new ConfigError(

@@ -67,13 +67,15 @@ export type Principal = z.infer<typeof Principal>;
 /** The normalized `issuer/tenant/subject` of a principal; `/` and `%` escaped. */
 export type PrincipalKey = string & z.core.$brand<"PrincipalKey">;
 
+/** One part of a principal key or memory scope: `%` then `/` escaped. */
+export const keyPart = (s: string): string =>
+  s.replaceAll("%", "%25").replaceAll("/", "%2F");
+
 export function principalKey(p: Principal): PrincipalKey {
-  const part = (s: string): string =>
-    s.replaceAll("%", "%25").replaceAll("/", "%2F");
   return z
     .string()
     .brand<"PrincipalKey">()
-    .parse(`${part(p.issuer)}/${part(p.tenant)}/${part(p.subject)}`);
+    .parse(`${keyPart(p.issuer)}/${keyPart(p.tenant)}/${keyPart(p.subject)}`);
 }
 
 const ACTOR_KINDS = [

@@ -123,6 +123,27 @@ describe("ingest, search and cite (F14.1, F14.6)", () => {
     rmSync(dir, { recursive: true });
   });
 
+  test("a file another agent or tenant added is still added in this scope", async () => {
+    const { dir, paths } = corpus({ "faq.md": "Refunds take five days.\n" });
+    const store = sqlite(":memory:");
+    const kb = localKnowledge({ paths });
+    for (const [name, tenant] of [
+      ["support", "acme"],
+      ["sales", "acme"],
+      ["support", "globex"],
+    ] as const) {
+      const run = await agent({
+        name,
+        model: scriptedModel({
+          responses: [search("refunds", "c1"), say("?")],
+        }),
+        knowledge: kb,
+      }).run("refunds?", { store, principal: { ...ALICE, tenant } });
+      expect(injectedOf(await eventsOf(run))).toHaveLength(1);
+    }
+    rmSync(dir, { recursive: true });
+  });
+
   test("a removed source is excluded from new searches (F14.5)", async () => {
     const { dir, paths } = corpus({
       "parking.md": "Parking is on level two.\n",
