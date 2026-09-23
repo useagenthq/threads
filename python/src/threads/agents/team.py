@@ -65,7 +65,7 @@ def _create(lead: Runtime, task_id: str, args: TeamTaskCreateInput) -> Answer:
     blockers = [] if args.blocked_by is MISSING else [str(b) for b in args.blocked_by]
     unknown = [b for b in blockers if b not in lead.fold.tasks]
     if unknown:
-        return None, f"unknown blockers: {', '.join(unknown)}", True
+        return None, f"no task {unknown[0]}", True
     data: dict[str, JsonValue] = {"task_id": task_id, "subject": args.subject}
     data["blocked_by"] = list[JsonValue](blockers)
     if args.description is not MISSING:
@@ -90,7 +90,7 @@ def _claim(lead: Runtime, member: str, task_id: str) -> Answer:
 def _update(lead: Runtime, member: str, args: TeamTaskUpdateInput) -> Answer:
     task = lead.fold.tasks.get(args.task_id)
     done = f"{args.task_id} {args.status}"
-    if task is not None and task.owner == member and task.status == args.status:
+    if task is not None and task.status == args.status:
         return None, done, False
     if task is None or task.status != "claimed" or task.owner != member:
         return None, f"{args.task_id} is not claimed by {member}", True
