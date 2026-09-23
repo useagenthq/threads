@@ -18,6 +18,15 @@ openai = [
 litellm = [
     "litellm>=1.83.0,<2",
 ]
+e2b = [
+    "e2b>=2.51,<3",
+]
+daytona = [
+    "daytona>=0.216,<0.217",
+]
+modal = [
+    "modal>=1.5.5,<2",
+]
 
 [dependency-groups]
 dev = [
