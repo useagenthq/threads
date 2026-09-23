@@ -12,6 +12,10 @@ async def request(rt: Runtime, attempt_no: int) -> Halt | None:
     gated = await gates.before_request(rt) or await todos.remind(rt) or await ladder.fit(rt)
     if gated is not None:
         return None if gated == gates.AGAIN else gated
+    if rt.framework is not None:
+        delivered = await rt.framework.deliver(rt)
+        if delivered is not False:
+            return None if delivered is True else delivered
     sent = await attempt.request(rt, attempt_no)
     return sent if isinstance(sent, Failed) else None
 

@@ -16,7 +16,7 @@ from threads.reduce.handlers import to_json
 from threads.store import Draft
 
 type Origin = Literal[
-    "executed", "materialized_from_commit", "denied", "not_executed", "interrupted"
+    "executed", "materialized_from_commit", "denied", "not_executed", "interrupted", "deferred"
 ]
 
 _MARKER = (

@@ -6,8 +6,10 @@ store, the principal and the deps.
 
 import asyncio
 from collections.abc import AsyncIterator, Sequence
+from dataclasses import replace
 from typing import Required, TypedDict, Unpack, overload
 
+from threads.agents import narrowing
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress
 from threads.agents.config import ConfigError
@@ -43,6 +45,10 @@ class AgentOptions(TypedDict, total=False):
     """Write authority for save_memory and forget_memory; default "ask"."""
     knowledge: KnowledgeProvider
     """search_knowledge over host-ingested sources."""
+    subagents: "Sequence[Agent[None]]"
+    """Agents spawn_agent may start, by name; the team tools come with them."""
+    handoffs: "Sequence[Agent[None]]"
+    """Agents this one may hand the conversation to, pinned as policy.handoffs."""
 
 
 class ServerAgentOptions(AgentOptions, total=False):
@@ -100,6 +106,11 @@ class Agent[D]:
     @property
     def name(self) -> str:
         return self._definition.name
+
+    @property
+    def definition(self) -> Definition[D]:
+        """What this agent pins; a parent starts it as a subagent or handoff target."""
+        return self._definition
 
     def _deps(self, options: RunOptions[D]) -> D:
         if "deps" in options:
@@ -168,7 +179,10 @@ def _definition[T](
         options.get("memory_write", "ask"),
         options.get("knowledge"),
         servers,
+        tuple(replace(a.definition, member=True) for a in options.get("subagents", ())),
+        tuple(a.definition for a in options.get("handoffs", ())),
     )
+    narrowing.check(definition)
     for kind, names in (
         ("tool", [s.name for s in definition.specs()]),
         ("MCP server", [s.name for s in servers]),

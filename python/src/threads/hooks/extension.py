@@ -15,7 +15,7 @@ from threads.hooks.runner import Bound, Call, HookRunner
 from threads.hooks.types import HookName, Hooks, wire_name
 from threads.log import Event, JsonObject, ToolSpec
 from threads.loop.model import LookupResult
-from threads.loop.tools import Output
+from threads.loop.tools import Dispatched
 
 type Observer = Callable[[Event], Awaitable[None]]
 
@@ -73,7 +73,7 @@ class Namespaced:
     def invalid(self, input: JsonObject) -> str | None:
         return self.tool.invalid(input)
 
-    async def run(self, input: JsonObject, ctx: RunContext[None]) -> Output:
+    async def run(self, input: JsonObject, ctx: RunContext[None]) -> Dispatched:
         return await self.tool.run(input, ctx)
 
     async def lookup(self, effect_key: str, ctx: RunContext[None]) -> LookupResult[str]:

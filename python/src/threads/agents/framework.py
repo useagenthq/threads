@@ -1,0 +1,62 @@
+"""The framework tools of one run, as the loop's `Framework`: spawn_agent, handoff and
+the team tools each advance their call on the log; background children run beside the loop and
+are all settled before the run gives its lease back."""
+
+import asyncio
+from typing import Final
+
+from threads.agents.handoff import handoff
+from threads.agents.scope import Scope
+from threads.agents.spawn import Tasks, spawn, start_background
+from threads.agents.team import deliver, team_tool
+from threads.log import AgentSpawnedEvent
+from threads.loop.history import CallState
+from threads.loop.runtime import Halt, Runtime
+from threads.tools import TEAM
+
+NAMES: Final = TEAM | {"spawn_agent", "handoff"}
+
+
+class Agents[D]:
+    def __init__(self, scope: Scope[D]) -> None:
+        self._scope = scope
+        self._tasks: Tasks = {}
+
+    @property
+    def names(self) -> frozenset[str]:
+        return NAMES
+
+    async def run(self, rt: Runtime, state: CallState) -> Halt | None:
+        match state.call.data.name:
+            case "spawn_agent":
+                return await spawn(self._scope, rt, state, self._tasks)
+            case "handoff":
+                return await handoff(self._scope, rt, state)
+            case _:
+                return await team_tool(self._scope, rt, state)
+
+    async def flush(self, rt: Runtime) -> Halt | None:
+        """Restarts a background child a crash left running: the log says it was spawned and
+        never finished, and nothing in this process runs it."""
+        for child, running in rt.fold.children.items():
+            if running is False and child not in self._tasks:
+                spawned = next(
+                    e
+                    for e in rt.events
+                    if isinstance(e, AgentSpawnedEvent) and e.data.child_thread_id == child
+                )
+                if spawned.data.mode == "background":
+                    start_background(self._scope, rt, spawned, self._tasks)
+        return None
+
+    async def deliver(self, rt: Runtime) -> Halt | bool:
+        return await deliver(self._scope, rt)
+
+    async def finish(self, rt: Runtime) -> None:
+        """Every background child reaches its result before the run ends (v0.1 has no detached
+        work), so its agent_finished and tool_result_late are recorded under this lease."""
+        await self.flush(rt)
+        while self._tasks:
+            pending = list(self._tasks.values())
+            self._tasks.clear()
+            await asyncio.gather(*pending)

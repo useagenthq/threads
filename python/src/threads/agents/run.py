@@ -7,13 +7,14 @@ import uuid
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Final, TypedDict
+from typing import Final, TypedDict
 
-from threads.agents.bindings import AppTool, AppTools, Fence, authorize
+from threads.agents.bindings import AppTool, AppTools, Fence, capped
 from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
-from threads.agents.config import ConfigError
 from threads.agents.context import RunContext
 from threads.agents.definition import Definition
+from threads.agents.framework import Agents
+from threads.agents.launch import Launch
 from threads.agents.outcome import result
 from threads.agents.results import (
     EventItem,
@@ -24,34 +25,21 @@ from threads.agents.results import (
     StreamEvent,
     Thread,
 )
+from threads.agents.scope import Execute, Scope
+from threads.agents.start import handed_off, launched, prepare, record_input, wants_input
 from threads.agents.store import Store, now_ms, open_store, sqlite
 from threads.hooks.extension import bind, extension_tools
 from threads.hooks.observers import ObserverPump
-from threads.log import (
-    BranchId,
-    Budget,
-    InputPart,
-    ParseError,
-    Principal,
-    ThreadId,
-    ThreadStartedEvent,
-)
+from threads.log import BranchId, Budget, InputPart, ParseError, Principal, ThreadId
 from threads.loop import gates
-from threads.loop.drafts import draft
 from threads.loop.drive import drive
-from threads.loop.recovery import recover
-from threads.loop.runtime import Halt, Idle, RunErrorCode, Runtime, lost
+from threads.loop.runtime import Idle, RunErrorCode, Runtime
 from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, memory_scope, provider_tools
-from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import SqliteStore, StoredEvent, Writer
 from threads.store.lines import uuid7
 from threads.tools import ReadResults
-
-if TYPE_CHECKING:
-    from pydantic import JsonValue
-
 
 LOCAL_OPERATOR: Final = Principal(issuer="api", tenant="local", subject="operator")
 """The default principal of a local run."""
@@ -85,14 +73,20 @@ class _Stream:
         await asyncio.sleep(max(0, when - now_ms()) / 1000)
 
 
-async def execute[D](
-    definition: Definition[D], input: Input, options: RunOptions[D], deps: D, emit: Emit
+async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launched
+    definition: Definition[D],
+    input: Input,
+    options: RunOptions[D],
+    deps: D,
+    emit: Emit,
+    launch: Launch | None = None,
 ) -> RunResult[str]:
     thread = options.get("thread")
     store = options.get("store") or (thread.store if thread is not None else sqlite(".threads"))
     sq = await open_store(store)
     # Each run is its own executor: a second run on a busy branch is branch_busy.
-    opened = await _open(sq, thread, uuid.uuid4().hex)
+    holder = uuid.uuid4().hex
+    opened = await (_open(sq, thread, holder) if launch is None else launched(sq, launch, holder))
     if isinstance(opened, Err):
         handle = thread or Thread(ThreadId(uuid7(now_ms())), BranchId(uuid7(now_ms())), store)
         return Failed(RunError(_refusal(opened.error), opened.error.message), handle)
@@ -104,14 +98,15 @@ async def execute[D](
             raise AssertionError("an acquired branch has a thread")
         sandbox = definition.sandbox or (None if thread is None else thread.sandbox)
         handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox)
-        principal = options.get("principal", LOCAL_OPERATOR)
+        principal = options.get("principal", LOCAL_OPERATOR) if launch is None else launch.principal
         ctx = RunContext(deps, handle.id, handle.branch, principal)
         observers = {e.name: e.on for e in definition.extensions}
         pump = ObserverPump(sq.cursors, writer.branch_id, lambda: writer.fold.events, observers)
         pump.poke()
         stream = _Stream(emit, pump)
         box = definition.sandbox
-        builtins = None if box is None else sandbox_tools(sq, box, writer, now_ms)
+        shared = None if launch is None else launch.shared
+        builtins = shared or (None if box is None else sandbox_tools(sq, box, writer, now_ms))
         results = ReadResults(sq, lambda: writer.fold.events)
         scope = memory_scope(definition.name, principal)
         providers = Providers(definition.memory, definition.knowledge)
@@ -120,26 +115,42 @@ async def execute[D](
         hook_ctx = RunContext(None, handle.id, handle.branch, principal)
         ext = AppTools(extension_tools(definition.extensions), hook_ctx)
         tools = Routed(builtins, results, AppTools(definition.tools, ctx), provided, ext)
+        frame = Scope(
+            definition,
+            principal,
+            store,
+            sq,
+            _child_runner(store),
+            () if launch is None else launch.ceilings,
+            builtins,
+            None if launch is None else launch.team,
+        )
+        agents = Agents(frame)
         rt = Runtime(
             sq,
             writer,
             definition.model,
             tools,
-            with_memory_write(authorize, definition.memory_write),
+            with_memory_write(capped(frame.ceilings), definition.memory_write),
             now_ms,
             stream.wait_until,
             observe=stream.observe,
             read_file=None if builtins is None else builtins.read_file,
             hooks=bind(definition.extensions, hook_ctx),
+            budgets=() if launch is None else launch.budgets,
+            framework=agents,
         )
-        halt = await _prepare(rt, definition, fresh=fresh)
-        if halt is None:
-            halt = await _input(rt, input, principal, options.get("budget"))
+        halt = await prepare(rt, definition, fresh=fresh, launch=launch)
+        if halt is None and not rt.fold.handed_off and wants_input(rt, launch):
+            halt = await record_input(rt, input, principal, options.get("budget"), launch)
         halt = halt or await drive(rt)
-        if isinstance(halt, Idle) and box is not None and builtins is not None:
+        await agents.finish(rt)
+        if isinstance(halt, Idle) and box is not None and builtins is not None and shared is None:
             revision = None if provided is None else await provided.knowledge_revision()
             await snapshot_turn_end(sq, writer, box, builtins, now_ms, knowledge_revision=revision)
         await gates.observe(rt, "session_end")
+        if rt.fold.handed_off:
+            return await handed_off(frame, rt, handle)
         return result(rt, halt, handle)
 
 
@@ -212,48 +223,14 @@ def _refusal(error: ParseError) -> RunErrorCode:
     return "branch_busy" if error.code in ("branch_busy", "stale_epoch") else "branch_not_runnable"
 
 
-async def _prepare[D](rt: Runtime, definition: Definition[D], *, fresh: bool) -> Halt | None:
-    """A new thread pins its config; a continued one first recovers and finishes an open turn."""
-    started, config = definition.pin()
-    if fresh:
-        # The resolved config, hooks included, is durable in the content-addressed store under
-        # its config_hash before the pin that names it.
-        await rt.store.put_artifact(config)
-        done = await rt.append(draft("thread_started", started))
-        return (
-            lost(done.error) if isinstance(done, Err) else await gates.session_start(rt, "startup")
-        )
-    _check_pin(rt, started["config_hash"])
-    halt = await recover(rt)
-    if halt is None and rt.fold.in_turn:
-        halt = await drive(rt)
-    # A turn that ended is out of the way; a park or a failure is this run's result.
-    if halt is None or isinstance(halt, Idle):
-        return await gates.session_start(rt, "resume")
-    return halt
+def _child_runner(store: Store) -> Execute:
+    """How this run starts a launched thread: the same pipeline, in the same store."""
+
+    async def run(definition: Definition[None], text: str, launch: Launch) -> RunResult[str]:
+        return await execute(definition, text, {"store": store}, None, _drop, launch)
+
+    return run
 
 
-def _check_pin(rt: Runtime, config_hash: object) -> None:
-    """A pin never changes in place: continuing a thread needs the config it started with, checked
-    before recovery can dispatch anything."""
-    pinned = next((e for e in rt.events if isinstance(e, ThreadStartedEvent)), None)
-    if pinned is not None and pinned.data.config_hash != config_hash:
-        raise ConfigError(
-            "invalid_config",
-            "this thread was started with another config; a config change starts a new thread",
-        )
-
-
-async def _input(
-    rt: Runtime, input: Input, principal: Principal, budget: Budget | None
-) -> Halt | None:
-    data: dict[str, JsonValue] = {"source": "api"}
-    if isinstance(input, str):
-        data["text"] = input
-    else:
-        data["content"] = [to_json(part) for part in input]
-    if budget is not None:
-        data["budget"] = to_json(budget)
-    actor: dict[str, JsonValue] = {"kind": "user", "principal": to_json(principal)}
-    done = await rt.append(replace(draft("user_input", data), actor=actor))
-    return lost(done.error) if isinstance(done, Err) else None
+def _drop(_item: StreamEvent) -> None:
+    pass

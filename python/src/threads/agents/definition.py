@@ -38,6 +38,12 @@ class Definition[D]:
     knowledge: KnowledgeProvider | None = None
     servers: tuple[ToolServer, ...] = ()
     """Tool servers (MCP); their tools join `tools` when a run connects them."""
+    subagents: "tuple[Definition[None], ...]" = ()
+    """What spawn_agent may start, by name."""
+    handoffs: "tuple[Definition[None], ...]" = ()
+    """What handoff may hand the conversation to, pinned as policy.handoffs (item 2)."""
+    member: bool = False
+    """Started as a subagent: a team member, offered the team tools (item 3)."""
 
     def policy(self) -> dict[str, JsonValue]:
         """The resolved runtime policy: each section absent (ADR defaults) or complete."""
@@ -50,17 +56,23 @@ class Definition[D]:
             pinned["retry"] = to_json(self.retry)
         if self.context is not None:
             pinned["context"] = to_json(self.context)
+        if self.handoffs:
+            pinned["handoffs"] = [h.name for h in self.handoffs]
         return pinned
 
     def specs(self) -> tuple[ToolSpec, ...]:
         """Built-ins sorted by name (read_tool_result always, the sandbox tools with a
-        sandbox, memory and knowledge tools with a provider), then app tools in declared order
-        and MCP tools sorted by name, then extension tools sorted by namespaced name ()."""
+        sandbox, memory and knowledge tools with a provider, framework tools as offered), then
+        app tools in declared order and MCP tools sorted by name, then extension tools sorted by
+        namespaced name."""
         builtins = specs(
             sandbox=self.sandbox is not None,
             egress_denied=egress_denied(self.egress),
             memory=writes(self.memory),
             knowledge=self.knowledge is not None,
+            spawn=bool(self.subagents),
+            team=bool(self.subagents) or self.member,
+            handoffs=bool(self.handoffs),
         )
         ext = extension_tools(self.extensions)
         return (*builtins, *(t.spec() for t in self.tools), *(t.spec() for t in ext))
@@ -93,6 +105,10 @@ class Definition[D]:
         if self.memory is not None:
             # Write authority is config: a changed policy is a changed pin.
             config["memory_write"] = self.memory_write
+        if self.subagents:
+            # What a child may do is part of what this thread may do: a changed subagent is a
+            # changed config.
+            config["subagents"] = [s.pin()[0]["config_hash"] for s in self.subagents]
         text = canonicalize(config)
         if not isinstance(text, Ok):
             raise AssertionError("a definition built from parsed models always canonicalizes")

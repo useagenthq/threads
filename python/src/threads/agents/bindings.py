@@ -8,6 +8,7 @@ from typing import Final, Protocol, runtime_checkable
 from threads.agents.context import RunContext
 from threads.log import JsonObject, Permissions, ToolCallData, ToolSpec
 from threads.loop.model import LookupResult, LookupUnknown
+from threads.loop.runtime import Authorize
 from threads.loop.tools import Dispatched, Invocation, Termination
 from threads.permissions import Call, Category, Decision, decide
 from threads.reduce import Fold
@@ -35,6 +36,7 @@ DEFAULT_PERMISSIONS: Final = Permissions(
     allow_bypass=False,
     plan_exit_mode="default",
 )
+_RANK: Final = {"allow": 0, "ask": 1, "deny": 2}
 _EDITS = frozenset({"write", "edit", "apply_patch", "notebook_edit"})
 
 
@@ -113,11 +115,33 @@ def category(spec: ToolSpec) -> Category:
     return "edit" if spec.name in _EDITS else "other"
 
 
+def permissions(fold: Fold) -> Permissions:
+    """The pinned permissions, or the defaults."""
+    pinned = policy(fold)
+    if pinned is not None and isinstance(pinned.permissions, Permissions):
+        return pinned.permissions
+    return DEFAULT_PERMISSIONS
+
+
 def authorize(fold: Fold, call: ToolCallData, spec: ToolSpec) -> Decision:
     """The fold against the pinned permissions and the current mode."""
-    pinned = policy(fold)
-    permissions = DEFAULT_PERMISSIONS
-    if pinned is not None and isinstance(pinned.permissions, Permissions):
-        permissions = pinned.permissions
     request = Call(spec.name, category(spec), dict(call.input))
-    return decide(permissions, WORKSPACE, fold.mode, request)
+    return decide(permissions(fold), WORKSPACE, fold.mode, request)
+
+
+def capped(ceilings: Sequence[Permissions]) -> Authorize:
+    """Each call decided under the thread's own policy and under every ceiling (each ancestor of
+    a subagent, a handoff target's principal and host), each in its own mode; the strictest wins
+   ."""
+    if not ceilings:
+        return authorize
+
+    def decide_all(fold: Fold, call: ToolCallData, spec: ToolSpec) -> Decision:
+        request = Call(spec.name, category(spec), dict(call.input))
+        decided = decide(permissions(fold), WORKSPACE, fold.mode, request)
+        for ceiling in ceilings:
+            cap = decide(ceiling, WORKSPACE, ceiling.mode, request)
+            decided = cap if _RANK[cap.decision] > _RANK[decided.decision] else decided
+        return decided
+
+    return decide_all

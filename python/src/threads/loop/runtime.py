@@ -98,6 +98,14 @@ class Framework(Protocol):
 
     async def run(self, rt: "Runtime", state: CallState) -> "Halt | None": ...
 
+    async def flush(self, rt: "Runtime") -> "Halt | None":
+        """Records what finished in the background (a child's result) at a step boundary."""
+        ...
+
+    async def deliver(self, rt: "Runtime") -> "Halt | bool":
+        """Before a turn request: delivers pending team messages; True when it appended."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class Runtime:

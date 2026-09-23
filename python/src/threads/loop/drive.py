@@ -8,11 +8,14 @@ from typing import TYPE_CHECKING, assert_never
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import (
+    AgentFinishedEvent,
+    AgentSpawnedEvent,
     CancelledEvent,
     CancelRequestedEvent,
     CompactionFailedEvent,
     ContextEditedEvent,
     Event,
+    HandoffEvent,
     HookDecisionEvent,
     LogRepairedEvent,
     ModelAttemptAbandonedEvent,
@@ -24,7 +27,12 @@ from threads.log import (
     ParkEscalatedEvent,
     ResumedEvent,
     RetryScheduledEvent,
+    TeamMessageEvent,
+    TeamTaskClaimedEvent,
+    TeamTaskCreatedEvent,
+    TeamTaskUpdatedEvent,
     ToolResultEvent,
+    ToolResultLateEvent,
     TurnCompletedEvent,
 )
 from threads.loop import calls, gates, retries, tool_gates
@@ -40,6 +48,14 @@ if TYPE_CHECKING:
     from pydantic import JsonValue
 
 _NEUTRAL = (
+    AgentSpawnedEvent,
+    AgentFinishedEvent,
+    ToolResultLateEvent,
+    TeamTaskCreatedEvent,
+    TeamTaskClaimedEvent,
+    TeamTaskUpdatedEvent,
+    TeamMessageEvent,
+    HandoffEvent,
     LogRepairedEvent,
     ParkedEvent,
     ParkEscalatedEvent,
@@ -48,14 +64,16 @@ _NEUTRAL = (
     HookDecisionEvent,
     ContextEditedEvent,
 )
-"""Events that never decide what comes next: a gate re-reads its own decisions from the log."""
+"""Events that never decide what comes next: a gate re-reads its own decisions from the log, and
+team and child records can land between any two steps."""
 
 
 async def drive(rt: Runtime) -> Halt:
     """Runs until the open turn ends (`Idle`), the branch parks, or the run fails. The run keeps
     the lease renewed meanwhile (threads.agents.run)."""
     while True:
-        halt = await _step(rt)
+        flushed = None if rt.framework is None else await rt.framework.flush(rt)
+        halt = flushed or await _step(rt)
         if halt is not None:
             if isinstance(halt, Parked):
                 await _notify_parked(rt)
