@@ -56,6 +56,11 @@ class SandboxTools:
         self._limits = limits
 
     @property
+    def opened(self) -> SandboxSession | None:
+        """The session, once a dispatch opened it."""
+        return self._session
+
+    @property
     def _box(self) -> SandboxSession:
         if self._session is None:
             raise AssertionError("a dispatch opens the session first")

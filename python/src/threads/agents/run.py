@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final, TypedDict
 
 from threads.agents.bindings import AppTools, authorize
-from threads.agents.builtins import Routed, sandbox_tools
+from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
 from threads.agents.config import ConfigError
 from threads.agents.context import RunContext
 from threads.agents.definition import Definition
@@ -94,14 +94,16 @@ async def execute[D](
         thread_id = writer.fold.thread_id
         if thread_id is None:
             raise AssertionError("an acquired branch has a thread")
-        sandbox = None if thread is None else thread.sandbox
+        sandbox = definition.sandbox or (None if thread is None else thread.sandbox)
         handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox)
         principal = options.get("principal", LOCAL_OPERATOR)
         ctx = RunContext(deps, handle.id, handle.branch, principal)
         stream = _Stream(emit)
         tools: ToolRunner = AppTools(definition.tools, ctx)
-        if definition.sandbox is not None:
-            tools = Routed(sandbox_tools(sq, definition.sandbox, writer, now_ms), tools)
+        box = definition.sandbox
+        builtins = None if box is None else sandbox_tools(sq, box, writer, now_ms)
+        if builtins is not None:
+            tools = Routed(builtins, tools)
         rt = Runtime(
             sq,
             writer,
@@ -115,7 +117,10 @@ async def execute[D](
         halt = await _prepare(rt, definition, fresh=fresh)
         if halt is None:
             halt = await _input(rt, input, principal, options.get("budget"))
-        return result(rt, halt or await drive(rt), handle)
+        halt = halt or await drive(rt)
+        if isinstance(halt, Idle) and box is not None and builtins is not None:
+            await snapshot_turn_end(sq, writer, box, builtins, now_ms)
+        return result(rt, halt, handle)
 
 
 @asynccontextmanager

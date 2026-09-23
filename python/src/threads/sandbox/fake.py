@@ -2,7 +2,7 @@
 conformance SandboxScript. Snapshots copy the file tree; a scripted snapshot restores into its
 `restore_sandbox_id`, and may lose the restore's answer after creating the sandbox."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Literal, NotRequired, TypedDict
 
@@ -64,6 +64,11 @@ class FakeSandbox:
     releases: int = 0
     """Release and close calls that passed their fence and reached the provider."""
     provider: str = "fake"
+    around_capture: tuple[Callable[[FakeSession], None], Callable[[FakeSession], None]] | None = (
+        None
+    )
+    """Test hook for the next capture: runs the first just before the image is taken and the
+    second just after, both after the manifest was measured."""
     _live: dict[str, FakeSession] = field(default_factory=dict[str, FakeSession])
     _snapshots: dict[str, _Snapshot] = field(default_factory=dict[str, _Snapshot])
     _by_key: dict[str, SandboxSession | SnapshotData] = field(
@@ -173,8 +178,15 @@ class FakeSandbox:
 
     def _capture(self, session: FakeSession, key: str) -> SnapshotData:
         name = self._name("snap")
+        # The manifest is measured on the running sandbox; the image is what the capture took.
+        # They differ when a write lands in between (the A-B-A schedule, ).
         manifest = manifest_of(session.files)
-        self._snapshots[name] = _Snapshot(dict(session.files), manifest)
+        before, after = self.around_capture or (_nothing, _nothing)
+        self.around_capture = None
+        before(session)
+        image = dict(session.files)
+        after(session)
+        self._snapshots[name] = _Snapshot(image, manifest_of(image))
         data: dict[str, JsonValue] = {
             "snapshot_id": name,
             "provider": self.provider,
@@ -205,6 +217,10 @@ class FakeSandbox:
     def _name(self, prefix: str) -> str:
         self._next += 1
         return f"{prefix}_{self._next}"
+
+
+def _nothing(_session: FakeSession) -> None:
+    pass
 
 
 def fake_sandbox(script: Mapping[str, JsonValue] | None = None) -> FakeSandbox:

@@ -14,6 +14,7 @@ from threads.sandbox.ledger import Tracked, acquire
 from threads.sandbox.protocol import Sandbox, SandboxError, SandboxSession
 from threads.store import SqliteStore, Writer
 from threads.store.worker import Clock
+from threads.thread.snapshot import take_snapshot
 from threads.tools import NAMES, SandboxTools
 
 type Egress = Sequence[str] | Literal["unenforced"]
@@ -53,6 +54,17 @@ def sandbox_tools(
         store,
         lambda: context(writer.fold).spill,
     )
+
+
+async def snapshot_turn_end(
+    store: SqliteStore, writer: Writer, sandbox: Sandbox, tools: SandboxTools, clock: Clock
+) -> None:
+    """The end-of-turn snapshot policy: a turn that used the sandbox ends at a fork point. The
+    capture goes through `take_snapshot` (quiescence under the writer, ledger rows, the image
+    proven by a restore); nothing else appends a snapshot. The run's loop has returned, so no
+    append or dispatch can interleave. A refused capture appends nothing."""
+    if tools.opened is not None and sandbox.info.capture_classes:
+        await take_snapshot(store, writer, sandbox, tools.opened, clock)
 
 
 class Routed:

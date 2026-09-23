@@ -111,7 +111,7 @@ class LocalSession:
 LOCAL_INFO = SandboxInfo(
     provider="local",
     egress="enforced",
-    capture_classes=("filesystem",),
+    capture_classes=(),
     browser="none",
     desktop="none",
     lookup=LookupSupport(create="final", snapshot="none"),

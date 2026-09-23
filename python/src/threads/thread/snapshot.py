@@ -8,6 +8,9 @@ captured). The scratch sandbox is a provider resource like any other: its
 own pending row before the restore, live after, released after; a crash in between is settled
 by lookup or parks as unknown, and a failed close stays release_failed for gc."""
 
+from dataclasses import dataclass, field
+from typing import Final
+
 from threads.log import ParseError, SnapshotData, SnapshotEvent
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
@@ -15,6 +18,22 @@ from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, release_se
 from threads.sandbox.protocol import Sandbox, SandboxError, SandboxSession, is_refusal
 from threads.store import Draft, SqliteStore, Writer
 from threads.store.worker import Clock
+
+_PROOF: Final = object()
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedSnapshot:
+    """A capture whose image a ledgered restore proved to hold its manifest. Only
+    `verify_image` makes one; a provider's raw `SnapshotData` is a candidate, never a fork
+    point."""
+
+    data: SnapshotData
+    proof: object = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if self.proof is not _PROOF:
+            raise TypeError("only verify_image proves a snapshot")
 
 
 async def take_snapshot(
@@ -43,18 +62,19 @@ async def take_snapshot(
     verified = await verify_image(by, sandbox, data)
     if isinstance(verified, Err):
         return verified
-    if not verified.value:
+    if verified.value is None:
         await abandon(by, sandbox, row)
         message = f"the image of {data.snapshot_id} doesn't hold manifest {data.manifest_hash}"
         return Err(SandboxError("not_quiescent", message))
-    return await _append(writer, data)
+    return await _append(writer, verified.value)
 
 
 async def verify_image(
     by: Fenced, sandbox: Sandbox, data: SnapshotData
-) -> Ok[bool] | Err[ParseError | SandboxError]:
-    """Whether a ledgered restore of the image verifies against its manifest hash. The scratch
-    sandbox is released either way; an error is only a lost authority or a ledger failure."""
+) -> Ok[VerifiedSnapshot | None] | Err[ParseError | SandboxError]:
+    """The capture, proven, when a ledgered restore of the image verifies against its manifest
+    hash; None when it doesn't. The scratch sandbox is released either way; an error is only a
+    lost authority or a ledger failure."""
     context = by.context
     restore = Tracked(
         "sandbox",
@@ -68,14 +88,17 @@ async def verify_image(
         error = got.error
         lost = isinstance(error, ParseError) or is_refusal(error)
         # Anything else (a mismatch, a failed or unresolvable restore) proves nothing.
-        return got if lost else Ok(False)
+        return got if lost else Ok(None)
     row, scratch = got.value
     released = await release_session(by, row, scratch)
-    return released if isinstance(released, Err) else Ok(True)
+    return released if isinstance(released, Err) else Ok(VerifiedSnapshot(data, _PROOF))
 
 
-async def _append(writer: Writer, data: SnapshotData) -> Ok[SnapshotEvent] | Err[ParseError]:
-    wire = to_json(data)
+async def _append(
+    writer: Writer, verified: VerifiedSnapshot
+) -> Ok[SnapshotEvent] | Err[ParseError]:
+    """Only a proven capture becomes a `snapshot` event, the one kind of fork point."""
+    wire = to_json(verified.data)
     if not isinstance(wire, dict):
         raise TypeError("snapshot data is an object")
     appended = await writer.append([Draft("snapshot", wire)])
