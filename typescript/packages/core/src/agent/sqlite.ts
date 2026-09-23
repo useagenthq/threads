@@ -99,7 +99,7 @@ async function connect(store: Store): Promise<OpenStore> {
   const artifacts = memory
     ? memoryArtifacts()
     : fileArtifacts(join(path, "artifacts"));
-  const db = openBunSqlite(memory ? path : join(path, "log.db"));
+  const db = openBunSqlite(memory ? path : join(path, "threads.db"));
   connections.set(store, { db, now: Date.now });
   const log = LogStore.open(db, Date.now, artifacts);
   if (!log.ok) throw new Error(`store ${path}: ${log.error.message}`);

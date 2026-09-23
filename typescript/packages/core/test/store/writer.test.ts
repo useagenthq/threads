@@ -59,6 +59,20 @@ describe("append", () => {
     unwrap(writer.append([started]));
   });
 
+  test("an alongside callback that fails appends nothing (idempotency receipts)", () => {
+    const { store, writer } = rootWithWriter();
+    unwrap(writer.append([started]));
+    const refused = writer.append([userInput("hi")], () => ({
+      ok: false,
+      error: { code: "invalid_request", message: "the key was taken" },
+    }));
+    expect(refused.ok ? "ok" : refused.error.code).toBe("invalid_request");
+    expect(unwrap(store.read(ROOT)).fold.seq).toBe(1);
+    expect(writer.chain.fold.seq).toBe(1);
+    unwrap(writer.append([userInput("hi")]));
+    expect(unwrap(store.read(ROOT)).fold.seq).toBe(2);
+  });
+
   test("a draft that fails its schema is an invalid line", () => {
     const { writer } = rootWithWriter();
     const bad = writer.append([
