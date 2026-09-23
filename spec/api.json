@@ -1146,7 +1146,7 @@
         "saveCase": {
           "ts": "saveCase",
           "py": "save_case",
-          "doc": "Writes a conformance case directory in exactly the spec/conformance layout, so the same runners replay it: case.json, expected.json, log.threads-ts.jsonl and log.threads-py.jsonl with matching expected.<impl>.json, artifacts/ and stubs.json. The kind is stub: external effects replay from stubs.json and unmatched invocations fail closed. The directory is validated against case.schema.json before the call returns.",
+          "doc": "Writes a conformance case directory in exactly the spec/conformance layout, so the same runners replay it: case.json (with expect and input.text), log.threads-ts.jsonl and log.threads-py.jsonl with matching expected.<impl>.json, artifacts/, model.json and stubs.json. The kind is stub: external effects replay from stubs.json and unmatched invocations fail closed. The case is built from typed values, so it is valid against case.schema.json by construction; core carries no JSON Schema evaluator, and both languages' tests validate every saved case against case.schema.json.",
           "source": "",
           "async": true,
           "params": [

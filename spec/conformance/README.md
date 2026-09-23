@@ -35,7 +35,8 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 | `kind` | `reduce`, `render`, `recover`, `fork`, `stub`, `intake`, `policy`, `security` or `parity` |
 | `clock.now` | The injected clock. Runners never read wall time |
 | `model_script`, `sandbox_script`, `stub_script` | Present when the case needs them |
-| `input` | Kind-specific input: `fork_at_event_id`, `new_branch_id` and optional `knowledge_policy` (fork; absent means `pinned`), `webhooks` (intake), `workspace`, `permissions` and `calls` (policy) |
+| `input` | Kind-specific input: `fork_at_event_id`, `new_branch_id` and optional `knowledge_policy` (fork; absent means `pinned`), `text` (stub: the user_input sent once the log is imported), `webhooks` (intake), `workspace`, `permissions` and `calls` (policy) |
+| `expect` | stub, written by `saveCase`: `{must, expect}` `EventMatcher` lists. Each `must` matcher matches at least one appended event, else the case fails; `expect` is only reported. `appended` in expected.json still means exactly the events appended |
 
 ### expected.json
 
@@ -136,9 +137,9 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 4. The parent is byte-unchanged in both cases.
 
 **`stub`**
-1. Import the log and continue it in stub mode against the model script.
+1. Import the log and continue it in stub mode against the model script. With `input.text`, first send it as a `user_input`.
 2. Every mediated external operation is matched against `stubs.json` by `(tool, args_hash, occurrence)`, where `occurrence` counts earlier invocations of the same `(tool, args_hash)` in this run. Stubs are consumed in order.
-3. An invocation with no unconsumed match fails closed: its effect is settled `not_sent`, nothing goes live, and the case ends with `unmatched_external_op`. Compare `appended` and `stubs`.
+3. An invocation with no unconsumed match fails closed: its effect is settled `not_sent`, nothing goes live, and the case ends with `unmatched_external_op`. Compare `appended` and `stubs`, and check `expect.must` against the appended events.
 
 **`intake`**
 1. Deliver `input.webhooks` in order to the host intake pipeline with a fake verifying adapter. A repeated delivery simulates provider redelivery after a crash that followed the inbox insert.

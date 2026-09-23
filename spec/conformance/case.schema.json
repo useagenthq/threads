@@ -118,11 +118,19 @@
             "ceiling": {
               "description": "policy: the principal/host ceiling a handoff target is intersected with. Each call is decided under both; the stricter decision wins (deny > ask > allow), the target's on a tie.",
               "$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"
+            },
+            "text": {
+              "description": "stub: the user_input the runner sends once the log is imported (a saved case's next input after its snapshot). saveCase always writes it.",
+              "type": "string"
             }
           }
         },
         "stub_script": {
           "const": "stubs.json"
+        },
+        "expect": {
+          "description": "stub, written by saveCase: the case's assertion over the events the run appends. Each `must` matcher matches at least one appended event, else the case fails; `expect` matchers are only reported.",
+          "$ref": "#/$defs/CaseExpectation"
         }
       }
     },
@@ -441,6 +449,29 @@
         },
         "data": {
           "type": "object"
+        }
+      }
+    },
+    "CaseExpectation": {
+      "description": "spec/api.json CaseExpectation as JSON Schema (check_api.py keeps the two equal).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "must"
+      ],
+      "properties": {
+        "must": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/EventMatcher"
+          }
+        },
+        "expect": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EventMatcher"
+          }
         }
       }
     },

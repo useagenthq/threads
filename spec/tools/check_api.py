@@ -14,7 +14,8 @@ Stdlib only, Python 3.12+. Checks:
   from api.schema.json (what public calls return);
 - every host API operation names existing api.json methods (x-api) and lists at least
   their failure codes;
-- every host API route's error responses allow exactly its x-error-codes, no more, no fewer.
+- every host API route's error responses allow exactly its x-error-codes, no more, no fewer;
+- api.json CaseExpectation and case.schema.json $defs/CaseExpectation stay the same shape.
 """
 
 from __future__ import annotations
@@ -227,6 +228,29 @@ def check_names(api: Json) -> list[str]:
     return errs
 
 
+CONFORMANCE_ID = "urn:threads:schema:conformance:v1"
+
+
+def check_case_expectation(api: Json, case_schema: Json) -> list[str]:
+    """case.schema.json $defs/CaseExpectation is api.json CaseExpectation as JSON Schema: the
+    same fields, the same required ones, arrays of the same items."""
+    fields = _obj(_obj(_obj(_obj(api).get("types")).get("CaseExpectation")).get("fields"))
+    schema = _obj(_obj(_obj(case_schema).get("$defs")).get("CaseExpectation"))
+    props = _obj(schema.get("properties"))
+    errs: list[str] = []
+    if set(fields) != set(props):
+        errs.append(f"CaseExpectation fields {sorted(fields)} != case.schema {sorted(props)}")
+    required = {k for k, f in fields.items() if _obj(f).get("required") is True}
+    if required != set(_strs(schema.get("required"))):
+        errs.append("CaseExpectation: required fields differ between api.json and case.schema")
+    for name in set(fields) & set(props):
+        item = _obj(_obj(_obj(fields[name]).get("type")).get("array")).get("$ref")
+        ref = _obj(_obj(props[name]).get("items")).get("$ref")
+        if not isinstance(ref, str) or item != CONFORMANCE_ID + ref:
+            errs.append(f"CaseExpectation.{name}: items {item} != case.schema {ref}")
+    return errs
+
+
 def _failure_lists(node: Json, at: str) -> Iterator[tuple[list[str], str]]:
     if isinstance(node, dict):
         if "result" in node and "errors" in node:
@@ -328,6 +352,7 @@ def main() -> int:
     problems += check_codes(api, by_id, openapi)
     problems += check_operations(api, openapi)
     problems += check_route_errors(openapi)
+    problems += check_case_expectation(api, docs[SPEC / "conformance" / "case.schema.json"])
     for p in problems:
         print(p)
     print("api contract ok" if not problems else f"{len(problems)} problem(s)")
