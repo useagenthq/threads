@@ -46,6 +46,7 @@ from threads.sandbox import (  # noqa: E402
     SandboxSession,
     fake_sandbox,
 )
+from threads.secrets import Secret, secret  # noqa: E402
 from threads.thread.case import CaseExpectation, SavedCase  # noqa: E402
 from threads.thread.handle import open_thread  # noqa: E402
 
@@ -81,6 +82,7 @@ __all__ = [
     "SandboxInfo",
     "SandboxSession",
     "SavedCase",
+    "Secret",
     "StatusItem",
     "Store",
     "StreamEvent",
@@ -91,6 +93,7 @@ __all__ = [
     "fake_sandbox",
     "open_thread",
     "scripted_model",
+    "secret",
     "sqlite",
     "tool",
 ]
