@@ -9,6 +9,7 @@ from pydantic import JsonValue
 
 from threads import Completed, ConfigError, Parked, agent, open_thread, scripted_model, sqlite
 from threads.agents.agent import Agent
+from threads.agents.run import execute
 from threads.agents.store import Store
 from threads.log import (
     EffectBeginEvent,
@@ -93,11 +94,11 @@ def test_a_saved_memory_is_recalled_in_a_later_run_as_an_untrusted_reference() -
 
 def test_a_shared_thread_renders_recalled_memory_only_to_the_principal_who_recalled_it() -> None:
     bob = Principal(issuer="api", tenant="acme", subject="bob")
-    secret = "Alice salary is 250k"
+    private = "Alice salary is 250k"
 
     async def main() -> None:
         store, memory = sqlite(":memory:"), local_memory()
-        save = [use("save_memory", {"text": secret}), text("Saved.")]
+        save = [use("save_memory", {"text": private}), text("Saved.")]
         await bot(save, memory).run("remember my salary", store=store, principal=ALICE)
         recall = [use("search_memory", {"query": "salary"}), text("ok")]
         shared = await bot(recall, memory).run("my salary?", store=store, principal=ALICE)
@@ -107,10 +108,40 @@ def test_a_shared_thread_renders_recalled_memory_only_to_the_principal_who_recal
             model=model, memory=memory, memory_write="allow", permissions=ALLOW, name="support"
         )
         await b.run("what did you recall?", store=store, principal=bob, thread=shared.thread)
-        assert secret not in model.sent[-1].body.decode()
+        assert private not in model.sent[-1].body.decode()
         # Alice continuing her own thread still sees what she recalled.
         await b.run("and now?", store=store, principal=ALICE, thread=shared.thread)
-        assert secret in model.sent[-1].body.decode()
+        assert private in model.sent[-1].body.decode()
+
+    asyncio.run(main())
+
+
+def test_a_write_resumed_by_another_run_lands_in_the_input_principal_scope() -> None:
+    carol = Principal(issuer="api", tenant="local", subject="carol")
+
+    async def main() -> None:
+        store, memory = sqlite(":memory:"), local_memory()
+        save = [use("save_memory", {"text": "Alice likes tabs"}), text("Saved.")]
+        model = scripted_model({"responses": save})
+        asks = agent(
+            model=model,
+            memory=memory,
+            memory_write="ask",
+            permissions=ALLOW,
+            name="support",
+            approvers=[carol],
+        )
+        parked = await asks.run("remember tabs", store=store, principal=carol)
+        assert isinstance(parked, Parked)
+        pending = await parked.thread.pending_approvals()
+        assert isinstance(pending, Ok)
+        assert isinstance(await parked.thread.approve(pending.value[0].challenge_id, carol), Ok)
+        # The resuming run is the operator's; the save is still for the input's principal.
+        done = await execute(asks.definition, None, {"thread": parked.thread}, None, lambda _: None)
+        assert isinstance(done, Completed), done
+        recall = [use("search_memory", {"query": "tabs"}), text("?")]
+        found = await bot(recall, memory).run("what do I like?", store=store, principal=carol)
+        assert [e for e in await events(store, found) if isinstance(e, InjectedEvent)]
 
     asyncio.run(main())
 

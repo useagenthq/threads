@@ -11,7 +11,13 @@ from pathlib import Path
 from threads.agents.config import ConfigError
 from threads.log import Event, Principal
 from threads.memory.fence import Fence
-from threads.memory.guard import Binder, ScopedKnowledge, scoped_knowledge, scoped_memory
+from threads.memory.guard import (
+    Binder,
+    ScopedKnowledge,
+    ScopedMemory,
+    scoped_knowledge,
+    scoped_memory,
+)
 from threads.memory.local_knowledge import LocalKnowledge
 from threads.memory.local_memory import LocalMemory
 from threads.memory.protocol import DeclaresWrites, KnowledgeProvider, MemoryProvider
@@ -68,30 +74,38 @@ class Providers:
 async def provider_tools(
     store: SqliteStore,
     providers: Providers,
-    scope: Scope,
+    agent: str,
+    principal: Principal,
     run: RunBinding,
 ) -> ProviderTools | None:
+    """`principal` is the run's; memory calls act for the current input's principal."""
     memory, knowledge = providers.memory, providers.knowledge
     if memory is None and knowledge is None:
         return None
     if isinstance(memory, LocalMemory):
         memory = await memory.bind(store)
-    scoped = None
-    if memory is not None:
-        scoped = scoped_memory(
-            memory, Binder(store.bindings("memory"), scope, run.clock, run.fence)
-        )
+    scoped = None if memory is None else _per_principal(store, memory, agent, run)
     corpus = None
     if knowledge is not None:
         paths: Sequence[str] = ()
         if isinstance(knowledge, LocalKnowledge):
             paths = knowledge.paths
             knowledge = await knowledge.bind(store)
-        shared = Scope(tenant_id=scope.tenant_id, agent=scope.agent, scope=KNOWLEDGE_SCOPE)
+        shared = Scope(tenant_id=principal.tenant, agent=agent, scope=KNOWLEDGE_SCOPE)
         by = Binder(store.bindings("knowledge"), shared, run.clock, run.fence)
         corpus = scoped_knowledge(knowledge, by)
         await _ingest(corpus, paths)
-    return ProviderTools(scoped, corpus, run.events)
+    return ProviderTools(scoped, corpus, run.events, principal)
+
+
+def _per_principal(
+    store: SqliteStore, memory: MemoryProvider, agent: str, run: RunBinding
+) -> Callable[[Principal], ScopedMemory]:
+    def scoped(principal: Principal) -> ScopedMemory:
+        by = Binder(store.bindings("memory"), memory_scope(agent, principal), run.clock, run.fence)
+        return scoped_memory(memory, by)
+
+    return scoped
 
 
 async def _ingest(corpus: ScopedKnowledge, paths: Sequence[str]) -> None:

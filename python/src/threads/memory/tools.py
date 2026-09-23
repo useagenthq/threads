@@ -18,7 +18,15 @@ from threads._generated.tools_v1 import (
     SearchKnowledgeInput,
     SearchMemoryInput,
 )
-from threads.log import Event, InjectedEvent, JsonObject, ToolCallEvent, ToolSpec, UserInputEvent
+from threads.log import (
+    Event,
+    InjectedEvent,
+    JsonObject,
+    Principal,
+    ToolCallEvent,
+    ToolSpec,
+    UserInputEvent,
+)
 from threads.loop.model import LookupResult, LookupUnknown
 from threads.loop.tools import (
     Dispatched,
@@ -33,6 +41,7 @@ from threads.memory.authority import origin
 from threads.memory.guard import ScopedKnowledge, ScopedMemory
 from threads.memory.protocol import Revisioned
 from threads.memory.types import Provenance, ProviderError
+from threads.reduce.view import input_principal
 from threads.result import Err, Ok
 from threads.thread.fork import knowledge_revision
 from threads.tools.runner import parse
@@ -66,9 +75,18 @@ def _write_failed(error: ProviderError) -> Dispatched:
 class ProviderTools:
     """The run's provider tools; a tool whose provider isn't configured is never pinned."""
 
-    memory: ScopedMemory | None
+    memory: Callable[[Principal], ScopedMemory] | None
+    """The memory of one principal's scope."""
     knowledge: ScopedKnowledge | None
     events: Callable[[], Sequence[Event]]
+    principal: Principal
+    """The run's: memory acts for it only when no input names one."""
+
+    def _memory(self) -> ScopedMemory | None:
+        # The current input's principal (spec/schema/README.md, Memory in shared threads).
+        if self.memory is None:
+            return None
+        return self.memory(input_principal(self.events()) or self.principal)
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
         parsed = parse(spec.name, input)
@@ -78,13 +96,14 @@ class ProviderTools:
         parsed = parse(call.spec.name, call.input)
         if isinstance(parsed, Err):
             raise AssertionError("a dispatched call was parsed first")
+        memory = self._memory()
         match parsed.value:
-            case SaveMemoryInput(text=text) if self.memory is not None:
-                return await self._save(self.memory, text, call)
-            case SearchMemoryInput(query=query, k=k) if self.memory is not None:
-                return await self._recall(self.memory, query, _k(k))
-            case ForgetMemoryInput(id=id) if self.memory is not None:
-                return await self._forget(self.memory, id, call.effect_key)
+            case SaveMemoryInput(text=text) if memory is not None:
+                return await self._save(memory, text, call)
+            case SearchMemoryInput(query=query, k=k) if memory is not None:
+                return await self._recall(memory, query, _k(k))
+            case ForgetMemoryInput(id=id) if memory is not None:
+                return await self._forget(memory, id, call.effect_key)
             case SearchKnowledgeInput(query=query, k=k, sources=sources) if self.knowledge:
                 only = None if sources is MISSING else sources
                 return await self._search(self.knowledge, query, _k(k), only)

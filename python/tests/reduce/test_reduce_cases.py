@@ -21,9 +21,12 @@ from threads.log import (
     ContextEditedEvent,
     Event,
     HookDecisionEvent,
+    InjectedEvent,
     ModelRequestEvent,
     ParseError,
     SettingsChangedEvent,
+    SteerEvent,
+    UserInputEvent,
 )
 from threads.log.digest import sha256_hex
 from threads.reduce import PROJECTIONS
@@ -144,10 +147,18 @@ def _breaks_history(event: Event) -> bool:
 
 def _history_is_prefix(case: Path, events: Sequence[Event], next_body: bytes) -> None:
     """Step 5, the cache-reuse property: each turn request is a byte prefix of the next turn
-    request unless an edit, compaction, settings change or denied input lies between."""
+    request unless an edit, compaction, settings change or denied input lies between, or a
+    change of input principal hides a recalled memory."""
     read = artifacts(case)
     previous: bytes | None = None
+    recalled, principal = False, None
     for event in [*events, None]:
+        if isinstance(event, InjectedEvent) and event.data.source == "memory":
+            recalled = True
+        if isinstance(event, UserInputEvent | SteerEvent):
+            if recalled and event.actor.principal != principal:
+                previous = None
+            principal = event.actor.principal
         if event is not None and _breaks_history(event):
             previous = None
             continue

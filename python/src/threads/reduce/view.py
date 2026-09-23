@@ -26,6 +26,7 @@ from threads.log import (
     ReasoningPart,
     SettingsChangedEvent,
     Span,
+    SteerEvent,
     ToolCallEvent,
     ToolResultEvent,
     ToolResultLateEvent,
@@ -74,10 +75,7 @@ class _Builder:
     )
 
     def add(self, event: Event) -> None:
-        if isinstance(event, UserInputEvent):
-            self.principal = event.actor.principal
-        elif isinstance(event, InjectedEvent) and event.data.source == "memory":
-            self.recalled.append((event.event_id, self.principal))
+        self._memory(event)
         if isinstance(event, ModelResponseEvent | ModelResponseRecoveredEvent):
             self.proposed.update(
                 p.call_id for p in event.data.content if isinstance(p, ToolUsePart)
@@ -95,6 +93,12 @@ class _Builder:
             self._edit(event)
         elif isinstance(event, CompactedEvent):
             self.compactions.append(event)
+
+    def _memory(self, event: Event) -> None:
+        if isinstance(event, UserInputEvent | SteerEvent):
+            self.principal = event.actor.principal
+        elif isinstance(event, InjectedEvent) and event.data.source == "memory":
+            self.recalled.append((event.event_id, self.principal))
 
     def _hook(self, event: HookDecisionEvent) -> None:
         d = event.data
@@ -126,6 +130,12 @@ def render_view(events: Sequence[Event]) -> RenderView:
         frozenset(c for c in b.calls if c not in b.proposed),
         frozenset(i for i, by in b.recalled if by != b.principal),
     )
+
+
+def input_principal(events: Sequence[Event]) -> Principal | None:
+    """The current input's principal: the latest `user_input` or `steer`'s."""
+    inputs = (e for e in reversed(events) if isinstance(e, UserInputEvent | SteerEvent))
+    return next((e.actor.principal for e in inputs), None)
 
 
 def _host_result(view: RenderView, event: Event) -> bool:

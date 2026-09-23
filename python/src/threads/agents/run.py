@@ -55,7 +55,7 @@ from threads.loop.drive import drive
 from threads.loop.runtime import Halt, Idle, Parked, RunErrorCode, Runtime
 from threads.loop.stubs import Stub
 from threads.memory.authority import with_memory_write
-from threads.memory.setup import Providers, RunBinding, memory_scope, provider_tools
+from threads.memory.setup import Providers, RunBinding, provider_tools
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import SqliteStore, StoredEvent, Writer
@@ -134,10 +134,9 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         shared = None if launch is None else launch.shared
         builtins = shared or (None if box is None else _sandbox_tools(sq, box, writer, definition))
         results = ReadResults(sq, lambda: writer.fold.events)
-        scope = memory_scope(definition.name, principal)
         providers = Providers(definition.memory, definition.knowledge)
         lent = RunBinding(now_ms, fenced(writer), lambda: writer.fold.events)
-        provided = await provider_tools(sq, providers, scope, lent)
+        provided = await provider_tools(sq, providers, definition.name, principal, lent)
         hook_ctx = RunContext(None, handle.id, handle.branch, principal)
         ext = AppTools(extension_tools(definition.extensions), hook_ctx)
         routes = gateways(definition.catalog, builtins, sq, fenced(writer))
