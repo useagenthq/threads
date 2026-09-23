@@ -1390,9 +1390,9 @@
       "step1": false,
       "evidence": [
         {
-          "kind": "job",
+          "kind": "case",
           "ref": "fork-crash-no-orphan",
-          "status": "planned"
+          "status": "implemented"
         },
         {
           "kind": "case",

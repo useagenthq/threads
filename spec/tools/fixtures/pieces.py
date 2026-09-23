@@ -204,6 +204,16 @@ def read_turn(log: Log, question: str = "What is in README.md?") -> None:
     log.add("turn_completed", {"reason": "end_turn"})
 
 
+README_BYTES = b"# demo\n"
+# The fake sandbox's captured file tree: path, mode, size and sha256 per
+# file, sorted by path. manifest_hash is its canonical hash, and restore verifies it.
+MANIFEST: JsonValue = [
+    {"path": "README.md", "mode": 0o644, "size": len(README_BYTES), "sha256": sha(README_BYTES)}
+]
+MANIFEST_HASH = sha(canonical(MANIFEST))
+SNAPSHOT_SCRIPT: Obj = {"restore_sandbox_id": "sbx_child_01", "manifest": MANIFEST}
+
+
 def snapshot(log: Log, expires_at: int | None, knowledge_revision: int | None = None) -> Obj:
     data: Obj = {
         "snapshot_id": "snap_01",
@@ -211,7 +221,7 @@ def snapshot(log: Log, expires_at: int | None, knowledge_revision: int | None = 
         "sandbox_id": "sbx_parent_01",
         "capture_class": "filesystem",
         "expires_at": expires_at,
-        "manifest_hash": sha(b"manifest:README.md"),
+        "manifest_hash": MANIFEST_HASH,
         "quiesced": {"frozen": [], "stopped": [], "excluded": []},
     }
     if knowledge_revision is not None:

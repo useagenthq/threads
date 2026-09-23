@@ -1,0 +1,18 @@
+{
+  "outcome": "ok",
+  "appended": [],
+  "fork": {
+    "child_created": false,
+    "parent_unchanged": true,
+    "child_state": "fork_failed"
+  },
+  "resources": {
+    "creates": 1,
+    "rows": [
+      {
+        "kind": "sandbox",
+        "state": "released"
+      }
+    ]
+  }
+}

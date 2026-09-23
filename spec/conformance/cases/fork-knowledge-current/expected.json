@@ -6,7 +6,7 @@
       "branch_id": "0192b000-0000-7000-8000-000000000002",
       "data": {
         "parent_branch_id": "0192b000-0000-7000-8000-000000000001",
-        "at_hash": "a3440c56f9d0efe35eeabc1641c02f27fd3917f09e8ca6124c9da764c11af76f",
+        "at_hash": "c906d6ece5136e5dda5f3fdd0e6d693528eb73ead8fce22dc4e0cfe1e2b37ca8",
         "reason": "snapshot",
         "sandbox_id": "sbx_child_01",
         "knowledge_policy": "current"

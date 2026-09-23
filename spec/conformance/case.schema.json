@@ -210,6 +210,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "child_state": {
+              "description": "The child branch's stored state after the operation (and, for restore_response: crash, after recovery).",
+              "enum": [
+                "forking",
+                "ready",
+                "inspection_only",
+                "read_only",
+                "corrupt",
+                "fork_failed"
+              ]
             }
           }
         },
@@ -768,17 +779,19 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "restore_sandbox_id"
+              "restore_sandbox_id",
+              "manifest"
             ],
             "properties": {
               "restore_sandbox_id": {
                 "type": "string"
               },
               "restore_response": {
-                "description": "ok (default): the restore create returns normally. lost: the provider creates the sandbox but the response never arrives.",
+                "description": "ok (default): the restore create returns normally. lost: the provider creates the sandbox but the response never arrives. crash: the restore succeeds, then the host dies before the child's fork event is appended; the runner restarts and runs recovery.",
                 "enum": [
                   "ok",
-                  "lost"
+                  "lost",
+                  "crash"
                 ]
               },
               "create_lookup": {
@@ -787,6 +800,38 @@
                   "found",
                   "unsupported"
                 ]
+              },
+              "manifest": {
+                "description": "The captured file tree: one entry per file, sorted by path. The snapshot event's manifest_hash is its canonical hash; restore verifies the restored tree against it (snapshot_manifest_mismatch otherwise).",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "mode",
+                    "size",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "mode": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                }
               }
             }
           }

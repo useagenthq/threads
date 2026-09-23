@@ -8,10 +8,13 @@ from typing import TYPE_CHECKING
 from .common import ALICE, CHILD, DAY, NOW, T0, num, obj, sha, tokens
 from .jcs import Obj, canonical
 from .log import reduce
-from .pieces import base_simple, case, negative, snapshot, user, write_case
+from .pieces import SNAPSHOT_SCRIPT, base_simple, case, negative, snapshot, user, write_case
 
 if TYPE_CHECKING:
     import pathlib
+
+
+SANDBOX: Obj = {"snapshots": {"snap_01": SNAPSHOT_SCRIPT}}
 
 
 def build(root: pathlib.Path) -> None:
@@ -51,7 +54,7 @@ def build(root: pathlib.Path) -> None:
                 "parent_unchanged": True,
             },
         },
-        extra={"sandbox.json": {"snapshots": {"snap_01": {"restore_sandbox_id": "sbx_child_01"}}}},
+        extra={"sandbox.json": SANDBOX},
     )
 
     # reduce-child-branch: a child export reduces over its resolved chain
@@ -115,7 +118,7 @@ def build(root: pathlib.Path) -> None:
             "appended": [],
             "fork": {"child_created": False, "parent_unchanged": True},
         },
-        extra={"sandbox.json": {"snapshots": {"snap_01": {"restore_sandbox_id": "sbx_child_01"}}}},
+        extra={"sandbox.json": SANDBOX},
     )
 
     # fork-snapshot-expired
@@ -141,7 +144,7 @@ def build(root: pathlib.Path) -> None:
             "appended": [],
             "fork": {"child_created": False, "parent_unchanged": True},
         },
-        extra={"sandbox.json": {"snapshots": {"snap_01": {"restore_sandbox_id": "sbx_child_01"}}}},
+        extra={"sandbox.json": SANDBOX},
     )
 
     # fork-at-hash-mismatch: a child export whose fork link does not match the parent line
@@ -163,11 +166,9 @@ def build(root: pathlib.Path) -> None:
 
     _knowledge(root)
     _lost_restore(root)
+    _crash_mid_fork(root)
     _repair(root)
     _duplicate_id(root)
-
-
-SANDBOX: Obj = {"snapshots": {"snap_01": {"restore_sandbox_id": "sbx_child_01"}}}
 
 
 def _knowledge(root: pathlib.Path) -> None:
@@ -220,7 +221,7 @@ def _lost_restore(root: pathlib.Path) -> None:
         script: Obj = {
             "snapshots": {
                 "snap_01": {
-                    "restore_sandbox_id": "sbx_child_01",
+                    **SNAPSHOT_SCRIPT,
                     "restore_response": "lost",
                     "create_lookup": lookup,
                 }
@@ -284,6 +285,41 @@ def _lost_restore(root: pathlib.Path) -> None:
             expected,
             extra={"sandbox.json": script},
         )
+
+
+def _crash_mid_fork(root: pathlib.Path) -> None:
+    log = base_simple()
+    s = snapshot(log, None)
+    write_case(
+        root,
+        case(
+            "fork-crash-no-orphan",
+            "sandboxes",
+            "fork",
+            "The host dies after the child sandbox is restored and before the child's fork "
+            "event is appended (sandbox.json restore_response: crash). A fork is never resumed: "
+            "on restart, recovery marks the child fork_failed and releases every ledger row "
+            "the fork wrote. No child is listed and the parent is unchanged.",
+            sandbox_script="sandbox.json",
+            input={"fork_at_event_id": s["event_id"], "new_branch_id": CHILD},
+        ),
+        log,
+        {
+            "outcome": "ok",
+            "appended": [],
+            "fork": {
+                "child_created": False,
+                "parent_unchanged": True,
+                "child_state": "fork_failed",
+            },
+            "resources": {"creates": 1, "rows": [{"kind": "sandbox", "state": "released"}]},
+        },
+        extra={
+            "sandbox.json": {
+                "snapshots": {"snap_01": {**SNAPSHOT_SCRIPT, "restore_response": "crash"}}
+            }
+        },
+    )
 
 
 def _repair(root: pathlib.Path) -> None:

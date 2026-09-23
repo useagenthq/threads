@@ -84,6 +84,7 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
     - A parent branch can't be deleted while a child references it (`branch_has_children`). Deleting a thread deletes all its branches together.
     - `fork.reason` is `snapshot` for a user fork at an eligible snapshot event or `repair` for operator repair of a corrupt parent (item 14).
     - A `snapshot` fork records `knowledge_policy`: `pinned` (the API default) searches knowledge as of the fork snapshot's `knowledge_revision`; `current` searches the live corpus. A `repair` fork has neither a sandbox nor a knowledge policy.
+    - **A fork is never resumed.** If the host dies between creating the child (branch state `forking`, ledger rows written) and appending the child's `fork` event, recovery marks the child `fork_failed` and moves every ledger row the fork wrote to `releasing`, then releases them. No child is listed, and the parent is untouched (`fork-crash-no-orphan`).
     - A `repair` child is **inspection-only**: it reduces, renders and exports, but it is never runnable, because no sandbox matches its log. Acquiring it to run fails with `branch_not_runnable` and appends nothing. To continue work, fork it at an eligible snapshot in its resolved chain.
 13. **Derived, never stored.** Payloads carry no field that the envelope or an earlier event already fixes:
 

@@ -48,7 +48,7 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 | `head_verified` | `false` when the input has no valid head checkpoint. Absent means `true` |
 | `appended` | Exactly the events the runner must append, in order. Each entry is an `EventMatcher` |
 | `sandbox` | Per-tool `dispatches`, `new_executions` and `lookups` counters from the scripted sandbox |
-| `fork` | `child_created`, `at_seq`, `parent_unchanged`, and `knowledge_revision` (the revision the child searches as of: the snapshot's under `pinned`, `null` under `current`) |
+| `fork` | `child_created`, `at_seq`, `parent_unchanged`, `child_state` (the child branch's stored state), and `knowledge_revision` (the revision the child searches as of: the snapshot's under `pinned`, `null` under `current`) |
 | `resources` | fork: `creates` (provider create calls the fake sandbox saw) and the resource-ledger `rows` `{kind, state}` the operation left |
 | `render` | `next_request_sha256` and `declared_prefix` |
 | `stubs` | `consumed` and `unmatched` counts |
@@ -130,7 +130,9 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 **`fork`**
 1. Call `fork(fork_at_event_id, new_branch_id, {knowledge_policy})`. Every provider create (the child sandbox) first writes a `pending` ledger row with a fresh `operation_key`.
 2. On success, the child's first own line is its header, then the matched `fork` event; the child's export imports cleanly and reduces over the resolved chain; no parent row is copied in the store.
+   The fake sandbox restores the snapshot's `manifest` (`sandbox.json`) and verifies that its canonical hash equals the snapshot event's `manifest_hash`.
 3. On error, no child branch and no child sandbox may exist, and every ledger row the fork wrote is released. The one exception is a create whose outcome the adapter can't establish: `sandbox.json` `restore_response: lost` with `create_lookup: unsupported`. That row stays `unknown` and parks for an operator, and the fork fails with `resource_unknown`. With `create_lookup: found` the adapter finds the sandbox by `operation_key` and the fork succeeds. Creation is never retried blindly: `resources.creates` counts the calls.
+4. `restore_response: crash`: the restore succeeds, then the runner kills the operation before the child's `fork` event is appended, restarts, and runs recovery. The fork is not resumed: the child ends `fork_failed` (`fork.child_state`), every ledger row it wrote is `released`, and no child is listed (`fork-crash-no-orphan`).
 4. The parent is byte-unchanged in both cases.
 
 **`stub`**

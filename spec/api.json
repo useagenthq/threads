@@ -670,6 +670,13 @@
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"},
           "required": false,
           "default_doc": "Default: the thread's main branch."
+        },
+        {
+          "name": "sandbox",
+          "kind": "option",
+          "type": {"$ref": "#/types/Sandbox"},
+          "required": false,
+          "doc": "The sandbox provider that restores snapshots for fork(). Inspection (timeline, branches, forkPoints, saveCase) doesn't need it; fork() on a handle without one fails with sandbox_required."
         }
       ],
       "returns": {
@@ -1125,6 +1132,7 @@
           "returns": {
             "result": {"$ref": "#/types/Thread"},
             "errors": [
+              "sandbox_required",
               "no_snapshot_boundary",
               "snapshot_expired",
               "snapshot_missing",
@@ -1138,6 +1146,7 @@
         "saveCase": {
           "ts": "saveCase",
           "py": "save_case",
+          "doc": "Writes a conformance case directory in exactly the spec/conformance layout, so the same runners replay it: case.json, expected.json, log.threads-ts.jsonl and log.threads-py.jsonl with matching expected.<impl>.json, artifacts/ and stubs.json. The kind is stub: external effects replay from stubs.json and unmatched invocations fail closed. The directory is validated against case.schema.json before the call returns.",
           "source": "",
           "async": true,
           "params": [
@@ -2463,9 +2472,17 @@
         "restore": {
           "ts": "restore",
           "py": "restore",
+          "doc": "Restore a snapshot into a new isolated sandbox and verify it: a restored file tree whose canonical manifest hash isn't manifest_hash is snapshot_manifest_mismatch, and the adapter releases the sandbox it created before returning that error.",
           "async": true,
           "params": [
             {"name": "snapshot_id", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {
+              "name": "manifest_hash",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Sha256"},
+              "required": true,
+              "doc": "The snapshot event's manifest_hash."
+            },
             {"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}
           ],
           "returns": {

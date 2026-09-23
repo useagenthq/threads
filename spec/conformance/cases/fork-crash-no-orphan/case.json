@@ -1,0 +1,14 @@
+{
+  "name": "fork-crash-no-orphan",
+  "family": "sandboxes",
+  "kind": "fork",
+  "description": "The host dies after the child sandbox is restored and before the child's fork event is appended (sandbox.json restore_response: crash). A fork is never resumed: on restart, recovery marks the child fork_failed and releases every ledger row the fork wrote. No child is listed and the parent is unchanged.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "sandbox_script": "sandbox.json",
+  "input": {
+    "fork_at_event_id": "0192e000-0000-7000-8000-00000000000b",
+    "new_branch_id": "0192b000-0000-7000-8000-000000000002"
+  }
+}

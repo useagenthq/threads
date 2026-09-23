@@ -40,7 +40,7 @@
     "status": "idle",
     "head": {
       "seq": 11,
-      "hash": "0750a56e3608f48938455f4f35d3500022052f1042f5430fccc06adbc545b75d"
+      "hash": "e982b60ce75b3c3ef4f8cd6ff9d85d197d3e9de499bbc7c0be0c44327ff9215b"
     }
   },
   "appended": [
@@ -51,7 +51,7 @@
       "epoch": 2,
       "data": {
         "parent_branch_id": "0192b000-0000-7000-8000-000000000001",
-        "at_hash": "0750a56e3608f48938455f4f35d3500022052f1042f5430fccc06adbc545b75d",
+        "at_hash": "e982b60ce75b3c3ef4f8cd6ff9d85d197d3e9de499bbc7c0be0c44327ff9215b",
         "reason": "snapshot",
         "sandbox_id": "sbx_child_01",
         "knowledge_policy": "pinned"
