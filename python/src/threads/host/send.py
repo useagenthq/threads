@@ -25,7 +25,7 @@ from threads.loop.drafts import draft
 from threads.loop.model import LookupResult, NotFound, NotFoundNonfinal
 from threads.loop.runtime import Halt, Idle, Runtime, lost
 from threads.loop.tools import Dispatched, NotSent, Output, Uncertain
-from threads.memory.fence import FenceRefusedError, bound
+from threads.memory.fence import bound, refused
 from threads.result import Err, Ok
 from threads.secrets import resolve
 from threads.store import Draft
@@ -85,10 +85,10 @@ class ChannelSend:
         try:
             with bound(self.fence):
                 outcome = await self.adapter.perform(op, ctx.effect_key, credentials)
-        except FenceRefusedError:
-            # Refused at the send point: no byte of the request was written.
-            return NotSent()
-        except Exception:
+        except Exception as error:
+            if refused(error):
+                # Refused at the send point: no byte of the request was written.
+                return NotSent()
             # An adapter that failed without saying what reached the provider: in doubt.
             return Uncertain("transport_error")
         match outcome:

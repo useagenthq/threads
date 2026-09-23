@@ -1,0 +1,204 @@
+"""`github()` (extra `github`, ): issue and pull-request comments.
+
+A webhook is verified by `X-Hub-Signature-256` with the webhook secret; the App installation is
+the tenant and `X-GitHub-Delivery` the delivery id. A new comment by a person becomes one item
+keyed `<delivery>#0`; bots' comments (the app's own included) are ignored. A reply is a comment
+carrying the effect key in a hidden marker, which lookup finds through code search. Search is
+eventually consistent, so its not_found is never final and an uncertain send that it can't find
+parks. GitHub publishes no official Python SDK; the REST API is called through the fenced httpx
+client.
+"""
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import Final
+
+import httpx
+from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
+
+from threads.adapters.channels.common import (
+    body_of,
+    client,
+    final_text,
+    hub_signature,
+    refused,
+    send,
+    unverified,
+)
+from threads.host.channel import (
+    ChannelCapabilities,
+    DeliveryError,
+    DeliveryOutcome,
+    Ignore,
+    Inbound,
+    Message,
+    RawRequest,
+    RawResponse,
+    Sent,
+    VerifiedDelivery,
+)
+from threads.log import Event, JsonObject, ParseError, Principal
+from threads.loop.model import Found, LookupResult, LookupUnknown, NotFoundNonfinal
+from threads.memory.fence import check
+from threads.result import Err, Ok
+from threads.secrets import Secret, resolve
+
+API: Final = "https://api.github.com"
+_ACCEPT: Final = {"accept": "application/vnd.github+json", "x-github-api-version": "2022-11-28"}
+
+
+class _Loose(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+
+class _Installation(_Loose):
+    id: int
+
+
+class _User(_Loose):
+    login: str
+    type: str = "User"
+
+
+class _Repository(_Loose):
+    full_name: str
+
+
+class _Issue(_Loose):
+    number: int
+
+
+class _Comment(_Loose):
+    body: str = ""
+
+
+class _Hook(_Loose):
+    action: str | None = None
+    installation: _Installation | None = None
+    sender: _User | None = None
+    repository: _Repository | None = None
+    issue: _Issue | None = None
+    comment: _Comment | None = None
+
+
+def marker(effect_key: str) -> str:
+    return f"<!-- threads:effect_key={effect_key} -->"
+
+
+@dataclass(frozen=True, slots=True)
+class GitHubChannel:
+    webhook_secret: Secret
+    token: Secret
+    agent: str
+    api: str = API
+    transport: httpx.AsyncBaseTransport | None = None
+    capabilities: ChannelCapabilities = field(
+        default_factory=lambda: ChannelCapabilities("nonfinal", False, True, False, False)
+    )
+    limits: Mapping[str, int] = field(default_factory=lambda: {"message_bytes": 65_536})
+
+    @property
+    def credentials(self) -> Mapping[str, Secret]:
+        return {"token": self.token}
+
+    def verify(self, raw: RawRequest) -> Ok[VerifiedDelivery] | Err[ParseError]:
+        header = raw.headers.get("x-hub-signature-256")
+        if not hub_signature(resolve(self.webhook_secret), raw.body, header):
+            return unverified("the GitHub signature does not match")
+        delivery = raw.headers.get("x-github-delivery")
+        hook = _hook(raw)
+        if delivery is None or hook is None or hook.installation is None:
+            return unverified("not a GitHub App delivery")
+        installation = f"inst_{hook.installation.id}"
+        return Ok(VerifiedDelivery(installation, installation, delivery))
+
+    def parse(self, raw: RawRequest) -> Ok[Sequence[Inbound]] | Err[ParseError]:
+        hook = _hook(raw)
+        verified = self.verify(raw)
+        if hook is None or isinstance(verified, Err):
+            return Err(ParseError("invalid", "not a verified GitHub delivery"))
+        return Ok((_item(raw, hook, verified.value),))
+
+    def ack(self, raw: RawRequest) -> RawResponse:
+        return RawResponse(200, {}, b"")
+
+    def render(self, event: Event) -> Sequence[JsonObject]:
+        text = final_text(event)
+        return () if text is None else ({"text": text},)
+
+    async def perform(
+        self, op: JsonObject, effect_key: str, credentials: Mapping[str, str]
+    ) -> DeliveryOutcome:
+        repo, _, number = str(op["address"]).rpartition("#")
+        body: JsonValue = {"body": f"{op['text']}\n\n{marker(effect_key)}"}
+        headers = _ACCEPT | {"authorization": f"Bearer {credentials['token']}"}
+        url = f"{self.api}/repos/{repo}/issues/{number}/comments"
+        async with client(self.transport) as http:
+            response = await send(http, url, headers, body)
+        if isinstance(response, DeliveryError):
+            return response
+        failed = refused(response)
+        if failed is not None:
+            return failed
+        created = body_of(response).get("id")
+        return Sent(str(created) if isinstance(created, int) else "")
+
+    async def lookup(self, effect_key: str) -> LookupResult[str]:
+        """The comment carrying the key's marker, by search; absence is never final."""
+        await check()
+        headers = _ACCEPT | {"authorization": f"Bearer {resolve(self.token)}"}
+        query = {"q": f'"{marker(effect_key)}" in:comments'}
+        try:
+            async with client(self.transport) as http:
+                response = await http.get(
+                    f"{self.api}/search/issues", headers=headers, params=query
+                )
+        except httpx.HTTPError as error:
+            return LookupUnknown(f"search failed: {type(error).__name__}")
+        if refused(response) is not None:
+            return LookupUnknown(f"search answered {response.status_code}")
+        items = body_of(response).get("items")
+        if isinstance(items, list) and items:
+            first = items[0]
+            url = first.get("html_url") if isinstance(first, dict) else None
+            return Found(url if isinstance(url, str) else effect_key)
+        return NotFoundNonfinal()
+
+
+def _hook(raw: RawRequest) -> _Hook | None:
+    try:
+        return _Hook.model_validate_json(raw.body)
+    except ValidationError:
+        return None
+
+
+def _item(raw: RawRequest, hook: _Hook, delivery: VerifiedDelivery) -> Inbound:
+    event = raw.headers.get("x-github-event")
+    person = hook.sender
+    if event != "issue_comment" or hook.action != "created" or person is None:
+        return Ignore(kind="ignore")
+    if person.type == "Bot" or hook.repository is None or hook.issue is None:
+        return Ignore(kind="ignore")
+    if hook.comment is None or not hook.comment.body:
+        return Ignore(kind="ignore")
+    tenant = delivery.tenant
+    return Message(
+        kind="message",
+        principal=Principal(issuer=f"github:{tenant}", tenant=tenant, subject=person.login),
+        address=f"{hook.repository.full_name}#{hook.issue.number}",
+        item_key=f"{delivery.delivery_id}#0",
+        content=hook.comment.body,
+    )
+
+
+def github(
+    *,
+    webhook_secret: Secret,
+    token: Secret,
+    agent: str,
+    api: str = API,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> GitHubChannel:
+    """A GitHub channel for host(channels=...). `token` is an installation or fine-grained token
+    with issues write; secrets are resolved on the host at use."""
+    return GitHubChannel(webhook_secret, token, agent, api, transport)
