@@ -141,7 +141,8 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
             framework=agents,
         )
         halt = await prepare(rt, definition, fresh=fresh, launch=launch)
-        if halt is None and not rt.fold.handed_off and wants_input(rt, launch):
+        moved = rt.fold.handed_off
+        if halt is None and not moved and wants_input(rt, launch):
             halt = await record_input(rt, input, principal, options.get("budget"), launch)
         halt = halt or await drive(rt)
         await agents.finish(rt)
@@ -150,7 +151,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
             await snapshot_turn_end(sq, writer, box, builtins, now_ms, knowledge_revision=revision)
         await gates.observe(rt, "session_end")
         if rt.fold.handed_off:
-            return await handed_off(frame, rt, handle)
+            return await handed_off(frame, rt, handle, again=moved)
         return result(rt, halt, handle)
 
 

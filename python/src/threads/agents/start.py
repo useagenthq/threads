@@ -11,7 +11,7 @@ from threads.agents.definition import Definition
 from threads.agents.handoff import launch as handoff_launch
 from threads.agents.handoff import target
 from threads.agents.launch import Launch, open_launched
-from threads.agents.results import HandedOff, RunResult, Thread
+from threads.agents.results import Failed, HandedOff, RunError, RunResult, Thread
 from threads.agents.scope import Scope
 from threads.agents.store import now_ms
 from threads.log import (
@@ -27,7 +27,7 @@ from threads.loop import gates
 from threads.loop.drafts import draft
 from threads.loop.drive import drive
 from threads.loop.recovery import recover
-from threads.loop.runtime import Failed, Halt, Idle, Runtime, lost
+from threads.loop.runtime import Halt, Idle, Runtime, lost
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import SqliteStore, Writer
@@ -96,9 +96,7 @@ def wants_input(rt: Runtime, launch: Launch | None) -> bool:
 async def record_input(
     rt: Runtime, input: Input, principal: Principal, budget: Budget | None, launch: Launch | None
 ) -> Halt | None:
-    """The input and its principal. A thread that handed off takes none (semantic rule 26)."""
-    if rt.fold.handed_off:
-        return Failed("branch_not_runnable", "this thread handed off; continue the new one")
+    """The input, recorded with the principal that sent it."""
     source = "api" if launch is None else launch.source
     data: dict[str, JsonValue] = {"source": source}
     if isinstance(input, str):
@@ -112,13 +110,20 @@ async def record_input(
     return lost(done.error) if isinstance(done, Err) else None
 
 
-async def handed_off[D](scope: Scope[D], rt: Runtime, thread: Thread) -> RunResult[str]:
+async def handed_off[D](
+    scope: Scope[D], rt: Runtime, thread: Thread, *, again: bool
+) -> RunResult[str]:
     """Starts (or, after a crash, finishes starting) the handoff target, which answers the
-    pending request; the run's result names both threads."""
+    pending request; the run's result names both threads. A thread that had already handed off
+    takes no new input (semantic rule 26): that run fails and names where the conversation
+    went."""
     event = next(e for e in reversed(rt.events) if isinstance(e, HandoffEvent))
     chosen = target(scope, event.data.to_agent)
     if chosen is None:
         raise AssertionError("a recorded handoff names a configured target")
     how, text = handoff_launch(scope, rt, event)
     answered = await scope.execute(chosen, text, how)
+    if again:
+        why = f"this thread handed off to {event.data.to_thread_id}; continue that one"
+        return Failed(RunError("branch_not_runnable", why), thread)
     return HandedOff(thread, answered.thread)
