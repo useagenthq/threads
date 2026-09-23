@@ -3,13 +3,24 @@
 import asyncio
 from collections.abc import AsyncIterator
 
+import pytest
 from corpus import Clock
 from kit import T0, Tools, open_store, start
+from pydantic import JsonValue
 
 from threads.log import ArtifactRef, ParseError, TextPart, Usage
 from threads.loop.drive import drive
-from threads.loop.model import ModelChunk, ModelContext, ModelRequest, ModelResponse
+from threads.loop.model import (
+    ModelChunk,
+    ModelContext,
+    ModelRequest,
+    ModelResponse,
+    Rejected,
+    RejectReason,
+)
+from threads.loop.runtime import Failed, Halt, Idle
 from threads.loop.scripted import ScriptedModel
+from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 
 USAGE = Usage(input_tokens=5, output_tokens=1)
@@ -37,6 +48,42 @@ class _Probe(ScriptedModel):
         )
         async for chunk in super().send(request, context):
             yield chunk
+
+
+def _run_rejected(reason: RejectReason) -> tuple[Halt, list[str], list[JsonValue], int]:
+    async def main() -> tuple[Halt, list[str], list[JsonValue], int]:
+        clock = Clock(T0)
+        model = ScriptedModel([Rejected(reason)], {})
+        rt = await start(await open_store(), [], model, Tools({}, clock), clock)
+        halt = await drive(rt)
+        kinds = [e.type for e in rt.events]
+        data = [to_json(e.data) for e in rt.events if e.type in _ENDINGS]
+        return halt, kinds, data, len(model.sent)
+
+    return asyncio.run(main())
+
+
+_ENDINGS = ("model_attempt_abandoned", "turn_completed")
+
+
+@pytest.mark.parametrize("code", ["content_unsupported", "continuation_unsupported"])
+def test_a_send_time_refusal_ends_the_turn_with_its_code_and_is_never_resent(
+    code: RejectReason,
+) -> None:
+    halt, kinds, data, sent = _run_rejected(code)
+    assert sent == 1
+    assert kinds.count("model_request") == 1
+    abandoned, ended = data
+    assert isinstance(abandoned, dict)
+    assert abandoned["provider_outcome"] == "not_sent"
+    assert ended == {"reason": "error", "code": code}
+    assert isinstance(halt, Idle)
+
+
+def test_a_stale_epoch_rejection_appends_nothing() -> None:
+    halt, kinds, _, _ = _run_rejected("stale_epoch")
+    assert kinds[-1] == "model_request"
+    assert halt == Failed("branch_busy", "the lease moved before the send")
 
 
 def test_the_loop_hands_the_adapter_its_fencing_pair_and_verified_artifacts() -> None:

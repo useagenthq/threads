@@ -84,6 +84,7 @@ class ScriptedModel:
         if not self._entries:
             raise ScriptExhaustedError(f"no scripted response left for {request.request_id}")
         if isinstance(await context.fence(), Err):
+            yield Rejected("stale_epoch")
             return
         self.before_send(request)
         self.sent.append(request)

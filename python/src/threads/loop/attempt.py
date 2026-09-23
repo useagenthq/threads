@@ -55,14 +55,24 @@ async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Faile
     event = appended.value[0]
     if not isinstance(event, ModelRequestEvent):
         raise AssertionError("a model_request draft stored another type")
+    return await _dispatch(rt, event, body)
+
+
+async def _dispatch(rt: Runtime, event: ModelRequestEvent, body: bytes) -> Failed | EventId | None:
+    """Sends the durable request and records its outcome in one batch."""
     guard.check(rt.model)
     stale = await fence(rt)
     if stale is not None:
         return stale
     req = ModelRequest(f"{rt.writer.branch_id}:{event.event_id}", body)
     outcome = await _collect(rt, req)
+    if isinstance(outcome, Rejected) and outcome.reason == "stale_epoch":
+        # The adapter's fence refused at its send point: this writer can't append anything.
+        return Failed("branch_busy", "the lease moved before the send")
     recorded = await rt.append(*outcome_drafts(rt, event.event_id, outcome))
-    return lost(recorded.error) if isinstance(recorded, Err) else event.event_id
+    if isinstance(recorded, Err):
+        return lost(recorded.error)
+    return None if _unencodable(outcome) else event.event_id
 
 
 type Outcome = ModelResponse | Rejected | None
@@ -96,6 +106,15 @@ def outcome_drafts(rt: Runtime, request_id: EventId, outcome: Outcome) -> Sequen
     match outcome:
         case ModelResponse():
             return response_drafts(rt, request_id, outcome)
+        case Rejected(reason="content_unsupported" | "continuation_unsupported" as code):
+            data = {
+                "request_event_id": request_id,
+                "provider_outcome": "not_sent",
+                "reason": "provider_error",
+                "billing": "not_billed",
+            }
+            ended = {"reason": "error", "code": code}
+            return [draft("model_attempt_abandoned", data), draft("turn_completed", ended)]
         case Rejected():
             return [draft("model_attempt_abandoned", _rejection(request_id, outcome))]
         case None:
@@ -105,6 +124,14 @@ def outcome_drafts(rt: Runtime, request_id: EventId, outcome: Outcome) -> Sequen
                 "reason": "stream_broken",
             }
             return [draft("model_attempt_abandoned", data)]
+
+
+def _unencodable(outcome: Outcome) -> bool:
+    """A send-time refusal already ended the turn with its code."""
+    return isinstance(outcome, Rejected) and outcome.reason in (
+        "content_unsupported",
+        "continuation_unsupported",
+    )
 
 
 def _rejection(request_id: EventId, rejected: Rejected) -> dict[str, JsonValue]:

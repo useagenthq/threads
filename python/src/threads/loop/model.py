@@ -26,9 +26,14 @@ type StopReason = Literal[
     "context_window_exceeded",
     "other",
 ]
-type RejectReason = Literal[
+type ProviderRejection = Literal[
     "rate_limited", "overloaded", "server_error", "prompt_too_long", "provider_error"
 ]
+"""A provider's rejection before any content: recorded as a failed attempt."""
+type Unencodable = Literal["content_unsupported", "continuation_unsupported"]
+"""A rendered part the adapter can't encode: nothing left, and nothing is re-sent."""
+type RejectReason = ProviderRejection | Literal["stale_epoch"] | Unencodable
+"""spec/api.json Model.send returns.errors. stale_epoch: the fence refused at the send point."""
 type LookupCapability = Literal["none", "nonfinal", "final"]
 
 
