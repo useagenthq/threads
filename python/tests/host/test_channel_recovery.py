@@ -4,6 +4,7 @@ channel_send from the log and issues it through the effect path, once."""
 
 import asyncio
 import json
+import threading
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
@@ -21,6 +22,8 @@ from threads.host import (
     VerifiedDelivery,
     host,
 )
+from threads.host.intake import ChannelIntake
+from threads.host.runs import Runner
 from threads.log import Event, JsonObject, ParseError, Principal, ToolCallEvent
 from threads.loop.model import LookupResult, LookupUnknown
 from threads.result import Err, Ok
@@ -167,3 +170,26 @@ async def _consumed(store: Store) -> bool:
 
 async def _sent(channel: Replies, count: int) -> bool:
     return len(channel.sent) >= count
+
+
+def test_stop_waits_out_an_intake_task_whose_bookkeeping_is_still_queued() -> None:
+    """A consumer that finished just before stop() leaves its done-callback queued; draining
+    must yield to it rather than spin on the finished task (found by the F9.1 drill)."""
+
+    async def consumed() -> None:
+        return None
+
+    async def main() -> None:
+        intake = ChannelIntake(Runner(sqlite(":memory:"), {}, {}), {})
+        tasks = intake._tasks  # pyright: ignore[reportPrivateUsage] - the race needs the set
+        task = asyncio.get_running_loop().create_task(consumed())
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+        await asyncio.sleep(0)  # the task finishes; its discard is queued behind this step
+        await intake.drain()
+
+    # A spinning drain never yields, so only a thread's join can time it out.
+    stopped = threading.Thread(target=lambda: asyncio.run(main()), daemon=True)
+    stopped.start()
+    stopped.join(5)
+    assert not stopped.is_alive(), "drain spun on a finished task"

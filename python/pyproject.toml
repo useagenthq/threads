@@ -114,7 +114,10 @@ select = ["E", "F", "W", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF", "ANN", "P
 testpaths = ["tests"]
 pythonpath = ["tests"]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
-markers = ["live: the live gate; sends real provider requests, only with THREADS_LIVE=1"]
+markers = [
+    "live: the live gate; sends real provider requests, only with THREADS_LIVE=1",
+    "jobs: crash drills; real child processes on one store, killed and restarted",
+]
 xfail_strict = true
 filterwarnings = ["error"]
 

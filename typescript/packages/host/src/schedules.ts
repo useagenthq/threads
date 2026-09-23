@@ -81,6 +81,7 @@ export async function tick(
   const { log } = await ctx.open(TENANT);
   for (const b of bound) {
     const last = lastOccurrence(db, b.schedule.id);
+    resumeOpen(ctx, log, b, last?.thread_id ?? lastThread(db, b.schedule.id));
     const after = last?.occurrence_at ?? startedAt;
     const due = occurrences(
       b.cron,
@@ -97,6 +98,30 @@ export async function tick(
       });
     }
   }
+}
+
+/**
+ * An occurrence whose input is durable but whose run never went (the lease was held elsewhere
+ * when it fired, or its host died) runs on from the log (found by the F10.5 drill).
+ */
+function resumeOpen(
+  ctx: HostContext,
+  log: LogStore,
+  b: Bound,
+  threadId: ThreadId | null,
+): void {
+  if (threadId === null) return;
+  const main = log.mainBranch(threadId);
+  const read = main.ok ? log.read(main.value) : undefined;
+  if (!main.ok || read?.ok !== true) return;
+  const { fold } = read.value;
+  if (!fold.turnOpen || fold.parked.length > 0) return;
+  // ponytail: a run in flight here gets a no-op resume queued behind it each tick; track
+  // in-flight branches if ticks ever outpace runs.
+  void ctx.resume(b.hosted, TENANT, principal(b), {
+    id: threadId,
+    branch: main.value,
+  });
 }
 
 function lastOccurrence(

@@ -8,7 +8,9 @@ import type { SqliteDriver } from "./driver";
  */
 export function openBunSqlite(path: string): SqliteDriver {
   const db = new Database(path, { create: true, strict: true });
-  db.exec("PRAGMA journal_mode = WAL");
+  // Other processes may share the file: a write meeting theirs waits, never fails SQLITE_BUSY.
+  db.exec("PRAGMA busy_timeout = 5000");
+  walMode(db);
   db.exec("PRAGMA synchronous = FULL");
   db.exec("PRAGMA foreign_keys = ON");
   if (process.platform === "darwin") {
@@ -28,4 +30,26 @@ export function openBunSqlite(path: string): SqliteDriver {
       db.close();
     },
   };
+}
+
+const WAL_TRIES = 500;
+
+/**
+ * Switching a new file to WAL can meet another process doing the same, and SQLite answers that
+ * SQLITE_BUSY without calling its busy handler: retried, so two hosts can open one fresh store.
+ */
+function walMode(db: Database): void {
+  for (let tried = 1; ; tried += 1) {
+    try {
+      db.exec("PRAGMA journal_mode = WAL");
+      return;
+    } catch (error) {
+      const busy =
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "SQLITE_BUSY";
+      if (!busy || tried >= WAL_TRIES) throw error;
+      Bun.sleepSync(10);
+    }
+  }
 }

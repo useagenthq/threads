@@ -84,7 +84,7 @@ export function host(options: HostOptions): Host {
   const consuming = new Map<string, Promise<void>>();
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking: Promise<void> | undefined;
-  /** Channel threads whose owed replies (a crash before they were issued) aren't settled yet. */
+  /** Channel threads a crash may have left mid-run or owing replies, not yet settled. */
   let unreplied: Map<string, { tenant: string; id: ThreadId }> | undefined;
 
   /** One consumer per thread in this process; a kick while one runs is picked up by it. */
@@ -140,7 +140,7 @@ export function host(options: HostOptions): Host {
       const main = log.mainBranch(t.id);
       const done =
         !main.ok ||
-        (await ctx.replies(t.tenant, { id: t.id, branch: main.value })) ===
+        (await ctx.recover(t.tenant, { id: t.id, branch: main.value })) ===
           "done";
       if (done) unreplied.delete(key);
     }

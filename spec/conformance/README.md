@@ -177,7 +177,7 @@ For every case of kind `recover`, `fork` or `stub`, the parity job runs four che
 
 ## Scenario coverage
 
-`coverage.json` maps every  scenario to its evidence: a corpus `case`, a per-language behavior `test`, a `job` (crash injection, competing processes, cross-language parity) or a `live_gate` (readiness gate 13). Each piece has `status` `planned` or `implemented`. For a case, `implemented` means the fixture directory exists. It never means either runtime passes it; the runners report that. `gen_fixtures.py --check` fails when a case's status disagrees with the corpus and, where the local brief is present, when a scenario or its evidence differs from the brief. The corpus is not complete until every entry is `implemented`.
+`coverage.json` maps every  scenario to its evidence: a corpus `case`, a per-language behavior `test`, a `job` (crash injection, competing processes, cross-language parity) or a `live_gate` (readiness gate 13). Each piece has `status` `planned` or `implemented`. For a case, `implemented` means the fixture directory exists; an implemented job lists the test files that run it in `tests` (repo-relative), and they must exist. It never means either runtime passes it; the runners report that. `gen_fixtures.py --check` fails when a case's status disagrees with the corpus and, where the local brief is present, when a scenario or its evidence differs from the brief. The corpus is not complete until every entry is `implemented`.
 
 ## Adding a case
 

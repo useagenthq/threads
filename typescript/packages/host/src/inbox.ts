@@ -1,5 +1,6 @@
 import { Inbound } from "@threads/core";
 import {
+  type Alongside,
   Int,
   type LogError,
   parseRows,
@@ -100,11 +101,39 @@ export function pendingItems(
 }
 
 /** Marks an item consumed; `seq` is the event that recorded it, 0 when none was appended. */
-export function consumed(db: SqliteDriver, inboxId: number, seq: number): void {
+export function consumed(
+  db: SqliteDriver,
+  inboxId: number,
+  seq: number,
+): boolean {
   db.run(
     "UPDATE inbox SET consumed_seq = ? WHERE inbox_id = ? AND consumed_seq IS NULL",
     [seq, inboxId],
   );
+  const rows = parseRows(
+    z.strictObject({ n: Int }),
+    db.all("SELECT changes() AS n", []),
+  );
+  return rows.ok && rows.value[0]?.n === 1;
+}
+
+/**
+ * The append that applies an item also consumes it, once: when another process applied it
+ * first, this append rolls back, so an item never runs twice (found by the F9.6 drill).
+ */
+export function consumes(db: SqliteDriver, inboxId: number): Alongside {
+  return (added) => {
+    const first = added[0];
+    if (first?.kind === "event" && consumed(db, inboxId, first.event.seq))
+      return { ok: true, value: undefined };
+    return {
+      ok: false,
+      error: {
+        code: "seq_conflict",
+        message: `inbox item ${inboxId} is already consumed`,
+      },
+    };
+  };
 }
 
 /** Every channel thread, for the replies a restart may owe (spec/schema/README.md). */

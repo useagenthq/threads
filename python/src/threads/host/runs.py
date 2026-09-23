@@ -207,7 +207,8 @@ class Runner:
         self.launch(bound, None, thread, who)
 
     async def redeliver(self, store: Store, thread_id: ThreadId) -> None:
-        """A restarted host: a channel thread whose log holds a reply it never sent (a crash
+        """A restarted host: a channel thread whose run a crash cut short (its turn still open,
+        not parked) runs on from the log, and one whose log holds a reply it never sent (a crash
         after the turn ended) runs again to send it. A thread that handed off moves its
         conversation to the target, whose replies are sent from there."""
         target = await self.follow(store, thread_id)
@@ -220,7 +221,11 @@ class Runner:
         if bound is None or bound.channel is None or not isinstance(root, Ok):
             return
         read = await sq.read(root.value, 0)
-        if isinstance(read, Ok) and undelivered(read.value.fold, bound.channel):
+        if not isinstance(read, Ok):
+            return
+        fold = read.value.fold
+        cut_short = fold.in_turn and not fold.parked
+        if cut_short or undelivered(fold, bound.channel):
             await self.resume(store, thread_id, root.value)
 
     def _emit(self, branch: BranchId) -> Emit:

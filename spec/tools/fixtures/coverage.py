@@ -12,9 +12,12 @@ from .common import CASES, arr, obj, text
 if TYPE_CHECKING:
     import pathlib
 
+    from .jcs import JsonValue
+
 COVERAGE = CASES.parent / "coverage.json"
+ROOT = CASES.parents[2]
 # The brief is local-only by design (.gitignore); CI checks the corpus side alone.
-BRIEF = CASES.parents[2] / "plans" / "specs" / ""
+BRIEF = ROOT / "plans" / "specs" / ""
 SCENARIO = re.compile(r"\s*- \*\*[✓✗] (F\d+\.\d+)(?: \[step 1[^\]]*\])?\*\* → (.*)")
 EVIDENCE = re.compile(r"(integration test \([^)]*\) )?`([a-z0-9-]+)`")
 KINDS = frozenset({"case", "test", "job", "live_gate"})
@@ -29,6 +32,14 @@ def _brief() -> dict[str, list[tuple[bool, str]]]:
         if m:
             found[m[1]] = [(r[1] is not None, r[2]) for r in EVIDENCE.finditer(m[2])]
     return found
+
+
+def _job_tests(where: str, tests: JsonValue) -> list[str]:
+    """An implemented job names the test files that run it (repo-relative), and they exist."""
+    paths = [text(t) for t in arr(tests)]
+    if not paths:
+        return [f"{where}: an implemented job lists its tests"]
+    return [f"{where}: no test file {p}" for p in paths if not (ROOT / p).is_file()]
 
 
 def check(cases: pathlib.Path) -> list[str]:
@@ -47,6 +58,8 @@ def check(cases: pathlib.Path) -> list[str]:
                 problems.append(f"{sid} {ref}: bad kind or status")
             elif kind == "case" and (status == "implemented") != (cases / ref).is_dir():
                 problems.append(f"{sid} {ref}: status {status} disagrees with the corpus")
+            elif kind == "job" and status == "implemented":
+                problems += _job_tests(f"{sid} {ref}", ev.get("tests", []))
     if BRIEF.exists():
         brief = _brief()
         problems += [f"{sid}: in the brief, not in coverage.json" for sid in brief.keys() - mapped]

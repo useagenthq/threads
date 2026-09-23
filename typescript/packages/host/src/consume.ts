@@ -1,6 +1,5 @@
 import type { ChannelAdapter } from "@threads/core";
 import {
-  type Alongside,
   assertNever,
   BranchId,
   cancel,
@@ -18,6 +17,7 @@ import type { HostContext, HostedAgent } from "./context";
 import {
   type Conversation,
   consumed,
+  consumes,
   type InboxItem,
   pendingItems,
 } from "./inbox";
@@ -130,29 +130,31 @@ async function message(
   const { log } = await ctx.open(tenant);
   const { db } = await storeConnection(ctx.store);
   const main = log.mainBranch(t.threadId);
-  const branchId = main.ok ? main.value : BranchId.parse(uuidv7(log.now()));
+  let branchId = main.ok ? main.value : BranchId.parse(uuidv7(log.now()));
   if (!main.ok) {
     const made = log.createBranch(t.threadId, branchId);
-    if (!made.ok) return "busy";
+    // Another process may have made the thread's root at the same moment: the first is the one.
+    const root = log.mainBranch(t.threadId);
+    if (!made.ok || !root.ok) return "busy";
+    branchId = root.value;
   }
-  const first: readonly EventDraft[] = main.ok
-    ? []
-    : [await t.hosted.runner.started()];
   const writer = log.acquire(branchId, `host-${crypto.randomUUID()}`);
   if (!writer.ok) return "busy";
   try {
     if (writer.value.chain.fold.turnOpen) return "busy";
     const w = writer.value;
+    // Only the thread's first event is its thread_started, whichever process creates it.
+    const first: readonly EventDraft[] =
+      w.chain.fold.seq === 0 ? [await t.hosted.runner.started()] : [];
     const done = w.fenced(() => {
       const delivered = w.append([...first, delivery(next)]);
       if (!delivered.ok) return delivered;
       const cause = delivered.value.at(-1);
       if (cause?.kind !== "event") throw new Error("channel_delivery is known");
-      return w.append([input(next, cause.event.event_id)], (added) => {
-        const run = added.at(-1);
-        if (run?.kind === "event") consumed(db, next.inbox_id, run.event.seq);
-        return { ok: true, value: undefined };
-      });
+      return w.append(
+        [input(next, cause.event.event_id)],
+        consumes(db, next.inbox_id),
+      );
     });
     if (!done.ok) return "busy";
   } finally {
@@ -227,11 +229,7 @@ async function applied(
     consumed(db, next.inbox_id, 0);
     return "done";
   }
-  const alongside: Alongside = (added) => {
-    const record = added[0];
-    if (record?.kind === "event") consumed(db, next.inbox_id, record.event.seq);
-    return { ok: true, value: undefined };
-  };
+  const alongside = consumes(db, next.inbox_id);
   const done = await control(log, main.value, item.principal, plan, alongside);
   if (!done.ok) {
     if (done.error.code === "branch_busy") return "busy";

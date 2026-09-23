@@ -102,8 +102,10 @@ class ChannelIntake:
         for handle in self._retries:
             handle.cancel()
         self._retries.clear()
-        while self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
+        # Only unfinished tasks: a finished one's discard may still be queued, and gathering
+        # finished tasks completes without yielding to it, so the loop would spin.
+        while pending := [t for t in self._tasks if not t.done()]:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     async def _drain(self, store: Store, thread_id: ThreadId) -> None:
         """Consumes the thread's items in arrival order. A message waits while the thread can't

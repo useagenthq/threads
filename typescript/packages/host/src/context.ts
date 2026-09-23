@@ -153,6 +153,31 @@ export class HostContext {
     return next;
   }
 
+  /**
+   * A restarted host's pass over a channel thread: a run a crash cut short (its turn still
+   * open, not parked) runs on from the log, then the thread's missing replies are issued.
+   * "busy" when it must be looked at again on a later tick.
+   */
+  async recover(
+    tenant: string,
+    thread: { readonly id: ThreadId; readonly branch: BranchId },
+  ): Promise<"done" | "busy"> {
+    const { log } = await this.open(tenant);
+    const read = log.read(thread.branch);
+    if (!read.ok) return "done";
+    const { fold } = read.value;
+    if (!fold.turnOpen || fold.parked.length > 0)
+      return this.replies(tenant, thread);
+    const events = knownEvents(read.value);
+    const hosted = this.agentOf(events);
+    const who = events.findLast((e) => e.type === "user_input")?.actor
+      .principal;
+    if (hosted === undefined || who === undefined) return "done";
+    // The run issues its replies as it ends; the next tick confirms the turn closed.
+    await this.resume(hosted, tenant, who, thread);
+    return "busy";
+  }
+
   async #reply(
     tenant: string,
     thread: { readonly id: ThreadId; readonly branch: BranchId },

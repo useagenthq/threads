@@ -1,5 +1,5 @@
 {
-  "description": " scenario coverage. One entry per scenario; each piece of evidence is a corpus case, a per-language behavior test, a job (crash injection, competing processes, cross-language parity) or a live-provider release gate (readiness gate 13). status implemented means the evidence artifact exists: for a case, its fixture directory. It does not mean either runtime passes it; the runners report that. gen_fixtures.py --check validates this file.",
+  "description": " scenario coverage. One entry per scenario; each piece of evidence is a corpus case, a per-language behavior test, a job (crash injection, competing processes, cross-language parity) or a live-provider release gate (readiness gate 13). status implemented means the evidence artifact exists: for a case, its fixture directory; for a job, the test files its tests list (repo-relative, one per language). It does not mean either runtime passes it; the runners report that. gen_fixtures.py --check validates this file.",
   "scenarios": [
     {
       "id": "F1.1",
@@ -993,7 +993,11 @@
         {
           "kind": "job",
           "ref": "kill-restart-acked-events",
-          "status": "planned"
+          "status": "implemented",
+          "tests": [
+            "python/tests/jobs/test_kill_restart.py",
+            "typescript/packages/host/test/jobs/kill-restart.test.ts"
+          ]
         }
       ]
     },
@@ -1118,7 +1122,11 @@
         {
           "kind": "job",
           "ref": "two-writers-fenced",
-          "status": "planned"
+          "status": "implemented",
+          "tests": [
+            "python/tests/jobs/test_two_writers.py",
+            "typescript/packages/host/test/jobs/two-writers.test.ts"
+          ]
         },
         {
           "kind": "case",
@@ -1324,7 +1332,11 @@
         {
           "kind": "job",
           "ref": "schedule-two-schedulers-one-run",
-          "status": "planned"
+          "status": "implemented",
+          "tests": [
+            "python/tests/jobs/test_two_schedulers.py",
+            "typescript/packages/host/test/jobs/two-schedulers.test.ts"
+          ]
         }
       ]
     },
