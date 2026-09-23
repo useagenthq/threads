@@ -2231,7 +2231,8 @@
           "budget_unenforceable",
           "permission_rule_invalid",
           "hosted_tool_unsupported",
-          "egress_policy_unsupported"
+          "egress_policy_unsupported",
+          "transport_fence_unsupported"
         ]
       }
     },
@@ -2324,7 +2325,7 @@
           "returns": {"result": {"prim": "integer"}, "errors": ["unavailable", "timeout"]}
         }
       },
-      "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off. Every send and lookup awaits context.fence() at its real network send, after any SDK or bridge queueing (AGENTS invariant 2: a send can carry provider-hosted tools, so a stale send is never treated as harmless). An adapter or bridge route whose real transport it cannot wrap is refused when the model is constructed, with transport_fence_unsupported; it is never shipped with a weaker fence.",
+      "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off. Every send and lookup awaits context.fence() at its real network send, after any SDK or bridge queueing (AGENTS invariant 2: a send can carry provider-hosted tools, so a stale send is never treated as harmless). An adapter or bridge route whose real transport it cannot wrap is refused when the model is constructed: ConfigError transport_fence_unsupported; it is never shipped with a weaker fence.",
       "source": ""
     },
     "ModelContext": {
