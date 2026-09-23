@@ -2,7 +2,6 @@
 `tools` (the command's first word names the entry)."""
 
 import asyncio
-import posixpath
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from typing import Literal, NotRequired, TypedDict
 
@@ -17,6 +16,7 @@ from threads.sandbox.protocol import (
     SandboxContext,
     SandboxError,
     SandboxId,
+    invalid_path,
     refused,
 )
 
@@ -67,7 +67,7 @@ class FakeSession:
     ) -> Ok[ExecOutput] | Err[SandboxError]:
         if not command:
             raise ValueError("exec needs a command")
-        bad = _invalid(cwd) or await refused(context)
+        bad = invalid_path(cwd) or await refused(context)
         if bad is not None:
             return bad
         tool = self._tools.get(command[0])
@@ -97,14 +97,14 @@ class FakeSession:
     async def upload(
         self, path: str, data: bytes, context: SandboxContext
     ) -> Ok[None] | Err[SandboxError]:
-        bad = _invalid(path) or self._directory(path) or await refused(context)
+        bad = invalid_path(path) or self._directory(path) or await refused(context)
         if bad is not None:
             return bad
         self.files[path] = data
         return Ok(None)
 
     async def download(self, path: str, context: SandboxContext) -> Ok[bytes] | Err[SandboxError]:
-        bad = _invalid(path) or self._directory(path) or await refused(context)
+        bad = invalid_path(path) or self._directory(path) or await refused(context)
         if bad is not None:
             return bad
         data = self.files.get(path)
@@ -125,13 +125,6 @@ class FakeSession:
         if any(name.startswith(prefix) for name in self.files):
             return Err(SandboxError("is_directory", f"{path} is a directory"))
         return None
-
-
-def _invalid(path: str) -> Err[SandboxError] | None:
-    # Absolute and already normal: no relative parts, no `..` escape.
-    if not path.startswith("/") or posixpath.normpath(path) != path:
-        return Err(SandboxError("invalid_path", f"not an absolute normal path: {path}"))
-    return None
 
 
 def _output(code: int, stdout: bytes, stderr: bytes) -> ExecOutput:

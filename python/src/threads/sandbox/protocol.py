@@ -5,6 +5,7 @@ Every create and restore carries an operation key that the resource ledger recor
 . Expected failures are `SandboxError` values; an adapter raises only for bugs.
 """
 
+import posixpath
 from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -84,6 +85,13 @@ async def refused(context: SandboxContext) -> Err[SandboxError] | None:
     if isinstance(passed, Ok):
         return None
     return Err(SandboxError(refusal(context.authority), passed.error.message))
+
+
+def invalid_path(path: str) -> Err[SandboxError] | None:
+    """A sandbox path is absolute and already normal: no relative parts, no `..` escape."""
+    if not path.startswith("/") or posixpath.normpath(path) != path:
+        return Err(SandboxError("invalid_path", f"not an absolute normal path: {path}"))
+    return None
 
 
 @dataclass(frozen=True, slots=True)
