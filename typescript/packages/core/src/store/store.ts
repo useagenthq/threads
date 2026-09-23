@@ -305,6 +305,12 @@ export class LogStore {
       ]);
       if (!forked.ok) return forked;
       setBranchState(this.#db, writer.lease.branchId, "ready");
+      // The fork is done with the child; hand the lease back so a run can take it at once.
+      putLease(this.#db, writer.lease.branchId, {
+        holder_id: writer.lease.holderId,
+        epoch: writer.lease.epoch,
+        expires_at: this.#now(),
+      });
       return ok(undefined);
     });
   }

@@ -52,7 +52,10 @@ describe("fork", () => {
   test("a child references its parent's rows and continues its epochs", () => {
     const { db, store, clock } = parentWithSnapshot();
     const parentBefore = unwrap(store.exportBranch(ROOT));
-    const child = unwrap(fork(store, 4));
+    const forked = unwrap(fork(store, 4));
+    expect(forked.lease.epoch).toBe(2); // the fork event's epoch
+    // The fork hands its lease back, so a run takes the child at once, one epoch on.
+    const child = unwrap(store.acquire(CHILD, "holder-r"));
     unwrap(child.append([userInput("again")]));
 
     expect(count(db, CHILD)).toEqual({ n: 2 }); // fork + user_input, no parent row copied
@@ -63,7 +66,7 @@ describe("fork", () => {
     expect(log.segments.map((s) => s.header.branch_id)).toEqual([ROOT, CHILD]);
     const state = reduce(log, clock.now);
     expect(state.branch_id).toBe(CHILD);
-    expect(state.epoch).toBe(2);
+    expect(state.epoch).toBe(3);
     expect(state.head.seq).toBe(6);
     expect(state.status).toBe("in_turn");
   });
