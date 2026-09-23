@@ -89,7 +89,7 @@ def not_sent(error: BaseException) -> bool:
     return isinstance(cause, httpx2.ConnectError | httpx2.ConnectTimeout)
 
 
-def rejection(status: int, headers: httpx2.Headers, too_long: bool) -> Rejected:
+def rejection(status: int, headers: Mapping[str, str], too_long: bool) -> Rejected:
     """a provider's HTTP rejection before any content."""
     if status == HTTPStatus.TOO_MANY_REQUESTS:
         return Rejected("rate_limited", status, _retry_after_ms(headers))
@@ -102,7 +102,7 @@ def rejection(status: int, headers: httpx2.Headers, too_long: bool) -> Rejected:
     return Rejected("provider_error", status)
 
 
-def _retry_after_ms(headers: httpx2.Headers) -> int | None:
+def _retry_after_ms(headers: Mapping[str, str]) -> int | None:
     millis = headers.get("retry-after-ms")
     if millis is not None and millis.isdigit():
         return int(millis)

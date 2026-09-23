@@ -1,8 +1,12 @@
 """`litellm()`: the LiteLLM bridge for providers without a first-party adapter.
 
 One transport attempt per send: LiteLLM's retries are off (`num_retries=0`, `max_retries=0`),
-and threads records and schedules every retry. The fence runs immediately
-before LiteLLM is called.
+and threads records and schedules every retry.
+
+The fence runs immediately before `acompletion`, not at the socket. LiteLLM does queue on the
+async path: `acompletion` runs the provider's request preparation in the event loop's default
+thread executor before sending, so a lease lost while that executor is busy is not caught
+here. Use a first-party adapter where that window matters.
 """
 
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable, Mapping
@@ -45,10 +49,8 @@ ACOMPLETION: Complete = getattr(bridge, "acompletion")  # noqa: B009
 class LiteLLMModel:
     """spec/api.json `Model` over LiteLLM. No response lookup.
 
-    ponytail: the fence runs before `acompletion`, not at LiteLLM's socket write: LiteLLM uses
-    a different HTTP stack per provider, so a lease lost during its own request preparation
-    (for example a credential refresh) is not caught. Use a first-party adapter where that
-    window matters.
+    ponytail: fenced before `acompletion` only (see the module docstring); LiteLLM uses a
+    different HTTP stack per provider, so there is no one transport to fence at the socket.
     """
 
     def __init__(
@@ -83,13 +85,24 @@ class LiteLLMModel:
             if started:
                 raise
             too_long = isinstance(error, ContextWindowExceededError)
-            yield transport.rejection(error.status_code, error.response.headers, too_long)
+            yield transport.rejection(error.status_code, _headers(error), too_long)
             return
         for chunk in assembler.finish():
             yield chunk
 
     async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
         return LookupUnknown("LiteLLM has no lookup by client request id")
+
+
+def _headers(error: sdk.APIStatusError) -> Mapping[str, str]:
+    """LiteLLM rebuilds the status error without the provider's headers and keeps them in
+    `litellm_response_headers`: retry-after is read there, else from the response."""
+    kept: object = getattr(error, "litellm_response_headers", None)
+    return kept if _is_headers(kept) else error.response.headers
+
+
+def _is_headers(value: object) -> TypeGuard[Mapping[str, str]]:
+    return isinstance(value, Mapping)
 
 
 def _is_stream(value: object) -> TypeGuard[AsyncIterable[object]]:

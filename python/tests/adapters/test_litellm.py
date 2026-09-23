@@ -143,8 +143,7 @@ def test_chunks_through_litellm_map_to_deltas_parts_and_usage() -> None:
 @pytest.mark.parametrize(
     ("status", "message", "expected"),
     [
-        # LiteLLM's OpenAI route drops the provider's headers, so no retry-after: backoff.
-        (429, "Rate limit reached", Rejected("rate_limited", 429)),
+        (429, "Rate limit reached", Rejected("rate_limited", 429, 2000)),
         (500, "The server had an error", Rejected("server_error", 500)),
         (400, "This model's maximum context length is 8 tokens", Rejected("prompt_too_long", 400)),
         (401, "Incorrect API key provided", Rejected("provider_error", 401)),
