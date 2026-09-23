@@ -79,11 +79,24 @@ The scripted model's first answer uses `"urgent"`, which isn't allowed, so it is
 ## Options
 
 <Field name="output" type="z.ZodType / type[BaseModel]">
-  The schema of the final answer. The agent's type becomes `Agent<Deps, z.infer<typeof schema>>` in TypeScript and `Agent[D, Triage]` in Python. In Python anything but a Pydantic model class is a `ConfigError`, and so is a model whose JSON Schema the log can't check: bounds (`ge`, `gt`, `le`, `lt`), lengths, patterns, `Literal`s, enums, optional fields and nested or recursive models are fine; a `format` (such as `datetime`) or `multiple_of` is refused at setup, with the keyword named.
+  The schema of the final answer. The agent's type becomes `Agent<Deps, z.infer<typeof schema>>` in TypeScript and `Agent[D, Triage]` in Python. In Python anything but a Pydantic model class is a `ConfigError`.
 </Field>
 <Field name="outputRetries / output_retries" type="number / int" default="2">
   When this many answers have failed in a turn (rejected by the schema, or plain text with no `final_output` call, which is answered with a request to call it), the run ends `failed` with code `output_invalid`. A non-negative integer; anything else is a `ConfigError` (`invalid_config`).
 </Field>
+
+## What an output schema can use
+
+The log checks every accepted answer against the schema itself, the same way in both languages. An answer your validator takes but the log's check doesn't (a datetime without a time zone, a URL with a space) is rejected like any other, and the model tries again. What the check covers:
+
+| In the schema | From |
+|---|---|
+| Types, required and optional fields, `Literal`s and enums, unions, nested and recursive models | any model |
+| Bounds (`ge`, `gt`, `le`, `lt`) and `multiple_of` / `.multipleOf()`, exact in decimal | numbers |
+| Lengths and patterns | strings and lists |
+| `date-time` (RFC 3339, with a time zone), `date`, `time` (with a time zone), `email`, `uri`, `uuid` | `datetime`, `date`, `time`, `UUID`, `EmailStr`, `AnyUrl`; `z.iso.datetime({ offset: true })`, `z.iso.date()`, `z.email()`, `z.url()`, `z.uuid()` |
+
+Anything else, such as a tuple (`prefixItems`), a dict with constrained keys or another `format`, is refused when the agent is set up, with a `ConfigError` (`invalid_config`) that names the keyword. The exact rules are in the [log schema reference](https://github.com/useagenthq/threads/blob/main/spec/schema/README.md#output-schemas-rule-20).
 
 Each accepted or rejected answer is recorded in the log, so you can see in the [timeline](/docs/evals/timeline) exactly what the model tried.
 

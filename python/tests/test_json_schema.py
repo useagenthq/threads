@@ -2,6 +2,8 @@
 refuses at setup a schema holds can't fully check."""
 
 import enum
+import json
+from pathlib import Path
 from typing import Literal
 
 import pytest
@@ -76,8 +78,8 @@ def test_a_recursive_model_is_checked_at_any_depth() -> None:
 @pytest.mark.parametrize(
     ("schema", "named"),
     [
-        ({"type": "string", "format": "date-time"}, "'format'"),
-        ({"properties": {"n": {"multipleOf": 2}}}, "'multipleOf'"),
+        ({"type": "string", "format": "hostname"}, "unsupported format 'hostname'"),
+        ({"properties": {"pair": {"prefixItems": [{"type": "integer"}]}}}, "'prefixItems'"),
         ({"items": {"$ref": "https://example.com/x"}}, "unsupported $ref"),
         ({"anyOf": [{"pattern": "("}]}, "doesn't compile"),
     ],
@@ -86,3 +88,29 @@ def test_unchecked_names_what_holds_cant_check_anywhere(schema: JsonValue, named
     why = unchecked(schema)
     assert why is not None
     assert named in why
+
+
+VECTOR = Path(__file__).resolve().parents[2] / "spec/conformance/vectors/multiple-of.json"
+
+
+def test_multiple_of_is_decimal_exact_on_the_shared_vector() -> None:
+    cases = json.loads(VECTOR.read_text())["cases"]
+    got = [holds({"multipleOf": c["divisor"]}, c["value"]) for c in cases]
+    assert got == [c["multiple"] for c in cases]
+
+
+@pytest.mark.parametrize(
+    ("form", "good", "bad"),
+    [
+        ("date-time", "2024-02-29T23:59:59.5+05:30", "2023-02-29T10:00:00Z"),
+        ("date", "2024-02-29", "2024-13-01"),
+        ("time", "10:00:00Z", "10:00:00"),
+        ("email", "a.b+c@x-y.example.com", "a@b"),
+        ("uri", "urn:isbn:0451450523", "example.com/x"),
+        ("uuid", "123E4567-e89b-12d3-a456-426614174000", "123e4567e89b12d3a456426614174000"),
+    ],
+)
+def test_each_format_accepts_and_rejects(form: str, good: str, bad: str) -> None:
+    assert holds({"format": form}, good)
+    assert not holds({"format": form}, bad)
+    assert holds({"format": form}, 7)  # a format constrains strings only

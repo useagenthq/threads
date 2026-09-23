@@ -197,3 +197,46 @@ describe("constraints, enums and recursive schemas", () => {
     expect(outcomes).toEqual(["rejected", "rejected", "accepted"]);
   });
 });
+
+const Meeting = z.object({
+  at: z.iso.datetime({ offset: true }),
+  day: z.iso.date(),
+  id: z.uuid(),
+  host: z.email(),
+  link: z.url(),
+});
+
+describe("formats", () => {
+  test("are checked by the log too; a value it refuses is retried", async () => {
+    const good = {
+      at: "2026-09-23T10:00:00+02:00",
+      day: "2026-09-23",
+      id: "123e4567-e89b-12d3-a456-426614174000",
+      host: "ops@example.com",
+      link: "https://example.com/standup",
+    };
+    // z.url() takes a space in the path; the pinned schema's uri doesn't.
+    const spaced = { ...good, link: "https://example.com/stand up" };
+    const bot = agent({
+      model: scriptedModel({ responses: [final(spaced), final(good, "c2")] }),
+      output: Meeting,
+    });
+    const result = await bot.run("Book it.", { store: sqlite(":memory:") });
+    expect(result).toMatchObject({ status: "completed", output: good });
+    const rejected = only(await logOf(result.thread), "tool_result")[0];
+    expect(rejected?.data.preview).toContain("fails the pinned output schema");
+  });
+
+  test("a schema keyword the log can't check is refused at setup", async () => {
+    const bot = agent({
+      model: scriptedModel({ responses: [] }),
+      output: z.object({ pair: z.tuple([z.number(), z.string()]) }),
+    });
+    const checked = await bot.check();
+    expect(checked).toMatchObject({
+      ok: false,
+      error: { code: "invalid_config" },
+    });
+    expect(checked.ok ? "" : checked.error.message).toContain("prefixItems");
+  });
+});

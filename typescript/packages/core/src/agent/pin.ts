@@ -20,6 +20,7 @@ import type { EventDraft } from "../store";
 import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
+import { unchecked } from "../validate/json-schema";
 import { checkEnforceable } from "./enforceable";
 import { ConfigError } from "./errors";
 import { type Extension, hookNames } from "./extension";
@@ -315,6 +316,13 @@ function outputPolicy(
   maxRetries: number,
 ): NonNullable<Policy["output"]> {
   const exported = jsonSchema("output", schema);
+  // Refused here, never by a run that has an answer to record: the log checks every keyword.
+  const why = unchecked(exported);
+  if (why !== undefined)
+    throw new ConfigError(
+      "invalid_config",
+      `output: ${why}; use a bound, a length, a pattern, an enum or a format the log checks`,
+    );
   const text = canonicalize(exported);
   if (!text.ok) throw new ConfigError("invalid_config", text.error.message);
   return {

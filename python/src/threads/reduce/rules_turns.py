@@ -2,11 +2,11 @@
 26, 27 in spec/schema/README.md)."""
 
 from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
-from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads._json_schema import holds
+from threads._json_schema import conforms
 from threads.log import (
     BudgetExceededEvent,
     HandoffEvent,
@@ -30,6 +30,9 @@ from threads.log.jcs import MAX_SAFE_INTEGER
 from threads.reduce.fold import Fold, policy, reject
 from threads.reduce.handlers import Handler, on, to_json
 from threads.result import Ok
+
+if TYPE_CHECKING:
+    from pydantic import JsonValue
 
 
 def _thread_started(fold: Fold, event: ThreadStartedEvent) -> None:
@@ -143,19 +146,10 @@ def _output_validated(fold: Fold, event: OutputValidatedEvent) -> ParseError | N
     data = event.data
     if data.schema_sha256 != pinned.output.schema_sha256:
         return reject(event, "schema_sha256 differs from policy.output.schema_sha256")
-    if data.outcome == "accepted" and not _conforms(pinned.output.schema_, data.value):
+    accepted = data.outcome == "accepted"
+    if accepted and (data.value is MISSING or not conforms(pinned.output.schema_, data.value)):
         return reject(event, "the accepted value fails policy.output.schema")
     return None
-
-
-def _conforms(schema: Mapping[str, JsonValue], value: JsonValue | MISSING) -> bool:
-    if value is MISSING:
-        return False
-    try:
-        return holds(dict(schema), value)
-    except TypeError:
-        # A keyword this reader can't check: fail closed rather than accept unchecked output.
-        return False
 
 
 HANDLERS: Mapping[type, Handler] = dict(

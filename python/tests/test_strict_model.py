@@ -55,7 +55,7 @@ def test_holds(schema: JsonValue, value: object, *, expected: bool) -> None:
 
 def test_unsupported_keyword_is_a_bug() -> None:
     with pytest.raises(TypeError, match="unsupported schema keyword"):
-        holds({"multipleOf": 2}, 4)
+        holds({"propertyNames": {}}, {})
 
 
 def test_an_explicit_missing_sentinel_is_rejected() -> None:

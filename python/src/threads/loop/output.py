@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Final
 
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads._json_schema import conforms
 from threads.log import Event, InjectedEvent, OutputValidatedEvent, ToolSpec
 from threads.log import Output as OutputPolicy
 from threads.log.jcs import canonicalize
@@ -48,6 +49,10 @@ async def validate(rt: Runtime, state: CallState) -> Halt | None:
         raise AssertionError("final_output is validated only under policy.output")
     value: JsonValue = dict(state.call.data.input)
     why = "unsupported: no output binding" if rt.output is None else rt.output(value)
+    if why is None and not conforms(output.schema_, value):
+        # The log's own check (semantic rule 20) is what an accepted value must pass, whatever
+        # the agent's validator lets through (a naive datetime, a URL without a scheme).
+        why = "the value fails the pinned output schema (its formats and bounds)"
     data: dict[str, JsonValue] = {
         "source_event_id": state.call.event_id,
         "schema_sha256": output.schema_sha256,

@@ -4,11 +4,12 @@ and a structured subagent reports the canonical JSON of its output."""
 
 import asyncio
 from collections.abc import Sequence
-from datetime import datetime
-from typing import Literal
+from datetime import date, datetime
+from typing import Annotated, Literal
+from uuid import UUID
 
 import pytest
-from pydantic import BaseModel, Field, JsonValue
+from pydantic import AnyUrl, BaseModel, Field, JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads import Completed, ConfigError, EventItem, Failed, Thread, agent, scripted_model, sqlite
@@ -240,11 +241,42 @@ def test_constraints_enums_and_recursive_models_are_checked_never_crash_the_run(
 
 class Meeting(BaseModel):
     at: datetime
+    day: date
+    id: UUID
+    host: Annotated[str, Field(json_schema_extra={"format": "email"})]
+    link: AnyUrl
+
+
+def test_formats_are_checked_by_the_log_and_a_value_it_refuses_is_retried() -> None:
+    async def main() -> None:
+        good: dict[str, JsonValue] = {
+            "at": "2026-09-23T10:00:00Z",
+            "day": "2026-09-23",
+            "id": "123e4567-e89b-12d3-a456-426614174000",
+            "host": "ops@example.com",
+            "link": "https://example.com/standup",
+        }
+        # Pydantic takes a naive datetime; the pinned schema's RFC 3339 date-time doesn't.
+        naive = {**good, "at": "2026-09-23T10:00:00"}
+        script: JsonValue = {"responses": [final(naive), final(good, "c2")]}
+        bot = agent(model=scripted_model(script), output=Meeting)
+        result = await bot.run("Book the standup.", store=sqlite(":memory:"))
+        assert isinstance(result, Completed)
+        assert str(result.output.id) == "123e4567-e89b-12d3-a456-426614174000"
+        events = await events_of(result.thread)
+        rejected = only(events, ToolResultEvent)[0].data.preview
+        assert "fails the pinned output schema" in rejected
+
+    asyncio.run(main())
+
+
+class Pair(BaseModel):
+    pair: tuple[int, str]
 
 
 def test_an_output_model_the_log_cant_check_is_refused_at_setup() -> None:
     with pytest.raises(ConfigError) as raised:
-        agent(model=scripted_model({"responses": []}), output=Meeting)
+        agent(model=scripted_model({"responses": []}), output=Pair)
     assert raised.value.code == "invalid_config"
-    assert "Meeting" in str(raised.value)
-    assert "'format'" in str(raised.value)
+    assert "Pair" in str(raised.value)
+    assert "'prefixItems'" in str(raised.value)
