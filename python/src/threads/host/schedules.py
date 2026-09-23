@@ -10,7 +10,7 @@ schedule itself as the principal.
 import asyncio
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Final
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -101,6 +101,23 @@ def zone(name: str) -> ZoneInfo:
         raise ConfigError("invalid_config", f"unknown timezone {name!r}") from None
 
 
+def is_due(cron: Cron, timezone: str, at: int) -> bool:
+    """Whether the instant `at` (UTC ms, on a minute) fires, by the wall-clock rules: a local time
+    skipped by a spring-forward runs at the first valid instant after it; a local time repeated by
+    a fall-back runs only at its first instance (fold 0)."""
+    tz = zone(timezone)
+    here = datetime.fromtimestamp(at / 1000, UTC).astimezone(tz)
+    before = datetime.fromtimestamp((at - MINUTE_MS) / 1000, UTC).astimezone(tz)
+    wall, skipped = here.replace(tzinfo=None, fold=0), before.replace(tzinfo=None, fold=0)
+    step = timedelta(minutes=1)
+    skipped += step
+    while skipped < wall:  # wall minutes that never happened: they run now
+        if cron.matches(skipped):
+            return True
+        skipped += step
+    return here.fold == 0 and cron.matches(wall)
+
+
 class Scheduler:
     def __init__(
         self, runner: Runner, schedules: Sequence[Schedule], clock: Callable[[], int] = now_ms
@@ -126,10 +143,9 @@ class Scheduler:
             await asyncio.sleep((at + MINUTE_MS - self._clock()) / 1000)
 
     async def tick(self, at: int) -> None:
-        """Fires every schedule whose cron matches the minute starting at `at` (UTC ms)."""
+        """Fires every schedule due at the minute starting at `at` (UTC ms)."""
         for schedule in self._schedules:
-            local = datetime.fromtimestamp(at / 1000, UTC).astimezone(zone(schedule.timezone))
-            if parse_cron(schedule.cron).matches(local):
+            if is_due(parse_cron(schedule.cron), schedule.timezone, at):
                 await self.fire(schedule, at)
 
     async def fire(self, schedule: Schedule, at: int) -> bool:
