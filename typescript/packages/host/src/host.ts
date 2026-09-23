@@ -12,7 +12,7 @@ import { consume } from "./consume";
 import { HostContext } from "./context";
 import { failure } from "./errors";
 import { type Authenticate, api } from "./http";
-import { receive } from "./intake";
+import { challenge, receive } from "./intake";
 import { type RunAccepted, type StartRunCode, startRun } from "./runs";
 import { bindSchedules, type Schedule, tick } from "./schedules";
 import type { StartRunRequest } from "./schemas";
@@ -96,6 +96,12 @@ export function host(options: HostOptions): Host {
     consuming.set(threadId, running);
   };
 
+  const kickAll = (
+    threads: readonly { readonly tenant: string; readonly threadId: string }[],
+  ): void => {
+    for (const t of threads) kick(t.tenant, t.threadId);
+  };
+
   const sweep = async (): Promise<void> => {
     const { db } = await storeConnection(ctx.store);
     const rows = db.all(
@@ -131,15 +137,12 @@ export function host(options: HostOptions): Host {
         return pathname.startsWith("/v1/")
           ? api(ctx, options.authenticate, request)
           : failure("not_found", `no route ${pathname}`);
+      const name = decodeURIComponent(channel[1] ?? "");
+      if (request.method === "GET") return challenge(ctx, name, request);
       if (request.method !== "POST")
-        return failure("not_found", "webhooks are POST");
-      const received = await receive(
-        ctx,
-        decodeURIComponent(channel[1] ?? ""),
-        request,
-      );
-      if (timer !== undefined)
-        for (const t of received.threads) kick(t.tenant, t.threadId);
+        return failure("not_found", "webhooks are GET or POST");
+      const received = await receive(ctx, name, request);
+      if (timer !== undefined) kickAll(received.threads);
       return received.response;
     },
     startRun: (request, { principal, idempotencyKey }) =>

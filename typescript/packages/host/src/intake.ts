@@ -63,6 +63,24 @@ export async function receive(
   return { response: responseOf(adapter, raw), threads };
 }
 
+/** GET /channels/{channel}/events: the adapter's subscription check, if it has one. */
+export function challenge(
+  ctx: HostContext,
+  channel: string,
+  request: Request,
+): Response {
+  const check = ctx.channels.get(channel)?.challenge;
+  if (check === undefined)
+    return failure("not_found", `no subscription check for ${channel}`);
+  const answer = check(Object.fromEntries(new URL(request.url).searchParams));
+  if (!answer.ok) return failure("unverified", answer.error.message);
+  const { status, headers, body } = answer.value;
+  return new Response(Uint8Array.from(body), {
+    status,
+    headers: { ...headers },
+  });
+}
+
 async function rawOf(request: Request): Promise<RawRequest> {
   const headers: Record<string, string> = {};
   request.headers.forEach((value, name) => {

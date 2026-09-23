@@ -164,6 +164,13 @@ export type ChannelAdapter = {
     { readonly code: "invalid"; readonly message: string }
   >;
   readonly ack: (raw: RawRequest) => RawResponse;
+  /** Optional: a provider's GET subscription check (WhatsApp hub.challenge); pure. */
+  readonly challenge?: (
+    query: Readonly<Record<string, string>>,
+  ) => Result<
+    RawResponse,
+    { readonly code: "unverified"; readonly message: string }
+  >;
   /**
    * Outbound ops (adapter-defined JSON) for an event: the host renders a turn's final
    * model_response and sets each op's `address` and `installation_id` before perform.
