@@ -68,7 +68,12 @@ describe("outputRetries", () => {
     const result = await bot.run("Fixed?", { store: sqlite(":memory:") });
     expect(result).toMatchObject({
       status: "failed",
-      error: { code: "output_invalid" },
+      // The same actionable text as Python's.
+      error: {
+        code: "output_invalid",
+        message:
+          "the model's answer failed the output schema on every retry; raise output retries or loosen the schema",
+      },
     });
   });
 });
