@@ -5,7 +5,19 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 from threads.agents.store import HOLDER, Store, now_ms, open_store
-from threads.log import BranchId, Event, EventId, ParseError, SnapshotData, SnapshotEvent, ThreadId
+from threads.log import (
+    AgentFinishedEvent,
+    AgentSpawnedEvent,
+    BranchId,
+    Event,
+    EventId,
+    ParseError,
+    SnapshotData,
+    SnapshotEvent,
+    ThreadId,
+    Todo,
+    TodosUpdatedEvent,
+)
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import VerifiedLog
@@ -42,6 +54,14 @@ class Timeline:
     thread_id: ThreadId
     branch_id: BranchId
     entries: tuple[TimelineEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Child:
+    """host-api Child: a child thread and its terminal status, or running."""
+
+    child_thread_id: ThreadId
+    status: Literal["running", "completed", "failed", "cancelled", "budget_exhausted"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +123,29 @@ class Thread:
             return read
         request = CaseRequest(name, expect, external_effects, at, dir)
         return await save_case(await open_store(self.store), read.value, self.sandbox, request)
+
+    async def todos(self) -> Ok[tuple[Todo, ...]] | Err[ParseError]:
+        """The agent's current todo list: the latest todos_updated."""
+        read = await self._read()
+        if isinstance(read, Err):
+            return read
+        events = read.value.fold.events
+        latest = next((e for e in reversed(events) if isinstance(e, TodosUpdatedEvent)), None)
+        return Ok(() if latest is None else tuple(latest.data.todos))
+
+    async def children(self) -> Ok[tuple[Child, ...]] | Err[ParseError]:
+        """Every subagent this thread spawned, in spawn order, with its terminal status."""
+        read = await self._read()
+        if isinstance(read, Err):
+            return read
+        children: dict[ThreadId, Child] = {}
+        for e in read.value.fold.events:
+            if isinstance(e, AgentSpawnedEvent):
+                children[e.data.child_thread_id] = Child(e.data.child_thread_id, "running")
+            elif isinstance(e, AgentFinishedEvent):
+                child = e.data.child_thread_id
+                children[child] = Child(child, e.data.status)
+        return Ok(tuple(children.values()))
 
     async def _read(self) -> Ok[VerifiedLog] | Err[ParseError]:
         sq = await open_store(self.store)

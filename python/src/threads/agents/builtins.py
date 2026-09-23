@@ -16,7 +16,8 @@ from threads.sandbox.protocol import Sandbox, SandboxError, SandboxSession
 from threads.store import SqliteStore, Writer
 from threads.store.worker import Clock
 from threads.thread.snapshot import take_snapshot
-from threads.tools import HOST, SANDBOXED, ReadResults, SandboxTools
+from threads.tools import FRAMEWORK, HOST, SANDBOXED, ReadResults, SandboxTools
+from threads.tools.runner import parse
 from threads.tools.specs import PROVIDED
 
 type Egress = Sequence[str] | Literal["unenforced"]
@@ -108,6 +109,9 @@ class Routed:
         return self._app
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
+        if spec.name in FRAMEWORK:
+            parsed = parse(spec.name, input)
+            return parsed.error if isinstance(parsed, Err) else None
         return self._for(spec.name).invalid(spec, input)
 
     async def dispatch(self, call: Invocation) -> Dispatched:

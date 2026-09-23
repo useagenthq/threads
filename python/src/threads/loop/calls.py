@@ -11,7 +11,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import CallId, EventId, ToolSpec, ToolUsePart
 from threads.log.digest import canonical_sha256
-from threads.loop import effects, gates, tool_gates
+from threads.loop import effects, gates, todos, tool_gates
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state
 from threads.loop.results import As, reference_drafts, result_draft
@@ -89,8 +89,17 @@ async def _advance(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
         return await close(rt, call_id, "denied", "denied by policy")
     if state.decision == "ask" and state.approved is None:
         return await await_approval(rt, state, "host")
+    return await _run(rt, state, spec)
+
+
+async def _run(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
+    """An authorized call: framework tools change only the log; the rest dispatch."""
     if _is_final_output(rt, spec):
         return await _final_output(rt, state)
+    if spec.name == "todo_write":
+        return await todos.write(rt, state)
+    if rt.framework is not None and spec.name in rt.framework.names:
+        return await rt.framework.run(rt, state)
     if spec.effect_class == "read_only":
         return await _read_only(rt, state, spec)
     return await _effect(rt, state, spec)

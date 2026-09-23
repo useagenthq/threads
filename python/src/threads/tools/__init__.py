@@ -3,6 +3,15 @@ glob and grep, and the host's read_tool_result."""
 
 from threads.tools.results import ReadResults
 from threads.tools.runner import SandboxTools
-from threads.tools.specs import HOST, NAMES, SANDBOXED, specs
+from threads.tools.specs import FRAMEWORK, HOST, NAMES, SANDBOXED, TEAM, specs
 
-__all__ = ["HOST", "NAMES", "SANDBOXED", "ReadResults", "SandboxTools", "specs"]
+__all__ = [
+    "FRAMEWORK",
+    "HOST",
+    "NAMES",
+    "SANDBOXED",
+    "TEAM",
+    "ReadResults",
+    "SandboxTools",
+    "specs",
+]

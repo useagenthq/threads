@@ -70,7 +70,17 @@ def test_builtins_are_pinned_first_and_bash_runs_in_the_sandbox(tmp_path: Path) 
         logged = await events(result)
         started = next(e for e in logged if isinstance(e, ThreadStartedEvent)).data
         names = [t.name for t in started.tools]
-        assert names == ["bash", "edit", "glob", "grep", "ls", "read", "read_tool_result", "write"]
+        assert names == [
+            "bash",
+            "edit",
+            "glob",
+            "grep",
+            "ls",
+            "read",
+            "read_tool_result",
+            "todo_write",
+            "write",
+        ]
         assert started.sandbox_provider == "local"
         done = next(e for e in logged if isinstance(e, ToolResultEvent))
         assert json.loads(done.data.preview)["stdout"] == "hi\n"

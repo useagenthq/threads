@@ -17,12 +17,21 @@ from threads.log.digest import sha256_hex
 from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
 from threads.result import Ok
 from threads.store import SqliteStore
-from threads.tools import NAMES, SandboxTools, specs
+from threads.tools import SandboxTools, specs
 from threads.tools.specs import Writes
 
 LIMITS = Spill(threshold_bytes=64, head_bytes=16, tail_bytes=8, request_budget_bytes=4096)
-SPECS = {s.name: s for s in specs(sandbox=True, egress_denied=True)}
 DAY_MS = 86_400_000
+ALL = specs(
+    sandbox=True,
+    egress_denied=True,
+    memory=Writes(),
+    knowledge=True,
+    spawn=True,
+    team=True,
+    handoffs=True,
+)
+SPECS = {s.name: s for s in ALL}
 
 type Call = Callable[[str, JsonObject], Awaitable[Dispatched]]
 
@@ -64,10 +73,9 @@ def test_specs_are_the_shared_catalog_and_read_tool_result_is_always_there() -> 
         {"name": s.name, "description": s.description, "input_schema": s.input_schema}
         for s in SPECS.values()
     ]
-    assert isinstance(catalog, list)
-    sandbox_tools = [e for e in catalog if isinstance(e, dict) and e["name"] in NAMES]
-    assert json.loads(json.dumps(pinned)) == sandbox_tools
-    assert [s.name for s in specs(sandbox=False, egress_denied=True)] == ["read_tool_result"]
+    assert json.loads(json.dumps(pinned)) == catalog
+    bare = specs(sandbox=False, egress_denied=True)
+    assert [s.name for s in bare] == ["read_tool_result", "todo_write"]
 
 
 def test_memory_and_knowledge_tools_are_pinned_only_with_a_provider() -> None:
@@ -86,6 +94,7 @@ def test_memory_and_knowledge_tools_are_pinned_only_with_a_provider() -> None:
         "save_memory",
         "search_knowledge",
         "search_memory",
+        "todo_write",
     ]
     assert local["save_memory"].dedup_window_ms == DAY_MS
     assert local["search_memory"].effect_class == "read_only"

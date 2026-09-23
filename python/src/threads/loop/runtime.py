@@ -6,7 +6,7 @@ epoch: a stale owner's append fails before it can dispatch anything.
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Final, Literal
+from typing import Final, Literal, Protocol
 
 from pydantic import JsonValue
 
@@ -20,6 +20,7 @@ from threads.log import (
     ToolCallData,
     ToolSpec,
 )
+from threads.loop.history import CallState
 from threads.loop.model import Model
 from threads.loop.tools import ToolRunner
 from threads.permissions import Decision
@@ -87,6 +88,16 @@ class Failed:
 type Halt = Idle | Parked | Failed
 
 
+class Framework(Protocol):
+    """The framework tools the agents layer runs on the log (spawn_agent, handoff, the team
+    tools; ): each advances its call to a result, or halts."""
+
+    @property
+    def names(self) -> frozenset[str]: ...
+
+    async def run(self, rt: "Runtime", state: CallState) -> "Halt | None": ...
+
+
 @dataclass(frozen=True, slots=True)
 class Runtime:
     store: SqliteStore
@@ -107,6 +118,8 @@ class Runtime:
     read_file: Callable[[str], Awaitable[bytes | None]] | None = None
     """L3 restore's sandbox read, a framework read_only operation; None
     when there is no sandbox or the file can't be read."""
+    framework: Framework | None = None
+    """Subagents, handoffs and teams, bound by the agents layer; None: those tools aren't run."""
 
     @property
     def fold(self) -> Fold:
