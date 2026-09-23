@@ -175,6 +175,7 @@ function build<Deps, Output>(
           options.sandbox,
           options.memory,
           options.knowledge,
+          options.web?.search,
         ],
         [...(options.subagents ?? []), ...(options.handoffs ?? [])],
         walked,

@@ -2,6 +2,7 @@
 against a loopback server, redirects, markdown, and search results with citations."""
 
 import asyncio
+import dataclasses
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 
 import pytest
@@ -312,7 +313,7 @@ def test_search_backends_send_the_key_on_the_host_and_parse_hits() -> None:
         ):
             canned = _Canned(body)
             backend = make(secret(env_key))
-            backend = type(backend)(backend.key, backend.build, backend.parse, canned, _public)
+            backend = dataclasses.replace(backend, transport=canned, resolver=_public)
             with bound(_open):
                 got = await backend.search("q", blocked_domains=["b.example"])
             assert isinstance(got, Ok)

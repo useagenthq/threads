@@ -19,6 +19,8 @@
     "functions/fakeSandbox",
     "functions/host",
     "---[Plug]Providers---",
+    "functions/supermemory",
+    "functions/zep",
     "functions/exa",
     "functions/tavily",
     "functions/brave",

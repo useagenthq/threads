@@ -3,18 +3,23 @@
   "packages": {
     "search": {
       "ts": ["typescript/packages/core/src/tools/search-backends.ts"],
-      "py": ["python/src/threads/search.py"],
-      "gaps": {
-        "missing_secret": { "owner": "09", "why": "Temporary: agent.check() should report an unset key before any run. Lane 09 resolves the key at setup and then declares missing_secret on exa, tavily and brave. Until then an unset key fails each search as unavailable, naming the variable (both languages).", "sites": { "typescript/packages/core/src/tools/search-backends.ts": 1, "python/src/threads/search.py": 1 } }
-      }
+      "py": ["python/src/threads/search.py"]
+    },
+    "supermemory": {
+      "ts": ["typescript/packages/supermemory/src"],
+      "py": ["python/src/threads/supermemory.py", "python/src/threads/adapters/memories/supermemory.py"]
+    },
+    "zep": {
+      "ts": ["typescript/packages/zep/src"],
+      "py": ["python/src/threads/zep.py", "python/src/threads/adapters/memories/zep.py"]
     }
   },
   "factories": {
     "exa": { "owner": "15A", "review_only": { "transport": "Seam: the live transport is the network itself; tests pass a fake one." } },
     "tavily": { "owner": "15A", "review_only": { "transport": "Seam: the live transport is the network itself; tests pass a fake one." } },
     "brave": { "owner": "15A", "review_only": { "transport": "Seam: the live transport is the network itself; tests pass a fake one." } },
-    "supermemory": { "owner": "15A", "pending": "Memory with Supermemory." },
-    "zep": { "owner": "15A", "pending": "Memory with Zep." },
+    "supermemory": { "owner": "15A" },
+    "zep": { "owner": "15A" },
     "anthropic": { "owner": "06", "pending": "Claude models." },
     "openai": { "owner": "06", "pending": "OpenAI models." },
     "aiSdk": { "owner": "06", "pending": "Any AI SDK model (TypeScript only)." },
@@ -49,8 +54,10 @@
     { "factory": "daytona", "option": "fetch", "lang": "ts", "decision": "Seams: fetch, openSocket, pollMs, waitMs.", "owner": "15B" },
     { "factory": "daytona", "option": "name", "lang": "py", "decision": "Python only, as for e2b.", "owner": "15B" },
     { "factory": "modal", "option": "*", "lang": "py", "decision": "Every option is Python only; TS modal() takes no parameters and always refuses (transport_fence_unsupported).", "owner": "15B" },
-    { "factory": "supermemory", "option": "base_url", "lang": "both", "decision": "baseUrl / base_url; fetch is a TS seam.", "owner": "09" },
-    { "factory": "zep", "option": "base_url", "lang": "both", "decision": "baseUrl / base_url; fetch is a TS seam.", "owner": "09" },
+    { "factory": "supermemory", "option": "base_url", "lang": "both", "decision": "baseUrl / base_url.", "owner": "09" },
+    { "factory": "supermemory", "option": "fetch", "lang": "ts", "decision": "Seam: the SDK's fetch, fenced either way.", "owner": "15A" },
+    { "factory": "zep", "option": "base_url", "lang": "both", "decision": "baseUrl / base_url.", "owner": "09" },
+    { "factory": "zep", "option": "fetch", "lang": "ts", "decision": "Seam: the SDK's fetch, fenced either way.", "owner": "15A" },
     { "factory": "mem0", "option": "host", "lang": "both", "decision": "Python gains host; the refusal is unchanged.", "owner": "15B" },
     { "factory": "slack", "option": "bot_user_id", "lang": "both", "decision": "Python gains the optional override.", "owner": "15B" },
     { "factory": "slack", "option": "tenant", "lang": "ts", "decision": "TypeScript only: multi-workspace mapping; Python binds one workspace per channel.", "owner": "15B" },
@@ -62,6 +69,6 @@
     { "factory": "exa", "option": "transport", "lang": "ts", "decision": "Seam: an optional positional transport (platform type WebTransport).", "owner": "15A" },
     { "factory": "tavily", "option": "transport", "lang": "ts", "decision": "Seam, as for exa.", "owner": "15A" },
     { "factory": "brave", "option": "transport", "lang": "ts", "decision": "Seam, as for exa.", "owner": "15A" },
-    { "factory": "exa", "option": "api_key", "lang": "both", "decision": "Resolved at setup with missing_secret declared (lane 09). Until then: an unset key fails each search as unavailable, naming the variable, in both languages (Python used to raise ConfigError mid-run); tavily and brave the same.", "owner": "09" }
+    { "factory": "exa", "option": "api_key", "lang": "both", "decision": "Resolved at setup: an unset key is missing_secret from check(). A search sent without setup reads it then and fails as unavailable while it is unset; tavily and brave the same.", "owner": "15A" }
   ]
 }

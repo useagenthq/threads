@@ -44,8 +44,8 @@ assistant = agent(
 | Provider | TypeScript | Python | Stored in |
 |---|---|---|---|
 | Local | `localMemory()` from `@threads/core` | `local_memory()` from `threads` | The run's own SQLite store. Full-text search, no extra service. |
-| Supermemory | `supermemory()` from `@threads/supermemory` | `supermemory()` from `threads.supermemory` | Supermemory. Reads `SUPERMEMORY_API_KEY` unless you pass `apiKey` / `api_key`. |
-| Zep | `zep()` from `@threads/zep` | `zep()` from `threads.zep` | Zep Cloud. Reads `ZEP_API_KEY` unless you pass `apiKey` / `api_key`. |
+| Supermemory | [`supermemory()`](/docs/reference/functions/supermemory) from `@threads/supermemory` | `supermemory()` from `threads.supermemory` | Supermemory. Reads `SUPERMEMORY_API_KEY` unless you pass `apiKey` / `api_key`. |
+| Zep | [`zep()`](/docs/reference/functions/zep) from `@threads/zep` | `zep()` from `threads.zep` | Zep Cloud. Reads `ZEP_API_KEY` unless you pass `apiKey` / `api_key`. |
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

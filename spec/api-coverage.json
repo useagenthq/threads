@@ -510,12 +510,28 @@
       "tests/web/test_web.py::test_search_backends_send_the_key_on_the_host_and_parse_hits"
     ]
   },
+  "brave!missing_secret": {
+    "ts": [
+      "packages/core/test/tools/search-backends.test.ts > search backend refusals > brave: check() reports an unset key as missing_secret"
+    ],
+    "py": [
+      "tests/web/test_search_unset_key.py::test_check_reports_an_unset_key_as_missing_secret[brave]"
+    ]
+  },
   "exa": {
     "ts": [
       "packages/core/test/tools/search-backends.test.ts > search backends > exa: one JSON POST with the key header and domain filters; hits mapped"
     ],
     "py": [
       "tests/web/test_web.py::test_search_backends_send_the_key_on_the_host_and_parse_hits"
+    ]
+  },
+  "exa!missing_secret": {
+    "ts": [
+      "packages/core/test/tools/search-backends.test.ts > search backend refusals > exa: check() reports an unset key as missing_secret"
+    ],
+    "py": [
+      "tests/web/test_search_unset_key.py::test_check_reports_an_unset_key_as_missing_secret[exa]"
     ]
   },
   "extension": {
@@ -638,12 +654,44 @@
       "tests/agents/test_api.py::test_readme_example"
     ]
   },
+  "supermemory": {
+    "ts": [
+      "packages/supermemory/test/supermemory.test.ts > supermemory transport > swapped in by one config entry: saves are effects, recall is injected (F3.5)"
+    ],
+    "py": [
+      "tests/adapters/test_hosted_memory.py::test_supermemory_stores_the_binding_and_drops_foreign_items"
+    ]
+  },
+  "supermemory!missing_secret": {
+    "ts": [
+      "packages/supermemory/test/credentials.test.ts > supermemory() credentials > missing: the factory and agent() succeed; check() and the run fail at setup"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_missing_key_fails_check_as_a_value_and_the_run_before_any_append[supermemory]"
+    ]
+  },
+  "supermemory.api_key=default": {
+    "ts": [
+      "packages/supermemory/test/credentials.test.ts > supermemory() credentials > a fixed environment is picked up by the same agent"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[supermemory]"
+    ]
+  },
   "tavily": {
     "ts": [
       "packages/core/test/tools/search-backends.test.ts > search backends > tavily: bearer auth and include/exclude domains"
     ],
     "py": [
       "tests/web/test_web.py::test_search_backends_send_the_key_on_the_host_and_parse_hits"
+    ]
+  },
+  "tavily!missing_secret": {
+    "ts": [
+      "packages/core/test/tools/search-backends.test.ts > search backend refusals > tavily: check() reports an unset key as missing_secret"
+    ],
+    "py": [
+      "tests/web/test_search_unset_key.py::test_check_reports_an_unset_key_as_missing_secret[tavily]"
     ]
   },
   "tool": {
@@ -676,6 +724,30 @@
     ],
     "py": [
       "tests/agents/test_api.py::test_a_tool_call_parses_through_its_input_model_and_runs"
+    ]
+  },
+  "zep": {
+    "ts": [
+      "packages/zep/test/zep.test.ts > zep transport > a stale lease sends nothing: the fence is at the SDK's fetcher"
+    ],
+    "py": [
+      "tests/adapters/test_hosted_memory.py::test_zep_creates_the_scope_graph_once_and_parses_episodes"
+    ]
+  },
+  "zep!missing_secret": {
+    "ts": [
+      "packages/zep/test/credentials.test.ts > zep() credentials > missing: the factory and agent() succeed; check() and the run fail at setup"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_missing_key_fails_check_as_a_value_and_the_run_before_any_append[zep]"
+    ]
+  },
+  "zep.api_key=default": {
+    "ts": [
+      "packages/zep/test/credentials.test.ts > zep() credentials > a fixed environment is picked up by the same agent"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[zep]"
     ]
   }
 }

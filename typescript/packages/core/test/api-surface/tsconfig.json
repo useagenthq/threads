@@ -6,11 +6,11 @@
     // The MCP SDK's own .d.ts doesn't compile under exactOptionalPropertyTypes; our code does.
     "skipLibCheck": true,
     "noEmit": true,
-    // Core doesn't depend on host or mcp, so the entries are mapped to their sources here.
+    // Core depends on no other package, so every entry (host, mcp, the adapter packages whose
+    // factories are in the contract) is mapped to its source here.
     "paths": {
       "@threads/core": ["../../src/index.ts"],
-      "@threads/host": ["../../../host/src/index.ts"],
-      "@threads/mcp": ["../../../mcp/src/index.ts"]
+      "@threads/*": ["../../../*/src/index.ts"]
     }
   },
   "include": ["generated/surface.ts"]

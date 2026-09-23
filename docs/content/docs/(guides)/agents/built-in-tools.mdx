@@ -37,7 +37,7 @@ coder = agent(
 </Tab>
 </Tabs>
 
-`exa` comes from `@threads/core` in TypeScript and `threads.search` in Python. `tavily` and `brave` work the same way; see the [search providers](/docs/reference/functions/exa) in the reference. The key is read on the host when a search is sent; while the variable is unset, each search fails as `unavailable` and the error names the variable.
+`exa` comes from `@threads/core` in TypeScript and `threads.search` in Python. `tavily` and `brave` work the same way; see the [search providers](/docs/reference/functions/exa) in the reference. The key is resolved on the host at setup, so `agent.check()` reports an unset variable as `missing_secret` before anything runs.
 
 ## What turns on each tool
 

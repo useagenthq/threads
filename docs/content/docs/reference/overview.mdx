@@ -22,6 +22,8 @@ say so.
 | core | `@threads/core` | `threads` |
 | host | `@threads/host` | `threads.host` |
 | mcp | `@threads/mcp` | `threads.mcp` |
+| supermemory | `@threads/supermemory` | `threads.supermemory` |
+| zep | `@threads/zep` | `threads.zep` |
 | search | `@threads/core` | `threads.search` |
 
 ## Functions
@@ -47,14 +49,14 @@ A provider factory connects an agent to an outside service and returns one of th
 
 | TypeScript | Python | What it does |
 |---|---|---|
+| [`supermemory`](/docs/reference/functions/supermemory) | `supermemory` | A MemoryProvider that stores records in Supermemory. |
+| [`zep`](/docs/reference/functions/zep) | `zep` | A MemoryProvider that stores records in Zep. |
 | [`exa`](/docs/reference/functions/exa) | `exa` | A web_search backend that searches with Exa (exa.ai). |
 | [`tavily`](/docs/reference/functions/tavily) | `tavily` | A web_search backend that searches with Tavily (tavily.com). |
 | [`brave`](/docs/reference/functions/brave) | `brave` | A web_search backend that searches with Brave (search.brave.com). |
 
 These providers exist but are not in the reference yet; their guides describe them: [Models](/docs/agents/models), [Sandboxes](/docs/sandboxes/overview), [Host server](/docs/host/overview) and [Memory](/docs/memory/memory).
 
-- `supermemory`: Memory with Supermemory.
-- `zep`: Memory with Zep.
 - `anthropic`: Claude models.
 - `openai`: OpenAI models.
 - `aiSdk`: Any AI SDK model (TypeScript only).

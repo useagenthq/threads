@@ -51,8 +51,8 @@ def test_each_real_factory_matches_the_contract(
     assert check_py_factory(f, fn, NS) == [], key
 
 
-def test_the_search_factories_are_checked() -> None:
-    assert [k for k, _, _ in real()] == ["exa", "tavily", "brave"]
+def test_every_contracted_factory_is_checked() -> None:
+    assert [k for k, _, _ in real()] == ["supermemory", "zep", "exa", "tavily", "brave"]
 
 
 def positional(api_key: Secret) -> None: ...
@@ -155,3 +155,24 @@ def test_a_lowercase_platform_type_imports_its_module_too() -> None:
 def test_a_sequence_default_compares_as_a_list() -> None:
     f = contract(param("names", default=[], type_={"array": STRING}))
     assert check_py_factory(f, tags, namespace()) == []
+
+
+def based(*, base_url: str | None = None) -> None: ...
+
+
+def based_wrong(*, base_url: str | None = "x") -> None: ...
+
+
+def test_an_optional_option_without_a_literal_default_is_t_or_none() -> None:
+    f = contract(param("base_url", doc="Omitted: the SDK default."))
+    assert check_py_factory(f, based, NS) == []
+    assert check_py_factory(f, based_wrong, NS) == [
+        "base_url: default 'x' != None (no literal default declared)"
+    ]
+    assert check_py_factory(f, keyword_region, NS) == [
+        "base_url: annotation <class 'str'> != declared str | None",
+        "base_url: default 'us' != None (no literal default declared)",
+    ]
+
+
+def keyword_region(*, base_url: str = "us") -> None: ...

@@ -34,10 +34,12 @@ UNREADABLE = "<unreadable>"
 HELPERS: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
     "ts": (
         (re.compile(r"\.reveal\(\)"), "missing_secret"),
+        (re.compile(r"\bcredential\("), "missing_secret"),
         (re.compile(r"\bcheckHostedTools\("), "hosted_tool_unsupported"),
     ),
     "py": (
         (re.compile(r"(?<![\w.])(?:secrets\.)?resolve\("), "missing_secret"),
+        (re.compile(r"\bcredential\("), "missing_secret"),
         (re.compile(r"\bcheck_hosted_tools\("), "hosted_tool_unsupported"),
     ),
 }

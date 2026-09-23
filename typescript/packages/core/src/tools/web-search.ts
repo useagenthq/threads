@@ -24,6 +24,8 @@ export type SearchHit = z.infer<typeof SearchHit>;
 
 /** spec/api.json SearchBackend. */
 export type SearchBackend = {
+  /** Resolves the search key at setup (check() or the first run); missing_secret if unset. */
+  readonly setup?: () => Promise<void>;
   readonly search: (
     query: string,
     options: {

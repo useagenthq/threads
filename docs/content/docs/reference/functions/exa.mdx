@@ -30,7 +30,7 @@ def exa(
 ## Parameters
 
 <Field name="apiKey / api_key" type={"Secret"} required>
-  A secret() naming the host environment variable that holds the Exa API key. It is read on the host each time a search is sent; while the variable is unset, each search fails as unavailable, naming it. See [Secret](/docs/reference/types/Secret).
+  A secret() naming the host environment variable that holds the Exa API key. It is resolved on the host at setup (check() or the first run): an unset variable is missing_secret naming it, before anything runs. A search sent without setup reads it then, and an unset variable fails that search as unavailable. See [Secret](/docs/reference/types/Secret).
 </Field>
 
 <Field name="transport" type={"WebTransport"}>
@@ -40,3 +40,5 @@ def exa(
 ## Returns
 
 [`SearchBackend`](/docs/reference/types/SearchBackend)
+
+**Throws** `ConfigError` with one of these codes: `missing_secret`.

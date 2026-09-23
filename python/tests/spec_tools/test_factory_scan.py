@@ -132,6 +132,8 @@ def test_the_scan_counts_direct_codes_and_core_helpers() -> None:
     }
     py = 'resolve(k)\nsystem_resolve(h)\nself.resolve(x)\nraise ConfigError("unknown_preset", "m")'
     assert raised_codes(py, "py") == {"missing_secret": 1, "unknown_preset": 1}
+    assert raised_codes('credential("exa", "apiKey", k, "EXA")', "ts") == {"missing_secret": 1}
+    assert raised_codes('credential("exa", "api_key", k, "EXA")', "py") == {"missing_secret": 1}
     qualified = "secrets.resolve(k)\nraise ConfigError(code='invalid_config', message='m')"
     assert raised_codes(qualified, "py") == {"missing_secret": 1, "invalid_config": 1}
     assert raised_codes("raise ConfigError(code, message)", "py") == {"<unreadable>": 1}

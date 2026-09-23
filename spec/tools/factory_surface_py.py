@@ -7,7 +7,8 @@ For a factory in spec/api.json and the Python function that implements it:
   declared set, with their required flags; no *args, and **kwargs only as Unpack[TypedDict];
 - every annotation equals the declared type, spelled by typeexpr_render and evaluated in the
   given namespace (so `str | Secret` must be exactly that, not wider);
-- an explicit keyword-only default equals the declared literal. Defaults inside a TypedDict can't
+- an explicit keyword-only default equals the declared literal; an optional keyword-only
+  param without one is `T | None = None`. Defaults inside a TypedDict can't
   be introspected: they are proven by behavior tests.
 
 pyright proves the return type over the file gen_api_surface_factories.py writes. Stdlib only.
@@ -114,8 +115,10 @@ def _platforms(t: Json) -> list[str]:
     return here + [s for v in t.values() for s in _platforms(v)]
 
 
-def _type_problem(name: str, got: object, want: Obj, ns: dict[str, object]) -> list[str]:
-    spelled = Render("py").expr(obj(want["type"]))
+def _type_problem(
+    name: str, got: object, want: Obj, ns: dict[str, object], *, or_none: bool = False
+) -> list[str]:
+    spelled = Render("py").expr(obj(want["type"])) + (" | None" if or_none else "")
     scope = dict(ns)
     for module in {m for p in _platforms(want["type"]) for m in modules_of(p)}:
         top = module.partition(".")[0]
@@ -143,7 +146,12 @@ def check_py_factory(f: Obj, fn: Callable[..., object], ns: dict[str, object]) -
         want = declared[name]
         if required[name] != bool(want["required"]):
             errs.append(f"{name}: required is {required[name]}, declared {want['required']}")
-        errs += _type_problem(name, types[name], want, ns)
+        # An optional keyword-only param with no literal default is `T | None = None`: omitting
+        # it means what its doc says (the docs signature spells it the same way).
+        or_none = name in defaults and not want["required"] and "default" not in want
+        errs += _type_problem(name, types[name], want, ns, or_none=or_none)
+        if or_none and defaults[name] is not None:
+            errs.append(f"{name}: default {defaults[name]!r} != None (no literal default declared)")
         if name in defaults and "default" in want and defaults[name] != _py(want["default"]):
             errs.append(f"{name}: default {defaults[name]!r} != declared {want['default']!r}")
     return errs
