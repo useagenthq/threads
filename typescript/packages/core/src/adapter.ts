@@ -1,12 +1,9 @@
 // @threads/core/adapter: what a model adapter package builds on. Core never imports adapters.
 
 export { ConfigError } from "./agent/errors";
-export { jsonSchema } from "./agent/tool";
 export { type Secret, secret } from "./agent/secret";
+export { jsonSchema } from "./agent/tool";
 export { assertNever } from "./assert-never";
-export { sha256Hex } from "./hash";
-/** What a tool provider package (MCP) builds on: the dispatchable tool and its run context. */
-export type { EffectClass, ToolSpec } from "./log";
 export {
   type ChannelAdapter,
   type ChannelCapabilities,
@@ -18,6 +15,9 @@ export {
   VerifiedDelivery,
 } from "./channel/protocol";
 export { responseText } from "./fold/state";
+export { sha256Hex } from "./hash";
+/** What a tool provider package (MCP) builds on: the dispatchable tool and its run context. */
+export type { EffectClass, ToolSpec } from "./log";
 export {
   type ArtifactRef,
   type InputPart,

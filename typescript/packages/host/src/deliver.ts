@@ -1,8 +1,9 @@
 import { type ChannelAdapter, DeliveryOutcome } from "@threads/core";
 import {
   type ArtifactStore,
-  BranchId,
+  dispatched,
   type EventDraft,
+  type Fence,
   type JsonObject,
   type Writer,
   within,
@@ -137,13 +138,21 @@ async function perform(s: Send): Promise<Performed> {
   const credentials: Record<string, string> = {};
   for (const [name, secret] of Object.entries(s.adapter.secrets))
     credentials[name] = secret.reveal();
-  const done = await within(context(s.writer), () =>
+  const done = await dispatched(fenceOf(s.writer), () =>
     s.adapter.perform(s.op, s.key, credentials),
   );
-  if (!done.ok && done.error.stale !== undefined) return "stale";
-  const outcome = done.ok ? DeliveryOutcome.safeParse(done.value) : undefined;
-  // A throw or a malformed answer after dispatch is uncertainty, never a plain failure.
-  return outcome?.success === true
+  // A refused fence means this writer lost its lease: it appends and sends nothing more.
+  if (done.refused) return "stale";
+  if (!done.outcome.ok)
+    // A throw before any request passed the fence proves nothing left; after one, it may have.
+    return {
+      status: "delivery_error",
+      kind: "transient",
+      sent: done.sent ? "outcome_unknown" : "definite_not_sent",
+    };
+  const outcome = DeliveryOutcome.safeParse(done.outcome.value);
+  // A malformed answer after dispatch is uncertainty, never a plain failure.
+  return outcome.success
     ? outcome.data
     : { status: "delivery_error", kind: "transient", sent: "outcome_unknown" };
 }
@@ -164,7 +173,7 @@ async function reconcile(s: Send, n: number): Promise<void> {
   const looked =
     capabilities.lookup === "none"
       ? undefined
-      : await within(context(s.writer), () => s.adapter.lookup(s.key, s.op));
+      : await within(fenceOf(s.writer), () => s.adapter.lookup(s.key, s.op));
   if (looked !== undefined && !looked.ok && looked.error.stale !== undefined)
     return;
   const answer = looked?.ok === true ? looked.value : undefined;
@@ -270,13 +279,8 @@ function append(s: Send, draft: EventDraft): boolean {
   return s.writer.append([draft]).ok;
 }
 
-function context(writer: Writer): Parameters<typeof within>[0] {
+function fenceOf(writer: Writer): Fence {
   return {
-    authority: {
-      kind: "owner",
-      branch_id: BranchId.parse(writer.lease.branchId),
-      epoch: writer.lease.epoch,
-    },
     fence: async () => {
       const live = writer.fence();
       return live.ok

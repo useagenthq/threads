@@ -14,7 +14,7 @@ import type { Store } from "./sqlite";
 
 export type HostRunner = {
   /** The pinned thread_started for a new thread of this agent. Throws ConfigError. */
-  readonly started: () => EventDraft;
+  readonly started: () => Promise<EventDraft>;
   /** Runs the branch until idle or parked: `inputs` are appended in order, each once idle. */
   readonly execute: (
     plan: {
@@ -37,7 +37,7 @@ export function hosted<Deps, Output>(
   approvers: readonly Principal[] | undefined,
 ): HostRunner {
   return {
-    started: () => pin(def).started,
+    started: async () => pin({ ...def, mcp: await def.setup() }).started,
     execute: (plan, inputs, hooks = {}) => execute(def, plan, inputs, hooks),
     approvers,
     sandbox: def.sandbox,

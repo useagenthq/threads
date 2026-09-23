@@ -1,5 +1,4 @@
 export * from "./agent";
-export * from "./memory";
 export {
   type ChannelAdapter,
   type ChannelCapabilities,
@@ -10,6 +9,7 @@ export {
   type RawResponse,
   VerifiedDelivery,
 } from "./channel/protocol";
+export * from "./memory";
 export {
   blockRealModels,
   type LookupCapability,

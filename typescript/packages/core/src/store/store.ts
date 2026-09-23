@@ -10,13 +10,7 @@ import { newBranch } from "./branch";
 import { BudgetLedger } from "./budget";
 import { ObserverCursors } from "./cursors";
 import type { SqliteDriver } from "./driver";
-import {
-  forkEligible,
-  forkingBranches,
-  type ListedBranch,
-  listedBranches,
-  loadChain,
-} from "./forking";
+import * as forking from "./forking";
 import { importSegments } from "./import";
 import { ResourceLedger } from "./ledger";
 import { exportBytes } from "./lines";
@@ -55,7 +49,7 @@ export class LogStore {
   readonly #db: SqliteDriver;
   readonly #now: () => number;
   readonly #artifacts: ArtifactStore;
-  readonly #tenant: string;
+  readonly tenant: string;
 
   private constructor(
     db: SqliteDriver,
@@ -66,7 +60,7 @@ export class LogStore {
     this.#db = db;
     this.#now = now;
     this.#artifacts = artifacts;
-    this.#tenant = tenantId;
+    this.tenant = tenantId;
   }
 
   /**
@@ -90,7 +84,7 @@ export class LogStore {
   createBranch(threadId: ThreadId, branchId: BranchId): Result<void, LogError> {
     return atomically(this.#db, () =>
       newBranch(this.#db, {
-        tenantId: this.#tenant,
+        tenantId: this.tenant,
         threadId,
         branchId,
         parent: null,
@@ -102,7 +96,7 @@ export class LogStore {
 
   /** A branch's state, if this tenant owns it (a forking or failed branch is never listed). */
   branchState(branchId: BranchId): Result<BranchRow["state"], LogError> {
-    const row = ownedBranch(this.#db, branchId, this.#tenant);
+    const row = ownedBranch(this.#db, branchId, this.tenant);
     return row.ok ? ok(row.value.state) : row;
   }
 
@@ -122,7 +116,7 @@ export class LogStore {
 
   /** A thread's main branch, or `branch_not_found`. */
   mainBranch(threadId: ThreadId): Result<BranchId, LogError> {
-    const root = rootBranch(this.#db, threadId, this.#tenant);
+    const root = rootBranch(this.#db, threadId, this.tenant);
     if (!root.ok) return root;
     return root.value === undefined
       ? err(logError("branch_not_found", `no thread ${threadId}`))
@@ -131,7 +125,7 @@ export class LogStore {
 
   /** `threads export`: ancestor segments, the branch's lines, then its head line. */
   exportBranch(branchId: BranchId): Result<Uint8Array, LogError> {
-    const owned = ownedBranch(this.#db, branchId, this.#tenant);
+    const owned = ownedBranch(this.#db, branchId, this.tenant);
     if (!owned.ok) return owned;
     return exportBytes(this.#db, this.#artifacts, branchId);
   }
@@ -151,7 +145,7 @@ export class LogStore {
     if (!replayed.ok) return replayed;
     const torn = log.value.torn;
     const target = {
-      tenantId: this.#tenant,
+      tenantId: this.tenant,
       droppedRef: torn === undefined ? null : this.#artifacts.put(torn.bytes),
     };
     const stored = atomically(this.#db, () =>
@@ -172,7 +166,7 @@ export class LogStore {
   ): Result<Writer, LogError> {
     return atomically(this.#db, () => {
       const now = this.#now();
-      const row = ownedBranch(this.#db, branchId, this.#tenant);
+      const row = ownedBranch(this.#db, branchId, this.tenant);
       const torn = row.ok && isTorn(row.value) ? row.value : undefined;
       if (torn !== undefined) markRepaired(this.#db, branchId);
       const log = this.#runnable(branchId);
@@ -194,13 +188,13 @@ export class LogStore {
     ttlMs: number = LEASE_TTL_MS,
   ): Result<Writer, LogError> {
     return atomically(this.#db, () => {
-      const row = ownedBranch(this.#db, branchId, this.#tenant);
+      const row = ownedBranch(this.#db, branchId, this.tenant);
       if (!row.ok) return row;
       if (row.value.state !== "forking")
         return err(
           logError("branch_not_runnable", `branch ${branchId} is not forking`),
         );
-      const chain = loadChain(this.#db, branchId);
+      const chain = forking.loadChain(this.#db, branchId);
       if (!chain.ok) return chain;
       return this.#take(branchId, holderId, this.#now() + ttlMs, chain.value);
     });
@@ -233,7 +227,7 @@ export class LogStore {
    * headed by this implementation at this major version.
    */
   #runnable(branchId: BranchId): Result<VerifiedLog, LogError> {
-    const branch = ownedBranch(this.#db, branchId, this.#tenant);
+    const branch = ownedBranch(this.#db, branchId, this.tenant);
     if (!branch.ok) return branch;
     const state: BranchRow["state"] = branch.value.state;
     if (state !== "ready")
@@ -262,11 +256,11 @@ export class LogStore {
     ttlMs: number = LEASE_TTL_MS,
   ): Result<Writer, LogError> {
     return atomically(this.#db, () => {
-      const owned = ownedBranch(this.#db, request.parent, this.#tenant);
+      const owned = ownedBranch(this.#db, request.parent, this.tenant);
       if (!owned.ok) return owned;
       const parent = this.read(request.parent);
       if (!parent.ok) return parent;
-      const eligible = forkEligible(
+      const eligible = forking.forkEligible(
         parent.value.fold,
         request.atSeq,
         this.#now(),
@@ -332,22 +326,18 @@ export class LogStore {
     });
   }
 
-  get tenant(): string {
-    return this.#tenant;
-  }
-
-  branches(threadId: ThreadId): Result<readonly ListedBranch[], LogError> {
-    return listedBranches(this.#db, threadId, this.#tenant);
+  branches(id: ThreadId): Result<readonly forking.ListedBranch[], LogError> {
+    return forking.listedBranches(this.#db, id, this.tenant);
   }
 
   /** Branches a crash left mid-fork, for their creator's recovery. */
   forkingBranches(): Result<readonly BranchId[], LogError> {
-    return forkingBranches(this.#db, this.#tenant);
+    return forking.forkingBranches(this.#db, this.tenant);
   }
 
   /** The resource ledger, fenced by the owner's writer. */
   get ledger(): ResourceLedger {
-    return new ResourceLedger(this.#db, this.#now, this.#tenant);
+    return new ResourceLedger(this.#db, this.#now, this.tenant);
   }
 
   /** The tree-wide budget ledger. */
@@ -378,14 +368,14 @@ export class LogStore {
     const threadId = parent.segments[0]?.header.thread_id;
     if (threadId === undefined) throw new Error("a verified log has a header");
     const stored = newBranch(this.#db, {
-      tenantId: this.#tenant,
+      tenantId: this.tenant,
       threadId,
       branchId: request.branch,
       parent: { branchId: request.parent, atSeq: request.atSeq },
       state: "forking",
       createdAt: this.#now(),
     });
-    return stored.ok ? loadChain(this.#db, request.branch) : stored;
+    return stored.ok ? forking.loadChain(this.#db, request.branch) : stored;
   }
 
   #lease(

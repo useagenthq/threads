@@ -38,10 +38,8 @@ export { turnEvents } from "./loop/turn";
 export { knownEvents } from "./reduce";
 export { err, ok, type Result } from "./result";
 export { collect, type Sandbox } from "./sandbox";
-export {
-  FenceRefused,
-  within,
-} from "./sandbox/remote";
+export { dispatched, FenceRefused, within } from "./sandbox/remote";
+export type { Fence } from "./sandbox/remote/fence";
 export {
   type ArtifactStore,
   type EventDraft,

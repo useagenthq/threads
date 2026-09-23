@@ -145,7 +145,7 @@ async function occurrence(
   if (!main.ok && !log.createBranch(threadId, branchId).ok) return;
   const first: readonly EventDraft[] = main.ok
     ? []
-    : [b.hosted.runner.started()];
+    : [await b.hosted.runner.started()];
   const writer = await briefly(log, branchId);
   if (!writer.ok) {
     // A run still holds the branch past a scheduler's short hold: the claim records the overlap.

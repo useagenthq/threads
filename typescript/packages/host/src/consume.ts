@@ -97,7 +97,7 @@ async function message(
   }
   const first: readonly EventDraft[] = main.ok
     ? []
-    : [t.hosted.runner.started()];
+    : [await t.hosted.runner.started()];
   const writer = log.acquire(branchId, `host-${crypto.randomUUID()}`);
   if (!writer.ok) return "busy";
   try {
