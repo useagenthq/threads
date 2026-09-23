@@ -63,8 +63,8 @@ class StubGateway:
         self._stubs = list(stubs)
         self._validate = validate
         self._seen: Counter[tuple[str, str]] = Counter()
-        self.consumed = 0
-        self.unmatched = 0
+        self.consumed: int = 0
+        self.unmatched: int = 0
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
         return self._validate(spec, input)

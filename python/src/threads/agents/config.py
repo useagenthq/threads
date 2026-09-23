@@ -1,0 +1,25 @@
+"""`ConfigError` (spec/api.json): the one failure that raises, only at setup."""
+
+from typing import Literal
+
+type ConfigErrorCode = Literal[
+    "invalid_config",
+    "missing_secret",
+    "unknown_preset",
+    "duplicate_name",
+    "capability_missing",
+    "mcp_unreachable",
+    "budget_unenforceable",
+    "permission_rule_invalid",
+    "hosted_tool_unsupported",
+    "egress_policy_unsupported",
+]
+
+
+class ConfigError(Exception):
+    """A definition that can't run. Every other expected failure is a value."""
+
+    def __init__(self, code: ConfigErrorCode, message: str) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code: ConfigErrorCode = code
+        self.message = message

@@ -1,0 +1,104 @@
+"""What an agent's definition binds at run time: its tools as the loop's tool runner, and its
+permissions as the loop's authorization."""
+
+from collections.abc import Mapping, Sequence
+from typing import Final, Protocol
+
+from threads.agents.context import RunContext
+from threads.log import JsonObject, Permissions, ToolCallData, ToolSpec
+from threads.loop.model import LookupResult, LookupUnknown
+from threads.loop.tools import Dispatched, Invocation, Termination
+from threads.loop.tools import Output as ToolOutput
+from threads.permissions import Call, Category, Decision, decide
+from threads.reduce import Fold
+from threads.reduce.fold import policy
+
+WORKSPACE: Final = "/workspace"
+PROTECTED: Final = (
+    ".git/**",
+    ".threads/**",
+    ".claude/**",
+    ".mcp.json",
+    "**/.bashrc",
+    "**/.zshrc",
+    "**/.profile",
+    "**/.gitconfig",
+    "**/.ssh/**",
+)
+"""defaults."""
+DEFAULT_PERMISSIONS: Final = Permissions(
+    mode="default",
+    allow=[],
+    ask=[],
+    deny=[],
+    protected_paths=list(PROTECTED),
+    allow_bypass=False,
+    plan_exit_mode="default",
+)
+_EDITS = frozenset({"write", "edit", "apply_patch", "notebook_edit"})
+
+
+class AppTool[D](Protocol):
+    """What the loop needs from one app tool; `Tool` from `tool()` is one."""
+
+    @property
+    def name(self) -> str: ...
+
+    def spec(self) -> ToolSpec: ...
+
+    def invalid(self, input: JsonObject) -> str | None: ...
+
+    async def run(self, input: JsonObject, ctx: RunContext[D]) -> ToolOutput: ...
+
+    async def lookup(self, effect_key: str, ctx: RunContext[D]) -> LookupResult[str]: ...
+
+
+class AppTools[D]:
+    """The agent's tools on the host. A tool the log names but this agent doesn't bind (a
+    changed definition, an MCP tool) fails closed before any effect."""
+
+    def __init__(self, tools: Sequence[AppTool[D]], ctx: RunContext[D]) -> None:
+        self._tools: Mapping[str, AppTool[D]] = {t.name: t for t in tools}
+        self._ctx = ctx
+
+    def _context(self, call: Invocation) -> RunContext[D]:
+        c = self._ctx
+        return RunContext(
+            c.deps, c.thread_id, c.branch_id, c.principal, call.call_id, call.effect_key
+        )
+
+    def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
+        bound = self._tools.get(spec.name)
+        return f"unsupported: no binding for {spec.name}" if bound is None else bound.invalid(input)
+
+    async def dispatch(self, call: Invocation) -> Dispatched:
+        return await self._tools[call.spec.name].run(call.input, self._context(call))
+
+    async def lookup(self, call: Invocation) -> LookupResult[str]:
+        bound = self._tools.get(call.spec.name)
+        if bound is None or call.spec.effect_class != "reconcilable":
+            return LookupUnknown(f"{call.spec.name} has no lookup")
+        return await bound.lookup(call.effect_key, self._context(call))
+
+    async def terminate(self, call: Invocation) -> Termination:
+        # Host tools start no sandbox process group, so none can be confirmed gone.
+        return "unknown"
+
+    def provider_now(self) -> int | None:
+        return None
+
+
+def category(spec: ToolSpec) -> Category:
+    if spec.effect_class == "read_only":
+        return "read_only"
+    return "edit" if spec.name in _EDITS else "other"
+
+
+def authorize(fold: Fold, call: ToolCallData, spec: ToolSpec) -> Decision:
+    """The fold against the pinned permissions and the current mode."""
+    pinned = policy(fold)
+    permissions = DEFAULT_PERMISSIONS
+    if pinned is not None and isinstance(pinned.permissions, Permissions):
+        permissions = pinned.permissions
+    request = Call(spec.name, category(spec), dict(call.input))
+    return decide(permissions, WORKSPACE, fold.mode, request)
