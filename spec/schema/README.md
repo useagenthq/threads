@@ -252,6 +252,10 @@ A channel thread's outbound ops are derived from its log, never from how its run
 - **After a handoff** the conversation moves with it. When a channel thread's run ends in `handoff`, the conversation's route (`channel_threads`) moves to `handoff.to_thread_id` with one conditional update keyed on (tenant, source thread), and its row count is checked: 0 rows means another process moved it, and the route is re-read, never overwritten. Later items are appended to the target thread and run with the target agent (the handoff target the source agent names). Replies are derived from the target thread's log. The source thread takes no further input (rule 26).
 - **Item keys come only from signed content.** An `item_key` never depends on an unsigned header, so a replayed body is the same inbox item. GitHub: `<lowercase hex SHA-256 of the verified raw body>#0`. `X-GitHub-Delivery` is not signed and is never part of the key.
 
+## API run recovery
+
+A run started through `POST /v1/runs` survives a host crash. Once a host is ready (from its first tick, never inside `ready()`), it visits every branch named by a `run_receipts` row whose last event isn't `turn_completed`, and runs any turn there that is open and not parked, under the principal of that branch's last `user_input` and in the receipt's tenant. It records no new input: the loop's recovery settles what was in flight, so a begun effect is reconciled or parks and is never dispatched again. A second host on the same branch is refused by the lease. A subscriber that reconnects sees the resumed run's events and then its result under the original `run_id`.
+
 ## Approval authority
 
 One rule for the host API, channel decisions and recovery.

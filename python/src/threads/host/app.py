@@ -124,6 +124,11 @@ class Host:
                     run = await self._runner.redeliver(self._runner.store(tenant), thread)
                     if run is not None:
                         _RECOVERY[self][1].append(run)
+            # ponytail: API runs are found at start only; a live peer's crash waits for a restart.
+            for tenant, thread, branch in await sq.tables.unfinished_runs():
+                run = await self._runner.reopen(self._runner.store(tenant), thread, branch)
+                if run is not None:
+                    _RECOVERY[self][1].append(run)
         finally:
             _RECOVERY[self][0].set()
         await self._scheduler.run()

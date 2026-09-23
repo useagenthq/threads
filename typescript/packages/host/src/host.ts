@@ -14,6 +14,7 @@ import { failure } from "./errors";
 import { type Authenticate, api } from "./http";
 import { channelThreads } from "./inbox";
 import { challenge, receive } from "./intake";
+import { unfinishedRuns } from "./receipts";
 import { type RunAccepted, type StartRunCode, startRun } from "./runs";
 import { bindSchedules, type Schedule, tick } from "./schedules";
 import type { StartRunRequest } from "./schemas";
@@ -155,6 +156,9 @@ export function host(options: HostOptions): Host {
     if (!seeded) {
       const { db } = await storeConnection(ctx.store);
       for (const r of channelThreads(db)) watch.add(r.tenant_id, r.thread_id);
+      // ponytail: API runs are found at start only; a live peer's crash waits for a restart.
+      for (const r of unfinishedRuns(db))
+        watch.add(r.tenant_id, r.thread_id, r.branch_id);
       seeded = true;
     }
     // Side by side: one thread's slow reply never holds up another's recovery.
@@ -162,10 +166,10 @@ export function host(options: HostOptions): Host {
       watch.entries().map(async ({ thread: t, settled }) => {
         const { log } = await ctx.open(t.tenant);
         const main = log.mainBranch(t.id);
+        const branch = t.branch ?? (main.ok ? main.value : undefined);
         const done =
-          !main.ok ||
-          (await ctx.recover(t.tenant, { id: t.id, branch: main.value })) ===
-            "done";
+          branch === undefined ||
+          (await ctx.recover(t.tenant, { id: t.id, branch })) === "done";
         if (done) settled();
       }),
     );

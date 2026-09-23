@@ -46,6 +46,20 @@ def find(conn: sqlite3.Connection, key: Key) -> Receipt | None:
     return Receipt(principal, body, ThreadId(thread), BranchId(branch), EventId(run))
 
 
+def unfinished(conn: sqlite3.Connection) -> tuple[tuple[str, ThreadId, BranchId], ...]:
+    """(tenant, thread, branch) of every tenant's API run branches, except those whose last event
+    is a turn_completed: where a crash may have left a run's turn open. The fold decides; this
+    only skips branches that are certainly closed, so a restart doesn't read every API thread's
+    log."""
+    rows: list[tuple[object, object, object]] = conn.execute(
+        "SELECT DISTINCT r.tenant_id, r.thread_id, r.branch_id FROM run_receipts r"
+        " JOIN branches b ON b.branch_id = r.branch_id AND b.tenant_id = r.tenant_id"
+        " JOIN events e ON e.branch_id = b.branch_id AND e.seq = b.head_seq"
+        " WHERE e.type <> 'turn_completed'"
+    ).fetchall()
+    return tuple((text_of(t), ThreadId(text_of(th)), BranchId(text_of(b))) for t, th, b in rows)
+
+
 def insert(key: Key, now: int) -> Companion:
     """The receipt of the append's user_input. A key another request took first refuses the
     append: the caller reads that receipt and answers from it."""

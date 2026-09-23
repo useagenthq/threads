@@ -27,12 +27,12 @@ WAIT_S: Final = 20.0
 _SPAWNED: list[subprocess.Popen[str]] = []
 
 
-def spawn(role: str, where: Path, **env: str) -> subprocess.Popen[str]:
+def spawn(role: str, where: Path, script: Path = WORKER, **env: str) -> subprocess.Popen[str]:
     # The worker is this repo's own test script, run by this interpreter.
     # Each worker's stderr goes to its own file, so a failed drill shows what every process did.
     with (where / f"worker-{len(_SPAWNED)}.log").open("w") as errors:
         worker = subprocess.Popen(  # noqa: S603
-            [sys.executable, str(WORKER), role, str(where)],
+            [sys.executable, str(script), role, str(where)],
             env={**os.environ, **env},
             stdout=subprocess.PIPE,
             stderr=errors,

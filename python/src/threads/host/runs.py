@@ -198,7 +198,7 @@ class Runner:
         if current is None or current.done():
             self._tasks[branch] = task
         self._live.add(task)
-        task.add_done_callback(lambda done: self._ended(thread, done))
+        task.add_done_callback(lambda done: self._ended(thread, done, resumed=input is None))
         return task
 
     @property
@@ -266,20 +266,34 @@ class Runner:
             return await self.resume(store, thread_id, root.value)
         return None
 
+    async def reopen(self, store: Store, thread_id: ThreadId, branch: BranchId) -> RunTask | None:
+        """A restarted host: an API run a crash cut short (its turn still open, not parked) runs
+        on from the log. What it left in doubt is settled by the loop's recovery, which never
+        dispatches a begun effect again. Returns the run that carries it, if any."""
+        if self.running(branch):
+            return None
+        read = await (await open_store(store)).read(branch, 0)
+        if not isinstance(read, Ok) or not read.value.fold.in_turn or read.value.fold.parked:
+            return None
+        return await self.resume(store, thread_id, branch)
+
     def _emit(self, branch: BranchId) -> Emit:
         def emit(_item: StreamEvent) -> None:
             self.wake(branch)
 
         return emit
 
-    def _ended(self, thread: Thread, task: RunTask) -> None:
+    def _ended(self, thread: Thread, task: RunTask, *, resumed: bool) -> None:
         branch = thread.branch
         self._live.discard(task)
         if self._tasks.get(branch) is task:
             del self._tasks[branch]
         if not task.cancelled() and task.exception() is None:
             result = task.result()
-            if isinstance(result, Failed):
+            # A resume that found the branch busy is no answer: the run holding it answers
+            # from the log.
+            busy = resumed and isinstance(result, Failed) and result.error.code == "branch_busy"
+            if isinstance(result, Failed) and not busy:
                 self.last[branch] = result
         self.wake(branch)
         if task.cancelled():

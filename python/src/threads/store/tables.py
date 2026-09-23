@@ -74,6 +74,11 @@ class Tables:
         """(tenant, thread) of every channel conversation, across every tenant."""
         return await self._worker.call(inbox.channel_threads)
 
+    async def unfinished_runs(self) -> tuple[tuple[str, ThreadId, BranchId], ...]:
+        """(tenant, thread, branch) of API runs a crash may have left open, across every
+        tenant."""
+        return await self._worker.call(receipts.unfinished)
+
     async def branches(self, thread_id: ThreadId) -> tuple[BranchRow, ...]:
         return await self._worker.call(lambda c: _branches(c, self.tenant_id, thread_id))
 

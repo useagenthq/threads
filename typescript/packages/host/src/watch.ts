@@ -1,20 +1,29 @@
-import type { ThreadId } from "@threads/core/host";
+import type { BranchId, ThreadId } from "@threads/core/host";
 
-// The channel threads a host looks at on every tick until it sees each one settled: every one a
-// crash may have left mid-run or owing replies, and every one this host consumed an item on.
+// The threads a host looks at on every tick until it sees each one settled: every channel thread
+// and API run branch a crash may have left mid-run or owing replies, and every channel thread
+// this host consumed an item on.
 
-export type Watched = { readonly tenant: string; readonly id: ThreadId };
+/** A thread at `branch`; without one, its main branch (a channel conversation). */
+export type Watched = {
+  readonly tenant: string;
+  readonly id: ThreadId;
+  readonly branch?: BranchId;
+};
 
 export class Watch {
   readonly #threads = new Map<string, Watched>();
 
-  /** Watches the thread again, even when it is watched already. */
-  add(tenant: string, id: ThreadId): void {
-    this.#threads.set(id, { tenant, id });
+  /** Watches the thread (at `branch`) again, even when it is watched already. */
+  add(tenant: string, id: ThreadId, branch?: BranchId): void {
+    this.#threads.set(
+      branch ?? id,
+      branch === undefined ? { tenant, id } : { tenant, id, branch },
+    );
   }
 
-  has(id: ThreadId): boolean {
-    return this.#threads.has(id);
+  has(key: ThreadId | BranchId): boolean {
+    return this.#threads.has(key);
   }
 
   /**
@@ -25,11 +34,10 @@ export class Watch {
     readonly thread: Watched;
     readonly settled: () => void;
   }[] {
-    return [...this.#threads.values()].map((thread) => ({
+    return [...this.#threads.entries()].map(([key, thread]) => ({
       thread,
       settled: () => {
-        if (this.#threads.get(thread.id) === thread)
-          this.#threads.delete(thread.id);
+        if (this.#threads.get(key) === thread) this.#threads.delete(key);
       },
     }));
   }
