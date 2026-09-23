@@ -60,6 +60,7 @@ if TYPE_CHECKING:
 DEFAULT_API = "https://app.daytona.io/api"
 _PROVIDER = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _VERIFIER_TTL_MINUTES = 60
+_PUMP_GRACE_S = 0.25
 
 
 class DaytonaSandbox:
@@ -104,12 +105,16 @@ class DaytonaSandbox:
         )
 
     async def aclose(self) -> None:
-        """Stops reading any exec still streaming, then closes the session."""
-        for pump in self._pumps:
-            pump.cancel()
-        await asyncio.gather(*self._pumps, return_exceptions=True)
+        """Closes the session, then the exec streams still reading it. The session goes first:
+        closing it closes every connection it holds or is opening, so a pump mid-request ends
+        with an error rather than being cancelled in a connect that leaves a socket behind."""
         if self._session is not None:
             await self._session.close()
+        if self._pumps:
+            _, stuck = await asyncio.wait(self._pumps, timeout=_PUMP_GRACE_S)
+            for pump in stuck:  # waiting on a reader that is gone, not on the network
+                pump.cancel()
+            await asyncio.gather(*stuck, return_exceptions=True)
 
     async def create(
         self, operation_key: str, context: SandboxContext

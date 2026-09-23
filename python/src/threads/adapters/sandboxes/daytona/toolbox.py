@@ -2,8 +2,8 @@
 commands run in a per-process-key session whose logs stream over a WebSocket.
 
 Session commands take no env or cwd, so exec uploads the env as a file (values travel through
-the provider's file API, never argv) that a small shell prefix sources, removes, then `cd`s and
-execs the command."""
+the provider's file API, never argv) that a small shell prefix sources and removes; the prefix
+then runs the command in its cwd with each stream base64-framed (PREFIX)."""
 
 import asyncio
 import shlex
@@ -24,18 +24,24 @@ from daytona_toolbox_api_client_async.models.session_execute_request import (
 )
 
 from threads.adapters.sandboxes.daytona.control import NOT_FOUND, StatusError, body
-from threads.adapters.sandboxes.daytona.logs import Demux
+from threads.adapters.sandboxes.daytona.logs import Demux, Stream, Unbase64
 from threads.adapters.sandboxes.daytona.wire import Command, Executed
 from threads.adapters.sandboxes.posix import RUN_DIR
 from threads.adapters.sandboxes.streams import Pipe, pump
 from threads.log.digest import sha256_hex
 from threads.sandbox.protocol import ExecOutput
 
-PREFIX = (
-    'if [ -n "$1" ]; then set -a; . "$1"; set +a; rm -f "$1"; fi; '
-    'cd "$2" || exit 1; shift 2; exec "$@"'
-)
-"""$1 the env file (empty: none), $2 the cwd, then the command."""
+PREFIX = r"""if [ -n "$1" ]; then set -a; . "$1"; set +a; rm -f "$1"; fi
+__t_cwd=$2; shift 2
+__t_d=$(mktemp -d) && mkfifo "$__t_d/o" "$__t_d/e" || exit 125
+base64 < "$__t_d/o" & __t_o=$!
+base64 < "$__t_d/e" >&2 & __t_e=$!
+(cd "$__t_cwd" && exec "$@") > "$__t_d/o" 2> "$__t_d/e"; __t_c=$?
+wait "$__t_o" "$__t_e"; rm -rf "$__t_d"; exit "$__t_c"
+"""
+"""$1 the env file (empty: none), $2 the cwd, then the command. Each stream is base64-encoded
+in the sandbox before it reaches Daytona's log channel, whose in-band stdout/stderr markers
+would otherwise swallow output that contains them; base64 never does."""
 
 _BAD_REQUEST = 400
 
@@ -120,6 +126,7 @@ class Toolbox:
         self, ws: aiohttp.ClientWebSocketResponse, pipe: Pipe, sid: str, cmd: str
     ) -> int:
         demux = Demux()
+        decoded: dict[Stream, Unbase64] = {"stdout": Unbase64(), "stderr": Unbase64()}
         async with ws:
             async for message in ws:
                 if message.type not in (aiohttp.WSMsgType.BINARY, aiohttp.WSMsgType.TEXT):
@@ -128,9 +135,11 @@ class Toolbox:
                 if isinstance(message.data, str):
                     data = message.data.encode("utf-8")
                 for stream, chunk in demux.feed(data):
-                    await (pipe.stdout if stream == "stdout" else pipe.stderr)(chunk)
+                    await _deliver(pipe, stream, decoded[stream].feed(chunk))
         for stream, chunk in demux.flush():
-            await (pipe.stdout if stream == "stdout" else pipe.stderr)(chunk)
+            await _deliver(pipe, stream, decoded[stream].feed(chunk))
+        for stream in decoded.values():
+            stream.end()
         if ws.close_code not in (None, 1000):
             raise StatusError(0, f"log stream closed with {ws.close_code}".encode())
         return await self._exit_code(sid, cmd)
@@ -143,3 +152,7 @@ class Toolbox:
                 if code is not None:
                     return code
                 await asyncio.sleep(self._poll_s)
+
+
+async def _deliver(pipe: Pipe, stream: Stream, chunk: bytes) -> None:
+    await (pipe.stdout if stream == "stdout" else pipe.stderr)(chunk)

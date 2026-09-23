@@ -2,6 +2,8 @@
 suite, the ledger's crash and takeover rules, the fork conformance cases, and its own fence."""
 
 import asyncio
+import base64
+import binascii
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -13,16 +15,17 @@ from daytona_server import API_KEY, DaytonaServer, serve
 from fork_kit import assert_expected, run_case, script_of
 from sandbox_backend import FakeBackend
 from sandbox_contract import CHECKS, Check, run_check
+from sandbox_deadline_kit import DEADLINE
 from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
-from threads.adapters.sandboxes.daytona.logs import STDERR, STDOUT, Demux
+from threads.adapters.sandboxes.daytona.logs import STDERR, STDOUT, Demux, Stream, Unbase64
 from threads.agents.config import ConfigError
 from threads.daytona import DaytonaSandbox, daytona
 from threads.result import Err, Ok
 
 
-@pytest.mark.parametrize("check", CHECKS, ids=lambda c: c.__name__)
+@pytest.mark.parametrize("check", [*CHECKS, *DEADLINE], ids=lambda c: c.__name__)
 def test_contract(check: Check) -> None:
     asyncio.run(run_check(check, serve, (API_KEY,)))
 
@@ -140,6 +143,32 @@ def test_the_log_stream_splits_markers_across_frames() -> None:
     chunks = [c for f in frames for c in demux.feed(f)] + demux.flush()
     joined = {s: b"".join(c for t, c in chunks if t == s) for s in ("stdout", "stderr")}
     assert joined == {"stdout": b"out", "stderr": b"err"}
+
+
+def test_framed_streams_decode_every_byte_split_anywhere() -> None:
+    """base64 framing survives the channel's markers and any frame split."""
+    payload = STDOUT + STDERR + bytes(range(256))
+    wire = STDOUT + base64.encodebytes(payload) + STDERR + base64.encodebytes(payload[::-1])
+    for size in (1, 2, 3, 5, 7, 64):
+        demux = Demux()
+        decoded: dict[Stream, Unbase64] = {"stdout": Unbase64(), "stderr": Unbase64()}
+        got: dict[Stream, bytes] = {"stdout": b"", "stderr": b""}
+        frames = [wire[i : i + size] for i in range(0, len(wire), size)]
+        for stream, chunk in [c for f in frames for c in demux.feed(f)] + demux.flush():
+            got[stream] += decoded[stream].feed(chunk)
+        assert got == {"stdout": payload, "stderr": payload[::-1]}, size
+
+
+@pytest.mark.parametrize("text", [b"QUJ", b"QU=D", b"QUJD!!!!"])
+def test_malformed_framing_is_refused(text: bytes) -> None:
+    def decode() -> None:
+        decoder = Unbase64()
+        decoder.feed(text)
+        decoder.feed(b"QUJD")
+        decoder.end()
+
+    with pytest.raises(binascii.Error):
+        decode()
 
 
 def test_egress_is_denied_unless_allowed() -> None:

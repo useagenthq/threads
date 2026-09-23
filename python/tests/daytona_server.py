@@ -2,6 +2,7 @@
 calls and act on a FakeBackend (sandbox_backend.py). Every request that reaches it counts."""
 
 import asyncio
+import base64
 import shlex
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -201,11 +202,18 @@ class DaytonaServer:
         proc = self.commands[request.match_info["cmd"]]
         ws = web.WebSocketResponse()
         await ws.prepare(request)
+        # As the prefix leaves them in the sandbox: each stream base64-framed.
         if proc.stdout:
-            await ws.send_bytes(STDOUT + proc.stdout)
+            await ws.send_bytes(STDOUT + base64.encodebytes(proc.stdout))
         if proc.stderr:
-            await ws.send_bytes(STDERR + proc.stderr)
-        await asyncio.shield(proc.exit)
+            await ws.send_bytes(STDERR + base64.encodebytes(proc.stderr))
+        # The stream ends when the process does, or when the client goes away first; a handler
+        # left waiting on a process nobody reads would keep its socket open past shutdown.
+        ended = asyncio.ensure_future(asyncio.shield(proc.exit))
+        left = asyncio.ensure_future(ws.receive())
+        await asyncio.wait({ended, left}, return_when=asyncio.FIRST_COMPLETED)
+        for waiting in (ended, left):
+            waiting.cancel()
         await ws.close()
         return ws
 

@@ -1,8 +1,13 @@
 """Daytona's command log stream: one byte stream where a 3-byte marker switches between stdout
 (0x01 x3) and stderr (0x02 x3). Markers can split across frames, so a trailing partial marker is
-held back until the next frame. ponytail: output that itself contains a marker is misread; the
-provider's framing gives no escape."""
+held back until the next frame.
 
+The markers are in-band and have no escape, so raw output containing them would be misread
+. The sandbox base64-encodes each stream before it reaches the channel
+(toolbox.PREFIX); base64 never contains a marker byte, and `Unbase64` restores the exact bytes.
+"""
+
+import binascii
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -41,6 +46,24 @@ class Demux:
     def _emit(self, out: list[tuple[Stream, bytes]], chunk: bytes) -> None:
         if chunk:
             out.append((self.stream, chunk))
+
+
+class Unbase64:
+    """One stream's base64 decoded as it arrives: whole 4-character groups at a time, line
+    breaks dropped. Anything else is malformed (binascii.Error)."""
+
+    def __init__(self) -> None:
+        self._held = b""
+
+    def feed(self, text: bytes) -> bytes:
+        buf = self._held + text.translate(None, b"\r\n")
+        cut = len(buf) - len(buf) % 4
+        self._held = buf[cut:]
+        return binascii.a2b_base64(buf[:cut], strict_mode=True)
+
+    def end(self) -> None:
+        if self._held:
+            raise binascii.Error(f"the stream ended mid-group: {self._held!r}")
 
 
 def _next_marker(buf: bytes) -> tuple[int, bytes | None]:
