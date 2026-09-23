@@ -42,8 +42,10 @@ export type ExecCall = {
 export function parseExec(script: string): ExecCall {
   const cwd = shellWords(script.split("\n")[1] ?? "")[1] ?? "";
   const input = /\nexec 0<('(?:[^']|'\\'')*')/.exec(script)?.[1] ?? "";
+  const cmd = /\n__t_x=('(?:[^']|'\\'')*')\n/.exec(script)?.[1];
   const words = shellWords(script.slice(script.indexOf("\nexec env -i ") + 13));
-  const at = words.findIndex((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w));
+  const at = words.indexOf(`"$__t_c"`);
+  words[at] = shellWords(cmd ?? "")[0] ?? "";
   const env = Object.fromEntries(
     words.slice(0, at).map((w) => {
       const eq = w.indexOf("=");

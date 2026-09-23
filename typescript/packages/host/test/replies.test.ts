@@ -3,6 +3,7 @@ import { sqlite } from "@threads/core";
 import { storeConnection } from "@threads/core/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
+import { hostTicked } from "../src/host";
 import {
   authenticate,
   eventsOf,
@@ -94,12 +95,21 @@ describe("a crash between turn_completed and the reply", () => {
     await until(async () =>
       (await threadEvents(store)).some((e) => e.type === "turn_completed"),
     );
-    await Bun.sleep(50);
     await first.stop();
     expect(sends(await threadEvents(store))).toHaveLength(0);
 
-    const restart = (): { readonly h: Host; readonly slack: FakeChannel } => {
-      const slack = fakeChannel("support");
+    // `hold` runs before each send, so a test can keep a tick inside recovery.
+    const restart = (
+      hold: () => Promise<void> = async () => {},
+    ): { readonly h: Host; readonly slack: FakeChannel } => {
+      const base = fakeChannel("support");
+      const slack: FakeChannel = {
+        ...base,
+        perform: async (op, key, credentials) => {
+          await hold();
+          return base.perform(op, key, credentials);
+        },
+      };
       const h = host({
         store,
         authenticate,
@@ -109,22 +119,35 @@ describe("a crash between turn_completed and the reply", () => {
       hosts.push(h);
       return { h, slack };
     };
-    const second = restart();
+    const gate = Promise.withResolvers<void>();
+    const sending = Promise.withResolvers<void>();
+    const second = restart(async () => {
+      sending.resolve();
+      await gate.promise;
+    });
+    const firstTick = hostTicked(second.h);
     await second.h.ready();
-    await until(async () =>
-      (await threadEvents(store)).some((e) => e.type === "effect_commit"),
-    );
+    await sending.promise;
+    // Asked while a tick runs: it waits for the next tick, not the one in flight.
+    const nextTick = hostTicked(second.h);
+    gate.resolve();
+    await firstTick;
+    // The tick hostTicked observed includes reply recovery.
     expect(second.slack.performed).toHaveLength(1);
     expect(second.slack.performed[0]?.op).toMatchObject({
       kind: "text",
       text: "Hello back",
       address: "C1",
     });
+    expect(await Promise.race([nextTick, Promise.resolve("pending")])).toBe(
+      "pending",
+    );
+    await nextTick;
     await second.h.stop();
 
     const third = restart();
     await third.h.ready();
-    await Bun.sleep(1_500);
+    await hostTicked(third.h);
     expect(third.slack.performed).toHaveLength(0);
     expect(sends(await threadEvents(store))).toHaveLength(1);
   }, 15_000);

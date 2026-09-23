@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import shutil
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
@@ -23,6 +25,11 @@ Message: TypeAlias = "dict[str, Json]"  # noqa: UP040 - runs on Python 3.8
 Timeout: Final = asyncio.TimeoutError
 
 READY_S: Final = 30.0
+SEARCH: Final = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+"""Where a bare server command is looked up, and the server's PATH. The driver runs with the
+tool env, which has no PATH: the default search (/bin:/usr/bin) would miss servers in
+/usr/local/bin, where pip and npm put them, and a launcher's `#!/usr/bin/env node` would find no
+node. Fixed system dirs, never a host PATH. An absolute command runs as given."""
 QUIET_S: Final = 1.0
 REQUESTS: Final = {
     "definition": "textDocument/definition",
@@ -129,12 +136,14 @@ async def main(argv: list[str]) -> Json:
     command = [a for a in parsed if isinstance(a, str)] if isinstance(parsed, list) else []
     if not command:
         return {"unavailable": "no language server command"}
+    command[0] = shutil.which(command[0], path=SEARCH) or command[0]
     try:
         proc = await asyncio.create_subprocess_exec(
             *command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             cwd=argv[1],
+            env={**os.environ, "PATH": SEARCH},
         )
     except OSError as error:
         return {"unavailable": "the language server did not start: " + str(error)}

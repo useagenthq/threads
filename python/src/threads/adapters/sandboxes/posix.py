@@ -7,7 +7,7 @@
 
 Nothing here proves a process ended or a sandbox was quiescent: anything the guest can write,
 it can forge. Termination and quiescence come only from provider primitives.
-Needs `/bin/sh`, `sed`, `find`, `sha256sum` and `stat` (coreutils) in the image.
+The image needs the tools spec/schema/README.md lists ("Sandbox image").
 """
 
 import asyncio

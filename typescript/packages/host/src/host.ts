@@ -74,6 +74,19 @@ export function hostSandboxes(h: Host): readonly Sandbox[] {
   return SANDBOXES.get(h) ?? [];
 }
 
+/** Each host's wait for its next complete tick. */
+const TICKS = new WeakMap<Host, () => Promise<void>>();
+
+/**
+ * Resolves after the next tick that starts after the call has finished: lets a test assert
+ * what a tick did (or didn't) without sleeping. Internal: not exported from the package.
+ */
+export function hostTicked(h: Host): Promise<void> {
+  const next = TICKS.get(h);
+  if (next === undefined) throw new Error("not a host");
+  return next();
+}
+
 export function host(options: HostOptions): Host {
   const ctx = new HostContext(
     options.store,
@@ -84,6 +97,7 @@ export function host(options: HostOptions): Host {
   const consuming = new Map<string, Promise<void>>();
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking: Promise<void> | undefined;
+  let tickWaiters: (() => void)[] = [];
   /** Channel threads a crash may have left mid-run or owing replies, not yet settled. */
   let unreplied: Map<string, { tenant: string; id: ThreadId }> | undefined;
 
@@ -184,6 +198,8 @@ export function host(options: HostOptions): Host {
       const startedAt = Date.now();
       timer = setInterval(() => {
         if (ticking !== undefined) return;
+        const waiting = tickWaiters;
+        tickWaiters = [];
         ticking = (async (): Promise<void> => {
           try {
             await tick(ctx, bound, startedAt, Date.now());
@@ -193,6 +209,7 @@ export function host(options: HostOptions): Host {
             console.error("threads host: tick failed", error);
           } finally {
             ticking = undefined;
+            for (const resolve of waiting) resolve();
           }
         })();
       }, TICK_MS);
@@ -200,6 +217,11 @@ export function host(options: HostOptions): Host {
     stop,
     [Symbol.asyncDispose]: stop,
   };
+  TICKS.set(made, () => {
+    const next = Promise.withResolvers<void>();
+    tickWaiters.push(next.resolve);
+    return next.promise;
+  });
   SANDBOXES.set(
     made,
     [...ctx.agents.values()].flatMap((a) => a.runner.sandbox ?? []),

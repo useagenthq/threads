@@ -3,7 +3,7 @@ server run as a real local process: every operation, 1-based positions, and a se
 missing or undeclared answers unavailable, never an empty success."""
 
 import asyncio
-import sys
+import shutil
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -18,6 +18,7 @@ from threads.result import Ok
 from threads.store import SqliteStore
 from threads.tools import SandboxTools, specs
 from threads.tools.lsp import render
+from threads.tools.lsp_driver import SEARCH
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
@@ -47,7 +48,9 @@ def ask(tmp_path: Path, input: JsonObject, servers: Mapping[str, Sequence[str]])
     return asyncio.run(main())
 
 
-SERVERS = {"python": (sys.executable, FAKE)}
+# Bare, as a declared server usually is: the driver runs with no PATH, and python3 is in
+# /usr/local/bin on python:* images, outside the default search path.
+SERVERS = {"python": ("python3", FAKE)}
 
 
 @pytest.mark.parametrize(
@@ -73,6 +76,39 @@ def test_each_operation_answers_from_the_server(
     assert isinstance(got, Output)
     assert not got.is_error, got.text
     assert got.text.replace(str(tmp_path.resolve()), "/workspace").replace("/private", "") == text
+
+
+def test_a_server_given_by_absolute_path_runs_from_outside_the_searched_dirs(
+    tmp_path: Path,
+) -> None:
+    # Like /opt/... or /workspace/node_modules/.bin/...: an absolute command is run as given.
+    opt = tmp_path / "opt" / "bin"
+    opt.mkdir(parents=True)
+    (opt / "server-python").symlink_to(shutil.which("python3") or "python3")
+    got = ask(
+        tmp_path,
+        {"operation": "symbols", "path": "app.py"},
+        {"python": (str(opt / "server-python"), FAKE)},
+    )
+    assert isinstance(got, Output)
+    assert not got.is_error, got.text
+
+
+def test_an_env_shebang_launcher_finds_its_interpreter_on_the_fixed_path(tmp_path: Path) -> None:
+    # pyright-langserver and typescript-language-server start with `#!/usr/bin/env node`: the
+    # server needs a PATH, and it must be exactly the fixed system dirs, never the host's.
+    launcher = tmp_path / "opt" / "launcher"
+    launcher.parent.mkdir()
+    launcher.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, sys\n"
+        f"if os.environ.get('PATH') != {SEARCH!r}: sys.exit('PATH is not the fixed dirs')\n"
+        f"os.execvp('python3', ['python3', {FAKE!r}])\n"
+    )
+    launcher.chmod(0o755)
+    got = ask(tmp_path, {"operation": "symbols", "path": "app.py"}, {"python": (str(launcher),)})
+    assert isinstance(got, Output)
+    assert not got.is_error, got.text
 
 
 def test_a_missing_or_undeclared_server_is_unavailable(tmp_path: Path) -> None:

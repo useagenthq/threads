@@ -22,6 +22,7 @@ from threads.host import (
     VerifiedDelivery,
     host,
 )
+from threads.host.app import recovered
 from threads.host.intake import ChannelIntake
 from threads.host.runs import Runner
 from threads.log import Event, JsonObject, ParseError, Principal, ToolCallEvent
@@ -46,9 +47,12 @@ def text(reply: str) -> JsonValue:
 @dataclass
 class Replies:
     """Renders a final response as one op; `crash` makes the first render die, as a host
-    that stops right after the turn ended."""
+    that stops right after the turn ended. `hold` keeps each send waiting until it is set;
+    `sending` is set once a send has started."""
 
     crash: bool = False
+    hold: asyncio.Event | None = None
+    sending: asyncio.Event = field(default_factory=asyncio.Event)
     sent: list[JsonObject] = field(default_factory=list[JsonObject])
     agent: str = "bot"
     capabilities: ChannelCapabilities = field(
@@ -78,6 +82,9 @@ class Replies:
     async def perform(
         self, op: JsonObject, effect_key: str, credentials: Mapping[str, str]
     ) -> DeliveryOutcome:
+        self.sending.set()
+        if self.hold is not None:
+            await self.hold.wait()
         self.sent.append(op)
         return Sent(f"ts{len(self.sent)}")
 
@@ -115,29 +122,39 @@ async def sends(store: Store) -> list[str]:
     return [e.data.call_id for e in events if isinstance(e, ToolCallEvent)]
 
 
+async def crashed(store: Store) -> None:
+    """A host that died right after its turn ended: the reply is in the log, never sent."""
+    crashing = Replies(crash=True)
+    bot = agent(model=scripted_model({"responses": [text("Hi there.")]}))
+    async with host(store=store, agents={"bot": bot}, channels={"fake": crashing}) as served:
+        await served.receive("fake", webhook("d1", "m1", "hello"))
+        await until(lambda: _consumed(store))
+        await asyncio.sleep(0.05)
+    assert crashing.sent == []
+
+
 def test_a_restarted_host_sends_the_reply_a_crash_left_unsent_once() -> None:
     store = sqlite(":memory:")
-    crashing = Replies(crash=True)
-
-    async def first() -> None:
-        bot = agent(model=scripted_model({"responses": [text("Hi there.")]}))
-        async with host(store=store, agents={"bot": bot}, channels={"fake": crashing}) as served:
-            await served.receive("fake", webhook("d1", "m1", "hello"))
-            await until(lambda: _consumed(store))
-            await asyncio.sleep(0.05)
-        assert crashing.sent == []
 
     async def restarted() -> Replies:
-        channel = Replies()
+        hold = asyncio.Event()
+        channel = Replies(hold=hold)
         bot = agent(model=scripted_model({"responses": []}))
-        async with host(store=store, agents={"bot": bot}, channels={"fake": channel}):
-            await until(lambda: _sent(channel, 1))
-            await asyncio.sleep(0.05)
-        async with host(store=store, agents={"bot": bot}, channels={"fake": channel}):
-            await asyncio.sleep(0.1)
+        async with host(store=store, agents={"bot": bot}, channels={"fake": channel}) as served:
+            done = asyncio.ensure_future(recovered(served))
+            await channel.sending.wait()
+            # Recovery is mid-send: the seam has not resolved yet.
+            assert not done.done()
+            hold.set()
+            await done
+            # The pass the seam observed includes the redelivery.
+            assert [op["text"] for op in channel.sent] == ["Hi there."]
+        channel.hold = None
+        async with host(store=store, agents={"bot": bot}, channels={"fake": channel}) as again:
+            await recovered(again)
         return channel
 
-    asyncio.run(first())
+    asyncio.run(crashed(store))
     channel = asyncio.run(restarted())
     assert [(op["text"], op["address"]) for op in channel.sent] == [("Hi there.", "C1")]
     assert len(asyncio.run(sends(store))) == 1
@@ -193,3 +210,58 @@ def test_stop_waits_out_an_intake_task_whose_bookkeeping_is_still_queued() -> No
     stopped.start()
     stopped.join(5)
     assert not stopped.is_alive(), "drain spun on a finished task"
+
+
+def test_the_same_host_started_again_waits_for_its_new_recovery_pass() -> None:
+    store = sqlite(":memory:")
+
+    async def main() -> None:
+        hold = asyncio.Event()
+        channel = Replies(hold=hold)
+        bot = agent(model=scripted_model({"responses": []}))
+        served = host(store=store, agents={"bot": bot}, channels={"fake": channel})
+        await served.ready()
+        await recovered(served)  # nothing to recover yet
+        await served.stop()
+        await crashed(store)
+        await served.ready()
+        done = asyncio.ensure_future(recovered(served))
+        await channel.sending.wait()
+        # The first start's pass finished long ago; the seam waits for this one.
+        assert not done.done()
+        hold.set()
+        await done
+        assert [op["text"] for op in channel.sent] == ["Hi there."]
+        await served.stop()
+
+    asyncio.run(main())
+
+
+def test_settled_waits_for_a_follow_on_resume_a_recovered_run_scheduled() -> None:
+    store = sqlite(":memory:")
+
+    async def main() -> None:
+        await crashed(store)
+        hold = asyncio.Event()
+        channel = Replies(hold=hold)
+        bot = agent(model=scripted_model({"responses": []}))
+        runner = Runner(store, {"bot": bot}, {"fake": channel})
+        runner.resolve_secrets()
+        tenant = runner.store(TEAM)
+        sq = await open_store(tenant)
+        thread_id = (await sq.tables.inbox_rows())[0].thread_id
+        root = await sq.root(thread_id)
+        assert isinstance(root, Ok)
+        await runner.redeliver(tenant, thread_id)
+        await channel.sending.wait()
+        # A control while the recovered run is in flight: its resume follows once that run ends.
+        await runner.resume(tenant, thread_id, root.value)
+        hold.set()
+        await runner.settled()
+        follow_ons = runner._pending  # pyright: ignore[reportPrivateUsage] - what settled covers
+        assert follow_ons
+        assert all(t.done() for t in follow_ons)
+        assert not runner.running(root.value)
+        await runner.stop()
+
+    asyncio.run(main())

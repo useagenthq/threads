@@ -34,14 +34,12 @@ export function localSession(root: string): LocalSession {
     execs,
     exec: async (command, _ctx, options) => {
       execs.push({ argv: command, env: options.env ?? {} });
-      // The tool's env exactly, plus PATH so the host's binaries resolve.
-      const proc = Bun.spawn(command.map(map), {
+      // Like the remote kit: argv[0] resolves on the host (provider) PATH, then the command
+      // runs with the tool's env exactly (HOME only moves git's config into the root).
+      const [cmd = "", ...rest] = command.map(map);
+      const proc = Bun.spawn([Bun.which(cmd) ?? cmd, ...rest], {
         cwd: map(options.cwd ?? "/workspace"),
-        env: {
-          ...options.env,
-          PATH: process.env["PATH"] ?? "/usr/bin:/bin",
-          HOME: root,
-        },
+        env: { ...options.env, HOME: root },
         stdout: "pipe",
         stderr: "pipe",
       });
