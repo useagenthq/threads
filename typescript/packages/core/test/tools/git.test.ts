@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { secret } from "../../src";
 import { gitClone, gitFetch } from "../../src/tools/git/clone";
 import type { GitOptions } from "../../src/tools/git/host";
-import { openPullRequest } from "../../src/tools/git/pull-request";
+import { forgeFetch, openPullRequest } from "../../src/tools/git/pull-request";
 import { gitPush } from "../../src/tools/git/push";
 import { bound, type LocalSession, localSession } from "./kit";
 
@@ -222,56 +222,117 @@ describe("open_pull_request", () => {
   };
   const PR = { repo: "acme/api", head: "fix-1", base: "main", title: "Fix" };
   const LIST =
-    "GET https://forge.test/repos/acme/api/pulls?head=acme%3Afix-1&state=all";
-  const pull = { html_url: "https://forge.test/acme/api/pull/7", number: 7 };
+    "GET https://forge.test/repos/acme/api/pulls?head=acme%3Afix-1&base=main&state=all&sort=created&direction=desc";
+  const POST = "POST https://forge.test/repos/acme/api/pulls";
+  const pull = {
+    html_url: "https://forge.test/acme/api/pull/7",
+    number: 7,
+    state: "open",
+    merged_at: null,
+  };
+  const closed = {
+    ...pull,
+    number: 3,
+    state: "closed",
+    html_url: "https://forge.test/acme/api/pull/3",
+  };
+  const EXISTS = {
+    message: "Validation Failed",
+    errors: [
+      {
+        resource: "PullRequest",
+        code: "custom",
+        message: "A pull request already exists for acme:fix-1.",
+      },
+    ],
+  };
 
-  test("creates one; the token goes only in the host's request", async () => {
+  test("looks up (head, base) first, then creates one; the token goes only in the host's request", async () => {
     const f = forge({
-      "POST https://forge.test/repos/acme/api/pulls": Response.json(pull, {
-        status: 201,
-      }),
+      [LIST]: Response.json([]),
+      [POST]: Response.json(pull, { status: 201 }),
     });
     const run = await bound(openPullRequest(f.o)).run(PR);
     expect(run).toEqual({
       kind: "done",
-      output: "pull request #7: https://forge.test/acme/api/pull/7",
+      output: "pull request #7 (open): https://forge.test/acme/api/pull/7",
       isError: false,
       receipt: "7",
     });
-    expect(f.seen[0]?.auth).toBe(`Bearer ${TOKEN}`);
+    expect(f.seen.map((s) => s.method)).toEqual(["GET", "POST"]);
+    expect(f.seen.every((s) => s.auth === `Bearer ${TOKEN}`)).toBe(true);
   });
 
-  test("an existing one for the head is the answer; a server error is unknown; lookup is by head", async () => {
-    const f = forge({
-      "POST https://forge.test/repos/acme/api/pulls": () =>
-        Response.json({ message: "exists" }, { status: 422 }),
-      [LIST]: () => Response.json([pull]),
-    });
-    const tool = bound(openPullRequest(f.o));
-    expect(await tool.run(PR)).toMatchObject({
+  test("an existing one in any state is the result, and nothing is created", async () => {
+    const f = forge({ [LIST]: () => Response.json([closed]) });
+    expect(await bound(openPullRequest(f.o)).run(PR)).toMatchObject({
       isError: false,
-      output:
-        "already open: pull request #7: https://forge.test/acme/api/pull/7",
+      output: "pull request #3 (closed): https://forge.test/acme/api/pull/3",
     });
-    expect(tool.impl.reconcile?.finality).toBe("final");
-    expect(await tool.impl.reconcile?.lookup("k", PR)).toEqual({
-      status: "found",
-      value: "pull request #7: https://forge.test/acme/api/pull/7",
+    expect(f.seen.some((s) => s.method === "POST")).toBe(false);
+    const merged = forge({
+      [LIST]: Response.json([{ ...closed, merged_at: "2026-01-01T00:00:00Z" }]),
     });
+    expect(await bound(openPullRequest(merged.o)).run(PR)).toMatchObject({
+      output: "pull request #3 (merged): https://forge.test/acme/api/pull/3",
+    });
+  });
+
+  test("a 422 means 'already exists' only when the forge says so; any other 422 is an error", async () => {
+    let listed = 0;
+    const raced = forge({
+      [LIST]: () => Response.json(listed++ === 0 ? [] : [pull]),
+      [POST]: () => Response.json(EXISTS, { status: 422 }),
+    });
+    expect(await bound(openPullRequest(raced.o)).run(PR)).toMatchObject({
+      isError: false,
+      output: "pull request #7 (open): https://forge.test/acme/api/pull/7",
+    });
+    const badBase = forge({
+      [LIST]: () => Response.json([]),
+      [POST]: () =>
+        Response.json(
+          {
+            message: "Validation Failed",
+            errors: [{ field: "base", code: "invalid" }],
+          },
+          { status: 422 },
+        ),
+    });
+    const run = await bound(openPullRequest(badBase.o)).run(PR);
+    expect(run).toMatchObject({ kind: "done", isError: true });
+    expect(
+      run.kind === "done" && run.output.startsWith("the forge refused"),
+    ).toBe(true);
+  });
+
+  test("a server error is unknown; recovery looks up (head, base) in every state", async () => {
     const down = forge({
-      "POST https://forge.test/repos/acme/api/pulls": new Response(
-        "bad gateway",
-        { status: 502 },
-      ),
       [LIST]: Response.json([]),
+      [POST]: new Response("bad gateway", { status: 502 }),
     });
-    const tool2 = bound(openPullRequest(down.o));
-    expect(await tool2.run(PR)).toEqual({
+    const tool = bound(openPullRequest(down.o));
+    expect(await tool.run(PR)).toEqual({
       kind: "unknown",
       reason: "transport_error",
     });
-    expect(await tool2.impl.reconcile?.lookup("k", PR)).toEqual({
-      status: "not_found",
+    expect(tool.impl.reconcile?.finality).toBe("final");
+    const later = forge({
+      [LIST]: Response.json([{ ...pull, state: "closed" }]),
     });
+    expect(
+      await bound(openPullRequest(later.o)).impl.reconcile?.lookup("k", PR),
+    ).toEqual({
+      status: "found",
+      value: "pull request #7 (closed): https://forge.test/acme/api/pull/7",
+    });
+  });
+
+  test("the forge API goes through the SSRF guard: a private api_url is never contacted", async () => {
+    const res = await forgeFetch("https://169.254.169.254/repos/a/b/pulls", {
+      method: "GET",
+    });
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain("non-public");
   });
 });

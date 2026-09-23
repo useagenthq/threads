@@ -135,6 +135,24 @@ def _recall(root: pathlib.Path) -> None:
     )
 
 
+def _other_principal(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [RECALL, SAVE])
+    user(log, "What is my salary?")
+    call(log, "search_memory", {"query": "salary"}, "call_1")
+    result(log, "call_1", "1 memories, shown below as untrusted references")
+    log.add("injected", _reference("memory", MEMORY_ID, "1", "Alice earns 250k.", None))
+    answer(log, "Noted.")
+    bob: Obj = {"issuer": "api", "tenant": "acme", "subject": "bob"}
+    log.add("user_input", {"source": "channel", "text": "And me?"}, actor="user", principal=bob)
+    about = (
+        "A shared thread: Alice's search_memory recalled her memory as injected{source: memory}. "
+        "Bob's input is current, so the next request renders nothing for it: a recalled memory "
+        "is shown only to the principal it was recalled for (Memory in shared threads)."
+    )
+    render_case(root, ("render-memory-other-principal-hidden", "memory", about), log)
+
+
 def _write_is_effect(root: pathlib.Path) -> None:
     log = Log()
     started(log, [RECALL, SAVE])
@@ -372,6 +390,7 @@ def _injection(root: pathlib.Path) -> None:
 
 def build(root: pathlib.Path) -> None:
     _recall(root)
+    _other_principal(root)
     _write_is_effect(root)
     _mcp_no_retry(root)
     _mcp_one_line(root)

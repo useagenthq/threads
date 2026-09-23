@@ -1,0 +1,9 @@
+{
+  "name": "render-memory-other-principal-hidden",
+  "family": "memory",
+  "kind": "render",
+  "description": "A shared thread: Alice's search_memory recalled her memory as injected{source: memory}. Bob's input is current, so the next request renders nothing for it: a recalled memory is shown only to the principal it was recalled for (Memory in shared threads).",
+  "clock": {
+    "now": 1790000060000
+  }
+}

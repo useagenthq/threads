@@ -152,6 +152,9 @@ function parsed(source: KnowledgeSource): Result<string, ProviderError> {
 }
 
 const where = (s: Scope): readonly string[] => [s.tenant_id, s.agent, s.scope];
+/** A caller's key names an operation in its scope; another scope's same key is another op. */
+const scoped = (s: Scope, key: string): string =>
+  JSON.stringify([...where(s), key]);
 
 function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
   installFts(db, DDL, "localKnowledge()");
@@ -261,14 +264,16 @@ function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
         if (!text.ok) return text;
         // The admitted bytes are durable before the row that references them.
         artifacts.put(source.content);
-        return db.transaction(() => admit(scope, source, key, text.value));
+        return db.transaction(() =>
+          admit(scope, source, scoped(scope, key), text.value),
+        );
       }),
     remove: async (scope, docId, key) =>
       guard(() =>
         db.transaction(() => {
           const seen = db.all(
             "SELECT 1 AS one FROM local_knowledge_keys WHERE key = ?",
-            [key],
+            [scoped(scope, key)],
           );
           if (seen.length > 0) return ok(undefined);
           const at = bump();
@@ -279,7 +284,7 @@ function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
           );
           db.run(
             "INSERT INTO local_knowledge_keys VALUES (?, 'remove', ?, '', ?)",
-            [key, docId, at],
+            [scoped(scope, key), docId, at],
           );
           return ok(undefined);
         }),

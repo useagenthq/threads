@@ -108,6 +108,7 @@ class _View:
         self.redactions: dict[tuple[str, int], list[JsonValue]] = {}
         self.denied: set[JsonValue] = set()
         self.host_calls = _host_calls(events)
+        self.foreign_memory = _foreign_memory(events)
         ranges: list[Obj] = []
         for e in events:
             d, t = obj(e["data"]), e["type"]
@@ -160,7 +161,9 @@ class _View:
             return {"role": "user", "content": d["content"]}
         return user_line(text(d["text"]))
 
-    def injected(self, e: Obj) -> Obj:
+    def injected(self, e: Obj) -> Obj | None:
+        if e["event_id"] in self.foreign_memory:
+            return None
         d = obj(e["data"])
         body = text(d["text"]) if "text" in d else self.artifacts[text(obj(d["ref"])["sha256"])]
         return user_line(wrap(d, body if isinstance(body, str) else body.decode()))
@@ -243,6 +246,19 @@ def _host_calls(events: list[Obj]) -> set[str]:
         for e in events
         if e["type"] == "tool_call" and text(obj(e["data"])["call_id"]) not in proposed
     }
+
+
+def _foreign_memory(events: list[Obj]) -> set[str]:
+    """Memory recalled for another principal than the current input's (the latest user_input or
+    steer): rendered as nothing (spec/schema/README.md, Memory in shared threads)."""
+    current: JsonValue = None
+    recalled_for: dict[str, JsonValue] = {}
+    for e in events:
+        if e["type"] in ("user_input", "steer"):
+            current = obj(e["actor"]).get("principal")
+        elif e["type"] == "injected" and obj(e["data"])["source"] == "memory":
+            recalled_for[text(e["event_id"])] = current
+    return {i for i, p in recalled_for.items() if p != current}
 
 
 def _bind(fn: Callable[[_View, Obj], Obj | None], v: _View, e: Obj) -> Callable[[], Obj | None]:

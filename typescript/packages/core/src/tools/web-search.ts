@@ -47,7 +47,8 @@ const within = (host: string, domains: readonly string[]): boolean =>
 
 function hostOf(url: string): string | undefined {
   try {
-    return new URL(url).hostname.toLowerCase();
+    // `evil.com.` is `evil.com` (spec/schema/README.md, SSRF guard).
+    return new URL(url).hostname.toLowerCase().replace(/\.$/, "");
   } catch {
     return undefined;
   }

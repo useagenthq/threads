@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
 import { err, ok } from "../../src/result";
 import { htmlTitle, htmlToMarkdown } from "../../src/tools/html";
 import { isPublicAddress } from "../../src/tools/ssrf";
@@ -45,34 +48,30 @@ const PUBLIC = {
   "other.org": ["2606:4700::1"],
 };
 
+// The shared SSRF vector (spec/schema/README.md, SSRF guard): both guards give its answers.
+const SSRF = z
+  .object({
+    cases: z.array(z.object({ address: z.string(), public: z.boolean() })),
+  })
+  .parse(
+    JSON.parse(
+      readFileSync(
+        join(
+          import.meta.dir,
+          "../../../../../spec/conformance/vectors/ssrf.json",
+        ),
+        "utf8",
+      ),
+    ),
+  );
+
 describe("the SSRF guard", () => {
-  test.each([
-    ["93.184.216.34", true],
-    ["2606:4700::1111", true],
-    ["10.1.2.3", false],
-    ["172.16.0.1", false],
-    ["172.32.0.1", true],
-    ["192.168.1.1", false],
-    ["127.0.0.1", false],
-    ["169.254.169.254", false],
-    ["100.64.0.1", false],
-    ["0.0.0.0", false],
-    ["224.0.0.1", false],
-    ["255.255.255.255", false],
-    ["::1", false],
-    ["::", false],
-    ["fd00::1", false],
-    ["fe80::1", false],
-    ["ff02::1", false],
-    ["::ffff:127.0.0.1", false],
-    ["::ffff:8.8.8.8", true],
-    ["::ffff:7f00:1", false],
-    ["64:ff9b::a9fe:a9fe", false],
-    ["2001:db8::1", false],
-    ["not-an-ip", false],
-  ])("%s public is %p", (ip, expected) => {
-    expect(isPublicAddress(ip)).toBe(expected);
-  });
+  test.each(SSRF.cases.map((c) => [c.address, c.public] as const))(
+    "%s public is %p",
+    (ip, expected) => {
+      expect(isPublicAddress(ip)).toBe(expected);
+    },
+  );
 });
 
 describe("web_fetch", () => {
@@ -288,6 +287,20 @@ describe("web_search", () => {
     expect(b.calls).toEqual([
       { query: "bun sqlite", allowedDomains: ["bun.sh"], signal: undefined },
     ]);
+  });
+
+  test("a trailing-dot host is the same host for blocked_domains", async () => {
+    const run = await bound(
+      webSearch(
+        backend([
+          { url: "https://evil.com./b", title: "Dot", snippet: "" },
+          { url: "https://EVIL.com/a", title: "Upper", snippet: "" },
+        ]),
+      ),
+    ).run({ query: "q", blocked_domains: ["evil.com"] });
+    if (run.kind !== "done") throw new Error(run.kind);
+    expect(run.output).not.toContain("Dot");
+    expect(run.output).not.toContain("Upper");
   });
 
   test("a backend failure or malformed hits are error results, never empty successes", async () => {

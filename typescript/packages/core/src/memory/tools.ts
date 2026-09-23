@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { ConfigError } from "../agent/errors";
 import { jsonSchema } from "../agent/tool";
 import {
   EventId,
@@ -59,6 +60,12 @@ function spec(e: CatalogEntry, effect: Partial<ToolSpec>): ToolSpec {
 
 /** A memory write carries the provider's declared effect class (absent: unguarded). */
 function writeSpec(name: string, provider: MemoryProvider): ToolSpec {
+  // A write is always an effect with effect_begin before dispatch.
+  if (provider.writeEffect === "read_only")
+    throw new ConfigError(
+      "invalid_config",
+      "a memory provider's writes can't be read_only: save_memory and forget_memory are effects",
+    );
   return spec(entry(name), {
     effect_class: provider.writeEffect ?? "unguarded",
     ...(provider.dedupWindowMs === undefined
@@ -106,17 +113,21 @@ function kept<
   return out;
 }
 
+/** `names` are listed in the bare result text, so only host-derived citation tags go there. */
 function listed(
   kind: string,
-  items: readonly string[],
   inject: readonly Inject[],
+  names?: readonly string[],
 ): ToolRun {
+  const head = `${inject.length} ${kind}, shown below as untrusted references`;
   return {
     kind: "done",
     output:
-      items.length === 0
+      inject.length === 0
         ? `no ${kind} found`
-        : `${items.length} ${kind}, shown below as untrusted references: ${items.join(", ")}`,
+        : names === undefined
+          ? head
+          : `${head}: ${names.join(", ")}`,
     isError: false,
     inject,
   };
@@ -137,9 +148,10 @@ function searchMemory(provider: MemoryProvider, env: MemoryEnv): ToolImpl {
       if (!parsed.success)
         return failedRun({ code: "invalid", message: "malformed hits" });
       const hits = kept(env, "memory", parsed.data, k);
+      // The provider chose each id and version: they reach the model only inside the
+      // reference wrapper (invariant 6), never in this bare text.
       return listed(
         "memories",
-        hits.map((h) => `${h.id}@${h.version}`),
         hits.map((h) => ({
           source: "memory",
           trust: "untrusted_reference",
@@ -254,11 +266,11 @@ function searchKnowledge(
       );
       return listed(
         "excerpts",
+        refs,
         refs.map(
           (r) =>
             `[doc:${r.origin.id}@${r.origin.version}#${r.origin.location}]`,
         ),
-        refs,
       );
     },
   };

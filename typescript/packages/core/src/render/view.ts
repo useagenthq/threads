@@ -1,6 +1,6 @@
 import { assertNever } from "../assert-never";
 import type { EventOf } from "../fold/state";
-import type { KnownEvent } from "../log";
+import { type KnownEvent, principalKey } from "../log";
 
 /** The events that render a conversational line (Render v1 table, spec/schema/README.md). */
 export type VisibleEvent = EventOf<
@@ -31,6 +31,8 @@ export type View = {
   readonly ranges: readonly Compacted[];
   /** Calls no model response proposed (a host's channel_send reply): their results render nothing. */
   readonly hostCalls: ReadonlySet<string>;
+  /** Memory recalled for another principal than the current input's: renders nothing. */
+  readonly foreignMemory: ReadonlySet<string>;
 };
 
 function covers(c: Compacted, seq: number): boolean {
@@ -60,7 +62,30 @@ export function view(events: readonly KnownEvent[]): View {
       (c) => !compacted.some((outer) => covers(outer, c.seq)),
     ),
     hostCalls: hostCalls(events),
+    foreignMemory: foreignMemory(events),
   };
+}
+
+/**
+ * A recalled memory is shown only to the principal it was recalled for: the current input's
+ * (latest user_input or steer) then and now must be the same (spec/schema/README.md, Memory in
+ * shared threads; reference: render.py `_foreign_memory`).
+ */
+function foreignMemory(events: readonly KnownEvent[]): ReadonlySet<string> {
+  let current: string | undefined;
+  const recalledFor = new Map<string, string | undefined>();
+  for (const e of events) {
+    if (e.type === "user_input" || e.type === "steer")
+      current =
+        e.actor.principal === undefined
+          ? undefined
+          : principalKey(e.actor.principal);
+    else if (e.type === "injected" && e.data.source === "memory")
+      recalledFor.set(e.event_id, current);
+  }
+  return new Set(
+    [...recalledFor].flatMap(([id, p]) => (p === current ? [] : [id])),
+  );
 }
 
 function hostCalls(events: readonly KnownEvent[]): ReadonlySet<string> {
@@ -129,8 +154,9 @@ export function assistantParts(
 
 function hidden(v: View, e: KnownEvent): boolean {
   return (
-    (e.type === "tool_result" || e.type === "tool_result_late") &&
-    v.hostCalls.has(e.data.call_id)
+    ((e.type === "tool_result" || e.type === "tool_result_late") &&
+      v.hostCalls.has(e.data.call_id)) ||
+    (e.type === "injected" && v.foreignMemory.has(e.event_id))
   );
 }
 

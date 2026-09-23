@@ -134,6 +134,19 @@ describe("localKnowledge", () => {
     expect(got.ok ? "ok" : got.error.code).toBe("invalid");
   });
 
+  test("a key is scoped: the same file admitted by another agent or tenant is stored there too", async () => {
+    const p = knowledge();
+    const s = src("refunds take five days");
+    const others: readonly Scope[] = [
+      S,
+      { ...S, agent: "b" },
+      { ...S, tenant_id: "t2" },
+    ];
+    for (const scope of others) unwrap(await p.ingest(scope, s.source, s.key));
+    for (const scope of others)
+      expect(unwrap(await p.search(scope, "refunds")).length).toBe(1);
+  });
+
   test("sources narrows the search; passages tile a long document with exact spans", async () => {
     const p = knowledge();
     const long = Array.from(

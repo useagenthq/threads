@@ -74,12 +74,13 @@ function failed(
       case ErrorCode.ConnectionClosed:
         return { kind: "unknown", reason: "transport_error" };
       default:
-        // A JSON-RPC error is the server's answer: it received the call and refused it.
-        return {
-          kind: "done",
-          output: `${name}: error ${error.code}: ${error.message}`,
-          isError: true,
-        };
+        // A JSON-RPC error is the server's answer: it received the call and refused it. Its
+        // text is the server's, so it is framed like any output (invariant 6).
+        return shown(
+          name,
+          `error ${error.code}: ${error.message.replace(`MCP error ${error.code}: `, "")}`,
+          true,
+        );
     }
   return { kind: "unknown", reason: "transport_error" };
 }

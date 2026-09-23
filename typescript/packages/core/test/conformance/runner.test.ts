@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { sha256Hex } from "../../src/hash";
-import type { KnownEvent } from "../../src/log";
+import { type KnownEvent, principalKey } from "../../src/log";
 import { knownEvents, projections, reduce } from "../../src/reduce";
 import { refReader, render } from "../../src/render";
 import type { ArtifactStore } from "../../src/store";
@@ -94,6 +94,21 @@ function breaksHistory(e: KnownEvent): boolean {
   return ["compacted", "context_edited", "settings_changed"].includes(e.type);
 }
 
+/** Inputs that change the current principal after a memory recall, which they hide (Memory in shared threads). */
+function principalShifts(events: readonly KnownEvent[]): ReadonlySet<string> {
+  const out = new Set<string>();
+  let recalled = false;
+  let principal: string | undefined;
+  for (const e of events) {
+    if (e.type === "injected" && e.data.source === "memory") recalled = true;
+    if (e.type !== "user_input" && e.type !== "steer") continue;
+    const now = e.actor.principal && principalKey(e.actor.principal);
+    if (recalled && now !== principal) out.add(e.event_id);
+    principal = now;
+  }
+  return out;
+}
+
 /**
  * Cache reuse, checked apart from C7: each turn request's bytes (the recorded ones, then the
  * next) start with the previous turn request's, unless an edit, compaction, settings change or
@@ -105,8 +120,9 @@ function historyPrefix(
   next: Uint8Array,
 ): void {
   let last: Uint8Array | undefined;
+  const shifts = principalShifts(events);
   for (const e of events) {
-    if (breaksHistory(e)) last = undefined;
+    if (breaksHistory(e) || shifts.has(e.event_id)) last = undefined;
     if (e.type !== "model_request" || e.data.purpose === "compaction") continue;
     const bytes = unwrap(artifacts.get(e.data.request_ref.sha256));
     if (last !== undefined)

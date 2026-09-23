@@ -136,6 +136,10 @@ describe("save, then recall in a later run (F3.1, F3.2)", () => {
       origin: { version: "1" },
       text: "Deploys happen on Friday.",
     });
+    // The provider chose the id and version: they appear only inside the wrapper (invariant 6).
+    expect(resultsOf(second)[0]?.preview).toBe(
+      "1 memories, shown below as untrusted references",
+    );
     // Recall is read_only: no effect events for it.
     expect(typesOf(second)).not.toContain("effect_begin");
     const last = (await requestsOf(b)).at(-1) ?? "";
@@ -266,6 +270,17 @@ describe("provider swap and provider errors (F3.5, F3.6)", () => {
       return typesOf(await eventsOf(b)).filter((t) => t !== "hook_decision");
     };
     expect(await run(listMemory().provider)).toEqual(await run(localMemory()));
+  });
+
+  test("a provider can't declare its writes read_only: a write is an effect", async () => {
+    const bot = saver(
+      listMemory({ writeEffect: "read_only" }).provider,
+      "allow",
+      [say("never")],
+    );
+    await expect(
+      bot.run("hi", { store: sqlite(":memory:"), principal: ALICE }),
+    ).rejects.toThrow(/read_only/);
   });
 
   test("a recall timeout is a recorded, typed error and the run goes on", async () => {
