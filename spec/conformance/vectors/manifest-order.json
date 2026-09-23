@@ -1,0 +1,18 @@
+{
+  "description": "Snapshot manifest order and paths (spec/schema/README.md, Snapshot manifest). Entries are paths relative to /workspace, ordered by UTF-16 code units (like JCS object keys, not code points). U+1F600 sorts before U+E000 in UTF-16 order.",
+  "files": [
+    {
+      "path": "/workspace/",
+      "data": "x"
+    },
+    {
+      "path": "/workspace/😀",
+      "data": "x"
+    }
+  ],
+  "manifest_paths": [
+    "😀",
+    ""
+  ],
+  "manifest_hash": "ad3a9d9cec5984aa06f31b2ccad3dca2d3dd6d1ebda39639c9ac54e1e0068f2e"
+}

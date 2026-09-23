@@ -31,6 +31,10 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
 - `threads export <branch>` writes those stored lines, one per line with `\n`, followed by the `Head` line. Import verifies every line, the chains and the head, then stores the same bytes.
 - The hash chain is over those bytes. A fixture that verifies as JSONL verifies in SQLite, and the reverse.
 
+## Snapshot manifest
+
+A snapshot's `manifest_hash` is the RFC 8785 hash of its manifest: a JSON array of `{path, mode, size, sha256}`, one entry per captured file. `path` is relative to `/workspace` (no leading `/`). Entries are ordered by `path` in **UTF-16 code-unit order**, the same order JCS uses for object keys; code-point order differs above the BMP (U+1F600 sorts before U+E000). JCS canonicalizes keys, not array order, so every manifest builder must sort this way. Shared vector: `spec/conformance/vectors/manifest-order.json`.
+
 ## Wire rules
 
 1. **snake_case on the wire,** in both languages. Language APIs may re-case accessors (`forkPoints` ↔ `fork_points`), but stored and hashed bytes never change.
