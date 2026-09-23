@@ -1,0 +1,80 @@
+---
+title: Schedules
+description: Run an agent on a cron schedule, in any time zone, without double runs.
+icon: clock
+---
+
+A schedule starts a run of a host agent at each cron occurrence: a daily digest, a nightly cleanup, a weekly report.
+
+<CodeGroup>
+
+```ts TypeScript
+const app = host({
+  store: sqlite(".threads"),
+  agents: { support },
+  schedules: [
+    {
+      id: "daily-digest",
+      agent: "support",
+      cron: "0 9 * * 1-5",
+      timezone: "Europe/Berlin",
+      input: "Summarize yesterday's open tickets.",
+    },
+  ],
+});
+```
+
+```python Python
+from threads.host import Schedule, host
+
+app = host(
+    store=sqlite(".threads"),
+    agents={"support": support},
+    schedules=[
+        Schedule(
+            id="daily-digest",
+            agent="support",
+            cron="0 9 * * 1-5",
+            timezone="Europe/Berlin",
+            input="Summarize yesterday's open tickets.",
+        ),
+    ],
+)
+```
+
+</CodeGroup>
+
+Schedules start firing after `ready()`, which `threads dev` and `threads start` call for you.
+
+## Fields
+
+<ParamField path="id" type="string" required>
+  A stable name for the schedule. Keep it the same across deploys.
+</ParamField>
+<ParamField path="agent" type="string" required>
+  A key of the host's `agents`.
+</ParamField>
+<ParamField path="cron" type="string" required>
+  Five fields: minute, hour, day of month, month, day of week. Supports `*`, lists (`1,15`), ranges (`1-5`) and steps (`*/15`). Sunday is `0` or `7`.
+</ParamField>
+<ParamField path="timezone" type="string" default="UTC">
+  An IANA time zone such as `America/New_York`.
+</ParamField>
+<ParamField path="input" type="string | InputPart[]" required>
+  What each run starts with.
+</ParamField>
+
+## Guarantees
+
+- **One run per occurrence.** Each occurrence is claimed in the store before its run starts, so two hosts on the same store, or a restart right at the boundary, never run it twice.
+- **No catch-up storms.** Occurrences that fell due while the host was down are skipped, not run late.
+- **Daylight saving.** A local time skipped by a spring-forward runs at the first valid minute after it; a time repeated by a fall-back runs once.
+- A bad cron expression, an unknown time zone or an unknown agent fails `ready()` with a `ConfigError`.
+
+## Threads per schedule
+
+<Note>
+  The two languages differ here today. In **TypeScript**, a schedule keeps one thread and each occurrence continues it; an occurrence that falls due while the previous run is still going is skipped. In **Python**, each occurrence starts a new thread.
+</Note>
+
+Scheduled runs belong to the `local` tenant and are recorded with the schedule as the caller, so the [timeline](/evals/timeline) shows which schedule started each run.

@@ -1,0 +1,240 @@
+---
+title: "Quickstart"
+description: "Run your first agent with no API key, then switch to a real model."
+icon: "rocket"
+---
+
+You'll build a small weather agent with one tool. First it runs on a **scripted model**, so it works offline with no keys. Then you swap in a real model.
+
+<Steps>
+  <Step title="Set up threads">
+    threads isn't published yet, so run it from a clone. Follow [Installation](/installation) for your language, then come back.
+  </Step>
+  <Step title="Write a tool and an agent">
+    A tool is a name, a description, an input schema and a function. `effect: "read_only"` tells threads the tool changes nothing, so it runs without asking for approval.
+
+    <CodeGroup>
+
+    ```ts TypeScript
+    import { agent, scriptedModel, sqlite, tool } from "@threads/core";
+    import { z } from "zod";
+
+    const getWeather = tool({
+      name: "get_weather",
+      description: "Get the weather for a city.",
+      input: z.object({ city: z.string() }),
+      runs: "host",
+      effect: "read_only",
+      execute: async ({ city }) => `It is sunny in ${city}.`,
+    });
+    ```
+
+    ```python Python
+    import asyncio
+
+    from pydantic import BaseModel
+
+    from threads import RunContext, agent, scripted_model, sqlite, tool
+
+
+    class WeatherInput(BaseModel):
+        city: str
+
+
+    async def get_weather(args: WeatherInput, ctx: RunContext[None]) -> str:
+        return f"It is sunny in {args.city}."
+
+
+    weather_tool = tool(
+        name="get_weather",
+        description="Get the weather for a city.",
+        input=WeatherInput,
+        runs="host",
+        effect="read_only",
+        execute=get_weather,
+    )
+    ```
+
+    </CodeGroup>
+  </Step>
+  <Step title="Script the model">
+    A scripted model plays back fixed responses in order. This one calls the tool, then answers.
+
+    <CodeGroup>
+
+    ```ts TypeScript
+    const model = scriptedModel({
+      responses: [
+        {
+          content: [{ type: "tool_use", call_id: "c1", name: "get_weather", input: { city: "Paris" } }],
+          stop_reason: "tool_use",
+          usage: { input_tokens: 20, output_tokens: 5 },
+        },
+        {
+          content: [{ type: "text", text: "It is sunny in Paris." }],
+          stop_reason: "end_turn",
+          usage: { input_tokens: 40, output_tokens: 8 },
+        },
+      ],
+    });
+    ```
+
+    ```python Python
+    model = scripted_model({
+        "responses": [
+            {
+                "content": [{"type": "tool_use", "call_id": "c1", "name": "get_weather", "input": {"city": "Paris"}}],
+                "stop_reason": "tool_use",
+                "usage": {"input_tokens": 20, "output_tokens": 5},
+            },
+            {
+                "content": [{"type": "text", "text": "It is sunny in Paris."}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 40, "output_tokens": 8},
+            },
+        ]
+    })
+    ```
+
+    </CodeGroup>
+  </Step>
+  <Step title="Run it">
+    `sqlite(":memory:")` keeps the log in memory for this example.
+
+    <CodeGroup>
+
+    ```ts TypeScript
+    const weather = agent({
+      name: "weather",
+      instructions: "Answer questions about the weather.",
+      model,
+      tools: [getWeather],
+    });
+
+    const result = await weather.run("What is the weather in Paris?", { store: sqlite(":memory:") });
+    if (result.status === "completed") console.log(result.output);
+    else console.log(result.status);
+    ```
+
+    ```python Python
+    weather = agent(
+        name="weather",
+        instructions="Answer questions about the weather.",
+        model=model,
+        tools=[weather_tool],
+    )
+
+
+    async def main() -> None:
+        result = await weather.run("What is the weather in Paris?", store=sqlite(":memory:"), deps=None)
+        print(result.output if result.status == "completed" else result.status)
+
+
+    asyncio.run(main())
+    ```
+
+    </CodeGroup>
+
+    Run the file with `bun index.ts` or `uv run python main.py`. It prints:
+
+    ```text
+    It is sunny in Paris.
+    ```
+
+    <Note>
+      In Python, an agent with tools needs `deps=` on every run. Pass `deps=None` when your tools don't use any. See [Agents](/agents/agents).
+    </Note>
+  </Step>
+  <Step title="Switch to a real model">
+    Replace the scripted model with a provider. The key comes from `ANTHROPIC_API_KEY`. The store `sqlite(".threads")` keeps every run on disk, so you can inspect, resume and fork it later.
+
+    <CodeGroup>
+
+    ```ts TypeScript
+    import { anthropic } from "@threads/anthropic";
+
+    const weather = agent({
+      name: "weather",
+      instructions: "Answer questions about the weather.",
+      model: anthropic({
+        model: "claude-sonnet-5",
+        maxTokens: 8192,
+        contextWindow: 200_000,
+        maxOutputTokens: 8192,
+      }),
+      tools: [getWeather],
+    });
+
+    const result = await weather.run("What is the weather in Paris?", { store: sqlite(".threads") });
+
+    switch (result.status) {
+      case "completed":
+        console.log(result.output);
+        break;
+      case "parked":
+        console.log("waiting on", result.reason);
+        break;
+      default:
+        console.log(result.status);
+    }
+    ```
+
+    ```python Python
+    from threads.anthropic import anthropic
+
+    weather = agent(
+        name="weather",
+        instructions="Answer questions about the weather.",
+        model=anthropic("claude-sonnet-5", context_window=200_000, max_output_tokens=8192),
+        tools=[weather_tool],
+    )
+
+
+    async def main() -> None:
+        result = await weather.run("What is the weather in Paris?", store=sqlite(".threads"), deps=None)
+        match result.status:
+            case "completed":
+                print(result.output)
+            case "parked":
+                print("waiting on", result.reason)
+            case _:
+                print(result.status)
+    ```
+
+    </CodeGroup>
+  </Step>
+</Steps>
+
+## Results are values
+
+A run never throws for an expected outcome. It returns one of these, keyed on `status`:
+
+| `status` | Meaning |
+|---|---|
+| `completed` | The agent finished. `output` holds the final text. |
+| `parked` | The run is waiting: for an approval, or for a decision about an action that may already have happened. See [Human-in-the-loop](/control/human-in-the-loop). |
+| `failed` | The run stopped with an `error` code, such as `max_turns` or `model_unavailable`. |
+| `budget_exhausted` | A [budget](/control/budgets) ran out. |
+| `cancelled` | Someone cancelled the thread. |
+| `handed_off` | The agent [handed the conversation](/multi-agent/handoffs) to another agent. |
+
+<Tip>
+  A tool without `effect: "read_only"` asks for approval before it runs, so the run parks with `awaiting_approval`. See [Permissions & approvals](/control/permissions) to allow it.
+</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Tools" icon="wrench" href="/agents/tools">
+    Input schemas, effects and errors.
+  </Card>
+  <Card title="Models" icon="cpu" href="/agents/models">
+    Anthropic, OpenAI, the AI SDK bridge and LiteLLM.
+  </Card>
+  <Card title="Timeline" icon="history" href="/evals/timeline">
+    Look at every step of the run you just made.
+  </Card>
+  <Card title="Scripted model" icon="flask-conical" href="/evals/testing">
+    Write tests that never call a real model.
+  </Card>
+</CardGroup>

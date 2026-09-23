@@ -1,0 +1,262 @@
+---
+title: Agents
+description: Define an agent once, run it as many times as you like, and handle every outcome as a plain value.
+icon: bot
+---
+
+An agent is a definition: a model, instructions and the tools it may use. Defining one does no I/O. Each `run()` starts a new thread (or continues one you pass), records every step to the log, and returns a result you can match on.
+
+## Define and run
+
+<CodeGroup>
+
+```ts TypeScript
+const support = agent({
+  name: "support",
+  instructions: "You answer billing questions. Be brief.",
+  model: scriptedModel({ responses: [say("Your invoice is paid."), say("It was paid on 3 May.")] }),
+});
+
+const store = sqlite(":memory:");
+const result = await support.run("Is my invoice paid?", { store });
+```
+
+```python Python
+support = agent(
+    name="support",
+    instructions="You answer billing questions. Be brief.",
+    model=scripted_model({"responses": [say("Your invoice is paid."), say("It was paid on 3 May.")]}),
+)
+
+store = sqlite(":memory:")
+result = await support.run("Is my invoice paid?", store=store)
+```
+
+</CodeGroup>
+
+`scriptedModel` plays back canned responses so these examples run with no API key. Swap in a real model from [Models](/agents/models). Without `store`, runs use `sqlite(".threads")` in the working directory.
+
+## Handle the result
+
+A run never throws for an expected outcome. It returns one of six variants, keyed on `status`:
+
+| `status` | What happened | What you get |
+|---|---|---|
+| `completed` | The agent finished its turn | `output`: the final text, or a typed value with [structured output](/agents/structured-output) |
+| `parked` | It is waiting on a person: an approval, a question, or a side effect whose outcome is unknown | `reason` and `pending` |
+| `failed` | The turn ended with an error | `error.code`, `error.message` |
+| `budget_exhausted` | A [budget](/control/budgets) limit was hit | `budget` |
+| `cancelled` | Someone cancelled the thread | |
+| `handed_off` | The conversation moved to another agent ([handoffs](/multi-agent/handoffs)) | `to_thread` |
+
+Every variant carries `thread`, so you can continue, inspect or fork it.
+
+<CodeGroup>
+
+```ts TypeScript
+function show(result: RunResult): string {
+  switch (result.status) {
+    case "completed":
+      return result.output;
+    case "parked":
+      return `waiting: ${result.reason}`; // approval, question or an uncertain side effect
+    case "failed":
+      return `failed: ${result.error.code}`;
+    case "budget_exhausted":
+      return "out of budget";
+    case "cancelled":
+      return "cancelled";
+    case "handed_off":
+      return `continued in thread ${result.to_thread.id}`;
+  }
+}
+```
+
+```python Python
+def show(result: RunResult[str]) -> str:
+    match result:
+        case Completed(output=output):
+            return output
+        case Parked(reason=reason):
+            return f"waiting: {reason}"  # approval, question or an uncertain side effect
+        case Failed(error=error):
+            return f"failed: {error.code}"
+        case BudgetExhausted():
+            return "out of budget"
+        case Cancelled():
+            return "cancelled"
+        case HandedOff(to_thread=to):
+            return f"continued in thread {to.id}"
+```
+
+</CodeGroup>
+
+A parked run is not lost. Answer it through the thread (see [Human-in-the-loop](/control/human-in-the-loop)) and run again to continue.
+
+## Continue a conversation
+
+Pass the previous result's `thread` to keep going in the same conversation. The agent sees the full history.
+
+<CodeGroup>
+
+```ts TypeScript
+const next = await support.run("When?", { thread: result.thread });
+```
+
+```python Python
+next_result = await support.run("When?", thread=result.thread)
+```
+
+</CodeGroup>
+
+In TypeScript `result.thread` is a small reference (`id`, `branch`, `store`); use [`openThread`](/reference/functions/openThread) for the full handle. In Python it is already the full `Thread` handle.
+
+## Stream a run
+
+`stream()` runs the same loop and yields items as they happen: committed log events, plus live text deltas that are never stored. Await `result` for the final outcome.
+
+<CodeGroup>
+
+```ts TypeScript
+const stream = streamed.stream("Hi", { store: sqlite(":memory:") });
+for await (const item of stream) {
+  if (item.kind === "delta") process.stdout.write(item.text); // live text, not stored
+  else console.log(item.event.type); // a committed log event
+}
+const final = await stream.result;
+```
+
+```python Python
+stream = streamed.stream("Hi", store=sqlite(":memory:"))
+async for item in stream:
+    if isinstance(item, DeltaItem):
+        print(item.text, end="")  # live text, not stored
+    elif isinstance(item, EventItem):
+        print(item.event.type)  # a committed log event
+final = await stream.result
+```
+
+</CodeGroup>
+
+Python also yields a `StatusItem` while the run waits to retry a model call.
+
+## Pass your own dependencies
+
+Give tools access to your database, clients or config with `deps`. Deps stay in memory on your side: they are never written to the log or shown to the model. Tools read them from `ctx.deps`.
+
+<CodeGroup>
+
+```ts TypeScript
+type Deps = { readonly db: Map<string, string> };
+
+const lookupOrder = tool({
+  name: "lookup_order",
+  description: "Find an order's status by id.",
+  input: z.object({ id: z.string() }),
+  runs: "host",
+  effect: "read_only",
+  execute: async ({ id }, ctx: RunContext<Deps>) =>
+    ctx.deps?.db.get(id) ?? "not found",
+});
+
+const shipped = await orders.run("Where is order 42?", {
+  store: sqlite(":memory:"),
+  deps: { db: new Map([["42", "shipped"]]) },
+});
+```
+
+```python Python
+@dataclass(frozen=True)
+class Deps:
+    db: dict[str, str]
+
+
+class OrderInput(BaseModel):
+    id: str
+
+
+async def lookup(args: OrderInput, ctx: RunContext[Deps]) -> str:
+    return ctx.deps.db.get(args.id, "not found")
+
+
+shipped = await orders.run(
+    "Where is order 42?",
+    store=sqlite(":memory:"),
+    deps=Deps(db={"42": "shipped"}),
+)
+```
+
+</CodeGroup>
+
+<Warning>
+In Python, an agent with app tools needs `deps=` on every run, even when the tools use none: pass `deps=None`. Leaving it out raises `ConfigError("invalid_config")`.
+</Warning>
+
+`ctx` also carries `thread_id`, `branch_id`, `principal` (who started the run) and, inside a tool, `call_id` and `effect_key`. See [RunContext](/reference/types/RunContext).
+
+## Options
+
+All options are optional except `model`. Names are camelCase in TypeScript and snake_case in Python.
+
+<AccordionGroup>
+  <Accordion title="Model" icon="cpu">
+    - `model`: the model adapter. See [Models](/agents/models).
+    - `instructions`: the system prompt. It stays the same for the life of the thread.
+    - `name`: shows in the log and is how other agents refer to this one. Default `"agent"`.
+    - `retry`: retry policy for provider errors. See [Models](/agents/models#retries).
+    - `fallback`: backup models, tried in order. TypeScript only.
+    - `output`, `outputRetries`: typed final output. TypeScript only. See [Structured output](/agents/structured-output).
+    - `context`: when to clear old tool output and compact long threads. Sensible defaults apply.
+  </Accordion>
+  <Accordion title="Tools" icon="wrench">
+    - `tools`: your [tools](/agents/tools) and [MCP servers](/agents/mcp).
+    - `extensions`: bundles of instructions, tools and [hooks](/control/hooks).
+    - `skills`: instructions the agent loads on demand. See [Skills](/agents/skills).
+    - `web`, `git`, `computer`, `lsp`: host-side [built-in tools](/agents/built-in-tools).
+  </Accordion>
+  <Accordion title="Runtime" icon="box">
+    - `sandbox`: where shell and file tools run. See [Sandboxes](/sandboxes/overview).
+    - `egress`: sandbox network access. Absent means no internet.
+  </Accordion>
+  <Accordion title="Multi-agent" icon="users">
+    - `subagents`: agents this one may start. See [Subagents](/multi-agent/subagents) and [Teams](/multi-agent/teams).
+    - `handoffs`: agents this one may hand the conversation to. See [Handoffs](/multi-agent/handoffs).
+  </Accordion>
+  <Accordion title="Memory and knowledge" icon="brain">
+    - `memory`, `memoryWrite`: long-term memory and who may write to it. See [Memory](/memory/memory).
+    - `knowledge`: a searchable knowledge base. See [Knowledge base](/memory/knowledge).
+  </Accordion>
+  <Accordion title="Policy" icon="shield">
+    - `permissions`: which tool calls run, ask or are denied. See [Permissions](/control/permissions).
+    - `approvers`: who may answer approvals. See [Human-in-the-loop](/control/human-in-the-loop).
+    - `budget`: limits on tokens, cost, turns and time. See [Budgets](/control/budgets).
+    - `on_unknown_usage`: how budgets treat a model with no per-request bound. Python only.
+  </Accordion>
+</AccordionGroup>
+
+## Run options
+
+| Option | What it does |
+|---|---|
+| `thread` | Continue this thread instead of starting a new one |
+| `store` | Where the log lives. Default `sqlite(".threads")` |
+| `deps` | Your in-memory dependencies for tools and hooks |
+| `budget` | A budget for this run |
+| `principal` | Who is running it. Default: the local operator |
+| `ceiling` | The strictest permissions this run and everything it starts may use |
+| `signal` | An `AbortSignal` that stops the run in this process. TypeScript only |
+
+To cancel a thread durably, from any process, use the thread's `cancel()`. See [Human-in-the-loop](/control/human-in-the-loop).
+
+## Check setup before running
+
+<Note>
+TypeScript only. `check()` connects MCP servers and validates the whole setup without starting a thread. Python reports the same errors on the first run.
+</Note>
+
+```ts TypeScript
+const checked = await support.check();
+if (!checked.ok) console.error(checked.error.code, checked.error.message);
+```
+
+Setup problems (a duplicate tool name, a sandbox that can't enforce the egress you asked for, an unreachable MCP server) are thrown as `ConfigError` with a `code`. Everything that can go wrong during a run comes back as a result instead.

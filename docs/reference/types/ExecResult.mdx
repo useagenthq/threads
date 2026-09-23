@@ -1,0 +1,29 @@
+---
+title: "ExecResult"
+description: "What tools and the log see."
+icon: "braces"
+---
+
+The framework's sandbox layer, not the adapter, builds it: it writes the ExecOutput streams to the artifact store incrementally while keeping head and tail previews, so full output is never held in host memory, and records full_output before the tool_result.
+
+## Fields
+
+<ResponseField name="exit_code" type={"number"} required>
+   
+</ResponseField>
+
+<ResponseField name="stdout" type={"string"} required>
+  Head and tail preview.
+</ResponseField>
+
+<ResponseField name="stderr" type={"string"} required>
+  Head and tail preview.
+</ResponseField>
+
+<ResponseField name="truncated" type={"boolean"} required>
+   
+</ResponseField>
+
+<ResponseField name="full_output" type={"ArtifactRef"}>
+  Present exactly when truncated: the complete stdout and stderr, readable with read_tool_result.
+</ResponseField>

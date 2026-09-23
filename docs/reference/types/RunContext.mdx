@@ -1,0 +1,35 @@
+---
+title: "RunContext"
+description: "The RunContext type."
+icon: "braces"
+---
+
+## Fields
+
+<ResponseField name="deps" type={"Deps"} required>
+   
+</ResponseField>
+
+<ResponseField name="threadId / thread_id" type={"ThreadId"} required>
+   
+</ResponseField>
+
+<ResponseField name="branchId / branch_id" type={"BranchId"} required>
+   
+</ResponseField>
+
+<ResponseField name="principal" type={"Principal"} required>
+   
+</ResponseField>
+
+<ResponseField name="callId / call_id" type={"CallId"}>
+  Set inside a tool or tool hook.
+</ResponseField>
+
+<ResponseField name="effectKey / effect_key" type={"string"}>
+  &lt;branch_id>:&lt;call_id>; send it to providers that dedup.
+</ResponseField>
+
+<ResponseField name="signal" type={"AbortSignal"} required>
+  TypeScript only.
+</ResponseField>

@@ -1,0 +1,389 @@
+---
+title: "Thread"
+description: "A thread positioned at one branch."
+icon: "box"
+---
+
+Every method reads or appends through the store; none needs the agent in memory.
+
+<Note>A handle returned by the library.</Note>
+
+## Properties
+
+<ResponseField name="id" type={"ThreadId"} required>
+   
+</ResponseField>
+
+<ResponseField name="branch" type={"BranchId"} required>
+   
+</ResponseField>
+
+<ResponseField name="store" type={"Store"} required>
+   
+</ResponseField>
+
+## Methods
+
+### timeline
+
+Every step with the exact request the model saw; fork points marked.
+
+<CodeGroup>
+
+```ts TypeScript
+timeline(): Promise<Result<Timeline>>
+```
+
+```python Python
+async def timeline() -> Ok[Timeline] | Err[Failure]
+```
+
+</CodeGroup>
+
+**Returns an error value** with one of these codes: `log_corrupt`.
+
+### branches
+
+<CodeGroup>
+
+```ts TypeScript
+branches(): Promise<readonly BranchInfo[]>
+```
+
+```python Python
+async def branches() -> Sequence[BranchInfo]
+```
+
+</CodeGroup>
+
+### forkPoints / fork_points
+
+Eligible snapshot events only. TypeScript returns the list itself; Python returns Ok or Err.
+
+<CodeGroup>
+
+```ts TypeScript
+forkPoints(): Promise<readonly ForkPoint[]>
+```
+
+```python Python
+async def fork_points() -> Sequence[ForkPoint]
+```
+
+</CodeGroup>
+
+### fork
+
+A new branch restored into an isolated sandbox. Continue it with agent.run(input, &#123;thread: child&#125;).
+
+<CodeGroup>
+
+```ts TypeScript
+fork(point: EventId | ForkPoint, options?: {
+  mode?: "live" | "stub";
+  knowledge?: "pinned" | "current";
+}): Promise<Result<Thread>>
+```
+
+```python Python
+async def fork(
+    point: EventId | ForkPoint,
+    *,
+    mode: Literal["live", "stub"] = "live",
+    knowledge: Literal["pinned", "current"] = "pinned",
+) -> Ok[Thread] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="point" type={"EventId | ForkPoint"} required>
+   
+</ParamField>
+
+<ParamField body="mode" type={"\"live\" | \"stub\""} default={"live"}>
+  stub runs the new branch without live side effects: every mediated call is answered from what the original branch recorded after the fork point. Stubbing works in Python only today; in TypeScript a run on a stub fork is live. A stub-mode run on a live model that declares hosted tools is refused with ConfigError hosted_tool_unsupported, because hosted calls can't be stubbed.
+</ParamField>
+
+<ParamField body="knowledge" type={"\"pinned\" | \"current\""} default={"pinned"}>
+   
+</ParamField>
+
+**Returns an error value** with one of these codes: `sandbox_required`, `no_snapshot_boundary`, `snapshot_expired`, `snapshot_missing`, `snapshot_restore_failed`, `snapshot_manifest_mismatch`, `resource_unknown`, `egress_policy_unsupported`.
+
+### saveCase / save_case
+
+Writes a conformance case directory in exactly the spec/conformance layout, so the same runners replay it: case.json (with expect and input.text), log.threads-ts.jsonl and log.threads-py.jsonl with matching expected.&lt;impl>.json, artifacts/, model.json and stubs.json. The kind is stub: external effects replay from stubs.json and unmatched invocations fail closed. The case is built from typed values, so it is valid against case.schema.json by construction; core carries no JSON Schema evaluator, and both languages' tests validate every saved case against case.schema.json.
+
+<CodeGroup>
+
+```ts TypeScript
+saveCase(name: string, options: {
+  expect: CaseExpectation;
+  externalEffects: "stub";
+  at?: EventId;
+  dir?: string;
+}): Promise<Result<SavedCase>>
+```
+
+```python Python
+async def save_case(
+    name: str,
+    *,
+    expect: CaseExpectation,
+    external_effects: Literal["stub"],
+    at: EventId | None = None,
+    dir: str = "cases",
+) -> Ok[SavedCase] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="name" type={"string"} required>
+   
+</ParamField>
+
+<ParamField body="expect" type={"CaseExpectation"} required>
+  See [CaseExpectation](/reference/types/CaseExpectation).
+</ParamField>
+
+<ParamField body="externalEffects / external_effects" type={"\"stub\""} required>
+  The effects policy is required; stub is the only one.
+</ParamField>
+
+<ParamField body="at" type={"EventId"}>
+  The snapshot event the case restores.
+</ParamField>
+
+<ParamField body="dir" type={"string"} default={"cases"}>
+  Directory in the app repo; the case is &lt;dir>/&lt;name>/.
+</ParamField>
+
+**Returns an error value** with one of these codes: `invalid_request`, `no_snapshot_boundary`, `case_missing_dependency`, `egress_policy_unsupported`.
+
+### pendingApprovals / pending_approvals
+
+<CodeGroup>
+
+```ts TypeScript
+pendingApprovals(): Promise<readonly PendingApproval[]>
+```
+
+```python Python
+async def pending_approvals() -> Sequence[PendingApproval]
+```
+
+</CodeGroup>
+
+### approve
+
+<CodeGroup>
+
+```ts TypeScript
+approve(challengeId: Uuid, principal: Principal, options?: {
+  rememberRule?: PermissionRule;
+}): Promise<Result<Appended>>
+```
+
+```python Python
+async def approve(
+    challenge_id: Uuid,
+    principal: Principal,
+    *,
+    remember_rule: PermissionRule | None = None,
+) -> Ok[Appended] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="challengeId / challenge_id" type={"Uuid"} required>
+   
+</ParamField>
+
+<ParamField body="principal" type={"Principal"} required>
+   
+</ParamField>
+
+<ParamField body="rememberRule / remember_rule" type={"PermissionRule"}>
+  One of the challenge's suggested_rules.
+</ParamField>
+
+**Returns an error value** with one of these codes: `forbidden`, `not_found`, `approval_mismatch`, `approval_expired`, `approval_duplicate`, `branch_busy`.
+
+### deny
+
+<CodeGroup>
+
+```ts TypeScript
+deny(challengeId: Uuid, principal: Principal, options?: {
+  reason?: string;
+}): Promise<Result<Appended>>
+```
+
+```python Python
+async def deny(
+    challenge_id: Uuid,
+    principal: Principal,
+    *,
+    reason: str | None = None,
+) -> Ok[Appended] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="challengeId / challenge_id" type={"Uuid"} required>
+   
+</ParamField>
+
+<ParamField body="principal" type={"Principal"} required>
+   
+</ParamField>
+
+<ParamField body="reason" type={"string"}>
+   
+</ParamField>
+
+**Returns an error value** with one of these codes: `forbidden`, `not_found`, `approval_mismatch`, `approval_expired`, `approval_duplicate`, `branch_busy`.
+
+### resolveParked / resolve_parked
+
+<CodeGroup>
+
+```ts TypeScript
+resolveParked(effectKey: string, resolution: "assume_done" | "assume_not_done", principal: Principal): Promise<Result<Appended>>
+```
+
+```python Python
+async def resolve_parked(
+    effect_key: str,
+    resolution: Literal["assume_done", "assume_not_done"],
+    principal: Principal,
+) -> Ok[Appended] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="effectKey / effect_key" type={"string"} required>
+   
+</ParamField>
+
+<ParamField body="resolution" type={"\"assume_done\" | \"assume_not_done\""} required>
+   
+</ParamField>
+
+<ParamField body="principal" type={"Principal"} required>
+   
+</ParamField>
+
+**Returns an error value** with one of these codes: `forbidden`, `not_parked`, `branch_busy`.
+
+### cancel
+
+Durable cancel_requested; unsettled effects park. Tree-wide: every descendant subagent without agent_finished gets cancel_requested&#123;scope: tree&#125; too, recursively, and the parent records each child's agent_finished&#123;cancelled&#125; before its own cancelled. A control appends through the run's own writer when this process runs the branch; otherwise it takes the branch lease for the one append. A lease another process holds is branch_busy and nothing is appended.
+
+<CodeGroup>
+
+```ts TypeScript
+cancel(principal: Principal): Promise<Result<Appended>>
+```
+
+```python Python
+async def cancel(
+    principal: Principal,
+) -> Ok[Appended] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="principal" type={"Principal"} required>
+  Who takes this action; recorded as the event's actor and authorized by the host.
+</ParamField>
+
+**Returns an error value** with one of these codes: `forbidden`, `branch_busy`.
+
+### setModel / set_model
+
+settings_changed&#123;reason: user&#125;. forbidden also covers a before_model_switch deny.
+
+<CodeGroup>
+
+```ts TypeScript
+setModel(settings: SettingsChange, principal: Principal): Promise<Result<Appended>>
+```
+
+```python Python
+async def set_model(
+    settings: SettingsChange,
+    principal: Principal,
+) -> Ok[Appended] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="settings" type={"SettingsChange"} required>
+   
+</ParamField>
+
+<ParamField body="principal" type={"Principal"} required>
+  Who takes this action; recorded as the event's actor and authorized by the host.
+</ParamField>
+
+**Returns an error value** with one of these codes: `forbidden`, `invalid_transition`, `branch_busy`.
+
+### setMode / set_mode
+
+<CodeGroup>
+
+```ts TypeScript
+setMode(mode: PermissionMode, principal: Principal): Promise<Result<Appended>>
+```
+
+```python Python
+async def set_mode(
+    mode: PermissionMode,
+    principal: Principal,
+) -> Ok[Appended] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="mode" type={"PermissionMode"} required>
+   
+</ParamField>
+
+<ParamField body="principal" type={"Principal"} required>
+  Who takes this action; recorded as the event's actor and authorized by the host.
+</ParamField>
+
+**Returns an error value** with one of these codes: `forbidden`, `invalid_transition`, `branch_busy`.
+
+### todos
+
+TypeScript returns the list itself; Python returns Ok or Err.
+
+<CodeGroup>
+
+```ts TypeScript
+todos(): Promise<readonly Todo[]>
+```
+
+```python Python
+async def todos() -> Sequence[Todo]
+```
+
+</CodeGroup>
+
+### children
+
+TypeScript returns the list itself; Python returns Ok or Err.
+
+<CodeGroup>
+
+```ts TypeScript
+children(): Promise<readonly Child[]>
+```
+
+```python Python
+async def children() -> Sequence[Child]
+```
+
+</CodeGroup>

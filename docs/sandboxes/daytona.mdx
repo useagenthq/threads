@@ -1,0 +1,65 @@
+---
+title: Daytona
+description: Run an agent's commands and files in a Daytona sandbox, with snapshots for forking.
+icon: server
+---
+
+[Daytona](https://daytona.io) runs each sandbox as a container. It is the provider to pick if you want to [fork](/evals/fork) threads at a sandbox state: threads takes Daytona snapshots.
+
+<CodeGroup>
+```ts TypeScript
+import { daytona } from "@threads/daytona";
+
+const daytonaSandbox = daytona({
+  apiKey: process.env["DAYTONA_API_KEY"] ?? "",
+  ttlMinutes: 60,
+});
+```
+
+```python Python
+from threads.daytona import daytona
+
+daytona_sandbox = daytona(snapshot="my-snapshot", lifetime_ms=60 * 60_000)  # DAYTONA_API_KEY
+```
+</CodeGroup>
+
+<Note>
+In TypeScript, `apiKey` is required. Python falls back to the `DAYTONA_API_KEY` environment variable.
+</Note>
+
+## Options
+
+| TypeScript | Python | Default | What it does |
+|---|---|---|---|
+| `apiKey` | `api_key` | required (TS), `DAYTONA_API_KEY` (Python) | Authenticates threads' calls to Daytona. Never enters the sandbox. |
+| `apiUrl` | `api_url` | `https://app.daytona.io/api` | Daytona API endpoint. |
+| `image` | `snapshot` | Daytona's default | The Daytona snapshot new sandboxes start from. |
+| `ttlMinutes` | `lifetime_ms` | 60 minutes (TS), none (Python) | How long a sandbox lives before Daytona deletes it. |
+| `autoStopMinutes` | `auto_stop_minutes` | `60` | Idle minutes before Daytona stops a leaked sandbox. A safety net, not the normal cleanup. |
+| `network: "open"` | `allow_internet=True` | blocked | Opens the network. Also set `egress: "unenforced"` on the agent. |
+| — | `target` | Daytona's | Python only: the Daytona region to place sandboxes in. |
+
+<CodeGroup>
+```ts TypeScript
+const open = agent({
+  model,
+  sandbox: daytona({ apiKey: process.env["DAYTONA_API_KEY"] ?? "", network: "open" }),
+  egress: "unenforced",
+});
+```
+
+```python Python
+opened = agent(
+    model=model,
+    sandbox=daytona(allow_internet=True),
+    egress="unenforced",
+)
+```
+</CodeGroup>
+
+## Good to know
+
+- **Snapshots stop the sandbox.** Daytona can only snapshot a stopped container. threads stops it, captures it and starts it again, so background processes (a dev server, for example) end at each snapshot. Snapshots are taken at the end of turns that changed something.
+- **Crashes park.** If the host crashes mid-command, threads can't prove the command's child processes are gone, so the run parks for you instead of re-running it.
+
+See [Sandboxes](/sandboxes/overview) for the tools an agent gets and how internet access works.

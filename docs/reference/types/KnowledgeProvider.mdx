@@ -1,0 +1,176 @@
+---
+title: "KnowledgeProvider"
+description: "The KnowledgeProvider type."
+icon: "plug"
+---
+
+<Note>A protocol: adapters implement it.</Note>
+
+## Methods
+
+### ingest
+
+<CodeGroup>
+
+```ts TypeScript
+ingest(scope: Scope, source: KnowledgeSource, key: string): Promise<Result<DocVersion>>
+```
+
+```python Python
+async def ingest(
+    scope: Scope,
+    source: KnowledgeSource,
+    key: str,
+) -> Ok[DocVersion] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="scope" type={"Scope"} required>
+  See [Scope](/reference/types/Scope).
+</ParamField>
+
+<ParamField body="source" type={"KnowledgeSource"} required>
+  See [KnowledgeSource](/reference/types/KnowledgeSource).
+</ParamField>
+
+<ParamField body="key" type={"string"} required>
+   
+</ParamField>
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
+
+### remove
+
+<CodeGroup>
+
+```ts TypeScript
+remove(scope: Scope, docId: string, key: string): Promise<Result<void>>
+```
+
+```python Python
+async def remove(
+    scope: Scope,
+    doc_id: str,
+    key: str,
+) -> Ok[None] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="scope" type={"Scope"} required>
+  See [Scope](/reference/types/Scope).
+</ParamField>
+
+<ParamField body="docId / doc_id" type={"string"} required>
+   
+</ParamField>
+
+<ParamField body="key" type={"string"} required>
+   
+</ParamField>
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
+
+### search
+
+<CodeGroup>
+
+```ts TypeScript
+search(scope: Scope, query: string, options?: {
+  k?: PosInt;
+  sources?: readonly string[];
+  asOf?: number;
+}): Promise<Result<readonly KnowledgeHit[]>>
+```
+
+```python Python
+async def search(
+    scope: Scope,
+    query: str,
+    *,
+    k: PosInt = 5,
+    sources: Sequence[str] | None = None,
+    as_of: int | None = None,
+) -> Ok[Sequence[KnowledgeHit]] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="scope" type={"Scope"} required>
+  See [Scope](/reference/types/Scope).
+</ParamField>
+
+<ParamField body="query" type={"string"} required>
+   
+</ParamField>
+
+<ParamField body="k" type={"PosInt"} default={"5"}>
+   
+</ParamField>
+
+<ParamField body="sources" type={"readonly string[]"}>
+   
+</ParamField>
+
+<ParamField body="asOf / as_of" type={"number"}>
+  Search as of this revision (a pinned fork).
+</ParamField>
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
+
+### get
+
+<CodeGroup>
+
+```ts TypeScript
+get(scope: Scope, docId: string, version: string): Promise<Result<Doc>>
+```
+
+```python Python
+async def get(
+    scope: Scope,
+    doc_id: str,
+    version: str,
+) -> Ok[Doc] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="scope" type={"Scope"} required>
+  See [Scope](/reference/types/Scope).
+</ParamField>
+
+<ParamField body="docId / doc_id" type={"string"} required>
+   
+</ParamField>
+
+<ParamField body="version" type={"string"} required>
+   
+</ParamField>
+
+**Returns an error value** with one of these codes: `not_found`, `unavailable`, `timeout`, `invalid`, `scope_violation`.
+
+### revision
+
+The store's current monotonic revision, recorded as snapshot.knowledge_revision at capture.
+
+<CodeGroup>
+
+```ts TypeScript
+revision(scope: Scope): Promise<Result<number>>
+```
+
+```python Python
+async def revision(
+    scope: Scope,
+) -> Ok[int] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="scope" type={"Scope"} required>
+  See [Scope](/reference/types/Scope).
+</ParamField>
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`.

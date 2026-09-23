@@ -1,0 +1,35 @@
+---
+title: "SandboxContext"
+description: "What the runtime hands a sandbox adapter for every provider operation: the authority it re-checks at its real dispatch point."
+icon: "plug"
+---
+
+The same adapter hook serves both authorities. Bound to the writer or claim that created it; nothing on it selects another.
+
+<Note>A protocol: adapters implement it.</Note>
+
+## Properties
+
+<ResponseField name="authority" type={"SandboxAuthority"} required>
+   
+</ResponseField>
+
+## Methods
+
+### fence
+
+Re-checks the authority: the owner still holds the branch lease at epoch, or the cleanup claim is still current on a collectable row. The adapter calls it at its real provider dispatch boundary, after any queueing; a failure means call nothing, and the operation returns that code: stale_epoch under owner authority, cleanup_claim_lost under cleanup authority, never an exception or an unavailable or timeout.
+
+<CodeGroup>
+
+```ts TypeScript
+fence(): Promise<Result<void>>
+```
+
+```python Python
+async def fence() -> Ok[None] | Err[Failure]
+```
+
+</CodeGroup>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`.

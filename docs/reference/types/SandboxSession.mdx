@@ -1,0 +1,217 @@
+---
+title: "SandboxSession"
+description: "The SandboxSession type."
+icon: "plug"
+---
+
+<Note>A protocol: adapters implement it.</Note>
+
+## Properties
+
+<ResponseField name="id" type={"string"} required>
+  Branded SandboxId.
+</ResponseField>
+
+## Methods
+
+### exec
+
+A timeout kills the whole process group.
+
+<CodeGroup>
+
+```ts TypeScript
+exec(command: readonly string[], context: SandboxContext, options: {
+  cwd?: string;
+  env?: Record<string, string>;
+  timeoutMs?: PosInt;
+  stdin?: Uint8Array;
+  processKey: string;
+}): Promise<Result<ExecOutput>>
+```
+
+```python Python
+async def exec(
+    command: Sequence[str],
+    context: SandboxContext,
+    *,
+    cwd: str = "/workspace",
+    env: Mapping[str, str] = {},
+    timeout_ms: PosInt | None = None,
+    stdin: bytes | None = None,
+    process_key: str,
+) -> Ok[ExecOutput] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="command" type={"readonly string[]"} required>
+   
+</ParamField>
+
+<ParamField body="context" type={"SandboxContext"} required>
+  See [SandboxContext](/reference/types/SandboxContext).
+</ParamField>
+
+<ParamField body="cwd" type={"string"} default={"/workspace"}>
+   
+</ParamField>
+
+<ParamField body="env" type={"Record<string, string>"}>
+  Exactly this env; nothing inherited.
+</ParamField>
+
+<ParamField body="timeoutMs / timeout_ms" type={"PosInt"}>
+   
+</ParamField>
+
+<ParamField body="stdin" type={"Uint8Array"}>
+   
+</ParamField>
+
+<ParamField body="processKey / process_key" type={"string"} required>
+  Durable identity of the process group: the call's effect key, recorded by effect_begin before dispatch, so recovery can terminate it after a crash.
+</ParamField>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `timeout`, `invalid_path`, `unavailable`.
+
+### terminate
+
+Kill the process group started with this process_key and confirm it is gone. terminated or already_exited → tool_result&#123;origin: interrupted&#125;. unknown or an error → the effect parks. Always unknown when info.termination is unconfirmed.
+
+<CodeGroup>
+
+```ts TypeScript
+terminate(processKey: string, context: SandboxContext): Promise<Result<"terminated" | "already_exited" | "unknown">>
+```
+
+```python Python
+async def terminate(
+    process_key: str,
+    context: SandboxContext,
+) -> Ok[Literal["terminated", "already_exited", "unknown"]] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="processKey / process_key" type={"string"} required>
+   
+</ParamField>
+
+<ParamField body="context" type={"SandboxContext"} required>
+  See [SandboxContext](/reference/types/SandboxContext).
+</ParamField>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `unavailable`.
+
+### upload
+
+<CodeGroup>
+
+```ts TypeScript
+upload(path: string, data: Uint8Array, context: SandboxContext): Promise<Result<void>>
+```
+
+```python Python
+async def upload(
+    path: str,
+    data: bytes,
+    context: SandboxContext,
+) -> Ok[None] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="path" type={"string"} required>
+   
+</ParamField>
+
+<ParamField body="data" type={"Uint8Array"} required>
+   
+</ParamField>
+
+<ParamField body="context" type={"SandboxContext"} required>
+  See [SandboxContext](/reference/types/SandboxContext).
+</ParamField>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `invalid_path`, `permission_denied`, `is_directory`, `too_large`, `unavailable`.
+
+### download
+
+<CodeGroup>
+
+```ts TypeScript
+download(path: string, context: SandboxContext): Promise<Result<Uint8Array>>
+```
+
+```python Python
+async def download(
+    path: str,
+    context: SandboxContext,
+) -> Ok[bytes] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="path" type={"string"} required>
+   
+</ParamField>
+
+<ParamField body="context" type={"SandboxContext"} required>
+  See [SandboxContext](/reference/types/SandboxContext).
+</ParamField>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `not_found`, `invalid_path`, `permission_denied`, `is_directory`, `too_large`, `unavailable`.
+
+### snapshot
+
+Freeze or stop tracked processes, capture, thaw. Returns only once durable and restorable.
+
+<CodeGroup>
+
+```ts TypeScript
+snapshot(operationKey: string, context: SandboxContext): Promise<Result<SnapshotEvent.data>>
+```
+
+```python Python
+async def snapshot(
+    operation_key: str,
+    context: SandboxContext,
+) -> Ok[SnapshotEvent.data] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="operationKey / operation_key" type={"string"} required>
+   
+</ParamField>
+
+<ParamField body="context" type={"SandboxContext"} required>
+  See [SandboxContext](/reference/types/SandboxContext).
+</ParamField>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `not_quiescent`, `unavailable`, `timeout`.
+
+### close
+
+Release the sandbox (ledger row releasing). ok → released. An error → release_failed, retried by the next gc, never dropped.
+
+<CodeGroup>
+
+```ts TypeScript
+close(context: SandboxContext): Promise<Result<void>>
+```
+
+```python Python
+async def close(
+    context: SandboxContext,
+) -> Ok[None] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="context" type={"SandboxContext"} required>
+  See [SandboxContext](/reference/types/SandboxContext).
+</ParamField>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `release_failed`, `unavailable`.

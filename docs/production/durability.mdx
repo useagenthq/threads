@@ -1,0 +1,206 @@
+---
+title: "Durability & crash safety"
+sidebarTitle: "Durability"
+description: "Pick up after a crash where the agent left off, without silently repeating a charge, an email or any other side effect."
+icon: "shield-check"
+---
+
+Every step a run takes is written to the thread's log before the next one starts. If your process dies, nothing is lost: run the same thread again and it continues from the log.
+
+What threads promises is narrower than "exactly once", and more useful: **a side effect that may already have happened is never silently repeated.** Either threads can prove what happened, or it stops and asks a person.
+
+## What survives a crash
+
+- Every input, model response, tool call and tool result already recorded.
+- Approvals, cancellations and budget spend.
+- Sandboxes and snapshots the run created, so they can be found again or cleaned up.
+
+Streaming text deltas are not recorded. They are shown live and then replaced by the recorded model response.
+
+## Resume a thread
+
+There is no separate "resume" call. Run the same thread again with the same agent. Before your new input is handled, threads settles anything the crash left in doubt.
+
+<CodeGroup>
+
+```ts TypeScript
+// After a crash or restart, run the same thread again. Recovery runs first.
+const again = await bot.run("Are you still there?", { store, thread: threadId });
+```
+
+```python Python
+# After a crash or restart, run the same thread again. Recovery runs first.
+again = await bot.run("Are you still there?", store=store, thread=result.thread)
+```
+
+</CodeGroup>
+
+A thread is pinned to the agent config it started with. Running it with a different model, tools or instructions raises a `ConfigError` ("a config change starts a new thread").
+
+During recovery threads:
+
+- asks the model provider whether an interrupted request went through, when the provider can answer;
+- turns a tool call that finished but wasn't written up yet into its result, without running it again;
+- checks approvals, cancellation and permissions again before running a call that never started;
+- settles each interrupted side effect by its effect class (below), or parks it.
+
+## Effect classes
+
+Declare how a tool's side effect behaves with `effect`. The class decides what happens when a crash lands between "started" and "finished".
+
+| `effect` | Use it for | After a crash mid-call |
+|---|---|---|
+| `read_only` | Lookups that change nothing | Runs again. There is nothing to protect |
+| `sandbox_local` | Changes that stay inside the sandbox (the built-in file tools, and `bash` when the sandbox has no internet) | Once the sandbox process is confirmed gone, the model is told the call was interrupted and may have partly run. Otherwise parks |
+| `idempotent` | APIs that dedupe on a key you send, inside a known window | Safe to send again while still inside the window, otherwise parks |
+| `reconcilable` | APIs you can ask "did this happen?" | Your `lookup` decides: found, proven not found, or park |
+| `unguarded` (default) | Anything else | Always parks for a person |
+
+Pass `ctx.effectKey` (TypeScript) or `ctx.effect_key` (Python) to your provider as the idempotency key. It is stable across retries of the same call.
+
+<CodeGroup>
+
+```ts TypeScript
+const charge = tool({
+  name: "charge_card",
+  description: "Charge the customer's card.",
+  input: z.object({ amount: z.number() }),
+  runs: "host",
+  effect: "idempotent",
+  dedupWindowMs: 24 * 60 * 60 * 1000, // the provider dedups a key for 24 hours
+  execute: async ({ amount }, ctx) => payments.charge(amount, ctx.effectKey ?? ""),
+});
+
+const refund = tool({
+  name: "refund",
+  description: "Refund a charge.",
+  input: z.object({ amount: z.number() }),
+  runs: "host",
+  effect: "reconcilable",
+  reconcile: {
+    finality: "final",
+    lookup: async (effectKey) => {
+      const found = await payments.findCharge(effectKey);
+      return found === undefined ? { status: "not_found" } : { status: "found", value: found };
+    },
+  },
+  execute: async ({ amount }, ctx) => payments.charge(-amount, ctx.effectKey ?? ""),
+});
+
+const sendEmail = tool({
+  name: "send_email",
+  description: "Email the customer.",
+  input: z.object({ to: z.string(), body: z.string() }),
+  runs: "host",
+  // no effect declared: unguarded, so a crash mid-send parks for a human
+  execute: async ({ to, body }) => mailer.send(to, body),
+});
+```
+
+```python Python
+from threads import Reconcile, RunContext, tool
+from threads.loop.model import Found, LookupResult, NotFound
+
+
+async def do_charge(args: Amount, ctx: RunContext[None]) -> str:
+    return await payments.charge(args.amount, ctx.effect_key or "")
+
+
+async def find_refund(effect_key: str, ctx: RunContext[None]) -> LookupResult[str]:
+    found = await payments.find_charge(effect_key)
+    return NotFound() if found is None else Found(found)
+
+
+charge = tool(
+    name="charge_card",
+    description="Charge the customer's card.",
+    input=Amount,
+    runs="host",
+    effect="idempotent",
+    dedup_window_ms=24 * 60 * 60 * 1000,  # the provider dedups a key for 24 hours
+    execute=do_charge,
+)
+
+refund = tool(
+    name="refund",
+    description="Refund a charge.",
+    input=Amount,
+    runs="host",
+    effect="reconcilable",
+    reconcile=Reconcile(lookup=find_refund, finality="final"),
+    execute=do_refund,
+)
+
+send_email = tool(
+    name="send_email",
+    description="Email the customer.",
+    input=Email,
+    runs="host",
+    # no effect declared: unguarded, so a crash mid-send parks for a human
+    execute=do_send,
+)
+```
+
+</CodeGroup>
+
+`idempotent` needs `dedupWindowMs` / `dedup_window_ms`, and `reconcilable` needs `reconcile`. Set `finality: "final"` only when a "not found" from your lookup really proves the call never happened. With `"nonfinal"`, a "not found" parks instead.
+
+## Parked effects
+
+When threads can't prove what happened, the run returns `status: "parked"` with the effects it is waiting on. Nothing runs on that thread until a person decides.
+
+Settle a parked effect with `resolveParked` / `resolve_parked`:
+
+- `"assume_done"`: the effect happened. The run continues without sending it again.
+- `"assume_not_done"`: it didn't. The call may be sent again, and the log records that a person accepted the risk of a duplicate.
+
+<CodeGroup>
+
+```ts TypeScript
+const operator = { issuer: "api", tenant: "local", subject: "operator" };
+const opened = await openThread(store, threadId);
+if (!opened.ok) throw new Error(opened.error.message);
+
+if (result.status === "parked") {
+  for (const p of result.pending) console.log(p.kind, p.id);
+}
+const resolved = await opened.value.resolveParked("<effect_key>", "assume_done", operator);
+if (!resolved.ok) console.log(resolved.error.code, resolved.error.message);
+```
+
+```python Python
+operator = Principal(issuer="api", tenant="local", subject="operator")
+opened = await open_thread(store, result.thread.id)
+if isinstance(opened, Err):
+    raise SystemExit(opened.error.message)
+
+if result.status == "parked":
+    for p in result.pending:
+        print(p.kind, p.id)
+resolved = await opened.value.resolve_parked("<effect_key>", "assume_done", operator)
+if isinstance(resolved, Err):
+    print(resolved.error.code, resolved.error.message)
+```
+
+</CodeGroup>
+
+Then run the thread again to continue. A host exposes the same action over HTTP, see [HTTP API & SSE](/host/http-api). Approvals park the same way; see [Human-in-the-loop](/control/human-in-the-loop).
+
+## One process per thread
+
+Only one process can drive a thread at a time. A run holds the thread while it works, and a second run on the same thread fails with `branch_busy` instead of racing it. If the holder dies, another process can take over once its hold expires, and anything the old holder tries to send after that is refused.
+
+## Providers threads can't guard are refused
+
+This holds for adapters too: every model, sandbox and memory call goes through a check that the run still owns the thread. When a provider's SDK sends requests threads can't intercept, the adapter is refused at setup with `ConfigError("transport_fence_unsupported")` rather than shipped with a weaker guarantee. Today that applies to:
+
+- `mem0()` memory, in both languages;
+- `modal()` sandboxes in TypeScript. Modal works in Python, see [Modal](/sandboxes/modal).
+
+## Logs work across languages
+
+TypeScript and Python use the same store format. A thread written by a TypeScript agent can be opened, inspected and forked from Python against the same store directory, and the other way round.
+
+<Card title="Inspect a thread" icon="history" href="/evals/timeline">
+  Read every step of a thread with `timeline()`.
+</Card>

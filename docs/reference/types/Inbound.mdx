@@ -1,0 +1,83 @@
+---
+title: "Inbound"
+description: "The Inbound type."
+icon: "braces"
+---
+
+A union discriminated by `kind`.
+
+### message
+
+<ResponseField name="kind" type={"\"message\""} required>
+   
+</ResponseField>
+
+<ResponseField name="principal" type={"Principal"} required>
+   
+</ResponseField>
+
+<ResponseField name="address" type={"string"} required>
+  Conversation key; the host maps it to a thread.
+</ResponseField>
+
+<ResponseField name="item_key" type={"string"} required>
+  Inbox dedup key, derived only from signed content.
+</ResponseField>
+
+<ResponseField name="content" type={"Input"} required>
+   
+</ResponseField>
+
+### decision
+
+<ResponseField name="kind" type={"\"decision\""} required>
+   
+</ResponseField>
+
+<ResponseField name="principal" type={"Principal"} required>
+   
+</ResponseField>
+
+<ResponseField name="address" type={"string"} required>
+  Conversation key; the host maps it to a thread.
+</ResponseField>
+
+<ResponseField name="item_key" type={"string"} required>
+  Inbox dedup key, derived only from signed content.
+</ResponseField>
+
+<ResponseField name="challenge_id" type={"Uuid"} required>
+   
+</ResponseField>
+
+<ResponseField name="decision" type={"\"grant\" | \"deny\""} required>
+   
+</ResponseField>
+
+### control
+
+<ResponseField name="kind" type={"\"control\""} required>
+   
+</ResponseField>
+
+<ResponseField name="principal" type={"Principal"} required>
+   
+</ResponseField>
+
+<ResponseField name="address" type={"string"} required>
+  Conversation key; the host maps it to a thread.
+</ResponseField>
+
+<ResponseField name="item_key" type={"string"} required>
+  Inbox dedup key, derived only from signed content.
+</ResponseField>
+
+<ResponseField name="command" type={"\"cancel\" | \"stop_when_idle\""} required>
+   
+</ResponseField>
+
+### ignore
+
+<ResponseField name="kind" type={"\"ignore\""} required>
+   
+</ResponseField>

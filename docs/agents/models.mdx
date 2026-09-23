@@ -1,0 +1,166 @@
+---
+title: Models
+description: Connect Anthropic, OpenAI or any other provider, with retries and fallbacks handled for you.
+icon: cpu
+---
+
+A model is one line of config. Keys come from your environment unless you pass them.
+
+| | TypeScript | Python |
+|---|---|---|
+| Anthropic | `anthropic()` from `@threads/anthropic` | `anthropic()` from `threads.anthropic` |
+| OpenAI | `openai()` from `@threads/openai` | `openai()` from `threads.openai` |
+| Everything else | `aiSdk()` from `@threads/ai-sdk` (any AI SDK provider) | `litellm()` from `threads.litellm` (LiteLLM's `openai/` route) |
+
+You declare the model's context window and output cap yourself. threads never guesses them from a model name, because a wrong guess would silently break budgets and context management.
+
+## Anthropic
+
+<CodeGroup>
+
+```ts TypeScript
+import { anthropic } from "@threads/anthropic";
+
+const claude = anthropic({
+  model: "claude-sonnet-5",
+  maxTokens: 8192,
+  contextWindow: 200_000,
+  maxOutputTokens: 8192,
+  params: { temperature: 0.2 },
+});
+```
+
+```python Python
+from threads.anthropic import anthropic
+
+claude = anthropic(
+    "claude-sonnet-5",
+    context_window=200_000,
+    max_output_tokens=8192,
+    params={"temperature": 0.2},
+)
+```
+
+</CodeGroup>
+
+Reads `ANTHROPIC_API_KEY`. In TypeScript, `maxTokens` is sent as `max_tokens`; in Python it defaults to `max_output_tokens`.
+
+## OpenAI
+
+Uses the Responses API.
+
+<CodeGroup>
+
+```ts TypeScript
+import { openai } from "@threads/openai";
+
+const gpt = openai({
+  model: "gpt-5.5",
+  contextWindow: 400_000,
+  maxOutputTokens: 8192,
+  params: { reasoning: { effort: "medium" } },
+});
+```
+
+```python Python
+from threads.openai import openai
+
+gpt = openai(
+    "gpt-5.5",
+    context_window=400_000,
+    max_output_tokens=8192,
+    params={"reasoning": {"effort": "medium"}},
+)
+```
+
+</CodeGroup>
+
+Reads `OPENAI_API_KEY`.
+
+<Note>
+In Python, `openai()` needs the key when you call it (the OpenAI SDK checks at construction). `anthropic()` only needs it when the first request is sent.
+</Note>
+
+## Other providers
+
+<Tabs>
+  <Tab title="TypeScript: AI SDK">
+    `aiSdk()` wraps any [AI SDK](https://ai-sdk.dev) provider. Build the model inside the factory with the `fetch` threads hands you, so every request goes through threads.
+
+    ```ts TypeScript
+    import { aiSdk } from "@threads/ai-sdk";
+
+    aiSdk({
+      model: (fetch) => createProvider({ fetch })("model-id"),
+      contextWindow: 128_000,
+      maxOutputTokens: 8192,
+    });
+    ```
+
+    `createProvider` stands for your provider's factory, such as `createOpenAI` or `createMistral`. Passing a ready-made model instead of a factory is refused at setup. Other options: `params` (AI SDK call options like `temperature`), `accepts` (input types, default text only), `price`.
+  </Tab>
+  <Tab title="Python: LiteLLM">
+    `litellm()` works with any OpenAI-compatible endpoint through LiteLLM's `openai/` route, such as a LiteLLM proxy or a local server.
+
+    ```python Python
+    from threads.litellm import litellm
+
+    local = litellm(
+        "openai/my-model",
+        base_url="http://localhost:4000",
+        context_window=128_000,
+        max_output_tokens=8192,
+    )
+    ```
+
+    Only the `openai/` route is supported; other routes raise `ConfigError("transport_fence_unsupported")`. Credentials come from `api_key` or `OPENAI_API_KEY`.
+  </Tab>
+</Tabs>
+
+## Shared options
+
+| Option (TS / Python) | What it does |
+|---|---|
+| `contextWindow` / `context_window` | Required. The model's context window in tokens |
+| `maxOutputTokens` / `max_output_tokens` | Required. The model's output cap |
+| `params` | Provider request fields (temperature, reasoning, thinking, ...). Fields threads sets itself, like `model` or `tools`, are refused |
+| `price` | Price per token, for cost budgets: `{ input, output, cache_read?, cache_write? }` in nano-dollars (USD 3 per million tokens is `3000`) |
+| `hostedTools` / `hosted_tools` | Provider-run tools. Only web search (both) and web fetch (Anthropic) are accepted |
+| `apiKey` / `api_key` | Overrides the environment variable. Never logged |
+| `baseURL` / `base_url` | A proxy or compatible endpoint |
+
+Model settings are fixed for the life of a thread, which keeps the prompt prefix identical on every request so provider caches keep hitting.
+
+## Retries
+
+threads owns every retry; provider SDK retries are turned off. Rate limits, overloads and server errors are retried with exponential backoff, honoring `retry-after`. The defaults:
+
+| Setting | Default |
+|---|---|
+| `max_retries` | 8 |
+| `base_delay_ms` / `max_delay_ms` | 1,000 / 32,000 |
+| `max_retry_after_ms` | 60,000 |
+| `max_total_wait_ms` | 600,000 |
+| `fallback_after` | 3 overloaded errors in a row |
+
+When retries run out, the run ends `failed` with code `model_unavailable`. In TypeScript, pass any subset: `retry: { max_retries: 4 }`. Python's `retry=` takes a complete `Retry` object from `threads.log`.
+
+## Fallback models
+
+<Note>
+TypeScript only. Python's `agent()` has no `fallback` option yet.
+</Note>
+
+After `fallback_after` overloaded errors in a row, the agent switches to the next model in `fallback` and records the switch in the log.
+
+```ts TypeScript
+const assistant = agent({
+  model: claude,
+  fallback: [gpt],
+  retry: { max_retries: 4, fallback_after: 2 },
+});
+```
+
+## Switch models mid-thread
+
+An operator can switch a thread to another model it already knows (its `model` or one of its `fallback` models) with the thread's `setModel` (`set_model`). The change is recorded in the log and applies from the next request. See [Thread](/reference/types/Thread).

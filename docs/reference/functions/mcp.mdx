@@ -1,0 +1,84 @@
+---
+title: "mcp"
+description: "An MCP server in one line."
+icon: "square-function"
+---
+
+The host owns the connection and credentials; an unreachable server is a ConfigError naming it.
+
+Import from `@threads/mcp` (TypeScript) or `threads.mcp` (Python).
+
+<CodeGroup>
+
+```ts TypeScript
+function mcp(options: {
+  name: Name;
+  url?: string;
+  headers?: Record<string, string | Secret>;
+  command?: string;
+  args?: readonly string[];
+  env?: Record<string, string | Secret>;
+  runs?: "host" | "sandbox";
+  tools?: { allow?: readonly string[]; deny?: readonly string[] };
+  effect?: EffectClass;
+}): McpServer
+```
+
+```python Python
+def mcp(
+    *,
+    name: Name,
+    url: str | None = None,
+    headers: Mapping[str, str | Secret] = {},
+    command: str | None = None,
+    args: Sequence[str] = (),
+    env: Mapping[str, str | Secret] = {},
+    runs: Literal["host", "sandbox"] = "host",
+    tools: {allow?: Sequence[str], deny?: Sequence[str]} | None = None,
+    effect: EffectClass = "unguarded",
+) -> McpServer
+```
+
+</CodeGroup>
+
+## Parameters
+
+<ParamField body="name" type={"Name"} required>
+  Tools are named mcp__&lt;name>__&lt;tool>.
+</ParamField>
+
+<ParamField body="url" type={"string"}>
+  Streamable HTTP (SSE fallback). Exactly one of url or command.
+</ParamField>
+
+<ParamField body="headers" type={"Record<string, string | Secret>"}>
+   
+</ParamField>
+
+<ParamField body="command" type={"string"}>
+  stdio transport.
+</ParamField>
+
+<ParamField body="args" type={"readonly string[]"}>
+   
+</ParamField>
+
+<ParamField body="env" type={"Record<string, string | Secret>"}>
+   
+</ParamField>
+
+<ParamField body="runs" type={"\"host\" | \"sandbox\""} default={"host"}>
+  sandbox: stdio server inside the sandbox, with no host credentials. Only "host" is supported today; "sandbox" is a setup error.
+</ParamField>
+
+<ParamField body="tools" type={"{ allow?: readonly string[]; deny?: readonly string[] }"}>
+  Filter before pinning.
+</ParamField>
+
+<ParamField body="effect" type={"EffectClass"} default={"unguarded"}>
+   
+</ParamField>
+
+## Returns
+
+[`McpServer`](/reference/types/McpServer)

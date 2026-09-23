@@ -1,0 +1,66 @@
+---
+title: "host"
+description: "Bind agents to a store, channels and schedules."
+icon: "square-function"
+---
+
+Starts nothing until ready().
+
+Import from `@threads/host` (TypeScript) or `threads.host` (Python).
+
+<CodeGroup>
+
+```ts TypeScript
+function host(options: {
+  store: Store;
+  agents: Record<string, Agent<unknown, unknown>>;
+  channels?: Record<string, ChannelAdapter>;
+  ceiling?: Partial<Policy.permissions>;
+  schedules?: readonly Schedule[];
+  authenticate?: (request: Request) => Promise<Principal | null>;
+}): Host
+```
+
+```python Python
+def host(
+    *,
+    store: Store,
+    agents: Mapping[str, Agent[object, object]],
+    channels: Mapping[str, ChannelAdapter] = {},
+    ceiling: Policy.permissions | None = None,
+    schedules: Sequence[Schedule] = (),
+    authenticate: Callable[[starlette.requests.Request], Awaitable[Principal | None]] | None = None,
+) -> Host
+```
+
+</CodeGroup>
+
+## Parameters
+
+<ParamField body="store" type={"Store"} required>
+  See [Store](/reference/types/Store).
+</ParamField>
+
+<ParamField body="agents" type={"Record<string, Agent<unknown, unknown>>"} required>
+  Keyed by the name channels, schedules and the HTTP API use.
+</ParamField>
+
+<ParamField body="channels" type={"Record<string, ChannelAdapter>"}>
+  A channel thread's replies are derived from its log, whatever ran it: each end_turn reply and each open approval card is a host-issued channel_send, issued after every run of the thread and, for a crash in between, again after ready(). A send with a result or a parked effect is never issued twice.
+</ParamField>
+
+<ParamField body="ceiling" type={"Partial<Policy.permissions>"}>
+  The host ceiling every run this host starts or resumes is also decided under (Agent.run ceiling). Absent: no ceiling.
+</ParamField>
+
+<ParamField body="schedules" type={"readonly Schedule[]"}>
+   
+</ParamField>
+
+<ParamField body="authenticate" type={"(request: Request) => Promise<Principal | null>"}>
+  Maps an HTTP API request to a principal, or null for 401. Absent: every /v1 route answers 401; channel webhooks still work.
+</ParamField>
+
+## Returns
+
+[`Host`](/reference/types/Host)

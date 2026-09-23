@@ -1,0 +1,33 @@
+---
+title: "fakeSandbox / fake_sandbox"
+description: "Test kit."
+icon: "square-function"
+---
+
+Runs the shared sandbox suite on every PR.
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<CodeGroup>
+
+```ts TypeScript
+function fakeSandbox(script: SandboxScript): Sandbox
+```
+
+```python Python
+def fake_sandbox(
+    script: SandboxScript,
+) -> Sandbox
+```
+
+</CodeGroup>
+
+## Parameters
+
+<ParamField body="script" type={"SandboxScript"}>
+   
+</ParamField>
+
+## Returns
+
+[`Sandbox`](/reference/types/Sandbox)

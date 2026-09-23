@@ -1,0 +1,106 @@
+---
+title: CLI
+description: Serve a host and inspect, move and clean up threads from the command line.
+icon: terminal
+---
+
+The `threads` CLI is a thin wrapper over library calls. Both languages ship the same commands, and both read the same store format, so a store written by TypeScript can be inspected with the Python CLI and the reverse.
+
+```text
+threads dev [module] [--port N]           serve a host locally; prints each channel's webhook URL
+threads start [module] [--port N]         serve a host in production
+threads timeline <thread_id> [--branch B] print a branch's steps as JSON lines
+threads export <branch_id>                write a branch's log (JSONL) to stdout
+threads import <file>                     verify and store an export
+threads repair <branch_id>                make an imported branch with a torn tail runnable
+threads delete <thread_id> | --tenant T   delete a thread, or every thread of a tenant
+threads gc [module] [--grace-days N]      release leftover sandboxes, remove unreferenced artifacts
+
+global options: --store <dir> (default .threads), --tenant <id> (default local)
+```
+
+## Running it from source
+
+Packages are not published yet, so run the CLI from your clone. See [Installation](/installation).
+
+<CodeGroup>
+
+```bash TypeScript
+# from your project directory
+bun /path/to/threads/typescript/packages/cli/src/main.ts dev
+```
+
+```bash Python
+# with threads installed from source (the host extra is needed for dev/start)
+uv run threads dev
+```
+
+</CodeGroup>
+
+The examples below write `threads` for either.
+
+## Serving: `dev` and `start`
+
+Both load your host module, call `ready()`, and serve it.
+
+| | TypeScript | Python |
+|---|---|---|
+| Default module | `threads.config.ts` | `app` (the module `app.py`) |
+| What the module provides | `export default host({...})` | exactly one `host(...)` at module level, or name it: `module:attribute`, `path/to/file.py[:attribute]` |
+| Server | `Bun.serve` | uvicorn (`host` extra) |
+| `dev` port | `8787` | `8787`, on `127.0.0.1` |
+| `start` port | `8787` | `$PORT`, else `8000`, on `0.0.0.0` |
+
+```bash
+threads dev
+# threads: dev listening on http://localhost:8787
+#   slack: http://localhost:8787/channels/slack/events
+```
+
+The store the host uses is the one in your module (`host({ store: sqlite(".threads") })`); `--store` applies to the other commands.
+
+## Inspecting: `timeline`
+
+```bash
+threads timeline 01a0ceb2-0776-7e19-9c4c-0a3ed10d8985
+threads timeline <thread_id> --branch <branch_id>
+```
+
+Prints one JSON object per step of the main branch (or the given one): the logged event plus whether it is a place you can fork from. See [Timeline](/evals/timeline).
+
+## Moving threads: `export`, `import`, `repair`
+
+```bash
+threads export <branch_id> > branch.jsonl
+threads --store ./other-store import branch.jsonl   # prints the imported branch id
+```
+
+The export is the branch's exact log bytes, so it verifies byte-for-byte on import, in either language.
+
+<Warning>
+  An export holds the log, not the stored artifacts it points to (recorded model requests, large tool outputs). Importing into a different store fails with `artifact_missing` unless that store's `artifacts/` directory already has them, so copy the source store's `artifacts/` directory along.
+</Warning>
+
+A file cut off mid-write (a torn tail) still imports, for inspection only. `threads repair <branch_id>` marks it runnable again.
+
+## Deleting: `delete`
+
+```bash
+threads delete <thread_id>          # one thread (of --tenant, default local)
+threads delete --tenant acme        # every thread of a tenant
+```
+
+Deletion removes the thread's log and records that it was deleted. Threads its subagents ran are deleted with it; threads it handed off to are not. Sandboxes it still held are marked for release by the next `gc`.
+
+## Cleaning up: `gc`
+
+```bash
+threads gc                  # remove unreferenced artifacts older than 7 days
+threads gc app --grace-days 1
+```
+
+With a host module, `gc` also releases sandboxes that runs left behind, using that module's sandbox providers. It never runs on its own: schedule it (for example with cron) if you want it regular.
+
+## Exit codes
+
+`0` on success, `1` when the command failed (the error code and message go to stderr, for example `not_found: ...`), `2` for a usage error.

@@ -1,0 +1,105 @@
+---
+title: Handoffs
+description: Pass the conversation to a specialist agent that takes it from there.
+icon: arrow-right-left
+---
+
+A handoff moves the whole conversation to another agent. A front-desk agent that hears a billing question can hand the customer to a billing agent, which answers from then on. Unlike a [subagent](/multi-agent/subagents), the first agent doesn't wait for a result: its part is over.
+
+## Add a handoff target
+
+List the agents an agent may hand to in `handoffs`. Its model gets a `handoff` tool and sees the names in its system prompt.
+
+<CodeGroup>
+
+```ts TypeScript
+const billing = agent({
+  name: "billing",
+  instructions: "You handle refunds and invoices.",
+  model: scriptedModel({ responses: [say("I've refunded the duplicate charge."), say("You're welcome.")] }),
+});
+
+const frontDesk = agent({
+  name: "front_desk",
+  instructions: "Greet customers. Hand billing questions to billing.",
+  model: scriptedModel({ responses: [handoffTo("billing")] }),
+  handoffs: [billing],
+});
+
+const store = sqlite(":memory:");
+const result = await frontDesk.run("I was charged twice.", { store });
+```
+
+```python Python
+billing = agent(
+    name="billing",
+    instructions="You handle refunds and invoices.",
+    model=scripted_model({"responses": [say("I've refunded the duplicate charge."), say("You're welcome.")]}),
+)
+
+front_desk = agent(
+    name="front_desk",
+    instructions="Greet customers. Hand billing questions to billing.",
+    model=scripted_model({"responses": [use("handoff", {"agent": "billing"}, "h1")]}),
+    handoffs=[billing],
+)
+
+result = await front_desk.run("I was charged twice.", store=store)
+```
+
+</CodeGroup>
+
+The model calls `handoff` with one argument, `agent`: a name from `handoffs`. Any other name fails without effect and the first agent carries on.
+
+## What happens
+
+1. The first agent's turn ends. Any other tool calls in the same model response are not run.
+2. A new thread starts for the target. It gets the conversation so far as reference material, and the customer's latest message as its first input.
+3. The target runs its first turn right away, inside the same `run` call.
+4. `run` returns a result with status `handed_off`. `thread` is the first agent's thread and `to_thread` is the target's.
+
+## Continue the conversation
+
+Send later messages to the target on `to_thread`:
+
+<CodeGroup>
+
+```ts TypeScript
+if (result.status === "handed_off") {
+  // billing has already answered "I was charged twice." in its own thread.
+  const next = await billing.run("Thanks!", { store, thread: result.to_thread });
+  if (next.status === "completed") console.log(next.output); // You're welcome.
+}
+```
+
+```python Python
+if isinstance(result, HandedOff):
+    # billing has already answered "I was charged twice." in its own thread.
+    after = await billing.run("Thanks!", store=store, thread=result.to_thread)
+    if isinstance(after, Completed):
+        print(after.output)  # You're welcome.
+```
+
+</CodeGroup>
+
+The target's first reply is in its thread's [timeline](/evals/timeline). The first thread takes no new input: running it again returns the same `handed_off` result and the same target thread, and never starts a second target. Behind the [host](/host/overview), a channel conversation moves to the target's thread on its own.
+
+## What the target may do
+
+The target runs under its own instructions, tools and permissions, not the first agent's. Two things carry over:
+
+- **Limits from the caller.** A `ceiling` passed to the original `run`, and any budget covering the first thread, also cover the target.
+- **The same user.** The target acts for the same principal (the user or system that started the run).
+
+The conversation it receives is marked as reference material, so text in it can't pose as instructions.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Subagents" icon="network" href="/multi-agent/subagents">
+    Delegate a task and get the result back.
+  </Card>
+  <Card title="Permissions & approvals" icon="shield-check" href="/control/permissions">
+    Ceilings and rules that apply to every agent in a run.
+  </Card>
+</CardGroup>

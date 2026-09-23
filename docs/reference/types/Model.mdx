@@ -1,0 +1,105 @@
+---
+title: "Model"
+description: "What a model adapter package (anthropic(), openai(), ...) returns."
+icon: "plug"
+---
+
+One transport attempt per send; SDK retries off. Every send and lookup awaits context.fence() at its real network send, after any SDK or bridge queueing. An adapter or bridge route whose real transport it cannot wrap is refused when the model is constructed: ConfigError transport_fence_unsupported; it is never shipped with a weaker fence. A bridge that takes a caller's model factory (the TypeScript AI SDK bridge) qualifies only providers whose implementation sends through the fenced fetch it hands over on every path; that qualification comes from the provider implementation and its conformance tests, under the trusted-host-code boundary. The bridge also counts fenced fetches per send as misuse detection and containment, not proof of qualification: a send whose stream arrives with zero requests through that fetch ends as a broken stream (unknown outcome: it may have left unfenced, and its output is not kept), and that model refuses every later send before anything leaves with the rejected reason transport_fence_unsupported, recorded as not_sent (not billed, never retried).
+
+<Note>A protocol: adapters implement it.</Note>
+
+## Properties
+
+<ResponseField name="info" type={"ModelInfo"} required>
+   
+</ResponseField>
+
+## Methods
+
+### send
+
+Stream one attempt. Every failure before content is the one terminal rejected chunk, never a thrown error, and its reason is one of returns.errors: a provider rejection class; stale_epoch when context.fence() refused at the real network send point, after any SDK queueing, so nothing left; content_unsupported or continuation_unsupported when the adapter can't encode a rendered part, so nothing left and nothing is re-sent. transport_fence_unsupported when a bridge model already detected that its sends bypass the fenced transport, so nothing left and nothing is re-sent. A throw after dispatch is a broken stream (unknown outcome).
+
+<CodeGroup>
+
+```ts TypeScript
+send(request: ModelRequest, context: ModelContext, options?: {
+  signal?: AbortSignal;
+}): Result<AsyncIterable<ModelChunk>>
+```
+
+```python Python
+def send(
+    request: ModelRequest,
+    context: ModelContext,
+) -> Ok[AsyncIterator[ModelChunk]] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="request" type={"ModelRequest"} required>
+  See [ModelRequest](/reference/types/ModelRequest).
+</ParamField>
+
+<ParamField body="context" type={"ModelContext"} required>
+  See [ModelContext](/reference/types/ModelContext).
+</ParamField>
+
+<ParamField body="signal" type={"AbortSignal"}>
+  TypeScript only.
+</ParamField>
+
+**Returns an error value** with one of these codes: `rate_limited`, `overloaded`, `server_error`, `prompt_too_long`, `provider_error`, `stale_epoch`, `content_unsupported`, `continuation_unsupported`, `transport_fence_unsupported`.
+
+### lookup
+
+Recover a response after a crash by client request id. Present when info.lookup is not none. Fenced like send: context.fence() at the real network send point; a found response's reasoning and hosted tool bytes are put() before their parts name them.
+
+<CodeGroup>
+
+```ts TypeScript
+lookup(requestId: string, context: ModelContext): Promise<Result<LookupResult<ModelResponse>>>
+```
+
+```python Python
+async def lookup(
+    request_id: str,
+    context: ModelContext,
+) -> Ok[LookupResult[ModelResponse]] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="requestId / request_id" type={"string"} required>
+   
+</ParamField>
+
+<ParamField body="context" type={"ModelContext"} required>
+  See [ModelContext](/reference/types/ModelContext).
+</ParamField>
+
+**Returns an error value** with one of these codes: `stale_epoch`.
+
+### countTokens / count_tokens
+
+Pre-dispatch input_bound_tokens.
+
+<CodeGroup>
+
+```ts TypeScript
+countTokens(request: ModelRequest): Promise<Result<number>>
+```
+
+```python Python
+async def count_tokens(
+    request: ModelRequest,
+) -> Ok[int] | Err[Failure]
+```
+
+</CodeGroup>
+
+<ParamField body="request" type={"ModelRequest"} required>
+  See [ModelRequest](/reference/types/ModelRequest).
+</ParamField>
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`.

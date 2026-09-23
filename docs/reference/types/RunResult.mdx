@@ -1,0 +1,93 @@
+---
+title: "RunResult"
+description: "The HTTP form is host-api RunOutcome (ids instead of handles)."
+icon: "braces"
+---
+
+In TypeScript, thread is a ThreadRef (id, branch, store): pass it to openThread for the full Thread handle. In Python it is the Thread handle.
+
+A union discriminated by `status`.
+
+### completed
+
+<ResponseField name="status" type={"\"completed\""} required>
+   
+</ResponseField>
+
+<ResponseField name="output" type={"Output"} required>
+   
+</ResponseField>
+
+<ResponseField name="thread" type={"Thread"} required>
+   
+</ResponseField>
+
+### parked
+
+<ResponseField name="status" type={"\"parked\""} required>
+   
+</ResponseField>
+
+<ResponseField name="reason" type={"ParkedEvent.data.reason"} required>
+   
+</ResponseField>
+
+<ResponseField name="pending" type={"readonly ParkAddress[]"} required>
+   
+</ResponseField>
+
+<ResponseField name="thread" type={"Thread"} required>
+   
+</ResponseField>
+
+### cancelled
+
+<ResponseField name="status" type={"\"cancelled\""} required>
+   
+</ResponseField>
+
+<ResponseField name="thread" type={"Thread"} required>
+   
+</ResponseField>
+
+### failed
+
+<ResponseField name="status" type={"\"failed\""} required>
+   
+</ResponseField>
+
+<ResponseField name="error" type={"{ code: RunErrorCode; message: string }"} required>
+   
+</ResponseField>
+
+<ResponseField name="thread" type={"Thread"} required>
+   
+</ResponseField>
+
+### budget_exhausted
+
+<ResponseField name="status" type={"\"budget_exhausted\""} required>
+   
+</ResponseField>
+
+<ResponseField name="budget" type={"BudgetExceededEvent.data"} required>
+   
+</ResponseField>
+
+<ResponseField name="thread" type={"Thread"} required>
+   
+</ResponseField>
+
+### handed_off
+
+<ResponseField name="status" type={"\"handed_off\""} required>
+   
+</ResponseField>
+
+<ResponseField name="thread" type={"Thread"} required>
+   
+</ResponseField>
+
+<ResponseField name="toThread / to_thread" type={"Thread"} required>
+   
+</ResponseField>

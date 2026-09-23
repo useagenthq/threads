@@ -1,0 +1,104 @@
+---
+title: Sandboxes
+description: Give an agent its own isolated machine to run commands and edit files, with no internet and no credentials by default.
+icon: box
+---
+
+Set `sandbox` on an agent and it gets a remote Linux machine to work in. threads creates the sandbox the first time a tool needs it and never hands it your API keys. Each provider deletes a sandbox after its lifetime runs out.
+
+<CodeGroup>
+```ts TypeScript
+import { agent } from "@threads/core";
+import { e2b } from "@threads/e2b";
+
+const coder = agent({
+  name: "coder",
+  instructions: "Fix the failing tests in /workspace.",
+  model,
+  sandbox: e2b(), // E2B_API_KEY
+});
+```
+
+```python Python
+from threads import agent
+from threads.e2b import e2b
+
+coder = agent(
+    name="coder",
+    instructions="Fix the failing tests in /workspace.",
+    model=model,
+    sandbox=e2b(),  # E2B_API_KEY
+)
+```
+</CodeGroup>
+
+## Providers
+
+| Provider | TypeScript | Python | Page |
+|---|---|---|---|
+| E2B | `@threads/e2b` (runs on Bun) | `threads.e2b` | [E2B](/sandboxes/e2b) |
+| Daytona | `@threads/daytona` | `threads.daytona` | [Daytona](/sandboxes/daytona) |
+| Modal | not available yet | `threads.modal` | [Modal](/sandboxes/modal) |
+
+## What the agent gets
+
+With a sandbox, the agent can use these [built-in tools](/agents/built-in-tools). Paths are relative to `/workspace`.
+
+| Tool | What it does |
+|---|---|
+| `bash` | Run a shell command |
+| `read`, `write`, `edit` | Read, create and change files |
+| `ls`, `glob`, `grep` | List, find and search files |
+| `notebook_edit` | Edit a Jupyter notebook cell |
+
+A sandbox also enables the git, code intelligence (`lsp`) and computer-use tools when you turn them on. See [Built-in tools](/agents/built-in-tools). Without a sandbox, none of these tools exist.
+
+## No internet by default
+
+Every sandbox starts with its network blocked. To open it, set the provider's option **and** tell the agent you accept that threads can no longer limit where the sandbox connects (`egress: "unenforced"`). Leaving out the second part is a setup error, so internet access is never turned on by accident.
+
+<CodeGroup>
+```ts TypeScript
+const researcher = agent({
+  model,
+  sandbox: e2b({ internet: true }),
+  egress: "unenforced",
+});
+```
+
+```python Python
+researcher = agent(
+    model=model,
+    sandbox=e2b(allow_internet=True),
+    egress="unenforced",
+)
+```
+</CodeGroup>
+
+| Provider | TypeScript option | Python option |
+|---|---|---|
+| E2B | `internet: true` | `allow_internet=True` |
+| Daytona | `network: "open"` | `allow_internet=True` |
+| Modal | — | `allow_internet=True` |
+
+<Note>
+Allowlists of specific hosts (`egress: ["api.github.com"]`) are not supported yet in either language; they fail at setup with `egress_policy_unsupported`. The choice today is all blocked (the default) or all open.
+</Note>
+
+## Your credentials stay on the host
+
+Provider keys authenticate threads' own calls to E2B, Daytona or Modal. They are never passed into the sandbox. Tools that need a credential, like `git_push` and `open_pull_request`, go through a gateway on the host, so the token never reaches the sandbox and the clone's remote has no credential.
+
+## Forks get their own sandbox
+
+When you [fork](/evals/fork) a thread, the new branch restores the sandbox into a fresh, separate machine. Experiments on a fork never touch the original sandbox.
+
+Fork points come from snapshots threads takes at the end of turns that changed something. Today Daytona takes snapshots; E2B and Modal don't yet, so threads that run on them have no fork points.
+
+## If a command is cut off by a crash
+
+If the host crashes while a command is running, threads can't prove the command stopped, so it does not run it again on its own. The run parks and waits for you to decide. See [Durability](/production/durability).
+
+## Testing
+
+Use `fakeSandbox()` / `fake_sandbox()` in tests: an in-memory sandbox with scripted commands, no provider and no network. It also takes snapshots, so you can test forks. See [Scripted model and fake sandbox](/evals/testing).

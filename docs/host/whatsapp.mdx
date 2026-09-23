@@ -1,0 +1,90 @@
+---
+title: WhatsApp
+description: Put your agent on a WhatsApp Business number through the WhatsApp Cloud API.
+icon: message-circle
+---
+
+Add `whatsapp()` to a host and each person who messages your business number gets their own thread. The agent replies in the chat, and approvals arrive as **Approve** / **Deny** buttons.
+
+## Setup
+
+<Steps>
+  <Step title="Create a Meta app with WhatsApp">
+    In the [Meta developer dashboard](https://developers.facebook.com/apps), add the WhatsApp product to an app and note the business **phone number id**. Create a system-user access token with the `whatsapp_business_messaging` permission.
+  </Step>
+  <Step title="Set the secrets">
+    ```bash
+    export WHATSAPP_APP_SECRET=...     # App settings → Basic → App secret
+    export WHATSAPP_ACCESS_TOKEN=...   # system-user access token
+    export WHATSAPP_VERIFY_TOKEN=...   # any string you choose; Meta echoes it on setup
+    ```
+  </Step>
+  <Step title="Add the channel to your host">
+    <CodeGroup>
+
+    ```ts TypeScript
+    import { secret } from "@threads/core";
+    import { whatsapp } from "@threads/whatsapp";
+
+    const whatsappChannel = whatsapp({
+      agent: "support",
+      appSecret: secret("WHATSAPP_APP_SECRET"),
+      accessToken: secret("WHATSAPP_ACCESS_TOKEN"),
+      verifyToken: secret("WHATSAPP_VERIFY_TOKEN"),
+    });
+    ```
+
+    ```python Python
+    from threads import secret
+    from threads.whatsapp import whatsapp
+
+    whatsapp_channel = whatsapp(
+        agent="support",
+        app_secret=secret("WHATSAPP_APP_SECRET"),
+        access_token=secret("WHATSAPP_ACCESS_TOKEN"),
+        verify_token=secret("WHATSAPP_VERIFY_TOKEN"),
+        phone_number_id="1234567890",
+    )
+    ```
+
+    </CodeGroup>
+  </Step>
+  <Step title="Register the webhook">
+    In the WhatsApp **Configuration** page, set the callback URL to `https://<your-host>/channels/whatsapp/events` and the verify token to the same value as `WHATSAPP_VERIFY_TOKEN`. Subscribe to the `messages` field. The host answers Meta's verification request for you.
+  </Step>
+</Steps>
+
+<Note>Python: install the `whatsapp` extra (`uv sync --extra whatsapp`).</Note>
+
+## Options
+
+<ParamField path="agent" type="string" required>
+  The host agent key this channel routes to.
+</ParamField>
+<ParamField path="appSecret / app_secret" type="Secret" required>
+  Verifies each webhook's `X-Hub-Signature-256` over the raw body.
+</ParamField>
+<ParamField path="accessToken / access_token" type="Secret" required>
+  Used to send replies.
+</ParamField>
+<ParamField path="verifyToken / verify_token" type="Secret">
+  The token Meta's setup check must present. Required in Python. In TypeScript it is optional, and without it the setup check is not answered.
+</ParamField>
+<ParamField path="phone_number_id" type="string">
+  Python only, required: the business phone number id this channel sends from. TypeScript reads it from each webhook.
+</ParamField>
+<ParamField path="graphVersion" type="string">
+  TypeScript only. Graph API version, default `"v21.0"`.
+</ParamField>
+<ParamField path="tenant" type="string | (phoneNumberId) => string | undefined">
+  TypeScript only. Tenant for a phone number, default `whatsapp:<phone_number_id>`. Returning `undefined` refuses that number.
+</ParamField>
+
+## Behavior to know
+
+- **One thread per sender.** Each phone number that writes to you is its own conversation.
+- **24-hour window.** WhatsApp only allows free-form replies within 24 hours of the person's last message. A reply outside the window fails. TypeScript catches this before sending anything; in Python the Cloud API rejects the send.
+- **No delivery lookup.** Meta offers no way to look up a sent message, so if a crash leaves it unclear whether a reply went out, the reply is held for a person to resolve instead of being sent twice. See [Durability & crash safety](/production/durability).
+- A webhook that speaks for two phone numbers at once is refused rather than filed under one of them.
+
+Approvals work as in Slack: by default only the person who started the run can approve; list others in the agent's `approvers`. See [Human-in-the-loop](/control/human-in-the-loop).

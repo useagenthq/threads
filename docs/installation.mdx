@@ -1,0 +1,114 @@
+---
+title: "Installation"
+description: "Run threads from source in TypeScript or Python."
+icon: "download"
+---
+
+<Warning>
+  threads is not on npm or PyPI yet. Until it is, install it from a clone of the repository.
+</Warning>
+
+## Requirements
+
+- [Bun](https://bun.sh) for TypeScript. The core runs on Bun; the E2B adapter needs it.
+- [uv](https://docs.astral.sh/uv/) and Python 3.12 or newer for Python.
+
+## Clone and build
+
+Both languages share generated code built from `spec/`. Run the generator once after cloning, and again after each pull.
+
+```bash
+git clone https://github.com/useagenthq/threads && cd threads
+./scripts/generate.sh
+```
+
+## Install your language
+
+<Tabs>
+  <Tab title="TypeScript" icon="file-code">
+    The packages live in a Bun workspace under `typescript/packages`. The simplest way to use them today is to add your app as another workspace package.
+
+    <Steps>
+      <Step title="Install the workspace">
+        ```bash
+        cd typescript && bun install
+        ```
+      </Step>
+      <Step title="Add your app as a package">
+        Create `typescript/packages/my-agent/package.json` and list the threads packages you need:
+
+        ```json package.json
+        {
+          "name": "my-agent",
+          "private": true,
+          "type": "module",
+          "dependencies": {
+            "@threads/core": "workspace:*",
+            "@threads/anthropic": "workspace:*",
+            "zod": "^4.6.5"
+          }
+        }
+        ```
+
+        Run `bun install` again from `typescript/`.
+      </Step>
+      <Step title="Run your code">
+        Put the [Quickstart](/quickstart) code in `typescript/packages/my-agent/index.ts` and run it:
+
+        ```bash
+        cd packages/my-agent && bun index.ts
+        ```
+      </Step>
+    </Steps>
+
+    | Package | What it adds |
+    |---|---|
+    | `@threads/core` | `agent`, `tool`, `sqlite`, `openThread`, memory, knowledge, the scripted model |
+    | `@threads/anthropic`, `@threads/openai`, `@threads/ai-sdk` | Models |
+    | `@threads/e2b`, `@threads/daytona` | Sandboxes |
+    | `@threads/mcp` | MCP servers as tools |
+    | `@threads/supermemory`, `@threads/zep` | Hosted memory |
+    | `@threads/host`, `@threads/slack`, `@threads/whatsapp`, `@threads/github` | The host and its channels |
+    | `@threads/cli` | The `threads` command |
+  </Tab>
+  <Tab title="Python" icon="file-code-2">
+    The Python package is `threads`, with one optional extra per provider. Install it in editable mode into your project's environment:
+
+    ```bash
+    uv pip install -e "path/to/threads/python[anthropic]"
+    ```
+
+    Add the extras you need, comma separated:
+
+    | Extra | What it adds |
+    |---|---|
+    | `anthropic`, `openai`, `litellm` | Models (`threads.anthropic`, `threads.openai`, `threads.litellm`) |
+    | `e2b`, `daytona`, `modal` | Sandboxes |
+    | `mcp` | MCP servers as tools (`threads.mcp`) |
+    | `supermemory`, `zep` | Hosted memory |
+    | `host` | The host server and `threads dev` / `threads start` |
+    | `slack`, `whatsapp`, `github` | Channels |
+
+    The core package needs only `pydantic`. Installing it also puts the `threads` command on your path.
+  </Tab>
+</Tabs>
+
+## Check your setup
+
+From the clone, run each language's checks:
+
+<CodeGroup>
+
+```bash TypeScript
+cd typescript && bun run check
+```
+
+```bash Python
+cd python && uv sync --all-extras && uv run pytest
+```
+
+</CodeGroup>
+
+## API keys
+
+Providers read their keys from the environment unless you pass them in code, for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `E2B_API_KEY` or `DAYTONA_API_KEY`. Each provider page lists its variables. Keys are never written to the log and never enter a sandbox.

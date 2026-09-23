@@ -1,0 +1,161 @@
+---
+title: "threads"
+sidebarTitle: "Home"
+description: "An agent framework for TypeScript and Python, built on an append-only event log."
+icon: "house"
+mode: "custom"
+---
+
+export const Tag = ({ children }) => (
+  <span className="inline-flex items-center rounded-full border border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/60 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+    {children}
+  </span>
+);
+
+export const Feature = ({ title, icon, href, tags, children }) => (
+  <a
+    href={href}
+    className="group flex flex-col gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-5 no-underline transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 dark:hover:border-primary-light/40"
+  >
+    <div className="flex items-center gap-3">
+      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary-light/10 dark:text-primary-light">
+        <Icon icon={icon} size={18} color="currentColor" />
+      </span>
+      <h3 className="m-0 text-base font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
+    </div>
+    <p className="m-0 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{children}</p>
+    <div className="mt-auto flex flex-wrap gap-1.5">
+      {tags.map((t) => (
+        <Tag key={t}>{t}</Tag>
+      ))}
+    </div>
+  </a>
+);
+
+export const Reason = ({ title, icon, children }) => (
+  <div className="flex flex-col gap-2">
+    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary dark:bg-primary-light/10 dark:text-primary-light">
+      <Icon icon={icon} size={20} color="currentColor" />
+    </span>
+    <h3 className="m-0 mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
+    <p className="m-0 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{children}</p>
+  </div>
+);
+
+export const Resource = ({ title, icon, href, children }) => (
+  <a
+    href={href}
+    className="flex items-start gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 no-underline transition hover:border-primary/50 dark:hover:border-primary-light/40"
+  >
+    <span className="mt-0.5 text-zinc-500 dark:text-zinc-400">
+      <Icon icon={icon} size={18} color="currentColor" />
+    </span>
+    <span className="flex flex-col">
+      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{title}</span>
+      <span className="text-sm text-zinc-600 dark:text-zinc-400">{children}</span>
+    </span>
+  </a>
+);
+
+<div className="relative overflow-hidden">
+  <div className="pointer-events-none absolute inset-x-0 -top-40 h-[28rem] bg-gradient-to-b from-primary/10 via-primary/5 to-transparent dark:from-primary-light/10 dark:via-primary-light/5" />
+  <div className="relative mx-auto max-w-4xl px-6 pb-12 pt-20 text-center lg:pt-28">
+    <div className="mb-6 flex justify-center">
+      <Tag>Alpha · TypeScript and Python</Tag>
+    </div>
+    <h1 className="m-0 text-5xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-6xl">
+      threads
+    </h1>
+    <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-zinc-600 dark:text-zinc-400">
+      An agent framework for TypeScript and Python, built on an append-only event log.
+    </p>
+    <p className="mx-auto mt-2 max-w-2xl text-base text-zinc-500 dark:text-zinc-500">
+      Sandboxes, channels, memory, hooks and evals come built in. You write what your agent does and add your API keys.
+    </p>
+    <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+      <a
+        href="/quickstart"
+        className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white no-underline shadow-sm transition hover:opacity-90 dark:bg-primary-light dark:text-zinc-950"
+      >
+        Get started
+        <Icon icon="arrow-right" size={16} color="currentColor" />
+      </a>
+      <a
+        href="https://github.com/useagenthq/threads"
+        className="inline-flex items-center gap-2 rounded-full border border-zinc-300 dark:border-zinc-700 px-5 py-2.5 text-sm font-semibold text-zinc-800 dark:text-zinc-100 no-underline transition hover:border-zinc-400 dark:hover:border-zinc-500"
+      >
+        <Icon icon="github" size={16} color="currentColor" />
+        GitHub
+      </a>
+    </div>
+  </div>
+</div>
+
+<div className="mx-auto max-w-6xl px-6 pb-16">
+  <h2 className="m-0 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">What you can build</h2>
+  <p className="mt-2 text-zinc-600 dark:text-zinc-400">Each piece is one option on your agent or host.</p>
+  <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <Feature title="Agents & tools" icon="bot" href="/agents/agents" tags={["agent()", "tool()", "MCP"]}>
+      A model, instructions and tools. Built-in shell, file, web, git and code tools, plus any MCP server.
+    </Feature>
+    <Feature title="Multi-agent" icon="users" href="/multi-agent/subagents" tags={["Subagents", "Handoffs", "Teams"]}>
+      Let an agent start helpers, hand the conversation to a specialist, or share a task board.
+    </Feature>
+    <Feature title="Sandboxes" icon="box" href="/sandboxes/overview" tags={["E2B", "Daytona", "Modal · Python"]}>
+      Run code in an isolated machine with no internet by default. Your keys never enter it.
+    </Feature>
+    <Feature title="Channels" icon="message-circle" href="/host/overview" tags={["Slack", "WhatsApp", "GitHub", "HTTP"]}>
+      Put an agent in Slack, WhatsApp or GitHub, on a cron schedule, or behind an HTTP API.
+    </Feature>
+    <Feature title="Memory & knowledge" icon="brain" href="/memory/memory" tags={["Local", "Supermemory", "Zep"]}>
+      Remember across runs and search your own documents, scoped per tenant.
+    </Feature>
+    <Feature title="Durability" icon="shield-check" href="/production/durability" tags={["Crash-safe", "Approvals", "Budgets"]}>
+      Resume after a crash without repeating an action. Park risky steps for a human to decide.
+    </Feature>
+    <Feature title="Evals & testing" icon="flask-conical" href="/evals/timeline" tags={["Timeline", "Fork", "Scripted model"]}>
+      Inspect every step, fork a past run to try a fix, and test with no real model calls.
+    </Feature>
+    <Feature title="Hooks & permissions" icon="sliders-horizontal" href="/control/hooks" tags={["Hooks", "Rules", "Plan mode"]}>
+      Gate tools, inject context, and decide who can approve what.
+    </Feature>
+    <Feature title="API reference" icon="square-code" href="/reference/overview" tags={["TypeScript", "Python", "HTTP"]}>
+      Every public function and type, side by side in both languages.
+    </Feature>
+  </div>
+</div>
+
+<div className="border-y border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/30">
+  <div className="mx-auto max-w-6xl px-6 py-16">
+    <h2 className="m-0 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Why threads</h2>
+    <p className="mt-2 max-w-2xl text-zinc-600 dark:text-zinc-400">
+      Every run is an append-only log of what the agent saw and did. That one record is what makes these work.
+    </p>
+    <div className="mt-10 grid gap-10 md:grid-cols-3">
+      <Reason title="Auditable" icon="scroll-text">
+        Every input, every exact model request, every tool call and result. Read it with <code>timeline()</code> or <code>threads timeline</code>.
+      </Reason>
+      <Reason title="Crash-safe" icon="shield">
+        After a crash, an action that may already have happened is checked or handed to you, never blindly retried.
+      </Reason>
+      <Reason title="Easy evals" icon="git-fork">
+        Fork any past step into its own sandbox, test with a scripted model, and save real threads as regression cases.
+      </Reason>
+    </div>
+  </div>
+</div>
+
+<div className="mx-auto max-w-6xl px-6 py-16">
+  <h2 className="m-0 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Resources</h2>
+  <div className="mt-6 grid gap-4 md:grid-cols-3">
+    <Resource title="Quickstart" icon="rocket" href="/quickstart">
+      Run an agent with no API key.
+    </Resource>
+    <Resource title="How it works" icon="workflow" href="/how-it-works">
+      A short tour of the log.
+    </Resource>
+    <Resource title="GitHub" icon="github" href="https://github.com/useagenthq/threads">
+      Source, issues and the spec.
+    </Resource>
+  </div>
+</div>

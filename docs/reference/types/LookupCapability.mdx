@@ -1,0 +1,19 @@
+---
+title: "LookupCapability"
+description: "Declared per lookup operation and verified by the provider conformance suite."
+icon: "braces"
+---
+
+none: no lookup for this operation. nonfinal: lookup can find it but never proves absence. final: lookup may answer not_found as final.
+
+<CodeGroup>
+
+```ts TypeScript
+type LookupCapability = "none" | "nonfinal" | "final";
+```
+
+```python Python
+type LookupCapability = Literal["none", "nonfinal", "final"]
+```
+
+</CodeGroup>

@@ -1,0 +1,159 @@
+---
+title: Hooks
+description: Run your own code at every step of the agent loop to guard, steer or watch it.
+icon: webhook
+---
+
+Hooks let your code take part in a run: block a risky tool call, add context before the model is asked, redact a tool result, or send the agent back to work when it stops too early. Observers watch every recorded event without being able to change anything.
+
+Both come from `extension()`, the one way to package reusable behavior: instructions, tools, hooks and observers together.
+
+## Write an extension
+
+<CodeGroup>
+
+```ts TypeScript
+const guard = extension({
+  name: "guard",
+  instructions: "Only email people at example.com.",
+  hooks: {
+    beforeTool: async (call) => {
+      const to = call.input["to"];
+      if (call.name === "send_email" && typeof to === "string" && !to.endsWith("@example.com"))
+        return { decision: "deny", reason: "external recipients are not allowed" };
+      return { decision: "allow" };
+    },
+    sessionStart: async () => [`Today is ${new Date().toDateString()}.`],
+  },
+  on: {
+    tool_result: async (event) => {
+      console.log("tool finished:", event.type);
+    },
+  },
+  hookTimeoutMs: 2000,
+});
+
+const assistant = agent({
+  model: scriptedModel({
+    responses: [use("send_email", { to: "eve@evil.test", body: "hi" }, "c1"), say("I can't email that address.")],
+  }),
+  tools: [sendEmail],
+  extensions: [guard],
+  permissions: { allow: ["send_email"] },
+});
+```
+
+```python Python
+async def only_example_com(call: ToolCallData, ctx: RunContext[None]) -> Allow | Deny:
+    to = call.input.get("to")
+    if call.name == "send_email" and isinstance(to, str) and not to.endswith("@example.com"):
+        return {"decision": "deny", "reason": "external recipients are not allowed"}
+    return {"decision": "allow"}
+
+
+async def today(source: str, ctx: RunContext[None]) -> list[str]:
+    return [f"Today is {date.today():%A %d %B %Y}."]
+
+
+async def log_result(event: Event) -> None:
+    print("tool finished:", event.type)
+
+
+guard = extension(
+    name="guard",
+    instructions="Only email people at example.com.",
+    hooks={"before_tool": only_example_com, "session_start": today},
+    on={"tool_result": log_result},
+    hook_timeout_ms=2000,
+)
+```
+
+</CodeGroup>
+
+In Python, the decision types come from `threads.hooks.types` (`Allow`, `Deny`, `Ask`, `Proceed`, ...) and the event types from `threads.log`.
+
+When the model tries to email `eve@evil.test`, the hook denies the call and the email is never sent. The model gets a denied tool result and answers accordingly.
+
+### Options
+
+<ParamField path="name" type="string" required>
+  Unique per agent: lowercase letters, digits and `_`. The extension's tools are named `<name>__<tool>`.
+</ParamField>
+<ParamField path="instructions" type="string">
+  Added to the system prompt after the agent's own instructions, in the order extensions are listed.
+</ParamField>
+<ParamField path="tools" type="Tool[]">
+  Tools this extension brings. In Python they receive no `deps`.
+</ParamField>
+<ParamField path="hooks" type="Hooks">
+  Any of the hooks below.
+</ParamField>
+<ParamField path="on" type="Record<string, handler>">
+  Observers keyed by event type, or `"*"` for every event.
+</ParamField>
+<ParamField path="setup" type="() => Promise<void>">
+  Runs once before the first run. If it throws, setup fails with a `ConfigError`.
+</ParamField>
+<ParamField path="hookTimeoutMs" type="number" default="5000">
+  Time limit for each hook call. `hook_timeout_ms` in Python.
+</ParamField>
+
+## Hook points
+
+Every hook is optional, awaited and time-limited. Each gets the run context last (`ctx`: thread id, principal and, in TypeScript, your `deps`; Python hooks get `deps` as `None`).
+
+| TypeScript | Python | When | Returns |
+|---|---|---|---|
+| `sessionStart` | `session_start` | A run starts, resumes or forks, or history was summarized | Text to add as context |
+| `sessionEnd` | `session_end` | A run ends | Nothing |
+| `beforeInput` | `before_input` | Before new user input is accepted | `allow` (optional `injections`) or `deny` |
+| `beforeModel` | `before_model` | Before each model request | `proceed` (optional `injections`) or `deny` |
+| `afterModel` | `after_model` | After each model response | `proceed`, `deny`, `guide` (with `text`) or `retry` (with `reason`) |
+| `beforeTool` | `before_tool` | Before a tool call runs | `allow`, `deny` or `ask` (optional `rule`) |
+| `permissionRequest` | `permission_request` | A call would need approval | `allow`, `deny` or `ask` |
+| `permissionDenied` | `permission_denied` | A call was denied | Nothing |
+| `afterTool` | `after_tool` | After a tool call ran | Notes to record in the log |
+| `beforeToolResult` | `before_tool_result` | Before the model sees a tool result | `proceed`, `redact` (with `spans`) or `deny` |
+| `afterToolBatch` | `after_tool_batch` | After all calls of one response ran | Text to add as context |
+| `beforeCompact` | `before_compact` | Before older history is summarized | `proceed`, `deny` or `guide` |
+| `afterCompact` | `after_compact` | After history was summarized | Text to add as context |
+| `onStop` | `on_stop` | The agent is about to finish its turn | `stop`, or `continue` with a `reason` to keep it working |
+| `onStopFailure` | `on_stop_failure` | A run ended with an error | Nothing |
+| `subagentStart` | `subagent_start` | Before a subagent starts | `allow` or `deny` |
+| `subagentStop` | `subagent_stop` | A subagent finished | `stop`, or `continue` with a `reason` to send it back |
+| `beforeModelSwitch` | `before_model_switch` | Before the thread's model changes | `allow` or `deny` |
+| `afterModelSwitch` | `after_model_switch` | After the model changed | Nothing |
+| `notification` | `notification` | The run parked or scheduled a retry (TypeScript also: a budget ran out, a subagent finished) | Nothing |
+
+A `deny` always carries a `reason`, recorded in the log. For a denied tool call, TypeScript shows the reason to the model as the result; Python currently shows `denied by policy`. Text a hook adds is shown to the model as context from the hook.
+
+### When a hook fails
+
+A hook fails when it throws, times out or returns something that hook can't return.
+
+- **Hooks that decide** (the ones that return `allow`/`deny`/`proceed`/`stop` and similar): a failure **denies**. A broken guard never lets something through.
+- **Hooks that add context** (`sessionStart`, `afterToolBatch`, `afterCompact`): a failure stops that step. A failed `sessionStart` refuses the run's input.
+- **Hooks that return nothing**: a failure is recorded and ignored.
+
+Every decision a hook makes is recorded in the thread's log, next to the call it was about.
+
+## Observers
+
+Observers in `on` get each event after it is written to the log, in order, in the background. They never slow the run down and can't change it. Each observer keeps its place in the log: if a handler throws or the process stops, delivery picks up from the first event it hadn't finished, on the next event or the next run.
+
+Use observers for metrics, notifications and syncing to other systems. Use hooks when you need to change what happens.
+
+<Note>
+  Hooks and extensions are trusted code you run on your host, not a sandbox. The hooks an agent has are fixed when its thread starts; the agent can't add or change them.
+</Note>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Permissions & approvals" icon="shield-check" href="/control/permissions">
+    Rules for which tools run, ask or are denied.
+  </Card>
+  <Card title="Hooks reference" icon="book-open" href="/reference/types/Hooks">
+    Every hook's exact signature in both languages.
+  </Card>
+</CardGroup>

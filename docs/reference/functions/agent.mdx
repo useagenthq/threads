@@ -1,0 +1,182 @@
+---
+title: "agent"
+description: "Describe an agent."
+icon: "square-function"
+---
+
+Pure: no I/O, no env reads, no sockets. Checked by Agent.check() or on the first run.
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<CodeGroup>
+
+```ts TypeScript
+function agent(options: {
+  model: Model;
+  instructions?: string;
+  name?: Name;
+  tools?: readonly (Tool | McpServer)[];
+  extensions?: readonly Extension[];
+  sandbox?: Sandbox;
+  memory?: MemoryProvider;
+  memoryWrite?: "deny" | "ask" | "allow_principal" | "allow";
+  knowledge?: KnowledgeProvider;
+  skills?: readonly Skill[];
+  output?: z.ZodType<Output>;
+  outputRetries?: number;
+  subagents?: readonly (Agent<unknown, unknown>)[];
+  handoffs?: readonly (Agent<unknown, unknown>)[];
+  fallback?: readonly Model[];
+  permissions?: Partial<Policy.permissions>;
+  approvers?: readonly Principal[];
+  budget?: Budget;
+  retry?: Partial<Policy.retry>;
+  context?: Partial<Policy.context>;
+  egress?: readonly string[] | "unenforced";
+  web?: { fetch?: boolean; search?: SearchBackend };
+  git?: { credential: Secret; forgeUrl?: string; apiUrl?: string };
+  computer?: boolean;
+  lsp?: { languages: readonly string[] };
+}): Agent<Deps, Output>
+```
+
+```python Python
+def agent(
+    *,
+    model: Model,
+    instructions: str = "",
+    name: Name = "agent",
+    tools: Sequence[Tool | McpServer] = (),
+    extensions: Sequence[Extension] = (),
+    sandbox: Sandbox | None = None,
+    memory: MemoryProvider | None = None,
+    memory_write: Literal["deny", "ask", "allow_principal", "allow"] = "ask",
+    knowledge: KnowledgeProvider | None = None,
+    skills: Sequence[Skill] = (),
+    subagents: Sequence[Agent[object, object]] = (),
+    handoffs: Sequence[Agent[object, object]] = (),
+    permissions: Policy.permissions | None = None,
+    approvers: Sequence[Principal] | None = None,
+    budget: Budget | None = None,
+    on_unknown_usage: Policy.on_unknown_usage = "upper_bound",
+    retry: Policy.retry | None = None,
+    context: Policy.context | None = None,
+    egress: Sequence[str] | Literal["unenforced"] = (),
+    web: {fetch?: bool, search?: SearchBackend} | None = None,
+    git: {credential: Secret, forge_url?: str, api_url?: str} | None = None,
+    computer: bool = False,
+    lsp: {languages: Sequence[str]} | None = None,
+) -> Agent[Deps, Output]
+```
+
+</CodeGroup>
+
+## Parameters
+
+<ParamField body="model" type={"Model"} required>
+  See [Model](/reference/types/Model).
+</ParamField>
+
+<ParamField body="instructions" type={"string"} default={""}>
+  Pinned system text (the pinned prompt prefix).
+</ParamField>
+
+<ParamField body="name" type={"Name"} default={"agent"}>
+  Unique among the agents a host, subagent list or handoff list names.
+</ParamField>
+
+<ParamField body="tools" type={"readonly (Tool | McpServer)[]"}>
+  App tools and MCP servers. Built-in tools come from the sandbox and the options below.
+</ParamField>
+
+<ParamField body="extensions" type={"readonly Extension[]"}>
+  Instructions and hooks run in this order.
+</ParamField>
+
+<ParamField body="sandbox" type={"Sandbox"}>
+  Absent: no sandbox tools (bash, files, browser, computer). See [Sandbox](/reference/types/Sandbox).
+</ParamField>
+
+<ParamField body="memory" type={"MemoryProvider"}>
+  See [MemoryProvider](/reference/types/MemoryProvider).
+</ParamField>
+
+<ParamField body="memoryWrite / memory_write" type={"\"deny\" | \"ask\" | \"allow_principal\" | \"allow\""} default={"ask"}>
+  Write authority for save_memory.
+</ParamField>
+
+<ParamField body="knowledge" type={"KnowledgeProvider"}>
+  See [KnowledgeProvider](/reference/types/KnowledgeProvider).
+</ParamField>
+
+<ParamField body="skills" type={"readonly Skill[]"}>
+  Pinned in config_hash (name, description, sha256 of body). The system prompt lists them after the extension instructions as "Skills you can load with load_skill:" then one "- name: description" line each, in the given order; load_skill (pinned only when this is non-empty) appends the body as injected&#123;source: skill, trust: trusted_instruction, origin: &#123;id: name, version: sha256 of body&#125;&#125;. Unique names; a description is one non-empty line.
+</ParamField>
+
+<ParamField body="output" type={"z.ZodType<Output>"}>
+  TypeScript only. Structured final output. Absent: completed.output is the final text.
+</ParamField>
+
+<ParamField body="outputRetries" type={"number"} default={"2"}>
+  TypeScript only.
+</ParamField>
+
+<ParamField body="subagents" type={"readonly (Agent<unknown, unknown>)[]"}>
+  Agents spawn_agent may start, by name. Team tools come with them.
+</ParamField>
+
+<ParamField body="handoffs" type={"readonly (Agent<unknown, unknown>)[]"}>
+  Agents this one may hand the conversation to, pinned as policy.handoffs.
+</ParamField>
+
+<ParamField body="fallback" type={"readonly Model[]"}>
+  TypeScript only. Fallback models in order.
+</ParamField>
+
+<ParamField body="permissions" type={"Partial<Policy.permissions>"}>
+   
+</ParamField>
+
+<ParamField body="approvers" type={"readonly Principal[]"}>
+  Who may answer approval challenges and resolve parked effects for runs this agent roots, its subagents and handoff targets included.
+</ParamField>
+
+<ParamField body="budget" type={"Budget"}>
+  Thread budget.
+</ParamField>
+
+<ParamField body="on_unknown_usage" type={"Policy.on_unknown_usage"} default={"upper_bound"}>
+  Python only.
+</ParamField>
+
+<ParamField body="retry" type={"Partial<Policy.retry>"}>
+   
+</ParamField>
+
+<ParamField body="context" type={"Partial<Policy.context>"}>
+   
+</ParamField>
+
+<ParamField body="egress" type={"readonly string[] | \"unenforced\""}>
+  Sandbox egress allowlist of hosts. [] is deny-all. unenforced opts in to a provider that can't enforce it; stub mode then refuses. Host allowlists are not supported yet in either language: use [] (deny-all) or "unenforced".
+</ParamField>
+
+<ParamField body="web" type={"{ fetch?: boolean; search?: SearchBackend }"}>
+  Host-side web_fetch and web_search.
+</ParamField>
+
+<ParamField body="git" type={"{ credential: Secret; forgeUrl?: string; apiUrl?: string }"}>
+  Enables the git gateway tools git_clone, git_fetch, git_push and open_pull_request. The forge is GitHub; the credential is revealed only on the host and never enters the sandbox.
+</ParamField>
+
+<ParamField body="computer" type={"boolean"} default={"false"}>
+  Pins computer_screenshot (read_only) and computer (actions, unguarded). Needs a sandbox whose info.desktop is native or image; otherwise a setup error capability_missing.
+</ParamField>
+
+<ParamField body="lsp" type={"{ languages: readonly string[] }"}>
+  Pins lsp for these languages (typescript, python, go, rust), run in the sandbox image's language servers. Needs a sandbox; an unknown language is unknown_preset. A server that isn't installed or ready answers unavailable at run time.
+</ParamField>
+
+## Returns
+
+[`Agent<Deps, Output>`](/reference/types/Agent)

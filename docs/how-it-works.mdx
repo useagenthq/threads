@@ -1,0 +1,87 @@
+---
+title: "How it works"
+description: "A short tour of the append-only log behind every thread."
+icon: "workflow"
+---
+
+You don't need to know any of this to build with threads. It explains why the guarantees on other pages hold.
+
+## A thread is a log
+
+Every conversation with an agent is a **thread**. A thread is an ordered list of events, and events are only ever appended, never edited. A run of a small agent looks like this:
+
+```text
+thread_started       the agent's instructions, tools and model settings
+user_input           "What is the weather in Paris?"
+model_request        the exact request the model was sent
+model_response       a call to get_weather
+tool_call            get_weather {"city": "Paris"}
+permission_decision  allowed: the tool is read-only
+tool_result          "It is sunny in Paris."
+model_request
+model_response       "It is sunny in Paris."
+turn_completed       end_turn
+```
+
+Everything else is computed from this list: the transcript the model sees next, the pending approvals, the todo list, the result of `run()`. Nothing is kept on the side, so the log is the complete story of what happened.
+
+<CardGroup cols={2}>
+  <Card title="Stored in SQLite" icon="database">
+    `sqlite(".threads")` is a folder with `threads.db` and an `artifacts/` folder for large outputs. `sqlite(":memory:")` is a throwaway store for tests.
+  </Card>
+  <Card title="Tamper-evident" icon="link">
+    Each event carries the hash of the one before it, so a changed or missing line is detected when the log is read.
+  </Card>
+</CardGroup>
+
+## What the log gives you
+
+<AccordionGroup>
+  <Accordion title="Resume after a crash" icon="rotate-ccw">
+    Run the same thread again and threads picks up where the log ends. A step that was recorded as finished is never redone. See [Durability](/production/durability).
+  </Accordion>
+  <Accordion title="No double actions" icon="shield">
+    Before a tool with side effects runs, threads records that it is about to run. If the process dies before the result is recorded, the action may or may not have happened. threads then uses what the tool declared about itself: it retries only when that is safe, asks the tool to check, or stops and asks you. It never quietly runs the action twice.
+  </Accordion>
+  <Accordion title="One process at a time" icon="lock">
+    Only one process can drive a thread at a time. A second one is refused with `branch_busy` instead of both running the agent.
+  </Accordion>
+  <Accordion title="Inspect and fork" icon="git-fork">
+    [`timeline()`](/evals/timeline) shows every step with the exact request the model saw. [`fork()`](/evals/fork) starts a new branch from a past step, in its own sandbox, so you can try a different input or a fix without touching the original.
+  </Accordion>
+  <Accordion title="A stable prompt prefix" icon="layers">
+    The system prompt, tool list and model settings are pinned when a thread starts and sent byte for byte the same on every request. They change only when you change them on purpose, for example with `setModel`. That keeps provider prompt caches warm and makes every request reproducible.
+  </Accordion>
+  <Accordion title="One format for both languages" icon="languages">
+    TypeScript and Python write the same bytes. A thread written by one can be read, inspected and exported by the other.
+  </Accordion>
+</AccordionGroup>
+
+## Branches
+
+A thread starts with one branch. Each fork adds a branch that shares the history up to the fork point and then goes its own way. Handles like `Thread` always point at one branch.
+
+```text
+main    ── input ── model ── tool ── model ── done
+                              │
+fork                          └── model ── tool ── done
+```
+
+## Where the pieces run
+
+| Piece | Where it runs |
+|---|---|
+| The agent loop, your tools, hooks | Your process, as a plain library |
+| Built-in shell and file tools | The [sandbox](/sandboxes/overview), with no internet by default and no credentials |
+| Channels, schedules, the HTTP API | The optional [host](/host/overview), started with `threads dev` or `threads start` |
+
+## Learn more
+
+<CardGroup cols={2}>
+  <Card title="Durability & crash safety" icon="shield-check" href="/production/durability">
+    What survives a crash, and what happens to each kind of tool.
+  </Card>
+  <Card title="Timeline" icon="history" href="/evals/timeline">
+    Read a thread's log step by step.
+  </Card>
+</CardGroup>
