@@ -1,4 +1,3 @@
-export { byteStream } from "./bytes";
 export type {
   Capture,
   Created,
@@ -9,13 +8,6 @@ export type {
   Sinks,
   Started,
 } from "./driver";
-export {
-  FenceRefused,
-  fenceHere,
-  messageOf,
-  refusedHere,
-  sandboxFetch,
-  within,
-} from "./fence";
+export { FenceRefused, fenceHere, sandboxFetch, within } from "./fence";
 export { type RemoteInfo, remoteSandbox } from "./sandbox";
 export { quote } from "./scripts";
