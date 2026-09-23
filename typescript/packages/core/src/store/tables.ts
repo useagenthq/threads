@@ -7,9 +7,9 @@ import { type LogError, logError } from "../verify/error";
 import type { SqliteDriver } from "./driver";
 import { STORE_SQL, STORE_VERSION } from "./generated/sql";
 
-// . The DDL is spec/schema/store.sql, embedded by spec/tools/gen_store_sql.py.
+//. The DDL is spec/schema/store.sql, embedded by spec/tools/gen_store_sql.py.
 
-/** The tenant of local use: the local operator's (spec/api.json, ). */
+/** The tenant of local use: the local operator's (spec/api.json). */
 export const LOCAL_TENANT = "local";
 
 const BRANCH_STATES = [

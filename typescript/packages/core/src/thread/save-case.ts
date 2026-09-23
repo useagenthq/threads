@@ -16,7 +16,7 @@ import { matches, modelScript, sandboxScript, stubScript } from "./case-files";
 import { caseLog, type Impl } from "./case-log";
 import type { ForkPoint } from "./open";
 
-// saveCase() (spec/api.json, ): a stub-kind conformance case in exactly the
+// saveCase() (spec/api.json): a stub-kind conformance case in exactly the
 // spec/conformance layout, so the same runners replay it. The log is the chain through the
 // snapshot; input.text is the next user_input after it; the recorded turn that followed becomes
 // model.json, stubs.json (mediated calls), sandbox.json (read-only calls) and `appended`.

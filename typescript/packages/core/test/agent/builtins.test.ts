@@ -236,7 +236,7 @@ describe("permission modes decide before any sandbox call", () => {
   });
 });
 
-describe("L0 spill and secret redaction", () => {
+describe("L0 spill and secret redaction (C5)", () => {
   test("a large result keeps head, marker and tail; read_tool_result reads any range", async () => {
     const big = `${"a".repeat(40_000)}MIDDLE${"z".repeat(40_000)}`;
     const dump = tool({

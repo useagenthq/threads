@@ -6,7 +6,7 @@ import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { unwrap } from "../store/helpers";
 
-// Budgets are tree-wide: each covers its thread and every
+// Budgets are tree-wide (F7.7, F9.11): each covers its thread and every
 // descendant, every attempt reserves its bound first, and a refusal records budget_exceeded,
 // ends the turn budget_exhausted and sends nothing more.
 

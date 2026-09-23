@@ -11,7 +11,7 @@ import { itemsOf, phoneNumbersOf } from "./inbound";
 import { performer, render, SESSION_WINDOW_MS } from "./outbound";
 
 // whatsapp(): the WhatsApp Cloud API as a threads channel (spec/api.json ChannelAdapter,
-// ). What it declares, and why:
+//). What it declares, and why:
 // - Authenticity: X-Hub-Signature-256 over the raw body. Meta signs no timestamp, so replay
 //   protection is the host inbox's dedup on each messages[].id.
 // - Installation: the business phone number id. A webhook that speaks for two phone numbers is

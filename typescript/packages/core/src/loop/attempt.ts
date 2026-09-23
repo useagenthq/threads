@@ -23,7 +23,7 @@ export type Attempted =
   | { readonly kind: "response"; readonly text: string }
   | { readonly kind: "rejected"; readonly rejection: Provider }
   | { readonly kind: "broken" }
-  /** Refused before sending, by the loop's pre-check or the adapter. */
+  /** Refused before sending, by the loop's pre-check or the adapter (8). */
   | { readonly kind: "unsupported"; readonly refused: Unsupported }
   /** A covering budget refused the reservation; budget_exceeded is recorded. */
   | { readonly kind: "budget" }

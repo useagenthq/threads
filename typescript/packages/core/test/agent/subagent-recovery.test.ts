@@ -17,7 +17,7 @@ import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { unwrap } from "../store/helpers";
 
-// A crash mid-subagent: the restarted parent finds the child by
+// A crash mid-subagent (invariant 3): the restarted parent finds the child by
 // the agent_spawned it recorded first, resumes that same child thread, never prompts it twice,
 // and records exactly one agent_finished.
 

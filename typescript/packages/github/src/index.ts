@@ -3,7 +3,7 @@ import { parser, type TenantOf, verifier } from "./inbound";
 import { looker, performer, render } from "./outbound";
 
 // github(): GitHub issues and pull requests as a threads channel (spec/api.json ChannelAdapter,
-// ). Inbound is a GitHub App webhook; outbound is an issue comment through the official
+//). Inbound is a GitHub App webhook; outbound is an issue comment through the official
 // SDK (@octokit/rest). `token` is an installation (or personal) token: minting one from an App
 // private key is out of scope. GitHub has no buttons, so approvals are `/approve <id>` replies.
 

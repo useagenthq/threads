@@ -11,7 +11,7 @@ import { webFetch } from "./web-fetch";
 import { type SearchBackend, webSearch } from "./web-search";
 import type { WebTransport } from "./web-transport";
 
-// The capability-gated built-ins: offered only when
+// The capability-gated built-ins (catalog GATED_TOOLS): offered only when
 // their capability is configured. Naming one whose capability is missing is a setup error that
 // names it; nothing is ever offered and then answered with an empty success.
 

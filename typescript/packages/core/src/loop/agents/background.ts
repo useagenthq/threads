@@ -4,7 +4,7 @@ import { stopGate } from "./gates";
 import { parkOn } from "./park";
 import { finish, finished, launch, spawnedFor } from "./spawn";
 
-// Background children: each runs concurrently in this process and
+// Background children (F7.2): each runs concurrently in this process and
 // hands its end to the parent's loop, which records it at a step boundary, so the parent's
 // single writer never interleaves a late result into a step.
 

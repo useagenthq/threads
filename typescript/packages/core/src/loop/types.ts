@@ -62,8 +62,7 @@ export type ToolRun =
        */
       readonly content?: readonly ResultPart[];
       /**
-       * Model-visible context the result brings, appended with it (recalled memory, retrieved
-       * knowledge: always untrusted reference, ).
+       * Model-visible context the result brings, appended with it (recalled memory, retrieved * knowledge: always untrusted reference).
        */
       readonly inject?: readonly z.infer<typeof InjectedData>[];
     }
@@ -112,7 +111,7 @@ export type ToolImpl = {
   readonly providerNow?: () => number;
 };
 
-/** A permission_decision the loop records for a new call. */
+/** A permission_decision the loop records for a new call (fold, hooks later). */
 export type Authorization = {
   readonly decision: "allow" | "deny" | "ask";
   readonly source: EventOf<"permission_decision">["data"]["source"];

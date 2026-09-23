@@ -11,7 +11,7 @@ import type { Halt } from "./types";
 // appends nothing. The open turn then continues in the loop, which reads the same log.
 
 export async function recover(s: Session): Promise<Halt | undefined> {
-  // An open turn with nothing in doubt and nothing pending ends interrupted (item 7), unless no
+  // An open turn with nothing in doubt and nothing pending ends interrupted, unless no
   // model_request follows its last user_input or steer: that input is unsent, so the loop sends it.
   const { fold } = s;
   const last = s.events.findLastIndex(

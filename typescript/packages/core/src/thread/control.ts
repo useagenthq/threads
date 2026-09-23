@@ -21,10 +21,10 @@ import {
 import type { ChainEvent, LogError } from "../verify";
 import { suggestedRules } from "./pending";
 
-// The Thread control methods (spec/api.json Thread, ): each appends the actor's
+// The Thread control methods (spec/api.json Thread): each appends the actor's
 // event through the run's own writer when this process runs the branch, else under a short lease
 // of its own; a lease another process holds is branch_busy, never waited on. The host
-// authorizes the principal first (approver policy, ); here a principal of
+// authorizes the principal first (approver policy); here a principal of
 // another tenant is refused, and the log's own rules decide the rest.
 
 /** A control method's typed failure (its api.json errors). */
@@ -352,7 +352,7 @@ export function answer(
   };
 }
 
-/** resolveParked: a human settles a parked effect. */
+/** resolveParked: a human settles a parked effect (C3). */
 export function resolveParked(
   effectKey: string,
   resolution: "assume_done" | "assume_not_done",

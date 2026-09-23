@@ -21,7 +21,7 @@ import { todoReminder } from "./todos";
 import { nextAttempt, stepEvents } from "./turn";
 import type { Halt } from "./types";
 
-// A turn request: one attempt and what its outcome requires (// L5, ). Counters come from the step's events, so a recovered run keeps them.
+// A turn request: one attempt and what its outcome requires (// L5). Counters come from the step's events, so a recovered run keeps them.
 
 type Abandon = EventOf<"model_attempt_abandoned">;
 type Rejection = Abandon["data"]["reason"];

@@ -15,7 +15,7 @@ import { forgeFetch, openPullRequest } from "../../src/tools/git/pull-request";
 import { gitPush } from "../../src/tools/git/push";
 import { bound, type LocalSession, localSession } from "./kit";
 
-// The git gateway: host git with the credential, bundles in and out of
+// The git gateway (F11.12): host git with the credential, bundles in and out of
 // a sandbox that never sees it. The forge is a local bare repository: no network.
 
 const TOKEN = "ghs_canary_0123456789";

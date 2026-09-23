@@ -266,7 +266,7 @@ export const ForkData: Ruled<
     reason: z
       .enum(FORK_REASONS)
       .describe(
-        "snapshot: a user fork at an eligible snapshot event. repair: operator repair of a corrupt parent at its last valid line; no sandbox is restored and the child is inspection-only (never runnable; ).",
+        "snapshot: a user fork at an eligible snapshot event. repair: operator repair of a corrupt parent at its last valid line; no sandbox is restored and the child is inspection-only (never runnable).",
       ),
     sandbox_id: SandboxId.describe(
       "The isolated child sandbox restored from the snapshot, with its manifest verified.",

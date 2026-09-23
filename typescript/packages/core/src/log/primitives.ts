@@ -56,7 +56,7 @@ export const JsonValue: z.ZodType<z.core.util.JSONType> = z
   .meta({
     id: "JsonValue",
     description:
-      "Any validated JSON value (tool input, model params, MCP payloads). Numbers follow .",
+      "Any validated JSON value (tool input, model params, MCP payloads). Numbers follow.",
   });
 
 function jsonObject(): JsonObjectSchema {

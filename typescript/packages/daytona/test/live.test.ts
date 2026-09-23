@@ -85,7 +85,7 @@ describe.skipIf(!live)("live gate: daytona", () => {
     }
   });
 
-  // The qualification gate for after toolbox traffic, no process env or command
+  // The qualification gate for: after toolbox traffic, no process env or command
   // line and no file in the guest holds the API key. The key never goes in to search for it:
   // the guest's state comes out and is searched on the host. The key's hash, written as a
   // probe file, must be found, which proves the scan reaches files.

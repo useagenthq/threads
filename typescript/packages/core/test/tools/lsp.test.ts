@@ -6,7 +6,7 @@ import { agent, fakeSandbox, scriptedModel } from "../../src";
 import { answered, lspText, lspWith } from "../../src/tools/lsp";
 import { bound, localSession } from "./kit";
 
-// lsp: the in-sandbox driver against a scripted language server; a
+// lsp (F1.19): the in-sandbox driver against a scripted language server; a
 // server that is missing or never ready is `unavailable`, never an empty success.
 
 // A tiny stdio language server: asks the client for configuration first (the driver must

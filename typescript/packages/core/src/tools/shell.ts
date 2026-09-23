@@ -2,7 +2,7 @@ import { execute, toolRunOf } from "../sandbox/exec";
 import { type Builtin, builtin, sessionOf } from "./builtin";
 import { BashInput } from "./catalog";
 
-// bash: one exec in the sandbox with an empty env, keyed by
+// bash (6, 7): one exec in the sandbox with an empty env, keyed by
 // the effect key so recovery can terminate its process group. A timeout is uncertain, never an
 // error result; the whole output is spilled at the source by the sandbox layer.
 

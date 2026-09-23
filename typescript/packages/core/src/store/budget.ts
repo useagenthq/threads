@@ -4,7 +4,7 @@ import type { Strict } from "../log/zod-types";
 import type { SqliteDriver } from "./driver";
 import { parseRows } from "./tables";
 
-// The tree-wide budget ledger: one row per budget,
+// The tree-wide budget ledger (store.sql budget_ledger): one row per budget,
 // limit and model attempt. A reservation sums each covering budget's rows and inserts its own
 // rows only if every one fits, in one transaction, so concurrent threads of a tree (one per
 // writer, possibly in several processes) can't overspend together.

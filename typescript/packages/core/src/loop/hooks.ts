@@ -12,7 +12,7 @@ import { draft } from "./drafts";
 import type { Session } from "./session";
 import type { Halt } from "./types";
 
-// Shared plumbing for hook points: hook order, the recorded decision
+// Shared plumbing for hook points (3, 5): hook order, the recorded decision
 // that stands in for a hook on replay, and the observation rule.
 
 type Decision = EventOf<"hook_decision">;
@@ -31,7 +31,7 @@ const AFTER: ReadonlySet<HookName> = new Set([
   "after_model_switch",
 ]);
 
-/** Extensions defining `hook`: before* in declaration order, after* in reverse (item 5). */
+/** Extensions defining `hook`: before* in declaration order, after* in reverse. */
 export function defining(s: Session, hook: HookName): readonly LoopExtension[] {
   const all = (s.config.extensions ?? []).filter(
     (e) => e.hooks[hook] !== undefined,
@@ -89,7 +89,7 @@ export function injection(ext: string, text: string): EventDraft {
   });
 }
 
-/** A hook's own trusted instruction (on_stop continue, after_model guide; ). */
+/** A hook's own trusted instruction (on_stop continue, after_model guide). */
 export function instruction(ext: string, text: string): EventDraft {
   return draft.injected({
     source: "hook",

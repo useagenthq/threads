@@ -15,7 +15,7 @@ import type {
   Scope,
 } from "./protocol";
 
-// localKnowledge() (spec/api.json, ): admitted versions stored as artifacts,
+// localKnowledge() (spec/api.json): admitted versions stored as artifacts,
 // an FTS5 index over their passages, and one monotonic revision. Versions are immutable and
 // removes are tombstones, so a search can be answered as of any revision (a pinned fork). The
 // index is a view: `rebuild` refills it from the admitted artifacts. The tables and version ids

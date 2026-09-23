@@ -12,7 +12,8 @@ import { z } from "zod";
 import type { ButtonValue } from "./inbound";
 
 // Slack's outbound side: every op is one chat.postMessage carrying its effect
-// key in message metadata, sent through the SDK's fetch behind the sandbox fence (// item 3) with the SDK's own retries off, so one perform is at most one transport attempt.
+// key in message metadata, sent through the SDK's fetch behind the sandbox fence (
+// item 3) with the SDK's own retries off, so one perform is at most one transport attempt.
 
 type Json = ReturnType<ChannelAdapter["render"]>[number];
 type Event = Parameters<ChannelAdapter["render"]>[0];

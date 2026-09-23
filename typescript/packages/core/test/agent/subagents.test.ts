@@ -14,7 +14,7 @@ import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { unwrap } from "../store/helpers";
 
-// Subagents are child threads: agent_spawned is
+// Subagents are child threads (F7.1, F7.2, F7.5, F7.8): agent_spawned is
 // durable before the child starts, the child only narrows its parent, and the parent records
 // exactly one agent_finished per child.
 

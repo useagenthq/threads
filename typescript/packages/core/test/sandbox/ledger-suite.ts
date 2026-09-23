@@ -230,7 +230,7 @@ export function ledgerSuite(harness: SandboxHarness): void {
     });
 
     // the exact adversarial schedules of the #153 repros, kept as regression tests.
-    describe("repro schedules", () => {
+    describe(" repro schedules", () => {
       test("stale creator: takeover and recovery run inside the old creator's restore, before the provider", async () => {
         const f = parent();
         const { sandbox: base, creates } = harness.make(SCRIPT);

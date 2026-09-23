@@ -173,7 +173,7 @@ export const ToolSpec: Ruled<
     ends_turn: z
       .boolean()
       .describe(
-        "A successful result ends the turn without another model call (the final_output tool, ).",
+        "A successful result ends the turn without another model call (the final_output tool).",
       )
       .optional(),
   }),
@@ -187,7 +187,7 @@ export const Tokens: z.ZodXor<readonly [typeof Int, z.ZodNull]> = z
   .meta({
     id: "Tokens",
     description:
-      "A measured token count, or null when the provider did not report it (unknown, never zero). .",
+      "A measured token count, or null when the provider did not report it (unknown, never zero).",
   });
 export const Usage: Strict<{
   input_tokens: typeof Tokens;
@@ -251,7 +251,7 @@ export const PermissionRule: z.ZodString = z
   .meta({
     id: "PermissionRule",
     description:
-      "Tool(specifier) grammar, . The tool part may end in * (mcp__github__*).",
+      "Tool(specifier) grammar. The tool part may end in * (mcp__github__*).",
   });
 
 const BUDGET_RULE = { minProperties: 1 } as const;

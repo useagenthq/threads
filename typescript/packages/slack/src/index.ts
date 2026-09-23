@@ -15,7 +15,7 @@ export type SlackOptions = {
   readonly fetch?: Fetch;
 };
 
-/** The Slack channel adapter (spec/api.json ChannelAdapter, ). */
+/** The Slack channel adapter (spec/api.json ChannelAdapter). */
 export function slack(options: SlackOptions): ChannelAdapter {
   const transport: Fetch =
     options.fetch ?? ((input, init) => fetch(input, init));

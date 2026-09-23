@@ -19,7 +19,7 @@ import { bindSchedules, type Schedule, tick } from "./schedules";
 import type { StartRunRequest } from "./schemas";
 import { type SseMessage, subscribe } from "./subscribe";
 
-// host() (spec/api.json, ): binds agents to a store, channels
+// host() (spec/api.json): binds agents to a store, channels
 // and schedules. It starts nothing until ready(), which confirms the bindings, sends nothing and
 // starts no run; after it, the host consumes durable intake and fires due schedules. stop()
 // drains in-flight work and releases leases.

@@ -1,6 +1,7 @@
 import type { ModelChunk, ModelContext } from "./protocol";
 
-// Shared by the HTTP model adapters: the fence at the real send point, and the // item 3 rejection classes.
+// Shared by the HTTP model adapters: the fence at the real send point, and the
+// item 3 rejection classes.
 
 export type Fetch = (
   input: string | URL | Request,

@@ -15,7 +15,7 @@ import { ComputerInput } from "../../src/tools/sandbox-inputs";
 import { unwrap } from "../store/helpers";
 import { bound } from "./kit";
 
-// Computer use: a screenshot is a read_only image_ref result;
+// Computer use (F11.8, F11.9): a screenshot is a read_only image_ref result;
 // an action is unguarded and parks when its outcome is unknown; no desktop is a setup error.
 
 /** A PNG header for a width x height image (enough for the IHDR read). */

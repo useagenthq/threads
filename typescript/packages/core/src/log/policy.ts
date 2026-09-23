@@ -231,9 +231,7 @@ export const Policy: Strict<{
     output: OutputPolicy.optional(),
     handoffs: z
       .array(NonEmpty)
-      .describe(
-        "Agent names this agent may hand the conversation to.",
-      )
+      .describe("Agent names this agent may hand the conversation to.")
       .optional(),
   })
   .meta({

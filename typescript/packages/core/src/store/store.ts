@@ -246,7 +246,7 @@ export class LogStore {
   }
 
   /**
-   * Starts a child branch at an eligible snapshot: its row in
+   * Starts a child branch at an eligible snapshot (steps 1 and 3): its row in
    * state `forking` with its own header, and its lease, one epoch above the parent's chain. A
    * forking branch is neither listed nor runnable until `finishFork`. Returns the child's writer,
    * which fences the child's resource ledger rows.

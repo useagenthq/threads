@@ -10,7 +10,7 @@ import {
   workspacePath,
 } from "./match";
 
-// the evaluation order. Thread rules (item 7) come later, with
+// the evaluation order. Thread rules come later, with
 // permission_rule_added.
 
 type Policy = z.infer<typeof PermissionsPolicy>;

@@ -2,7 +2,7 @@ import type { Writer } from "./writer";
 
 // The writers of the runs this process is executing, by branch. A control on such a branch
 // appends through the run's own writer, so it lands between the run's steps and the run sees it
-// at its next one.
+// at its next one (one writer per branch, never a second lease in this process).
 
 const live = new Map<string, Writer>();
 

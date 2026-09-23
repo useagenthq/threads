@@ -7,7 +7,7 @@ import { liveTransport, vet } from "../web-transport";
 import { missingCredential } from "./clone";
 import type { GitOptions } from "./host";
 
-// open_pull_request: reconcilable. The
+// open_pull_request (spec/schema/README.md "Git gateway"): reconcilable. The
 // forge (GitHub's REST API) is asked for a pull request for (head, base) in every state before
 // anything is created, so a lost create that was later closed never leads to a second one. The
 // credential is sent only from the host.

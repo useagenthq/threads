@@ -9,8 +9,7 @@ import { toolSpec } from "./turn";
 import type { Halt } from "./types";
 
 // A response's tool calls become durable before anything runs: tool_call (the parsed args),
-// then its authorization, or an error result for a call that fails before any effect
-//.
+// then its authorization, or an error result for a call that fails before any effect.
 
 type ToolUse = Extract<
   Response["data"]["content"][number],

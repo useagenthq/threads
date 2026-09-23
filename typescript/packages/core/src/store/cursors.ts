@@ -7,7 +7,7 @@ import type { LogError } from "../verify/error";
 import type { SqliteDriver } from "./driver";
 import { parseRows } from "./tables";
 
-// Durable observer cursors: how far each observer
+// Durable observer cursors (store.sql observer_cursors): how far each observer
 // got on a branch. Only observer bookkeeping: the log never depends on it.
 
 const CursorRow: Strict<{ seq: typeof Int }> = z.strictObject({ seq: Int });

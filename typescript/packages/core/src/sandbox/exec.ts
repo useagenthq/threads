@@ -12,7 +12,7 @@ import type {
   Stale,
 } from "./protocol";
 
-// The sandbox layer over an adapter's exec: both
+// The sandbox layer over an adapter's exec (spec/api.json ExecResult): both
 // streams go to one artifact as they arrive, in arrival order, while only head and tail
 // previews stay in memory. The artifact is kept only when a stream outgrew its preview.
 

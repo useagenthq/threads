@@ -4,8 +4,7 @@ import { dispatched } from "../sandbox/remote/fence";
 import type { ProviderError } from "./protocol";
 
 // One provider call from a memory or knowledge tool, under the tool's lease fence at the
-// adapter's real transport, bounded in time, and what its failure amounts to
-//.
+// adapter's real transport, bounded in time, and what its failure amounts to.
 
 /** A provider that doesn't answer in time is a typed timeout, never a hung run. */
 const TIMEOUT_MS = 10_000;

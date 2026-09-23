@@ -6,7 +6,7 @@ import type { SessionGetter } from "../tools";
 
 // The end-of-turn snapshot policy: a turn that ran a tool whose class
 // is not read_only ends with a capture. It runs after the loop is idle, so no append or dispatch
-// happens between the capture and its event (the writer barrier, ), and only a
+// happens between the capture and its event (the writer barrier), and only a
 // capture captureSnapshot verified is recorded. A failed capture records nothing.
 
 /** The last turn completed and began an effect: only non-read_only calls write effect_begin. */

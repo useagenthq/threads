@@ -274,7 +274,7 @@ describe("failures are explicit (F14.7)", () => {
   });
 });
 
-describe("forks honor knowledge_policy (F14.2, )", () => {
+describe("forks honor knowledge_policy (F14.2)", () => {
   async function forked(policy: "pinned" | "current") {
     const { dir, paths } = corpus({
       "hours.md": "The office opens at nine.\n",

@@ -3,8 +3,7 @@ import { sha256Hex } from "../hash";
 import type { Binding, Scope } from "../memory/protocol";
 import type { SqliteDriver } from "./driver";
 
-// Host-issued bindings (store.sql memory_bindings, knowledge_bindings and
-// provider_audit). The host, never the provider, decides which records a scope may see: it
+// Host-issued bindings (store.sql memory_bindings, knowledge_bindings and // provider_audit). The host, never the provider, decides which records a scope may see: it
 // issues a binding before every write or ingest, and before use it looks each returned binding
 // up here. A scope label a provider echoes proves nothing, so none is read. Bindings derive from
 // the scope and the write key, so a retried write carries the same binding (the same rule, and
@@ -65,7 +64,7 @@ export class HostBindings {
     return Owned.parse(rows).length > 0;
   }
 
-  /** A hit with an unknown or foreign binding: dropped by the caller, recorded here (item 1). */
+  /** A hit with an unknown or foreign binding: dropped by the caller, recorded here. */
   violation(kind: BindingKind, scope: Scope, binding: Binding): void {
     this.#db.run(
       `INSERT INTO provider_audit (tenant_id, kind, code, namespace, record_id, at)

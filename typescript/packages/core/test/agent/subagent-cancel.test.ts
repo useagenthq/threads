@@ -15,8 +15,7 @@ import { type KnownEvent, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { unwrap } from "../store/helpers";
 
-// Tree-wide cancellation and parked children (spec/schema/README.md, "Subagent cancellation and
-// parking"; ): a cancelled parent cancels its running descendants and records each
+// Tree-wide cancellation and parked children (spec/schema/README.md, "Subagent cancellation and // parking"): a cancelled parent cancels its running descendants and records each
 // one's end before its own cancelled; a child that parks parks its parent, which resumes once
 // the child's park is resolved.
 

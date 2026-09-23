@@ -178,7 +178,7 @@ export const CompactionFailed: EventDef<
   type: "compaction_failed",
   critical: true,
   description:
-    "A compaction attempt failed. Consecutive failures since the last compacted open the circuit breaker (derived, ).",
+    "A compaction attempt failed. Consecutive failures since the last compacted open the circuit breaker (derived).",
   data: CompactionFailedData,
 });
 

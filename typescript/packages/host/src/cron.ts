@@ -1,6 +1,6 @@
 import { err, ok, type Result } from "@threads/core/host";
 
-// Five-field cron (minute hour day-of-month month day-of-week) in an IANA time zone (
+// Five-field cron (minute hour day-of-month month day-of-week) in an IANA time zone (v2
 // F10). Wall-clock rules: a nonexistent local time (spring forward) runs at the first valid
 // instant after it; an ambiguous one (fall back) runs once, at its first instance.
 

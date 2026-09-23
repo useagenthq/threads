@@ -7,7 +7,7 @@ import { CTX } from "../context";
 import { created, drained, LOST_CLAIM, run, staleContext } from "./kit";
 import type { World } from "./world";
 
-// The provider adapter contract (spec/api.json Sandbox, SandboxSession; ):
+// The provider adapter contract (spec/api.json Sandbox, SandboxSession, F11.3):
 // run against every adapter built on the remote kit, each over its own mocked transport.
 
 /** The host secret each adapter is built with; it must never reach the sandbox. */

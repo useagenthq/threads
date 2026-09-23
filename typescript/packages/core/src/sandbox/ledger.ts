@@ -13,7 +13,7 @@ import type {
   Stale,
 } from "./protocol";
 
-// The provider side of the resource ledger: how a
+// The provider side of the resource ledger (spec/api.json LookupResult): how a
 // pending row settles by lookup, how the owner releases a row, and how gc finishes releases.
 // A row is resolved only with the adapter of its own provider; any other can prove nothing.
 

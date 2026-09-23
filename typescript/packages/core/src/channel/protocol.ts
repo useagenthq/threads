@@ -13,7 +13,7 @@ import type { Result } from "../result";
 
 // spec/api.json ChannelAdapter: what slack(), whatsapp() and github() return.
 // verify, parse, ack and render are pure; perform and lookup reach the provider through a
-// transport fenced by the host (sandboxFetch inside within(), ). What an adapter
+// transport fenced by the host (sandboxFetch inside within()). What an adapter
 // returns is parsed by the host like any boundary value, so the shapes are schemas.
 
 /** host-api Input: text, or ordered input parts. */

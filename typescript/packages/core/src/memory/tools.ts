@@ -27,14 +27,13 @@ import {
   type Scope,
 } from "./protocol";
 
-// The memory and knowledge tools (catalog entries save_memory, search_memory,
-// forget_memory, search_knowledge). They run on the host. Scope comes from the run, never from
+// The memory and knowledge tools (catalog entries save_memory, search_memory, // forget_memory, search_knowledge). They run on the host. Scope comes from the run, never from
 // arguments. Every hit is parsed (a provider is a boundary), then kept only if the host issued
 // its binding to this scope; a foreign hit is dropped and audited. What survives is appended as
-// injected untrusted reference with the result, before the next request (items 1-3). Result
+// injected untrusted reference with the result, before the next request. Result
 // texts match the Python host's.
 
-/** Model-visible bytes one search may bring (item 9: bounded by k and bytes). */
+/** Model-visible bytes one search may bring (bounded by k and bytes). */
 const MAX_HIT_BYTES = 16_384;
 const DEFAULT_K = 5;
 const encoder = new TextEncoder();
@@ -184,7 +183,7 @@ function saveMemory(provider: MemoryProvider, env: MemoryEnv): ToolImpl {
           thread_id: ThreadId.parse(env.threadId),
           event_ids: ids.slice(-2),
         },
-        // Derived from the key, so a re-dispatch writes the same record (item 4).
+        // Derived from the key, so a re-dispatch writes the same record.
         binding: env.bindings.issue("memory", env.scope, ctx.effectKey),
       };
       const got = await called(ctx, () =>

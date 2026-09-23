@@ -10,7 +10,7 @@ import { type SearchBackend, webSearch } from "../../src/tools/web-search";
 import type { WebTransport } from "../../src/tools/web-transport";
 import { bound } from "./kit";
 
-// web_fetch and web_search: host-side, fenced, SSRF-guarded,
+// web_fetch and web_search (F1.15, F1.16): host-side, fenced, SSRF-guarded,
 // recorded with the final URL, status, hash and citations. No test touches the network.
 
 type Page = {

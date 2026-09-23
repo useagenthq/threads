@@ -8,7 +8,7 @@ import { knownEvents, projections } from "../../src/reduce";
 import { harness } from "../loop/harness";
 import { ROOT, unwrap } from "../store/helpers";
 
-// Teams: the lead's log holds the tasks and the mailbox;
+// Teams (F7.3, F7.4, F7.11): the lead's log holds the tasks and the mailbox;
 // members act only through the lead's writer, so a claim is atomic and a repeated call (a
 // member re-dispatching after a restart) never claims or sends twice.
 

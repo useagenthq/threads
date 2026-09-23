@@ -330,7 +330,7 @@ export function entry(name: string): CatalogEntry {
   return found;
 }
 
-/** The entries: pinned with subagents, handoffs and todos, and run by the loop. */
+/** the entries: pinned with subagents, handoffs and todos, and run by the loop. */
 export const AGENT_TOOLS: ReadonlySet<string> = new Set([
   "handoff",
   "send_message",
@@ -343,7 +343,7 @@ export const AGENT_TOOLS: ReadonlySet<string> = new Set([
 
 /**
  * Pinned only when their host source is configured: a memory or knowledge provider,
- * or skills (load_skill, ).
+ * or skills (load_skill).
  */
 export const PROVIDER_TOOLS: ReadonlySet<string> = new Set([
   "forget_memory",

@@ -7,7 +7,7 @@ import type { Claim } from "../../src/store/budget";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { fixture, unwrap } from "./helpers";
 
-// The budget ledger: a reservation fits every
+// The budget ledger (store.sql budget_ledger): a reservation fits every
 // covering budget or reserves nothing, and reservers on separate connections to one database
 // (two processes of one tree) never overspend a limit together.
 

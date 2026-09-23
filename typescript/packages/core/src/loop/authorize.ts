@@ -29,7 +29,7 @@ function verdictOf(d: EventOf<"hook_decision">["data"]): Verdict {
     case "ask":
       return { decision: "ask", ...reason };
     default:
-      // deny, and failed: a gating hook that throws or times out denies (item 3).
+      // deny, and failed: a gating hook that throws or times out denies.
       return { decision: "deny", ...reason };
   }
 }

@@ -119,7 +119,8 @@ export type ModelContext = {
 };
 
 /**
- * What a model adapter returns. One transport attempt per `send`; SDK retries off (* item 2). `lookup` is present when `info.lookup` is not `none`.
+ * What a model adapter returns. One transport attempt per `send`; SDK retries off (
+ * item 2). `lookup` is present when `info.lookup` is not `none`.
  */
 export type Model = {
   readonly info: ModelInfo;

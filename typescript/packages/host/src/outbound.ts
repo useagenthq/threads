@@ -11,8 +11,7 @@ import type { HostContext } from "./context";
 import { sendOp } from "./deliver";
 import { type Conversation, conversationOf } from "./inbox";
 
-// A channel thread's replies are derived from its log, whatever ran it (spec/schema/README.md,
-// "Channel replies"; ): each end_turn reply and each open approval card
+// A channel thread's replies are derived from its log, whatever ran it (spec/schema/README.md, // "Channel replies"): each end_turn reply and each open approval card
 // is a host-issued channel_send with call_id send_<source seq>_<op index>. Every call the log
 // lacks is issued, a begun one is reconciled by sendOp, and one with a result or a parked
 // effect is left alone, so a crash between a turn's end and its reply loses nothing and never

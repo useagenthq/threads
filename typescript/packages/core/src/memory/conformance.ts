@@ -11,7 +11,7 @@ import type {
 } from "./protocol";
 import { KnowledgeHit, MemoryHit } from "./protocol";
 
-// The provider conformance suites: what every memory and
+// The provider conformance suites (F14.8): what every memory and
 // knowledge provider must do, the built-ins included. Each takes the host's test function, so
 // any runner works (bun:test, vitest, pytest's twin). A case fails by throwing.
 

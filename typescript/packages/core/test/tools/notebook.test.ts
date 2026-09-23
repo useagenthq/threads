@@ -6,7 +6,7 @@ import { editCells } from "../../src/tools/notebook";
 import { NotebookEditInput } from "../../src/tools/sandbox-inputs";
 import { unwrap } from "../store/helpers";
 
-// notebook_edit: cells are addressed by nbformat id; an unknown id
+// notebook_edit (F1.19): cells are addressed by nbformat id; an unknown id
 // fails before anything is written.
 
 const first = { id: "a", cell_type: "markdown", source: "# T", metadata: {} };

@@ -3,7 +3,8 @@ import type { Fetch } from "../../model/transport";
 import { err, ok, type Result } from "../../result";
 import type { SandboxContext, Stale } from "../protocol";
 
-// The sandbox fence at a provider SDK's real transport (spec/api.json SandboxContext, // item 3). Every provider operation runs inside `within(context, ...)`, and the SDK's transport
+// The sandbox fence at a provider SDK's real transport (spec/api.json SandboxContext
+// item 3). Every provider operation runs inside `within(context, ...)`, and the SDK's transport
 // re-checks that context as each request leaves, after any SDK queueing or retry. A refusal is
 // also recorded on the operation, because an SDK may rethrow it as its own error without cause.
 

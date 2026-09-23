@@ -3,7 +3,7 @@ import { err, ok, type Result } from "../result";
 
 type Json = z.core.util.JSONType;
 
-// Strict JSON for log lines. JSON.parse silently keeps
+// Strict JSON for log lines (RFC 8785 §3.1, §3.2.2). JSON.parse silently keeps
 // the last duplicate key and turns 1e400 into Infinity, so lines are parsed here instead.
 
 export type JsonParseError = {

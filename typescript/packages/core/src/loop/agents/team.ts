@@ -11,7 +11,7 @@ import type { Session } from "../session";
 import type { Halt, Team } from "../types";
 
 // Teams: the lead's log holds the task list and the mailbox, and members
-// change them only through the lead's writer, so claims are atomic under . Every act is
+// change them only through the lead's writer, so claims are atomic per the spec. Every act is
 // keyed by the member's call, so a member re-dispatching a call after a restart gets the same
 // answer and never claims or sends twice (F7.4).
 

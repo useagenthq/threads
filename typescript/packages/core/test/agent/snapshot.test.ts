@@ -13,8 +13,7 @@ import { knownEvents, reduce } from "../../src/reduce";
 import { unwrap } from "../store/helpers";
 
 // The end-of-turn snapshot policy: after a turn that ran a tool whose
-// class is not read_only, the sandbox is captured through captureSnapshot (ledgered and
-// image-verified, ), and only a verified capture becomes a snapshot event.
+// class is not read_only, the sandbox is captured through captureSnapshot (ledgered and // image-verified), and only a verified capture becomes a snapshot event.
 
 const usage = { input_tokens: 10, output_tokens: 2 };
 const say = (text: string) => ({

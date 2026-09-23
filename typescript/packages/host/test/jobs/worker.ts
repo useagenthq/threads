@@ -1,4 +1,4 @@
-// A crash-drill host process. The drills beside it
+// A crash-drill host process (F9.6, F10.5). The drills beside it
 // run it as a real child process on one file-backed SQLite store and kill it with SIGKILL.
 // `bun worker.ts <role> <dir>`:
 //

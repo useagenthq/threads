@@ -16,7 +16,7 @@ import type {
 } from "./protocol";
 import { type ManifestEntry, SandboxScript } from "./script";
 
-// fakeSandbox() (spec/api.json, ): an in-memory provider for tests. Files live in
+// fakeSandbox() (spec/api.json): an in-memory provider for tests. Files live in
 // a Map; exec runs only the tools sandbox.json scripts (the command's first word names one);
 // snapshots copy the tree and hash its manifest; scripted snapshots restore as the script says.
 
@@ -80,7 +80,7 @@ export function manifestOf(
     .toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
-/** RFC 8785 hash of a manifest. */
+/** RFC 8785 hash of a manifest (Domain A). */
 export function manifestHash(manifest: readonly ManifestEntry[]): string {
   const text = canonicalize(manifest.map((e) => ({ ...e })));
   if (!text.ok) throw new Error("a manifest is JSON");

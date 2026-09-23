@@ -6,7 +6,7 @@ import { LoadSkillInput } from "../tools/memory-inputs";
 import { ConfigError } from "./errors";
 import { jsonSchema } from "./tool";
 
-// Skills: host config, pinned by config_hash at thread start.
+// Skills (spec/api.json Skill): host config, pinned by config_hash at thread start.
 // Line 0 lists each name and description; load_skill appends a body from this pinned set only,
 // never from the sandbox or repo (F4.3). Compaction restores loaded skills (loop/restore.ts).
 

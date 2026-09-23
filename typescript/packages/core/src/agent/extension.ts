@@ -14,7 +14,7 @@ import type { ReducedState } from "../reduce";
 import { ConfigError } from "./errors";
 import type { RunContext, Tool } from "./tool";
 
-// extension() (spec/api.json, ): the one primitive for tools, trusted
+// extension() (spec/api.json): the one primitive for tools, trusted
 // instructions, hooks and observers. Trusted host code, not a security boundary. What it pins
 // (name, instructions, tools, which hooks and observers exist, the timeout) is part of the
 // thread's config_hash, so no agent path and no later run can change a thread's hooks.
@@ -110,7 +110,7 @@ export type ExtensionOptions<Deps = undefined> = {
   /** Static; line 0 after the base instructions, in declaration order. */
   readonly instructions?: string;
   readonly hooks?: Hooks<Deps>;
-  /** Observers keyed by event type, or "*": committed events after append (item 4). */
+  /** Observers keyed by event type, or "*": committed events after append. */
   readonly on?: Readonly<Record<string, ObserverHandler>>;
   /** Runs once at check() or the first run. Throwing is a ConfigError. */
   readonly setup?: () => Promise<void>;

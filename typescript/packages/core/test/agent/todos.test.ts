@@ -11,7 +11,7 @@ import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { unwrap } from "../store/helpers";
 
-// todo_write: always pinned; a valid list is recorded as todos_updated
+// todo_write (F8): always pinned; a valid list is recorded as todos_updated
 // before its result, a malformed one fails with an error result and appends nothing, and the
 // reminder producer shows open items after 10 turns without a write.
 

@@ -6,7 +6,7 @@ import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { unwrap } from "../store/helpers";
 
-// Handoffs: the conversation moves to a new thread of a listed agent,
+// Handoffs (F7.10): the conversation moves to a new thread of a listed agent,
 // which keeps the originating principal, pins its own line 0 and policy, and gets the forwarded
 // history as untrusted reference. The old thread takes no input afterwards.
 

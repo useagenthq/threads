@@ -9,7 +9,7 @@ import {
   type WebTransport,
 } from "./web-transport";
 
-// web_search backends (spec/api.json SearchBackend, ): exa(), brave() and
+// web_search backends (spec/api.json SearchBackend): exa(), brave() and
 // tavily(). Each takes its API key as a secret(), revealed on the host when a search is sent,
 // and sends one JSON request through the host web transport. No SDK.
 

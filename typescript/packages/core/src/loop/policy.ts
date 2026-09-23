@@ -7,7 +7,7 @@ import type { ContextPolicy, Policy, RetryPolicy, Threshold } from "../log";
 type Retry = z.infer<typeof RetryPolicy>;
 type Context = z.infer<typeof ContextPolicy>;
 
-/** . */
+/** The default retry policy. */
 export const RETRY_DEFAULTS: Retry = {
   max_retries: 8,
   base_delay_ms: 1000,
@@ -20,7 +20,7 @@ export const RETRY_DEFAULTS: Retry = {
   heartbeat_ms: 15_000,
 };
 
-/** . */
+/** The default context policy. */
 export const CONTEXT_DEFAULTS: Context = {
   reserve_tokens: 20_000,
   cache_ttl_ms: 300_000,

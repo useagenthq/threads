@@ -34,7 +34,7 @@ export type ToolDefinition<Input, Output, Deps = undefined> = {
   /** Required, no default. Only host tools run in this release. */
   readonly runs: "host" | "sandbox";
   readonly execute?: (input: Input, ctx: RunContext<Deps>) => Promise<Output>;
-  /** . Undeclared tools are unguarded: uncertainty always parks. */
+  /**. Undeclared tools are unguarded: uncertainty always parks. */
   readonly effect?: z.infer<typeof EffectClass>;
   readonly dedupWindowMs?: number;
   readonly reconcile?: {

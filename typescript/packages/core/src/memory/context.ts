@@ -1,7 +1,8 @@
 import type { KnownEvent, Principal } from "../log";
 import type { MemoryOrigin } from "./protocol";
 
-// What the host derives from the recorded log, never from the model's claim (// and 9): a memory's origin and whether a write counts as the principal's, and the corpus
+// What the host derives from the recorded log, never from the model's claim (
+// and 9): a memory's origin and whether a write counts as the principal's, and the corpus
 // revision a forked branch searches as of.
 
 /** Untrusted material: tool output, an untrusted reference, a summary, a channel item. */

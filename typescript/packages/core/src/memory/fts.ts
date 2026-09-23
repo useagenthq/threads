@@ -1,7 +1,7 @@
 import { ConfigError } from "../agent/errors";
 import type { SqliteDriver } from "../store/driver";
 
-// SQLite FTS5 for the built-in providers.
+// SQLite FTS5 for the built-in providers (FTS5 is a setup check).
 
 /** Creates the provider's tables; a SQLite build without FTS5 is a setup error that says so. */
 export function installFts(db: SqliteDriver, ddl: string, who: string): void {

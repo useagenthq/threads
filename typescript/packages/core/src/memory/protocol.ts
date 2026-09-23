@@ -14,7 +14,7 @@ import type { Arr, EnumOf, Opt, Strict } from "../log/zod-types";
 import type { Result } from "../result";
 import type { Failure } from "../sandbox/protocol";
 
-// The memory and knowledge provider protocols (spec/api.json, ). What a
+// The memory and knowledge provider protocols (spec/api.json). What a
 // provider returns crosses a trust boundary, so the framework parses it with these schemas
 // before any use. Scope and binding are host-issued: a provider stores the binding opaquely and
 // echoes it on every hit, and the host checks it against its own table (bindings.ts).

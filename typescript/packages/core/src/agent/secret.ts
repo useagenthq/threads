@@ -1,6 +1,6 @@
 import { ConfigError } from "./errors";
 
-// secret() (spec/api.json, ): a reference to a host secret. The object holds only
+// secret() (spec/api.json): a reference to a host secret. The object holds only
 // the name; the value is read from the host env when host code reveals it, so it never reaches
 // the pin, a prompt, the log or the sandbox (invariant 4).
 

@@ -1,7 +1,7 @@
 import type { BranchId, KnownEvent } from "../log";
 import type { ObserverCursors } from "../store/cursors";
 
-// Observers: committed events delivered after
+// Observers (spec/api.json choice observers): committed events delivered after
 // append, asynchronously, in log order. They can lag and fail without touching execution or the
 // log: each keeps a durable cursor, advanced only after its handler resolved, so a failed or
 // interrupted delivery is retried from the cursor on the next poke or the next run.

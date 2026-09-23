@@ -35,7 +35,7 @@ import {
 import { type SaveCaseOptions, type SavedCase, saveCase } from "./save-case";
 import { cancel, setMode, setModel } from "./settings";
 
-// openThread() (spec/api.json, ): a handle for inspection and control that reads
+// openThread() (spec/api.json): a handle for inspection and control that reads
 // through the store and needs no agent in memory.
 
 /** host-api ForkPoint: an eligible snapshot event, the value fork() takes. */

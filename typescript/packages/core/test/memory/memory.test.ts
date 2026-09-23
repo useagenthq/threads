@@ -148,7 +148,7 @@ describe("save, then recall in a later run (F3.1, F3.2)", () => {
   });
 });
 
-describe("write authority (F3.3, )", () => {
+describe("write authority (F3.3)", () => {
   test("ask, the default, parks the write for approval", async () => {
     const result = await agent({
       model: scriptedModel({

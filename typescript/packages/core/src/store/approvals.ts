@@ -8,7 +8,7 @@ import type { SqliteDriver } from "./driver";
 import type { BranchRow } from "./tables";
 import { parseRows } from "./tables";
 
-// The approvals table (store.sql, ): one single-use row per approval_requested,
+// The approvals table (store.sql): one single-use row per approval_requested,
 // written in that append's transaction, and consumed by the append of its answer. The log's own
 // rule 9 makes a challenge single-use along one chain; the row makes it single-use across every
 // branch that inherited it, and binds it to the branch it was asked on.

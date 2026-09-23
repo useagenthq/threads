@@ -14,7 +14,7 @@ import {
 import { type Effect, serverTools } from "./tools";
 import { clientTransport } from "./transport";
 
-// mcp() (spec/api.json, ): an MCP server in one line, by URL
+// mcp() (spec/api.json): an MCP server in one line, by URL
 // (Streamable HTTP, SSE as the legacy fallback) or by stdio command. The host owns the
 // connection and the credentials: secret() values are resolved here, on the host, and never
 // reach the log, a prompt or the sandbox. The tool list is resolved at setup, filtered, and
@@ -35,7 +35,7 @@ export type McpOptions = {
     readonly allow?: readonly string[];
     readonly deny?: readonly string[];
   };
-  /** . Undeclared: unguarded, so an uncertain call parks and is never retried. */
+  /**. Undeclared: unguarded, so an uncertain call parks and is never retried. */
   readonly effect?: "read_only" | "unguarded" | "idempotent";
   /** Required exactly when effect is idempotent: the server dedups on the effect key within it. */
   readonly dedupWindowMs?: number;

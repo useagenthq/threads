@@ -6,7 +6,7 @@ import { type ArtifactStore, LogStore, memoryArtifacts } from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { unwrap } from "../store/helpers";
 
-// F11.2 sandbox-credential-canary: a host secret a
+// F11.2 sandbox-credential-canary (v2, invariant 4): a host secret a
 // credentialed host tool uses never reaches the sandbox env, argv or files, a prompt, an event
 // line or any artifact.
 
