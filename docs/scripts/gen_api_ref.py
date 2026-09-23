@@ -12,7 +12,11 @@ api_ref/tables.py.
 
 import sys
 
-from api_ref.cli import main
+# Works as a script (python3 docs/scripts/gen_api_ref.py) and as a module (-m docs.scripts...).
+if __package__:
+    from .api_ref.cli import main
+else:
+    from api_ref.cli import main
 
 if __name__ == "__main__":
     sys.exit(main())

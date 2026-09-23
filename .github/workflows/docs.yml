@@ -2,9 +2,23 @@ name: docs
 
 on:
   push:
-    paths: ["docs/**", "spec/**", "scripts/**", ".github/workflows/docs.yml"]
+    paths:
+      - "docs/**"
+      - "spec/**"
+      - "scripts/**"
+      - "python/pyproject.toml"
+      - "python/uv.lock"
+      - "python/.python-version"
+      - ".github/workflows/docs.yml"
   pull_request:
-    paths: ["docs/**", "spec/**", "scripts/**", ".github/workflows/docs.yml"]
+    paths:
+      - "docs/**"
+      - "spec/**"
+      - "scripts/**"
+      - "python/pyproject.toml"
+      - "python/uv.lock"
+      - "python/.python-version"
+      - ".github/workflows/docs.yml"
 
 jobs:
   check:
