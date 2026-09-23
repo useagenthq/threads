@@ -3,7 +3,7 @@ registered while a spill streams, direct knowledge ingest, and a torn-tail impor
 
 import asyncio
 import sqlite3
-from collections.abc import AsyncGenerator, Callable, Sequence
+from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 import pytest
@@ -11,7 +11,7 @@ from pydantic import JsonValue
 
 from threads import Failed, agent, scripted_model, sqlite
 from threads.agents.bindings import AppTool, Fence
-from threads.log import BranchId, ThreadId
+from threads.log import BranchId, ParseError, ThreadId
 from threads.log.digest import sha256_hex
 from threads.memory.conformance import A
 from threads.memory.local_knowledge import LocalKnowledge
@@ -19,7 +19,9 @@ from threads.memory.types import Binding, KnowledgeSource
 from threads.redaction import SecretInStoredBytesError, register
 from threads.result import Err, Ok
 from threads.secrets import credential
-from threads.store import Draft, SqliteStore, Writer, verify_export
+from threads.store import Draft, ForkRequest, SqliteStore, Writer, verify_export
+from threads.store import sqlite as store_sqlite
+from threads.store.forking import ChildStart, Forking
 from threads.store.worker import Worker
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
@@ -247,6 +249,8 @@ def test_a_value_registered_before_the_append_publishes_is_refused(
         exported = await store.export(ROOT)
         assert isinstance(exported, Ok)
         assert RACED.encode() not in exported.value
+        # Nothing was written, so the writer goes on.
+        assert isinstance(await w.append([user("safe")]), Ok)
         await store.close()
 
     asyncio.run(main())
@@ -300,6 +304,73 @@ def test_a_value_registered_before_an_import_publishes_is_refused(
         imported = await fresh.import_log(verified.value)
         assert isinstance(imported, Err)
         assert imported.error.code == "secret_in_stored_bytes"
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_a_fork_event_publishes_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    child = BranchId("0192b000-0000-7000-8000-000000000002")
+    snapshot = Draft(
+        "snapshot",
+        {
+            "snapshot_id": "snap_01",
+            "provider": "fake",
+            "sandbox_id": "sbx_parent_01",
+            "capture_class": "filesystem",
+            "expires_at": None,
+            "manifest_hash": "1" * 64,
+            "quiesced": {"frozen": [], "stopped": [], "excluded": []},
+        },
+    )
+    built = store_sqlite.start_child
+
+    def racing(
+        started: Forking, data: Mapping[str, JsonValue], now: int
+    ) -> Ok[ChildStart] | Err[ParseError]:
+        made = built(started, data, now)
+        register(RACED, "raced")
+        return made
+
+    async def main() -> None:
+        store = await opened()
+        w = await writer(store)
+        done = Draft("turn_completed", {"reason": "end_turn"})
+        assert isinstance(await w.append([started({}), user("hi"), done, snapshot]), Ok)
+        monkeypatch.setattr(store_sqlite, "start_child", racing)
+        data: dict[str, JsonValue] = {
+            "reason": "snapshot",
+            "sandbox_id": RACED,
+            "knowledge_policy": "pinned",
+        }
+        forked = await store.fork(ForkRequest(ROOT, 4, child, data), "c", lambda: T0)
+        assert isinstance(forked, Err)
+        assert forked.error.code == "secret_in_stored_bytes"
+        exported = await store.export(child)
+        assert not (isinstance(exported, Ok) and RACED.encode() in exported.value)
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_value_registered_before_a_knowledge_source_publishes_is_an_error_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        store = await opened()
+        provider = await LocalKnowledge(()).bind(store)
+        source = KnowledgeSource(
+            source_id="doc.md",
+            media_type="text/markdown",
+            content=f"the note {RACED}".encode(),
+            binding=Binding(namespace="n", record_id="doc"),
+        )
+        Race(monkeypatch, RACED)
+        got = await provider.ingest(A, source, "doc@1")
+        assert isinstance(got, Err)
+        assert got.error.code == "invalid"
         await store.close()
 
     asyncio.run(main())

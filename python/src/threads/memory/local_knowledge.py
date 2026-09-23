@@ -24,7 +24,7 @@ from threads.memory.types import (
     ProviderError,
     Scope,
 )
-from threads.redaction import contains_secret
+from threads.redaction import SecretInStoredBytesError, contains_secret
 from threads.result import Err, Ok
 from threads.store import SqliteStore
 
@@ -126,7 +126,12 @@ class LocalKnowledge:
             return Err(ProviderError("invalid", message))
         digest = hashlib.sha256(source.content).hexdigest()
         # The admitted bytes are durable before the row that references them.
-        await self.store.put_artifact(source.content)
+        try:
+            await self.store.put_artifact(source.content)
+        except SecretInStoredBytesError:
+            # A value registered after the check above: the store refused the bytes.
+            message = f"{source.source_id}: holds a registered secret; not ingested"
+            return Err(ProviderError("invalid", message))
         return await self.store.run(transaction(_admit(scope, source, key, digest, text)))
 
     async def remove(self, scope: Scope, doc_id: str, key: str) -> Outcome[None]:

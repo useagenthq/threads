@@ -24,7 +24,7 @@ from threads.store.bindings import Bindings, Kind
 from threads.store.budgets import BudgetLedger
 from threads.store.context import CleanupContext, OwnerContext
 from threads.store.cursors import ObserverCursors
-from threads.store.forking import Forking, forking, start_child
+from threads.store.forking import Forking, forking, publish_fork, start_child
 from threads.store.lines import Draft, head_line, header_line, imported_bytes
 from threads.store.resources import Ledger, Resource
 from threads.store.spill import Spill
@@ -316,7 +316,7 @@ class SqliteStore:
         if isinstance(built, Err):
             return built
         start, held = built.value, started.owner.lease
-        error = await self._worker.call(lambda c: lease.finish_fork(c, start.row, start.fork, held))
+        error = await self._worker.call(lambda c: publish_fork(c, start, held))
         if error is not None:
             return Err(error)
         if not start.runnable:

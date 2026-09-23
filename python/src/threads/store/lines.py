@@ -87,6 +87,12 @@ def _canonical(value: JsonValue) -> bytes:
             raise ValueError(reason)
 
 
+def stored_secret(seq: int | None = None) -> ParseError:
+    """An event refused because its stored bytes would hold a registered value (C5)."""
+    message = "the event's stored bytes would hold a registered secret; nothing appended"
+    return ParseError("secret_in_stored_bytes", message, seq)
+
+
 def event_line(
     draft: Draft, at: Position
 ) -> Ok[tuple[StoredEvent, bytes, bytes]] | Err[ParseError]:
@@ -115,8 +121,7 @@ def event_line(
     content = _canonical({"actor": actor, "data": data})
     if contains_secret(content):
         # Canonical escaping or JSON punctuation can still join redacted strings into a value.
-        message = "the event's stored bytes would hold a registered secret; nothing appended"
-        return Err(ParseError("secret_in_stored_bytes", message, at.seq))
+        return Err(stored_secret(at.seq))
     parsed = parse_log_line(text.value)
     if isinstance(parsed, Err):
         return parsed

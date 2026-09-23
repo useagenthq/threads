@@ -11,7 +11,7 @@ from threads.reduce.state import HeadRef, ReducedState, reduced_state
 from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.companion import Companion
-from threads.store.lines import Draft, Position, event_line
+from threads.store.lines import Draft, Position, event_line, stored_secret
 from threads.store.verify import StoredEvent, verify_export
 from threads.store.worker import Clock, Worker
 
@@ -191,9 +191,9 @@ def _published(
     content: bytes, append: Callable[[], ParseError | lease.Refused | None]
 ) -> ParseError | lease.Refused | None:
     """The append, unless a value registered since `event_line` checked it is in the content:
-    registration is paused until the rows are durable (C5)."""
+    registration is paused until the rows are durable (C5). Refused, like a companion's
+    refusal: nothing was written, so the writer reloads and goes on."""
     try:
         return published(content, append)
     except SecretInStoredBytesError:
-        message = "the event's stored bytes would hold a registered secret; nothing appended"
-        return ParseError("secret_in_stored_bytes", message)
+        return lease.Refused(stored_secret())
