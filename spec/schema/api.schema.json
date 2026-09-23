@@ -84,7 +84,8 @@
         "idempotency_key_principal_mismatch",
         "branch_not_found",
         "branch_exists",
-        "sandbox_required"
+        "sandbox_required",
+        "cleanup_claim_lost"
       ]
     },
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },

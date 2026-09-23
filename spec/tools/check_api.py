@@ -281,6 +281,26 @@ def check_codes(api: Json, docs: dict[str, Json], openapi: Json) -> list[str]:
     ]
 
 
+FENCED = {"SandboxContext": ("stale_epoch", "cleanup_claim_lost"), "ModelContext": ("stale_epoch",)}
+
+
+def check_fence_codes(api: Json) -> list[str]:
+    """An operation that takes a dispatch context declares its fence refusal as a result code."""
+    errs: list[str] = []
+    for where, _, f in _callables(api):
+        for p in _list(f.get("params")):
+            ref = _obj(_obj(p).get("type")).get("$ref")
+            codes = FENCED.get(ref.removeprefix("#/types/")) if isinstance(ref, str) else None
+            if codes is None:
+                continue
+            returns = _obj(f.get("returns"))
+            if "stream" in returns:
+                continue  # a stream reports refusal in-band; see the method's doc
+            listed = set(_strs(returns.get("errors")))
+            errs += [f"{where}: returns.errors lacks fence code {c}" for c in codes if c not in listed]
+    return errs
+
+
 def check_operations(api: Json, openapi: Json) -> list[str]:
     methods = {where: f for where, _, f in _callables(api)}
     errs: list[str] = []
@@ -351,6 +371,7 @@ def main() -> int:
     problems += check_names(api)
     problems += check_codes(api, by_id, openapi)
     problems += check_operations(api, openapi)
+    problems += check_fence_codes(api)
     problems += check_route_errors(openapi)
     problems += check_case_expectation(api, docs[SPEC / "conformance" / "case.schema.json"])
     for p in problems:
