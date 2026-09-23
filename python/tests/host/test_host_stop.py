@@ -234,10 +234,7 @@ def test_recovered_does_not_wait_on_a_later_run_of_the_same_branch() -> None:
             extensions=[extension(name="gated", hooks={"session_start": gated})],
         )
         # A host that died right after its turn ended: the reply is owed.
-        channels = {"fake": Replies(crash=True)}
-        async with host(store=store, agents={"bot": bot}, channels=channels) as first:
-            await first.receive("fake", webhook("d1", "m1", "hello"))
-            await until(lambda: _consumed(store))
+        await crashed(store, bot)
         served = host(store=store, agents={"bot": bot}, channels={"fake": Replies()})
         await served.ready()
         await asyncio.wait_for(recovered(served), STOP_S)

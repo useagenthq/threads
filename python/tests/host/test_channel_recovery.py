@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pydantic import JsonValue, TypeAdapter
 
 from threads import agent, scripted_model, sqlite
+from threads.agents.agent import Agent
 from threads.agents.store import Store, open_store, scoped
 from threads.host import (
     ChannelCapabilities,
@@ -25,7 +26,7 @@ from threads.host import (
 from threads.host.app import recovered
 from threads.host.intake import ChannelIntake
 from threads.host.runs import Runner
-from threads.log import Event, JsonObject, ParseError, Principal, ToolCallEvent
+from threads.log import Event, JsonObject, ParseError, Principal, ToolCallEvent, TurnCompletedEvent
 from threads.loop.model import LookupResult, LookupUnknown
 from threads.result import Err, Ok
 from threads.secrets import Secret
@@ -49,12 +50,10 @@ def text(reply: str) -> JsonValue:
 @dataclass
 class Replies:
     """Renders a final response as one op; `crash` makes the first render die, as a host
-    that stops right after the turn ended; `crashed` is set when it has. `hold` keeps each send
-    waiting until it is set; `sending` is set once a send has started."""
+    that stops right after the turn ended. `hold` keeps each send waiting until it is set;
+    `sending` is set once a send has started."""
 
     crash: bool = False
-    # Render may run off the event loop, so a thread-safe flag.
-    crashed: threading.Event = field(default_factory=threading.Event)
     hold: asyncio.Event | None = None
     sending: asyncio.Event = field(default_factory=asyncio.Event)
     sent: list[JsonObject] = field(default_factory=list[JsonObject])
@@ -79,7 +78,6 @@ class Replies:
             return ()
         if self.crash:
             self.crash = False
-            self.crashed.set()
             raise _CrashError
         said = "".join(p.text for p in event.data.content if p.type == "text")
         return ({"text": said},)
@@ -127,14 +125,36 @@ async def sends(store: Store) -> list[str]:
     return [e.data.call_id for e in events if isinstance(e, ToolCallEvent)]
 
 
-async def crashed(store: Store) -> None:
-    """A host that died right after its turn ended: the reply is in the log, never sent."""
-    crashing = Replies(crash=True)
-    bot = agent(model=scripted_model({"responses": [text("Hi there.")]}))
-    async with host(store=store, agents={"bot": bot}, channels={"fake": crashing}) as served:
+class _Dead(Replies):
+    """A channel whose every render dies: the host that has it never sends a reply, whichever of
+    its paths (the run's delivery, its own recovery pass) gets to the reply first."""
+
+    def render(self, event: Event) -> Sequence[JsonObject]:
+        if event.type == "model_response":
+            raise _CrashError
+        return ()
+
+
+async def crashed(store: Store, bot: Agent[None, object] | None = None) -> None:
+    """A host that died right after its turn ended: the reply is in the log, never sent.
+    `bot` answers "Hi there." first; a test that runs its own config passes it. The host stops
+    once the turn has ended `end_turn`, the moment a reply is owed. Stopped any earlier, the turn
+    ends `interrupted` and no reply is owed; a fixed sleep here raced that on Linux."""
+    dead = _Dead()
+    bot = bot or agent(model=scripted_model({"responses": [text("Hi there.")]}))
+    async with host(store=store, agents={"bot": bot}, channels={"fake": dead}) as served:
         await served.receive("fake", webhook("d1", "m1", "hello"))
-        await until(lambda: _crashed(crashing))
-    assert crashing.sent == []
+        await until(lambda: _turn_ended(store))
+    assert dead.sent == []
+
+
+async def _turn_ended(store: Store) -> bool:
+    sq = await open_store(scoped(store, TEAM))
+    rows = await sq.tables.inbox_rows()
+    root = None if not rows else await sq.root(rows[0].thread_id)
+    read = None if not isinstance(root, Ok) else await sq.read(root.value, 0)
+    events = read.value.fold.events if isinstance(read, Ok) else ()
+    return any(isinstance(e, TurnCompletedEvent) and e.data.reason == "end_turn" for e in events)
 
 
 def test_a_restarted_host_sends_the_reply_a_crash_left_unsent_once() -> None:
@@ -187,10 +207,6 @@ async def _consumed(store: Store) -> bool:
         lambda c: c.execute("SELECT count(*) FROM inbox WHERE consumed_seq IS NULL").fetchone()
     )
     return rows is not None and rows[0] == 0
-
-
-async def _crashed(channel: Replies) -> bool:
-    return channel.crashed.is_set()
 
 
 async def _sent(channel: Replies, count: int) -> bool:
