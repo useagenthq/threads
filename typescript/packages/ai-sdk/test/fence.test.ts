@@ -7,7 +7,7 @@ import {
 } from "@threads/adapter-testkit";
 import { ConfigError, type Fetch, memoryContext } from "@threads/core/adapter";
 import { aiSdk } from "../src";
-import { fakeModel } from "./fake";
+import { fakeModel, offline } from "./fake";
 
 // The lease check at the provider's real send point: a send can carry
 // provider-hosted tools, so no provider request may leave without it.
@@ -116,5 +116,35 @@ describe("fencing", () => {
     });
     await expect(providerFetch?.("https://acme.dev/chat")).rejects.toThrow();
     expect(transport.calls).toHaveLength(0);
+  });
+
+  test("a model that bypasses the fenced fetch is caught and then refused", async () => {
+    const { model } = fakeModel([[finish("stop")], [finish("stop")]]);
+    // The factory ignores threads' fetch: the provider would send on its own transport.
+    const m = aiSdk({ model: () => model, fetch: offline, ...limits });
+    const head = {
+      adapter: m.info.adapter,
+      model: m.info.model,
+      params: m.info.params,
+      system: "",
+      tools: [],
+    };
+    const send = () =>
+      drain(
+        m.send(
+          { request_id: "b:e1", body: renderBody([head, hi]) },
+          memoryContext(() => true),
+        ),
+      );
+    // The request left unfenced, so its outcome is unknown: a broken stream, no output kept.
+    const first = await send();
+    expect(first.chunks).toEqual([]);
+    expect(first.thrown).toBeInstanceOf(ConfigError);
+    // From then on nothing leaves: refused before doStream.
+    const second = await send();
+    expect(second.thrown).toBeUndefined();
+    expect(second.chunks).toEqual([
+      { kind: "rejected", reason: "provider_error" },
+    ]);
   });
 });

@@ -2325,7 +2325,7 @@
           "returns": {"result": {"prim": "integer"}, "errors": ["unavailable", "timeout"]}
         }
       },
-      "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off. Every send and lookup awaits context.fence() at its real network send, after any SDK or bridge queueing (AGENTS invariant 2: a send can carry provider-hosted tools, so a stale send is never treated as harmless). An adapter or bridge route whose real transport it cannot wrap is refused when the model is constructed: ConfigError transport_fence_unsupported; it is never shipped with a weaker fence.",
+      "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off. Every send and lookup awaits context.fence() at its real network send, after any SDK or bridge queueing (AGENTS invariant 2: a send can carry provider-hosted tools, so a stale send is never treated as harmless). An adapter or bridge route whose real transport it cannot wrap is refused when the model is constructed: ConfigError transport_fence_unsupported; it is never shipped with a weaker fence. A bridge that takes a caller's model factory (the TypeScript AI SDK bridge) qualifies only providers that actually send through the fenced fetch it hands over; this is enforced at runtime: a send whose stream arrives with no request through that fetch ends as a broken stream (unknown outcome: it left unfenced, and its output is not kept), and that model refuses every later send before anything leaves.",
       "source": ""
     },
     "ModelContext": {

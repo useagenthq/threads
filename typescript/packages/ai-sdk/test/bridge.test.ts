@@ -4,14 +4,15 @@ import { drain, renderBody, renderCase } from "@threads/adapter-testkit";
 import { type Json, memoryContext, parseRender } from "@threads/core/adapter";
 import { aiSdk } from "../src";
 import { toPrompt } from "../src/prompt";
-import { type Entry, fakeModel, unknownUsage, usage } from "./fake";
+import { type Entry, fakeModel, offline, unknownUsage, usage } from "./fake";
 
 const limits = { contextWindow: 128_000, maxOutputTokens: 8192 };
 
 function bridge(script: readonly Entry[], live = () => true) {
-  const { model, calls } = fakeModel(script);
+  const { factory, calls } = fakeModel(script);
   const m = aiSdk({
-    model: () => model,
+    model: factory,
+    fetch: offline,
     ...limits,
     params: { maxOutputTokens: 512 },
   });

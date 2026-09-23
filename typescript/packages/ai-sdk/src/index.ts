@@ -84,7 +84,10 @@ export type AiSdkOptions = {
   readonly price?: ModelInfo["limits"]["price"];
 };
 
-const current = new AsyncLocalStorage<ModelContext>();
+/** The send in progress, and how many provider requests went through the fenced fetch. */
+type Sending = { readonly context: ModelContext; fetches: number };
+
+const current = new AsyncLocalStorage<Sending>();
 
 /**
  * The fetch handed to the model factory: it re-checks the lease at the provider's real send
@@ -92,10 +95,11 @@ const current = new AsyncLocalStorage<ModelContext>();
  */
 function providerFetch(inner: Fetch): Fetch {
   return async (input, init) => {
-    const context = current.getStore();
-    if (context === undefined)
+    const sending = current.getStore();
+    if (sending === undefined)
       throw new StaleEpochError("no threads send is in progress");
-    return fencedFetch(context, inner)(input, init);
+    sending.fetches += 1;
+    return fencedFetch(sending.context, inner)(input, init);
   };
 }
 
@@ -137,20 +141,29 @@ export function aiSdk(options: AiSdkOptions): Model {
     // doStream has no retrieval by request id.
     lookup: "none",
   };
+  // Set once a send streamed without any request through the fenced fetch: the factory built a
+  // model on its own transport, so every later send is refused before anything leaves.
+  const state = { bypassed: false };
   return {
     info,
     send: (request, context, sendOptions) =>
-      send(model, options, request, context, sendOptions?.signal),
+      send(model, options, state, request, context, sendOptions?.signal),
   };
 }
 
 async function* send(
   model: LanguageModelV4,
   options: AiSdkOptions,
+  state: { bypassed: boolean },
   request: ModelRequest,
   context: ModelContext,
   signal: AbortSignal | undefined,
 ): AsyncGenerator<ModelChunk, void, undefined> {
+  if (state.bypassed) {
+    // ponytail: provider_error until Model.send's rejection enum carries transport_fence_unsupported.
+    yield { kind: "rejected", reason: "provider_error" };
+    return;
+  }
   const render = parseRender(request.body);
   const mapped = await toPrompt(render, context, options.accepts ?? ["text"]);
   if (!mapped.ok) {
@@ -165,7 +178,8 @@ async function* send(
   }
   let yielded = false;
   try {
-    const { stream } = await current.run(context, () =>
+    const sending: Sending = { context, fetches: 0 };
+    const { stream } = await current.run(sending, () =>
       model.doStream({
         ...CallParams.parse(render.head.params),
         prompt: mapped.prompt,
@@ -173,6 +187,15 @@ async function* send(
         ...(signal === undefined ? {} : { abortSignal: signal }),
       }),
     );
+    if (sending.fetches === 0) {
+      // A provider sends inside doStream, so a stream with no fenced request came over another
+      // transport. It left unfenced: its outcome is unknown (a broken stream), never kept.
+      state.bypassed = true;
+      throw new ConfigError(
+        "transport_fence_unsupported",
+        "the aiSdk model factory did not send through threads' fetch",
+      );
+    }
     const ctx = {
       provider: render.head.model.provider,
       model: render.head.model.name,
@@ -183,6 +206,7 @@ async function* send(
       yield chunk;
     }
   } catch (error) {
+    if (error instanceof ConfigError) throw error;
     const rejected = yielded ? undefined : rejection(error);
     if (staleEpoch(error) !== undefined) {
       // The fence refused at the real send point: nothing left (in-band, never a throw).
