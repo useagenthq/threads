@@ -5,7 +5,7 @@ with the default ":memory:" path is the in-memory store tests use: the same code
 """
 
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +19,7 @@ from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
+from threads.store.bindings import Bindings, Kind
 from threads.store.context import CleanupContext, OwnerContext
 from threads.store.cursors import ObserverCursors
 from threads.store.forking import Forking, forking, start_child
@@ -69,6 +70,15 @@ class SqliteStore:
                 MemoryArtifacts() if memory else FileArtifacts(Path(path).parent / "artifacts")
             )
         return Ok(cls(worker, tenant_id, artifacts))
+
+    def bindings(self, kind: Kind) -> Bindings:
+        """Host-issued memory or knowledge bindings."""
+        return Bindings(self._worker, kind)
+
+    async def run[T](self, statement: Callable[[sqlite3.Connection], T]) -> T:
+        """A built-in provider's statement on the store's own thread (local_memory,
+        local_knowledge keep their tables in the run's store)."""
+        return await self._worker.call(statement)
 
     @property
     def cursors(self) -> ObserverCursors:

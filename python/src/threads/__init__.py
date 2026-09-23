@@ -40,6 +40,21 @@ from threads.loop.model import (  # noqa: E402
     ModelResponse,
 )
 from threads.loop.scripted import scripted_model  # noqa: E402
+from threads.memory.local_knowledge import local_knowledge  # noqa: E402
+from threads.memory.local_memory import local_memory  # noqa: E402
+from threads.memory.protocol import KnowledgeProvider, MemoryProvider  # noqa: E402
+from threads.memory.types import (  # noqa: E402
+    Binding,
+    Doc,
+    DocVersion,
+    KnowledgeHit,
+    KnowledgeSource,
+    MemoryHit,
+    MemoryRecord,
+    ProviderError,
+    RecordRef,
+    Scope,
+)
 from threads.sandbox import (  # noqa: E402
     ExecOutput,
     ExecResult,
@@ -55,6 +70,7 @@ from threads.thread.handle import open_thread  # noqa: E402
 __all__ = [
     "VERSION",
     "Agent",
+    "Binding",
     "BudgetExhausted",
     "Cancelled",
     "CaseExpectation",
@@ -62,6 +78,8 @@ __all__ = [
     "ConfigError",
     "ConfigErrorCode",
     "DeltaItem",
+    "Doc",
+    "DocVersion",
     "EventItem",
     "ExecOutput",
     "ExecResult",
@@ -69,7 +87,13 @@ __all__ = [
     "Failed",
     "HandedOff",
     "Hooks",
+    "KnowledgeHit",
+    "KnowledgeProvider",
+    "KnowledgeSource",
     "LookupResult",
+    "MemoryHit",
+    "MemoryProvider",
+    "MemoryRecord",
     "Model",
     "ModelChunk",
     "ModelContext",
@@ -77,7 +101,9 @@ __all__ = [
     "ModelRequest",
     "ModelResponse",
     "Parked",
+    "ProviderError",
     "Reconcile",
+    "RecordRef",
     "RunContext",
     "RunError",
     "RunResult",
@@ -86,6 +112,7 @@ __all__ = [
     "SandboxInfo",
     "SandboxSession",
     "SavedCase",
+    "Scope",
     "Secret",
     "StatusItem",
     "Store",
@@ -96,6 +123,8 @@ __all__ = [
     "agent",
     "extension",
     "fake_sandbox",
+    "local_knowledge",
+    "local_memory",
     "open_thread",
     "scripted_model",
     "secret",

@@ -5,11 +5,11 @@ import asyncio
 import contextlib
 import uuid
 from collections.abc import AsyncGenerator, Callable, Sequence
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final, TypedDict
 
-from threads.agents.bindings import AppTools, authorize
+from threads.agents.bindings import AppTool, AppTools, Fence, authorize
 from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
 from threads.agents.config import ConfigError
 from threads.agents.context import RunContext
@@ -41,6 +41,8 @@ from threads.loop.drafts import draft
 from threads.loop.drive import drive
 from threads.loop.recovery import recover
 from threads.loop.runtime import Halt, Idle, RunErrorCode, Runtime, lost
+from threads.memory.authority import with_memory_write
+from threads.memory.setup import Providers, RunBinding, memory_scope, provider_tools
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import SqliteStore, StoredEvent, Writer
@@ -95,7 +97,8 @@ async def execute[D](
         handle = thread or Thread(ThreadId(uuid7(now_ms())), BranchId(uuid7(now_ms())), store)
         return Failed(RunError(_refusal(opened.error), opened.error.message), handle)
     writer, fresh = opened.value
-    async with _held(writer):
+    async with _held(writer), AsyncExitStack() as servers:
+        definition = await with_servers(definition, servers, writer)
         thread_id = writer.fold.thread_id
         if thread_id is None:
             raise AssertionError("an acquired branch has a thread")
@@ -110,13 +113,17 @@ async def execute[D](
         box = definition.sandbox
         builtins = None if box is None else sandbox_tools(sq, box, writer, now_ms)
         results = ReadResults(sq, lambda: writer.fold.events)
-        tools = Routed(builtins, results, AppTools(definition.tools, ctx))
+        scope = memory_scope(definition.name, principal)
+        providers = Providers(definition.memory, definition.knowledge)
+        lent = RunBinding(now_ms, fenced(writer), lambda: writer.fold.events)
+        provided = await provider_tools(sq, providers, scope, lent)
+        tools = Routed(builtins, results, AppTools(definition.tools, ctx), provided)
         rt = Runtime(
             sq,
             writer,
             definition.model,
             tools,
-            authorize,
+            with_memory_write(authorize, definition.memory_write),
             now_ms,
             stream.wait_until,
             observe=stream.observe,
@@ -130,7 +137,8 @@ async def execute[D](
             halt = await _input(rt, input, principal, options.get("budget"))
         halt = halt or await drive(rt)
         if isinstance(halt, Idle) and box is not None and builtins is not None:
-            await snapshot_turn_end(sq, writer, box, builtins, now_ms)
+            revision = None if provided is None else await provided.knowledge_revision()
+            await snapshot_turn_end(sq, writer, box, builtins, now_ms, knowledge_revision=revision)
         await gates.observe(rt, "session_end")
         return result(rt, halt, handle)
 
@@ -174,6 +182,30 @@ async def _open(
     if isinstance(acquired, Err) and acquired.error.code == "branch_not_runnable":
         acquired = await sq.repair_torn(thread.branch, holder, now_ms)
     return acquired if isinstance(acquired, Err) else Ok((acquired.value, False))
+
+
+def fenced(writer: Writer) -> Fence:
+    """Whether this run still owns its branch, for a tool or provider transport's send point."""
+
+    async def fence() -> bool:
+        return isinstance(await writer.fence(), Ok)
+
+    return fence
+
+
+async def with_servers[D](
+    definition: Definition[D], stack: AsyncExitStack, writer: Writer
+) -> Definition[D]:
+    """The definition with its tool servers' tools, connected for this run and fenced by its
+    writer: app tools in declared order, then server tools sorted by name."""
+    if not definition.servers:
+        return definition
+
+    found: list[AppTool[object]] = []
+    for server in definition.servers:
+        found.extend(await stack.enter_async_context(server.connect(fenced(writer))))
+    extra = sorted(found, key=lambda t: t.name)
+    return replace(definition, tools=(*definition.tools, *extra))
 
 
 def _refusal(error: ParseError) -> RunErrorCode:

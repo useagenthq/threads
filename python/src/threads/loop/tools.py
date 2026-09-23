@@ -22,6 +22,20 @@ class Invocation:
 
 
 @dataclass(frozen=True, slots=True)
+class Reference:
+    """Recalled memory or retrieved knowledge: one `injected{trust: untrusted_reference}` event
+    appended right after the call's result, so the model sees it only inside the reference
+    wrapper and replay reads it from the log."""
+
+    source: Literal["memory", "knowledge"]
+    id: str
+    version: str
+    text: str
+    location: str | None = None
+    """A knowledge excerpt's byte span, `<start>-<end>`."""
+
+
+@dataclass(frozen=True, slots=True)
 class Output:
     """The tool finished: its text result, which may be an error the model sees."""
 
@@ -30,6 +44,7 @@ class Output:
     full_output: ArtifactRef | None = None
     """Output spilled at the source (a sandbox exec over its preview): the result's `ref`, so
     `read_tool_result` reads it."""
+    references: tuple[Reference, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,14 +1,14 @@
 """What an agent's definition binds at run time: its tools as the loop's tool runner, and its
 permissions as the loop's authorization."""
 
-from collections.abc import Mapping, Sequence
-from typing import Final, Protocol
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager
+from typing import Final, Protocol, runtime_checkable
 
 from threads.agents.context import RunContext
 from threads.log import JsonObject, Permissions, ToolCallData, ToolSpec
 from threads.loop.model import LookupResult, LookupUnknown
 from threads.loop.tools import Dispatched, Invocation, Termination
-from threads.loop.tools import Output as ToolOutput
 from threads.permissions import Call, Category, Decision, decide
 from threads.reduce import Fold
 from threads.reduce.fold import policy
@@ -48,9 +48,24 @@ class AppTool[D](Protocol):
 
     def invalid(self, input: JsonObject) -> str | None: ...
 
-    async def run(self, input: JsonObject, ctx: RunContext[D]) -> ToolOutput: ...
+    async def run(self, input: JsonObject, ctx: RunContext[D]) -> Dispatched: ...
 
     async def lookup(self, effect_key: str, ctx: RunContext[D]) -> LookupResult[str]: ...
+
+
+type Fence = Callable[[], Awaitable[bool]]
+"""Whether this run still owns its branch: re-checked at a tool server's real send point."""
+
+
+@runtime_checkable
+class ToolServer(Protocol):
+    """A source of tools resolved at run setup, such as an MCP server (`threads.mcp.mcp`). Its
+    connection lives for the run and every request it writes passes the fence first."""
+
+    @property
+    def name(self) -> str: ...
+
+    def connect(self, fence: Fence) -> AbstractAsyncContextManager[Sequence[AppTool[object]]]: ...
 
 
 class AppTools[D]:

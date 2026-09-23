@@ -1,6 +1,7 @@
 """`tool_result` drafts, with L0 spill: a result whose text is over the
 threshold keeps its full bytes as `ref` and shows the model a bounded preview."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -10,6 +11,7 @@ from threads.log import ArtifactRef, CallId
 from threads.loop.defaults import context
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.runtime import Runtime
+from threads.loop.tools import Reference
 from threads.reduce.handlers import to_json
 from threads.store import Draft
 
@@ -37,6 +39,23 @@ async def text_ref(rt: Runtime, text: str) -> JsonValue:
     raw = text.encode("utf-8")
     sha = await rt.store.put_artifact(raw)
     return {"sha256": sha, "bytes": len(raw), "media_type": "text/plain"}
+
+
+def reference_drafts(references: Sequence[Reference]) -> list[Draft]:
+    """One untrusted `injected` per recalled item, appended with the result that carries it."""
+    out: list[Draft] = []
+    for r in references:
+        origin: dict[str, JsonValue] = {"id": r.id, "version": r.version}
+        if r.location is not None:
+            origin["location"] = r.location
+        data: dict[str, JsonValue] = {
+            "source": r.source,
+            "trust": "untrusted_reference",
+            "origin": origin,
+            "text": r.text,
+        }
+        out.append(draft("injected", data))
+    return out
 
 
 async def result_draft(

@@ -4,13 +4,16 @@ from dataclasses import dataclass
 
 from pydantic import JsonValue
 
-from threads.agents.bindings import AppTool
+from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
 from threads.hooks.extension import Extension
 from threads.log import Budget, Context, Permissions, Retry, ToolSpec
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.loop.model import Model
+from threads.memory.authority import MemoryWrite
+from threads.memory.protocol import KnowledgeProvider, MemoryProvider
+from threads.memory.setup import writes
 from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.sandbox.protocol import Sandbox
@@ -30,6 +33,11 @@ class Definition[D]:
     sandbox: Sandbox | None = None
     egress: Egress = ()
     extensions: tuple[Extension, ...] = ()
+    memory: MemoryProvider | None = None
+    memory_write: MemoryWrite = "ask"
+    knowledge: KnowledgeProvider | None = None
+    servers: tuple[ToolServer, ...] = ()
+    """Tool servers (MCP); their tools join `tools` when a run connects them."""
 
     def policy(self) -> dict[str, JsonValue]:
         """The resolved runtime policy: each section absent (ADR defaults) or complete."""
@@ -46,9 +54,14 @@ class Definition[D]:
 
     def specs(self) -> tuple[ToolSpec, ...]:
         """Built-ins sorted by name (read_tool_result always, the sandbox tools with a
-        sandbox), then app tools in declared order."""
-        denied = egress_denied(self.egress)
-        builtins = specs(sandbox=self.sandbox is not None, egress_denied=denied)
+        sandbox, memory and knowledge tools with a provider), then app tools in declared order
+        and MCP tools sorted by name."""
+        builtins = specs(
+            sandbox=self.sandbox is not None,
+            egress_denied=egress_denied(self.egress),
+            memory=writes(self.memory),
+            knowledge=self.knowledge is not None,
+        )
         return (*builtins, *(t.spec() for t in self.tools))
 
     @property
@@ -76,6 +89,9 @@ class Definition[D]:
         config: dict[str, JsonValue] = dict(data)
         if self.extensions:
             config["extensions"] = self.manifests()
+        if self.memory is not None:
+            # Write authority is config: a changed policy is a changed pin.
+            config["memory_write"] = self.memory_write
         text = canonicalize(config)
         if not isinstance(text, Ok):
             raise AssertionError("a definition built from parsed models always canonicalizes")

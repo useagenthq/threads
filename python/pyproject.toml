@@ -27,6 +27,16 @@ daytona = [
 modal = [
     "modal>=1.5.5,<2",
 ]
+mcp = [
+    "jsonschema>=4.23,<5",
+    "mcp>=1.20,<2",
+]
+supermemory = [
+    "supermemory>=3.62,<4",
+]
+zep = [
+    "zep-cloud>=3.28,<4",
+]
 
 [dependency-groups]
 dev = [
@@ -35,6 +45,7 @@ dev = [
     "pytest",
     "hypothesis",
     "datamodel-code-generator==0.82.0",
+    "types-jsonschema>=4.26.0.20260518",
 ]
 
 [build-system]
@@ -68,6 +79,8 @@ select = ["E", "F", "W", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF", "ANN", "P
 "tests/**" = ["S101"]
 # Docstrings are schema descriptions copied verbatim; the formatter doesn't wrap them.
 "src/threads/_generated/events_v1.py" = ["E501"]
+# Its queries are composed from constant scope and revision fragments; every value is bound.
+"src/threads/memory/local_knowledge.py" = ["S608"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -35,7 +35,7 @@ from threads.sandbox.exec import Command, run_exec
 from threads.sandbox.protocol import ExecResult, SandboxContext, SandboxError, SandboxSession
 from threads.store import SqliteStore
 from threads.tools import files
-from threads.tools.specs import MODELS
+from threads.tools.specs import MODELS, PROVIDED
 
 DEFAULT_TIMEOUT_MS: Final = 120_000
 LISTING_BYTES: Final = 1 << 20
@@ -268,6 +268,7 @@ def parse(name: str, input: JsonObject) -> Ok[BaseModel] | Err[str]:
     if not isinstance(text, Ok):
         return Err("the arguments are not canonical JSON")
     try:
-        return Ok(MODELS[name].model_validate_json(text.value, strict=True))
+        model = MODELS.get(name) or PROVIDED[name]
+        return Ok(model.model_validate_json(text.value, strict=True))
     except ValidationError as error:
         return Err(f"invalid arguments for {name}: {error.error_count()} error(s): {error}")

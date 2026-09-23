@@ -36,8 +36,14 @@ class VerifiedSnapshot:
             raise TypeError("only verify_image proves a snapshot")
 
 
-async def take_snapshot(
-    store: SqliteStore, writer: Writer, sandbox: Sandbox, session: SandboxSession, clock: Clock
+async def take_snapshot(  # noqa: PLR0913 - the corpus revision rides with the capture
+    store: SqliteStore,
+    writer: Writer,
+    sandbox: Sandbox,
+    session: SandboxSession,
+    clock: Clock,
+    *,
+    knowledge_revision: int | None = None,
 ) -> Ok[SnapshotEvent] | Err[ParseError | SandboxError]:
     """Snapshots `session` at the writer's head. Refused (not_quiescent) while a turn is open,
     a call or model attempt is pending, anything is parked or an effect is unsettled, and when
@@ -66,7 +72,7 @@ async def take_snapshot(
         await abandon(by, sandbox, row)
         message = f"the image of {data.snapshot_id} doesn't hold manifest {data.manifest_hash}"
         return Err(SandboxError("not_quiescent", message))
-    return await _append(writer, verified.value)
+    return await _append(writer, verified.value, knowledge_revision)
 
 
 async def verify_image(
@@ -95,12 +101,15 @@ async def verify_image(
 
 
 async def _append(
-    writer: Writer, verified: VerifiedSnapshot
+    writer: Writer, verified: VerifiedSnapshot, knowledge_revision: int | None
 ) -> Ok[SnapshotEvent] | Err[ParseError]:
-    """Only a proven capture becomes a `snapshot` event, the one kind of fork point."""
+    """Only a proven capture becomes a `snapshot` event, the one kind of fork point. With a
+    knowledge binding it records the corpus revision a pinned fork searches as of."""
     wire = to_json(verified.data)
     if not isinstance(wire, dict):
         raise TypeError("snapshot data is an object")
+    if knowledge_revision is not None:
+        wire["knowledge_revision"] = knowledge_revision
     appended = await writer.append([Draft("snapshot", wire)])
     if isinstance(appended, Err):
         return appended

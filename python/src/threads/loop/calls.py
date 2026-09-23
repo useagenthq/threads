@@ -14,7 +14,7 @@ from threads.log.digest import canonical_sha256
 from threads.loop import effects, gates, tool_gates
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state
-from threads.loop.results import As, result_draft
+from threads.loop.results import As, reference_drafts, result_draft
 from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import NotSent, Output, Uncertain
 from threads.reduce.fold import policy
@@ -195,9 +195,11 @@ async def _read_only(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | No
     stale = await fence(rt)
     if stale is not None:
         return stale
+    references: list[Draft] = []
     match await rt.tools.dispatch(inv):
-        case Output(text=text, is_error=is_error, full_output=full):
+        case Output(text=text, is_error=is_error, full_output=full, references=recalled):
             result = await result_draft(rt, inv.call_id, text, As("executed", is_error), full)
+            references = reference_drafts(recalled)
         case Uncertain(reason=reason):
             text = f"{reason}: the read did not finish"
             result = await result_draft(rt, inv.call_id, text, As("executed", True))
@@ -205,7 +207,7 @@ async def _read_only(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | No
             return Failed("unmatched_external_op", f"no recorded stub for {spec.name}")
         case NotSent():
             result = await result_draft(rt, inv.call_id, "not sent", As("not_executed", True))
-    done = await rt.append(result)
+    done = await rt.append(result, *references)
     return lost(done.error) if isinstance(done, Err) else None
 
 

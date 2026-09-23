@@ -16,6 +16,7 @@ from threads.store import SqliteStore, Writer
 from threads.store.worker import Clock
 from threads.thread.snapshot import take_snapshot
 from threads.tools import HOST, SANDBOXED, ReadResults, SandboxTools
+from threads.tools.specs import PROVIDED
 
 type Egress = Sequence[str] | Literal["unenforced"]
 
@@ -56,29 +57,46 @@ def sandbox_tools(
     )
 
 
-async def snapshot_turn_end(
-    store: SqliteStore, writer: Writer, sandbox: Sandbox, tools: SandboxTools, clock: Clock
+async def snapshot_turn_end(  # noqa: PLR0913 - the corpus revision rides with the capture
+    store: SqliteStore,
+    writer: Writer,
+    sandbox: Sandbox,
+    tools: SandboxTools,
+    clock: Clock,
+    *,
+    knowledge_revision: int | None = None,
 ) -> None:
     """The end-of-turn snapshot policy: a turn that used the sandbox ends at a fork point. The
     capture goes through `take_snapshot` (quiescence under the writer, ledger rows, the image
     proven by a restore); nothing else appends a snapshot. The run's loop has returned, so no
     append or dispatch can interleave. A refused capture appends nothing."""
     if tools.opened is not None and sandbox.info.capture_classes:
-        await take_snapshot(store, writer, sandbox, tools.opened, clock)
+        revision = knowledge_revision
+        opened = tools.opened
+        await take_snapshot(store, writer, sandbox, opened, clock, knowledge_revision=revision)
 
 
 class Routed:
-    """Sandbox built-ins go to the sandbox, read_tool_result to the host reader, every other
-    name to the app tools."""
+    """Sandbox built-ins go to the sandbox, read_tool_result to the host reader, memory and
+    knowledge tools to their providers, every other name to the app tools."""
 
-    def __init__(self, sandbox: ToolRunner | None, results: ReadResults, app: ToolRunner) -> None:
+    def __init__(
+        self,
+        sandbox: ToolRunner | None,
+        results: ReadResults,
+        app: ToolRunner,
+        provided: ToolRunner | None = None,
+    ) -> None:
         self._sandbox = sandbox
         self._results = results
         self._app = app
+        self._provided = provided
 
     def _for(self, name: str) -> ToolRunner:
         if name in HOST:
             return self._results
+        if name in PROVIDED and self._provided is not None:
+            return self._provided
         if name in SANDBOXED and self._sandbox is not None:
             return self._sandbox
         return self._app

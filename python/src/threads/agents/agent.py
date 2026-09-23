@@ -8,7 +8,7 @@ import asyncio
 from collections.abc import AsyncIterator, Sequence
 from typing import Required, TypedDict, Unpack, overload
 
-from threads.agents.bindings import AppTool
+from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
@@ -17,6 +17,8 @@ from threads.agents.run import Input, RunOptions, execute
 from threads.hooks.extension import Extension
 from threads.log import Budget, Context, Permissions, Retry
 from threads.loop.model import Model
+from threads.memory.authority import MemoryWrite
+from threads.memory.protocol import KnowledgeProvider, MemoryProvider
 from threads.sandbox.protocol import Sandbox
 
 
@@ -35,14 +37,26 @@ class AgentOptions(TypedDict, total=False):
     """Sandbox egress allowlist; [] (the default) is deny-all."""
     extensions: Sequence[Extension]
     """Instructions and hooks, run in this order."""
+    memory: MemoryProvider
+    """save_memory, search_memory and forget_memory."""
+    memory_write: MemoryWrite
+    """Write authority for save_memory and forget_memory; default "ask"."""
+    knowledge: KnowledgeProvider
+    """search_knowledge over host-ingested sources."""
+
+
+class ServerAgentOptions(AgentOptions, total=False):
+    tools: Required[Sequence[ToolServer]]
+    """MCP servers only: their tools need no deps."""
 
 
 class ToolAgentOptions[D](AgentOptions, total=False):
-    tools: Required[Sequence[AppTool[D]]]
+    tools: Required[Sequence[AppTool[D] | ToolServer]]
+    """App tools and MCP servers (`threads.mcp.mcp`)."""
 
 
 class _Options[D](AgentOptions, total=False):
-    tools: Sequence[AppTool[D]]
+    tools: Sequence[AppTool[D] | ToolServer]
 
 
 class RunStream:
@@ -114,17 +128,23 @@ def _drop(_item: StreamEvent) -> None:
 @overload
 def agent(**options: Unpack[AgentOptions]) -> Agent[None]: ...
 @overload
+def agent(**options: Unpack[ServerAgentOptions]) -> Agent[None]: ...
+@overload
 def agent[D](**options: Unpack[ToolAgentOptions[D]]) -> Agent[D]: ...
 def agent[D](**options: Unpack[_Options[D]]) -> Agent[D] | Agent[None]:
     """spec/api.json `agent`. Pure: no I/O. Raises ConfigError for duplicate tool names."""
-    tools = tuple(options.get("tools", ()))
+    given = options.get("tools", ())
+    servers = tuple(t for t in given if isinstance(t, ToolServer))
+    tools = tuple(t for t in given if not isinstance(t, ToolServer))
     if not tools:
         empty: tuple[AppTool[None], ...] = ()
-        return Agent(_definition(options, empty), (None,))
-    return Agent(_definition(options, tools), ())
+        return Agent(_definition(options, empty, servers), (None,))
+    return Agent(_definition(options, tools, servers), ())
 
 
-def _definition[T](options: AgentOptions, tools: tuple[AppTool[T], ...]) -> Definition[T]:
+def _definition[T](
+    options: AgentOptions, tools: tuple[AppTool[T], ...], servers: tuple[ToolServer, ...]
+) -> Definition[T]:
     sandbox = options.get("sandbox")
     egress = options.get("egress", ())
     if egress != "unenforced" and egress:
@@ -144,9 +164,14 @@ def _definition[T](options: AgentOptions, tools: tuple[AppTool[T], ...]) -> Defi
         sandbox,
         egress,
         tuple(options.get("extensions", ())),
+        options.get("memory"),
+        options.get("memory_write", "ask"),
+        options.get("knowledge"),
+        servers,
     )
     for kind, names in (
         ("tool", [s.name for s in definition.specs()]),
+        ("MCP server", [s.name for s in servers]),
         ("extension", [e.name for e in definition.extensions]),
     ):
         if len(set(names)) != len(names):
