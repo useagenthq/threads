@@ -1,0 +1,10 @@
+{
+  "name": "structured-output-retries-exhausted",
+  "family": "tools_streaming",
+  "kind": "recover",
+  "description": "With max_retries 2, two final_output candidates fail the pinned schema. Each is recorded as output_validated{rejected} with an error result; the second is the max_retries-th failed candidate, so the turn ends output_invalid with no further model call.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

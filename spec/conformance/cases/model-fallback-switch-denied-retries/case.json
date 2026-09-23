@@ -1,0 +1,9 @@
+{
+  "name": "model-fallback-switch-denied-retries",
+  "family": "cancellation_resume",
+  "kind": "render",
+  "description": "before_model_switch denies the fallback: its hook_decision{deny} is recorded, there is no settings_changed, and the retry is scheduled on the old epoch, so the next request still declares the primary's line 0.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

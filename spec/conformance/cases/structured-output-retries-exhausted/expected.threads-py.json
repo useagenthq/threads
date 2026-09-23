@@ -1,0 +1,141 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 2,
+      "hash": "7627b05597abe76d6a0dc70b8502319369abab34b7edd8ca8bfde62f4ccb463d"
+    }
+  },
+  "appended": [
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "call_1",
+            "name": "final_output",
+            "input": {
+              "fixed": "yes"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "tool_call",
+      "data": {
+        "call_id": "call_1",
+        "name": "final_output",
+        "input": {
+          "fixed": "yes"
+        }
+      }
+    },
+    {
+      "type": "permission_decision",
+      "data": {
+        "call_id": "call_1",
+        "decision": "allow"
+      }
+    },
+    {
+      "type": "output_validated",
+      "data": {
+        "schema_sha256": "fa6e9fb55a2d95af5eb811303e5899bcf593335171f299bcda08c84f5ea51046",
+        "outcome": "rejected"
+      }
+    },
+    {
+      "type": "tool_result",
+      "data": {
+        "call_id": "call_1",
+        "is_error": true
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "call_2",
+            "name": "final_output",
+            "input": {
+              "fixed": "yes"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "tool_call",
+      "data": {
+        "call_id": "call_2",
+        "name": "final_output",
+        "input": {
+          "fixed": "yes"
+        }
+      }
+    },
+    {
+      "type": "permission_decision",
+      "data": {
+        "call_id": "call_2",
+        "decision": "allow"
+      }
+    },
+    {
+      "type": "output_validated",
+      "data": {
+        "schema_sha256": "fa6e9fb55a2d95af5eb811303e5899bcf593335171f299bcda08c84f5ea51046",
+        "outcome": "rejected"
+      }
+    },
+    {
+      "type": "tool_result",
+      "data": {
+        "call_id": "call_2",
+        "is_error": true
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "output_invalid"
+      }
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 2,
+      "hash": "aac587bd4e4f00b7b08475e77f9a7b017c51746d0c4400cc971297b2b6215256"
+    }
+  },
+  "appended": [
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Yes, it is fixed."
+          }
+        ]
+      }
+    },
+    {
+      "type": "injected",
+      "data": {
+        "source": "recovery",
+        "trust": "trusted_instruction",
+        "origin": {
+          "id": "final_output"
+        },
+        "text": "Return the final result by calling final_output."
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "call_1",
+            "name": "final_output",
+            "input": {
+              "fixed": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "tool_call",
+      "data": {
+        "call_id": "call_1",
+        "name": "final_output",
+        "input": {
+          "fixed": true
+        }
+      }
+    },
+    {
+      "type": "permission_decision",
+      "data": {
+        "call_id": "call_1",
+        "decision": "allow"
+      }
+    },
+    {
+      "type": "output_validated",
+      "data": {
+        "schema_sha256": "fa6e9fb55a2d95af5eb811303e5899bcf593335171f299bcda08c84f5ea51046",
+        "outcome": "accepted",
+        "value": {
+          "fixed": true
+        }
+      }
+    },
+    {
+      "type": "tool_result",
+      "data": {
+        "call_id": "call_1",
+        "is_error": false,
+        "preview": "{\"fixed\":true}"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ]
+}

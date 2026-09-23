@@ -1,0 +1,10 @@
+{
+  "name": "model-fallback-revert-deny-keyed-to-input",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Turn 2's input is recorded with a before_model_switch deny keyed to it (input_event_id), then the run stopped. Recovery never asks the hook again for that input and appends no revert: the turn is sent on the fallback epoch.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

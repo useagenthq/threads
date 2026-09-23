@@ -1,0 +1,9 @@
+{
+  "name": "output-validated-nested-schema-accepted",
+  "family": "tools_streaming",
+  "kind": "reduce",
+  "description": "The pinned output schema is what a Pydantic model with a nested model writes: titles and a default (annotations, never constraints) and a $defs entry used by $ref. An accepted value that satisfies it is valid.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -166,6 +166,12 @@
       "open": "The draft design reserves each attempt's bound, but says nothing of a token limit when max_tokens (or an input bound) is unknown; TS skipped the limit, Python reserved 0.",
       "choice": "Setup refuses such a limit with budget_unenforceable unless on_unknown_usage is stop; at run time an attempt with no bound for a covering limit is refused as exceeding (spec/schema/README.md, Budget enforcement).",
       "why": "A budget must never overspend; refusing at setup surfaces the misconfiguration before any spend."
+    },
+    {
+      "id": "output-mode-tool-only",
+      "open": "The draft design offers output_mode tool or native; no adapter maps a response format.",
+      "choice": "v0.1 pins policy.output.mode tool; native is reserved on the wire",
+      "why": "no adapter maps a response format; an option neither language honors is not offered"
     }
   ],
   "functions": {
@@ -243,20 +249,20 @@
           "doc": "Structured final output. Absent: completed.output is the final text."
         },
         {
-          "name": "output_mode",
+          "name": "output_retries",
           "kind": "option",
-          "type": {"enum": ["tool", "native"]},
+          "type": {"prim": "integer"},
           "required": false,
-          "default": "tool"
+          "default": 2,
+          "doc": "Failed candidates per turn (a rejected final_output or a plain-text end) before turn_completed{output_invalid}. A non-negative integer; anything else is ConfigError invalid_config."
         },
-        {"name": "output_retries", "kind": "option", "type": {"prim": "integer"}, "required": false, "default": 2},
         {
           "name": "subagents",
           "kind": "option",
           "type": {"array": {"$ref": "#/types/Agent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}},
           "required": false,
           "default": [],
-          "doc": "Agents spawn_agent may start, by name. Team tools come with them."
+          "doc": "Agents spawn_agent may start, by name. Team tools come with them. A subagent with output reports the canonical JSON of its accepted output."
         },
         {
           "name": "handoffs",
@@ -272,7 +278,7 @@
           "type": {"array": {"$ref": "#/types/Model"}},
           "required": false,
           "default": [],
-          "doc": "Fallback models in order."
+          "doc": "Fallback models in order. With the default fallback_scope turn, the next user_input reverts to the settings before the fallback (settings_changed{reason: revert}), gated by before_model_switch."
         },
         {
           "name": "permissions",
