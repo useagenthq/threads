@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Inbound, secret } from "@threads/core/adapter";
 import { github } from "../src";
 import { adapter, alice, CHALLENGE, commentPayload, request } from "./kit";
@@ -7,10 +9,12 @@ import { adapter, alice, CHALLENGE, commentPayload, request } from "./kit";
 const principal = { issuer: "github:99", tenant: "github:99", subject: "42" };
 
 describe("verify", () => {
-  test("a good signature yields tenant, installation and delivery", () => {
-    expect(adapter.verify(request(commentPayload("hi")))).toEqual({
+  test("a good signature yields tenant, installation and the body's hash as delivery", () => {
+    const raw = request(commentPayload("hi"));
+    const hash = createHash("sha256").update(raw.body).digest("hex");
+    expect(adapter.verify(raw)).toEqual({
       ok: true,
-      value: { tenant: "github:99", installation_id: "99", delivery_id: "d-1" },
+      value: { tenant: "github:99", installation_id: "99", delivery_id: hash },
     });
   });
 
@@ -18,7 +22,6 @@ describe("verify", () => {
     ["bad signature", { "x-hub-signature-256": `sha256=${"0".repeat(64)}` }],
     ["short signature", { "x-hub-signature-256": "sha256=abcd" }],
     ["missing signature", { "x-hub-signature-256": undefined }],
-    ["missing delivery id", { "x-github-delivery": undefined }],
   ])("%s is unverified", (_, headers) => {
     const result = adapter.verify(
       request(commentPayload("hi"), "issue_comment", headers),
@@ -48,6 +51,61 @@ describe("verify", () => {
       tenant: (id) => (id === "1" ? "acme" : undefined),
     });
     expect(mapped.verify(request(commentPayload("hi"))).ok).toBe(false);
+  });
+});
+
+describe("shared delivery vector", () => {
+  const vector: {
+    webhook_secret: string;
+    event: string;
+    body: string;
+    signature: string;
+    tenant: string;
+    installation_id: string;
+    delivery_id: string;
+    accepted_delivery_headers: (string | null)[];
+    tampered_body: string;
+  } = JSON.parse(
+    readFileSync(
+      join(
+        import.meta.dir,
+        "../../../../spec/conformance/vectors/github-delivery.json",
+      ),
+      "utf8",
+    ),
+  );
+  process.env["THREADS_GH_VECTOR_WEBHOOK"] = vector.webhook_secret;
+  const vectored = github({
+    agent: "triage",
+    webhookSecret: secret("THREADS_GH_VECTOR_WEBHOOK"),
+    token: secret("THREADS_GH_TEST_TOKEN"),
+  });
+  const raw = (body: string, delivery: string | null) => ({
+    headers: {
+      "x-hub-signature-256": vector.signature,
+      "x-github-event": vector.event,
+      ...(delivery === null ? {} : { "x-github-delivery": delivery }),
+    },
+    body: new TextEncoder().encode(body),
+  });
+
+  test.each(vector.accepted_delivery_headers.map((h) => [h]))(
+    "X-GitHub-Delivery %p is untrusted: the delivery id is the body hash",
+    (header) => {
+      expect(vectored.verify(raw(vector.body, header))).toEqual({
+        ok: true,
+        value: {
+          tenant: vector.tenant,
+          installation_id: vector.installation_id,
+          delivery_id: vector.delivery_id,
+        },
+      });
+    },
+  );
+
+  test("a body the signature doesn't cover is unverified", () => {
+    const result = vectored.verify(raw(vector.tampered_body, "d-1"));
+    expect(result.ok ? "ok" : result.error.code).toBe("unverified");
   });
 });
 

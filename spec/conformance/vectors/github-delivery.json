@@ -1,0 +1,16 @@
+{
+  "_doc": "GitHub delivery identity (spec/schema/README.md, signed GitHub item keys): delivery_id is the lowercase SHA-256 of the verified raw body; X-GitHub-Delivery is untrusted and optional. Every accepted header set yields the same delivery_id; a body that doesn't match the signature is unverified.",
+  "webhook_secret": "whsec-vector",
+  "event": "issue_comment",
+  "body": "{\"action\":\"created\",\"installation\":{\"id\":99},\"repository\":{\"full_name\":\"acme/app\"},\"issue\":{\"number\":7},\"comment\":{\"id\":1,\"body\":\"hi\",\"user\":{\"id\":42,\"login\":\"alice\",\"type\":\"User\"}},\"sender\":{\"id\":42,\"login\":\"alice\",\"type\":\"User\"}}",
+  "signature": "sha256=5a8d56af4c9b629f2d6f60270fa82423834e42f3f626330213280a6651d4889d",
+  "tenant": "github:99",
+  "installation_id": "99",
+  "delivery_id": "1a0dcda37696721a8c295deef4fe96156e20044178ee9772d1c614d2306eb2fc",
+  "accepted_delivery_headers": [
+    "d-1",
+    "d-2",
+    null
+  ],
+  "tampered_body": "{\"action\":\"created\",\"installation\":{\"id\":99},\"repository\":{\"full_name\":\"acme/app\"},\"issue\":{\"number\":7},\"comment\":{\"id\":1,\"body\":\"bye\",\"user\":{\"id\":42,\"login\":\"alice\",\"type\":\"User\"}},\"sender\":{\"id\":42,\"login\":\"alice\",\"type\":\"User\"}}"
+}

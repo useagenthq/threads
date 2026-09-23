@@ -81,9 +81,6 @@ export function verifier(webhookSecret: Secret, tenantOf: TenantOf): Verify {
       ({ ok: false, error: { code: "unverified", message } }) as const;
     if (!signed(raw, webhookSecret.reveal()))
       return unverified("github: bad or missing X-Hub-Signature-256");
-    const deliveryId = raw.headers["x-github-delivery"];
-    if (deliveryId === undefined || deliveryId === "")
-      return unverified("github: missing X-GitHub-Delivery");
     const body = Installed.safeParse(decode(raw.body));
     if (!body.success) return unverified("github: payload has no installation");
     const installationId = String(body.data.installation.id);
@@ -97,7 +94,9 @@ export function verifier(webhookSecret: Secret, tenantOf: TenantOf): Verify {
       value: {
         tenant,
         installation_id: installationId,
-        delivery_id: deliveryId,
+        // Identity comes only from signed content; X-GitHub-Delivery is unsigned, so a
+        // replay can set it to anything (spec/schema/README.md, signed GitHub item keys).
+        delivery_id: createHash("sha256").update(raw.body).digest("hex"),
       },
     };
   };
