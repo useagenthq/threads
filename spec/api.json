@@ -2384,6 +2384,12 @@
           "doc": "Input parts it accepts; others fail pre-dispatch with content_unsupported."
         },
         "hosted_tools": {"type": {"array": {"prim": "string"}}, "required": false, "default": []},
+        "fence_point": {
+          "type": {"enum": ["transport", "pre_call"]},
+          "required": false,
+          "default": "transport",
+          "doc": "Where send awaits context.fence(). transport: at the real network send, after any SDK queueing. pre_call: just before handing the request to a bridge that queues internally, so a lease lost in that queue can still send once. A stale send is cost-only: the stale owner can never append its response, and effects never go through a model send."
+        },
         "lookup": {"type": {"$ref": "#/types/LookupCapability"}, "required": true, "doc": "Response lookup by client request id."}
       }
     },
