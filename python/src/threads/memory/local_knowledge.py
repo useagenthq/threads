@@ -105,9 +105,10 @@ class LocalKnowledge:
         await store.run(install(_DDL))
         return replace(self, store=store)
 
-    async def revision(self) -> int:
-        """The store's current revision (0 before the first ingest)."""
-        return 0 if self.store is None else await self.store.run(_revision)
+    async def revision(self, scope: Scope) -> Outcome[int]:
+        """The store's current revision (0 before the first ingest). One revision covers every
+        scope, so `scope` only satisfies the protocol."""
+        return Ok(0 if self.store is None else await self.store.run(_revision))
 
     async def ingest(self, scope: Scope, source: KnowledgeSource, key: str) -> Outcome[DocVersion]:
         if self.store is None:

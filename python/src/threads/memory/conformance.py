@@ -61,7 +61,7 @@ async def memory_suite(
             if not (isinstance(gone, Ok) and isinstance(twice, Ok) and after == Ok([])):
                 failed.append("a forgotten record is never recalled")
         missing = await a.forget("no-such-id", "k3")
-        if not (isinstance(missing, Err) and missing.error.code == "not_found"):
+        if not (isinstance(missing, Err) and missing.error.code == "invalid"):
             failed.append("errors are typed values")
         return tuple(failed)
     finally:

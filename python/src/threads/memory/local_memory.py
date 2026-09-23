@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Final
 
+from threads.log import EffectClass
 from threads.memory.sqlite_fts import install, match_query, transaction
 from threads.memory.types import (
     MemoryHit,
@@ -20,7 +21,6 @@ from threads.memory.types import (
 )
 from threads.result import Err, Ok
 from threads.store import SqliteStore
-from threads.tools.specs import Writes
 
 FOREVER_MS: Final = 2**53 - 1
 """The dedup window of a key: the table keeps every key for good."""
@@ -55,8 +55,12 @@ class LocalMemory:
     store: SqliteStore | None = None
 
     @property
-    def writes(self) -> Writes:
-        return Writes("idempotent", FOREVER_MS)
+    def write_effect(self) -> EffectClass:
+        return "idempotent"
+
+    @property
+    def dedup_window_ms(self) -> int:
+        return FOREVER_MS
 
     async def bind(self, store: SqliteStore) -> "LocalMemory":
         """This provider on `store`, its tables created. No FTS5: ConfigError."""
@@ -124,7 +128,7 @@ class LocalMemory:
                 (id, *_where(scope)),
             ).fetchone()
             if row is None:
-                return Err(ProviderError("not_found", f"no memory {id} in this scope"))
+                return Err(ProviderError("invalid", f"no memory {id} in this scope"))
             if row[1] == 0:  # forgetting twice is a no-op
                 conn.execute("UPDATE local_memory SET forgotten = 1 WHERE rowid = ?", (row[0],))
                 conn.execute("DELETE FROM local_memory_fts WHERE rowid = ?", (row[0],))

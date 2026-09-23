@@ -33,7 +33,7 @@ from threads.memory.authority import origin
 from threads.memory.guard import ScopedKnowledge, ScopedMemory
 from threads.memory.protocol import Revisioned
 from threads.memory.types import Provenance, ProviderError
-from threads.result import Err
+from threads.result import Err, Ok
 from threads.thread.fork import knowledge_revision
 from threads.tools.runner import parse
 
@@ -144,7 +144,10 @@ class ProviderTools:
     async def knowledge_revision(self) -> int | None:
         """The corpus revision a snapshot records, when the provider keeps one."""
         k = self.knowledge
-        return await k.provider.revision() if k and isinstance(k.provider, Revisioned) else None
+        if k is None or not isinstance(k.provider, Revisioned):
+            return None
+        now = await k.provider.revision(k.owner.scope)
+        return now.value if isinstance(now, Ok) else None
 
     async def lookup(self, call: Invocation) -> LookupResult[str]:
         return LookupUnknown(f"{call.spec.name} has no lookup")

@@ -12,7 +12,7 @@ from threads.memory import passages
 from threads.memory.conformance import A, B, knowledge_suite, memory_suite
 from threads.memory.guard import Binder, scoped_knowledge, scoped_memory
 from threads.memory.local_knowledge import LocalKnowledge, local_knowledge
-from threads.memory.local_memory import local_memory
+from threads.memory.local_memory import FOREVER_MS, local_memory
 from threads.memory.types import (
     Binding,
     MemoryHit,
@@ -154,3 +154,31 @@ def test_passage_spans_are_the_exact_utf8_bytes(parts: list[str]) -> None:
         assert raw[start:end].decode("utf-8") == body
         assert body.strip() == body
         assert body
+
+
+def test_forgetting_an_unknown_id_is_invalid() -> None:
+    async def main() -> None:
+        store = await _store()
+        provider = await local_memory().bind(store)
+        missing = await provider.forget(A, "no-such-id", "k1")
+        assert isinstance(missing, Err)
+        assert missing.error.code == "invalid"
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_local_memory_declares_idempotent_keyed_writes() -> None:
+    provider = local_memory()
+    assert provider.write_effect == "idempotent"
+    assert provider.dedup_window_ms == FOREVER_MS
+
+
+def test_knowledge_revision_takes_the_scope() -> None:
+    async def main() -> None:
+        store = await _store()
+        provider = await LocalKnowledge(()).bind(store)
+        assert await provider.revision(A) == Ok(0)
+        await store.close()
+
+    asyncio.run(main())

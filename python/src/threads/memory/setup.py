@@ -36,7 +36,9 @@ def writes(memory: MemoryProvider | None) -> Writes | None:
     """What the pinned save_memory and forget_memory declare."""
     if memory is None:
         return None
-    return memory.writes if isinstance(memory, DeclaresWrites) else Writes()
+    if isinstance(memory, DeclaresWrites):
+        return Writes(memory.write_effect, memory.dedup_window_ms)
+    return Writes()
 
 
 @dataclass(frozen=True, slots=True)

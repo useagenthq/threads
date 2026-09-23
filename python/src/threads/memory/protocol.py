@@ -8,6 +8,7 @@ A new provider implements these methods and passes `threads.memory.conformance`.
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
+from threads.log import EffectClass
 from threads.memory.types import (
     Doc,
     DocVersion,
@@ -19,7 +20,6 @@ from threads.memory.types import (
     RecordRef,
     Scope,
 )
-from threads.tools.specs import Writes
 
 
 class MemoryProvider(Protocol):
@@ -62,7 +62,10 @@ class DeclaresWrites(Protocol):
     is `unguarded`: an uncertain write parks, it is never retried blindly."""
 
     @property
-    def writes(self) -> Writes: ...
+    def write_effect(self) -> EffectClass: ...
+
+    @property
+    def dedup_window_ms(self) -> int | None: ...
 
 
 @runtime_checkable
@@ -70,4 +73,4 @@ class Revisioned(Protocol):
     """A knowledge provider with a monotonic revision: snapshots record it,
     and a pinned fork searches `as_of` it. Without one, forks search the live corpus."""
 
-    async def revision(self) -> int: ...
+    async def revision(self, scope: Scope) -> Outcome[int]: ...
