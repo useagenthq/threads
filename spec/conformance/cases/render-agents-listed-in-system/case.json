@@ -1,0 +1,9 @@
+{
+  "name": "render-agents-listed-in-system",
+  "family": "agents_teams",
+  "kind": "render",
+  "description": "An agent with subagents reviewer and scanner and handoff target billing: line 0's system ends with the two pinned agent sentences, in declaration order, joined by blank lines; its tools are the framework catalog entries, read_only, sorted by name with the built-ins.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

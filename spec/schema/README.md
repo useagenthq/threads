@@ -124,6 +124,8 @@ The one normative representation of a model request. `req_hash` covers these byt
 
 - **Line 0 is the declared prefix of the current settings epoch:** `{adapter, model, params, system, tools}`.
   - `system` and `tools` come from `thread_started` and never change.
+  - `system` is `thread_started.instructions`, pinned by the runtime as these parts in order, each omitted when empty, joined by `\n\n`: the agent's base instructions; each extension's instructions in declaration order; `Subagents you can start with spawn_agent: <names>.` when the agent lists subagents; `Agents you can hand the conversation to: <names>.` when it lists handoff targets. `<names>` are the agent names in declaration order joined by `, ` (`render-agents-listed-in-system`).
+  - The framework tools are catalog entries, pinned `read_only` and sorted by name together with the built-ins: `todo_write` always; `spawn_agent`, `send_message` and `team_task_claim`, `team_task_create`, `team_task_update` when the agent lists subagents; `handoff` when it lists handoff targets (the names are also `policy.handoffs`). A spawned child pins `send_message` and the `team_task_*` tools as a team member, and only tools its parent pinned (`final_output` excepted).
   - `model`, `params` (`model_params`) and `adapter` come from the latest `thread_started` or `settings_changed` before the request.
   - `adapter` is the model adapter's name, version and every provider-conversion setting, including declared hosted tools.
   - `tools` is `[{name, description, input_schema}]` in declared order. A spec with `defer_loading: true` renders as `{name, description, deferred: true}`. `effect_class`, `dedup_window_ms`, `output_schema` and `ends_turn` aren't model-visible and are omitted.
@@ -148,6 +150,19 @@ The one normative representation of a model request. `req_hash` covers these byt
 - **Provider wire bytes** are derived deterministically from these bytes and the verified artifacts by the adapter that line 0 names, using only the settings line 0 records. So every adapter-visible setting is inside the hashed bytes. An adapter that can't encode a rendered part fails before dispatch with `content_unsupported` or `continuation_unsupported`.
 - **C7, the declared prefix, per settings epoch.** `model_request.declared_prefix` describes line 0 (bytes including its `\n`, and SHA-256). Within one settings epoch every recorded `declared_prefix` must be **equal** to every other and to that epoch's line 0 as re-rendered. A prefix that changes without a `settings_changed`, including one that grows while keeping its old bytes as a start, is a C7 failure (`prefix_changed`). `system` and `tools` never change in place: a new config pin is a new thread.
 - **History prefix (cache reuse, not C7).** Each recorded turn request's bytes are a byte prefix of the next turn request's bytes, unless a `compacted`, `context_edited`, `settings_changed` or denying `before_input` decision lies between them. Compaction side requests are excluded. The render runner checks this as a separate property. It never stands in for C7.
+
+## Team tools
+
+A team tool call changes the lead's log through the lead's writer. `<member>` is the calling agent's name (the lead's own name for the lead's calls). Every act is keyed by the member's call, so a call re-dispatched after a restart answers the same and appends nothing (`team-tool-replay-appends-nothing`). The call's `tool_result.preview` is exactly:
+
+| Tool | Appends | Preview | Repeated call |
+|---|---|---|---|
+| `team_task_create{subject, description?, blocked_by?}` | `team_task_created{task_id: "<member>/<call_id>"}`; an unknown blocker appends nothing: `no task <id>` (error) | the task id | the task exists: its id, nothing appended |
+| `team_task_claim{task_id}` | `team_task_claimed{task_id, member}` when rule 23 allows; else nothing: `can't claim: <reason>` (error) | `claimed <task_id>` | already claimed by this member: `claimed <task_id>` |
+| `team_task_update{task_id, status}` | `team_task_updated` when this member holds the claim; else `<task_id> is not claimed by <member>` (error) | `<task_id> <status>` | the task already has that status: `<task_id> <status>` |
+| `send_message{to, text}` | `team_message{message_id: "<member>/<call_id>", from: <member>, to, text}` | `sent` | the message_id exists: `sent` |
+
+A member receives each `team_message` addressed to it or to `*` (and not from itself) once, before its next turn request, as `injected{source: agent, trust: untrusted_reference, origin: {id: message_id}, text: "<from>: <text>"}`; one already injected with that `origin.id` is never injected again.
 
 ## Semantic rules
 
