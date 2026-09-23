@@ -1,0 +1,9 @@
+{
+  "name": "output-style-restored-after-compaction",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "A compaction drops the range holding the latest output style; the restore re-appends it with actor host in the same batch as compacted, so the next request still carries the style after the summary.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

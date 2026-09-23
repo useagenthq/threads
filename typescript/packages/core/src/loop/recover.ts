@@ -1,6 +1,7 @@
 import { assertNever } from "../assert-never";
 import { type EventOf, effectKey } from "../fold/state";
 import { draft, RECOVERY } from "./drafts";
+import { settleRequested } from "./manual";
 import type { Session } from "./session";
 import { resolvedResult, settleUnknown } from "./settle";
 import { recordOutput } from "./spill";
@@ -13,13 +14,16 @@ import type { Halt } from "./types";
 export async function recover(s: Session): Promise<Halt | undefined> {
   // An open turn with nothing in doubt and nothing pending ends interrupted, unless no
   // model_request follows its last user_input or steer: that input is unsent, so the loop sends it.
+  // A requested compaction's side request is cut before the input, so it never sent it.
   const { fold } = s;
   const last = s.events.findLastIndex(
     (e) => e.type === "user_input" || e.type === "steer",
   );
   const answered = s.events
     .slice(Math.max(last, 0))
-    .some((e) => e.type === "model_request");
+    .some(
+      (e) => e.type === "model_request" && e.data.cause_event_id === undefined,
+    );
   if (
     fold.turnOpen &&
     answered &&
@@ -42,7 +46,7 @@ export async function recover(s: Session): Promise<Halt | undefined> {
     const stopped = await recoverCall(s, callId);
     if (stopped !== undefined) return stopped;
   }
-  return undefined;
+  return settleRequested(s);
 }
 
 /** ask the adapter first; only a final answer settles the attempt. */

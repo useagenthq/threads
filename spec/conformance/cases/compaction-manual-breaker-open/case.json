@@ -1,0 +1,10 @@
+{
+  "name": "compaction-manual-breaker-open",
+  "family": "context_compaction",
+  "kind": "recover",
+  "description": "Three failed compactions open the breaker, then Thread.compact records a request and the thread's next input is durable. The resumed run carries the request out anyway, before its turn request: one side request naming it, compacted{trigger: manual}, then the turn.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

@@ -631,6 +631,9 @@
             },
             {
               "$ref": "#/$defs/ev_context_preflight_blocked"
+            },
+            {
+              "$ref": "#/$defs/ev_compaction_requested"
             }
           ]
         }
@@ -913,7 +916,8 @@
             "team_task_claimed",
             "team_task_updated",
             "team_message",
-            "context_preflight_blocked"
+            "context_preflight_blocked",
+            "compaction_requested"
           ]
         },
         "type_version": {
@@ -1299,6 +1303,16 @@
             "mode",
             "max_retries"
           ],
+          "type": "object"
+        },
+        "output_styles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/NonEmpty"
+          },
+          "description": "Named instructions Thread.setOutputStyle can switch the thread to; an injected{source: output_style} must carry the text pinned here.",
+          "propertyNames": {
+            "$ref": "#/$defs/NonEmpty"
+          },
           "type": "object"
         },
         "permissions": {
@@ -2190,6 +2204,10 @@
         "data": {
           "additionalProperties": false,
           "properties": {
+            "cause_event_id": {
+              "$ref": "#/$defs/EventId",
+              "description": "The compaction_requested this answers (trigger manual). Required while a request is unanswered."
+            },
             "from_event_id": {
               "$ref": "#/$defs/EventId"
             },
@@ -2249,6 +2267,10 @@
         "data": {
           "additionalProperties": false,
           "properties": {
+            "cause_event_id": {
+              "$ref": "#/$defs/EventId",
+              "description": "The compaction_requested this answers (trigger manual). Required while a request is unanswered."
+            },
             "reason": {
               "enum": [
                 "hook_denied",
@@ -2287,6 +2309,49 @@
         "type",
         "type_version",
         "critical",
+        "data"
+      ],
+      "type": "object"
+    },
+    "ev_compaction_requested": {
+      "description": "An operator asked for a compaction while the thread was idle (Thread.compact). The next run summarizes events from the first user_input to the one before this request, before its first turn request; the compacted or compaction_failed that names it (cause_event_id) answers it. Renders nothing.",
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/ActorWithPrincipal",
+          "properties": {
+            "kind": {
+              "enum": [
+                "user",
+                "host"
+              ]
+            }
+          }
+        },
+        "critical": {
+          "const": true
+        },
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "instructions": {
+              "$ref": "#/$defs/NonEmpty",
+              "description": "Operator text for the summary; it follows the fixed instruction of the side request."
+            }
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "compaction_requested"
+        },
+        "type_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "type",
+        "type_version",
+        "critical",
+        "actor",
         "data"
       ],
       "type": "object"
@@ -3275,10 +3340,19 @@
         },
         "data": {
           "additionalProperties": false,
+          "if": {
+            "required": [
+              "cause_event_id"
+            ]
+          },
           "properties": {
             "attempt": {
               "$ref": "#/$defs/PosInt",
               "description": "1 for a fresh request; n+1 when re-sending after model_attempt_abandoned."
+            },
+            "cause_event_id": {
+              "$ref": "#/$defs/EventId",
+              "description": "purpose compaction only: the compaction_requested this side request summarizes for. Its history is cut at that request (Render v1)."
             },
             "declared_prefix": {
               "additionalProperties": false,
@@ -3316,6 +3390,16 @@
             "request_ref",
             "declared_prefix"
           ],
+          "then": {
+            "properties": {
+              "purpose": {
+                "const": "compaction"
+              }
+            },
+            "required": [
+              "purpose"
+            ]
+          },
           "type": "object"
         },
         "type": {

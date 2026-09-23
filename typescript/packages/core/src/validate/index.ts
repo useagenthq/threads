@@ -15,6 +15,12 @@ import {
 } from "./calls";
 import { checkModeChanged, checkOutput, checkToolsChanged } from "./config";
 import {
+  checkCause,
+  checkCompactionRequested,
+  checkOutputStyle,
+  checkRequestedCompacted,
+} from "./requested";
+import {
   checkCompacted,
   checkInput,
   checkModelRequest,
@@ -24,7 +30,7 @@ import type { Violation } from "./violation";
 
 /**
  * The semantic rules that need earlier events (spec/schema/README.md, "Semantic rules" 6-13
- * and 17-28), checked against the fold before `line` is applied. Rules 1-4 are the chain's,
+ * and 17-30), checked against the fold before `line` is applied. Rules 1-4 are the chain's,
  * 5 is the parser's, and 14-16 need rendering or a fork request.
  */
 export function validateNext(
@@ -58,11 +64,22 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "steer":
       return checkInput(fold, e);
     case "model_request":
-      return checkModelRequest(fold);
+      return (
+        checkModelRequest(fold) ??
+        (e.data.purpose === "compaction"
+          ? checkCause(fold, e.data.cause_event_id)
+          : undefined)
+      );
     case "settings_changed":
       return checkSettings(fold, e);
     case "compacted":
-      return checkCompacted(fold, e);
+      return checkCompacted(fold, e) ?? checkRequestedCompacted(fold, e);
+    case "compaction_failed":
+      return checkCause(fold, e.data.cause_event_id);
+    case "compaction_requested":
+      return checkCompactionRequested(fold);
+    case "injected":
+      return checkOutputStyle(fold, e);
     case "tool_call":
       return checkToolCall(fold, e);
     case "tool_result":
@@ -96,7 +113,6 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "schedule_fired":
       return checkUnique(fold, e);
     case "thread_started":
-    case "injected":
     case "heartbeat":
     case "model_response":
     case "model_response_recovered":
@@ -116,7 +132,6 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "log_repaired":
     case "retry_scheduled":
     case "budget_exceeded":
-    case "compaction_failed":
     case "permission_rule_added":
     case "agent_spawned":
     case "handoff":

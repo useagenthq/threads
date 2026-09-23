@@ -1,0 +1,9 @@
+{
+  "name": "output-style-text-mismatch-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A text other than the pinned one. Semantic rule 29: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

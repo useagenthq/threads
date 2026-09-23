@@ -1,0 +1,9 @@
+{
+  "name": "compaction-request-no-input-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A request with nothing to compact. Semantic rule 30: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

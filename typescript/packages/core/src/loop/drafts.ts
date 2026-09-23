@@ -145,16 +145,19 @@ export const draft = {
     actor: HOST,
     data: d,
   }),
-  compacted: (d: Data<"compacted">): EventDraft => ({
+  compacted: (d: Data<"compacted">, actor: Actor = HOST): EventDraft => ({
     ...base,
     type: "compacted",
-    actor: HOST,
+    actor,
     data: d,
   }),
-  compactionFailed: (d: Data<"compaction_failed">): EventDraft => ({
+  compactionFailed: (
+    d: Data<"compaction_failed">,
+    actor: Actor = HOST,
+  ): EventDraft => ({
     ...base,
     type: "compaction_failed",
-    actor: HOST,
+    actor,
     data: d,
   }),
   preflightBlocked: (d: Data<"context_preflight_blocked">): EventDraft => ({

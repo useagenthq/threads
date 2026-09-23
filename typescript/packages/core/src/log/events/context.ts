@@ -8,7 +8,7 @@ import {
 } from "../common";
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { CallId, ChallengeId, EventId } from "../ids";
-import { Int, JsonValue, PosInt, Sha256 } from "../primitives";
+import { Int, JsonValue, NonEmpty, PosInt, Sha256 } from "../primitives";
 import { type Ruled, withRule } from "../rules";
 import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
 
@@ -45,6 +45,7 @@ export const CompactedData: Strict<{
   summary_ref: typeof ArtifactRef;
   summary_request_event_id: Opt<typeof EventId>;
   trigger: Opt<EnumOf<typeof COMPACT_TRIGGERS>>;
+  cause_event_id: Opt<typeof EventId>;
 }> = z.strictObject({
   from_seq: PosInt,
   to_seq: PosInt,
@@ -53,6 +54,9 @@ export const CompactedData: Strict<{
   summary_ref: ArtifactRef,
   summary_request_event_id: EventId.optional(),
   trigger: z.enum(COMPACT_TRIGGERS).optional(),
+  cause_event_id: EventId.describe(
+    "The compaction_requested this answers (trigger manual). Required while a request is unanswered.",
+  ).optional(),
 });
 export const Compacted: EventDef<"compacted", typeof CompactedData, true> =
   event({
@@ -165,10 +169,14 @@ export const CompactionFailedData: Strict<{
   stage: EnumOf<typeof COMPACTION_STAGES>;
   reason: EnumOf<typeof COMPACTION_FAILURES>;
   request_event_id: Opt<typeof EventId>;
+  cause_event_id: Opt<typeof EventId>;
 }> = z.strictObject({
   stage: z.enum(COMPACTION_STAGES),
   reason: z.enum(COMPACTION_FAILURES),
   request_event_id: EventId.optional(),
+  cause_event_id: EventId.describe(
+    "The compaction_requested this answers (trigger manual). Required while a request is unanswered.",
+  ).optional(),
 });
 export const CompactionFailed: EventDef<
   "compaction_failed",
@@ -180,6 +188,29 @@ export const CompactionFailed: EventDef<
   description:
     "A compaction attempt failed. Consecutive failures since the last compacted open the circuit breaker (derived).",
   data: CompactionFailedData,
+});
+
+export const CompactionRequestedData: Strict<{
+  instructions: Opt<typeof NonEmpty>;
+}> = z.strictObject({
+  instructions: NonEmpty.describe(
+    "Operator text for the summary; it follows the fixed instruction of the side request.",
+  ).optional(),
+});
+export const CompactionRequested: EventDef<
+  "compaction_requested",
+  typeof CompactionRequestedData,
+  true,
+  typeof ActorWithPrincipal
+> = eventWithActor({
+  type: "compaction_requested",
+  critical: true,
+  description:
+    "An operator asked for a compaction while the thread was idle (Thread.compact). The next run summarizes events from the first user_input to the one before this request, before its first turn request; the compacted or compaction_failed that names it (cause_event_id) answers it. Renders nothing.",
+  data: CompactionRequestedData,
+  actor: withRule(ActorWithPrincipal, {
+    properties: { kind: { enum: ["user", "host"] } },
+  }),
 });
 
 export const ModeChangedData: Strict<{

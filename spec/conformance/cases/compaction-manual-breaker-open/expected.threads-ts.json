@@ -1,0 +1,126 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 4,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 550,
+      "output_tokens": 60,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000007"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000009"
+      },
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-00000000000b"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-00000000000e"
+      },
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000010"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000013"
+      },
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000015"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000018"
+      },
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-00000000001b"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 27,
+      "hash": "1dd0e1aa5564de8e8a6e17741e89d717b6aa6197f21d5e42afab96062f514d76"
+    }
+  },
+  "appended": [
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1,
+        "purpose": "compaction",
+        "cause_event_id": "0192e000-0000-7000-8000-00000000001a"
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "The user asked what README.md holds (one heading, demo)."
+          }
+        ]
+      }
+    },
+    {
+      "type": "compacted",
+      "data": {
+        "trigger": "manual",
+        "from_seq": 2,
+        "to_seq": 25,
+        "cause_event_id": "0192e000-0000-7000-8000-00000000001a"
+      }
+    },
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ]
+}

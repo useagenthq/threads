@@ -1,0 +1,9 @@
+{
+  "name": "compaction-manual-old-guide-excluded",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "A before_compact guide recorded for an earlier, failed compaction is not carried into a later requested compaction: its side request's instruction line takes only guides appended after the request, so here it is the fixed text alone.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

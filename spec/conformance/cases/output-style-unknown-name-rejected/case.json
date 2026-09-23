@@ -1,0 +1,9 @@
+{
+  "name": "output-style-unknown-name-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A name the pin lacks. Semantic rule 29: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

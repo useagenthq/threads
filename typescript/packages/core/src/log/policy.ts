@@ -208,6 +208,7 @@ export const Policy: Strict<{
   permissions: Opt<typeof PermissionsPolicy>;
   output: Opt<typeof OutputPolicy>;
   handoffs: Opt<Arr<typeof NonEmpty>>;
+  output_styles: Opt<z.ZodRecord<typeof NonEmpty, typeof NonEmpty>>;
 }> = z
   .strictObject({
     models: z
@@ -230,6 +231,12 @@ export const Policy: Strict<{
     handoffs: z
       .array(NonEmpty)
       .describe("Agent names this agent may hand the conversation to.")
+      .optional(),
+    output_styles: z
+      .record(NonEmpty, NonEmpty)
+      .describe(
+        "Named instructions Thread.setOutputStyle can switch the thread to; an injected{source: output_style} must carry the text pinned here.",
+      )
       .optional(),
   })
   .meta({

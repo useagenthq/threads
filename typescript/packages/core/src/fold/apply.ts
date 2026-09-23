@@ -70,6 +70,7 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "fork":
     case "compacted":
     case "compaction_failed":
+    case "compaction_requested":
       applyControl(fold, e);
       return;
     case "agent_spawned":
@@ -157,6 +158,7 @@ type TurnEvent = EventOf<
 function applyTurn(fold: Fold, e: TurnEvent): void {
   switch (e.type) {
     case "user_input":
+      fold.firstInput ??= e;
       fold.turnOpen = true;
       fold.budgetBlocked = false;
       return;
@@ -166,7 +168,11 @@ function applyTurn(fold: Fold, e: TurnEvent): void {
       return;
     case "model_request": {
       const compaction = e.data.purpose === "compaction";
-      fold.requests.set(e.event_id, { compaction });
+      const cause = e.data.cause_event_id;
+      fold.requests.set(
+        e.event_id,
+        cause === undefined ? { compaction } : { compaction, cause },
+      );
       fold.awaiting.add(e.event_id);
       return;
     }
@@ -290,6 +296,7 @@ type ControlEvent = EventOf<
   | "fork"
   | "compacted"
   | "compaction_failed"
+  | "compaction_requested"
 >;
 
 function applyControl(fold: Fold, e: ControlEvent): void {
@@ -326,13 +333,24 @@ function applyControl(fold: Fold, e: ControlEvent): void {
     case "compacted":
       fold.ranges.push([e.data.from_seq, e.data.to_seq]);
       fold.compactionFailures = 0;
+      answer(fold, e.data.cause_event_id);
       return;
     case "compaction_failed":
       fold.compactionFailures += 1;
+      answer(fold, e.data.cause_event_id);
+      return;
+    case "compaction_requested":
+      fold.compactionRequest = e;
       return;
     default:
       assertNever(e);
   }
+}
+
+/** An outcome naming the unanswered compaction request answers it (rule 30 checked the name). */
+function answer(fold: Fold, cause: string | undefined): void {
+  if (cause !== undefined && cause === fold.compactionRequest?.event_id)
+    fold.compactionRequest = undefined;
 }
 
 /** C4 without the expiry, which depends on the reader's clock. */

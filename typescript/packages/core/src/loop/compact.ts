@@ -1,19 +1,20 @@
 import { assertNever } from "../assert-never";
+import type { EventOf } from "../fold/state";
 import type { Outcome } from "../hooks/invoke";
-import type { KnownEvent } from "../log";
+import type { EventId, KnownEvent } from "../log";
 import { refReader, render } from "../render";
 import type { EventDraft } from "../store";
 import { attempt } from "./attempt";
-import { draft } from "./drafts";
-import { decision, defining, run } from "./hooks";
+import { draft, HOST, type RECOVERY } from "./drafts";
+import { decision, defining, recorded, run } from "./hooks";
 import { contextPolicy, tokens } from "./policy";
-import { restore } from "./restore";
+import { restoreDrafts, restoreHooks } from "./restore";
 import type { Session } from "./session";
 import { stepEvents } from "./turn";
 import type { Halt } from "./types";
 
 // (clear old results) and L2 (summary compaction, then L3 restore), run on a
-// threshold by the ladder (ladder.ts) or reactively by L4 and L5.
+// threshold by the ladder (ladder.ts), reactively by L4 and L5, or on request (manual.ts).
 
 export type Compaction =
   | { readonly kind: "compacted" }
@@ -23,6 +24,18 @@ export type Compaction =
   | { readonly kind: "halt"; readonly halt: Halt };
 
 type Reason = "threshold" | "compaction_fallback";
+export type FailReason =
+  | "still_over_threshold"
+  | "empty_summary"
+  | "prompt_too_long"
+  | "model_error"
+  | "artifact_error";
+
+/** Who a compaction's outcome is for: the request it answers, and recovery when it settles it. */
+export type Answering = {
+  readonly cause?: EventId;
+  readonly actor?: typeof HOST | typeof RECOVERY;
+};
 
 /** L5's once-per-step guard, shared with L4: this step already compacted or failed to. */
 export function reactiveSpent(s: Session): boolean {
@@ -67,86 +80,120 @@ export async function compact(
       return { kind: "ended" };
     case "broken":
     case "unsupported":
-    case "budget":
       return failed(s, "model_error");
+    case "budget":
+      // The attempt recorded the failure with budget_exceeded.
+      return { kind: "failed" };
     default:
       return assertNever(got);
   }
 }
 
-function failed(
+/** compaction_failed{summary}, naming the latest side request unless none was made for it. */
+export function failed(
   s: Session,
-  reason:
-    | "still_over_threshold"
-    | "empty_summary"
-    | "prompt_too_long"
-    | "model_error",
+  reason: FailReason,
+  answering: Answering = {},
 ): Compaction {
+  const { cause, actor = HOST } = answering;
   const side = s.events.findLast(
-    (e) => e.type === "model_request" && e.data.purpose === "compaction",
+    (e) =>
+      e.type === "model_request" &&
+      e.data.purpose === "compaction" &&
+      e.data.cause_event_id === cause,
   );
+  const omit =
+    side === undefined ||
+    reason === "still_over_threshold" ||
+    reason === "artifact_error";
   const stopped = s.append(
-    draft.compactionFailed({
-      stage: "summary",
-      reason,
-      ...(side === undefined || reason === "still_over_threshold"
-        ? {}
-        : { request_event_id: side.event_id }),
-    }),
+    draft.compactionFailed(
+      {
+        stage: "summary",
+        reason,
+        ...(omit ? {} : { request_event_id: side.event_id }),
+        ...(cause === undefined ? {} : { cause_event_id: cause }),
+      },
+      actor,
+    ),
   );
   return stopped === undefined
     ? { kind: "failed" }
     : { kind: "halt", halt: stopped };
 }
 
-async function summarized(
+/**
+ * `compacted` over `range`, from the latest side request's summary, with its restore in the
+ * same batch; the context hooks follow.
+ */
+export async function summarized(
   s: Session,
   range: readonly [KnownEvent, KnownEvent],
   text: string,
-  trigger: "reactive" | "threshold",
+  trigger: "reactive" | "threshold" | "manual",
+  answering: Answering = {},
 ): Promise<Compaction> {
   const [from, to] = range;
-  const side = s.events.findLast((e) => e.type === "model_request");
+  const { cause, actor = HOST } = answering;
+  const side = s.events.findLast(
+    (e) => e.type === "model_request" && e.data.purpose === "compaction",
+  );
   if (side === undefined) throw new Error("a summary answers a side request");
+  const restored = await restoreDrafts(s, from.seq, to.seq);
   const stopped = s.append(
-    draft.compacted({
-      from_seq: from.seq,
-      to_seq: to.seq,
-      from_event_id: from.event_id,
-      to_event_id: to.event_id,
-      summary_ref: s.store(text, "text/plain"),
-      summary_request_event_id: side.event_id,
-      trigger,
-    }),
+    draft.compacted(
+      {
+        from_seq: from.seq,
+        to_seq: to.seq,
+        from_event_id: from.event_id,
+        to_event_id: to.event_id,
+        summary_ref: s.store(text, "text/plain"),
+        summary_request_event_id: side.event_id,
+        trigger,
+        ...(cause === undefined ? {} : { cause_event_id: cause }),
+      },
+      actor,
+    ),
+    ...restored,
   );
   if (stopped !== undefined) return { kind: "halt", halt: stopped };
-  const done = s.events.at(-1);
-  if (done?.type !== "compacted")
-    throw new Error("compacted was just appended");
-  const restored = await restore(s, done);
-  return restored === undefined
+  const hooked = await restoreHooks(s);
+  return hooked === undefined
     ? { kind: "compacted" }
-    : { kind: "halt", halt: restored };
+    : { kind: "halt", halt: hooked };
 }
 
 /**
  * before_compact gates the side request: a deny or failure is
  * compaction_failed{stage: hook}; a guide is recorded with its text, which the side request's
- * instruction line carries (Render v1).
+ * instruction line carries (Render v1). Every extension sees the state from before the first
+ * call. For a request, an extension that already decided after it is not asked again.
  */
-async function beforeCompact(s: Session): Promise<Compaction | undefined> {
+export async function beforeCompact(
+  s: Session,
+  request?: EventOf<"compaction_requested">,
+): Promise<Compaction | undefined> {
+  const window =
+    request === undefined ? [] : s.events.filter((e) => e.seq > request.seq);
+  const cause =
+    request === undefined ? {} : { cause_event_id: request.event_id };
+  const state = s.state();
   for (const ext of defining(s, "before_compact")) {
-    const out = await run(ext, "before_compact", [s.state()]);
-    const recorded = compactDecision(ext.name, out);
+    if (recorded(window, ext.name, "before_compact") !== undefined) continue;
+    const out = await run(ext, "before_compact", [state]);
+    const made = compactDecision(ext.name, out);
     const denied =
-      recorded.data.decision !== "proceed" &&
-      recorded.data.decision !== "guide";
+      made.data.decision !== "proceed" && made.data.decision !== "guide";
     const stopped = denied
       ? s.append(
-          recorded,
-          draft.compactionFailed({ stage: "hook", reason: "hook_denied" }),
+          made,
+          draft.compactionFailed({
+            stage: "hook",
+            reason: "hook_denied",
+            ...cause,
+          }),
         )
-      : s.append(recorded);
+      : s.append(made);
     if (stopped !== undefined) return { kind: "halt", halt: stopped };
     if (denied) return { kind: "failed" };
   }

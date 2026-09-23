@@ -23,14 +23,6 @@
   {"name": "SandboxContext", "lang": "py", "kind": "missing", "lane": "01-api-surface-gate"},
   {"name": "SearchBackend", "lang": "py", "kind": "missing", "lane": "01-api-surface-gate"},
   {"name": "SearchHit", "lang": "py", "kind": "missing", "lane": "01-api-surface-gate"},
-  {"name": "Thread.compact", "lang": "py", "kind": "missing", "lane": "17-thread-methods"},
-  {"name": "Thread.compact", "lang": "ts", "kind": "missing", "lane": "17-thread-methods"},
-  {"name": "Thread.replay", "lang": "py", "kind": "missing", "lane": "17-thread-methods"},
-  {"name": "Thread.replay", "lang": "ts", "kind": "missing", "lane": "17-thread-methods"},
-  {"name": "Thread.setOutputStyle", "lang": "py", "kind": "missing", "lane": "17-thread-methods"},
-  {"name": "Thread.setOutputStyle", "lang": "ts", "kind": "missing", "lane": "17-thread-methods"},
   {"name": "VerifiedDelivery", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
-  {"name": "agent.output_styles", "lang": "py", "kind": "missing", "lane": "17-thread-methods"},
-  {"name": "agent.output_styles", "lang": "ts", "kind": "missing", "lane": "17-thread-methods"},
   {"name": "tool.output", "lang": "py", "kind": "missing", "lane": "05-python-output-fallback"}
 ]

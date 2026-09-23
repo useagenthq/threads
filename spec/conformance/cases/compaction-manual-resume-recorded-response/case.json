@@ -1,0 +1,10 @@
+{
+  "name": "compaction-manual-resume-recorded-response",
+  "family": "context_compaction",
+  "kind": "recover",
+  "description": "A crash after a requested compaction's summary was recorded and before its outcome. Recovery appends compacted from the recorded summary and never sends the summary request again; the side request didn't carry the turn's input, so the turn then continues with its own request.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}
