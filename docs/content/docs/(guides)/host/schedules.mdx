@@ -15,7 +15,7 @@ const app = host({
   agents: { support },
   schedules: [
     {
-      id: "daily-digest",
+      id: "daily_digest",
       agent: "support",
       cron: "0 9 * * 1-5",
       timezone: "Europe/Berlin",
@@ -36,7 +36,7 @@ app = host(
     agents={"support": support},
     schedules=[
         Schedule(
-            id="daily-digest",
+            id="daily_digest",
             agent="support",
             cron="0 9 * * 1-5",
             timezone="Europe/Berlin",
@@ -54,7 +54,7 @@ Schedules start firing after `ready()`, which `threads dev` and `threads start` 
 ## Fields
 
 <Field name="id" type="string" required>
-  A stable name for the schedule. Keep it the same across deploys.
+  A stable name for the schedule: lowercase letters, digits and underscores, starting with a letter. Keep it the same across deploys.
 </Field>
 <Field name="agent" type="string" required>
   A key of the host's `agents`.
@@ -73,20 +73,20 @@ Schedules start firing after `ready()`, which `threads dev` and `threads start` 
 
 - **One run per occurrence.** Each occurrence is reserved in the store before it is decided, so two hosts on the same store, or a restart right at the boundary, never run it twice.
 - **No catch-up storms.** Occurrences that fell due while the host was down are skipped as missed, not run late.
-- **No pile-ups.** An occurrence that falls due while the schedule's previous run is still going is skipped as an overlap.
+- **No pile-ups.** An occurrence that falls due while the schedule's previous run is still going is skipped as an overlap, even across a config change: a new thread starts only once the old one's run has finished.
 - **Daylight saving.** A local time skipped by a spring-forward runs at the first valid minute after it; a time repeated by a fall-back runs once.
 - A bad cron expression, an unknown time zone or an unknown agent fails `ready()` with a `ConfigError`.
 
 ## One thread per schedule
 
-A schedule keeps one thread, created at its first occurrence, for as long as its agent's config stays the same. Every occurrence is logged on it, so the schedule's whole history is one log you can read, replay and test:
+A schedule keeps one thread, created at its first occurrence, for as long as its agent's config stays the same. Every occurrence is logged on it, so each config's history is one log you can read, replay and test:
 
 - **Fired:** `schedule_fired`, then the run's input and the run itself.
 - **Skipped:** `schedule_skipped` with a reason: `missed`, `overlap`, or `removed` (see below).
 
-Each occurrence has the id `<schedule id>@<scheduled instant>`, for example `daily-digest@2026-09-23T07:00:00.000Z`, the same in both languages.
+Each occurrence has the id `<schedule id>@<scheduled instant>`, for example `daily_digest@2026-09-23T07:00:00.000Z`, the same in both languages.
 
-A thread keeps the agent config it started with, so changing the schedule's agent, or that agent's instructions, tools or model, starts a new thread at the next occurrence. Changing only the cron, time zone or input keeps the thread.
+A thread keeps the agent config it started with, so changing the schedule's agent, or that agent's instructions, tools or model, starts a new thread at the next occurrence once the old thread's run has finished. The old thread stays in the store with its history; its `schedule_fired` and `schedule_skipped` events name the schedule. Changing only the cron, time zone or input keeps the thread.
 
 A due occurrence is reserved with the agent, input and time zone it fires with. So an occurrence reserved before you remove or change its schedule still fires as it was reserved. If its agent is no longer on the host, or its config changed since the thread started, it is logged as skipped with reason `removed`. Deleting a schedule's thread drops the occurrences it had reserved but not yet decided: they are never logged. The next occurrence starts a new thread.
 

@@ -943,6 +943,129 @@
       ]
     },
     {
+      "name": "schedule-agent-changed-while-running",
+      "note": "A config change moves to a new thread only once the old one is quiet: an occurrence due while the old run goes on is an overlap on the old thread, the old run is recovered there, and the next occurrence starts the new thread.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "run"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-01T10:00:00Z",
+          "agents": [
+            "bot",
+            "helper"
+          ],
+          "schedules": [
+            {
+              "id": "daily",
+              "agent": "helper",
+              "cron": "0 9 * * *",
+              "input": "Report."
+            }
+          ]
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "pending",
+                  "overlap"
+                ]
+              ],
+              "threads": 1
+            }
+          }
+        },
+        {
+          "release": "crash"
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:00:02Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped overlap daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "overlap"
+                ]
+              ],
+              "threads": 1
+            }
+          }
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-03T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-03T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "overlap"
+                ],
+                [
+                  "2026-05-03T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 2,
+              "inputs": [
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "schedule-agent-config-changed",
       "note": "A pending reservation whose agent now pins another config than its thread's is logged as removed, never fired into a run the pin refuses; the next occurrence starts a new thread.",
       "steps": [

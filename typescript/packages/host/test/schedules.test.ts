@@ -193,4 +193,16 @@ describe("scheduler", () => {
     );
     expect(() => pendingRows(db, "local")).toThrow("schedule rows are corrupt");
   });
+
+  test("a schedule id that is not a Name is refused at ready", () => {
+    const ctx = new HostContext(
+      sqlite(":memory:"),
+      { support: mailer({ responses: [] }) },
+      {},
+    );
+    const bound = bindSchedules(ctx, [
+      { id: "daily-digest", agent: "support", cron: "0 9 * * *", input: "Hi." },
+    ]);
+    expect(bound).toContain("lowercase letters, digits and underscores");
+  });
 });

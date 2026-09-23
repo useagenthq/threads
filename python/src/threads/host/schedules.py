@@ -16,6 +16,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Final
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from pydantic import TypeAdapter, ValidationError
+
+from threads._generated.events_v1 import Name
 from threads._generated.host_api_v1 import Input
 from threads.agents.config import ConfigError
 from threads.agents.run import pinned_start
@@ -27,6 +30,7 @@ from threads.store import LOCAL_TENANT
 from threads.store.schedules import Due
 
 MINUTE_MS: Final = 60_000
+_NAME: TypeAdapter[Name] = TypeAdapter(Name)
 _RANGES: Final = ((0, 59), (0, 23), (1, 31), (1, 12), (0, 6))
 """minute, hour, day of month, month, day of week (0 is Sunday; 7 is accepted as Sunday)."""
 
@@ -96,6 +100,15 @@ def _field(text: str, lo: int, hi: int, expression: str) -> frozenset[int]:
     return frozenset(values)
 
 
+def _check_id(schedule_id: str) -> None:
+    """spec/api.json Schedule.id is a Name."""
+    try:
+        _NAME.validate_python(schedule_id)
+    except ValidationError:
+        why = "an id is lowercase letters, digits and underscores, starting with a letter, up to 64"
+        raise ConfigError("invalid_config", f"schedule {schedule_id}: {why}") from None
+
+
 def zone(name: str) -> ZoneInfo:
     try:
         return ZoneInfo(name)
@@ -137,6 +150,7 @@ class Scheduler:
     def check(self, agents: Callable[[str], object]) -> None:
         """ready(): every schedule names a host agent, a valid cron and a known zone."""
         for s in self._schedules:
+            _check_id(s.id)
             if agents(s.agent) is None:
                 raise ConfigError("invalid_config", f"schedule {s.id}: no agent {s.agent}")
             parse_cron(s.cron)

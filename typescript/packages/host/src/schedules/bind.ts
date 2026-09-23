@@ -1,4 +1,5 @@
 import type { Input } from "@threads/core";
+import { Name } from "@threads/core/host";
 import type { HostContext, HostedAgent } from "../context";
 import { type Cron, parseCron } from "../cron";
 
@@ -28,6 +29,8 @@ export function bindSchedules(
 ): readonly Bound[] | string {
   const bound: Bound[] = [];
   for (const schedule of schedules) {
+    if (!Name.safeParse(schedule.id).success)
+      return `schedule ${schedule.id}: an id is lowercase letters, digits and underscores, starting with a letter, up to 64`;
     const cron = parseCron(schedule.cron);
     if (!cron.ok) return `schedule ${schedule.id}: ${cron.error}`;
     const hosted = ctx.agents.get(schedule.agent);

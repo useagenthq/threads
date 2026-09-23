@@ -157,3 +157,27 @@ def test_ready_refuses_a_schedule_of_an_unknown_agent() -> None:
     served = host(store=sqlite(":memory:"), agents={}, schedules=[bad])
     with pytest.raises(ConfigError):
         asyncio.run(served.ready())
+
+
+def test_ready_refuses_a_schedule_id_that_is_not_a_name() -> None:
+    bot = agent(name="bot", model=scripted_model({"responses": []}))
+    bad = Schedule(id="daily-digest", agent="bot", cron="* * * * *", input="hi")
+    served = host(store=sqlite(":memory:"), agents={"bot": bot}, schedules=[bad])
+    with pytest.raises(ConfigError, match="lowercase letters, digits and underscores"):
+        asyncio.run(served.ready())
+
+
+def test_a_stored_pending_row_whose_thread_id_is_not_a_uuid_is_reported_as_corrupt() -> None:
+    async def main() -> None:
+        sq = await open_store(sqlite(":memory:"))
+        await sq.run(
+            lambda c: c.execute(
+                "INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state,"
+                " thread_id, claimed_at, agent, input_json, timezone) VALUES ('local', 'daily', 1,"
+                " 'pending', 'not-a-thread-id', 1, 'bot', '\"Report.\"', 'UTC')"
+            )
+        )
+        with pytest.raises(TypeError, match="schedule rows are corrupt"):
+            await sq.tables.schedules.pending()
+
+    asyncio.run(main())

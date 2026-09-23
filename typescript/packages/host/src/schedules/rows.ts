@@ -12,6 +12,7 @@ import {
   type SqliteDriver,
   ThreadId,
   uuidv7,
+  type VerifiedLog,
 } from "@threads/core/host";
 import { z } from "zod";
 
@@ -91,9 +92,9 @@ export function pendingOf(
 /**
  * Reserves due occurrences on the schedule's thread, in one transaction with finding that thread:
  * a deletion commits wholly before (a new thread is made) or after (these rows are retired). A
- * schedule without a thread, or whose thread was started with another config than `started`
- * pins, gets a new thread (a config change starts a new thread): its identity row, branch and
- * thread_started are written together. Another scheduler's reservation of a key wins silently.
+ * schedule without a thread gets one; so does one whose agent now pins another config than its
+ * thread's (a config change starts a new thread), once that thread is quiet. The identity row,
+ * branch and thread_started are written together. Keys another scheduler reserved are skipped.
  */
 export function reserveDue(
   db: SqliteDriver,
@@ -101,15 +102,16 @@ export function reserveDue(
   started: EventDraft,
   due: readonly Due[],
 ): void {
-  const first = due[0];
-  if (first === undefined) return;
   db.transaction(() => {
+    const fresh = due.filter((row) => !reserved(db, log.tenant, row));
+    const first = fresh[0];
+    if (first === undefined) return;
     const found = threadOf(db, log.tenant, first.schedule_id);
     const threadId =
-      found !== undefined && pinOf(log, found) === hashOf(started)
+      found !== undefined && keeps(db, log, found, started)
         ? found
         : newThread(db, log, first.schedule_id, started);
-    for (const row of due)
+    for (const row of fresh)
       db.run(
         `INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state, reason,
           thread_id, claimed_at, agent, input_json, timezone)
@@ -208,15 +210,49 @@ export function hashOf(started: EventDraft): string | undefined {
 
 /** The config_hash a stored thread was started with, read back through the log. */
 export function pinOf(log: LogStore, threadId: ThreadId): string | undefined {
+  const read = logOf(log, threadId);
+  return read === undefined ? undefined : pinIn(read);
+}
+
+/**
+ * Whether the schedule stays on its thread: it pins the same config, or it doesn't but the
+ * thread is still busy. A config change moves to a new thread only once the old one is quiet (no
+ * open turn, no undecided reservation), so no run is left behind where recovery won't look and
+ * no new run starts while the old one goes on.
+ */
+function keeps(
+  db: SqliteDriver,
+  log: LogStore,
+  threadId: ThreadId,
+  started: EventDraft,
+): boolean {
+  const read = logOf(log, threadId);
+  if (read === undefined) return false;
+  if (pinIn(read) === hashOf(started)) return true;
+  return read.fold.turnOpen || pendingOf(db, log.tenant, threadId).length > 0;
+}
+
+function logOf(log: LogStore, threadId: ThreadId): VerifiedLog | undefined {
   const main = log.mainBranch(threadId);
   const read = main.ok ? log.read(main.value) : undefined;
-  if (read?.ok !== true) return undefined;
-  const started = knownEvents(read.value).find(
-    (e) => e.type === "thread_started",
-  );
+  return read?.ok === true ? read.value : undefined;
+}
+
+function pinIn(read: VerifiedLog): string | undefined {
+  const started = knownEvents(read).find((e) => e.type === "thread_started");
   return started?.type === "thread_started"
     ? started.data.config_hash
     : undefined;
+}
+
+function reserved(db: SqliteDriver, tenant: string, row: Due): boolean {
+  return (
+    db.all(
+      `SELECT 1 FROM schedule_occurrences
+        WHERE tenant_id = ? AND schedule_id = ? AND occurrence_at = ?`,
+      [tenant, row.schedule_id, row.occurrence_at],
+    ).length > 0
+  );
 }
 
 function threadOf(
