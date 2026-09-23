@@ -99,16 +99,32 @@ export function checkReadScript(path: string): string {
   ].join("\n");
 }
 
-const utf8 = new TextDecoder();
+// Fatal: a raw-byte path has no lossless JSON string, and a lossy decode would give two
+// different paths the same manifest.
+const utf8 = new TextDecoder("utf-8", { fatal: true });
 const Octal = z.string().regex(/^[0-7]{1,6}$/);
 const Decimal = z.string().regex(/^[0-9]{1,15}$/);
 
-/** Parses the manifest script's output (a sandbox response: a trust boundary), sorted by path. */
+function decoded(output: Uint8Array): string | undefined {
+  try {
+    return utf8.decode(output);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Parses the manifest script's output (a sandbox response: a trust boundary), in UTF-16 order
+ * of path (spec/schema/README.md, Snapshot manifest). Malformed output, including a path that
+ * isn't UTF-8, is undefined.
+ */
 export function parseManifest(
   output: Uint8Array,
 ): readonly ManifestEntry[] | undefined {
+  const text = decoded(output);
+  if (text === undefined) return undefined;
   const entries: ManifestEntry[] = [];
-  for (const record of utf8.decode(output).split("\0")) {
+  for (const record of text.split("\0")) {
     if (record === "") continue;
     const [mode, size, sha256, ...path] = record.split("\t");
     const parsed = ManifestSchema.safeParse({

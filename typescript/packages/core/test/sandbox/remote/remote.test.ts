@@ -118,6 +118,18 @@ describe("the kit's scripts", () => {
     for (const output of bad)
       expect(parseManifest(utf8.encode(output))).toBeUndefined();
   });
+
+  test("a path that isn't UTF-8 is refused, never read as U+FFFD", () => {
+    const sha = "a".repeat(64);
+    const record = (raw: number) =>
+      new Uint8Array([
+        ...new TextEncoder().encode(`644\t1\t${sha}\tx`),
+        raw,
+        0,
+      ]);
+    expect(parseManifest(record(0xff))).toBeUndefined();
+    expect(parseManifest(record(0xfe))).toBeUndefined();
+  });
 });
 
 describe("snapshot capability by the provider's declared boundary", () => {
