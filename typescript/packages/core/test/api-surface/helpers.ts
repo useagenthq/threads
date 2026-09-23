@@ -35,8 +35,8 @@ export type Req<T, K extends PropertyKey> = K extends keyof T
   : false;
 
 /**
- * The parameter lists of up to five overloads. With fewer overloads, tsc repeats the first
- * one in the leading slots, so a function with at most four has equal first two slots.
+ * The parameter lists of a function's last eight overloads. With fewer than eight, tsc fills the
+ * leading slots with copies of the first overload, so every overload is in the window.
  */
 type Signatures<F> = F extends {
   (...args: infer A1): unknown;
@@ -44,14 +44,28 @@ type Signatures<F> = F extends {
   (...args: infer A3): unknown;
   (...args: infer A4): unknown;
   (...args: infer A5): unknown;
+  (...args: infer A6): unknown;
+  (...args: infer A7): unknown;
+  (...args: infer A8): unknown;
 }
-  ? [A1, A2, A3, A4, A5]
+  ? [A1, A2, A3, A4, A5, A6, A7, A8]
   : never;
 
-/** The options helpers below read at most four overloads; a fifth must fail loudly. */
-export type AtMostFourOverloads<F> =
-  Signatures<F> extends [infer A1, infer A2, ...unknown[]]
-    ? Equals<A1, A2>
+/**
+ * At most five overloads: then the first four slots are copies of the first overload, and the
+ * window holds every overload, so the option checks below see all of them. With more, the
+ * leading slots differ and this fails. (It can't tell four identical consecutive overloads from
+ * padding: a function declaring the same signature four times in a row is out of scope.)
+ */
+export type AtMostFiveOverloads<F> =
+  Signatures<F> extends [infer A1, infer A2, infer A3, infer A4, ...unknown[]]
+    ? [Equals<A1, A2>, Equals<A2, A3>, Equals<A3, A4>] extends [
+        true,
+        true,
+        true,
+      ]
+      ? true
+      : false
     : false;
 
 /** The options object at parameter N of one overload; an overload without it has none. */
@@ -62,15 +76,7 @@ type OptionsAt<A, N extends number> = A extends readonly unknown[]
   : never;
 
 /** Every overload's options object, as a union (each member of a union options type counts). */
-type EachOptions<F, N extends number> =
-  Signatures<F> extends [infer A1, infer A2, infer A3, infer A4, infer A5]
-    ?
-        | OptionsAt<A1, N>
-        | OptionsAt<A2, N>
-        | OptionsAt<A3, N>
-        | OptionsAt<A4, N>
-        | OptionsAt<A5, N>
-    : never;
+type EachOptions<F, N extends number> = OptionsAt<Signatures<F>[number], N>;
 
 type AnyHas<U, K extends PropertyKey> = true extends (
   U extends unknown

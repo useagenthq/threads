@@ -55,8 +55,9 @@ class Gap:
     at: str | None = None
 
     @property
-    def key(self) -> tuple[str, str, str]:
-        return (self.name, self.lang, self.kind)
+    def key(self) -> tuple[str, str, str, str | None]:
+        """What a gap claims; the baseline compares it, so retargeting a placement is new."""
+        return (self.name, self.lang, self.kind, self.at)
 
 
 def obj(v: Json) -> dict[str, Json]:
@@ -188,7 +189,8 @@ def _gap(entry: Json, at: str, contract: dict[str, Member]) -> tuple[Gap | None,
 
 
 def parse_gaps(doc: Json, contract: dict[str, Member], source: str) -> tuple[list[Gap], list[str]]:
-    """The registry's entries, or every problem with it. A duplicate entry is a problem."""
+    """The registry's entries, or every problem with it. A member has one gap per language, except
+    a Python optional method, whose base protocol and capability protocol can each be wrong."""
     if not isinstance(doc, list):
         return [], [f"{source}: expected a JSON array of gaps"]
     gaps: list[Gap] = []
@@ -196,8 +198,12 @@ def parse_gaps(doc: Json, contract: dict[str, Member], source: str) -> tuple[lis
     for i, entry in enumerate(doc):
         gap, problems = _gap(entry, f"{source}[{i}]", contract)
         errs += problems
-        if gap is not None and gap.key in {g.key for g in gaps}:
-            errs.append(f"{source}[{i}]: duplicate gap {gap.name} ({gap.lang}, {gap.kind})")
-        elif gap is not None:
+        if gap is None:
+            continue
+        same = [g for g in gaps if (g.name, g.lang) == (gap.name, gap.lang)]
+        two_allowed = gap.lang == "py" and contract[gap.name].capability is not None
+        if same and (not two_allowed or any(g.kind == gap.kind for g in same)):
+            errs.append(f"{source}[{i}]: a second gap for {gap.name} ({gap.lang})")
+        else:
             gaps.append(gap)
     return gaps, errs

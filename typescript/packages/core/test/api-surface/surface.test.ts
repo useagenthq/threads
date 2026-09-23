@@ -96,12 +96,37 @@ describe("options over overloads", () => {
     ]);
   });
 
-  test("a fifth overload is red at the overload-count assertion", () => {
+  test("a fifth overload is still read in full", () => {
     const five = `${pkg}export declare function four(options: { readonly a: "z" }): void;\n`;
-    const verdict = compile({ pkg: five });
-    expect(verdict.failed).toEqual([
-      "export type function_four_overloads = Assert<AtMostFourOverloads<typeof core.four>>;",
+    expect(compile({ pkg: five })).toEqual({ ok: true, failed: [] });
+  });
+
+  test("a sixth overload is red at the overload-count assertion", () => {
+    const extra = [
+      'export declare function four(options: { readonly a: "z" }): void;',
+      'export declare function four(options: { readonly a: "w" }): void;',
+    ].join("\n");
+    expect(compile({ pkg: `${pkg}${extra}\n` }).failed).toEqual([
+      "export type function_four_overloads = Assert<AtMostFiveOverloads<typeof core.four>>;",
     ]);
+  });
+
+  test("an early overload that omits a required option is seen behind five identical ones", () => {
+    // The oldest overload omits a; five later identical ones require it.
+    const start = pkg.indexOf("export declare function four(");
+    const end = pkg.indexOf("export type Model");
+    const same =
+      "export declare function four(options: { readonly a: string }): void;\n";
+    const overloads = `export declare function four(options: { readonly d?: number }): void;\n${same.repeat(5)}\n`;
+    const verdict = compile({
+      pkg: pkg.slice(0, start) + overloads + pkg.slice(end),
+    });
+    expect(verdict.failed).toContain(
+      "export type function_four_overloads = Assert<AtMostFiveOverloads<typeof core.four>>;",
+    );
+    expect(verdict.failed).toContain(
+      'export type option_four_a_required = Assert<Equals<OptionRequired<typeof core.four, 0, "a">, true>>;',
+    );
   });
 });
 
@@ -115,7 +140,7 @@ describe("optional methods and gaps", () => {
     expect(compile({ pkg: absent }).failed).toEqual([
       'export type method_Model_lookup_present = Assert<HasKey<core.Model, "lookup">>;',
       'export type method_Model_lookup_callable = Assert<IsCallable<core.Model["lookup"]>>;',
-      'export type method_Model_lookup_overloads = Assert<AtMostFourOverloads<core.Model["lookup"]>>;',
+      'export type method_Model_lookup_overloads = Assert<AtMostFiveOverloads<core.Model["lookup"]>>;',
     ]);
   });
 

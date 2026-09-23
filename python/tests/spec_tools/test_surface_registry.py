@@ -7,7 +7,7 @@ import check_surface
 import pytest
 from check_api import Json
 from git_kit import commit, git, init, write_json
-from surface_contract import members, parse_gaps
+from surface_contract import Gap, members, parse_gaps
 from surface_coverage import junit_results
 from surface_kit import PY_JUNIT, RUNS, TS_JUNIT, api, core_members, coverage, installed
 
@@ -198,7 +198,29 @@ def test_malformed_gap_entries_are_rejected(entry: Json, problem: str) -> None:
 
 def test_a_duplicate_gap_is_rejected() -> None:
     errs = parse_gaps([gap("agent"), gap("agent")], members(api()), "gaps")[1]
-    assert errs == ["gaps[1]: duplicate gap agent (py, missing)"]
+    assert errs == ["gaps[1]: a second gap for agent (py)"]
+
+
+def test_one_gap_per_member_and_language() -> None:
+    two: list[Json] = [gap("agent.model"), gap("agent.model", kind="required_mismatch")]
+    errs = parse_gaps(two, members(api()), "gaps")[1]
+    assert errs == ["gaps[1]: a second gap for agent.model (py)"]
+
+
+def test_a_python_optional_method_may_have_both_its_gaps() -> None:
+    both: list[Json] = [gap("Model.lookup"), gap("Model.lookup", kind="required_mismatch")]
+    assert parse_gaps(both, members(api()), "gaps")[1] == []
+
+
+def test_later_pr_retargeting_a_placement_gap_fails() -> None:
+    def placed(at: str) -> Gap:
+        return Gap("Channel", "ts", "placement", "01-gate", at)
+
+    errs = check_surface.check_baseline([placed("mcp")], [placed("core")], members(api()), "ts")
+    assert errs == [
+        "surface gate: new gap Channel (ts, placement (exported from mcp), lane 01-gate) for a "
+        "member that exists at the base; restore the member instead of listing it"
+    ]
 
 
 @pytest.mark.parametrize(
