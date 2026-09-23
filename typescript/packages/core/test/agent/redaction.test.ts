@@ -55,7 +55,7 @@ describe("secret redaction on every recorded path (C5)", () => {
     const sink = redactingSink(artifacts.sink());
     const raw = new TextEncoder().encode(`before ${key} after`);
     for (let i = 0; i < raw.length; i += 3) sink.write(raw.subarray(i, i + 3));
-    const { sha256, bytes } = sink.finish();
+    const { sha256, bytes } = sink.finish() ?? { sha256: "", bytes: 0 };
     const got = artifacts.get(sha256);
     if (!got.ok) throw new Error(got.error.message);
     expect(new TextDecoder().decode(got.value)).toBe(`before ${LABEL} after`);

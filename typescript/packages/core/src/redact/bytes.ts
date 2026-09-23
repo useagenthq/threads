@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import type { ArtifactSink } from "../store/artifacts";
-import { ordered } from "./registry";
+import { generation, ordered } from "./registry";
 import { holdsAny, replacements, scan, streamOf } from "./scan";
 
 // Bytes the host stores: redacted when they are text it may edit (a spilled exec output, a
@@ -51,9 +51,18 @@ export class SecretInProviderOutput extends Error {
   }
 }
 
-/** An artifact sink (a spilled exec output) that stores its bytes redacted as they stream in. */
-export function redactingSink(sink: ArtifactSink): ArtifactSink {
+/** A spilled exec output's sink; `finish` gives undefined when the spill was dropped. */
+export type RedactingSink = Omit<ArtifactSink, "finish"> & {
+  readonly finish: () => ReturnType<ArtifactSink["finish"]> | undefined;
+};
+
+/**
+ * An artifact sink (a spilled exec output) that stores its bytes redacted as they stream in.
+ * Bytes already written can't be revisited, so a value registered while it streams drops it.
+ */
+export function redactingSink(sink: ArtifactSink): RedactingSink {
   const stream = streamOf(latin1);
+  const since = generation();
   const write = (text: string): void => {
     sink.write(Buffer.from(text, "latin1"));
   };
@@ -61,7 +70,9 @@ export function redactingSink(sink: ArtifactSink): ArtifactSink {
     write: (chunk) => write(stream.feed(Buffer.from(chunk).toString("latin1"))),
     finish: () => {
       write(stream.end());
-      return sink.finish();
+      if (generation() === since) return sink.finish();
+      sink.abort();
+      return undefined;
     },
     abort: sink.abort,
   };

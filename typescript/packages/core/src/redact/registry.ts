@@ -4,7 +4,7 @@ import { ErrorCode, LogLine } from "../log";
 
 // The registered values: every credential the host resolves (spec/schema/README.md "Secret
 // redaction", C5). A value is at least 8 characters and never a literal of the event schema,
-// so the line envelope and the schema's keys can stay unredacted: none can hold one.
+// so no schema key or fixed literal ever holds one.
 
 const MIN_CHARS = 8;
 
@@ -70,6 +70,11 @@ export function register(value: string, label: string): void {
 /** Forgets every registered value: each test starts with none (test/setup.ts). */
 export function forgetSecrets(): void {
   registered.clear();
+}
+
+/** Grows with each new value: a stream that saw it change may have emitted part of one. */
+export function generation(): number {
+  return registered.size;
 }
 
 /** Value and label, longest value first, then by code point. */

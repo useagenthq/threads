@@ -1,6 +1,6 @@
 """The registered values: every credential the host resolves (spec/schema/README.md "Secret
 redaction", C5). A value is at least 8 characters and never a literal of the event schema, so
-the line envelope and the schema's keys can stay unredacted: none can hold one."""
+no schema key or fixed literal ever holds one."""
 
 from functools import cache
 
@@ -61,6 +61,11 @@ def register(value: str, label: str) -> None:
 def forget_secrets() -> None:
     """Forgets every registered value: each test starts with none (tests/conftest.py)."""
     REGISTERED.clear()
+
+
+def generation() -> int:
+    """Grows with each new value: a stream that saw it change may have emitted part of one."""
+    return len(REGISTERED)
 
 
 def ordered() -> list[tuple[str, str]]:

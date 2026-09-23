@@ -1,5 +1,5 @@
 // Secret redaction (spec/schema/README.md "Secret redaction", C5). Every credential the host
-// resolves is registered; nothing recorded holds one. Event data is redacted where the writer
+// resolves is registered; no recorded content holds one. Event data is redacted where the writer
 // stores it; text beside events is redacted where it is written; bytes that must stay
 // byte-exact are refused (`containsSecret`).
 

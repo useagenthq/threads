@@ -1,11 +1,11 @@
 """Secret redaction (spec/schema/README.md "Secret redaction", C5).
 
-Every credential the host resolves is registered; nothing recorded holds one. Event data is
+Every credential the host resolves is registered; no recorded content holds one. Event data is
 redacted where the writer stores it (`store/lines.py`); text beside events is redacted where it
 is written; bytes that must stay byte-exact are refused (`contains_secret`).
 """
 
-from threads.redaction.registry import forget_secrets, register
+from threads.redaction.registry import forget_secrets, generation, register
 from threads.redaction.stored import (
     SecretInProviderOutputError,
     StreamRedactor,
@@ -19,6 +19,7 @@ __all__ = [
     "StreamRedactor",
     "contains_secret",
     "forget_secrets",
+    "generation",
     "redact_bytes",
     "redact_json",
     "redact_secrets",

@@ -5,7 +5,7 @@ import asyncio
 import contextlib
 import uuid
 from collections.abc import AsyncGenerator, Callable, Sequence
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import TypedDict
@@ -283,6 +283,19 @@ def fenced(writer: Writer) -> Fence:
     return fence
 
 
+@asynccontextmanager
+async def _closed_quietly[T](session: AbstractAsyncContextManager[T]) -> AsyncGenerator[T]:
+    """`session`, closed best effort: a failed close never replaces the error, or the result, a
+    run or check ends with (and its message could hold a secret)."""
+    stack = AsyncExitStack()
+    entered = await stack.enter_async_context(session)
+    try:
+        yield entered
+    finally:
+        with contextlib.suppress(Exception):
+            await stack.aclose()
+
+
 async def with_servers[D](
     definition: Definition[D], stack: AsyncExitStack, fence: Fence
 ) -> Definition[D]:
@@ -295,7 +308,7 @@ async def with_servers[D](
     found: list[AppTool[object]] = []
     for server in definition.servers:
         try:
-            found.extend(await stack.enter_async_context(server.connect(fence)))
+            found.extend(await stack.enter_async_context(_closed_quietly(server.connect(fence))))
         except Exception as error:
             # check() returns it and a run raises it: redacted, whatever it was (C5).
             raise redacted_error(error, "mcp_unreachable", f"MCP server {server.name}") from None

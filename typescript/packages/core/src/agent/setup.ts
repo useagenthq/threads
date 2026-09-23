@@ -121,12 +121,16 @@ export async function connectAll(
       "duplicate_name",
       `two MCP servers are named ${twice}`,
     );
-  const opened = await Promise.allSettled(servers.map((s) => s.connect()));
+  // async: a connect that throws before returning a promise is a rejection like any other.
+  const opened = await Promise.allSettled(
+    servers.map(async (s) => s.connect()),
+  );
   const sessions = opened.flatMap((o) =>
     o.status === "fulfilled" ? [o.value] : [],
   );
+  // Best effort: a failed close never replaces the error, or the result, a run or check ends with.
   const close = async (): Promise<void> => {
-    await Promise.all(sessions.map((s) => s.close()));
+    await Promise.allSettled(sessions.map(async (s) => s.close()));
   };
   const failed = opened.findIndex((o) => o.status === "rejected");
   const reason = opened[failed];

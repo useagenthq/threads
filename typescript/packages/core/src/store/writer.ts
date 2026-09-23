@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { KnownEvent } from "../log";
-import { redactStrings } from "../redact";
+import { containsSecret, redactStrings } from "../redact";
 import { err, ok, type Result } from "../result";
 import {
   addLine,
@@ -212,11 +212,23 @@ export class Writer {
     const segment = trial.segments.at(-1);
     if (segment === undefined) throw new Error("a writer's chain has a header");
     const now = this.#now();
+    // Nothing is recorded with a resolved secret in it (C5): every event passes here.
+    const actor = redactStrings(draft.actor);
+    const data = redactStrings(draft.data);
+    const content = canonicalLine({ actor, data });
+    if (!content.ok) return content;
+    // Canonical escaping or JSON punctuation can still join redacted strings into a value.
+    if (containsSecret(content.value))
+      return err(
+        logError(
+          "secret_in_stored_bytes",
+          "the event's stored bytes would hold a registered secret; nothing appended",
+        ),
+      );
     const line = canonicalLine({
       ...draft,
-      // Nothing is recorded with a resolved secret in it (C5): every event passes here.
-      actor: redactStrings(draft.actor),
-      data: redactStrings(draft.data),
+      actor,
+      data,
       seq: trial.fold.seq + 1,
       event_id: uuidv7(now),
       thread_id: segment.header.thread_id,

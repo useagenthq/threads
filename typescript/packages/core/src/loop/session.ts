@@ -75,8 +75,12 @@ export class Session {
    */
   append(...drafts: readonly EventDraft[]): Halt | undefined {
     const appended = this.#writer.append(drafts);
-    if (!appended.ok)
-      return { code: "branch_busy", message: appended.error.message };
+    if (!appended.ok) {
+      const { code, message } = appended.error;
+      return code === "secret_in_stored_bytes"
+        ? { code, message }
+        : { code: "branch_busy", message };
+    }
     const events = this.events;
     for (const e of events.slice(events.length - appended.value.length))
       this.config.onEvent?.(e);

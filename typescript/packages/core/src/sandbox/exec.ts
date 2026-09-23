@@ -175,6 +175,8 @@ async function collect(
     return ok(base);
   }
   const full = sink.finish();
+  // A value registered mid-stream dropped the spill: the previews stand alone.
+  if (full === undefined) return ok(base);
   return ok({
     ...base,
     full_output: { ...full, media_type: "application/octet-stream" },

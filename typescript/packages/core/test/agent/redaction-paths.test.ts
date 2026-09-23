@@ -100,7 +100,7 @@ describe("streaming redaction never leaks across a chunk boundary", () => {
     const sink = redactingSink(artifacts.sink());
     const raw = new TextEncoder().encode(`a ${key} b ${long}`);
     for (const byte of raw) sink.write(Uint8Array.of(byte));
-    const got = artifacts.get(sink.finish().sha256);
+    const got = artifacts.get(sink.finish()?.sha256 ?? "");
     if (!got.ok) throw new Error(got.error.message);
     expect(decoder.decode(got.value)).toBe(
       "a [secret fake.apiKey] b [secret long.apiKey]",

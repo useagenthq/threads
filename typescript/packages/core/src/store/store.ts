@@ -1,7 +1,4 @@
 import type { BranchId, SandboxId, ThreadId } from "../log";
-import { containsSecret } from "../redact";
-import { knownEvents } from "../reduce";
-import { refReader, verifyRequests } from "../render";
 import { err, ok, type Result } from "../result";
 import { type Chain, tipHash, type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
@@ -12,7 +9,7 @@ import { BudgetLedger } from "./budget";
 import { ObserverCursors } from "./cursors";
 import type { SqliteDriver } from "./driver";
 import * as forking from "./forking";
-import { importSegments } from "./import";
+import { importSegments, verifiedImport } from "./import";
 import { ResourceLedger } from "./ledger";
 import { exportBytes } from "./lines";
 import { isTorn, markRepaired, recordRepair } from "./repair";
@@ -137,22 +134,8 @@ export class LogStore {
    * model request must replay from the log and the artifacts already stored (C7, Render v1).
    */
   importLog(bytes: Uint8Array): Result<VerifiedLog, LogError> {
-    // Imported bytes are stored exactly as exported, torn tail included: one holding a
-    // registered value is refused (C5).
-    if (containsSecret(bytes))
-      return err(
-        logError(
-          "secret_in_stored_bytes",
-          "the export holds a registered secret; nothing imported",
-        ),
-      );
-    const log = verifyExport(bytes);
+    const log = verifiedImport(bytes, this.#artifacts);
     if (!log.ok) return log;
-    const replayed = verifyRequests(
-      knownEvents(log.value),
-      refReader(this.#artifacts),
-    );
-    if (!replayed.ok) return replayed;
     const torn = log.value.torn;
     const target = {
       tenantId: this.tenant,

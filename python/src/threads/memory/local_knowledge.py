@@ -24,6 +24,7 @@ from threads.memory.types import (
     ProviderError,
     Scope,
 )
+from threads.redaction import contains_secret
 from threads.result import Err, Ok
 from threads.store import SqliteStore
 
@@ -119,6 +120,10 @@ class LocalKnowledge:
             text = source.content.decode("utf-8")
         except UnicodeDecodeError:
             return Err(ProviderError("invalid", f"{source.source_id}: not UTF-8 text"))
+        if contains_secret(source.content):
+            # Byte-exact (its digest is its version): a source holding a value is refused.
+            message = f"{source.source_id}: holds a registered secret; not ingested"
+            return Err(ProviderError("invalid", message))
         digest = hashlib.sha256(source.content).hexdigest()
         # The admitted bytes are durable before the row that references them.
         await self.store.put_artifact(source.content)

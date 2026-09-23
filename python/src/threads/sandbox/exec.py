@@ -104,7 +104,11 @@ async def run_exec(
     full = None
     if truncated:
         sha = await spill.commit()
-        full = ArtifactRef(sha256=sha, bytes=spill.written, media_type="application/octet-stream")
+        # A value registered mid-stream dropped the spill: the previews stand alone.
+        if sha is not None:
+            full = ArtifactRef(
+                sha256=sha, bytes=spill.written, media_type="application/octet-stream"
+            )
     else:
         await spill.discard()
     return Ok(ExecResult(code, out.text(), err.text(), truncated, full))

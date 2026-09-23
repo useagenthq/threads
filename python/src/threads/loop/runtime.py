@@ -66,6 +66,7 @@ type RunErrorCode = Literal[
     "continuation_unsupported",
     "transport_fence_unsupported",
     "secret_in_provider_output",
+    "secret_in_stored_bytes",
     "artifact_missing",
     "artifact_corrupt",
     "unmatched_external_op",
@@ -256,8 +257,11 @@ LOST: Final = frozenset({"stale_epoch", "seq_conflict", "writer_poisoned"})
 
 
 def lost(error: ParseError) -> Failed:
-    """An append that failed: a lost lease or moved head is branch_busy; anything else is a
-    bug in what the loop wrote, which validate_next refused."""
+    """An append that failed: a lost lease or moved head is branch_busy; stored bytes that would
+    hold a registered value end the run with that code (C5); anything else is a bug in what the
+    loop wrote, which validate_next refused."""
     if error.code in LOST:
         return Failed("branch_busy", error.message)
+    if error.code == "secret_in_stored_bytes":
+        return Failed("secret_in_stored_bytes", error.message)
     raise AssertionError(f"the loop wrote an invalid event: {error.code}: {error.message}")

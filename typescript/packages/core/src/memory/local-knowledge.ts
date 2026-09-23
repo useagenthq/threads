@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sha256Hex } from "../hash";
+import { containsSecret } from "../redact";
 import { err, ok, type Result } from "../result";
 import type { Failure } from "../sandbox/protocol";
 import type { ArtifactStore } from "../store/artifacts";
@@ -259,6 +260,12 @@ function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
       guard(() => {
         const text = parsed(source);
         if (!text.ok) return text;
+        // Byte-exact (its digest is its version): a source holding a registered value is refused.
+        if (containsSecret(source.content))
+          return err({
+            code: "invalid",
+            message: `${source.source_id}: holds a registered secret; not ingested`,
+          });
         // The admitted bytes are durable before the row that references them.
         artifacts.put(source.content);
         return db.transaction(() => admit(scope, source, key, text.value));
