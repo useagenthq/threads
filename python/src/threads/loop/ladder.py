@@ -17,7 +17,7 @@ from threads.loop import compact, defaults, manual
 from threads.loop.drafts import draft
 from threads.loop.estimate import estimate
 from threads.loop.gates import AGAIN, Gated, append
-from threads.loop.history import turn_events
+from threads.loop.history import open_cancel, turn_events
 from threads.loop.runtime import Runtime
 from threads.result import Err
 
@@ -45,6 +45,9 @@ async def fit(rt: Runtime) -> Gated:
         halt = await compact.summarize(rt, "threshold")
         if halt is not None or not isinstance(rt.events[-1], CompactionFailedEvent):
             return halt or AGAIN
+        if open_cancel(rt.events) is not None:
+            # A cancel landed during the side request: the loop's cancellation step is next.
+            return AGAIN
         # A failed threshold compaction doesn't end the turn: the request goes on to L4, in
         # this same step (ponytail: a crash right here resumes as context_exhausted).
         spent = True
