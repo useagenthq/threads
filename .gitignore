@@ -12,8 +12,6 @@ plans/
 # Local agent tool state
 .omx/
 
-
-
 # Agent worktrees
 .claude/worktrees/
 
