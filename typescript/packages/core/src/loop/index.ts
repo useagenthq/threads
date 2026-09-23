@@ -1,4 +1,4 @@
-import type { ArtifactStore, Writer } from "../store";
+import type { ArtifactStore, EventDraft, Writer } from "../store";
 import { recover } from "./recover";
 import { type LoopEnd, runLoop } from "./run";
 import { Session } from "./session";
@@ -22,20 +22,25 @@ export type {
 } from "./types";
 
 /**
- * Runs a branch under a freshly acquired lease: recovery first, then the
- * loop until the branch is idle or parked. `runLoop` alone skips recovery; a new lease never
- * does.
+ * Runs a branch under a freshly acquired lease: recovery first, then, when
+ * the branch is idle, the new `input` (a user_input draft), then the loop until the branch is
+ * idle or parked. A branch left parked by recovery takes no new input.
  */
 export async function resume(
   writer: Writer,
   artifacts: ArtifactStore,
   config: LoopConfig,
-  options: { readonly loop: boolean } = { loop: true },
+  options: { readonly loop?: boolean; readonly input?: EventDraft } = {},
 ): Promise<LoopEnd> {
   const s = new Session(writer, artifacts, config);
   const stopped = await recover(s);
   if (stopped !== undefined) return { kind: "halted", halt: stopped };
-  if (!options.loop)
+  if (options.loop === false)
     return { kind: s.fold.parked.length > 0 ? "parked" : "idle" };
-  return runLoop(s);
+  const earlier = await runLoop(s);
+  if (earlier.kind !== "idle" || options.input === undefined) return earlier;
+  const appended = s.append(options.input);
+  return appended === undefined
+    ? runLoop(s)
+    : { kind: "halted", halt: appended };
 }

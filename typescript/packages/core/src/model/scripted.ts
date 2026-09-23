@@ -11,7 +11,7 @@ import type {
   Model,
   ModelChunk,
   ModelInfo,
-  RecoveredResponse,
+  ModelResponse,
 } from "./protocol";
 
 // scriptedModel (spec/api.json): plays spec/conformance ModelScript, $defs/ModelScript in
@@ -135,15 +135,16 @@ async function* play(
   yield { kind: "done", stop_reason: entry.stop_reason, usage: entry.usage };
 }
 
-function lookupAnswer(
-  answer: Answer | undefined,
-): LookupResult<RecoveredResponse> {
+function lookupAnswer(answer: Answer | undefined): LookupResult<ModelResponse> {
   if (answer === undefined)
     return { status: "unknown", reason: "no scripted lookup" };
   if (answer.result === "not_found")
     return { status: answer.final ? "not_found" : "not_found_nonfinal" };
   const { response, provider_request_id: id } = answer;
-  if (!answer.final || response === undefined || id === undefined)
+  if (!answer.final || response === undefined)
     return { status: "unknown", reason: "found without a final response" };
-  return { status: "found", value: { ...response, provider_request_id: id } };
+  return {
+    status: "found",
+    value: { ...response, provider_request_id: id ?? null },
+  };
 }

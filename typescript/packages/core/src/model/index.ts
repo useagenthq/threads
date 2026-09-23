@@ -7,6 +7,5 @@ export type {
   ModelInfo,
   ModelRequest,
   ModelResponse,
-  RecoveredResponse,
 } from "./protocol";
 export { type ScriptedModel, scriptedModel } from "./scripted";

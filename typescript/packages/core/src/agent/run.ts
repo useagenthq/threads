@@ -81,11 +81,9 @@ export async function run<Deps, Output>(
       thread,
       def.decode,
     );
-  // Recovery first, and an in-doubt turn finishes before new input opens the next one.
-  const earlier = await resume(writer, artifacts, config);
-  if (earlier.kind !== "idle") return result(earlier);
-  const appended = writer.append([
-    {
+  // Recovery first; an in-doubt turn finishes before the new input opens the next one.
+  const end = await resume(writer, artifacts, config, {
+    input: {
       type: "user_input",
       type_version: 1,
       critical: true,
@@ -98,11 +96,8 @@ export async function run<Deps, Output>(
         ...(options.budget === undefined ? {} : { budget: options.budget }),
       },
     },
-  ]);
-  if (!appended.ok) return failed(appended.error, thread);
-  for (const e of knownEvents(writer.chain).slice(-appended.value.length))
-    hooks.onEvent?.(e);
-  return result(await resume(writer, artifacts, config));
+  });
+  return result(end);
 }
 
 function handleOf(thread: RunOptions<unknown>["thread"]): Thread | undefined {

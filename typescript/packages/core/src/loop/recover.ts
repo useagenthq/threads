@@ -3,6 +3,7 @@ import { type EventOf, effectKey } from "../fold/state";
 import { draft, RECOVERY } from "./drafts";
 import type { Session } from "./session";
 import { resolvedResult, settleUnknown } from "./settle";
+import { turnEvents } from "./turn";
 import type { Halt } from "./types";
 
 // the recovery classifier, run once a new lease is taken and before anything
@@ -10,6 +11,24 @@ import type { Halt } from "./types";
 // appends nothing. The open turn then continues in the loop, which reads the same log.
 
 export async function recover(s: Session): Promise<Halt | undefined> {
+  // An open turn with nothing in doubt and nothing pending ends interrupted (item 7). An input
+  // no request has answered yet is still pending: the loop sends it (a saved stub case).
+  const { fold } = s;
+  const answered = turnEvents(s.events).some((e) => e.type === "model_request");
+  if (
+    fold.turnOpen &&
+    answered &&
+    fold.awaiting.size === 0 &&
+    fold.pending.size === 0 &&
+    fold.parked.length === 0
+  )
+    return s.append({
+      type: "turn_completed",
+      type_version: 1,
+      critical: true,
+      actor: RECOVERY,
+      data: { reason: "interrupted" },
+    });
   for (const requestId of [...s.fold.awaiting]) {
     const stopped = await recoverRequest(s, requestId);
     if (stopped !== undefined) return stopped;
@@ -33,8 +52,12 @@ async function recoverRequest(
     model?.lookup === undefined || model.info.lookup === "none"
       ? undefined
       : await model.lookup(`${s.branchId}:${requestId}`);
-  if (answer?.status === "found") {
-    const { content, stop_reason, usage, provider_request_id } = answer.value;
+  // model_response_recovered records the provider's id; a found answer without one can't be
+  // recorded, so the attempt stays unknown.
+  const found = answer?.status === "found" ? answer.value : undefined;
+  const provider_request_id = found?.provider_request_id ?? null;
+  if (found !== undefined && provider_request_id !== null) {
+    const { content, stop_reason, usage } = found;
     return s.append(
       draft.recovered({
         request_event_id: requestId,

@@ -44,14 +44,8 @@ export type ModelResponse = {
   readonly content: readonly OutputPart[];
   readonly stop_reason: ResponseData["stop_reason"];
   readonly usage: Usage;
-};
-
-/**
- * A response found by lookup. model_response_recovered records the provider's id for it, which
- * spec/api.json's ModelResponse does not carry, so lookup answers with it.
- */
-export type RecoveredResponse = ModelResponse & {
-  readonly provider_request_id: string;
+  /** The provider's id for this request, or null when it gives none. */
+  readonly provider_request_id: string | null;
 };
 
 /** One streamed item of an attempt. A rejection before any content is a chunk, never a throw. */
@@ -80,9 +74,7 @@ export type Model = {
     request: ModelRequest,
     options?: { readonly signal?: AbortSignal },
   ) => AsyncIterable<ModelChunk>;
-  readonly lookup?: (
-    requestId: string,
-  ) => Promise<LookupResult<RecoveredResponse>>;
+  readonly lookup?: (requestId: string) => Promise<LookupResult<ModelResponse>>;
   readonly countTokens?: (
     request: ModelRequest,
   ) => Promise<

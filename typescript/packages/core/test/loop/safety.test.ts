@@ -40,7 +40,7 @@ function takeoverAfter(
 
 describe("a stale owner never dispatches (invariant 2)", () => {
   test("model.send is not called after a takeover following model_request", async () => {
-    const h = harness([], [userInput("hi")], [FINAL]);
+    const h = harness([], [], [FINAL]);
     const writer = unwrap(h.store.acquire(ROOT, "owner", 30_000));
     const end = await resume(
       writer,
@@ -48,6 +48,7 @@ describe("a stale owner never dispatches (invariant 2)", () => {
       h.config({
         onEvent: takeoverAfter(h, "model_request"),
       }),
+      { input: userInput("hi") },
     );
     expect(end).toMatchObject({
       kind: "halted",
@@ -57,7 +58,7 @@ describe("a stale owner never dispatches (invariant 2)", () => {
   });
 
   test("tool.run is not called after a takeover following effect_begin", async () => {
-    const h = harness([EMAIL], [userInput("mail bob")], [SEND, FINAL]);
+    const h = harness([EMAIL], [], [SEND, FINAL]);
     const writer = unwrap(h.store.acquire(ROOT, "owner", 30_000));
     const end = await resume(
       writer,
@@ -65,6 +66,7 @@ describe("a stale owner never dispatches (invariant 2)", () => {
       h.config({
         onEvent: takeoverAfter(h, "effect_begin"),
       }),
+      { input: userInput("mail bob") },
     );
     expect(end).toMatchObject({
       kind: "halted",

@@ -1,6 +1,6 @@
 import { expect } from "bun:test";
 import { z } from "zod";
-import type { BranchId, KnownEvent, ThreadId } from "../../src/log";
+import type { KnownEvent } from "../../src/log";
 import {
   type LoopConfig,
   type LoopEnd,
@@ -9,11 +9,10 @@ import {
 } from "../../src/loop";
 import { scriptedModel } from "../../src/model";
 import { knownEvents } from "../../src/reduce";
-import type { ArtifactStore, LogStore, Writer } from "../../src/store";
+import type { ArtifactStore, Writer } from "../../src/store";
 import { verifyExport } from "../../src/verify";
 import { unwrap } from "../store/helpers";
 import { type Case, type Counters, caseStore, type Matcher } from "./cases";
-import { redraft } from "./replay";
 import { scriptedTools } from "./sandbox";
 
 // The recover and stub kinds (spec/conformance/README.md): acquire (recovery runs first), then
@@ -29,12 +28,9 @@ export async function runAppending(c: Case, bytes: Uint8Array): Promise<void> {
   const log = unwrap(imported.store.importLog(bytes));
   const leaf = log.segments.at(-1)?.header;
   if (leaf === undefined) throw new Error("a verified log has a header");
-  const { db, store, artifacts } = c.kind === "stub" ? caseStore(c) : imported;
+  const { db, store, artifacts } = imported;
   const clock = { now: c.now };
-  const acquired =
-    c.kind === "stub"
-      ? replayed(store, knownEvents(log), leaf)
-      : store.acquire(leaf.branch_id, HOLDER);
+  const acquired = store.acquire(leaf.branch_id, HOLDER);
   if (!acquired.ok) {
     expect<unknown>({
       code: acquired.error.code,
@@ -46,9 +42,8 @@ export async function runAppending(c: Case, bytes: Uint8Array): Promise<void> {
     expect(c.appended ?? []).toEqual([]);
     return close(imported.db, db);
   }
-  // Acquiring may already append (log_repaired); the replayed stub prefix is not appended.
-  const before =
-    c.kind === "stub" ? acquired.value.chain.fold.seq : log.fold.seq;
+  // Acquiring may already append (log_repaired).
+  const before = log.fold.seq;
   const outcome = await run(c, acquired.value, artifacts, clock);
   const appended = knownEvents(acquired.value.chain).filter(
     (e) => e.seq > before,
@@ -62,28 +57,6 @@ export async function runAppending(c: Case, bytes: Uint8Array): Promise<void> {
   const exported = unwrap(store.exportBranch(leaf.branch_id));
   expect(verifyExport(exported).ok).toBe(true);
   close(imported.db, db);
-}
-
-/**
- * Stub mode runs a saved case in a temporary store: the recorded prefix is replayed
- * onto a fresh branch this implementation writes, since only a branch's own writer may append
- * to it. The prefix may not reference its own event ids.
- */
-function replayed(
-  store: LogStore,
-  events: readonly KnownEvent[],
-  leaf: { readonly thread_id: ThreadId; readonly branch_id: BranchId },
-): ReturnType<LogStore["acquire"]> {
-  const ids = new Set(events.map((e) => e.event_id));
-  const refers = events.some((e) =>
-    [...ids].some((id) => JSON.stringify(e.data).includes(id)),
-  );
-  if (refers)
-    throw new Error("a replayed prefix may not reference its event ids");
-  unwrap(store.createBranch(leaf.thread_id, leaf.branch_id));
-  const writer = store.acquire(leaf.branch_id, HOLDER);
-  if (writer.ok) unwrap(writer.value.append(events.map(redraft)));
-  return writer;
 }
 
 function close(...dbs: readonly { close: () => void }[]): void {
