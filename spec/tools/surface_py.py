@@ -58,21 +58,11 @@ def _exports(module: ModuleType) -> frozenset[str]:
     return _strs(getattr(module, "__all__", ()))
 
 
-def _defined_anywhere(name: str, root: str) -> object | None:
-    """The object a module of the package defines under this name, exported or not."""
-    for module_name, module in sorted(sys.modules.items()):
-        found: object = getattr(module, name, None)
-        if module_name.partition(".")[0] == root and found is not None:
-            return found
-    return None
-
-
 class Package:
     """The imported public entries of one language's packages."""
 
     def __init__(self, entries: Mapping[str, str]) -> None:
         self.entries = {key: importlib.import_module(path) for key, path in entries.items()}
-        self.root = next(iter(entries.values())).partition(".")[0]
 
     def export(self, package: str, name: str) -> object | None:
         entry = self.entries[package]
@@ -80,14 +70,14 @@ class Package:
 
     def locate(self, package: str, name: str) -> tuple[object | None, Found]:
         """The object, and its gap: none when its declared entry exports it; placement (with
-        the entry that does) when another public entry exports it; otherwise missing. A missing
-        object defined in some module is still returned, so its members can be checked."""
+        the entry that does) when another public entry exports it; otherwise missing, with no
+        object, so its members aren't checked (the type's own gap covers them)."""
         if (found := self.export(package, name)) is not None:
             return found, []
         for other in sorted(self.entries):
             if other != package and (found := self.export(other, name)) is not None:
                 return found, [("placement", other)]
-        return _defined_anywhere(name, self.root), MISSING
+        return None, MISSING
 
 
 def typed_dict_keys(td: object) -> Keys:

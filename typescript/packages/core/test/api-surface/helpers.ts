@@ -61,13 +61,15 @@ type Signatures<F> = F extends {
   : never;
 
 /**
- * At most five overloads: then the first four slots are copies of the first overload, and the
- * window holds every overload, so the option checks below see all of them. With more, the
- * leading slots are different overloads and this fails. The one thing it can't tell from padding
- * is four consecutive overloads with identical signatures (parameters and return type), which a
- * package has no reason to declare; that is out of scope.
+ * Every overload of F is in the window, so the option checks below see all of them. The type
+ * system can't count overloads; what it shows is the window: when its first four slots are the
+ * same signature, they are tsc's padding (so F has at most five overloads) or overloads F
+ * declares identically, which the window shows too. Only four consecutive identical overload
+ * signatures (parameters and return type) followed by more overloads can hide one; that case is
+ * out of scope (spec/schema/README.md, "What it doesn't check"). Otherwise the leading slots
+ * differ and this fails.
  */
-export type AtMostFiveOverloads<F> =
+export type EveryOverloadSeen<F> =
   Signatures<F> extends [infer S1, infer S2, infer S3, infer S4, ...unknown[]]
     ? [Equals<S1, S2>, Equals<S2, S3>, Equals<S3, S4>] extends [
         true,

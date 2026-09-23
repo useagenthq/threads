@@ -37,7 +37,7 @@ HEADER = (
 )
 MARKER = "__surfaceGap"
 HELPERS = (
-    "Assert", "AtMostFiveOverloads", "Equals", "HasKey", "IsCallable", "IsMissing",
+    "Assert", "Equals", "EveryOverloadSeen", "HasKey", "IsCallable", "IsMissing",
     "OptionPresent", "OptionRequired", "Req",
 )  # fmt: skip
 
@@ -96,7 +96,7 @@ class Emitter:
             )
         if m.role in ("function", "method"):
             self._out(m, "callable", f"Assert<IsCallable<{self.callable_ref(m)}>>")
-            self._out(m, "overloads", f"Assert<AtMostFiveOverloads<{self.callable_ref(m)}>>")
+            self._out(m, "overloads", f"Assert<EveryOverloadSeen<{self.callable_ref(m)}>>")
 
     def option(self, m: Member) -> None:
         parent = self.contract[m.parent]

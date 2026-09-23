@@ -27,7 +27,26 @@ Rules that JSON Schema can't express at all are allowed only when they are liste
 
 ## The API surface gate
 
-Both packages are checked against `../api.json` in CI. TypeScript: `tools/gen_api_surface.py` emits type-level assertions that `tsc` compiles (`bun run typecheck`). Python: `tools/check_surface.py --lang py` imports the package and inspects it. Each checks that every function and method exists and is callable; every option exists with its required flag, across all overloads (a TypeScript function or method may have at most five; four consecutive overloads with identical signatures, parameters and return type alike, are out of scope); every type is exported from its declared `package` entry; and every field of a data type exists and can be omitted exactly when the contract marks it optional (TypeScript: a `?` property; Python: the type's constructor inputs, where a parameter with a default is optional, or its TypedDict keys, where a top-level `Required`/`NotRequired` counts even in a postponed annotation); every property of a handle or protocol exists (TypeScript also checks its `?`; a Python protocol has no optional attributes, so Python checks presence only). An `optional` method is an optional property of the base type in TypeScript and a `@runtime_checkable` protocol named by `capability` in Python, never a member of the base protocol. **The gate does not check signatures**, nor that a Python constructor stores its inputs as attributes: parameter and return types, positional parameters and option value types are left to each language's type checker and the tests. Anything either language lacks is listed in `../api-surface-gaps.json`, the one registry of what isn't built (the docs reference reads it too), with its owning lane; a `placement` gap names the other public entry that exports the type (`at`), and the gate checks it is there. The registry only shrinks: a listed gap that is fixed fails until its entry is deleted, and a PR may add an entry only for a member its own contract change introduces (compared against the base commit's `api.json`). It must be empty at the release gate (`--release`). `../api-coverage.json` names, for every function, required method and required option in each language that has it, a test that must pass in the same CI run's JUnit report. That proves a named, reviewed test exists and passed; that it exercises the member is a reviewed claim, not something CI checks.
+Both packages are checked against `../api.json` in CI. TypeScript: `tools/gen_api_surface.py` emits type-level assertions that `tsc` compiles (`bun run typecheck`). Python: `tools/check_surface.py --lang py` imports the package and inspects it.
+
+**What it checks**, in each language:
+
+- every function and method exists and is callable;
+- every option exists, with its required flag, across all overloads;
+- every type is exported from its declared `package` entry (a `placement` gap names the other public entry that exports it instead, `at`, and the gate checks it is there);
+- every field of a data type exists and can be omitted exactly when the contract marks it optional: in TypeScript a `?` property; in Python the type's constructor inputs (a parameter with a default is optional) or its TypedDict keys (a top-level `Required`/`NotRequired` counts even in a postponed annotation);
+- every property of a handle or protocol exists; TypeScript also checks its `?` (a Python protocol has no optional attributes);
+- an `optional` method is an optional property of the base type in TypeScript, and in Python a `@runtime_checkable` protocol named by `capability` that declares it, never a member of the base protocol.
+
+**What it doesn't check:**
+
+- signatures: parameter and return types, positional parameters and option value types are left to each language's type checker and the tests;
+- that a Python constructor stores its inputs as attributes;
+- **overloads:** TypeScript's type system can't count overloads, so the gate reads a window of a function's last eight signatures and fails unless it can see all of them. Four consecutive overloads with identical signatures (parameters and return type), followed by more, can hide an earlier one; that case is out of scope.
+
+**The gaps registry.** Anything either language lacks is listed in `../api-surface-gaps.json`, the one registry of what isn't built (the docs reference reads it too), one gap per member and language, each with its owning lane. It only shrinks: a listed gap that is fixed fails until its entry is deleted, and a PR may add an entry only for a member its own contract change introduces (compared against the base commit's `api.json`). It must be empty at the release gate (`--release`).
+
+**Test evidence.** `../api-coverage.json` names, for every function, required method and required option in each language that has it, a test that must pass in the same CI run's JUnit report. That proves a named, reviewed test exists and passed; that it exercises the member is a reviewed claim, not something CI checks.
 
 ## One contract for storage and interchange
 

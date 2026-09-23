@@ -26,6 +26,35 @@ let cases = 0;
 
 afterAll(() => rmSync(work, { recursive: true, force: true }));
 
+// four's overloads in the fixture package, and pieces for replacing them.
+const FOUR = [
+  "{ readonly a: string }",
+  '{ readonly a: "x" }',
+  '{ readonly a: "y" }',
+  "{ readonly a: string; readonly d: number }",
+];
+const OMITS_A = "{ readonly d?: number }";
+const NEEDS_A = "{ readonly a: string; readonly d?: number }";
+const SEEN_FOUR =
+  "export type function_four_overloads = Assert<EveryOverloadSeen<typeof core.four>>;";
+const A_REQUIRED =
+  'export type option_four_a_required = Assert<Equals<OptionRequired<typeof core.four, 0, "a">, true>>;';
+
+/**
+ * The fixture package with four's overloads replaced, one per options type. A `returns` of ""
+ * means each entry already ends with its own return type.
+ */
+function withFour(options: readonly string[], returns = "): void"): string {
+  const start = pkg.indexOf("export declare function four(");
+  const end = pkg.indexOf("export type Model");
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const overloads = options
+    .map((o) => `export declare function four(options: ${o}${returns};\n`)
+    .join("");
+  return `${pkg.slice(0, start)}${overloads}\n${pkg.slice(end)}`;
+}
+
 type Verdict = { readonly ok: boolean; readonly failed: readonly string[] };
 
 /** Generates and compiles one case; failed holds the generated lines tsc reports. */
@@ -97,57 +126,50 @@ describe("options over overloads", () => {
   });
 
   test("a fifth overload is still read in full", () => {
-    const five = `${pkg}export declare function four(options: { readonly a: "z" }): void;\n`;
+    const five = withFour([...FOUR, '{ readonly a: "z" }']);
     expect(compile({ pkg: five })).toEqual({ ok: true, failed: [] });
   });
 
-  test("a sixth overload is red at the overload-count assertion", () => {
-    const extra = [
-      'export declare function four(options: { readonly a: "z" }): void;',
-      'export declare function four(options: { readonly a: "w" }): void;',
-    ].join("\n");
-    expect(compile({ pkg: `${pkg}${extra}\n` }).failed).toEqual([
-      "export type function_four_overloads = Assert<AtMostFiveOverloads<typeof core.four>>;",
+  test("a sixth distinct overload is red: the window can't show every overload", () => {
+    const six = withFour([
+      ...FOUR,
+      '{ readonly a: "z" }',
+      '{ readonly a: "w" }',
     ]);
+    expect(compile({ pkg: six }).failed).toEqual([SEEN_FOUR]);
   });
 
   test("an early overload that omits a required option is seen behind five identical ones", () => {
-    // The oldest overload omits a; five later identical ones require it.
-    const start = pkg.indexOf("export declare function four(");
-    const end = pkg.indexOf("export type Model");
-    const same =
-      "export declare function four(options: { readonly a: string }): void;\n";
-    const overloads = `export declare function four(options: { readonly d?: number }): void;\n${same.repeat(5)}\n`;
-    const verdict = compile({
-      pkg: pkg.slice(0, start) + overloads + pkg.slice(end),
-    });
-    expect(verdict.failed).toContain(
-      "export type function_four_overloads = Assert<AtMostFiveOverloads<typeof core.four>>;",
-    );
-    expect(verdict.failed).toContain(
-      'export type option_four_a_required = Assert<Equals<OptionRequired<typeof core.four, 0, "a">, true>>;',
-    );
+    const hidden = withFour([OMITS_A, ...Array(5).fill(NEEDS_A)]);
+    const verdict = compile({ pkg: hidden });
+    expect(verdict.failed).toContain(SEEN_FOUR);
+    expect(verdict.failed).toContain(A_REQUIRED);
   });
-});
 
-describe("overloads that differ only in return type", () => {
   test("an early overload behind eight that differ only in return type is red", () => {
-    const start = pkg.indexOf("export declare function four(");
-    const end = pkg.indexOf("export type Model");
-    const later = [1, 2, 3, 4, 5, 6, 7, 8]
-      .map(
-        (n) =>
-          `export declare function four(options: { readonly a: string; readonly d?: number }): ${n};`,
-      )
-      .join("\n");
-    const overloads = `export declare function four(options: { readonly d?: number }): void;\n${later}\n`;
+    const later = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `${NEEDS_A}): ${n}`);
     const verdict = compile({
-      pkg: pkg.slice(0, start) + overloads + pkg.slice(end),
+      pkg: withFour([`${OMITS_A}): void`, ...later], ""),
     });
-    expect(verdict.failed).toContain(
-      "export type function_four_overloads = Assert<AtMostFiveOverloads<typeof core.four>>;",
-    );
+    expect(verdict.failed).toContain(SEEN_FOUR);
   });
+
+  test.each([
+    ["six, the oldest two identical", 2, 4],
+    ["seven, the oldest three identical", 3, 4],
+  ])(
+    "%s: every overload is seen, so a missing required option is red",
+    (_, same, distinct) => {
+      const others = Array.from(
+        { length: distinct },
+        (_, i) => `{ readonly a: "${i}" }`,
+      );
+      const verdict = compile({
+        pkg: withFour([...Array(same).fill(OMITS_A), ...others]),
+      });
+      expect(verdict.failed).toEqual([A_REQUIRED]);
+    },
+  );
 });
 
 describe("optional methods and gaps", () => {
@@ -160,7 +182,7 @@ describe("optional methods and gaps", () => {
     expect(compile({ pkg: absent }).failed).toEqual([
       'export type method_Model_lookup_present = Assert<HasKey<core.Model, "lookup">>;',
       'export type method_Model_lookup_callable = Assert<IsCallable<core.Model["lookup"]>>;',
-      'export type method_Model_lookup_overloads = Assert<AtMostFiveOverloads<core.Model["lookup"]>>;',
+      'export type method_Model_lookup_overloads = Assert<EveryOverloadSeen<core.Model["lookup"]>>;',
     ]);
   });
 
