@@ -8,6 +8,8 @@ gaps registry.
 
 from __future__ import annotations
 
+import ast
+import builtins
 import dataclasses
 import importlib
 import inspect
@@ -104,18 +106,51 @@ def field_state(owner: object, name: str) -> State:
         is_required: object = getattr(info, "is_required", None)
         return "absent" if info is None else _state(callable(is_required) and is_required() is True)
     if typing.is_typeddict(owner):
-        if name in _strs(getattr(owner, "__required_keys__", None)):
-            return "required"
-        return "optional" if name in _strs(getattr(owner, "__optional_keys__", None)) else "absent"
+        keys = typed_dict_keys(owner)
+        return "absent" if name not in keys else _state(keys[name])
     return _attribute_state(_cls(owner), name)
+
+
+def typed_dict_keys(td: object) -> dict[str, bool]:
+    """A TypedDict's keys and whether each is required. An explicit Required or NotRequired
+    decides, else the key set Python computed from total (with postponed annotations those sets
+    miss Required and NotRequired written as strings). A key whose annotation can't be read is
+    left out, which fails closed."""
+    required = _strs(getattr(td, "__required_keys__", None))
+    keys: dict[str, bool] = {}
+    for base in reversed(_typed_dict_bases(td)):
+        for name, annotation in _own_heads(base).items():
+            if annotation is typing.Required or annotation is typing.NotRequired:
+                keys[name] = annotation is typing.Required
+            elif annotation is not UNRESOLVED:
+                keys[name] = name in required
+    return keys
+
+
+def _objects(v: object) -> list[object]:
+    return list(v) if _is_collection(v) else []
+
+
+def _typed_dict_bases(td: object) -> list[type]:
+    """The TypedDict and the TypedDicts it extends, nearest first (a TypedDict's MRO is only
+    itself and dict, so its bases are read from __orig_bases__)."""
+    found: list[type] = []
+    pending: list[object] = [td]
+    while pending:
+        current = pending.pop(0)
+        if isinstance(current, type) and typing.is_typeddict(current) and current not in found:
+            found.append(current)
+            bases: object = getattr(current, "__orig_bases__", ())
+            pending += _objects(bases)
+    return found
 
 
 def _attribute_state(cls: type, name: str) -> State:
     """An instance annotation (not a ClassVar) is required unless the class gives it a default;
     a property is required; a plain class attribute is only a default, so optional. An
     annotation that can't be resolved fails closed: the member counts as undeclared."""
-    annotated = [a[name] for a in map(_own_annotations, inspect.getmro(cls)) if name in a]
-    if annotated and (annotated[0] is UNRESOLVED or _is_class_var(annotated[0])):
+    annotated = [a[name] for a in map(_own_heads, inspect.getmro(cls)) if name in a]
+    if annotated and annotated[0] in (UNRESOLVED, typing.ClassVar):
         return "absent"
     if isinstance(inspect.getattr_static(cls, name, None), property):
         return "required"
@@ -127,17 +162,39 @@ def _attribute_state(cls: type, name: str) -> State:
 UNRESOLVED = object()
 
 
-def _own_annotations(cls: type) -> Mapping[str, object]:
-    """One class's own annotations, resolved (postponed string annotations and aliases such as
-    `ClassVar as CV` included). If they can't be resolved, every name maps to UNRESOLVED."""
+def _own_heads(cls: type) -> dict[str, object]:
+    """One class's own annotated names, each mapped to what its annotation is at the top level:
+    ClassVar, Required or NotRequired for those wrappers, else the annotation's origin or the
+    annotation itself. Only the head is resolved, so a type imported for checking only doesn't
+    matter. A postponed string, a string quoted inside one, and an alias such as
+    `ClassVar as CV` resolve in the class's module; a head that can't be resolved is UNRESOLVED,
+    which fails closed."""
+    scope = vars(sys.modules[cls.__module__]) if cls.__module__ in sys.modules else {}
+    return {name: _head(a, scope) for name, a in inspect.get_annotations(cls).items()}
+
+
+def _head(annotation: object, scope: Mapping[str, object]) -> object:
+    if isinstance(annotation, typing.ForwardRef):  # how a TypedDict keeps a postponed string
+        annotation = annotation.__forward_arg__
+    if not isinstance(annotation, str):
+        return typing.get_origin(annotation) or annotation
     try:
-        return inspect.get_annotations(cls, eval_str=True)
-    except Exception:  # any failure to evaluate an annotation fails closed
-        return dict.fromkeys(inspect.get_annotations(cls), UNRESOLVED)
+        node = ast.parse(annotation, mode="eval").body
+    except SyntaxError:
+        return UNRESOLVED
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return _head(node.value, scope)
+    return _resolve(node.value if isinstance(node, ast.Subscript) else node, scope)
 
 
-def _is_class_var(annotation: object) -> bool:
-    return annotation is typing.ClassVar or typing.get_origin(annotation) is typing.ClassVar
+def _resolve(node: ast.expr, scope: Mapping[str, object]) -> object:
+    """A dotted name looked up in a module's namespace, never evaluated as code."""
+    if isinstance(node, ast.Name):
+        return scope.get(node.id, getattr(builtins, node.id, UNRESOLVED))
+    if isinstance(node, ast.Attribute):
+        base = _resolve(node.value, scope)
+        return UNRESOLVED if base is UNRESOLVED else getattr(base, node.attr, UNRESOLVED)
+    return UNRESOLVED
 
 
 def _is_mapping(v: object) -> TypeGuard[Mapping[object, object]]:
@@ -151,9 +208,7 @@ def _unpacked(fn: Callable[..., object], param: inspect.Parameter) -> Options:
     if typing.get_origin(annotation) is not typing.Unpack:
         return {}
     (td,) = typing.get_args(annotation)
-    td = typing.get_origin(td) or td
-    optional = dict.fromkeys(_strs(getattr(td, "__optional_keys__", None)), False)
-    return optional | dict.fromkeys(_strs(getattr(td, "__required_keys__", None)), True)
+    return typed_dict_keys(typing.get_origin(td) or td)
 
 
 def _signature_options(fn: Callable[..., object]) -> Options:

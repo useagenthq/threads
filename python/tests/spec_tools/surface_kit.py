@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from typing import Protocol, Required, TypedDict, Unpack, runtime_checkable
 
 from check_api import Json
+from check_surface import check_python
+from surface_contract import Gap, members
 
 ROOT = "fakepkg"
 
@@ -179,3 +181,20 @@ def installed(
                 sys.modules.pop(key, None)
             else:
                 sys.modules[key] = old
+
+
+ENTRIES = {"core": ROOT, "host": f"{ROOT}.host"}
+
+
+def problems(
+    gaps: tuple[Gap, ...] = (),
+    core: dict[str, object] | None = None,
+    host: dict[str, object] | None = None,
+    contract: Json | None = None,
+) -> list[str]:
+    with installed(core, host):
+        return check_python(members(contract or api()), list(gaps), ENTRIES)
+
+
+def without(members_: dict[str, object], name: str) -> dict[str, object]:
+    return {k: v for k, v in members_.items() if k != name}
