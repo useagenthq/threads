@@ -10,6 +10,7 @@ from threads.hooks.extension import Extension, extension_tools
 from threads.log import Budget, Context, Permissions, Retry, ToolSpec
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
+from threads.loop.calls import FINAL_OUTPUT
 from threads.loop.model import Model
 from threads.memory.authority import MemoryWrite
 from threads.memory.protocol import KnowledgeProvider, MemoryProvider
@@ -45,6 +46,9 @@ class Definition[D]:
     """What handoff may hand the conversation to, pinned as policy.handoffs (item 2)."""
     member: bool = False
     """Started as a subagent: a team member, offered the team tools (item 3)."""
+    allowed: frozenset[str] | None = None
+    """A subagent's tools are its own filtered to these, its parent's pinned names: a child only
+    narrows. final_output is exempt."""
 
     def policy(self) -> dict[str, JsonValue]:
         """The resolved runtime policy: each section absent (ADR defaults) or complete."""
@@ -78,12 +82,23 @@ class Definition[D]:
             ),
         )
         ext = extension_tools(self.extensions)
-        return (*builtins, *(t.spec() for t in self.tools), *(t.spec() for t in ext))
+        mine = (*builtins, *(t.spec() for t in self.tools), *(t.spec() for t in ext))
+        allowed = self.allowed
+        if allowed is None:
+            return mine
+        return tuple(s for s in mine if s.name in allowed or s.name == FINAL_OUTPUT)
 
     @property
     def full_instructions(self) -> str:
-        """Base instructions, then each extension's, in declaration order: all line 0."""
+        """Base instructions, then each extension's, in declaration order, then the agents this
+        one may start and hand off to: all line 0, so pinned per thread (C7)."""
         parts = [self.instructions, *(e.instructions for e in self.extensions)]
+        if self.subagents:
+            names = ", ".join(a.name for a in self.subagents)
+            parts.append(f"Subagents you can start with spawn_agent: {names}.")
+        if self.handoffs:
+            names = ", ".join(a.name for a in self.handoffs)
+            parts.append(f"Agents you can hand the conversation to: {names}.")
         return "\n\n".join(p for p in parts if p)
 
     def pin(self) -> tuple[dict[str, JsonValue], bytes]:

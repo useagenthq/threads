@@ -182,6 +182,9 @@ def _definition[T](
         tuple(replace(a.definition, member=True) for a in options.get("subagents", ())),
         tuple(a.definition for a in options.get("handoffs", ())),
     )
+    pinned = frozenset(s.name for s in definition.specs())
+    children = tuple(replace(c, allowed=pinned) for c in definition.subagents)
+    definition = replace(definition, subagents=children)
     narrowing.check(definition)
     for kind, names in (
         ("tool", [s.name for s in definition.specs()]),

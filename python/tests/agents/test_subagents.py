@@ -10,9 +10,9 @@ import pytest
 from pydantic import BaseModel, JsonValue
 
 from threads import (
+    Agent,
     BudgetExhausted,
     Completed,
-    ConfigError,
     EventItem,
     RunContext,
     Store,
@@ -163,10 +163,34 @@ async def echo(args: Echo, _ctx: RunContext[None]) -> str:
 ECHO = tool(name="echo", description="Echo.", input=Echo, runs="host", execute=echo)
 
 
-def test_a_subagent_with_a_tool_its_parent_lacks_is_a_config_error() -> None:
+def test_a_subagents_tools_are_filtered_to_its_parents_pinned_names() -> None:
     wider = agent(name="wider", model=scripted_model({"responses": []}), tools=[ECHO])
-    with pytest.raises(ConfigError):
-        agent(model=scripted_model({"responses": []}), subagents=[wider])
+    lead = agent(model=scripted_model({"responses": []}), subagents=[wider])
+    (child,) = lead.definition.subagents
+    names = [s.name for s in child.specs()]
+    assert "echo" not in names
+    assert {"todo_write", "send_message", "team_task_claim"} <= set(names)
+    assert "spawn_agent" not in names
+
+
+def test_the_model_is_told_which_agents_it_can_start_and_hand_off_to() -> None:
+    def named(name: str) -> Agent[None]:
+        return agent(name=name, model=scripted_model({"responses": []}))
+
+    lead = agent(
+        instructions="Base.",
+        model=scripted_model({"responses": []}),
+        extensions=[extension(name="ops", instructions="Ext.")],
+        subagents=[named("reviewer"), named("scanner")],
+        handoffs=[named("billing")],
+    )
+    pinned = lead.definition.thread_started()
+    assert pinned["instructions"] == (
+        "Base.\n\nExt.\n\nSubagents you can start with spawn_agent: reviewer, scanner."
+        "\n\nAgents you can hand the conversation to: billing."
+    )
+    plain = agent(instructions="Base.", model=scripted_model({"responses": []}))
+    assert plain.definition.thread_started()["instructions"] == "Base."
 
 
 def test_a_child_never_gains_a_permission_its_parent_lacks() -> None:
