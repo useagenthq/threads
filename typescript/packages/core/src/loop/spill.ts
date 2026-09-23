@@ -1,5 +1,5 @@
-import type { z } from "zod";
-import { type ArtifactRef, InjectedData, ResultPart } from "../log";
+import type { ArtifactRef } from "../log";
+import { redactSecrets } from "../redact";
 import { contextPolicy } from "./policy";
 import type { Session } from "./session";
 
@@ -25,41 +25,13 @@ function boundary(bytes: Uint8Array, at: number): number {
   return end;
 }
 
-/** `value` with `redact` applied to every string value in it. */
-function redactStrings(
-  value: unknown,
-  redact: (text: string) => string,
-): unknown {
-  if (typeof value === "string") return redact(value);
-  if (Array.isArray(value)) return value.map((v) => redactStrings(v, redact));
-  if (typeof value === "object" && value !== null)
-    return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k, redactStrings(v, redact)]),
-    );
-  return value;
-}
-
-/** A result part as recorded: every string redacted, a citation's title and ids included. */
-export function recordPart(s: Session, part: ResultPart): ResultPart {
-  const redact = s.config.redact ?? ((text: string) => text);
-  return ResultPart.parse(redactStrings(part, redact));
-}
-
-/** Recalled context as recorded: redacted like the result that brings it (C5). */
-export function recordInjection(
-  s: Session,
-  injected: z.infer<typeof InjectedData>,
-): z.infer<typeof InjectedData> {
-  const redact = s.config.redact ?? ((text: string) => text);
-  return InjectedData.parse(redactStrings(injected, redact));
-}
-
 export function recordOutput(
   s: Session,
   callId: string,
   output: string,
 ): Recorded {
-  const text = s.config.redact?.(output) ?? output;
+  // Stored as an artifact beside the event, so redacted here (the writer redacts events).
+  const text = redactSecrets(output);
   const bytes = encoder.encode(text);
   const spill = contextPolicy(s.fold.policy).spill;
   if (bytes.length <= spill.threshold_bytes) return { text, preview: text };

@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { KnownEvent } from "../log";
+import { redactStrings } from "../redact";
 import { err, ok, type Result } from "../result";
 import {
   addLine,
@@ -213,6 +214,8 @@ export class Writer {
     const now = this.#now();
     const line = canonicalLine({
       ...draft,
+      // Nothing is recorded with a resolved secret in it (C5): every event passes here.
+      data: redactStrings(draft.data),
       seq: trial.fold.seq + 1,
       event_id: uuidv7(now),
       thread_id: segment.header.thread_id,

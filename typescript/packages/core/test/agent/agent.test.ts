@@ -130,9 +130,10 @@ describe("stream()", () => {
     const run = bot.stream("hi", { store: sqlite(":memory:") });
     const items: StreamEvent[] = [];
     for await (const item of run) items.push(item);
-    expect(items.flatMap((i) => (i.kind === "delta" ? [i.text] : []))).toEqual([
-      "streamed",
-    ]);
+    // Deltas may arrive re-chunked (redaction holds a tail that could start a secret).
+    expect(
+      items.flatMap((i) => (i.kind === "delta" ? [i.text] : [])).join(""),
+    ).toBe("streamed");
     const types = items.flatMap((i) =>
       i.kind === "event" ? [i.event.type] : [],
     );

@@ -6,20 +6,15 @@ tool, an MCP client) at the moment it is used. Nothing hands a `Secret` or its v
 sandbox: sandbox commands run with an empty environment (invariant 4).
 
 Every value the host resolves, from a `Secret` or an adapter's explicit credential, is
-registered here, and `redact_secrets` replaces it in tool-result text before it is recorded
-(C5, spec/schema/README.md "Secret redaction").
+registered for redaction (`threads.redaction`): nothing is recorded with one in it (C5).
 """
 
 import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from pydantic import JsonValue
-
 from threads.agents.config import ConfigError
-
-_REGISTERED: dict[str, str] = {}
-"""Resolved values, each with the smallest label it was registered under."""
+from threads.redaction import register
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,18 +34,12 @@ def secret(name: str) -> Secret:
     return Secret(name)
 
 
-def _register(value: str, label: str) -> None:
-    known = _REGISTERED.get(value)
-    if known is None or label < known:
-        _REGISTERED[value] = label
-
-
 def resolve(ref: Secret, env: Mapping[str, str] | None = None) -> str:
     """The secret's value, in the host process only. An unset secret is a setup error."""
     value = (os.environ if env is None else env).get(ref.name)
     if not value:
         raise ConfigError("missing_secret", f"secret {ref.name} is not set on the host")
-    _register(value, ref.name)
+    register(value, ref.name)
     return value
 
 
@@ -80,56 +69,5 @@ def _resolve(factory: str, option: str, value: str | Secret | None, env: str) ->
     if not resolved:
         name = given.name if isinstance(given, Secret) else env
         raise ConfigError("missing_secret", f"{factory}: set {option} or {name}")
-    _register(resolved, f"{factory}.{option}")
+    register(resolved, f"{factory}.{option}")
     return resolved
-
-
-def _ordered() -> list[tuple[str, str]]:
-    """Longest first, so a value never leaks the tail of a longer one, then by code point."""
-    return sorted(_REGISTERED.items(), key=lambda item: (-len(item[0]), item[0]))
-
-
-def redact_secrets(text: str) -> str:
-    """Replaces every resolved value in `text` with `[secret <label>]`."""
-    for value, label in _ordered():
-        text = text.replace(value, f"[secret {label}]")
-    return text
-
-
-def redact_json(value: JsonValue) -> JsonValue:
-    """`value` with every string value in it redacted."""
-    match value:
-        case str():
-            return redact_secrets(value)
-        case list():
-            return [redact_json(v) for v in value]
-        case dict():
-            return {k: redact_json(v) for k, v in value.items()}
-        case _:
-            return value
-
-
-def _redact_bytes(data: bytes) -> bytes:
-    for value, label in _ordered():
-        data = data.replace(value.encode(), f"[secret {label}]".encode())
-    return data
-
-
-class StreamRedactor:
-    """Redacts bytes as they stream into a recorded artifact (a spilled exec output). It holds
-    back the longest value's length less one byte, so a value split across chunks is still
-    replaced whole; `end` releases the rest."""
-
-    def __init__(self) -> None:
-        self._held = b""
-
-    def feed(self, chunk: bytes) -> bytes:
-        data = _redact_bytes(self._held + chunk)
-        longest = max((len(v.encode()) for v in _REGISTERED), default=0)
-        keep = min(len(data), max(0, longest - 1))
-        self._held = data[len(data) - keep :]
-        return data[: len(data) - keep]
-
-    def end(self) -> bytes:
-        rest, self._held = _redact_bytes(self._held), b""
-        return rest

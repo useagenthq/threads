@@ -1,7 +1,7 @@
 """An artifact written a chunk at a time on the store's thread, with every resolved secret
 redacted as it streams in (C5): what is stored is what a read returns."""
 
-from threads.secrets import StreamRedactor
+from threads.redaction import StreamRedactor
 from threads.store.artifacts import ArtifactSink
 from threads.store.worker import Worker
 

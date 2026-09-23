@@ -18,6 +18,7 @@ from threads.log import (
 )
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
+from threads.redaction import redact_json
 from threads.result import Err, Ok
 from threads.store.verify import StoredEvent
 
@@ -93,7 +94,8 @@ def event_line(draft: Draft, at: Position) -> Ok[tuple[StoredEvent, bytes]] | Er
         "actor": dict(draft.actor),
         "branch_id": at.branch_id,
         "critical": draft.critical,
-        "data": dict(draft.data),
+        # Nothing is recorded with a resolved secret in it (C5): every event passes here.
+        "data": redact_json(dict(draft.data)),
         "epoch": at.epoch,
         "event_id": draft.event_id or uuid7(at.now),
         "prev_hash": sha256_hex(at.prev_line),

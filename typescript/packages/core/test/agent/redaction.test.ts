@@ -12,7 +12,8 @@ import {
   sqlite,
   type Tool,
 } from "../../src";
-import { credential, redactingSink } from "../../src/agent/secret";
+import { credential } from "../../src/agent/secret";
+import { redactingSink } from "../../src/redact";
 import { memoryArtifacts } from "../../src/store/artifacts";
 
 // C5 on every path a resolved credential could be recorded by: a spilled exec output's full

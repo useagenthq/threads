@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { credential } from "../../src/agent/secret";
 import type { LoopExtension } from "../../src/hooks/types";
 import type { KnownEvent, Policy } from "../../src/log";
 import { type LoopConfig, resume } from "../../src/loop";
@@ -259,5 +260,28 @@ describe("a gate hook that outlives its deadline", () => {
       "failed",
     );
     expect(h.model.remaining()).toBe(1);
+  });
+});
+
+describe("a compaction summary is recorded redacted (C5)", () => {
+  test("a key the summary repeats is in neither the log nor the summary artifact", async () => {
+    const key = credential("fake", "apiKey", "sk-l9-summary-2e3f", "U")();
+    const h = harness(
+      [],
+      [],
+      [say("one", 160_000), say(`The key was ${key}.`, 900), say("two", 10)],
+      undefined,
+      policy({}),
+    );
+    await turn(h, "first");
+    const second = await turn(h, "second");
+    expect(JSON.stringify(second)).not.toContain(key);
+    const compacted = second.find((e) => e.type === "compacted");
+    if (compacted?.type !== "compacted") throw new Error("the run compacted");
+    const summary = h.artifacts.get(compacted.data.summary_ref.sha256);
+    if (!summary.ok) throw new Error(summary.error.message);
+    expect(new TextDecoder().decode(summary.value)).toBe(
+      "The key was [secret fake.apiKey].",
+    );
   });
 });

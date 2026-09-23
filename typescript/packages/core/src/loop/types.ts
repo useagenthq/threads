@@ -154,8 +154,6 @@ export type LoopConfig = {
    * read_only operation. Absent when there is no sandbox: no file is restored.
    */
   readonly readFile?: (path: string) => Promise<Uint8Array | undefined>;
-  /** Scrubs host secrets from tool output before it is recorded (C5). */
-  readonly redact?: (text: string) => string;
   /** Subagents and the team; absent: spawn_agent and team tools have no agents. */
   readonly agents?: Agents;
   /** The tree-wide budget ledger; absent: no cost, token or request budget. */

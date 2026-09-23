@@ -1,7 +1,7 @@
-import { redactingSink } from "../agent/secret";
 import { assertNever } from "../assert-never";
 import type { ArtifactRef } from "../log";
 import type { ToolRun } from "../loop/types";
+import { redactingSink } from "../redact";
 import { err, ok, type Result } from "../result";
 import type { ArtifactStore } from "../store/artifacts";
 import type {

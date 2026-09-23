@@ -264,7 +264,10 @@ A handoff target runs inside the originating tree's limits, whoever hands off.
 
 ## Secret redaction (C5, invariant 4)
 
-Every credential value the host resolves, from a Secret or an explicit option, is replaced by `[secret <label>]` in tool-result text before it is recorded. Values are replaced longest first; for equal values the smallest label wins. A revealed Secret's label is its name; an adapter credential's is `<factory>.<option>` (`anthropic.apiKey` in TS, `anthropic.api_key` in Python). Length and order are by Unicode code point, in both languages.
+Every credential value the host resolves, from a Secret or an explicit option, is replaced by `[secret <label>]` in everything recorded: every string of every event's `data` as the writer appends it (tool results and their parts, injected text, model output, hook decisions and injections, the run's own input), and every artifact the host stores beside events (a spilled or committed result, a spilled exec output, a compaction summary). Streamed model deltas shown to a caller are redacted too. A revealed Secret's label is its name; an adapter credential's is `<factory>.<option>` (`anthropic.apiKey` in TS, `anthropic.api_key` in Python); for equal values the smallest label wins.
+
+- **Matching.** Scanning left to right, the longest registered value that starts at each position is replaced (ties by code point). Lengths and order are by Unicode code point, in both languages.
+- **Streams.** A stream (exec output bytes, model deltas) holds back its unredacted tail while it could still grow into a registered value, and decides it when more arrives or at the end. So `abc` then `123` with `abc` and `abc123` registered records one `[secret …]` for `abc123`, and a value split inside a multi-byte character is replaced whole.
 
 ## Server-originated text (invariant 6)
 

@@ -1,3 +1,4 @@
+import { redactSecrets } from "../redact";
 import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
 import { setupOf } from "./registry";
@@ -60,7 +61,7 @@ async function extensionSetup<Deps>(e: Extension<Deps>): Promise<void> {
   } catch (error) {
     throw new ConfigError(
       "invalid_config",
-      `extension ${e.name}: setup failed: ${String(error)}`,
+      `extension ${e.name}: setup failed: ${redactSecrets(String(error))}`,
     );
   }
 }

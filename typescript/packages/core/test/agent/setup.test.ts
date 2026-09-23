@@ -9,7 +9,8 @@ import {
   sqlite,
   tool,
 } from "../../src";
-import { credential, redactSecrets } from "../../src/agent/secret";
+import { credential } from "../../src/agent/secret";
+import { redactSecrets } from "../../src/redact";
 
 // Lane 09: setup is result-valued at check(), thrown by a run, remembered per object on success
 // only, shared by a parent and the agents it may start; credentials are redacted longest first.

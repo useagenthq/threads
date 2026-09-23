@@ -12,8 +12,8 @@ from threads.loop.defaults import context
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.runtime import Runtime
 from threads.loop.tools import Reference
+from threads.redaction import redact_secrets
 from threads.reduce.handlers import to_json
-from threads.secrets import redact_json, redact_secrets
 from threads.store import Draft
 
 type Origin = Literal[
@@ -42,29 +42,19 @@ async def text_ref(rt: Runtime, text: str) -> JsonValue:
     return {"sha256": sha, "bytes": len(raw), "media_type": "text/plain"}
 
 
-def redacted_part(part: ResultPart) -> ResultPart:
-    """`part` with every string in it redacted (C5): text, and a citation's title, source id
-    and cited text as much as a document's title."""
-    return type(part).model_validate(redact_json(to_json(part)))
-
-
 def reference_drafts(references: Sequence[Reference]) -> list[Draft]:
     """One `injected` per recalled item or loaded skill, appended with the result that carries
     it; only a skill is trusted."""
     out: list[Draft] = []
-    # Recalled text is recorded, so a resolved secret in it is redacted like a result (C5).
     for r in references:
-        origin: dict[str, JsonValue] = {
-            "id": redact_secrets(r.id),
-            "version": redact_secrets(r.version),
-        }
+        origin: dict[str, JsonValue] = {"id": r.id, "version": r.version}
         if r.location is not None:
             origin["location"] = r.location
         data: dict[str, JsonValue] = {
             "source": r.source,
             "trust": "trusted_instruction" if r.source == "skill" else "untrusted_reference",
             "origin": origin,
-            "text": redact_secrets(r.text),
+            "text": r.text,
         }
         out.append(draft("injected", data))
     return out
@@ -79,12 +69,10 @@ async def result_draft(  # noqa: PLR0913 - the result's parts ride with it
     *,
     content: Sequence[ResultPart] = (),
 ) -> Draft:
-    """The result the model sees, with every resolved secret redacted (C5): every tool result,
-    read_only or effectful, is recorded through here. Spilled bytes are a durable artifact
-    before this draft; `full` is output the source already spilled, and the text is then its
-    bounded preview."""
+    """The result the model sees. Spilled bytes are a durable artifact before this draft, and
+    redacted (C5): the writer redacts the event itself. `full` is output the source already
+    spilled, and the text is then its bounded preview."""
     text = redact_secrets(text)
-    content = tuple(redacted_part(p) for p in content)
     data: dict[str, JsonValue] = {
         "call_id": call_id,
         "completeness": "complete",

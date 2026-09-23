@@ -18,7 +18,6 @@ import { withMemoryWrite } from "./providers";
 import { childFactory } from "./registry";
 import type { ThreadRef } from "./result";
 import type { Hooks, Resolved, RunOptions, SetUp } from "./run";
-import { redactSecrets } from "./secret";
 
 // The loop config for one run of an agent: its models, bound tools, hooks, permission fold and
 // the agents it may start. A child's permission decisions are capped by its parent's.
@@ -102,7 +101,6 @@ export function loopConfig<Deps, Output>(
     },
     principal,
     skewMarginMs: 1000,
-    redact: redactSecrets,
     agents: agents(def, env),
     budgets: { ledger: env.ledger, inherited: env.inherited },
     ...(readFile === undefined ? {} : { readFile }),

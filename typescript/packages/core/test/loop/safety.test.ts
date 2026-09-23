@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { credential } from "../../src/agent/secret";
 import type { KnownEvent } from "../../src/log";
 import { resume } from "../../src/loop";
 import type { EventDraft } from "../../src/store";
@@ -283,5 +284,50 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
       type: "parked",
       data: { reason: "effect_unknown" },
     });
+  });
+});
+
+describe("a reconciled result is recorded redacted (C5)", () => {
+  test("a found lookup value never reaches the log or an artifact raw", async () => {
+    const key = credential("fake", "apiKey", "sk-l9-reconcile-9c0d", "U")();
+    const reconcilable = { ...EMAIL, effect_class: "reconcilable" } as const;
+    const h = harness([reconcilable], [userInput("mail bob")], [FINAL]);
+    crashedCall(h, []);
+    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const base = h.config();
+    const impl = base.tools.get("send_email");
+    if (impl === undefined) throw new Error("the harness binds send_email");
+    const tools = new Map([
+      [
+        "send_email",
+        {
+          ...impl,
+          reconcile: {
+            finality: "final" as const,
+            lookup: async () => ({
+              status: "found" as const,
+              value: `sent with ${key}`,
+            }),
+          },
+        },
+      ],
+    ]);
+    expect((await resume(writer, h.artifacts, { ...base, tools })).kind).toBe(
+      "idle",
+    );
+    const all = events(writer);
+    expect(JSON.stringify(all)).not.toContain(key);
+    const resolved = all.find((e) => e.type === "effect_resolved");
+    const ref =
+      resolved?.type === "effect_resolved"
+        ? resolved.data.result_ref
+        : undefined;
+    if (ref === undefined)
+      throw new Error("a reconciled effect records its result");
+    const stored = h.artifacts.get(ref.sha256);
+    if (!stored.ok) throw new Error(stored.error.message);
+    expect(new TextDecoder().decode(stored.value)).toBe(
+      "sent with [secret fake.apiKey]",
+    );
   });
 });

@@ -17,8 +17,8 @@ from threads.loop.model import Found, NotFound
 from threads.loop.results import As, result_draft, text_ref
 from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import Invocation, NotSent, Output, Uncertain
+from threads.redaction import redact_secrets
 from threads.result import Err
-from threads.secrets import redact_secrets
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

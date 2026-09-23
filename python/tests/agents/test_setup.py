@@ -39,8 +39,9 @@ from threads.loop.model import (
     ModelResponse,
 )
 from threads.loop.scripted import ScriptedModel
+from threads.redaction import redact_secrets
 from threads.result import Err, Ok
-from threads.secrets import credential, redact_secrets, resolve
+from threads.secrets import credential, resolve
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 FAILED_THEN_SET_UP = 2

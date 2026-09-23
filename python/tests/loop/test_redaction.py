@@ -9,11 +9,16 @@ from local_sandbox import LocalSandbox
 from pydantic import JsonValue
 
 from threads import Completed, agent, scripted_model, sqlite
-from threads.log import CitationPart, Permissions, TextPart, ToolResultEvent
-from threads.loop.results import redacted_part, reference_drafts
+from threads.log import BranchId, CitationPart, Permissions, TextPart, ThreadId, ToolResultEvent
+from threads.loop.drafts import draft
+from threads.loop.results import reference_drafts
 from threads.loop.tools import Reference
+from threads.redaction import StreamRedactor
+from threads.reduce.handlers import to_json
 from threads.result import Ok
-from threads.secrets import StreamRedactor, credential
+from threads.secrets import credential
+from threads.store import Draft
+from threads.store.lines import Position, event_line, uuid7
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 BYPASS = Permissions.model_validate(
@@ -80,15 +85,8 @@ def test_a_spilled_exec_output_is_stored_redacted_and_read_back_redacted(tmp_pat
         assert key.encode() not in stored.read_bytes(), stored
 
 
-def test_injected_references_are_redacted() -> None:
+def test_injected_references_and_every_string_of_a_part_are_stored_redacted() -> None:
     key = credential("fake", "api_key", "sk-lane09-recall-3a9b", "UNUSED")()
-    (drafted,) = reference_drafts([Reference("memory", "m1", "1", f"the key is {key}")])
-    assert key not in str(drafted)
-    assert LABEL in str(drafted)
-
-
-def test_every_string_of_a_part_is_redacted() -> None:
-    key = credential("fake", "api_key", "sk-lane09-cite-5f10", "UNUSED")()
     cited = CitationPart(
         type="citation",
         source_kind="web",
@@ -96,8 +94,31 @@ def test_every_string_of_a_part_is_redacted() -> None:
         title=f"title {key}",
         cited_text=f"cited {key}",
     )
-    shown = redacted_part(cited)
-    assert isinstance(shown, CitationPart)
-    assert key not in shown.model_dump_json()
-    assert shown.title == f"title {LABEL}"
-    assert redacted_part(TextPart(type="text", text=key)) == TextPart(type="text", text=LABEL)
+    (recalled,) = reference_drafts([Reference("memory", "m1", "1", f"the key is {key}")])
+    parts: list[JsonValue] = [
+        to_json(TextPart(type="text", text=key)),
+        to_json(cited),
+    ]
+    result = draft(
+        "tool_result",
+        {
+            "call_id": "c1",
+            "completeness": "complete",
+            "is_error": False,
+            "origin": "executed",
+            "preview": key,
+            "content": parts,
+        },
+    )
+    stored = [stored_line(d) for d in (recalled, result)]
+    assert all(key not in line for line in stored)
+    assert f"title {LABEL}" in stored[1]
+    assert f"the key is {LABEL}" in stored[0]
+
+
+def stored_line(d: Draft) -> str:
+    """The line the writer would store for `d`."""
+    at = Position(ThreadId(uuid7(0)), BranchId(uuid7(1)), 1, 1, b"", 0)
+    built = event_line(d, at)
+    assert isinstance(built, Ok)
+    return built.value[1].decode()

@@ -17,6 +17,7 @@ from typing import Protocol, runtime_checkable
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
 from threads.hooks.extension import Extension
+from threads.redaction import redact_secrets
 
 
 @runtime_checkable
@@ -86,7 +87,9 @@ async def _extension(e: Extension) -> None:
     try:
         await e.setup()
     except Exception as error:
-        raise ConfigError("invalid_config", f"extension {e.name}: setup failed: {error}") from error
+        # check() returns this text: a resolved secret in the error is redacted.
+        why = redact_secrets(str(error))
+        raise ConfigError("invalid_config", f"extension {e.name}: setup failed: {why}") from error
 
 
 async def set_up[D](definition: Definition[D]) -> None:

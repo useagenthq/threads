@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { inspect } from "node:util";
 import { ConfigError, secret } from "../../src";
-import { redactSecrets } from "../../src/agent/secret";
+import { redactSecrets } from "../../src/redact";
 
 describe("secret()", () => {
   test("a reference shows its name, never its value", () => {
