@@ -199,7 +199,7 @@ One rule for the host API, channel decisions and recovery.
 
 A handoff target runs inside the originating tree's limits, whoever hands off.
 
-- **Ceilings.** The target's decisions are capped by every ceiling of the run that made the handoff: the host ceiling, the `Agent.run` ceiling, the handing-off agent's policy and, when a subagent hands off, every ancestor's policy up the spawn chain. A subagent's handoff target never runs under fewer ceilings than the subagent.
+- **Ceilings.** The target's decisions are capped by every ceiling of the run that made the handoff: the host ceiling and the `Agent.run` ceiling and, when a subagent hands off, the subagent's own policy and every ancestor's policy up the spawn chain (a root agent's handoff target is capped by the run's ceilings, not by the source agent's policy: `handoff-target-policy-capped`). A subagent's handoff target never runs under fewer ceilings than the subagent.
 - **Budgets.** Every budget covering the handing-off thread (its thread and run budgets and each one it inherits) also covers the target thread, as an ancestor's; a refusal is `budget_exceeded{scope: ancestor, owner_thread_id}`. The target's model requests reserve against those budgets and its own.
 
 ## Budget enforcement
@@ -211,6 +211,16 @@ A handoff target runs inside the originating tree's limits, whoever hands off.
 
 - **Scope.** `search_memory`, `save_memory` and `forget_memory` act in the memory scope of the **current input's principal**: the `actor.principal` of the latest `user_input` or `steer` before the call. In a thread several principals write to (a shared channel conversation), each input is answered from its own sender's memory.
 - **Visibility.** A recalled memory is shown only to the principal it was recalled for. Render v1 renders nothing for an `injected{source: memory}` event in a request whose current input principal (the latest `user_input` or `steer` before the request) differs from the current input principal before the `injected` event (planned case `render-memory-other-principal-hidden`).
+- **Scope string.** `Scope.scope` of a memory call is `<e(issuer)>/<e(subject)>`, where `e` replaces `%` with `%25` and then `/` with `%2F`. So `("a/b", "c")` and `("a", "b/c")` never share a scope, and a principal with neither character keeps its existing scope.
+- **Recall listing.** `search_memory`'s `tool_result.preview` is `<n> memories, shown below as untrusted references` (or `no memories found`). Provider-chosen ids and versions appear only in each reference's `id` (`memory-save-recall-untrusted`).
+- **Knowledge ingest key.** The `key` passed to `KnowledgeProvider.ingest` is the `record_id` of the host binding issued for `(tenant, agent, scope, <path>@<sha256>)`, never the bare `<path>@<sha256>`. A file one agent or tenant has added is still added in another scope, and a provider that dedups on its key never answers across scopes. The host's own "already added" record is keyed per scope in the same way.
+- **Knowledge passages.** A document splits into passages at every `\n`, then any run of whitespace, then `\n`; each passage is trimmed of whitespace, and an empty one is dropped. Spans are UTF-8 byte offsets into the document. Whitespace is exactly ECMAScript's WhiteSpace and LineTerminator set (what `\s` and `trim` use in TS): U+0009-U+000D, U+0020, U+00A0, U+1680, U+2000-U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF. It is not Python's `str.isspace` (U+001C-U+001F and U+0085 aren't whitespace here).
+
+## Questions and remembered rules
+
+- **Who answers.** An `ask_user` question is answered only by the principal whose input opened the turn that asked it: the `actor.principal` of the turn's `user_input`. Anyone else gets `forbidden`, and nothing is appended. A question asks that user, and it is not an approval.
+- **Multi-choice.** An answer given as a list is recorded as its items joined with `\n` in `tool_result.preview`. A newline can't be confused with a comma that is inside a choice.
+- **Suggested rules.** `PendingApproval.suggested_rules` for a `bash` call whose `command` is non-blank are `bash(<command>)`, then `bash(<w1> <w2>:*)`, where `w1 w2` are the first two words of the command as split by POSIX shell rules (Python `shlex.split`; one word gives `bash(<w1>:*)`). A command that doesn't split (an unclosed quote) gives only the exact rule. Any other call gives the tool name alone. A grant's `remember_rule` must equal one of the challenge's `suggested_rules`, otherwise the answer is `invalid_request`. Both languages suggest and accept the same rules.
 
 ## Server-originated text (invariant 6)
 

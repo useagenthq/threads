@@ -117,7 +117,8 @@ def _recall(root: pathlib.Path) -> None:
     _save_turn(log, fact)
     user(log, "When do we deploy?")
     call(log, "search_memory", {"query": "when are deploys"}, "call_2")
-    result(log, "call_2", _listing("memories", [f"{MEMORY_ID}@1"]))
+    # Provider-chosen ids and versions appear only inside the reference wrapper.
+    result(log, "call_2", "1 memories, shown below as untrusted references")
     log.add("injected", _reference("memory", MEMORY_ID, "1", fact, None))
     render_case(
         root,

@@ -5,5 +5,5 @@
 {"content":[{"text":"Saved.","type":"text"}],"role":"assistant"}
 {"content":[{"text":"When do we deploy?","type":"text"}],"role":"user"}
 {"content":[{"call_id":"call_2","input":{"query":"when are deploys"},"name":"search_memory","type":"tool_use"}],"role":"assistant"}
-{"call_id":"call_2","content":[{"text":"1 memories, shown below as untrusted references: mem_fc9d7550ed0c6673fa9d86d4@1","type":"text"}],"is_error":false,"role":"tool"}
+{"call_id":"call_2","content":[{"text":"1 memories, shown below as untrusted references","type":"text"}],"is_error":false,"role":"tool"}
 {"content":[{"text":"<reference source=\"memory\" id=\"mem_fc9d7550ed0c6673fa9d86d4\" untrusted=\"true\">\nDeploys happen on Friday.\n</reference>","type":"text"}],"role":"user"}
