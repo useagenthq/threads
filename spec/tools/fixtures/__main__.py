@@ -77,12 +77,15 @@ def _build(out: pathlib.Path) -> None:
         family.build(out)
 
 
+APPENDING_KINDS = frozenset({"recover", "stub"})
+
+
 def _split_recover(out: pathlib.Path, other: pathlib.Path) -> None:
-    """Recover cases append, and only the header's writer may: each keeps one
-    log and expected file per implementation. Everything else in the case must be identical."""
+    """Recover and stub cases append, and only the header's writer may: each
+    keeps one log and expected file per implementation. Everything else must be identical."""
     py, ts = WRITERS
     for d in out.iterdir():
-        if json.loads((d / "case.json").read_text())["kind"] != "recover":
+        if json.loads((d / "case.json").read_text())["kind"] not in APPENDING_KINDS:
             continue
         o = other / d.name
         logs = {py: d / "log.jsonl", ts: o / "log.jsonl"}

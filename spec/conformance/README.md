@@ -12,7 +12,7 @@ cases/<name>/
   log.jsonl        the input: a branch export (bytes as exported; may be deliberately torn or invalid)
   expected.json    what must come out
   log.<impl>.jsonl, expected.<impl>.json
-                   recover kind only: one pair per implementation (threads-py, threads-ts)
+                   recover and stub kinds only: one pair per implementation (threads-py, threads-ts)
   model.json       optional: scripted model responses
   sandbox.json     optional: scripted sandbox/provider behaviour
   stubs.json       optional: recorded stubs (stub kind)
@@ -20,7 +20,7 @@ cases/<name>/
   artifacts/<sha256>  optional: content-addressed bytes referenced by the log
 ```
 
-`log.jsonl` is absent only for the `intake` and `policy` kinds, and for `recover`, which appends. Only the implementation named in a header's `writer.impl` may append to that branch, so each `recover` case has `log.threads-py.jsonl` and `log.threads-ts.jsonl` from the same script, differing only in the header's writer and the hashes that follow, with the matching `expected.<impl>.json` (only `state.head.hash` differs). A runner uses the pair named for itself. Reading and forking are portable, so every other kind has one `log.jsonl`. In `recover-foreign-writer-refused` each runner gets the other implementation's log: it opens it read-only and refuses to append (`writer_mismatch` at seq 0). `case.schema.json` defines `case.json` (`$defs/Case`), `expected.json` (`$defs/Expected`), `model.json` (`$defs/ModelScript`), `sandbox.json` (`$defs/SandboxScript`) and `stubs.json` (`$defs/StubScript`). Line shapes come from `../schema/events.v1.schema.json`. Every line of every `log.jsonl` validates, except the torn line in `torn-tail-truncated` and the lines a negative case breaks on purpose.
+`log.jsonl` is absent only for the `intake` and `policy` kinds, and for `recover` and `stub`, which append. Only the implementation named in a header's `writer.impl` may append to that branch, so each `recover` and `stub` case has `log.threads-py.jsonl` and `log.threads-ts.jsonl` from the same script, differing only in the header's writer and the hashes that follow, with the matching `expected.<impl>.json` (only `state.head.hash` differs). A runner uses the pair named for itself. Reading and forking are portable, so every other kind has one `log.jsonl`. In `recover-foreign-writer-refused` each runner gets the other implementation's log: it opens it read-only and refuses to append (`writer_mismatch` at seq 0). `case.schema.json` defines `case.json` (`$defs/Case`), `expected.json` (`$defs/Expected`), `model.json` (`$defs/ModelScript`), `sandbox.json` (`$defs/SandboxScript`) and `stubs.json` (`$defs/StubScript`). Line shapes come from `../schema/events.v1.schema.json`. Every line of every `log.jsonl` validates, except the torn line in `torn-tail-truncated` and the lines a negative case breaks on purpose.
 
 ### log.jsonl is an export
 

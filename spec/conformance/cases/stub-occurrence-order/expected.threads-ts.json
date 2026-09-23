@@ -1,0 +1,224 @@
+{
+  "outcome": "error",
+  "error": {
+    "code": "unmatched_external_op"
+  },
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 2,
+      "hash": "e23206a742bf9f6a24ac36b0c64e217267565999fce573a702195065f6d1a4a2"
+    }
+  },
+  "appended": [
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "call_1",
+            "name": "search_web",
+            "input": {
+              "q": "threads"
+            }
+          }
+        ],
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "tool_call",
+      "data": {
+        "call_id": "call_1",
+        "name": "search_web",
+        "input": {
+          "q": "threads"
+        }
+      }
+    },
+    {
+      "type": "permission_decision",
+      "data": {
+        "call_id": "call_1",
+        "decision": "allow"
+      }
+    },
+    {
+      "type": "effect_begin",
+      "data": {
+        "call_id": "call_1",
+        "attempt": 1
+      }
+    },
+    {
+      "type": "effect_commit",
+      "data": {
+        "call_id": "call_1",
+        "result_ref": {
+          "sha256": "b5abc04f218a4a3de14806e04621a4ed084d4c81dd80700febe275d2f77e1fe0",
+          "bytes": 8,
+          "media_type": "text/plain"
+        }
+      }
+    },
+    {
+      "type": "tool_result",
+      "data": {
+        "call_id": "call_1",
+        "is_error": false,
+        "origin": "executed",
+        "preview": "result A"
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "call_2",
+            "name": "search_web",
+            "input": {
+              "q": "threads"
+            }
+          }
+        ],
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "tool_call",
+      "data": {
+        "call_id": "call_2",
+        "name": "search_web",
+        "input": {
+          "q": "threads"
+        }
+      }
+    },
+    {
+      "type": "permission_decision",
+      "data": {
+        "call_id": "call_2",
+        "decision": "allow"
+      }
+    },
+    {
+      "type": "effect_begin",
+      "data": {
+        "call_id": "call_2",
+        "attempt": 1
+      }
+    },
+    {
+      "type": "effect_commit",
+      "data": {
+        "call_id": "call_2",
+        "result_ref": {
+          "sha256": "eb62b71b9b22cd6e5168d6d5b581166e4a3c353b7a0c40ff5c58af064b1be7c8",
+          "bytes": 8,
+          "media_type": "text/plain"
+        }
+      }
+    },
+    {
+      "type": "tool_result",
+      "data": {
+        "call_id": "call_2",
+        "is_error": false,
+        "origin": "executed",
+        "preview": "result B"
+      }
+    },
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "call_3",
+            "name": "search_web",
+            "input": {
+              "q": "threads"
+            }
+          }
+        ],
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "tool_call",
+      "data": {
+        "call_id": "call_3",
+        "name": "search_web",
+        "input": {
+          "q": "threads"
+        }
+      }
+    },
+    {
+      "type": "permission_decision",
+      "data": {
+        "call_id": "call_3",
+        "decision": "allow"
+      }
+    },
+    {
+      "type": "effect_begin",
+      "data": {
+        "call_id": "call_3",
+        "attempt": 1
+      }
+    },
+    {
+      "type": "effect_resolved",
+      "data": {
+        "call_id": "call_3",
+        "outcome": "not_sent",
+        "by": "adapter"
+      }
+    }
+  ],
+  "stubs": {
+    "consumed": 2,
+    "unmatched": 1
+  }
+}
