@@ -66,7 +66,9 @@ def _run_rejected(reason: RejectReason) -> tuple[Halt, list[str], list[JsonValue
 _ENDINGS = ("model_attempt_abandoned", "turn_completed")
 
 
-@pytest.mark.parametrize("code", ["content_unsupported", "continuation_unsupported"])
+@pytest.mark.parametrize(
+    "code", ["content_unsupported", "continuation_unsupported", "transport_fence_unsupported"]
+)
 def test_a_send_time_refusal_ends_the_turn_with_its_code_and_is_never_resent(
     code: RejectReason,
 ) -> None:

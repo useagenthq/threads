@@ -72,7 +72,7 @@ async def _dispatch(rt: Runtime, event: ModelRequestEvent, body: bytes) -> Faile
     recorded = await rt.append(*outcome_drafts(rt, event.event_id, outcome))
     if isinstance(recorded, Err):
         return lost(recorded.error)
-    return None if _unencodable(outcome) else event.event_id
+    return None if _refused(outcome) else event.event_id
 
 
 type Outcome = ModelResponse | Rejected | None
@@ -106,7 +106,11 @@ def outcome_drafts(rt: Runtime, request_id: EventId, outcome: Outcome) -> Sequen
     match outcome:
         case ModelResponse():
             return response_drafts(rt, request_id, outcome)
-        case Rejected(reason="content_unsupported" | "continuation_unsupported" as code):
+        case Rejected(
+            reason="content_unsupported"
+            | "continuation_unsupported"
+            | "transport_fence_unsupported" as code
+        ):
             data = {
                 "request_event_id": request_id,
                 "provider_outcome": "not_sent",
@@ -126,11 +130,12 @@ def outcome_drafts(rt: Runtime, request_id: EventId, outcome: Outcome) -> Sequen
             return [draft("model_attempt_abandoned", data)]
 
 
-def _unencodable(outcome: Outcome) -> bool:
+def _refused(outcome: Outcome) -> bool:
     """A send-time refusal already ended the turn with its code."""
     return isinstance(outcome, Rejected) and outcome.reason in (
         "content_unsupported",
         "continuation_unsupported",
+        "transport_fence_unsupported",
     )
 
 

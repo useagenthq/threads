@@ -32,7 +32,10 @@ type ProviderRejection = Literal[
 """A provider's rejection before any content: recorded as a failed attempt."""
 type Unencodable = Literal["content_unsupported", "continuation_unsupported"]
 """A rendered part the adapter can't encode: nothing left, and nothing is re-sent."""
-type RejectReason = ProviderRejection | Literal["stale_epoch"] | Unencodable
+type Refused = Unencodable | Literal["transport_fence_unsupported"]
+"""A send the adapter refused before anything left: recorded not_sent, ends the turn with its
+code, never re-sent. transport_fence_unsupported: the model's transport bypasses the fence."""
+type RejectReason = ProviderRejection | Literal["stale_epoch"] | Refused
 """spec/api.json Model.send returns.errors. stale_epoch: the fence refused at the send point."""
 type LookupCapability = Literal["none", "nonfinal", "final"]
 
