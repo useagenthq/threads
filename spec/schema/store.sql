@@ -3,9 +3,6 @@
 -- Both implementations embed this file byte for byte: spec/tools/gen_store_sql.py writes the
 -- constants, and CI runs it with --check. Change this file, then regenerate.
 --
--- Tables for later features are added with those features: inbox, approvals and
--- schedule_occurrences.
---
 -- Connection settings, set by each driver before this script runs:
 --   PRAGMA journal_mode = WAL;
 --   PRAGMA synchronous = FULL;
@@ -154,6 +151,97 @@ CREATE TABLE IF NOT EXISTS provider_audit (
   namespace TEXT NOT NULL,
   record_id TEXT NOT NULL,
   at INTEGER NOT NULL
+) STRICT;
+
+-- Channel intake. Every item of a verified batch is inserted in one
+-- transaction before the webhook response is returned; a redelivered item is a no-op under the
+-- UNIQUE key and is still answered. item_key is the provider's per-item id, or
+-- '<delivery_id>#<index>' for a batch without one. item is the parsed Inbound item as canonical
+-- JSON. thread_id is the conversation's thread (channel_threads). consumed_seq is null until the
+-- run appends the item's channel_delivery (or, for a decision or control item, its event) under
+-- the branch lease; it is set in that append's transaction.
+CREATE TABLE IF NOT EXISTS inbox (
+  inbox_id INTEGER PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  installation_id TEXT NOT NULL,
+  item_key TEXT NOT NULL,
+  delivery_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
+  item BLOB NOT NULL,
+  received_at INTEGER NOT NULL,
+  consumed_seq INTEGER,
+  UNIQUE (tenant_id, channel, installation_id, item_key)
+) STRICT;
+
+-- A channel conversation's thread: the verified (tenant, channel,
+-- installation, address) maps to one thread by an atomic create-or-get. Message text or metadata
+-- never selects the thread or tenant. A handoff moves the row to the target thread (-- item 2) with one conditional update.
+CREATE TABLE IF NOT EXISTS channel_threads (
+  tenant_id TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  installation_id TEXT NOT NULL,
+  address TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, channel, installation_id, address)
+) STRICT;
+
+-- Approval challenges. One single-use row per approval_requested, inserted in
+-- that event's append transaction and bound to the tenant, the workspace or installation (null
+-- outside a channel), thread, branch, call, canonical-args hash, the hashes of the files the call
+-- references (a canonical JSON array) and the expiry. An answer consumes it with one conditional
+-- UPDATE ... WHERE state = 'open' in the transaction that appends approval_granted or
+-- approval_denied; a second answer finds no open row (approval_duplicate), and an answer at or
+-- after expires_at moves it to 'expired' (approval_expired, a denial). decided_by is the
+-- approver's PrincipalKey.
+CREATE TABLE IF NOT EXISTS approvals (
+  challenge_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  installation_id TEXT,
+  thread_id TEXT NOT NULL,
+  branch_id TEXT NOT NULL,
+  call_id TEXT NOT NULL,
+  args_hash TEXT NOT NULL,
+  file_hashes BLOB NOT NULL,
+  expires_at INTEGER NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('open', 'granted', 'denied', 'expired')),
+  decided_by TEXT,
+  decided_at INTEGER
+) STRICT;
+
+-- Schedule occurrences. occurrence_at is the scheduled instant in UTC ms; the
+-- pair is the OccurrenceId. A scheduler claims an occurrence by inserting its row before it
+-- appends schedule_fired or schedule_skipped, so two schedulers that see the same due occurrence
+-- start one run. state is the claim's outcome; thread_id is the thread it ran or was recorded on.
+CREATE TABLE IF NOT EXISTS schedule_occurrences (
+  tenant_id TEXT NOT NULL,
+  schedule_id TEXT NOT NULL,
+  occurrence_at INTEGER NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('fired', 'skipped')),
+  reason TEXT CHECK (reason IN ('missed', 'overlap')),
+  thread_id TEXT,
+  claimed_at INTEGER NOT NULL,
+  UNIQUE (schedule_id, occurrence_at)
+) STRICT;
+
+-- POST /v1/runs idempotency. The receipt is
+-- inserted in the transaction that appends the run's user_input, so a lost response replays
+-- it. The key is unique per tenant and operation; principal_key (the full normalized
+-- issuer/tenant/subject PrincipalKey) and body_hash (sha256 of the request's canonical JSON) are
+-- its binding: the same principal and body replay the receipt and start nothing, a different
+-- body is idempotency_key_reused, and a different principal is idempotency_key_principal_mismatch
+-- and never sees the receipt. run_id is the user_input's event_id.
+CREATE TABLE IF NOT EXISTS run_receipts (
+  tenant_id TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  principal_key TEXT NOT NULL,
+  body_hash TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
+  branch_id TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (tenant_id, operation, idempotency_key)
 ) STRICT;
 
 PRAGMA user_version = 1;
