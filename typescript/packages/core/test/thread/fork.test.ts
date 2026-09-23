@@ -11,6 +11,7 @@ import {
 } from "../../src/sandbox";
 import type { EventDraft } from "../../src/store";
 import { openThread, recoverFork } from "../../src/thread";
+import { CTX } from "../sandbox/context";
 import {
   CHILD,
   code,
@@ -54,7 +55,7 @@ async function crashed(sandbox: FakeSandbox, called: boolean) {
   const f = parent();
   const writer = unwrap(f.store.beginFork(request));
   const row = unwrap(f.store.ledger.begin(writer, "sandbox", "fake"));
-  if (called) await sandbox.restore("snap_01", EMPTY, row.operation_key);
+  if (called) await sandbox.restore("snap_01", EMPTY, row.operation_key, CTX);
   f.clock.now += LEASE + 1;
   return f;
 }
@@ -64,16 +65,16 @@ function flakyClose(base: FakeSandbox): Sandbox {
   let failures = 1;
   return {
     ...base,
-    attach: async (ref) => {
-      const s = await base.attach(ref);
+    attach: async (ref, context) => {
+      const s = await base.attach(ref, context);
       if (!s.ok) return s;
       return ok({
         ...s.value,
-        close: async () => {
+        close: async (context) => {
           failures -= 1;
           return failures >= 0
             ? err({ code: "release_failed", message: "provider 500" })
-            : s.value.close();
+            : s.value.close(context);
         },
       });
     },
@@ -103,7 +104,7 @@ describe("a crash between the pending row and the create resolves by lookup", ()
     );
     expect(states).toEqual(["released"]);
     expect(sandbox.creates()).toBe(1);
-    expect((await sandbox.attach("sbx_child_01")).ok).toBe(false);
+    expect((await sandbox.attach("sbx_child_01", CTX)).ok).toBe(false);
     const handle = await openThread(
       storeOf({ log: f.store, artifacts: f.artifacts }),
       THREAD,
@@ -182,7 +183,7 @@ describe("a failed release is retried, never dropped", () => {
     const writer = unwrap(f.store.beginFork(request));
     const row = unwrap(f.store.ledger.begin(writer, "sandbox", "fake"));
     const made = unwrap(
-      await sandbox.restore("snap_01", EMPTY, row.operation_key),
+      await sandbox.restore("snap_01", EMPTY, row.operation_key, CTX),
     );
     unwrap(f.store.ledger.live(writer, row.resource_id, made.id, null));
     f.clock.now += LEASE + 1; // crash before the fork event
@@ -200,6 +201,6 @@ describe("a failed release is retried, never dropped", () => {
     expect(done.map((r) => [r.state, r.release_outcome])).toEqual([
       ["released", "released"],
     ]);
-    expect((await base.attach("sbx_child_01")).ok).toBe(false);
+    expect((await base.attach("sbx_child_01", CTX)).ok).toBe(false);
   });
 });

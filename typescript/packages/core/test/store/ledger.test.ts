@@ -72,12 +72,30 @@ describe("resource ledger transitions", () => {
     expect(unwrap(ledger.collectable()).map((r) => r.resource_id)).toEqual([
       row.resource_id,
     ]);
-    unwrap(ledger.collected(row.resource_id, "release_failed", "boom"));
-    unwrap(ledger.collected(row.resource_id, "released", "released"));
+    const claim = unwrap(ledger.claim(row.resource_id));
+    unwrap(ledger.collected(row.resource_id, claim, "release_failed", "boom"));
+    unwrap(ledger.collected(row.resource_id, claim, "released", "released"));
     expect(states(store)).toEqual(["released"]);
-    expect(code(ledger.collected(row.resource_id, "released", "x"))).toBe(
-      "invalid_transition",
-    );
+    expect(code(ledger.claim(row.resource_id))).toBe("invalid_transition");
+    expect(
+      code(ledger.collected(row.resource_id, claim, "released", "x")),
+    ).toBe("stale_epoch");
+  });
+
+  test("a later cleanup claim supersedes an earlier one: only its holder may record", () => {
+    const { store, writer, clock } = owner();
+    const ledger = store.ledger;
+    const row = unwrap(ledger.begin(writer, "sandbox", "fake"));
+    unwrap(ledger.live(writer, row.resource_id, "sbx_1", null));
+    unwrap(ledger.releasing(writer, row.resource_id));
+    clock.now += 60_000;
+    const first = unwrap(ledger.claim(row.resource_id));
+    const second = unwrap(ledger.claim(row.resource_id));
+    expect(code(ledger.claimed(row.resource_id, first))).toBe("stale_epoch");
+    expect(
+      code(ledger.collected(row.resource_id, first, "released", "x")),
+    ).toBe("stale_epoch");
+    unwrap(ledger.collected(row.resource_id, second, "released", "released"));
   });
 
   test("an expired live snapshot row is collectable; a live sandbox row is not", () => {
@@ -89,9 +107,7 @@ describe("resource ledger transitions", () => {
     unwrap(ledger.live(writer, box.resource_id, "sbx_1", null));
     clock.now += 60_000;
     expect(unwrap(ledger.collectable()).map((r) => r.ref)).toEqual(["snap_1"]);
-    expect(code(ledger.collected(box.resource_id, "released", "x"))).toBe(
-      "invalid_transition",
-    );
+    expect(code(ledger.claim(box.resource_id))).toBe("invalid_transition");
   });
 });
 
@@ -108,8 +124,12 @@ describe("the ledger is tenant-scoped", () => {
     expect(unwrap(other.store.ledger.rows())).toEqual([]);
     other.clock.now = acme.clock.now;
     expect(unwrap(other.store.ledger.collectable())).toEqual([]);
+    expect(code(other.store.ledger.claim(row.resource_id))).toBe("not_found");
+    const claim = unwrap(acme.store.ledger.claim(row.resource_id));
     expect(
-      code(other.store.ledger.collected(row.resource_id, "released", "x")),
+      code(
+        other.store.ledger.collected(row.resource_id, claim, "released", "x"),
+      ),
     ).toBe("not_found");
     expect(states(acme.store)).toEqual(["releasing"]);
   });

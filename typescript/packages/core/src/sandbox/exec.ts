@@ -1,7 +1,13 @@
 import type { ArtifactRef } from "../log";
 import { ok, type Result } from "../result";
 import type { ArtifactStore } from "../store/artifacts";
-import type { ExecOptions, Failure, SandboxSession } from "./protocol";
+import type {
+  ExecOptions,
+  Failure,
+  SandboxContext,
+  SandboxSession,
+  Stale,
+} from "./protocol";
 
 // The sandbox layer over an adapter's exec: both
 // streams go to one artifact as they arrive, in arrival order, while only head and tail
@@ -72,13 +78,17 @@ async function pump(
 export async function execute(
   session: SandboxSession,
   command: readonly string[],
+  context: SandboxContext,
   options: ExecOptions,
   artifacts: ArtifactStore,
   keep: number = PREVIEW_BYTES,
 ): Promise<
-  Result<ExecResult, Failure<"timeout" | "invalid_path" | "unavailable">>
+  Result<
+    ExecResult,
+    Failure<"timeout" | "invalid_path" | "unavailable"> | Stale
+  >
 > {
-  const started = await session.exec(command, options);
+  const started = await session.exec(command, context, options);
   if (!started.ok) return started;
   const output = started.value;
   const sink = artifacts.sink();

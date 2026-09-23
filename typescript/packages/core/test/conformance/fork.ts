@@ -13,6 +13,7 @@ import { LEASE_TTL_MS } from "../../src/store";
 import { openThread } from "../../src/thread";
 import { forkBranch, recoverForks } from "../../src/thread/fork";
 import { verifyExport } from "../../src/verify";
+import { CTX } from "../sandbox/context";
 import { count, fixture, unwrap } from "../store/helpers";
 import { type Case, caseStore } from "./cases";
 import { expectAppended } from "./recover";
@@ -94,7 +95,7 @@ async function checkNothingLeft(
   for (const row of rows) expect(["released", "unknown"]).toContain(row.state);
   if (rows.some((r) => r.state === "unknown")) return;
   for (const snap of Object.values(script.snapshots ?? {})) {
-    const attached = await sandbox.attach(snap.restore_sandbox_id);
+    const attached = await sandbox.attach(snap.restore_sandbox_id, CTX);
     expect(attached.ok).toBe(false);
   }
 }

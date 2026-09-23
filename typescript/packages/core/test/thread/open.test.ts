@@ -7,6 +7,7 @@ import { type EventId, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { fakeSandbox, type SnapshotData } from "../../src/sandbox";
 import { openThread, type Thread } from "../../src/thread";
+import { CTX } from "../sandbox/context";
 import {
   code,
   fixture,
@@ -25,9 +26,9 @@ const bytes = (s: string): Uint8Array => new TextEncoder().encode(s);
 async function setup() {
   const f = fixture();
   const sandbox = fakeSandbox();
-  const box = unwrap(await sandbox.create("op-parent"));
-  unwrap(await box.upload("notes.txt", bytes("v1")));
-  const data: SnapshotData = unwrap(await box.snapshot("op-snap"));
+  const box = unwrap(await sandbox.create("op-parent", CTX));
+  unwrap(await box.upload("notes.txt", bytes("v1"), CTX));
+  const data: SnapshotData = unwrap(await box.snapshot("op-snap", CTX));
   unwrap(f.store.createBranch(THREAD, ROOT));
   const writer = unwrap(f.store.acquire(ROOT, "holder-a"));
   unwrap(
@@ -89,11 +90,13 @@ describe("fork", () => {
     const fork = knownEvents(log).at(-1);
     if (fork?.type !== "fork") throw new Error("the child ends with its fork");
     expect(fork.data.knowledge_policy).toBe("pinned");
-    const restored = unwrap(await sandbox.attach(fork.data.sandbox_id ?? ""));
+    const restored = unwrap(
+      await sandbox.attach(fork.data.sandbox_id ?? "", CTX),
+    );
     expect(restored.id).not.toBe(box.id);
-    expect(text(unwrap(await restored.download("notes.txt")))).toBe("v1");
-    unwrap(await restored.upload("notes.txt", bytes("child")));
-    expect(text(unwrap(await box.download("notes.txt")))).toBe("v1");
+    expect(text(unwrap(await restored.download("notes.txt", CTX)))).toBe("v1");
+    unwrap(await restored.upload("notes.txt", bytes("child"), CTX));
+    expect(text(unwrap(await box.download("notes.txt", CTX)))).toBe("v1");
     expect(unwrap(f.store.ledger.rows()).map((r) => r.state)).toEqual(["live"]);
 
     // The child continues on its own, like any branch.

@@ -1,5 +1,5 @@
 import type { EventOf } from "../fold/state";
-import type { SandboxId } from "../log";
+import type { BranchId, SandboxId } from "../log";
 import type { LookupCapability, LookupResult } from "../model/protocol";
 import type { Result } from "../result";
 
@@ -67,34 +67,83 @@ export type RestoreFailure = Failure<
 
 export type ReleaseFailure = Failure<"release_failed" | "unavailable">;
 
+/**
+ * A refused dispatch: the context's fence failed, so nothing reached the provider.
+ * stale_epoch under owner authority, cleanup_claim_lost under cleanup authority.
+ */
+export type Stale = Failure<"stale_epoch" | "cleanup_claim_lost">;
+
+/**
+ * spec/api.json SandboxAuthority: the owner's lease at an epoch, or gc's cleanup claim on one
+ * resources row (which outlives the owning branch).
+ */
+export type SandboxAuthority =
+  | {
+      readonly kind: "owner";
+      readonly branch_id: BranchId;
+      readonly epoch: number;
+    }
+  | {
+      readonly kind: "cleanup";
+      readonly resource_id: string;
+      readonly claim: string;
+    };
+
+/**
+ * spec/api.json SandboxContext: the authority an adapter re-checks at its real provider
+ * dispatch point, after any queueing. A failed fence means call nothing.
+ */
+export type SandboxContext = {
+  readonly authority: SandboxAuthority;
+  readonly fence: () => Promise<Result<void, Stale>>;
+};
+
 export type SandboxSession = {
   readonly id: SandboxId;
   /** A timeout kills the whole process group. */
   readonly exec: (
     command: readonly string[],
+    context: SandboxContext,
     options: ExecOptions,
   ) => Promise<
-    Result<ExecOutput, Failure<"timeout" | "invalid_path" | "unavailable">>
+    Result<
+      ExecOutput,
+      Failure<"timeout" | "invalid_path" | "unavailable"> | Stale
+    >
   >;
   /** Kill the process group started with this key and confirm it is gone. */
   readonly terminate: (
     processKey: string,
+    context: SandboxContext,
   ) => Promise<
-    Result<"terminated" | "already_exited" | "unknown", Failure<"unavailable">>
+    Result<
+      "terminated" | "already_exited" | "unknown",
+      Failure<"unavailable"> | Stale
+    >
   >;
   readonly upload: (
     path: string,
     data: Uint8Array,
-  ) => Promise<Result<void, FileFailure>>;
-  readonly download: (path: string) => Promise<Result<Uint8Array, FileFailure>>;
+    context: SandboxContext,
+  ) => Promise<Result<void, FileFailure | Stale>>;
+  readonly download: (
+    path: string,
+    context: SandboxContext,
+  ) => Promise<Result<Uint8Array, FileFailure | Stale>>;
   /** Freeze or stop tracked processes, capture, thaw. Returns once durable and restorable. */
   readonly snapshot: (
     operationKey: string,
+    context: SandboxContext,
   ) => Promise<
-    Result<SnapshotData, Failure<"not_quiescent" | "unavailable" | "timeout">>
+    Result<
+      SnapshotData,
+      Failure<"not_quiescent" | "unavailable" | "timeout"> | Stale
+    >
   >;
   /** Release the sandbox: ok → released, an error → release_failed (retried by gc). */
-  readonly close: () => Promise<Result<void, ReleaseFailure>>;
+  readonly close: (
+    context: SandboxContext,
+  ) => Promise<Result<void, ReleaseFailure | Stale>>;
 };
 
 /** What a sandbox adapter returns. Every create and restore carries a ledgered operation key. */
@@ -102,7 +151,10 @@ export type Sandbox = {
   readonly info: SandboxInfo;
   readonly create: (
     operationKey: string,
-  ) => Promise<Result<SandboxSession, Failure<"unavailable" | "timeout">>>;
+    context: SandboxContext,
+  ) => Promise<
+    Result<SandboxSession, Failure<"unavailable" | "timeout"> | Stale>
+  >;
   /**
    * Restores into a new isolated sandbox and verifies its tree against `manifestHash` (the
    * snapshot event's); a mismatch releases what it created and is snapshot_manifest_mismatch.
@@ -111,26 +163,31 @@ export type Sandbox = {
     snapshotId: string,
     manifestHash: string,
     operationKey: string,
-  ) => Promise<Result<SandboxSession, RestoreFailure>>;
+    context: SandboxContext,
+  ) => Promise<Result<SandboxSession, RestoreFailure | Stale>>;
   /** Present when info.lookup.create is not none. */
   readonly lookup?: (
     operationKey: string,
-  ) => Promise<LookupResult<SandboxSession>>;
+    context: SandboxContext,
+  ) => Promise<Result<LookupResult<SandboxSession>, Stale>>;
   /** Present when info.lookup.snapshot is not none. */
   readonly lookupSnapshot?: (
     operationKey: string,
-  ) => Promise<LookupResult<SnapshotData>>;
+    context: SandboxContext,
+  ) => Promise<Result<LookupResult<SnapshotData>, Stale>>;
   /** Reattach to a live row's sandbox by its ref, to terminate and close it after a restart. */
   readonly attach: (
     ref: string,
+    context: SandboxContext,
   ) => Promise<
     Result<
       SandboxSession,
-      Failure<"not_found" | "resource_unknown" | "unavailable">
+      Failure<"not_found" | "resource_unknown" | "unavailable"> | Stale
     >
   >;
   /** Release a snapshot by its ref. */
   readonly release: (
     ref: string,
-  ) => Promise<Result<"released" | "already_gone", ReleaseFailure>>;
+    context: SandboxContext,
+  ) => Promise<Result<"released" | "already_gone", ReleaseFailure | Stale>>;
 };

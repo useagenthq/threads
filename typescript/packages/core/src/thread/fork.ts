@@ -1,10 +1,12 @@
 import type { BranchId, EventId } from "../log";
 import { knownEvents } from "../reduce";
 import { err, ok, type Result } from "../result";
+import { isRefusal, ownerContext } from "../sandbox/context";
 import {
   lookupSandbox,
   release,
   resolvePending,
+  sameProvider,
   settle,
 } from "../sandbox/ledger";
 import type {
@@ -105,12 +107,13 @@ async function restore(
   const ledger = log.ledger;
   const row = ledger.begin(writer, "sandbox", sandbox.info.provider);
   if (!row.ok) return row;
-  const fence = writer.fence();
-  if (!fence.ok) return fence;
+  // The adapter fences this context at its real dispatch point, after any queueing: a
+  // creator that lost the lease meanwhile creates nothing.
   const made = await sandbox.restore(
     snapshot.snapshot_id,
     snapshot.manifest_hash,
     row.value.operation_key,
+    ownerContext(writer),
   );
   if (made.ok) {
     const live = ledger.live(
@@ -121,6 +124,8 @@ async function restore(
     );
     return live.ok ? ok(made.value) : live;
   }
+  if (isRefusal(made.error))
+    return err(logError("stale_epoch", made.error.message));
   return recover(log, writer, sandbox, row.value, made.error);
 }
 
@@ -132,11 +137,17 @@ async function recover(
   failure: RestoreFailure,
 ): Promise<Result<SandboxSession, LogError>> {
   const ledger = log.ledger;
+  const answer = await lookupSandbox(
+    sandbox,
+    row.operation_key,
+    ownerContext(writer),
+  );
+  if (!answer.ok) return answer;
   const settled = settle(
     ledger,
     writer,
     row,
-    await lookupSandbox(sandbox, row.operation_key),
+    answer.value,
     sandbox.info.lookup.create === "final",
     (s) => s.id,
   );
@@ -156,7 +167,7 @@ async function recover(
       ledger,
       writer,
       sandbox,
-      row.resource_id,
+      row,
       settled.value.value,
     );
     if (!released.ok) return released;
@@ -177,17 +188,22 @@ export async function recoverFork(
   branch: BranchId,
   holderId: string,
 ): Promise<Result<readonly ResourceState[], LogError>> {
-  const writer = log.reclaimFork(branch, holderId);
-  if (!writer.ok) return writer;
   const rows = log.ledger.rows(branch);
   if (!rows.ok) return rows;
+  // Only the rows' own provider can prove anything about them; refuse before touching them.
+  for (const row of rows.value) {
+    const same = sameProvider(sandbox, row);
+    if (!same.ok) return same;
+  }
+  const writer = log.reclaimFork(branch, holderId);
+  if (!writer.ok) return writer;
   const states: ResourceState[] = [];
   for (const row of rows.value) {
     const settled =
       row.state === "pending"
         ? await resolvePending(log.ledger, writer.value, sandbox, row)
         : row.state === "live" || row.state === "release_failed"
-          ? await release(log.ledger, writer.value, sandbox, row.resource_id)
+          ? await release(log.ledger, writer.value, sandbox, row)
           : ok(row.state);
     if (!settled.ok) return settled;
     states.push(settled.value);

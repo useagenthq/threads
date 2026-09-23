@@ -37,6 +37,7 @@ export const ResourceRow: Strict<{
   expires_at: z.ZodNullable<typeof Int>;
   released_at: z.ZodNullable<typeof Int>;
   release_outcome: z.ZodNullable<z.ZodString>;
+  cleanup_claim: z.ZodNullable<z.ZodString>;
 }> = z.strictObject({
   resource_id: z.string(),
   tenant_id: z.string(),
@@ -50,6 +51,7 @@ export const ResourceRow: Strict<{
   expires_at: Int.nullable(),
   released_at: Int.nullable(),
   release_outcome: z.string().nullable(),
+  cleanup_claim: z.string().nullable(),
 });
 export type ResourceRow = z.infer<typeof ResourceRow>;
 export type ResourceState = ResourceRow["state"];
@@ -62,7 +64,7 @@ type Change = {
 };
 
 const COLUMNS = `resource_id, tenant_id, owner_branch_id, provider, kind, ref, state, operation_key,
-  acquired_at, expires_at, released_at, release_outcome`;
+  acquired_at, expires_at, released_at, release_outcome, cleanup_claim`;
 
 export class ResourceLedger {
   readonly #db: SqliteDriver;
@@ -98,9 +100,10 @@ export class ResourceLedger {
         expires_at: null,
         released_at: null,
         release_outcome: null,
+        cleanup_claim: null,
       };
       this.#db.run(
-        `INSERT INTO resources (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO resources (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.resource_id,
           row.tenant_id,
@@ -114,6 +117,7 @@ export class ResourceLedger {
           row.expires_at,
           row.released_at,
           row.release_outcome,
+          row.cleanup_claim,
         ],
       );
       return ok(row);
@@ -181,41 +185,56 @@ export class ResourceLedger {
 
   /**
    * What gc may finish: this tenant's rows `releasing` or `release_failed`, and `live` rows
-   * whose provider expiry has passed, of owners nobody holds.
+   * whose provider expiry has passed, of owners nobody holds (a deleted owner holds nothing).
    */
   collectable(): Result<readonly ResourceRow[], LogError> {
     const rows = this.rows();
-    if (!rows.ok) return rows;
-    const now = this.#now();
-    return ok(
-      rows.value.filter(
-        (r) =>
-          (r.state === "releasing" ||
-            r.state === "release_failed" ||
-            (r.state === "live" &&
-              r.expires_at !== null &&
-              r.expires_at <= now)) &&
-          this.#unheld(r.owner_branch_id),
-      ),
-    );
+    return rows.ok ? ok(rows.value.filter((r) => this.#collectable(r))) : rows;
   }
 
-  /** gc's release outcome for a collectable row. It can't create, resolve or reopen anything. */
+  /**
+   * gc's claim on a collectable row, by compare-and-set: a new token replaces any older claim,
+   * so only the latest claimant's fence passes (spec/api.json SandboxAuthority cleanup).
+   */
+  claim(resourceId: string): Result<string, LogError> {
+    return atomically(this.#db, () => {
+      const row = this.#get(resourceId);
+      if (!row.ok) return row;
+      if (!this.#collectable(row.value))
+        return err(
+          logError("invalid_transition", `${resourceId} is not collectable`),
+        );
+      const token = uuidv7(this.#now());
+      this.#db.run(
+        `UPDATE resources SET cleanup_claim = ? WHERE tenant_id = ? AND resource_id = ?
+          AND cleanup_claim IS ?`,
+        [token, this.#tenant, resourceId, row.value.cleanup_claim],
+      );
+      return ok(token);
+    });
+  }
+
+  /** The cleanup fence: the row still carries `claim` and is still collectable. */
+  claimed(resourceId: string, claim: string): Result<ResourceRow, LogError> {
+    const row = this.#get(resourceId);
+    if (!row.ok) return row;
+    return row.value.cleanup_claim === claim && this.#collectable(row.value)
+      ? row
+      : err(
+          logError("stale_epoch", `the cleanup claim on ${resourceId} is gone`),
+        );
+  }
+
+  /** gc's release outcome, under its current claim. It can't create, resolve or reopen anything. */
   collected(
     resourceId: string,
+    claim: string,
     to: "released" | "release_failed",
     outcome: string,
   ): Result<ResourceRow, LogError> {
     return atomically(this.#db, () => {
-      const row = this.#get(resourceId);
-      if (!row.ok) return row;
-      const collectable = this.collectable();
-      if (!collectable.ok) return collectable;
-      if (!collectable.value.some((r) => r.resource_id === resourceId))
-        return err(
-          logError("invalid_transition", `${resourceId} is not collectable`),
-        );
-      return this.#write(row.value, to, { outcome });
+      const row = this.claimed(resourceId, claim);
+      return row.ok ? this.#write(row.value, to, { outcome }) : row;
     });
   }
 
@@ -303,6 +322,16 @@ export class ResourceLedger {
     return row === undefined
       ? err(logError("not_found", `no resource ${resourceId}`))
       : ok(row);
+  }
+
+  #collectable(r: ResourceRow): boolean {
+    const due =
+      r.state === "releasing" ||
+      r.state === "release_failed" ||
+      (r.state === "live" &&
+        r.expires_at !== null &&
+        r.expires_at <= this.#now());
+    return due && this.#unheld(r.owner_branch_id);
   }
 
   #unheld(branchId: string): boolean {
