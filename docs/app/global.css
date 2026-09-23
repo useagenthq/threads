@@ -4,6 +4,9 @@
 @import "fumadocs-openapi/css/preset.css";
 @import "./theme.css";
 
+/* Follow the site's theme toggle (a .dark class), not only the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 html {
   scrollbar-gutter: stable;
 }
