@@ -21,10 +21,11 @@ export type LocalSession = SandboxSession & {
 };
 
 export function localSession(root: string): LocalSession {
+  // One pass that leaves the test's host paths alone: on Linux they are under /tmp/ too.
+  const host = dirname(root);
+  const paths = new RegExp(`${RegExp.escape(host)}|/workspace|/tmp/`, "g");
   const map = (s: string): string =>
-    s
-      .replaceAll("/workspace", `${root}/workspace`)
-      .replaceAll("/tmp/", `${root}/tmp/`);
+    s.replaceAll(paths, (m) => (m === host ? m : `${root}${m}`));
   mkdirSync(`${root}/workspace`, { recursive: true });
   mkdirSync(`${root}/tmp`, { recursive: true });
   const execs: LocalSession["execs"] = [];
