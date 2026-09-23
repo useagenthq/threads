@@ -85,7 +85,8 @@
         "branch_not_found",
         "branch_exists",
         "sandbox_required",
-        "cleanup_claim_lost"
+        "cleanup_claim_lost",
+        "transport_fence_unsupported"
       ]
     },
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
