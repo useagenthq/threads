@@ -3,7 +3,7 @@ the run must stop. No decision reads memory the log doesn't hold, so resuming af
 the same loop over the same log (invariant 1)."""
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Final, assert_never
+from typing import TYPE_CHECKING, assert_never
 
 from pydantic.experimental.missing_sentinel import MISSING
 
@@ -37,21 +37,14 @@ from threads.result import Err
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-RENEW_MS: Final = 10_000
-"""Lease renewal interval."""
 _NEUTRAL = (LogRepairedEvent, ParkedEvent, ParkEscalatedEvent, ResumedEvent, OutputValidatedEvent)
 """Events that never decide what comes next."""
 
 
 async def drive(rt: Runtime) -> Halt:
-    """Runs until the open turn ends (`Idle`), the branch parks, or the run fails."""
-    renewed = rt.clock()
+    """Runs until the open turn ends (`Idle`), the branch parks, or the run fails. The run keeps
+    the lease renewed meanwhile (threads.agents.run)."""
     while True:
-        if rt.clock() - renewed >= RENEW_MS:
-            kept = await rt.writer.renew()
-            if isinstance(kept, Err):
-                return lost(kept.error)
-            renewed = rt.clock()
         halt = await _step(rt)
         if halt is not None:
             return halt

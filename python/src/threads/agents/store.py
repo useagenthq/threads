@@ -20,8 +20,8 @@ class Store:
 
 
 HOLDER: Final = uuid.uuid4().hex
-"""This process's lease holder id: runs and forks share it, so a run can
-continue a branch this process just forked."""
+"""This process's fork holder id, which finds the forks a crash interrupted.
+A finished fork hands the child's lease back; each run takes the branch as its own holder."""
 
 
 def now_ms() -> int:

@@ -121,8 +121,8 @@ def test_fork_restores_an_isolated_sandbox_and_the_child_runs() -> None:
             ("sandbox", "released"),
             ("sandbox", "live"),
         ]
-        # This process's runs continue the child it forked.
-        assert isinstance(await w.sq.acquire(child.value.branch, HOLDER, now_ms), Ok)
+        # The fork handed the child's lease back: a run, its own holder, takes it at once.
+        assert isinstance(await w.sq.acquire(child.value.branch, "a-run", now_ms), Ok)
 
     run(body)
 

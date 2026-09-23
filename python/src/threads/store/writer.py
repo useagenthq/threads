@@ -147,6 +147,13 @@ class Writer:
             return Err(error)
         return Ok(None)
 
+    async def release(self) -> None:
+        """Hands the lease back so the next executor can take the branch at once, only while
+        this holder and epoch still hold it. The writer is done afterwards."""
+        now = self._clock()
+        await self._worker.call(lambda c: lease.release(c, self._branch, self._lease, now))
+        self._poisoned = True
+
     async def renew(self) -> Ok[None] | Err[ParseError]:
         """Extends the lease. Once lost it stays lost: the writer is poisoned."""
         now = self._clock()

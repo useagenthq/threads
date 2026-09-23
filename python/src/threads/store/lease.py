@@ -98,6 +98,15 @@ def renew(
     return renewed
 
 
+def release(conn: sqlite3.Connection, branch_id: BranchId, mine: Lease, now: int) -> None:
+    """Hands a live lease back at once, only while this holder and epoch still hold it: a stale
+    holder never clears a newer owner's lease. Only the lease changes; in-doubt work stays in the
+    log for recovery."""
+    with transaction(conn):
+        if not _stale(conn, branch_id, mine, now):
+            _put(conn, branch_id, Lease(mine.holder_id, mine.epoch, now))
+
+
 @dataclass(frozen=True, slots=True)
 class Batch:
     """Rows for one branch, the head seq they follow, and the hash of their last line."""

@@ -83,6 +83,8 @@ class Thread:
         forked = await fork_branch(sq, self.sandbox, at, HOLDER, now_ms)
         if isinstance(forked, Err):
             return forked
+        # Done with the child: hand its lease back so a run (its own holder) takes it at once.
+        await forked.value.release()
         return Ok(Thread(self.id, child, self.store, sandbox=self.sandbox))
 
     async def save_case(
