@@ -160,8 +160,12 @@ export class Writer {
     return done;
   }
 
-  /** Extends the lease; fails (and poisons) if another holder or epoch took it. */
+  /** Extends the lease; fails (and poisons) if another holder or epoch took it or it lapsed. */
   renew(ttlMs: number): Result<void, LogError> {
+    if (this.#poisoned)
+      return err(
+        logError("writer_poisoned", "this writer lost its lease or head"),
+      );
     const renewed = atomically(this.#db, () => {
       const live = this.#checkLease();
       if (!live.ok) return live;
@@ -174,6 +178,25 @@ export class Writer {
     });
     if (!renewed.ok) this.#poisoned = true;
     return renewed;
+  }
+
+  /**
+   * Hands the lease back so the next executor can take the branch at once. Only while this
+   * holder and epoch still hold it: a stale writer never clears a newer owner's lease. Only the
+   * lease changes; in-doubt work stays in the log for recovery. The writer is done afterwards.
+   */
+  release(): void {
+    if (!this.#poisoned)
+      atomically(this.#db, () => {
+        if (this.#checkLease().ok)
+          putLease(this.#db, this.lease.branchId, {
+            holder_id: this.lease.holderId,
+            epoch: this.lease.epoch,
+            expires_at: this.#now(),
+          });
+        return ok(undefined);
+      });
+    this.#poisoned = true;
   }
 
   #admit(trial: Chain, draft: EventDraft): Result<ChainEvent, LogError> {

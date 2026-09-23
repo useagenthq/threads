@@ -10,7 +10,7 @@ import { toolSpec } from "../loop/turn";
 import type { Model } from "../model";
 import { category, decide } from "../permissions";
 import { knownEvents } from "../reduce";
-import type { LogStore, Writer } from "../store";
+import { LEASE_TTL_MS, type LogStore, type Writer } from "../store";
 import { uuidv7 } from "../store/encode";
 import type { LogError } from "../verify";
 import { ConfigError } from "./errors";
@@ -50,7 +50,6 @@ const OPERATOR: Principal = {
   subject: "operator",
 };
 const WORKSPACE = "/workspace";
-const HOLDER = `run-${crypto.randomUUID()}`;
 
 export type Hooks = {
   readonly onEvent?: (event: KnownEvent) => void;
@@ -67,7 +66,9 @@ export async function run<Deps, Output>(
     options.store ?? handleOf(options.thread)?.store ?? sqlite(".threads");
   const { log, artifacts } = await openStore(store);
   const pinned = pin(def);
-  const opened = open(log, options.thread, pinned.started);
+  // Each run is its own executor: a second run on a busy branch is branch_busy.
+  const holder = `run-${crypto.randomUUID()}`;
+  const opened = open(log, options.thread, pinned.started, holder);
   const thread: ThreadRef = {
     id: opened.threadId,
     branch: opened.branchId,
@@ -75,34 +76,54 @@ export async function run<Deps, Output>(
   };
   if (!opened.writer.ok) return failed(opened.writer.error, thread);
   const writer = opened.writer.value;
-  checkPin(writer, pinned.started);
-  const principal = options.principal ?? OPERATOR;
-  const config = loopConfig(def, options, principal, thread, hooks);
-  const result = (end: LoopEnd): RunResult<Output> =>
-    runResult(
-      end,
-      knownEvents(writer.chain),
-      writer.chain.fold.parked,
-      thread,
-      def.decode,
-    );
-  // Recovery first; an in-doubt turn finishes before the new input opens the next one.
-  const end = await resume(writer, artifacts, config, {
-    input: {
-      type: "user_input",
-      type_version: 1,
-      critical: true,
-      actor: { kind: "user", principal },
-      data: {
-        source: "api",
-        ...(typeof input === "string"
-          ? { text: input }
-          : { content: [...input] }),
-        ...(options.budget === undefined ? {} : { budget: options.budget }),
+  const stop = keepLease(writer);
+  try {
+    checkPin(writer, pinned.started);
+    const principal = options.principal ?? OPERATOR;
+    const config = loopConfig(def, options, principal, thread, hooks);
+    const result = (end: LoopEnd): RunResult<Output> =>
+      runResult(
+        end,
+        knownEvents(writer.chain),
+        writer.chain.fold.parked,
+        thread,
+        def.decode,
+      );
+    // Recovery first; an in-doubt turn finishes before the new input opens the next one.
+    const end = await resume(writer, artifacts, config, {
+      input: {
+        type: "user_input",
+        type_version: 1,
+        critical: true,
+        actor: { kind: "user", principal },
+        data: {
+          source: "api",
+          ...(typeof input === "string"
+            ? { text: input }
+            : { content: [...input] }),
+          ...(options.budget === undefined ? {} : { budget: options.budget }),
+        },
       },
-    },
-  });
-  return result(end);
+    });
+    return result(end);
+  } finally {
+    stop();
+  }
+}
+
+/**
+ * Renews the lease every third of its TTL while the run is in flight, so slow model and tool
+ * calls keep it, then hands it back so the next run starts at once. A failed renewal
+ * poisons the writer, which fences every later dispatch and append.
+ */
+function keepLease(writer: Writer): () => void {
+  const timer = setInterval(() => {
+    if (!writer.renew(LEASE_TTL_MS).ok) clearInterval(timer);
+  }, LEASE_TTL_MS / 3);
+  return () => {
+    clearInterval(timer);
+    writer.release();
+  };
 }
 
 function handleOf(
@@ -122,13 +143,14 @@ function open(
   log: LogStore,
   thread: RunOptions<unknown>["thread"],
   started: ReturnType<typeof pin>["started"],
+  holder: string,
 ): Opened {
   if (thread === undefined) {
     const threadId = ThreadId.parse(uuidv7(Date.now()));
     const branchId = BranchId.parse(uuidv7(Date.now()));
     const created = log.createBranch(threadId, branchId);
     if (!created.ok) return { threadId, branchId, writer: created };
-    const writer = log.acquire(branchId, HOLDER);
+    const writer = log.acquire(branchId, holder);
     if (writer.ok) {
       const first = writer.value.append([started]);
       if (!first.ok) return { threadId, branchId, writer: first };
@@ -148,7 +170,7 @@ function open(
   return {
     threadId,
     branchId: branch.value,
-    writer: log.acquire(branch.value, HOLDER),
+    writer: log.acquire(branch.value, holder),
   };
 }
 
