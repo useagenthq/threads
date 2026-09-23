@@ -39,8 +39,6 @@ CONTINUE_TEXT: Final = (
 )
 """The fixed max-output continuation."""
 
-type Response = ModelResponseEvent | ModelResponseRecoveredEvent
-
 
 def turn_events(events: Sequence[Event]) -> Sequence[Event]:
     """The open turn's events, from its `user_input` on."""

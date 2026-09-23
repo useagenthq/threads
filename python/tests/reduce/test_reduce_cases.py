@@ -3,9 +3,9 @@ view of every other case's log (spec/conformance/README.md, "What a runner does 
 
 A `reduce` case imports its log read-only into a fresh SQLite store, reads it back through the
 same boundary, and compares `state` and `projections`, or the error `code` and `seq`. A `render`
-case also replays every recorded request and renders the next one. The other kinds need the
-loop, fork or host, which don't exist yet. Their logs must still import to the pinned `state`,
-and each of them is listed below as skipped, with the reason.
+case also replays every recorded request and renders the next one. policy, recover and stub
+cases have their own runners; fork and intake need parts not built yet and are skipped by name
+with the reason. Every other kind's log must still import to its pinned `state`.
 """
 
 import asyncio

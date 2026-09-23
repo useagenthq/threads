@@ -50,9 +50,8 @@ async def result_draft(rt: Runtime, call_id: CallId, text: str, how: As) -> Draf
     raw = text.encode("utf-8")
     spill = context(rt.fold).spill
     if len(raw) > spill.threshold_bytes:
-        sha = await rt.store.put_artifact(raw)
         head = raw[: spill.head_bytes].decode("utf-8", "ignore")
         tail = raw[len(raw) - spill.tail_bytes :].decode("utf-8", "ignore")
         data["preview"] = head + _MARKER.format(n=len(raw), id=call_id) + tail
-        data["ref"] = {"sha256": sha, "bytes": len(raw), "media_type": "text/plain"}
+        data["ref"] = await text_ref(rt, text)
     return draft("tool_result", data, how.actor)

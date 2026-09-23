@@ -5,7 +5,9 @@ import asyncio
 
 from corpus import Clock
 from kit import T0, Tools, kinds, open_store, spec, start, text, use
+from pydantic.experimental.missing_sentinel import MISSING
 
+from threads.log import ToolResultEvent
 from threads.loop.drive import drive
 from threads.loop.runtime import Idle, Parked
 from threads.loop.scripted import scripted_model
@@ -41,6 +43,25 @@ def test_an_idempotent_timeout_inside_its_window_is_resent_under_the_same_key() 
     ]
     assert tools.dispatches["charge"] == SENT_TWICE
     assert len(set(tools.keys)) == 1
+
+
+def test_a_large_result_spills_to_an_artifact_with_a_bounded_preview() -> None:
+    big = "x" * 40_000
+
+    async def main() -> ToolResultEvent:
+        clock = Clock(T0)
+        tools = Tools({"read": [Output(big)]}, clock)
+        model = scripted_model({"responses": [use("read"), text("Done.")]})
+        store = await open_store()
+        rt = await start(store, [spec("read", "read_only")], model, tools, clock)
+        assert isinstance(await drive(rt), Idle)
+        return next(e for e in rt.events if isinstance(e, ToolResultEvent))
+
+    result = asyncio.run(main())
+    assert result.data.ref is not MISSING
+    assert result.data.ref.bytes == len(big)
+    assert "[output truncated: 40000 bytes;" in result.data.preview
+    assert len(result.data.preview) < len(big)
 
 
 def test_an_unguarded_timeout_parks_and_is_never_resent() -> None:
