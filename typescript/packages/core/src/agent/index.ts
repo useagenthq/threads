@@ -9,6 +9,7 @@ export {
 export { ConfigError, type ConfigErrorCode } from "./errors";
 export type { RunResult, ThreadRef } from "./result";
 export type { RunOptions } from "./run";
+export { type Secret, secret } from "./secret";
 export { type Store, sqlite } from "./sqlite";
 export {
   type RunContext,
