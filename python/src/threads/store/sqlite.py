@@ -20,6 +20,7 @@ from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
 from threads.store.context import CleanupContext, OwnerContext
+from threads.store.cursors import ObserverCursors
 from threads.store.forking import Forking, forking, start_child
 from threads.store.lines import Draft, head_line, header_line
 from threads.store.resources import Ledger, Resource
@@ -68,6 +69,11 @@ class SqliteStore:
                 MemoryArtifacts() if memory else FileArtifacts(Path(path).parent / "artifacts")
             )
         return Ok(cls(worker, tenant_id, artifacts))
+
+    @property
+    def cursors(self) -> ObserverCursors:
+        """Durable observer cursors."""
+        return ObserverCursors(self._worker)
 
     @property
     def ledger(self) -> Ledger:

@@ -28,6 +28,8 @@ from threads.agents.results import (  # noqa: E402
 )
 from threads.agents.store import Store, sqlite  # noqa: E402
 from threads.agents.tool import Reconcile, Tool, tool  # noqa: E402
+from threads.hooks.extension import Extension, extension  # noqa: E402
+from threads.hooks.types import Hooks  # noqa: E402
 from threads.loop.model import (  # noqa: E402
     LookupResult,
     Model,
@@ -63,8 +65,10 @@ __all__ = [
     "EventItem",
     "ExecOutput",
     "ExecResult",
+    "Extension",
     "Failed",
     "HandedOff",
+    "Hooks",
     "LookupResult",
     "Model",
     "ModelChunk",
@@ -90,6 +94,7 @@ __all__ = [
     "Tool",
     "__version__",
     "agent",
+    "extension",
     "fake_sandbox",
     "open_thread",
     "scripted_model",

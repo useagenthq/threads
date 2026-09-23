@@ -26,6 +26,7 @@ from threads.agents.results import (
 )
 from threads.agents.store import Store, now_ms, open_store, sqlite
 from threads.hooks.extension import bind
+from threads.hooks.observers import ObserverPump
 from threads.log import (
     BranchId,
     Budget,
@@ -70,10 +71,12 @@ class RunOptions[D](TypedDict, total=False):
 @dataclass(frozen=True, slots=True)
 class _Stream:
     emit: Emit
+    pump: ObserverPump
 
     def observe(self, events: Sequence[StoredEvent]) -> None:
         for event in events:
             self.emit(EventItem(event))
+        self.pump.poke()
 
     async def wait_until(self, when: int) -> None:
         self.emit(StatusItem(when))
@@ -100,7 +103,10 @@ async def execute[D](
         handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox)
         principal = options.get("principal", LOCAL_OPERATOR)
         ctx = RunContext(deps, handle.id, handle.branch, principal)
-        stream = _Stream(emit)
+        observers = {e.name: e.on for e in definition.extensions}
+        pump = ObserverPump(sq.cursors, writer.branch_id, lambda: writer.fold.events, observers)
+        pump.poke()
+        stream = _Stream(emit, pump)
         box = definition.sandbox
         builtins = None if box is None else sandbox_tools(sq, box, writer, now_ms)
         results = ReadResults(sq, lambda: writer.fold.events)
