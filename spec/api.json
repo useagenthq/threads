@@ -2466,7 +2466,7 @@
           "ts": "create",
           "py": "create",
           "async": true,
-          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
           "returns": {"result": {"$ref": "#/types/SandboxSession"}, "errors": ["unavailable", "timeout"]}
         },
         "restore": {
@@ -2483,7 +2483,8 @@
               "required": true,
               "doc": "The snapshot event's manifest_hash."
             },
-            {"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}
+            {"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}
           ],
           "returns": {
             "result": {"$ref": "#/types/SandboxSession"},
@@ -2499,10 +2500,10 @@
         "lookup": {
           "ts": "lookup",
           "py": "lookup",
-          "doc": "Find a sandbox whose create or restore response was lost, by that call's operation key. Resolves the pending ledger row (LookupResult doc). Present when info.lookup.create is not none.",
+          "doc": "Find a sandbox whose create or restore response was lost, by that call's operation key. Resolves the pending ledger row (LookupResult doc). Present when info.lookup.create is not none. A final not_found retires a pending row only when no older local dispatch for that operation_key can still reach the provider; every create and restore fences its SandboxContext at the provider boundary, so once the lease has moved a stale creator can't pass that fence.",
           "async": true,
           "optional": true,
-          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
           "returns": {"$ref": "#/types/LookupResult", "args": [{"$ref": "#/types/SandboxSession"}]}
         },
         "lookupSnapshot": {
@@ -2511,7 +2512,7 @@
           "doc": "Find a snapshot whose capture response was lost, by the snapshot call's operation key. Resolves the pending ledger row. Present when info.lookup.snapshot is not none.",
           "async": true,
           "optional": true,
-          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
           "returns": {
             "$ref": "#/types/LookupResult",
             "args": [{"$ref": "urn:threads:schema:events:v1#/$defs/ev_snapshot/properties/data"}]
@@ -2522,7 +2523,7 @@
           "py": "attach",
           "doc": "Reattach to a live ledger row's sandbox by its recorded ref, so a restarted host can terminate its processes and close it. not_found is final only when info.lookup.create is final; otherwise the answer is resource_unknown and the row becomes unknown.",
           "async": true,
-          "params": [{"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "params": [{"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
           "returns": {"result": {"$ref": "#/types/SandboxSession"}, "errors": ["not_found", "resource_unknown", "unavailable"]}
         },
         "release": {
@@ -2530,11 +2531,31 @@
           "py": "release",
           "doc": "Release a snapshot by its durable ref (ledger row releasing). released or already_gone (the provider proves it no longer exists) → released. An error → release_failed, retried by the next gc, never dropped. Sandboxes are released with SandboxSession.close. v0.1 has no retention holds: a snapshot lives until the provider's declared expiry, and restoring an expired one is snapshot_expired.",
           "async": true,
-          "params": [{"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "params": [{"name": "ref", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
           "returns": {"result": {"enum": ["released", "already_gone"]}, "errors": ["release_failed", "unavailable"]}
         }
       },
-      "doc": "What a sandbox adapter (e2b(), daytona(), modal(), fakeSandbox()) returns. Every create and restore carries an operation key written to the resource ledger first.",
+      "doc": "What a sandbox adapter (e2b(), daytona(), modal(), fakeSandbox()) returns. Every create and restore carries an operation key written to the resource ledger first. Recovery and gc resolve a ledger row only with the adapter whose info.provider is the row's provider; any other adapter is refused before lookup or release, and the row stays unresolved for the right one.",
+      "source": ""
+    },
+    "SandboxContext": {
+      "kind": "interface",
+      "role": "protocol",
+      "properties": {
+        "branch_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true, "doc": "The branch that owns the resource (its resource-ledger owner)."},
+        "epoch": {"type": {"prim": "integer"}, "required": true, "doc": "The lease epoch this operation is dispatched under."}
+      },
+      "methods": {
+        "fence": {
+          "ts": "fence",
+          "py": "fence",
+          "doc": "Re-checks that the dispatching owner still holds the branch lease at epoch. The adapter calls it at its real provider dispatch boundary, after any queueing; a failure means call nothing.",
+          "async": true,
+          "params": [],
+          "returns": {"result": {"prim": "void"}, "errors": ["stale_epoch"]}
+        }
+      },
+      "doc": "What the runtime hands a sandbox adapter for every provider operation: the fencing pair it re-checks at its real dispatch point, as ModelContext without read and put. Bound to the writer that created it; nothing on it selects another branch or epoch. Cleanup (gc) holds no lease: its context is bound to the row's owner branch and passes only while no one holds that branch's lease.",
       "source": ""
     },
     "SandboxInfo": {
@@ -2580,6 +2601,7 @@
           "async": true,
           "params": [
             {"name": "command", "kind": "positional", "type": {"array": {"prim": "string"}}, "required": true},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true},
             {"name": "cwd", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "/workspace"},
             {
               "name": "env",
@@ -2611,7 +2633,7 @@
           "py": "terminate",
           "doc": "Kill the process group started with this process_key and confirm it is gone. terminated or already_exited → tool_result{origin: interrupted}. unknown or an error → the effect parks. Always unknown when info.termination is unconfirmed.",
           "async": true,
-          "params": [{"name": "process_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "params": [{"name": "process_key", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
           "returns": {"result": {"enum": ["terminated", "already_exited", "unknown"]}, "errors": ["unavailable"]}
         },
         "upload": {
@@ -2642,7 +2664,7 @@
           "py": "snapshot",
           "doc": "Freeze or stop tracked processes, capture, thaw. Returns only once durable and restorable.",
           "async": true,
-          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}],
+          "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
           "returns": {
             "result": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_snapshot/properties/data"},
             "errors": ["not_quiescent", "unavailable", "timeout"]
@@ -2653,7 +2675,7 @@
           "py": "close",
           "doc": "Release the sandbox (ledger row releasing). ok → released. An error → release_failed, retried by the next gc, never dropped.",
           "async": true,
-          "params": [],
+          "params": [{"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true}],
           "returns": {"result": {"prim": "void"}, "errors": ["release_failed", "unavailable"]}
         }
       },
