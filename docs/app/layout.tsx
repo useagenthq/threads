@@ -28,7 +28,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="flex min-h-screen flex-col font-sans antialiased">
-        <RootProvider>{children}</RootProvider>
+        <RootProvider search={{ options: { type: "static" } }}>{children}</RootProvider>
       </body>
     </html>
   );

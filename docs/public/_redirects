@@ -1,0 +1,24 @@
+# Pages that lived at the site root on Mintlify now live under /docs.
+# Static rules first: Pages matches them faster than splats.
+/introduction /docs 301
+/quickstart /docs/quickstart 301
+/installation /docs/installation 301
+/how-it-works /docs/how-it-works 301
+/agents /docs/agents 301
+/multi-agent /docs/multi-agent 301
+/sandboxes /docs/sandboxes 301
+/host /docs/host 301
+/memory /docs/memory 301
+/control /docs/control 301
+/production /docs/production 301
+/evals /docs/evals 301
+/reference /docs/reference 301
+/agents/* /docs/agents/:splat 301
+/multi-agent/* /docs/multi-agent/:splat 301
+/sandboxes/* /docs/sandboxes/:splat 301
+/host/* /docs/host/:splat 301
+/memory/* /docs/memory/:splat 301
+/control/* /docs/control/:splat 301
+/production/* /docs/production/:splat 301
+/evals/* /docs/evals/:splat 301
+/reference/* /docs/reference/:splat 301

@@ -12,11 +12,10 @@ bun install
 bun run dev           # http://localhost:3000
 ```
 
-Production build:
+Production build (a static site in `out/`; see [Deploy](#deploy) to serve it):
 
 ```sh
 bun run build
-bun run start
 ```
 
 ## Before you push
@@ -38,7 +37,7 @@ bun run check:links   # after a build: every internal link and #anchor resolves
 | `app/llms.txt`, `app/llms-full.txt`, `app/llms.mdx/` | Plain-text docs for LLMs. Any docs page is also served as Markdown at `<url>.md` |
 | `app/og/`, `app/opengraph-image.tsx` | Open Graph images |
 | `app/sitemap.ts`, `app/robots.ts` | Sitemap and robots.txt |
-| `app/api/search/` | Search (Orama, built from the pages at build time) |
+| `app/api/search/` | Search index (Orama, built at build time and searched in the browser) |
 | `content/docs/(guides)/` | The guides. `meta.json` holds the sidebar order and sections |
 | `content/docs/reference/` | Generated API reference. Do not edit by hand |
 | `content/docs/http-api/` | Generated HTTP API reference. Do not edit by hand |
@@ -47,7 +46,7 @@ bun run check:links   # after a build: every internal link and #anchor resolves
 | `scripts/` | Generators and the link checker |
 | `public/logo/`, `app/icon.svg` | Brand assets |
 
-The old Mintlify URLs (`/quickstart`, `/agents/tools`, `/reference/...`) redirect to their `/docs/...` pages (`next.config.mjs`).
+The old Mintlify URLs (`/quickstart`, `/agents/tools`, `/reference/...`) redirect to their `/docs/...` pages (`public/_redirects`).
 
 ## The generated reference
 
@@ -96,20 +95,35 @@ The contract also lists members that aren't built yet. `gen_api_ref.py` keeps th
 
 ## Deploy
 
-The site is a standard Next.js app. The search index, llms.txt and OG images are built at build time; search and the `.md` negotiation run on the server, so deploy it as a Next.js app, not a static export.
+The site is a static export hosted on Cloudflare Pages (project `threadsai`). `bun run build` writes everything to `out/`: the HTML pages, the search index (`/api/search`, searched in the browser), llms.txt, the sitemap, robots.txt, the OG images and each page's Markdown. Three files cover what a static export can't do by itself:
 
-### Vercel
+- `public/_redirects`: the old Mintlify URLs, as Cloudflare Pages redirect rules.
+- `public/_headers`: content types for the Markdown files and for the files without an extension.
+- `functions/_middleware.ts`: a Pages Function that serves a page's Markdown at `<url>.md`, or at `<url>` when the `Accept` header prefers Markdown. `public/_routes.json` runs it on `/docs` requests only; everything else is served as static files.
 
-1. Import the repository and set **Root Directory** to `docs`. Vercel detects Next.js and Bun (from `bun.lock`).
-2. Build command `bun run build`, install command `bun install` (the defaults once Bun is detected).
-3. Under **Domains**, add `threadsai.dev` (and `www.threadsai.dev` redirecting to it). At your DNS provider, point the apex `A` record to `76.76.21.21` and `www` to `cname.vercel-dns.com`, or use the values Vercel shows.
+`bun run dev` has neither the redirects nor the Markdown routes. To try the site the way Cloudflare serves it:
 
-### Cloudflare
+```sh
+bun run build
+bunx wrangler pages dev out     # http://localhost:8788
+```
 
-Use the [OpenNext Cloudflare adapter](https://opennext.js.org/cloudflare), which runs Next.js on Workers:
+### Deploys
 
-1. `bun add -d @opennextjs/cloudflare wrangler` in `docs/`, and add a `wrangler.jsonc` as the adapter's guide describes.
-2. Build and deploy with `bunx opennextjs-cloudflare build && bunx opennextjs-cloudflare deploy`, or connect the repository in Workers Builds with root `docs`.
-3. Add `threadsai.dev` as a **Custom Domain** on the Worker. With the zone on Cloudflare, the DNS record is created for you.
+Every push to `main` that touches `docs/` or `spec/` builds and deploys through `.github/workflows/docs-deploy.yml` (it can also be run by hand from the Actions tab). It needs two repository secrets:
+
+- `CLOUDFLARE_ACCOUNT_ID`: the account ID, shown by `bunx wrangler whoami` or in the dashboard.
+- `CLOUDFLARE_API_TOKEN`: an API token with the **Cloudflare Pages: Edit** permission.
+
+To deploy from your machine, run this in `docs/` (wrangler looks for `functions/` in the current directory):
+
+```sh
+bun run build
+bunx wrangler pages deploy out --project-name threadsai --branch main
+```
+
+### Custom domain
+
+In the Cloudflare dashboard, open **Workers & Pages > threadsai > Custom domains**, choose **Set up a custom domain** and enter `threadsai.dev`. With the `threadsai.dev` zone on the same Cloudflare account, the DNS record is created for you; with DNS elsewhere, add the `CNAME` to `threadsai.pages.dev` that the dashboard shows. Add `www.threadsai.dev` the same way if you want it, and redirect it to `threadsai.dev` with a redirect rule on the zone.
 
 `lib/shared.ts` holds the site URL (`https://threadsai.dev`) used for the sitemap, canonical URLs and OG images. Change it there if the domain changes.
