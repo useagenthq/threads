@@ -50,7 +50,7 @@ def knowledge(value: JsonValue) -> KnowledgePolicy:
             raise ValueError(f"knowledge_policy {value!r}")
 
 
-async def run_case(case: Path) -> Outcome:
+async def run_case(case: Path, script: dict[str, JsonValue] | None = None) -> Outcome:
     meta = load(case, "case.json")
     now, request = now_of(meta), obj(meta["input"])
     log = (case / "log.jsonl").read_bytes()
@@ -63,7 +63,9 @@ async def run_case(case: Path) -> Outcome:
         assert await store.import_log(verified.value) == Ok(None)
         parent = verified.value.segments[-1].header.branch_id
         child = BranchId(str(request["new_branch_id"]))
-        sandbox = fake_sandbox(load(case, "sandbox.json") if "sandbox_script" in meta else {})
+        if script is None:
+            script = load(case, "sandbox.json") if "sandbox_script" in meta else {}
+        sandbox = fake_sandbox(script)
         point = EventId(str(request["fork_at_event_id"]))
         at = ForkAt(parent, point, child, knowledge(request.get("knowledge_policy")))
         forked = await _fork(store, sandbox, at, now)
@@ -154,3 +156,15 @@ def test_fork_case(name: str) -> None:
         rows = resources["rows"]
         assert isinstance(rows, list)
         assert list(got.rows) == [(obj(r)["kind"], obj(r)["state"]) for r in rows]
+
+
+def test_an_interrupted_fork_never_calls_an_unproven_resource_released() -> None:
+    """recovery parks a restore it can't find by key as unknown; only a final
+    not_found or a confirmed release counts as released."""
+    case = CASES / "fork-crash-no-orphan"
+    snap = obj(obj(load(case, "sandbox.json")["snapshots"])["snap_01"])
+    unprovable: dict[str, JsonValue] = {
+        "snapshots": {"snap_01": {**snap, "create_lookup": "unsupported"}}
+    }
+    got = asyncio.run(run_case(case, unprovable))
+    assert (got.child_state, got.rows) == ("fork_failed", (("sandbox", "unknown"),))
