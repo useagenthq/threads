@@ -1,9 +1,32 @@
+import { z } from "zod";
 import type { Fold } from "../fold/state";
+import { BranchId } from "../log";
+import type { Strict } from "../log/zod-types";
 import { err, ok, type Result } from "../result";
 import { addLine, type Chain, emptyChain } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import type { SqliteDriver } from "./driver";
 import { branchLines } from "./lines";
+import { parseRows } from "./tables";
+
+const Id: Strict<{ branch_id: typeof BranchId }> = z.strictObject({
+  branch_id: BranchId,
+});
+
+/** This tenant's branches a fork left `forking`: a crash stopped them before step 4. */
+export function forkingBranches(
+  db: SqliteDriver,
+  tenantId: string,
+): Result<readonly BranchId[], LogError> {
+  const rows = parseRows(
+    Id,
+    db.all(
+      "SELECT branch_id FROM branches WHERE tenant_id = ? AND state = 'forking' ORDER BY rowid",
+      [tenantId],
+    ),
+  );
+  return rows.ok ? ok(rows.value.map((r) => r.branch_id)) : rows;
+}
 
 /** A stored branch's chain, every line admitted as on import; a forking branch has no head line. */
 export function loadChain(

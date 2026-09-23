@@ -103,8 +103,13 @@ export type Sandbox = {
   readonly create: (
     operationKey: string,
   ) => Promise<Result<SandboxSession, Failure<"unavailable" | "timeout">>>;
+  /**
+   * Restores into a new isolated sandbox and verifies its tree against `manifestHash` (the
+   * snapshot event's); a mismatch releases what it created and is snapshot_manifest_mismatch.
+   */
   readonly restore: (
     snapshotId: string,
+    manifestHash: string,
     operationKey: string,
   ) => Promise<Result<SandboxSession, RestoreFailure>>;
   /** Present when info.lookup.create is not none. */

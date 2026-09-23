@@ -16,7 +16,12 @@ import type { LogError } from "../verify";
 import { ConfigError } from "./errors";
 import type { PinOptions } from "./pin";
 import { pin } from "./pin";
-import { type Decode, type RunResult, runResult, type Thread } from "./result";
+import {
+  type Decode,
+  type RunResult,
+  runResult,
+  type ThreadRef,
+} from "./result";
 import { openStore, type Store, sqlite } from "./sqlite";
 import type { Tool } from "./tool";
 
@@ -25,7 +30,7 @@ import type { Tool } from "./tool";
 
 /** spec/api.json Agent.run options (TS casing). */
 export type RunOptions<Deps> = {
-  readonly thread?: ThreadId | Thread;
+  readonly thread?: ThreadId | ThreadRef;
   readonly store?: Store;
   readonly deps?: Deps;
   readonly budget?: NonNullable<PinOptions["budget"]>;
@@ -63,7 +68,7 @@ export async function run<Deps, Output>(
   const { log, artifacts } = await openStore(store);
   const pinned = pin(def);
   const opened = open(log, options.thread, pinned.started);
-  const thread: Thread = {
+  const thread: ThreadRef = {
     id: opened.threadId,
     branch: opened.branchId,
     store,
@@ -100,7 +105,9 @@ export async function run<Deps, Output>(
   return result(end);
 }
 
-function handleOf(thread: RunOptions<unknown>["thread"]): Thread | undefined {
+function handleOf(
+  thread: RunOptions<unknown>["thread"],
+): ThreadRef | undefined {
   return typeof thread === "object" ? thread : undefined;
 }
 
@@ -164,7 +171,7 @@ function checkPin(
     );
 }
 
-function failed<Output>(error: LogError, thread: Thread): RunResult<Output> {
+function failed<Output>(error: LogError, thread: ThreadRef): RunResult<Output> {
   const code =
     error.code === "branch_busy" ? "branch_busy" : "branch_not_runnable";
   return { status: "failed", error: { code, message: error.message }, thread };
@@ -174,7 +181,7 @@ function loopConfig<Deps, Output>(
   def: Resolved<Deps, Output>,
   options: RunOptions<Deps>,
   principal: Principal,
-  thread: Thread,
+  thread: ThreadRef,
   hooks: Hooks,
 ): LoopConfig {
   const env = {

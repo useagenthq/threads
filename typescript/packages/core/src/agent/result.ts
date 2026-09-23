@@ -8,8 +8,8 @@ import type { Store } from "./sqlite";
 
 // RunResult (spec/api.json): a discriminated union on status, read from the run's log.
 
-/** A thread positioned at one branch. Inspection and control methods come with openThread. */
-export type Thread = {
+/** The data of a thread at one branch; openThread returns the full Thread handle. */
+export type ThreadRef = {
   readonly id: ThreadId;
   readonly branch: BranchId;
   readonly store: Store;
@@ -19,29 +19,29 @@ export type RunResult<Output = string> =
   | {
       readonly status: "completed";
       readonly output: Output;
-      readonly thread: Thread;
+      readonly thread: ThreadRef;
     }
   | {
       readonly status: "parked";
       readonly reason: EventOf<"parked">["data"]["reason"];
       readonly pending: readonly ParkAddress[];
-      readonly thread: Thread;
+      readonly thread: ThreadRef;
     }
-  | { readonly status: "cancelled"; readonly thread: Thread }
+  | { readonly status: "cancelled"; readonly thread: ThreadRef }
   | {
       readonly status: "failed";
       readonly error: { readonly code: RunErrorCode; readonly message: string };
-      readonly thread: Thread;
+      readonly thread: ThreadRef;
     }
   | {
       readonly status: "budget_exhausted";
       readonly budget: EventOf<"budget_exceeded">["data"];
-      readonly thread: Thread;
+      readonly thread: ThreadRef;
     }
   | {
       readonly status: "handed_off";
-      readonly thread: Thread;
-      readonly to_thread: Thread;
+      readonly thread: ThreadRef;
+      readonly to_thread: ThreadRef;
     };
 
 type Reason = EventOf<"turn_completed">["data"]["reason"];
@@ -56,7 +56,7 @@ export function runResult<Output>(
   end: LoopEnd,
   events: readonly KnownEvent[],
   parked: readonly ParkAddress[],
-  thread: Thread,
+  thread: ThreadRef,
   decode: Decode<Output>,
 ): RunResult<Output> {
   if (end.kind === "halted")
@@ -80,7 +80,7 @@ export function runResult<Output>(
 function ended<Output>(
   reason: Reason,
   turn: readonly KnownEvent[],
-  thread: Thread,
+  thread: ThreadRef,
   decode: Decode<Output>,
 ): RunResult<Output> {
   switch (reason) {
@@ -115,7 +115,7 @@ function ended<Output>(
 function failed<Output>(
   code: RunErrorCode,
   reason: Reason,
-  thread: Thread,
+  thread: ThreadRef,
 ): RunResult<Output> {
   return {
     status: "failed",

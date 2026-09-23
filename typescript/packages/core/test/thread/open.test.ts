@@ -6,7 +6,7 @@ import { storeOf } from "../../src/agent/sqlite";
 import { type EventId, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { fakeSandbox, type SnapshotData } from "../../src/sandbox";
-import { openThread, type ThreadHandle } from "../../src/thread";
+import { openThread, type Thread } from "../../src/thread";
 import {
   code,
   fixture,
@@ -49,7 +49,7 @@ async function setup() {
   return { f, sandbox, box, thread };
 }
 
-async function eventAt(thread: ThreadHandle, index: number): Promise<EventId> {
+async function eventAt(thread: Thread, index: number): Promise<EventId> {
   const entry = unwrap(await thread.timeline()).entries[index];
   if (entry === undefined) throw new Error(`no entry ${index}`);
   return entry.event.event_id;
@@ -82,7 +82,7 @@ describe("fork", () => {
     const { f, sandbox, box, thread } = await setup();
     const [point] = await thread.forkPoints();
     if (point === undefined) throw new Error("one fork point");
-    const child: ThreadHandle = unwrap(await thread.fork(point));
+    const child: Thread = unwrap(await thread.fork(point));
     expect(child.branch).not.toBe(ROOT);
 
     const log = unwrap(f.store.read(child.branch));
@@ -122,13 +122,13 @@ describe("fork", () => {
     expect(unwrap(f.store.ledger.rows())).toEqual([]);
   });
 
-  test("without an adapter for the snapshot's provider it fails before any create", async () => {
+  test("without a sandbox it is sandbox_required and creates nothing", async () => {
     const { f } = await setup();
     const store = storeOf({ log: f.store, artifacts: f.artifacts });
     const thread = unwrap(await openThread(store, THREAD));
     const [point] = await thread.forkPoints();
     if (point === undefined) throw new Error("one fork point");
-    expect(code(await thread.fork(point))).toBe("snapshot_restore_failed");
+    expect(code(await thread.fork(point))).toBe("sandbox_required");
     expect(unwrap(f.store.ledger.rows())).toEqual([]);
   });
 });

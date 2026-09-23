@@ -1,4 +1,4 @@
-import type { Thread } from "../agent/result";
+import type { ThreadRef } from "../agent/result";
 import { openStore, type Store } from "../agent/sqlite";
 import { BranchId, type EventId, type ThreadId } from "../log";
 import { knownEvents, reduce } from "../reduce";
@@ -37,13 +37,13 @@ export type ForkOptions = {
 };
 
 /** spec/api.json Thread: the plain handle plus its inspection and fork methods. */
-export type ThreadHandle = Thread & {
+export type Thread = ThreadRef & {
   readonly timeline: () => Promise<Result<Timeline, LogError>>;
   readonly forkPoints: () => Promise<readonly ForkPoint[]>;
   readonly fork: (
     point: EventId | ForkPoint,
     options?: ForkOptions,
-  ) => Promise<Result<ThreadHandle, LogError>>;
+  ) => Promise<Result<Thread, LogError>>;
   readonly saveCase: (
     name: string,
     options: SaveCaseOptions,
@@ -113,7 +113,7 @@ export async function openThread(
   store: Store,
   threadId: ThreadId,
   options: OpenThreadOptions = {},
-): Promise<Result<ThreadHandle, LogError>> {
+): Promise<Result<Thread, LogError>> {
   const { log, artifacts } = await openStore(store);
   const branch = listedBranch(log, threadId, options.branchId);
   if (!branch.ok) return branch;
@@ -149,7 +149,14 @@ export async function openThread(
     forkPoints: points,
     fork: async (point, forkOptions = {}) => {
       const sandbox = options.sandbox;
-      if (forkOptions.mode === "stub" && sandbox?.info.egress !== "enforced")
+      if (sandbox === undefined)
+        return err(
+          logError(
+            "sandbox_required",
+            "fork restores into a sandbox; open the thread with one",
+          ),
+        );
+      if (forkOptions.mode === "stub" && sandbox.info.egress !== "enforced")
         return err(
           logError(
             "egress_policy_unsupported",

@@ -1,5 +1,10 @@
 export { type ExecResult, execute, PREVIEW_BYTES } from "./exec";
-export { type FakeSandbox, fakeSandbox, manifestHash } from "./fake";
+export {
+  type FakeSandbox,
+  fakeSandbox,
+  manifestHash,
+  manifestOf,
+} from "./fake";
 export { collect } from "./ledger";
 export type {
   ExecOptions,
@@ -11,4 +16,4 @@ export type {
   SandboxSession,
   SnapshotData,
 } from "./protocol";
-export { SandboxScript } from "./script";
+export { ManifestEntry, SandboxScript } from "./script";

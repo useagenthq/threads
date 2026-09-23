@@ -8,7 +8,8 @@ export type StoreApiCode =
   | "branch_not_found"
   | "branch_exists"
   | "not_found"
-  | "invalid_request";
+  | "invalid_request"
+  | "sandbox_required";
 
 /** A typed log failure. Runners compare `code` and `seq`, never `message`. */
 export type LogError = {

@@ -11,6 +11,7 @@ import type {
   RestoreFailure,
   Sandbox,
   SandboxSession,
+  SnapshotData,
 } from "../sandbox/protocol";
 import type { LogStore, ResourceRow, ResourceState, Writer } from "../store";
 import { type LogError, logError } from "../verify/error";
@@ -76,12 +77,7 @@ export async function forkBranch(
       "snapshot_restore_failed",
       `no ${snapshot.provider} sandbox adapter to restore with`,
     );
-  const restored = await restore(
-    log,
-    writer.value,
-    sandbox,
-    snapshot.snapshot_id,
-  );
+  const restored = await restore(log, writer.value, sandbox, snapshot);
   if (!restored.ok)
     return restored.error.code === "stale_epoch" ||
       restored.error.code === "writer_poisoned"
@@ -104,14 +100,18 @@ async function restore(
   log: LogStore,
   writer: Writer,
   sandbox: Sandbox,
-  snapshotId: string,
+  snapshot: SnapshotData,
 ): Promise<Result<SandboxSession, LogError>> {
   const ledger = log.ledger;
   const row = ledger.begin(writer, "sandbox", sandbox.info.provider);
   if (!row.ok) return row;
   const fence = writer.fence();
   if (!fence.ok) return fence;
-  const made = await sandbox.restore(snapshotId, row.value.operation_key);
+  const made = await sandbox.restore(
+    snapshot.snapshot_id,
+    snapshot.manifest_hash,
+    row.value.operation_key,
+  );
   if (made.ok) {
     const live = ledger.live(
       writer,
@@ -194,4 +194,24 @@ export async function recoverFork(
   }
   const failed = log.failFork(writer.value);
   return failed.ok ? ok(states) : failed;
+}
+
+/**
+ * Startup recovery for forks: every branch a crash left `forking` whose lease has lapsed is
+ * failed and its ledger rows settled. A fork is never resumed. Returns the branches it failed.
+ */
+export async function recoverForks(
+  log: LogStore,
+  sandbox: Sandbox,
+  holderId: string,
+): Promise<Result<readonly BranchId[], LogError>> {
+  const forking = log.forkingBranches();
+  if (!forking.ok) return forking;
+  const failed: BranchId[] = [];
+  for (const branch of forking.value) {
+    const done = await recoverFork(log, sandbox, branch, holderId);
+    if (done.ok) failed.push(branch);
+    else if (done.error.code !== "branch_busy") return done;
+  }
+  return ok(failed);
 }

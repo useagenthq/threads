@@ -65,6 +65,7 @@ describe("a store is bound to one tenant", () => {
       "branch_exists",
       "not_found",
       "invalid_request",
+      "sandbox_required",
     ];
     for (const c of codes) expect(schema.$defs.ApiErrorCode.enum).toContain(c);
   });

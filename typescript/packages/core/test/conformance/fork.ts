@@ -6,10 +6,12 @@ import { knownEvents } from "../../src/reduce";
 import {
   type FakeSandbox,
   fakeSandbox,
+  type Sandbox,
   SandboxScript,
 } from "../../src/sandbox";
+import { LEASE_TTL_MS } from "../../src/store";
 import { openThread } from "../../src/thread";
-import { forkBranch } from "../../src/thread/fork";
+import { forkBranch, recoverForks } from "../../src/thread/fork";
 import { verifyExport } from "../../src/verify";
 import { count, fixture, unwrap } from "../store/helpers";
 import { type Case, caseStore } from "./cases";
@@ -17,6 +19,19 @@ import { expectAppended } from "./recover";
 
 // The fork kind (spec/conformance/README.md): fork against the fake sandbox, then check the
 // child, the parent, the sandboxes and the resource ledger the operation left.
+
+class Crash extends Error {}
+
+/** The host dies right after the restore returns, before the child's fork event. */
+function dies(sandbox: FakeSandbox): Sandbox {
+  return {
+    ...sandbox,
+    restore: async (...args) => {
+      await sandbox.restore(...args);
+      throw new Crash("the host died");
+    },
+  };
+}
 
 const Input = z.strictObject({
   fork_at_event_id: EventId,
@@ -35,21 +50,15 @@ export async function runFork(c: Case, bytes: Uint8Array): Promise<void> {
   const before = unwrap(f.store.exportBranch(parent));
   const script = SandboxScript.parse(c.scripts.sandbox ?? {});
   const sandbox = fakeSandbox(script);
-
-  const forked = await forkBranch(f.store, sandbox, {
-    parent,
-    point: input.fork_at_event_id,
-    child: input.new_branch_id,
-    knowledge: input.knowledge_policy ?? "pinned",
-    holderId: "conformance-runner",
-  });
-  expect<unknown>(
-    forked.ok ? undefined : { code: forked.error.code, seq: forked.error.seq },
-  ).toEqual(
-    c.error === undefined
-      ? undefined
-      : { code: c.error.code, seq: c.error.seq },
+  const crash = Object.values(script.snapshots ?? {}).some(
+    (s) => s.restore_response === "crash",
   );
+
+  await operate(c, f, crash ? dies(sandbox) : sandbox, sandbox, parent, input);
+  if (c.fork?.child_state !== undefined)
+    expect<unknown>(unwrap(f.store.branchState(input.new_branch_id))).toBe(
+      c.fork.child_state,
+    );
   if (c.fork?.parent_unchanged === true)
     expect(unwrap(f.store.exportBranch(parent))).toEqual(before);
 
@@ -88,6 +97,40 @@ async function checkNothingLeft(
     const attached = await sandbox.attach(snap.restore_sandbox_id);
     expect(attached.ok).toBe(false);
   }
+}
+
+/** The fork, or for restore_response crash: the fork dies, the host restarts, recovery runs. */
+async function operate(
+  c: Case,
+  f: ReturnType<typeof caseStore>,
+  used: Sandbox,
+  sandbox: FakeSandbox,
+  parent: BranchId,
+  input: z.infer<typeof Input>,
+): Promise<void> {
+  const forking = forkBranch(f.store, used, {
+    parent,
+    point: input.fork_at_event_id,
+    child: input.new_branch_id,
+    knowledge: input.knowledge_policy ?? "pinned",
+    holderId: "conformance-runner",
+  });
+  if (used !== sandbox) {
+    expect(forking).rejects.toThrow(Crash);
+    await forking.catch(() => undefined);
+    f.clock.now += LEASE_TTL_MS + 1; // the dead process's lease lapses
+    const failed = unwrap(await recoverForks(f.store, sandbox, "restarted"));
+    expect(failed).toEqual([input.new_branch_id]);
+    return;
+  }
+  const forked = await forking;
+  expect<unknown>(
+    forked.ok ? undefined : { code: forked.error.code, seq: forked.error.seq },
+  ).toEqual(
+    c.error === undefined
+      ? undefined
+      : { code: c.error.code, seq: c.error.seq },
+  );
 }
 
 function checkChild(

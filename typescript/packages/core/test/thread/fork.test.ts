@@ -6,6 +6,7 @@ import {
   collect,
   type FakeSandbox,
   fakeSandbox,
+  manifestHash,
   type Sandbox,
 } from "../../src/sandbox";
 import type { EventDraft } from "../../src/store";
@@ -29,6 +30,7 @@ const LOST = {
   snapshots: {
     snap_01: {
       restore_sandbox_id: "sbx_child_01",
+      manifest: [],
       restore_response: "lost",
       create_lookup: "found",
     },
@@ -45,13 +47,14 @@ function parent(snap: EventDraft = snapshot(null)) {
 
 const request = { parent: ROOT, atSeq: 4, branch: CHILD, holderId: "creator" };
 const LEASE = 30_000;
+const EMPTY = manifestHash([]);
 
 /** A fork that crashed after its ledger row, optionally after the provider call too. */
 async function crashed(sandbox: FakeSandbox, called: boolean) {
   const f = parent();
   const writer = unwrap(f.store.beginFork(request));
   const row = unwrap(f.store.ledger.begin(writer, "sandbox", "fake"));
-  if (called) await sandbox.restore("snap_01", row.operation_key);
+  if (called) await sandbox.restore("snap_01", EMPTY, row.operation_key);
   f.clock.now += LEASE + 1;
   return f;
 }
@@ -123,6 +126,23 @@ describe("a crash between the pending row and the create resolves by lookup", ()
     expect(sandbox.creates()).toBe(1);
   });
 
+  test("a not_found that isn't final proves nothing: the row parks unknown, never released", async () => {
+    const base = fakeSandbox(LOST);
+    const nonfinal: Sandbox = {
+      ...base,
+      info: {
+        ...base.info,
+        lookup: { ...base.info.lookup, create: "nonfinal" },
+      },
+    };
+    const f = await crashed(base, false);
+    const states = unwrap(
+      await recoverFork(f.store, nonfinal, CHILD, "creator"),
+    );
+    expect(states).toEqual(["unknown"]);
+    expect(unwrap(f.store.branchState(CHILD))).toBe("fork_failed");
+  });
+
   test("nobody else reclaims a fork while its creator's lease is live", async () => {
     const sandbox = fakeSandbox(LOST);
     const f = parent();
@@ -153,13 +173,17 @@ describe("a stale fork owner", () => {
 describe("a failed release is retried, never dropped", () => {
   test("release_failed stays until gc releases it", async () => {
     const base = fakeSandbox({
-      snapshots: { snap_01: { restore_sandbox_id: "sbx_child_01" } },
+      snapshots: {
+        snap_01: { restore_sandbox_id: "sbx_child_01", manifest: [] },
+      },
     });
     const sandbox = flakyClose(base);
     const f = parent();
     const writer = unwrap(f.store.beginFork(request));
     const row = unwrap(f.store.ledger.begin(writer, "sandbox", "fake"));
-    const made = unwrap(await sandbox.restore("snap_01", row.operation_key));
+    const made = unwrap(
+      await sandbox.restore("snap_01", EMPTY, row.operation_key),
+    );
     unwrap(f.store.ledger.live(writer, row.resource_id, made.id, null));
     f.clock.now += LEASE + 1; // crash before the fork event
 

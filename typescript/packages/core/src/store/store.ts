@@ -7,7 +7,7 @@ import { type LogError, logError } from "../verify/error";
 import type { ArtifactStore } from "./artifacts";
 import { newBranch } from "./branch";
 import type { SqliteDriver } from "./driver";
-import { forkEligible, loadChain } from "./forking";
+import { forkEligible, forkingBranches, loadChain } from "./forking";
 import { importSegments } from "./import";
 import { ResourceLedger } from "./ledger";
 import { exportBytes } from "./lines";
@@ -321,6 +321,11 @@ export class LogStore {
       setBranchState(this.#db, writer.lease.branchId, "fork_failed");
       return ok(undefined);
     });
+  }
+
+  /** Branches a crash left mid-fork, for their creator's recovery. */
+  forkingBranches(): Result<readonly BranchId[], LogError> {
+    return forkingBranches(this.#db, this.#tenant);
   }
 
   /** The resource ledger, fenced by the owner's writer. */

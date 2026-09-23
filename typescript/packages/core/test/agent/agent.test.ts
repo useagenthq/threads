@@ -8,7 +8,7 @@ import {
   type StreamEvent,
   scriptedModel,
   sqlite,
-  type Thread,
+  type ThreadRef,
   tool,
 } from "../../src";
 import { openStore } from "../../src/agent/sqlite";
@@ -30,12 +30,12 @@ const use = (name: string, input: Record<string, unknown>, id: string) => ({
   usage,
 });
 
-function threadOf<T>(result: RunResult<T>): Thread {
+function threadOf<T>(result: RunResult<T>): ThreadRef {
   return result.thread;
 }
 
 /** The branch's events, with every recorded request re-verified (C7 and request_ref). */
-async function logOf(thread: Thread): Promise<readonly KnownEvent[]> {
+async function logOf(thread: ThreadRef): Promise<readonly KnownEvent[]> {
   const { log, artifacts } = await openStore(thread.store);
   const events = knownEvents(unwrap(log.read(thread.branch)));
   unwrap(verifyRequests(events, refReader(artifacts)));

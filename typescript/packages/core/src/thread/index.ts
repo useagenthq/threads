@@ -1,10 +1,10 @@
-export { type KnowledgePolicy, recoverFork } from "./fork";
+export { type KnowledgePolicy, recoverFork, recoverForks } from "./fork";
 export {
   type ForkOptions,
   type ForkPoint,
   type OpenThreadOptions,
   openThread,
-  type ThreadHandle,
+  type Thread,
   type Timeline,
 } from "./open";
 export type {

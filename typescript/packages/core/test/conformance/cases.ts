@@ -72,6 +72,7 @@ const ExpectedFile = z.strictObject({
       at_seq: z.int().optional(),
       parent_unchanged: z.boolean(),
       knowledge_revision: z.int().nullable().optional(),
+      child_state: z.string().optional(),
     })
     .optional(),
   resources: z
@@ -121,6 +122,7 @@ export type Case = {
         readonly at_seq?: number | undefined;
         readonly parent_unchanged: boolean;
         readonly knowledge_revision?: number | null | undefined;
+        readonly child_state?: string | undefined;
       }
     | undefined;
   readonly resources:

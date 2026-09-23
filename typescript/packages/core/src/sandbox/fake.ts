@@ -5,12 +5,13 @@ import { err, ok, type Result } from "../result";
 import type {
   ExecOutput,
   FileFailure,
+  RestoreFailure,
   Sandbox,
   SandboxInfo,
   SandboxSession,
   SnapshotData,
 } from "./protocol";
-import { SandboxScript } from "./script";
+import { type ManifestEntry, SandboxScript } from "./script";
 
 // fakeSandbox() (spec/api.json, ): an in-memory provider for tests. Files live in
 // a Map; exec runs only the tools sandbox.json scripts (the command's first word names one);
@@ -39,17 +40,25 @@ const INFO: SandboxInfo = {
 const CHUNK = 4096;
 const utf8 = new TextEncoder();
 
-/** RFC 8785 hash of the tree's manifest: path, mode, size, sha256. */
-export function manifestHash(tree: ReadonlyMap<string, Uint8Array>): string {
-  const manifest = [...tree.entries()]
-    .toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([path, bytes]) => ({
-      path,
+const WORKSPACE = "/workspace/";
+
+/** A tree's manifest: path (relative to /workspace), mode, size, sha256, sorted by path. */
+export function manifestOf(
+  tree: ReadonlyMap<string, Uint8Array>,
+): readonly ManifestEntry[] {
+  return [...tree.entries()]
+    .map(([at, bytes]) => ({
+      path: at.startsWith(WORKSPACE) ? at.slice(WORKSPACE.length) : at,
       mode: 0o644,
       size: bytes.length,
       sha256: sha256Hex(bytes),
-    }));
-  const text = canonicalize(manifest);
+    }))
+    .toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/** RFC 8785 hash of a manifest. */
+export function manifestHash(manifest: readonly ManifestEntry[]): string {
+  const text = canonicalize(manifest.map((e) => ({ ...e })));
   if (!text.ok) throw new Error("a manifest is JSON");
   return sha256Hex(text.value);
 }
@@ -130,7 +139,7 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
           sandbox_id: self.id,
           capture_class: "filesystem",
           expires_at: null,
-          manifest_hash: manifestHash(tree),
+          manifest_hash: manifestHash(manifestOf(tree)),
           quiesced: { frozen: [], stopped: [], excluded: [] },
         };
         captured.set(data.snapshot_id, { tree: new Map(tree), data });
@@ -159,7 +168,25 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
     return session(id, tree);
   };
 
-  const restore: Sandbox["restore"] = async (snapshotId, operationKey) => {
+  /** A restored tree that fails the snapshot's hash is released before the error returns. */
+  const verified = async (
+    made: SandboxSession,
+    manifest: readonly ManifestEntry[],
+    expected: string,
+  ): Promise<Result<SandboxSession, RestoreFailure>> => {
+    if (manifestHash(manifest) === expected) return ok(made);
+    await made.close();
+    return err({
+      code: "snapshot_manifest_mismatch",
+      message: `the restored tree of ${made.id} fails manifest ${expected}`,
+    });
+  };
+
+  const restore: Sandbox["restore"] = async (
+    snapshotId,
+    expected,
+    operationKey,
+  ) => {
     const script = scripted[snapshotId];
     if (script !== undefined) {
       const made = open(operationKey, script.restore_sandbox_id, new Map());
@@ -167,7 +194,7 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
         operations.set(operationKey, { kind: "unsupported" });
       return script.restore_response === "lost"
         ? err({ code: "unavailable", message: "the create response was lost" })
-        : ok(made);
+        : verified(made, script.manifest, expected);
     }
     const snap = captured.get(snapshotId);
     if (snap === undefined)
@@ -177,12 +204,8 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
       });
     serial += 1;
     const tree = new Map(snap.tree);
-    if (manifestHash(tree) !== snap.data.manifest_hash)
-      return err({
-        code: "snapshot_manifest_mismatch",
-        message: `the restored tree of ${snapshotId} fails its manifest`,
-      });
-    return ok(open(operationKey, `sbx_fake_${serial}`, tree));
+    const made = open(operationKey, `sbx_fake_${serial}`, tree);
+    return verified(made, manifestOf(tree), expected);
   };
 
   const find = <T>(

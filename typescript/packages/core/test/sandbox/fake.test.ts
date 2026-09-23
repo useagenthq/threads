@@ -3,6 +3,7 @@ import {
   execute,
   fakeSandbox,
   manifestHash,
+  manifestOf,
   type SandboxSession,
 } from "../../src/sandbox";
 import { memoryArtifacts } from "../../src/store";
@@ -10,6 +11,7 @@ import { unwrap } from "../store/helpers";
 
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 const text = (b: Uint8Array): string => new TextDecoder().decode(b);
+const EMPTY = manifestHash([]);
 
 async function session(script: unknown = {}): Promise<SandboxSession> {
   return unwrap(await fakeSandbox(script).create("op-1"));
@@ -22,10 +24,14 @@ describe("fakeSandbox files and snapshots", () => {
     unwrap(await parent.upload("notes.txt", bytes("v1")));
     const snap = unwrap(await parent.snapshot("op-snap"));
     expect(snap.manifest_hash).toBe(
-      manifestHash(new Map([["/workspace/notes.txt", bytes("v1")]])),
+      manifestHash(
+        manifestOf(new Map([["/workspace/notes.txt", bytes("v1")]])),
+      ),
     );
 
-    const child = unwrap(await sandbox.restore(snap.snapshot_id, "op-child"));
+    const child = unwrap(
+      await sandbox.restore(snap.snapshot_id, snap.manifest_hash, "op-child"),
+    );
     expect(child.id).not.toBe(parent.id);
     expect(text(unwrap(await child.download("/workspace/notes.txt")))).toBe(
       "v1",
@@ -33,6 +39,20 @@ describe("fakeSandbox files and snapshots", () => {
     unwrap(await child.upload("notes.txt", bytes("v2")));
     expect(text(unwrap(await parent.download("notes.txt")))).toBe("v1");
     expect(sandbox.creates()).toBe(2);
+  });
+
+  test("a restore whose tree fails the snapshot's hash is refused and released", async () => {
+    const sandbox = fakeSandbox({
+      snapshots: {
+        snap_01: { restore_sandbox_id: "sbx_child_01", manifest: [] },
+      },
+    });
+    const bad = await sandbox.restore("snap_01", "0".repeat(64), "op-a");
+    expect(bad.ok ? "ok" : bad.error.code).toBe("snapshot_manifest_mismatch");
+    expect(sandbox.creates()).toBe(1);
+    expect((await sandbox.attach("sbx_child_01")).ok).toBe(false);
+    const good = await sandbox.restore("snap_01", EMPTY, "op-b");
+    expect(good.ok).toBe(true);
   });
 
   test("paths are typed failures, never throws", async () => {
@@ -52,12 +72,13 @@ describe("fakeSandbox files and snapshots", () => {
       snapshots: {
         snap_01: {
           restore_sandbox_id: "sbx_child_01",
+          manifest: [],
           restore_response: "lost",
           create_lookup: "found",
         },
       },
     });
-    const lost = await sandbox.restore("snap_01", "op-a");
+    const lost = await sandbox.restore("snap_01", EMPTY, "op-a");
     expect(lost.ok ? "ok" : lost.error.code).toBe("unavailable");
     const found = await sandbox.lookup?.("op-a");
     expect(found?.status === "found" ? found.value.id : "none").toBe(
@@ -72,19 +93,20 @@ describe("fakeSandbox files and snapshots", () => {
       snapshots: {
         snap_01: {
           restore_sandbox_id: "sbx_child_01",
+          manifest: [],
           restore_response: "lost",
           create_lookup: "unsupported",
         },
       },
     });
-    await sandbox.restore("snap_01", "op-a");
+    await sandbox.restore("snap_01", EMPTY, "op-a");
     const answer = await sandbox.lookup?.("op-a");
     expect(answer?.status).toBe("unknown");
   });
 
   test("a missing snapshot is snapshot_missing; release is released, then already_gone", async () => {
     const sandbox = fakeSandbox();
-    const missing = await sandbox.restore("snap_nope", "op-x");
+    const missing = await sandbox.restore("snap_nope", EMPTY, "op-x");
     expect(missing.ok ? "ok" : missing.error.code).toBe("snapshot_missing");
     const s = unwrap(await sandbox.create("op-1"));
     const snap = unwrap(await s.snapshot("op-snap"));
