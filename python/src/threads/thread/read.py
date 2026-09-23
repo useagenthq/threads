@@ -7,16 +7,15 @@ from threads.store import VerifiedLog
 
 
 async def read_log(store: Store, branch: BranchId) -> Ok[VerifiedLog] | Err[ParseError]:
-    """The branch's verified log. A branch that fails verification is log_corrupt."""
+    """The branch's verified log, or `read_error` of why it can't be read."""
     read = await (await open_store(store)).read(branch, now_ms())
-    return read if isinstance(read, Ok) else Err(reader_error(read.error))
+    return read if isinstance(read, Ok) else Err(read_error(read.error))
 
 
-def reader_error(error: ParseError) -> ParseError:
-    """Any failure but a missing branch or an unsupported line is log_corrupt."""
+def read_error(error: ParseError) -> ParseError:
+    """A line from a newer writer stays unsupported; any other failure, a branch gone missing
+    included, is log_corrupt (TS readLog)."""
     match error.code:
-        case "branch_not_found":
-            return ParseError("not_found", error.message)
         case "unsupported_format" | "unsupported_critical_event":
             return error
         case _:

@@ -19,12 +19,20 @@ import { readLog } from "./read";
 // projects that verified log. A failed read is an error, never a zero.
 
 export type ThreadUsage = {
-  /** Usage over this branch's resolved chain (a fork includes its parent's prefix). */
+  /**
+   * Token totals over this branch (a fork counts its parent's prefix). A response whose count
+   * the provider didn't report is counted in unknown_responses, never as zero.
+   */
   readonly usage: () => Promise<Result<ReducedState["usage"], LogError>>;
-  /** null when the thread pins no currency or no models. */
+  /**
+   * What the thread spent, in nano-units of its pinned currency (USD for agent()), with a
+   * conservative upper bound. null when the thread pins no prices. `tree: true` adds every
+   * descendant subagent; one that declares no price makes the total incomplete and unbounded.
+   */
   readonly cost: (options?: {
     readonly tree?: boolean;
   }) => Promise<Result<Cost | null, LogError>>;
+  /** Turns whose prompt-cache reads dropped sharply, each with its likely cause. */
   readonly cacheBreaks: () => Promise<Result<readonly CacheBreak[], LogError>>;
 };
 
@@ -57,24 +65,44 @@ function ownCost(chain: VerifiedLog): Cost | undefined {
   return cost(knownEvents(chain), chain.fold.policy);
 }
 
-/** This thread's cost plus every descendant's, each read from its own main branch. */
+/** This thread's cost plus the cost of every descendant at any depth. */
 function treeCost(
   log: LogStore,
   chain: VerifiedLog,
 ): Result<Cost | undefined, LogError> {
-  let total = ownCost(chain);
-  if (total === undefined) return ok(undefined);
+  const parts = descendantCosts(log, chain);
+  if (!parts.ok) return parts;
+  const own = ownCost(chain);
+  return ok(
+    own === undefined
+      ? undefined
+      : parts.value.reduce<Cost>((total, part) => mergeCost(total, part), own),
+  );
+}
+
+/**
+ * Each descendant's own cost (undefined when unpriced), read from its main branch, depth
+ * first. An unpriced descendant doesn't stop the walk, and any unreadable one is the error.
+ */
+function descendantCosts(
+  log: LogStore,
+  chain: VerifiedLog,
+): Result<readonly (Cost | undefined)[], LogError> {
+  const out: (Cost | undefined)[] = [];
   for (const child of chain.fold.children.keys()) {
     const branch = log.mainBranch(ThreadId.parse(child));
     // A child with no thread yet was never started: it spent nothing.
     if (!branch.ok && branch.error.code === "branch_not_found") continue;
     const read = branch.ok ? readLog(log, branch.value) : branch;
-    const part = read.ok ? treeCost(log, read.value) : read;
-    if (!part.ok) {
-      const { code, message, seq } = part.error;
-      return err(logError(code, `child ${child}: ${message}`, seq));
-    }
-    total = mergeCost(total, part.value);
+    if (!read.ok) return err(inChild(child, read.error));
+    const below = descendantCosts(log, read.value);
+    if (!below.ok) return err(inChild(child, below.error));
+    out.push(ownCost(read.value), ...below.value);
   }
-  return ok(total);
+  return ok(out);
+}
+
+/** The error, keeping its code, with the path to the descendant that failed. */
+function inChild(child: string, error: LogError): LogError {
+  return logError(error.code, `child ${child}: ${error.message}`, error.seq);
 }

@@ -49,7 +49,7 @@ from threads.thread.case import (
 )
 from threads.thread.control import Controlled
 from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch, fork_point
-from threads.thread.read import read_log, reader_error
+from threads.thread.read import read_error, read_log
 from threads.thread.usage import tree_cost
 
 
@@ -203,21 +203,24 @@ class Thread:
         return Ok(tuple(children.values()))
 
     async def usage(self) -> Ok[UsageTotals] | Err[ParseError]:
-        """Usage over this branch's resolved chain (a fork includes its parent's prefix)."""
+        """Token totals over this branch (a fork counts its parent's prefix). A response whose
+        count the provider didn't report is counted in unknown_responses, never as zero."""
         read = await read_log(self.store, self.branch)
         return read if isinstance(read, Err) else Ok(usage_totals(read.value.fold))
 
     async def cost(self, *, tree: bool = False) -> Ok[Cost | None] | Err[ParseError]:
-        """None when the thread pins no currency or no models. `tree` adds every descendant's,
-        read from its own log."""
+        """What the thread spent, in nano-units of its pinned currency (USD for `agent()`), with
+        a conservative upper bound. None when the thread pins no prices. `tree=True` adds every
+        descendant subagent; one that declares no price makes the total incomplete and
+        unbounded."""
         read = await read_log(self.store, self.branch)
         if isinstance(read, Err):
             return read
         return await tree_cost(self.store, read.value) if tree else Ok(cost(read.value.fold))
 
     async def cache_breaks(self) -> Ok[tuple[CacheBreak, ...]] | Err[ParseError]:
-        """Under the effective context policy, so a thread that pinned none still gets a
-        tuple."""
+        """Turns whose prompt-cache reads dropped sharply, each with its likely cause. A thread
+        that pinned no context policy is judged by the default cache ttl."""
         read = await read_log(self.store, self.branch)
         if isinstance(read, Err):
             return read
@@ -335,8 +338,10 @@ async def open_thread(
     if isinstance(branch, Err):
         return branch
     read = await sq.read(branch.value, now_ms())
+    if isinstance(read, Err) and read.error.code == "branch_not_found":
+        return Err(ParseError("not_found", read.error.message))
     if isinstance(read, Err):
-        return Err(reader_error(read.error))
+        return Err(read_error(read.error))
     if read.value.fold.thread_id != thread_id:
         return Err(ParseError("not_found", f"no branch {branch.value} in thread {thread_id}"))
     return Ok(Thread(thread_id, branch.value, store, sandbox=sandbox))

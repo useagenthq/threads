@@ -147,6 +147,10 @@ def dispositions(fold: Fold) -> list[tuple[int, int, int | None]]:
     for attempt in _attempts(fold, models):
         if attempt.usage is None and _not_billed(attempt.abandoned):
             continue
+        if attempt.model is None or attempt.model.price is MISSING:
+            # An unpriced epoch can be neither costed nor bounded; it is never an exact zero.
+            out.append((attempt.request.seq, 0, None))
+            continue
         cap = _bound(attempt)
         k, u = (
             (0, cap) if attempt.usage is None else _response_cost(attempt.usage, attempt.model, cap)
