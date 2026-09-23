@@ -4,9 +4,11 @@ settles each attempt, so a thread budget spans runs."""
 
 import asyncio
 
+import pytest
 from pydantic import BaseModel, JsonValue
 
 from threads import BudgetExhausted, Completed, RunContext, agent, scripted_model, sqlite, tool
+from threads.agents import run as run_module
 from threads.agents.store import open_store
 from threads.log import Budget, ModelRequestEvent, Permissions
 from threads.result import Ok
@@ -30,6 +32,8 @@ class Echo(BaseModel):
 async def echo(args: Echo, _ctx: RunContext[None]) -> str:
     return args.text
 
+
+SLOW_MS = 5_000
 
 ECHO = tool(name="echo", description="Echo.", input=Echo, runs="host", execute=echo)
 
@@ -85,5 +89,51 @@ def test_a_thread_budget_spans_runs_and_every_attempt_is_settled() -> None:
             e.event.seq for e in timeline.value.entries if isinstance(e.event, ModelRequestEvent)
         ]
         assert rows == {f"{first.thread.branch}:{seq}": False for seq in seqs}
+
+    asyncio.run(main())
+
+
+def test_max_turns_counts_the_thread_s_turns_across_runs() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        bot = agent(
+            model=scripted_model({"responses": [text("one"), text("two")]}),
+            budget=Budget(max_turns=1),
+        )
+        first = await bot.run("a", store=store)
+        assert isinstance(first, Completed)
+        second = await bot.run("b", store=store, thread=first.thread)
+        assert isinstance(second, BudgetExhausted)
+        assert (second.budget.scope, second.budget.limit) == ("thread", "max_turns")
+        assert (second.budget.limit_value, second.budget.observed) == (1, 2)
+        assert not second.budget.observed_is_upper_bound
+
+    asyncio.run(main())
+
+
+def test_max_wall_ms_refuses_a_request_after_the_run_s_time_is_up(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = [1_790_000_000_000]
+
+    async def slow(args: Echo, _ctx: RunContext[None]) -> str:
+        now[0] += SLOW_MS
+        return args.text
+
+    monkeypatch.setattr(run_module, "now_ms", lambda: now[0])
+    slow_echo = tool(name="echo", description="Echo.", input=Echo, runs="host", execute=slow)
+
+    async def main() -> None:
+        bot = agent(
+            model=scripted_model({"responses": [use(), text("never")]}),
+            tools=[slow_echo],
+            permissions=ALLOW,
+        )
+        result = await bot.run(
+            "go", store=sqlite(":memory:"), deps=None, budget=Budget(max_wall_ms=1_000)
+        )
+        assert isinstance(result, BudgetExhausted)
+        assert (result.budget.scope, result.budget.limit) == ("run", "max_wall_ms")
+        assert result.budget.observed == SLOW_MS
 
     asyncio.run(main())
