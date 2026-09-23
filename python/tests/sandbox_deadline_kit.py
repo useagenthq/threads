@@ -1,7 +1,10 @@
 """An exec deadline over a real adapter: at the deadline the sandbox layer answers
 timeout, whether the best-effort stop finishes, never finishes, or kills the process so its
 stream ends with 137 — a killed process never reads as a normal exit, and a stop that hangs
-never holds the exec."""
+never holds the exec.
+
+A check waits for its own background stop to settle before it ends: a stop still mid-request
+when the adapter closes is cancelled at teardown, and aiohttp leaks the socket it was using."""
 
 import asyncio
 from collections.abc import Mapping, Sequence
@@ -22,12 +25,14 @@ _PROMPT_S = 2.0
 """Well past the deadline, well short of a hang."""
 
 
-class HangingStop:
-    """The adapter's session, except that terminate never finishes."""
+class WatchedStop:
+    """The adapter's session, telling when terminate is asked for and when it settles; with
+    `hang`, it never settles."""
 
-    def __init__(self, inner: SandboxSession) -> None:
-        self._inner = inner
+    def __init__(self, inner: SandboxSession, *, hang: bool) -> None:
+        self._inner, self._hang = inner, hang
         self.stops = 0
+        self.asked, self.settled = asyncio.Event(), asyncio.Event()
 
     @property
     def id(self) -> SandboxId:
@@ -52,8 +57,13 @@ class HangingStop:
         self, process_key: str, context: SandboxContext
     ) -> Ok[Termination] | Err[SandboxError]:
         self.stops += 1
-        await asyncio.Event().wait()
-        raise AssertionError("unreachable")
+        self.asked.set()
+        if self._hang:
+            await asyncio.Event().wait()
+        try:
+            return await self._inner.terminate(process_key, context)
+        finally:
+            self.settled.set()
 
     async def upload(
         self, path: str, data: bytes, context: SandboxContext
@@ -86,18 +96,22 @@ async def _deadline(s: SandboxSession) -> Ok[object] | Err[SandboxError]:
 
 async def a_deadline_answers_timeout_though_the_stop_kills(h: Harness) -> None:
     """The provider's stop ends the stream with 137 after the deadline: still timeout."""
-    got = await _deadline(await session(h))
+    watched = WatchedStop(await session(h), hang=False)
+    got = await _deadline(watched)
     assert isinstance(got, Err)
     assert got.error.code == "timeout"
+    async with asyncio.timeout(_PROMPT_S):
+        await watched.settled.wait()
 
 
 async def a_deadline_answers_timeout_though_the_stop_hangs(h: Harness) -> None:
-    hanging = HangingStop(await session(h))
+    hanging = WatchedStop(await session(h), hang=True)
     got = await _deadline(hanging)
     assert isinstance(got, Err)
     assert got.error.code == "timeout"
-    await asyncio.sleep(0)
-    assert hanging.stops == 1, "terminate is still asked for, in the background"
+    async with asyncio.timeout(_PROMPT_S):
+        await hanging.asked.wait()  # terminate is still asked for, in the background
+    assert hanging.stops == 1
 
 
 DEADLINE: tuple[Check, ...] = (

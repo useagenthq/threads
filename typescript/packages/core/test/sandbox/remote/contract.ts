@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Sandbox } from "../../../src/sandbox";
+import type { Sandbox, SandboxSession } from "../../../src/sandbox";
 import { execute, manifestHash } from "../../../src/sandbox";
 import { memoryArtifacts } from "../../../src/store/artifacts";
 import { code, unwrap } from "../../store/helpers";
@@ -72,15 +72,25 @@ export function contractSuite(name: string, make: () => Contract): void {
     test("a timeout is reported as one, and the process is killed best effort", async () => {
       const { sandbox, world } = make();
       const box = await created(sandbox);
+      // The kill runs in the background: wait for it to settle, not for a clock.
+      const stopped = Promise.withResolvers<void>();
+      const watched: SandboxSession = {
+        ...box,
+        terminate: async (processKey, context) => {
+          const answer = await box.terminate(processKey, context);
+          stopped.resolve();
+          return answer;
+        },
+      };
       const ran = await execute(
-        box,
+        watched,
         ["sleep"],
         CTX,
         { processKey: "k2", timeoutMs: 5 },
         memoryArtifacts(),
       );
       expect(code(ran)).toBe("timeout");
-      await Bun.sleep(20);
+      await stopped.promise;
       expect(world.machine(box.id).procs.has("k2")).toBe(false);
     });
 
