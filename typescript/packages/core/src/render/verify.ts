@@ -5,7 +5,7 @@ import type { ArtifactStore } from "../store/artifacts";
 import { type LogError, logError } from "../verify/error";
 import type { ReadRef } from "./lines";
 import { line0 } from "./prefix";
-import { compactionInstruction, render } from "./render";
+import { compactionSide, render } from "./render";
 
 /**
  * Artifact reads that name the event carrying the ref when they fail. The store verifies the
@@ -42,9 +42,9 @@ export function verifyRequests(
   for (const [i, e] of events.entries()) {
     if (e.type !== "model_request") continue;
     const before = events.slice(0, i);
-    const instruction =
+    const side =
       e.data.purpose === "compaction"
-        ? compactionInstruction(before)
+        ? compactionSide(before, e.data.cause_event_id)
         : undefined;
     const prefix = new TextEncoder().encode(`${line0(before)}\n`);
     const declared = e.data.declared_prefix;
@@ -61,7 +61,7 @@ export function verifyRequests(
       );
     const recorded = read(e.data.request_ref, e.seq);
     if (!recorded.ok) return recorded;
-    const rendered = render(before, read, instruction);
+    const rendered = render(before, read, side);
     if (!rendered.ok) return rendered;
     if (e.data.request_ref.sha256 !== sha256Hex(rendered.value.bytes))
       return err(

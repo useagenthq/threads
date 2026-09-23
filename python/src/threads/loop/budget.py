@@ -34,6 +34,7 @@ from threads.loop.runtime import Failed, Runtime, lost
 from threads.reduce.fold import Fold
 from threads.reduce.projections import bound, dispositions, output_bound
 from threads.result import Err
+from threads.store import Draft
 from threads.store.budgets import Cover, LimitName
 
 _LIMITS: tuple[LimitName, ...] = (
@@ -174,9 +175,10 @@ def _covers(covering: Sequence[Covering]) -> list[Cover]:
     return [c for c in map(_cover, covering) if c is not None]
 
 
-async def reserve(rt: Runtime) -> Failed | None:
+async def reserve(rt: Runtime, answer: Draft | None = None) -> Failed | None:
     """None when the next attempt's reservation committed; else the turn ends budget_exhausted
-    and no model_request is appended."""
+    and no model_request is appended. `answer` (a side request's compaction_failed) is recorded
+    in the same batch, before the turn ends."""
     await _sync(rt, rt.budgets)
     thread_id = rt.writer.fold.thread_id
     if thread_id is None:
@@ -196,8 +198,11 @@ async def reserve(rt: Runtime) -> Failed | None:
     }
     if by.owner is not None:
         data["owner_thread_id"] = by.owner
+    answered = () if answer is None else (answer,)
     done = await rt.append(
-        draft("budget_exceeded", data), draft("turn_completed", {"reason": "budget_exhausted"})
+        draft("budget_exceeded", data),
+        *answered,
+        draft("turn_completed", {"reason": "budget_exhausted"}),
     )
     return lost(done.error) if isinstance(done, Err) else None
 

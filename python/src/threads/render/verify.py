@@ -10,6 +10,8 @@ the events before it (rule 15).
 
 from collections.abc import Sequence
 
+from pydantic.experimental.missing_sentinel import MISSING
+
 from threads.log import Event, ModelRequestEvent, ParseError
 from threads.log.digest import sha256_hex
 from threads.render.artifacts import ReadArtifact, read_verified
@@ -41,7 +43,13 @@ def _request_error(
     recorded = read_verified(read, request.data.request_ref, request.seq)
     if isinstance(recorded, Err):
         return recorded.error
-    rendered = render(before, read, compaction=request.data.purpose == "compaction")
+    cause = request.data.cause_event_id
+    rendered = render(
+        before,
+        read,
+        compaction=request.data.purpose == "compaction",
+        cause=None if cause is MISSING else cause,
+    )
     if isinstance(rendered, Err):
         return rendered.error
     if recorded.value != rendered.value.body:

@@ -1,0 +1,9 @@
+{
+  "name": "compaction-cause-orphan-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A cause that names no open request. Semantic rule 30: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

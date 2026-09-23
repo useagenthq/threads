@@ -5,6 +5,8 @@ the same loop over the same log (invariant 1)."""
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, assert_never
 
+from pydantic.experimental.missing_sentinel import MISSING
+
 from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
@@ -149,12 +151,14 @@ async def _next(rt: Runtime) -> Halt | None:
             return await _after_response(rt, last)
         case ToolResultEvent():
             return await _after_results(rt)
-        case ModelAttemptAbandonedEvent():
+        # A requested compaction's abandoned side attempt is the ladder's to decide (after a
+        # crash), never the turn's retry.
+        case ModelAttemptAbandonedEvent() if rt.fold.compaction_request is None:
             return await retries.after_abandon(rt, last, current)
         case RetryScheduledEvent():
             await rt.wait_until(last.data.not_before)
             return await request(rt, current.attempts + 1)
-        case CompactionFailedEvent():
+        case CompactionFailedEvent() if last.data.cause_event_id is MISSING:
             return await complete(rt, "context_exhausted")
         case _:
             return await request(rt, current.attempts + 1)

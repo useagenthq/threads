@@ -4,6 +4,7 @@ import { OutputPart } from "../content";
 import { type EventDef, event } from "../envelope";
 import { EventId } from "../ids";
 import { Int, NonEmpty, PosInt, Sha256, TimeMs } from "../primitives";
+import { type Ruled, withRule } from "../rules";
 import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
 
 // Model attempts: request, response, recovery, abandonment and retry waits.
@@ -42,28 +43,46 @@ const ABANDON_REASONS = [
 const BILLING = ["not_billed", "unknown"] as const;
 const RETRY_BASES = ["retry_after", "backoff"] as const;
 
-export const ModelRequestData: Strict<{
-  input_bound_tokens: Opt<typeof PosInt>;
-  purpose: Opt<EnumOf<typeof PURPOSES>>;
-  attempt: typeof PosInt;
-  request_ref: typeof ArtifactRef;
-  declared_prefix: Strict<{ bytes: typeof PosInt; sha256: typeof Sha256 }>;
-}> = z.strictObject({
-  input_bound_tokens: PosInt.describe(
-    "A pre-dispatch upper bound on billed input units for this attempt, from the provider's token-counting API when the adapter supports it. Absent: the model's context_window bounds it.",
-  ).optional(),
-  purpose: z
-    .enum(PURPOSES)
-    .describe(
-      "turn (absent means turn) or compaction: the summarizer side request. A compaction request and its response render nothing into later requests.",
-    )
-    .optional(),
-  attempt: PosInt.describe(
-    "1 for a fresh request; n+1 when re-sending after model_attempt_abandoned.",
-  ),
-  request_ref: ArtifactRef,
-  declared_prefix: z.strictObject({ bytes: PosInt, sha256: Sha256 }),
-});
+// cause_event_id names a compaction_requested, so only a compaction side request carries it.
+const CAUSE_RULE = {
+  if: { required: ["cause_event_id"] },
+  then: {
+    required: ["purpose"],
+    properties: { purpose: { const: "compaction" } },
+  },
+} as const;
+export const ModelRequestData: Ruled<
+  Strict<{
+    input_bound_tokens: Opt<typeof PosInt>;
+    purpose: Opt<EnumOf<typeof PURPOSES>>;
+    attempt: typeof PosInt;
+    request_ref: typeof ArtifactRef;
+    declared_prefix: Strict<{ bytes: typeof PosInt; sha256: typeof Sha256 }>;
+    cause_event_id: Opt<typeof EventId>;
+  }>,
+  typeof CAUSE_RULE
+> = withRule(
+  z.strictObject({
+    input_bound_tokens: PosInt.describe(
+      "A pre-dispatch upper bound on billed input units for this attempt, from the provider's token-counting API when the adapter supports it. Absent: the model's context_window bounds it.",
+    ).optional(),
+    purpose: z
+      .enum(PURPOSES)
+      .describe(
+        "turn (absent means turn) or compaction: the summarizer side request. A compaction request and its response render nothing into later requests.",
+      )
+      .optional(),
+    attempt: PosInt.describe(
+      "1 for a fresh request; n+1 when re-sending after model_attempt_abandoned.",
+    ),
+    request_ref: ArtifactRef,
+    declared_prefix: z.strictObject({ bytes: PosInt, sha256: Sha256 }),
+    cause_event_id: EventId.describe(
+      "purpose compaction only: the compaction_requested this side request summarizes for. Its history is cut at that request (Render v1).",
+    ).optional(),
+  }),
+  CAUSE_RULE,
+);
 export const ModelRequest: EventDef<
   "model_request",
   typeof ModelRequestData,

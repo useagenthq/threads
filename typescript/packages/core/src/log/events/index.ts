@@ -12,6 +12,7 @@ import {
 import {
   Compacted,
   CompactionFailed,
+  CompactionRequested,
   ContextEdited,
   ContextPreflightBlocked,
   ModeChanged,
@@ -124,6 +125,7 @@ export const EVENT_TYPES = [
   "team_task_updated",
   "team_message",
   "context_preflight_blocked",
+  "compaction_requested",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -183,6 +185,7 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
     typeof TeamTaskUpdated.schema,
     typeof TeamMessage.schema,
     typeof ContextPreflightBlocked.schema,
+    typeof CompactionRequested.schema,
   ],
   "type"
 > = z.discriminatedUnion("type", [
@@ -239,6 +242,7 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
   TeamTaskUpdated.schema,
   TeamMessage.schema,
   ContextPreflightBlocked.schema,
+  CompactionRequested.schema,
 ]);
 export type KnownEvent = z.infer<typeof KnownEvent>;
 
@@ -297,6 +301,7 @@ export const EVENT_FRAGMENTS: readonly z.ZodType[] = [
   TeamTaskUpdated.fragment,
   TeamMessage.fragment,
   ContextPreflightBlocked.fragment,
+  CompactionRequested.fragment,
 ];
 
 export * from "./agents";

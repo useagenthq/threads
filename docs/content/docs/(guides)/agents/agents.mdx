@@ -126,6 +126,58 @@ next_result = await support.run("When?", thread=result.thread)
 
 In TypeScript `result.thread` is a small reference (`id`, `branch`, `store`); use [`openThread`](/docs/reference/functions/openThread) for the full handle. In Python it is already the full `Thread` handle.
 
+## Change the reply style, or compact, between runs
+
+An operator can steer a thread between runs without touching the agent's config. Both calls work only while the thread is idle; during a run they return `branch_busy`.
+
+- `setOutputStyle` / `set_output_style` switches later replies to one of the styles you define with `outputStyles` / `output_styles`. The style is added to the conversation as an instruction, so the system prompt and the prompt cache stay as they are. The latest style applies; to go back, define a style for that too.
+- `compact` asks the next run to summarize the conversation so far before it answers. Pass `instructions` to say what the summary must keep. The summary, or why it failed, shows up in the [timeline](/docs/evals/timeline).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const support = agent({
+  model,
+  outputStyles: { concise: "Answer in at most three sentences." },
+});
+const result = await support.run("Where is my invoice?", { store });
+
+const operator = { issuer: "api", tenant: "local", subject: "operator" };
+const opened = await openThread(store, result.thread.id);
+if (!opened.ok) throw new Error(opened.error.message);
+const thread = opened.value;
+
+await thread.setOutputStyle("concise", operator);
+await thread.compact(operator, { instructions: "Keep the open invoice numbers." });
+
+// The next run summarizes first, then answers in the concise style.
+await support.run("And the one from May?", { store, thread: result.thread });
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+support = agent(
+    model=model,
+    output_styles={"concise": "Answer in at most three sentences."},
+)
+result = await support.run("Where is my invoice?", store=store)
+
+operator = Principal(issuer="api", tenant="local", subject="operator")
+await result.thread.set_output_style("concise", operator)
+await result.thread.compact(operator, instructions="Keep the open invoice numbers.")
+
+# The next run summarizes first, then answers in the concise style.
+await support.run("And the one from May?", store=store, thread=result.thread)
+```
+
+</Tab>
+</Tabs>
+
+Styles are pinned with the agent's config: adding or changing one starts new threads, and a thread that was started with other styles refuses to continue with this config. An unknown style name is `not_found`, and the error lists the styles the thread knows.
+
 ## Stream a run
 
 `stream()` runs the same loop and yields items as they happen: committed log events, plus live text deltas that are never stored. Await `result` for the final outcome.
@@ -231,6 +283,7 @@ All options are optional except `model`. Names are camelCase in TypeScript and s
     - `fallback`: backup models, tried in order. See [Fallback models](/docs/agents/models#fallback-models).
     - `output`, `outputRetries` (`output_retries`): typed final output. See [Structured output](/docs/agents/structured-output).
     - `context`: when to clear old tool output and compact long threads. Sensible defaults apply.
+    - `outputStyles` (`output_styles`): named reply styles an operator can switch a thread to. See [Change the reply style](#change-the-reply-style-or-compact-between-runs).
   </Accordion>
   <Accordion title="Tools">
     - `tools`: your [tools](/docs/agents/tools) and [MCP servers](/docs/agents/mcp).

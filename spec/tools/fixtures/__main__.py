@@ -39,8 +39,10 @@ from . import (
     rules,
     skills,
     structure,
+    styles,
     summaries,
     teams,
+    thread_methods,
     tool_groups,
     tool_inputs,
 )
@@ -79,6 +81,8 @@ FAMILIES = (
     memory,
     catalog_tools,
     skills,
+    thread_methods,
+    styles,
 )
 
 

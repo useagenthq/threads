@@ -128,18 +128,38 @@ class Log:
         c.add("fork", data)
         return c
 
-    def model_request(self, attempt: int = 1, *, compaction: bool = False) -> Obj:
-        """A turn request, or (compaction=True) the summarizer side request of."""
-        instruction = self._compact_instruction() if compaction else None
-        body, line0 = render(self.events, self.artifacts, instruction)
+    def model_request(
+        self, attempt: int = 1, *, compaction: bool = False, cause: Obj | None = None
+    ) -> Obj:
+        """A turn request, or (compaction=True) the summarizer side request; `cause` is the
+        compaction_requested a requested compaction answers."""
+        if cause is not None:
+            instruction = self._requested_instruction(cause)
+            through: int | None = num(cause["seq"])
+        else:
+            instruction = self._compact_instruction() if compaction else None
+            through = None
+        body, line0 = render(self.events, self.artifacts, instruction, through)
         data: Obj = {
             "attempt": attempt,
             "request_ref": self.art(body, "application/x-ndjson"),
             "declared_prefix": {"bytes": len(line0), "sha256": sha(line0)},
         }
-        if compaction:
+        if compaction or cause is not None:
             data["purpose"] = "compaction"
+        if cause is not None:
+            data["cause_event_id"] = cause["event_id"]
         return self.add("model_request", data)
+
+    def _requested_instruction(self, request: Obj) -> str:
+        """The fixed instruction, then the request's instructions and the guides after it."""
+        extra = [text(v) for v in (obj(request["data"]).get("instructions"),) if v is not None]
+        for e in self.events:
+            d = obj(e["data"])
+            guide = d.get("hook") == "before_compact" and d.get("decision") == "guide"
+            if num(e["seq"]) > num(request["seq"]) and guide and "reason" in d:
+                extra.append(text(d["reason"]))
+        return COMPACT_INSTRUCTION + (GUIDE_PREFIX + "\n".join(extra) if extra else "")
 
     def _compact_instruction(self) -> str:
         """The fixed instruction plus before_compact guide text since the last model_request."""

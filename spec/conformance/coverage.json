@@ -1697,7 +1697,7 @@
         {
           "kind": "case",
           "ref": "replay-render-equals-recorded",
-          "status": "planned"
+          "status": "implemented"
         },
         {
           "kind": "case",

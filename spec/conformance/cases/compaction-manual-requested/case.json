@@ -1,0 +1,9 @@
+{
+  "name": "compaction-manual-requested",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "Thread.compact records compaction_requested with instructions while idle. The next run's side request names it: its history ends at the request, so the new input is not summarized, and its instruction line carries the instructions. compacted{trigger: manual} covers the first input to the event before the request; the next turn request renders the summary, then the new input.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

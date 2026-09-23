@@ -1,0 +1,9 @@
+{
+  "name": "replay-render-equals-recorded",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "Thread.replay: every recorded request of a thread with two settings epochs, a tools_changed, a compaction and a trusted injection re-renders to its request_ref bytes and declares its own epoch's line 0 (render step 3), with no model call.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

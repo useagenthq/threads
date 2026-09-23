@@ -84,8 +84,14 @@ export type Fold = {
   readonly cancelScopes: Map<string, string>;
   cancelled: boolean;
   repair: boolean;
-  /** model_request event_id → whether it is a compaction side request. */
-  readonly requests: Map<string, { readonly compaction: boolean }>;
+  /**
+   * model_request event_id → whether it is a compaction side request, and the
+   * compaction_requested it names.
+   */
+  readonly requests: Map<
+    string,
+    { readonly compaction: boolean; readonly cause?: string }
+  >;
   /** Requests awaiting a response or abandonment. */
   readonly awaiting: Set<string>;
   /** Response text per compaction request, for the summary check (rule 10). */
@@ -94,6 +100,17 @@ export type Fold = {
   readonly boundaries: boolean[];
   readonly ranges: (readonly [number, number])[];
   compactionFailures: number;
+  /** The compaction_requested no compacted or compaction_failed has answered yet (rule 30). */
+  compactionRequest: EventOf<"compaction_requested"> | undefined;
+  /** The first user_input of the resolved chain: where a requested compaction's range starts. */
+  firstInput: EventOf<"user_input"> | undefined;
+  /** The latest output style set on the chain (rule 29). */
+  outputStyle: EventOf<"injected"> | undefined;
+  /**
+   * The style the L3 restore may re-append as the host, open only for the event right after a
+   * `compacted` whose dropped range holds the latest style (rule 29).
+   */
+  restoreStyle: EventOf<"injected"> | undefined;
   readonly approvals: Map<
     string,
     { readonly callId: string; readonly argsHash: string; consumed: boolean }
@@ -135,6 +152,10 @@ export function emptyFold(): Fold {
     boundaries: [true],
     ranges: [],
     compactionFailures: 0,
+    compactionRequest: undefined,
+    firstInput: undefined,
+    outputStyle: undefined,
+    restoreStyle: undefined,
     approvals: new Map(),
     budgetBlocked: false,
     handedOff: false,

@@ -59,7 +59,22 @@ async def _exceeded(rt: Runtime, scope: str, over: tuple[str, int, int]) -> Fail
         "observed": observed,
         "observed_is_upper_bound": False,
     }
+    # The run ends before its ladder: an unanswered compaction request is answered here, in the
+    # same batch, so it never outlives the run that should have carried it out.
+    request = rt.fold.compaction_request
+    answered = (
+        ()
+        if request is None
+        else (
+            draft(
+                "compaction_failed",
+                {"stage": "summary", "reason": "model_error", "cause_event_id": request.event_id},
+            ),
+        )
+    )
     done = await rt.append(
-        draft("budget_exceeded", data), draft("turn_completed", {"reason": "budget_exhausted"})
+        draft("budget_exceeded", data),
+        *answered,
+        draft("turn_completed", {"reason": "budget_exhausted"}),
     )
     return lost(done.error) if isinstance(done, Err) else None

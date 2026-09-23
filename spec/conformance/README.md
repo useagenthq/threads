@@ -121,7 +121,7 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 3. **Request verification.** Walk the `model_request` events in seq order. For each one, check in this order, and stop at the first failure (`render-verify-first-failure-wins`):
    1. C7: its `declared_prefix` equals the line 0 of its own settings epoch (`prefix_changed`).
    2. Its `request_ref` artifact exists and verifies, sha256 and byte length (`artifact_missing`, `artifact_corrupt`, at the request's seq).
-   3. Its body: re-render from the events before it (adding the instruction line for `purpose: compaction`). Every artifact a rendered part references must exist and verify (`artifact_missing`, `artifact_corrupt`, at the seq of the event carrying the part), and the bytes must equal the `request_ref` artifact (`request_hash_mismatch`).
+   3. Its body: re-render from the events before it (adding the instruction line for `purpose: compaction`; a side request that names a `compaction_requested` renders the history through that request and its own instruction line, `../schema/README.md` Render v1). Every artifact a rendered part references must exist and verify (`artifact_missing`, `artifact_corrupt`, at the seq of the event carrying the part), and the bytes must equal the `request_ref` artifact (`request_hash_mismatch`).
 4. Render the next request. It must equal `request.bytes` byte for byte, and its line 0 must equal `render.declared_prefix`.
 5. History prefix: each recorded turn request is a byte prefix of the next turn request unless a `compacted`, `context_edited`, `settings_changed` or denying `before_input` decision lies between. Compaction requests are skipped. This is the cache-reuse property, checked separately from C7.
 

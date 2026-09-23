@@ -1,0 +1,9 @@
+{
+  "name": "compaction-manual-range-mismatch-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A requested compaction that starts after the first input. Semantic rule 30: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

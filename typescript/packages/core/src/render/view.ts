@@ -216,6 +216,7 @@ function visible(e: KnownEvent): VisibleEvent | undefined {
     case "team_task_updated":
     case "team_message":
     case "context_preflight_blocked":
+    case "compaction_requested":
       return undefined;
     default:
       return assertNever(e);

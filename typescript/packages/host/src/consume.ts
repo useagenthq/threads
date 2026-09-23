@@ -236,7 +236,9 @@ async function applied(
     return "done";
   }
   const alongside = consumes(db, next.inbox_id);
-  const done = await control(log, main.value, item.principal, plan, alongside);
+  const done = await control(log, main.value, item.principal, plan, {
+    alongside,
+  });
   if (!done.ok) {
     if (done.error.code === "branch_busy") return "busy";
     consumed(db, next.inbox_id, 0);

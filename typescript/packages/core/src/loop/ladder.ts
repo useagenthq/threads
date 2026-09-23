@@ -4,6 +4,7 @@ import { refReader, render } from "../render";
 import { clear, compact, reactiveSpent, windowTokens } from "./compact";
 import { draft } from "./drafts";
 import type { Gated } from "./gates";
+import { requested } from "./manual";
 import { contextPolicy, tokens } from "./policy";
 import type { Session } from "./session";
 import { stepEvents } from "./turn";
@@ -62,8 +63,13 @@ export function estimate(s: Session): number {
   );
 }
 
-/** L1, L2 (then L3) and L4 before a turn request. */
+/**
+ * A requested compaction, then L1, L2 (then L3) and L4 before a turn request. The request runs
+ * first whatever the window or the breaker says: an operator asked for it.
+ */
 export async function ladder(s: Session): Promise<Gated> {
+  const asked = await requested(s);
+  if (asked !== undefined) return asked;
   const window = windowTokens(s);
   // A model with no declared window can't be measured against one.
   if (window <= 0) return undefined;

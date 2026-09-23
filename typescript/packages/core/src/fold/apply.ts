@@ -17,6 +17,8 @@ export function apply(fold: Fold, line: EventLine): void {
   fold.seq = event.seq;
   fold.epoch = event.epoch;
   fold.eventIds.add(event.event_id);
+  // The restore slot is open for one event only.
+  fold.restoreStyle = undefined;
   if (line.kind === "event") applyKnown(fold, line.event);
   fold.boundaries[event.seq] =
     fold.pending.size === 0 && fold.awaiting.size === 0;
@@ -70,6 +72,7 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "fork":
     case "compacted":
     case "compaction_failed":
+    case "compaction_requested":
       applyControl(fold, e);
       return;
     case "agent_spawned":
@@ -83,8 +86,10 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "schedule_fired":
       applyAgents(fold, e);
       return;
-    case "steer":
     case "injected":
+      if (e.data.source === "output_style") fold.outputStyle = e;
+      return;
+    case "steer":
     case "heartbeat":
     case "hook_decision":
     case "park_escalated":
@@ -157,6 +162,7 @@ type TurnEvent = EventOf<
 function applyTurn(fold: Fold, e: TurnEvent): void {
   switch (e.type) {
     case "user_input":
+      fold.firstInput ??= e;
       fold.turnOpen = true;
       fold.budgetBlocked = false;
       return;
@@ -166,7 +172,11 @@ function applyTurn(fold: Fold, e: TurnEvent): void {
       return;
     case "model_request": {
       const compaction = e.data.purpose === "compaction";
-      fold.requests.set(e.event_id, { compaction });
+      const cause = e.data.cause_event_id;
+      fold.requests.set(
+        e.event_id,
+        cause === undefined ? { compaction } : { compaction, cause },
+      );
       fold.awaiting.add(e.event_id);
       return;
     }
@@ -290,6 +300,7 @@ type ControlEvent = EventOf<
   | "fork"
   | "compacted"
   | "compaction_failed"
+  | "compaction_requested"
 >;
 
 function applyControl(fold: Fold, e: ControlEvent): void {
@@ -326,13 +337,35 @@ function applyControl(fold: Fold, e: ControlEvent): void {
     case "compacted":
       fold.ranges.push([e.data.from_seq, e.data.to_seq]);
       fold.compactionFailures = 0;
+      fold.restoreStyle = dropped(fold.outputStyle, e)
+        ? fold.outputStyle
+        : undefined;
+      answer(fold, e.data.cause_event_id);
       return;
     case "compaction_failed":
       fold.compactionFailures += 1;
+      answer(fold, e.data.cause_event_id);
+      return;
+    case "compaction_requested":
+      fold.compactionRequest = e;
       return;
     default:
       assertNever(e);
   }
+}
+
+function dropped(
+  style: EventOf<"injected"> | undefined,
+  compacted: EventOf<"compacted">,
+): boolean {
+  const { from_seq, to_seq } = compacted.data;
+  return style !== undefined && style.seq >= from_seq && style.seq <= to_seq;
+}
+
+/** An outcome naming the unanswered compaction request answers it (rule 30 checked the name). */
+function answer(fold: Fold, cause: string | undefined): void {
+  if (cause !== undefined && cause === fold.compactionRequest?.event_id)
+    fold.compactionRequest = undefined;
 }
 
 /** C4 without the expiry, which depends on the reader's clock. */

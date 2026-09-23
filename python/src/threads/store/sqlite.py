@@ -6,15 +6,16 @@ with the default ":memory:" path is the in-memory store tests use: the same code
 
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
+from functools import partial
 from pathlib import Path
 
 from pydantic import JsonValue
 
 from threads import VERSION
-from threads.log import BranchId, Event, ParseError, ThreadId
+from threads.log import BranchId, Event, EventId, ParseError, ThreadId
 from threads.log.digest import sha256_hex
 from threads.redaction import SecretInStoredBytesError, published
-from threads.render import Rendered, render
+from threads.render import ReadArtifact, Rendered, render
 from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.store import lease, sql
@@ -174,13 +175,14 @@ class SqliteStore:
         return await self._worker.call(lambda _: self._artifacts.get(sha256))
 
     async def render(
-        self, events: Sequence[Event], *, compaction: bool = False
+        self, events: Sequence[Event], *, compaction: bool = False, cause: EventId | None = None
     ) -> Ok[Rendered] | Err[ParseError]:
         """Render v1 of the next request after `events`, reading every artifact it references
         on the store's thread (a missing or changed one is an error, never a substitute)."""
-        return await self._worker.call(
-            lambda _: render(events, self._artifacts.get, compaction=compaction)
-        )
+        return await self.reading(partial(render, events, compaction=compaction, cause=cause))
+
+    async def reading[T](self, job: Callable[[ReadArtifact], T]) -> T:
+        return await self._worker.call(lambda _: job(self._artifacts.get))
 
     async def export(self, branch_id: BranchId) -> Ok[bytes] | Err[ParseError]:
         """The JSONL export of a branch, ending with its committed head checkpoint."""

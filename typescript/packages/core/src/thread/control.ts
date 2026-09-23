@@ -1,12 +1,11 @@
 import type { z } from "zod";
-import type { EventOf, ParkAddress } from "../fold/state";
+import type { ParkAddress } from "../fold/state";
 import type {
   BranchId,
   EventId,
   JsonObject,
   KnownEvent,
   ModelRef,
-  PermissionRule,
   Principal,
 } from "../log";
 import { principalKey } from "../log";
@@ -19,7 +18,6 @@ import {
   type Writer,
 } from "../store";
 import type { ChainEvent, LogError } from "../verify";
-import { suggestedRules } from "./pending";
 
 // The Thread control methods (spec/api.json Thread): each appends the actor's
 // event through the run's own writer when this process runs the branch, else under a short lease
@@ -39,7 +37,8 @@ export type ControlError = {
     | "no_open_question"
     | "not_parked"
     | "invalid_transition"
-    | "branch_busy";
+    | "branch_busy"
+    | "branch_not_runnable";
   readonly message: string;
 };
 
@@ -78,6 +77,17 @@ export function resumed(address: ParkAddress, cause: EventId): EventDraft {
 /** Host rows written in the same transaction as a control's record (a consumed inbox item). */
 export type Alongside = Parameters<Writer["append"]>[1];
 
+export type ControlOptions = {
+  readonly alongside?: Alongside;
+  /**
+   * Only between turns (compact, setOutputStyle): a run in progress, one parked on an approval
+   * or a question included, is branch_busy, and an inspection-only branch is branch_not_runnable.
+   */
+  readonly idle?: boolean;
+};
+
+const BUSY = "the thread has a turn in progress; try again when it ends";
+
 /**
  * Appends the plan's events in one transaction, through the live run's writer or under a lease
  * taken and handed back here.
@@ -90,23 +100,46 @@ export async function control(
     events: readonly KnownEvent[],
     writer: Writer,
   ) => Result<Plan, ControlError>,
-  alongside?: Alongside,
+  { alongside, idle = false }: ControlOptions = {},
 ): Promise<Controlled> {
   if (principal.tenant !== log.tenant)
     return fail("forbidden", "the principal is not of this thread's tenant");
   const live = liveWriter(branchId);
-  if (live !== undefined) return appendPlan(live, plan, alongside);
+  if (live !== undefined)
+    return idle ? fail("branch_busy", BUSY) : appendPlan(live, plan, alongside);
   const writer = log.acquire(branchId, HOLDER);
   if (!writer.ok)
-    return fail(
-      writer.error.code === "branch_busy" ? "branch_busy" : "not_found",
-      writer.error.message,
-    );
+    return fail(acquireCode(writer.error, idle), writer.error.message);
+  const planned = idle ? between(plan) : plan;
   try {
-    return appendPlan(writer.value, plan, alongside);
+    return appendPlan(writer.value, planned, alongside);
   } finally {
     writer.value.release();
   }
+}
+
+/** The existing controls report a branch they can't run as not_found; the idle ones say why. */
+function acquireCode(error: LogError, idle: boolean): ControlError["code"] {
+  if (error.code === "branch_busy") return "branch_busy";
+  return idle && error.code === "branch_not_runnable"
+    ? "branch_not_runnable"
+    : "not_found";
+}
+
+/** A parked run releases its lease, so the lease alone doesn't prove the thread is idle. */
+function between(
+  plan: (
+    events: readonly KnownEvent[],
+    writer: Writer,
+  ) => Result<Plan, ControlError>,
+): (
+  events: readonly KnownEvent[],
+  writer: Writer,
+) => Result<Plan, ControlError> {
+  return (events, writer) =>
+    writer.chain.fold.turnOpen
+      ? err({ code: "branch_busy", message: BUSY })
+      : plan(events, writer);
 }
 
 function appendPlan(
@@ -149,142 +182,8 @@ function codeOf(error: LogError): ControlError["code"] {
   }
 }
 
-function requested(
-  events: readonly KnownEvent[],
-  challengeId: string,
-): EventOf<"approval_requested"> | undefined {
-  return events.findLast(
-    (e): e is EventOf<"approval_requested"> =>
-      e.type === "approval_requested" && e.data.challenge_id === challengeId,
-  );
-}
-
-/** The challenge's request, if it is open and unexpired. */
-function openChallenge(
-  events: readonly KnownEvent[],
-  writer: Writer,
-  challengeId: string,
-  now: number,
-): Result<EventOf<"approval_requested">, ControlError> {
-  const asked = requested(events, challengeId);
-  const state = writer.chain.fold.approvals.get(challengeId);
-  if (asked === undefined || state === undefined)
-    return err({ code: "not_found", message: `no challenge ${challengeId}` });
-  if (state.consumed)
-    return err({
-      code: "approval_duplicate",
-      message: `challenge ${challengeId} is already answered`,
-    });
-  return asked.data.expires_at <= now
-    ? err({
-        code: "approval_expired",
-        message: `challenge ${challengeId} expired`,
-      })
-    : ok(asked);
-}
-
-/** approve and deny: the open challenge, answered once, before it expires. */
-export function decide(
-  challengeId: string,
-  principal: Principal,
-  now: number,
-  answer:
-    | {
-        readonly grant: true;
-        readonly rememberRule?: z.infer<typeof PermissionRule>;
-      }
-    | { readonly grant: false; readonly reason?: string },
-): (
-  events: readonly KnownEvent[],
-  writer: Writer,
-) => Result<Plan, ControlError> {
-  return (events, writer) => {
-    const open = openChallenge(events, writer, challengeId, now);
-    if (!open.ok) return open;
-    const asked = open.value;
-    const rule = answer.grant ? answer.rememberRule : undefined;
-    if (rule !== undefined && !suggested(events, asked.data.call_id, rule))
-      return err({
-        code: "invalid_request",
-        message: "remember_rule must be one of the challenge's suggested_rules",
-      });
-    const binding = {
-      challenge_id: challengeId,
-      call_id: asked.data.call_id,
-      args_hash: asked.data.args_hash,
-    };
-    const record = decision(answer, binding, principal);
-    const resume = resumeIf(writer, { kind: "approval", id: challengeId });
-    if (rule === undefined)
-      return ok(resume === undefined ? { record } : { record, after: resume });
-    const added = ruleAdded(rule, challengeId, principal);
-    return ok({
-      record,
-      after: (id) => [added, ...(resume === undefined ? [] : resume(id))],
-    });
-  };
-}
-
-function decision(
-  answer: { readonly grant: boolean; readonly reason?: string },
-  binding: {
-    readonly challenge_id: string;
-    readonly call_id: string;
-    readonly args_hash: string;
-  },
-  principal: Principal,
-): EventDraft {
-  return answer.grant
-    ? {
-        type: "approval_granted",
-        type_version: 1,
-        critical: true,
-        actor: { kind: "approver", principal },
-        data: binding,
-      }
-    : {
-        type: "approval_denied",
-        type_version: 1,
-        critical: true,
-        actor: { kind: "approver", principal },
-        data: {
-          ...binding,
-          ...(answer.reason === undefined ? {} : { reason: answer.reason }),
-        },
-      };
-}
-
-/** The approver's "allow for this thread" rule. */
-function ruleAdded(
-  rule: string,
-  challengeId: string,
-  principal: Principal,
-): EventDraft {
-  return {
-    type: "permission_rule_added",
-    type_version: 1,
-    critical: true,
-    actor: { kind: "approver", principal },
-    data: { rule, decision: "allow", challenge_id: challengeId },
-  };
-}
-
-function suggested(
-  events: readonly KnownEvent[],
-  callId: string,
-  rule: string,
-): boolean {
-  const call = events.find(
-    (e) => e.type === "tool_call" && e.data.call_id === callId,
-  );
-  return (
-    call?.type === "tool_call" &&
-    suggestedRules(call.data.name, call.data.input).includes(rule)
-  );
-}
-
 /** A resumed for `address` when the branch is parked on it. */
-function resumeIf(
+export function resumeIf(
   writer: Writer,
   address: ParkAddress,
 ): ((id: EventId) => readonly EventDraft[]) | undefined {

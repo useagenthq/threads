@@ -32,7 +32,9 @@ describe("golden: the declared prefix and tool schemas the model sees", () => {
 
   test("the compaction instruction line keeps the epoch's line 0", () => {
     const { events, artifacts } = caseEvents("compaction-summarizer-recorded");
-    const next = unwrap(render(events, refReader(artifacts), "SUMMARIZE"));
+    const next = unwrap(
+      render(events, refReader(artifacts), { instruction: "SUMMARIZE" }),
+    );
     const lines = text(next.bytes).trimEnd().split("\n");
     expect(lines[0]).toBe(text(next.prefix).trimEnd());
     expect(lines.at(-1)).toBe(

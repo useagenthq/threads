@@ -1,13 +1,13 @@
 import { assertNever } from "../assert-never";
 import { type EventOf, responseText } from "../fold/state";
 import { sha256Hex } from "../hash";
-import type { OutputPart, Usage } from "../log";
+import type { EventId, OutputPart, Usage } from "../log";
 import { assertModelAllowed, type Model, type ModelChunk } from "../model";
 import { type Unsupported, unsupported } from "../model/capabilities";
 import type { ProviderRejection } from "../model/protocol";
 import { parseRender } from "../model/render-lines";
 import { redactStream, SecretInProviderOutput } from "../redact";
-import { compactionInstruction, refReader, render } from "../render";
+import { compactionSide, refReader, render } from "../render";
 import { draft } from "./drafts";
 import { reserve, settleOpen } from "./ledger";
 import type { Session } from "./session";
@@ -31,7 +31,10 @@ export type Attempted =
    * nothing of it is stored, and the turn has ended with secret_in_provider_output.
    */
   | { readonly kind: "leaked" }
-  /** A covering budget refused the reservation; budget_exceeded is recorded. */
+  /**
+   * A covering budget refused the reservation: budget_exceeded is recorded, with a side
+   * request's compaction_failed in the same batch.
+   */
   | { readonly kind: "budget" }
   | { readonly kind: "halt"; readonly halt: Halt };
 
@@ -51,18 +54,23 @@ const halt = (code: Halt["code"], message: string): Attempted => ({
   halt: { code, message },
 });
 
+/**
+ * `cause` is the compaction_requested a side request summarizes for: the request names it, and
+ * its history ends there (Render v1).
+ */
 export async function attempt(
   s: Session,
   purpose: "turn" | "compaction",
   number: number,
+  cause?: EventId,
 ): Promise<Attempted> {
   const model = s.fold.model && s.config.models(s.fold.model);
   if (model === undefined)
     return halt("model_error", "no adapter for this settings epoch's model");
   const events = s.events;
-  const instruction =
-    purpose === "compaction" ? compactionInstruction(events) : undefined;
-  const rendered = render(events, refReader(s.artifacts), instruction);
+  const side =
+    purpose === "compaction" ? compactionSide(events, cause) : undefined;
+  const rendered = render(events, refReader(s.artifacts), side);
   if (!rendered.ok)
     return halt(
       rendered.error.code === "artifact_missing"
@@ -75,16 +83,12 @@ export async function attempt(
   if (refused !== undefined) return { kind: "unsupported", refused };
   // Reserved right before the request is appended, at the seq it will take.
   const over = reserve(s);
-  if (over !== undefined) {
-    const stopped = s.append(draft.budgetExceeded(over));
-    return stopped === undefined
-      ? { kind: "budget" }
-      : { kind: "halt", halt: stopped };
-  }
+  if (over !== undefined) return refuse(s, over, purpose, cause);
+  const tags = purpose === "compaction" ? sideTags(cause) : {};
   const stopped = s.append(
     draft.modelRequest({
       attempt: number,
-      ...(purpose === "compaction" ? { purpose } : {}),
+      ...tags,
       request_ref: s.store(bytes, "application/x-ndjson"),
       declared_prefix: { bytes: prefix.length, sha256: sha256Hex(prefix) },
     }),
@@ -95,9 +99,37 @@ export async function attempt(
   const fenced = s.fence();
   if (fenced !== undefined) return { kind: "halt", halt: fenced };
   const collected = await collect(s, model, requestId, bytes);
-  const recorded = record(s, requestId, collected);
+  const recorded = record(s, requestId, collected, cause);
   settleOpen(s);
   return recorded;
+}
+
+const sideTags = (
+  cause: EventId | undefined,
+): { readonly purpose: "compaction"; readonly cause_event_id?: EventId } =>
+  cause === undefined
+    ? { purpose: "compaction" }
+    : { purpose: "compaction", cause_event_id: cause };
+
+/** budget_exceeded; a side request's compaction_failed goes in the same batch. */
+function refuse(
+  s: Session,
+  over: Parameters<typeof draft.budgetExceeded>[0],
+  purpose: "turn" | "compaction",
+  cause: EventId | undefined,
+): Attempted {
+  const failed = draft.compactionFailed({
+    stage: "summary",
+    reason: "model_error",
+    ...(cause === undefined ? {} : { cause_event_id: cause }),
+  });
+  const stopped = s.append(
+    draft.budgetExceeded(over),
+    ...(purpose === "compaction" ? [failed] : []),
+  );
+  return stopped === undefined
+    ? { kind: "budget" }
+    : { kind: "halt", halt: stopped };
 }
 
 async function collect(
@@ -148,7 +180,12 @@ function delta(s: Session, requestId: string, text: string): void {
   if (text !== "") s.config.onDelta?.(requestId, text);
 }
 
-function record(s: Session, requestId: string, c: Collected): Attempted {
+function record(
+  s: Session,
+  requestId: string,
+  c: Collected,
+  cause: EventId | undefined,
+): Attempted {
   switch (c.kind) {
     case "done": {
       const stopped = s.append(
@@ -181,13 +218,26 @@ function record(s: Session, requestId: string, c: Collected): Attempted {
     }
     case "leaked": {
       // The response arrived (it may be billed) but none of it is kept. The abandonment and
-      // the turn's end are one batch: a crash between them can't leave the turn open.
+      // the turn's end are one batch: a crash between them can't leave the turn open. A
+      // requested compaction's side request is answered in it too, before the turn closes.
+      const answered =
+        cause === undefined
+          ? []
+          : [
+              draft.compactionFailed({
+                stage: "summary",
+                reason: "model_error",
+                request_event_id: requestId,
+                cause_event_id: cause,
+              }),
+            ];
       const stopped = s.append(
         draft.abandoned({
           request_event_id: requestId,
           provider_outcome: "unknown",
           reason: "provider_error",
         }),
+        ...answered,
         draft.turnCompleted("error", "secret_in_provider_output"),
       );
       return stopped === undefined ? c : { kind: "halt", halt: stopped };

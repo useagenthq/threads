@@ -1,8 +1,9 @@
-"""L3 restore: right after `compacted`, what the dropped range held that the
-agent still needs comes back as appended events, in a fixed order: skills, recently touched
-files, the todo list, a heartbeat of running work, then after_compact and session_start{compact}
-hook injections. Files are read from the sandbox as a framework read_only operation; everything
-restored renders as untrusted reference."""
+"""L3 restore: what the dropped range held that the agent still needs comes back as appended
+events, in the same batch as `compacted` and in a fixed order: the output style when the range
+holds the latest one, skills, recently touched files, the todo list, a heartbeat of running work.
+The after_compact and session_start{compact} hook injections follow in a later batch. Files are
+read from the sandbox as a framework read_only operation; everything restored but the style
+renders as untrusted reference."""
 
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
@@ -36,15 +37,22 @@ _FILE_TOOLS = frozenset({"read", "write", "edit"})
 BYTES_PER_TOKEN = 4
 
 
-async def restore(rt: Runtime, dropped: Sequence[Event]) -> Halt | None:
-    """Appends the restore events and the hooks' injections in one batch."""
+async def restore_drafts(rt: Runtime, dropped: Sequence[Event]) -> list[Draft]:
+    """What a compaction of `dropped` restores, built before `compacted` so both land in one
+    batch: a crash never leaves a summary without its restore."""
     limits = defaults.context(rt.fold).restore
-    drafts = [
+    return [
+        *_style(rt.events, dropped),
         *_skills(dropped, limits.skill_tokens, limits.skills_total_tokens),
         *await _files(rt, dropped, limits.max_files, limits.file_tokens),
         *_todos(rt.events),
         *_heartbeat(rt.events),
     ]
+
+
+async def restore_hooks(rt: Runtime) -> Halt | None:
+    """The context hooks after a compaction's batch, their injections in one append."""
+    drafts: list[Draft] = []
     failed = False
     points: tuple[tuple[HookName, tuple[object, ...]], ...] = (
         ("after_compact", (rt.writer.state(),)),
@@ -64,6 +72,21 @@ async def restore(rt: Runtime, dropped: Sequence[Event]) -> Halt | None:
         return None
     done = await rt.append(*drafts)
     return lost(done.error) if isinstance(done, Err) else None
+
+
+def _style(events: Sequence[Event], dropped: Sequence[Event]) -> list[Draft]:
+    """The latest output style, when the range drops it: the thread keeps replying in it."""
+    latest = next(
+        (e for e in reversed(events) if isinstance(e, InjectedEvent) and _is_style(e)), None
+    )
+    if latest is None or not dropped or not dropped[0].seq <= latest.seq <= dropped[-1].seq:
+        return []
+    data = to_json(latest.data)
+    return [draft("injected", data)] if isinstance(data, dict) else []
+
+
+def _is_style(event: InjectedEvent) -> bool:
+    return event.data.source == "output_style"
 
 
 def _skills(dropped: Sequence[Event], each_tokens: int, total_tokens: int) -> list[Draft]:

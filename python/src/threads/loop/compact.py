@@ -3,31 +3,36 @@ prompt is too long. Every layer is an appended event; nothing edits history.
 
 The summarizer call is an ordinary recorded attempt (`model_request{purpose: compaction}`), so
 it replays from the log like any request and counts toward cost. The proactive layers that
-call into it are loop/ladder.py.
+call into it are loop/ladder.py; a requested compaction is loop/manual.py.
 """
 
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from threads.hooks.runner import COMPACT, decision_draft
+from threads.hooks.runner import COMPACT, decision_draft, run_one
+from threads.hooks.types import wire_name
 from threads.log import (
     CallId,
+    CompactionRequestedEvent,
     ContextEditedEvent,
     Event,
     EventId,
+    HookDecisionEvent,
     ModelAttemptAbandonedEvent,
     ModelRequestEvent,
     ModelResponseEvent,
+    ModelResponseRecoveredEvent,
     TextPart,
     ThreadStartedEvent,
     ToolCallEvent,
     ToolResultEvent,
 )
 from threads.loop import attempt, defaults
-from threads.loop.drafts import draft
+from threads.loop.drafts import ActorKind, draft
 from threads.loop.gates import said, verdict
-from threads.loop.restore import restore
+from threads.loop.restore import restore_drafts, restore_hooks
 from threads.loop.runtime import Failed, Halt, Runtime, lost
 from threads.result import Err, Ok
 
@@ -35,6 +40,19 @@ if TYPE_CHECKING:
     from pydantic import JsonValue
 
 type Trigger = Literal["threshold", "reactive", "manual"]
+
+
+@dataclass(frozen=True, slots=True)
+class Answering:
+    """Who a compaction's outcome is for: its trigger, the compaction_requested it answers, and
+    recovery when recovery settles it."""
+
+    trigger: Trigger = "threshold"
+    cause: EventId | None = None
+    actor: ActorKind = "host"
+
+    def tag(self, data: "dict[str, JsonValue]") -> "dict[str, JsonValue]":
+        return data if self.cause is None else {**data, "cause_event_id": self.cause}
 
 
 async def reactive(rt: Runtime) -> Halt | None:
@@ -49,31 +67,57 @@ async def summarize(rt: Runtime, trigger: Trigger) -> Halt | None:
     """L2: before_compact, the recorded side request, `compacted`, then L3 restore."""
     bounds = await _range(rt)
     if bounds is None:
-        return await _failed(rt, "still_over_threshold", None)
-    denied = await _before_compact(rt)
+        return await failed(rt, "still_over_threshold", None, Answering(trigger))
+    denied = await before_compact(rt)
     if denied is not False:
         return denied
     return await _side_request(rt, bounds, trigger)
 
 
-async def _before_compact(rt: Runtime) -> Halt | Literal[False] | None:
+async def before_compact(
+    rt: Runtime, request: CompactionRequestedEvent | None = None
+) -> Halt | Literal[False] | None:
     """A deny (or a failure) is compaction_failed{hook, hook_denied}; a guide's text is its
-    decision's reason, which the side request's instruction line carries (Render v1)."""
-    if not rt.hooks.has("before_compact"):
-        return False
-    ran = await rt.hooks.run("before_compact", COMPACT, rt.writer.state())
-    drafts = [
-        decision_draft("before_compact", r, verdict(r), said(r, "text") or said(r, "reason"))
-        for r in ran
-    ]
-    denied = any(verdict(r) == "deny" for r in ran)
-    if denied:
-        failed = {"stage": "hook", "reason": "hook_denied"}
-        drafts.append(draft("compaction_failed", failed))
-    done = await rt.append(*drafts)
-    if isinstance(done, Err):
-        return lost(done.error)
-    return None if denied else False
+    decision's reason, which the side request's instruction line carries (Render v1). Each
+    decision is appended before the next extension runs, and every extension sees the state
+    from before the first call. For a request, an extension that already decided after it is not
+    asked again. False: go on to the side request."""
+    decided = _decided(rt.events, request)
+    state = rt.writer.state()
+    for bound in rt.hooks.defining("before_compact"):
+        if bound.extension in decided:
+            continue
+        ran = await run_one(bound, "before_compact", COMPACT, state)
+        decision = verdict(ran)
+        drafts = [
+            decision_draft(
+                "before_compact", ran, decision, said(ran, "text") or said(ran, "reason")
+            )
+        ]
+        denied = decision == "deny"
+        if denied:
+            cause = Answering(cause=None if request is None else request.event_id)
+            drafts.append(
+                draft("compaction_failed", cause.tag({"stage": "hook", "reason": "hook_denied"}))
+            )
+        done = await rt.append(*drafts)
+        if isinstance(done, Err):
+            return lost(done.error)
+        if denied:
+            return None
+    return False
+
+
+def _decided(events: Sequence[Event], request: CompactionRequestedEvent | None) -> set[str]:
+    """Extensions with a before_compact decision recorded after the request."""
+    if request is None:
+        return set()
+    hook = wire_name("before_compact")
+    return {
+        e.data.extension
+        for e in events
+        if isinstance(e, HookDecisionEvent) and e.seq > request.seq and e.data.hook == hook
+    }
 
 
 async def _side_request(rt: Runtime, bounds: tuple[Event, Event], trigger: Trigger) -> Halt | None:
@@ -85,13 +129,16 @@ async def _side_request(rt: Runtime, bounds: tuple[Event, Event], trigger: Trigg
             return sent
         outcome = rt.events[-1]
         if isinstance(outcome, ModelResponseEvent):
-            return await _compacted(rt, bounds, sent, outcome, trigger)
+            text = response_text(outcome)
+            if not text:
+                return await failed(rt, "empty_summary", sent, Answering(trigger))
+            return await summarized(rt, bounds, sent, text, Answering(trigger))
         too_long = isinstance(outcome, ModelAttemptAbandonedEvent) and (
             outcome.data.reason == "prompt_too_long"
         )
         if not too_long or side_attempt == 2:  # noqa: PLR2004 - the fallback retries once
             reason = "prompt_too_long" if too_long else "model_error"
-            return await _failed(rt, reason, sent)
+            return await failed(rt, reason, sent, Answering(trigger))
         halt = await clear(rt, 0, "compaction_fallback")
         if halt is not None:
             return halt
@@ -164,16 +211,14 @@ async def _range(rt: Runtime) -> tuple[Event, Event] | None:
     return None
 
 
-async def _compacted(
-    rt: Runtime,
-    bounds: tuple[Event, Event],
-    request_id: EventId,
-    response: ModelResponseEvent,
-    trigger: Trigger,
+def response_text(response: ModelResponseEvent | ModelResponseRecoveredEvent) -> str:
+    return "".join(p.text for p in response.data.content if isinstance(p, TextPart))
+
+
+async def summarized(
+    rt: Runtime, bounds: tuple[Event, Event], request_id: EventId, text: str, answering: Answering
 ) -> Halt | None:
-    text = "".join(p.text for p in response.data.content if isinstance(p, TextPart))
-    if not text:
-        return await _failed(rt, "empty_summary", request_id)
+    """`compacted` over `bounds` with its restore in the same batch; the context hooks follow."""
     raw = text.encode("utf-8")
     sha = await rt.store.put_artifact(raw)
     first, last = bounds
@@ -184,18 +229,21 @@ async def _compacted(
         "to_event_id": last.event_id,
         "summary_ref": {"sha256": sha, "bytes": len(raw), "media_type": "text/plain"},
         "summary_request_event_id": request_id,
-        "trigger": trigger,
+        "trigger": answering.trigger,
     }
-    done = await rt.append(draft("compacted", data))
+    dropped = [e for e in rt.events if first.seq <= e.seq <= last.seq]
+    restored = await restore_drafts(rt, dropped)
+    done = await rt.append(draft("compacted", answering.tag(data), answering.actor), *restored)
     if isinstance(done, Err):
         return lost(done.error)
-    dropped = [e for e in rt.events if first.seq <= e.seq <= last.seq]
-    return await restore(rt, dropped)
+    return await restore_hooks(rt)
 
 
-async def _failed(rt: Runtime, reason: str, request_id: EventId | None) -> Halt | None:
-    data: dict[str, str] = {"stage": "summary", "reason": reason}
+async def failed(
+    rt: Runtime, reason: str, request_id: EventId | None, answering: Answering
+) -> Halt | None:
+    data: dict[str, JsonValue] = {"stage": "summary", "reason": reason}
     if request_id is not None:
         data["request_event_id"] = request_id
-    done = await rt.append(draft("compaction_failed", data))
+    done = await rt.append(draft("compaction_failed", answering.tag(data), answering.actor))
     return lost(done.error) if isinstance(done, Err) else None

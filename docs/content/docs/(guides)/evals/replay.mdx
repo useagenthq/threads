@@ -1,0 +1,115 @@
+---
+title: "Replay"
+description: "Check that your real threads still reproduce, byte for byte, after an upgrade. No model calls, no API keys, no cost."
+icon: Repeat
+---
+
+Every model request a thread makes is recorded: the exact bytes that were sent, and the events they were built from. `replay()` rebuilds each of those requests from the log with the code you are running now and checks that the bytes match. It calls no model and no tool, starts no sandbox and writes nothing, so it is free and safe to run on production data.
+
+Use it as the first step of your evals: before you stub-run saved cases or pay for a judge, prove the new build still sees your threads the way the old one did.
+
+## Replay one thread
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { openThread, sqlite } from "@threads/core";
+
+const store = sqlite("./threads-data");
+const opened = await openThread(store, threadId);
+if (!opened.ok) throw new Error(opened.error.message);
+
+const replayed = await opened.value.replay();
+if (!replayed.ok) {
+  console.error(replayed.error.code, "at seq", replayed.error.seq);
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads import open_thread, sqlite
+from threads.result import Err
+
+store = sqlite("./threads-data")
+opened = await open_thread(store, thread_id)
+if isinstance(opened, Err):
+    raise SystemExit(opened.error.message)
+
+replayed = await opened.value.replay()
+if isinstance(replayed, Err):
+    print(replayed.error.code, "at seq", replayed.error.seq)
+```
+
+</Tab>
+</Tabs>
+
+A thread that made no model request replays trivially. A fork replays its parent's history too.
+
+## Run it in CI
+
+Keep a corpus of real threads (export them with `threads export`, or point at a copy of a production store) and replay every one on each pull request. A failure names the thread, the check that failed and the seq of the request, so you can open that request in the [timeline](/docs/evals/timeline).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { expect, test } from "bun:test";
+import { openThread, sqlite } from "@threads/core";
+import { corpus } from "./corpus"; // your list of thread ids
+
+const store = sqlite("./fixtures/threads");
+
+for (const id of corpus) {
+  test(`thread ${id} still reproduces`, async () => {
+    const opened = await openThread(store, id);
+    if (!opened.ok) throw new Error(opened.error.message);
+    const replayed = await opened.value.replay();
+    expect(replayed).toEqual({ ok: true, value: undefined });
+  });
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+import pytest
+
+from threads import open_thread, sqlite
+from threads.result import Ok
+
+from corpus import CORPUS  # your list of thread ids
+
+STORE = sqlite("./fixtures/threads")
+
+
+@pytest.mark.parametrize("thread_id", CORPUS)
+async def test_thread_still_reproduces(thread_id: str) -> None:
+    opened = await open_thread(STORE, thread_id)
+    assert isinstance(opened, Ok), opened
+    assert isinstance(await opened.value.replay(), Ok)
+```
+
+</Tab>
+</Tabs>
+
+The TypeScript and Python packages write the same bytes, so a corpus recorded by one replays in the other.
+
+## What a failure means
+
+| Code | What changed |
+|---|---|
+| `prefix_changed` | The request's first line (system prompt, tools, model and adapter settings) no longer matches the settings it was recorded under. Usually an adapter or tool-schema rendering change. |
+| `request_hash_mismatch` | The rest of the request renders differently: how messages, tool results, summaries or instructions are laid out has changed. |
+| `artifact_missing` | A stored blob the request needs (a tool result, an image, a summary) is gone from the store. |
+| `artifact_corrupt` | A stored blob is there but its bytes changed. |
+| `log_corrupt`, `unsupported_format`, `unsupported_critical_event` | The log itself can't be read: it was edited, or it was written by a newer version of threads. |
+
+The first failure wins: `replay()` stops at the earliest request that doesn't reproduce and reports its `seq`.
+
+<Callout>
+Replay checks the requests, not the answers. To check that the agent still behaves well on the same inputs, [fork](/docs/evals/fork) a thread in stub mode or run a [saved case](/docs/evals/saved-cases).
+</Callout>

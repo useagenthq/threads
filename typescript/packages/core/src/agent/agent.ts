@@ -40,6 +40,11 @@ export type AgentOptions<Deps, Output> = {
   /** Structured final output; absent: the output is the final text. */
   readonly output?: z.ZodType<Output>;
   readonly outputRetries?: number;
+  /**
+   * Named instructions an operator can switch a thread to with Thread.setOutputStyle, pinned
+   * with the config. Keys and texts are non-empty.
+   */
+  readonly outputStyles?: Readonly<Record<string, string>>;
   /** Fallback models in order. */
   readonly fallback?: readonly Model[];
   readonly permissions?: Partial<z.infer<typeof PermissionsPolicy>>;
@@ -151,6 +156,7 @@ function build<Deps, Output>(
     bindable: tools,
     output: options.output,
     outputRetries: options.outputRetries ?? 2,
+    outputStyles: options.outputStyles ?? {},
     fallback: options.fallback ?? [],
     permissions: options.permissions ?? {},
     budget: options.budget,

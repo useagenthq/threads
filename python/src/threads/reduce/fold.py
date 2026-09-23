@@ -10,6 +10,7 @@ from typing import Literal
 from threads.log import (
     BranchId,
     CallId,
+    CompactionRequestedEvent,
     ErrorCode,
     Event,
     EventId,
@@ -26,6 +27,7 @@ from threads.log import (
     ToolResultLateData,
     ToolSpec,
     UnknownEvent,
+    UserInputEvent,
 )
 
 type EffectStatus = Literal["begun", "committed", "unknown", "resolved"]
@@ -61,6 +63,12 @@ class Fold:
     over_budget: bool = False
     open_requests: set[EventId] = field(default_factory=set[EventId])
     compaction_requests: set[EventId] = field(default_factory=set[EventId])
+    causes: dict[EventId, EventId] = field(default_factory=dict[EventId, EventId])
+    """Side request -> the compaction_requested it names."""
+    compaction_request: CompactionRequestedEvent | None = None
+    """The request no compacted or compaction_failed has answered yet (rule 30)."""
+    first_input: UserInputEvent | None = None
+    """The first user_input of the resolved chain: where a requested compaction starts."""
     responses: dict[EventId, Response] = field(default_factory=dict[EventId, Response])
     calls: dict[CallId, ToolCallEvent] = field(default_factory=dict[CallId, ToolCallEvent])
     pending: list[CallId] = field(default_factory=list[CallId])

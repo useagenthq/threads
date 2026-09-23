@@ -1,0 +1,9 @@
+{
+  "name": "output-style-by-model-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A style the model injected. Semantic rule 29: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

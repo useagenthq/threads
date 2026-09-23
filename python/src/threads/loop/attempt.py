@@ -28,10 +28,15 @@ from threads.store import Draft
 type Purpose = Literal["turn", "compaction"]
 
 
-async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Failed | EventId | None:
+async def request(
+    rt: Runtime, attempt: int, purpose: Purpose = "turn", cause: EventId | None = None
+) -> Failed | EventId | None:
     """Sends one attempt and records its outcome. Returns the model_request's event id, or None
-    when the capability pre-check ended the turn before any model_request."""
-    rendered = await rt.store.render(rt.events, compaction=purpose == "compaction")
+    when the capability pre-check ended the turn before any model_request. `cause` is the
+    compaction_requested a side request summarizes for: that side request never ends the turn,
+    so a refusal before any request is `model_error` for its caller to answer."""
+    compaction = purpose == "compaction"
+    rendered = await rt.store.render(rt.events, compaction=compaction, cause=cause)
     if isinstance(rendered, Err):
         code = rendered.error.code
         if code in ("artifact_missing", "artifact_corrupt"):
@@ -41,12 +46,10 @@ async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Faile
     model = epoch_model(rt)
     if model is None:
         return Failed("model_error", "no adapter for this settings epoch's model")
-    unsupported = mismatch(body, model.info)
-    if unsupported is not None:
-        data = {"reason": "error", "code": unsupported}
-        ended = await rt.append(draft("turn_completed", data))
-        return lost(ended.error) if isinstance(ended, Err) else None
-    refused = await budget.reserve(rt)
+    refused = await _unsupported(rt, body, model, cause)
+    if refused is not False:
+        return refused
+    refused = await budget.reserve(rt, _answer(compaction, cause))
     if refused is not None or not rt.fold.in_turn:
         return refused
     sha = await rt.store.put_artifact(body)
@@ -55,21 +58,47 @@ async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Faile
         "declared_prefix": {"bytes": len(line0), "sha256": sha256_hex(line0)},
         "request_ref": {"sha256": sha, "bytes": len(body), "media_type": "application/x-ndjson"},
     }
-    if purpose == "compaction":
+    if compaction:
         data["purpose"] = "compaction"
+    if cause is not None:
+        data["cause_event_id"] = cause
     appended = await rt.append(draft("model_request", data))
     if isinstance(appended, Err):
         return lost(appended.error)
     event = appended.value[0]
     if not isinstance(event, ModelRequestEvent):
         raise AssertionError("a model_request draft stored another type")
-    sent = await _dispatch(rt, model, event, body)
+    sent = await _dispatch(rt, model, event, body, cause)
     await budget.settle(rt)
     return sent
 
 
+async def _unsupported(
+    rt: Runtime, body: bytes, model: Model, cause: EventId | None
+) -> Failed | Literal[False] | None:
+    """The capability pre-check: False when the model can take the request. Otherwise the turn
+    ends error, or for a requested compaction's side request its caller answers model_error."""
+    unsupported = mismatch(body, model.info)
+    if unsupported is None:
+        return False
+    if cause is not None:
+        return Failed("model_error", f"the model can't take this request: {unsupported}")
+    ended = await rt.append(draft("turn_completed", {"reason": "error", "code": unsupported}))
+    return lost(ended.error) if isinstance(ended, Err) else None
+
+
+def _answer(compaction: bool, cause: EventId | None) -> Draft | None:
+    """A side request's compaction_failed, recorded with a budget refusal."""
+    if not compaction:
+        return None
+    data: dict[str, JsonValue] = {"stage": "summary", "reason": "model_error"}
+    if cause is not None:
+        data["cause_event_id"] = cause
+    return draft("compaction_failed", data)
+
+
 async def _dispatch(
-    rt: Runtime, model: Model, event: ModelRequestEvent, body: bytes
+    rt: Runtime, model: Model, event: ModelRequestEvent, body: bytes, cause: EventId | None
 ) -> Failed | EventId | None:
     """Sends the durable request and records its outcome in one batch."""
     guard.check(model)
@@ -81,10 +110,10 @@ async def _dispatch(
     if isinstance(outcome, Rejected) and outcome.reason == "stale_epoch":
         # The adapter's fence refused at its send point: this writer can't append anything.
         return Failed("branch_busy", "the lease moved before the send")
-    recorded = await rt.append(*outcome_drafts(rt, event.event_id, outcome))
+    recorded = await rt.append(*outcome_drafts(rt, event.event_id, outcome, cause=cause))
     if isinstance(recorded, Err):
         return lost(recorded.error)
-    return None if _refused(outcome) else event.event_id
+    return None if cause is None and _refused(outcome) else event.event_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,9 +150,14 @@ async def _collect(rt: Runtime, model: Model, req: ModelRequest) -> Outcome:
     return None
 
 
-def outcome_drafts(rt: Runtime, request_id: EventId, outcome: Outcome) -> Sequence[Draft]:
+def outcome_drafts(
+    rt: Runtime, request_id: EventId, outcome: Outcome, *, cause: EventId | None = None
+) -> Sequence[Draft]:
     """The events one attempt's outcome appends, in one batch: the response with its tool calls,
-    or the abandonment."""
+    or the abandonment. A send-time refusal ends the turn unless the attempt is a requested
+    compaction's side request (`cause`), which its caller answers. A refused leak ends the turn
+    either way, and answers `cause` in the same batch."""
+    ends_turn = cause is None
     match outcome:
         case ModelResponse():
             return response_drafts(rt, request_id, outcome)
@@ -139,7 +173,8 @@ def outcome_drafts(rt: Runtime, request_id: EventId, outcome: Outcome) -> Sequen
                 "billing": "not_billed",
             }
             ended = {"reason": "error", "code": code}
-            return [draft("model_attempt_abandoned", data), draft("turn_completed", ended)]
+            abandoned = draft("model_attempt_abandoned", data)
+            return [abandoned, draft("turn_completed", ended)] if ends_turn else [abandoned]
         case Rejected():
             return [draft("model_attempt_abandoned", _rejection(request_id, outcome))]
         case Leaked():
@@ -150,7 +185,9 @@ def outcome_drafts(rt: Runtime, request_id: EventId, outcome: Outcome) -> Sequen
                 "reason": "provider_error",
             }
             ended = {"reason": "error", "code": "secret_in_provider_output"}
-            return [draft("model_attempt_abandoned", data), draft("turn_completed", ended)]
+            answered = [] if cause is None else [_leak_answer(request_id, cause)]
+            abandoned = draft("model_attempt_abandoned", data)
+            return [abandoned, *answered, draft("turn_completed", ended)]
         case None:
             data: dict[str, JsonValue] = {
                 "request_event_id": request_id,
@@ -158,6 +195,17 @@ def outcome_drafts(rt: Runtime, request_id: EventId, outcome: Outcome) -> Sequen
                 "reason": "stream_broken",
             }
             return [draft("model_attempt_abandoned", data)]
+
+
+def _leak_answer(request_id: EventId, cause: EventId) -> Draft:
+    """The requested compaction's outcome when its summary was refused as a leak."""
+    data: dict[str, JsonValue] = {
+        "stage": "summary",
+        "reason": "model_error",
+        "request_event_id": request_id,
+        "cause_event_id": cause,
+    }
+    return draft("compaction_failed", data)
 
 
 def _refused(outcome: Outcome) -> bool:

@@ -39,6 +39,7 @@ function agent(options: {
   git?: { credential: Secret; forgeUrl?: string; apiUrl?: string };
   computer?: boolean;
   lsp?: { languages: readonly string[] };
+  outputStyles?: Record<string, string>;
 }): Agent<Deps, Output>
 ```
 
@@ -74,6 +75,7 @@ def agent(
     git: {credential: Secret, forge_url?: str, api_url?: str} | None = None,
     computer: bool = False,
     lsp: {languages: Sequence[str]} | None = None,
+    output_styles: Mapping[str, str] = {},
 ) -> Agent[Deps, Output]
 ```
 
@@ -208,6 +210,10 @@ def agent(
 
 <Field name="lsp.languages" type={"readonly string[]"} required>
   The languages lsp serves: typescript, python, go or rust. Any other name is a setup error unknown_preset.
+</Field>
+
+<Field name="outputStyles / output_styles" type={"Record<string, string>"} default={"{}"}>
+  Named instructions an operator can switch a thread to with Thread.setOutputStyle. Pinned with the agent config; keys and texts non-empty. Omitted: no styles.
 </Field>
 
 ## Returns

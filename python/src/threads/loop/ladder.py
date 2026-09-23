@@ -13,7 +13,7 @@ from threads.log import (
     ModelRequestEvent,
     ModelResponseEvent,
 )
-from threads.loop import compact, defaults
+from threads.loop import compact, defaults, manual
 from threads.loop.drafts import draft
 from threads.loop.estimate import estimate
 from threads.loop.gates import AGAIN, Gated, append
@@ -23,7 +23,12 @@ from threads.result import Err
 
 
 async def fit(rt: Runtime) -> Gated:
-    """None when the next request may be sent as rendered now; AGAIN after a layer appended."""
+    """None when the next request may be sent as rendered now; AGAIN after a layer appended.
+    A requested compaction runs first, whatever the window or the breaker says: an operator
+    asked for it. Once it is answered the loop decides again, so a cancel that landed during the
+    side attempt is handled before any turn request."""
+    if rt.fold.compaction_request is not None:
+        return await manual.requested(rt) or AGAIN
     rendered = await rt.store.render(rt.events)
     if isinstance(rendered, Err):
         return None  # the attempt renders again and reports the error

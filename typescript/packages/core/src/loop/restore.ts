@@ -8,10 +8,11 @@ import { contextPolicy } from "./policy";
 import type { Session } from "./session";
 import type { Halt } from "./types";
 
-// L3 restore, appended right after `compacted`, in this order: skills from
-// the dropped range, recently touched files, the todo list, a heartbeat of running work, then
-// after_compact and session_start{compact} injections. Everything restored is an event, so the
-// next request renders it and a replay reads it back.
+// L3 restore, appended in the same batch as `compacted`, in this order: the output style when
+// the dropped range holds the latest one, skills from the range, recently touched files, the todo
+// list, a heartbeat of running work. after_compact and session_start{compact} injections follow
+// in later appends. Everything restored is an event, so the next request renders it and a replay
+// reads it back.
 
 type Injected = EventOf<"injected">;
 
@@ -20,25 +21,43 @@ const FILE_TOOLS: ReadonlySet<string> = new Set(["read", "write", "edit"]);
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 const encoder = new TextEncoder();
 
-export async function restore(
+/**
+ * What a compaction of `from..to` restores, built before `compacted` is appended so both land in
+ * one batch: a crash never leaves a summary without its restore.
+ */
+export async function restoreDrafts(
   s: Session,
-  compacted: EventOf<"compacted">,
-): Promise<Halt | undefined> {
-  const { from_seq, to_seq } = compacted.data;
-  const dropped = s.events.filter((e) => e.seq >= from_seq && e.seq <= to_seq);
-  const drafts = [
+  from: number,
+  to: number,
+): Promise<readonly EventDraft[]> {
+  const dropped = s.events.filter((e) => e.seq >= from && e.seq <= to);
+  return [
+    ...style(s, from, to),
     ...skills(s, dropped),
     ...(await files(s, dropped)),
     ...todos(s),
     ...heartbeat(s),
   ];
-  const stopped = drafts.length === 0 ? undefined : s.append(...drafts);
-  if (stopped !== undefined) return stopped;
+}
+
+/** The context hooks after a compaction's batch. */
+export async function restoreHooks(s: Session): Promise<Halt | undefined> {
   // Context hooks feed the next request; a failure is recorded and restores nothing more.
   const after = await context(s, "after_compact", [s.state()]);
   if (after !== undefined && after !== "failed") return after;
   const started = await context(s, "session_start", ["compact"]);
   return started === "failed" ? undefined : started;
+}
+
+/** The latest output style, when the range drops it: the thread keeps replying in it. */
+function style(s: Session, from: number, to: number): EventDraft[] {
+  const latest = s.events.findLast(
+    (e): e is Injected =>
+      e.type === "injected" && e.data.source === "output_style",
+  );
+  return latest !== undefined && latest.seq >= from && latest.seq <= to
+    ? [draft.injected(latest.data)]
+    : [];
 }
 
 /** Each skill's latest injection in the range, capped per skill and in total. */

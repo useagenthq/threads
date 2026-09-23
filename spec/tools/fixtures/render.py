@@ -279,13 +279,19 @@ BUILDERS: dict[str, Callable[[_View, Obj], Obj | None]] = {
 
 
 def render(
-    events: list[Obj], artifacts: dict[str, bytes], instruction: str | None = None
+    events: list[Obj],
+    artifacts: dict[str, bytes],
+    instruction: str | None = None,
+    through: int | None = None,
 ) -> tuple[bytes, bytes]:
-    """Returns (request bytes, declared prefix bytes = line 0). instruction: compaction request."""
+    """Returns (request bytes, declared prefix bytes = line 0). instruction: compaction request.
+    through: a requested compaction's history ends at its request's seq."""
     v = _View(events, artifacts)
     line0 = v.line0()
     out = [line0]
-    for _, build in v.walk():
+    for e, build in v.walk():
+        if through is not None and num(e["seq"]) > through:
+            continue
         m = build()
         if m is not None:
             out.append(canonical(m) + b"\n")

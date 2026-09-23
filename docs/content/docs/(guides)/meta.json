@@ -49,6 +49,7 @@
     "production/cli",
     "---[FlaskConical]Evals & testing---",
     "evals/timeline",
+    "evals/replay",
     "evals/fork",
     "evals/saved-cases",
     "evals/testing"

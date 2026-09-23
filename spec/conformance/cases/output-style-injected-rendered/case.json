@@ -1,0 +1,9 @@
+{
+  "name": "output-style-injected-rendered",
+  "family": "context_compaction",
+  "kind": "render",
+  "description": "Thread.setOutputStyle appends the pinned style text as injected{source: output_style, trust: trusted_instruction}. It renders as a <context> user line after line 0, and line 0 is byte-equal before and after it (C7 within one epoch).",
+  "clock": {
+    "now": 1790000060000
+  }
+}
