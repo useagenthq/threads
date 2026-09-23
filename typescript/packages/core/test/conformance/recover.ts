@@ -83,6 +83,9 @@ async function run(
   const stubs =
     c.scripts.stubs === undefined ? undefined : recordedStubs(c.scripts.stubs);
   const output = writer.chain.fold.policy?.output;
+  const started = knownEvents(writer.chain).find(
+    (e) => e.type === "thread_started",
+  );
   const config: LoopConfig = {
     models: () => model,
     tools: sandbox.tools,
@@ -99,6 +102,11 @@ async function run(
     },
     principal: ALICE,
     skewMarginMs: 1000,
+    // The thread is its own team lead; no subagents (spec/conformance/README.md, recover 5).
+    agents: {
+      name: started?.type === "thread_started" ? started.data.agent_name : "",
+      subagent: () => undefined,
+    },
     ...(stubs === undefined ? {} : { stub: stubs }),
     ...(output === undefined
       ? {}
