@@ -19,17 +19,15 @@ What this adapter declares (Daytona 0.216, container sandboxes; ):
   snapshot is disruptive: the parent's processes don't survive it. Capture class filesystem;
   no provider expiry is declared. A snapshot can't be found by key with its manifest, so
   snapshot lookup is none. Restore verifies the manifest and deletes a mismatched child.
-- The manifest a snapshot returns is the image's own: a verifier sandbox is
-  cold-started from the snapshot, measured and deleted. Measuring the parent before or after
-  would miss a guest that writes just before the stop and restores the file just after the
-  start. The verifier has a short TTL, so one whose delete fails still dies on its own.
+- The manifest a snapshot returns is the parent's just before the stop: a claim. Core proves
+  it against the image by a ledgered restore before recording the snapshot, and refuses one
+  whose image differs (thread/snapshot.py, ).
 """
 
 import asyncio
 import os
 import re
 from collections.abc import Sequence
-from dataclasses import replace
 from typing import TYPE_CHECKING, Literal
 
 import aiohttp
@@ -59,7 +57,6 @@ if TYPE_CHECKING:
 
 DEFAULT_API = "https://app.daytona.io/api"
 _PROVIDER = re.compile(r"[a-z][a-z0-9_]{0,63}")
-_VERIFIER_TTL_MINUTES = 60
 _PUMP_GRACE_S = 0.25
 
 
@@ -136,18 +133,6 @@ class DaytonaSandbox:
             return Ok(child)
         await child.close(context)
         return Err(SandboxError("snapshot_manifest_mismatch", f"{snapshot_id}: manifest"))
-
-    async def verify(
-        self, snapshot_id: str, operation_key: str, context: SandboxContext
-    ) -> "Ok[list[ManifestEntry]] | Err[SandboxError]":
-        """The snapshot image's own manifest, from a verifier cold-started from it."""
-        placed = replace(self._placed, ttl_minutes=_VERIFIER_TTL_MINUTES, block_network=True)
-        made = await self._measured(snapshot_id, f"threads-verify-{operation_key}", placed, context)
-        if isinstance(made, Err):
-            return made
-        verifier, tree = made.value
-        await verifier.close(context)
-        return Ok(tree)
 
     async def lookup(
         self, operation_key: str, context: SandboxContext
@@ -227,7 +212,7 @@ class DaytonaSandbox:
             wait_s=self._wait_s,
             tasks=self._pumps,
         )
-        return DaytonaSession(dto.id, self._name, self._controls(), toolbox, self.verify)
+        return DaytonaSession(dto.id, self._name, self._controls(), toolbox)
 
     def _http(self) -> aiohttp.ClientSession:
         if self._session is None:

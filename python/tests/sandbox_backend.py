@@ -79,6 +79,8 @@ class FakeBackend:
     fail_releases: int = 0
     lose_creates: int = 0
     """Lose the answer of this many plain creates, after creating."""
+    crash_restores: int = 0
+    """The host dies right after this many restores created their sandbox."""
     envs: list[dict[str, str]] = field(default_factory=list[dict[str, str]])
     """Every environment handed to a sandbox: at create and at every exec."""
     argvs: list[tuple[str, ...]] = field(default_factory=list[tuple[str, ...]])
@@ -119,6 +121,9 @@ class FakeBackend:
         ident = snap.script["restore_sandbox_id"] if snap.script else self._name("sbx")
         box = Box(ident, key, dict(snap.files), snap.manifest)
         self.boxes[box.id] = box
+        if self.crash_restores:
+            self.crash_restores -= 1
+            raise FakeCrashError(f"the host died after restoring {snapshot_id}")
         match snap.script.get("restore_response") if snap.script else None:
             case "lost":
                 raise LostAnswerError(box.id)

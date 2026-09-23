@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 
-from sandbox_backend import Box, FakeBackend
+from sandbox_backend import FakeBackend
 from sandbox_kit import OPEN, KitContext
 
 from threads.adapters.sandboxes.posix import collect
@@ -236,30 +236,6 @@ async def a_snapshot_release_is_idempotent(h: Harness) -> None:
     assert await h.sandbox.release(snap.value.snapshot_id, OPEN) == Ok("already_gone")
 
 
-async def the_snapshot_manifest_describes_the_captured_image(h: Harness) -> None:
-    """a guest that writes A->B just before the capture and B->A just after it
-    leaves the parent looking unchanged while the image holds B. The manifest hash a snapshot
-    returns must be the image's, or the snapshot is refused."""
-    if not h.sandbox.info.capture_classes:
-        return
-    s = await session(h)
-    path = "/workspace/a.txt"
-    assert await s.upload(path, b"A", OPEN) == Ok(None)
-
-    def write(data: bytes) -> Callable[[Box], None]:
-        def to(box: Box) -> None:
-            box.files[path] = data
-
-        return to
-
-    h.backend.around_capture = (write(b"B"), write(b"A"))
-    snap = await s.snapshot("aba", OPEN)
-    if isinstance(snap, Ok):
-        image = h.backend.snaps[snap.value.snapshot_id].manifest
-        assert image is not None
-        assert snap.value.manifest_hash == manifest_hash(image)
-
-
 CHECKS: tuple[Check, ...] = (
     exec_streams_output_and_exit_codes,
     every_byte_reaches_its_own_stream,
@@ -272,5 +248,4 @@ CHECKS: tuple[Check, ...] = (
     a_lost_create_is_found_by_its_key,
     attach_then_close_releases,
     a_snapshot_release_is_idempotent,
-    the_snapshot_manifest_describes_the_captured_image,
 )

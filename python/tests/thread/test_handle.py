@@ -115,8 +115,10 @@ def test_fork_restores_an_isolated_sandbox_and_the_child_runs() -> None:
         assert await restored.value.download("/workspace/a.txt", OPEN) == Ok(b"v1")
         assert await restored.value.upload("/workspace/a.txt", b"v2", OPEN) == Ok(None)
         assert await w.session.download("/workspace/a.txt", OPEN) == Ok(b"v1")
+        # The image's verification sandbox was ledgered and released.
         assert [(r.kind, r.state) for r in await w.sq.ledger.rows()] == [
             ("snapshot", "live"),
+            ("sandbox", "released"),
             ("sandbox", "live"),
         ]
         # This process's runs continue the child it forked.
@@ -132,8 +134,9 @@ def test_fork_without_a_sandbox_adapter_creates_nothing() -> None:
         refused = await thread.fork(snap.event_id)
         assert isinstance(refused, Err)
         assert (refused.error.code, refused.error.seq) == ("sandbox_required", snap.seq)
-        assert w.sandbox.creates == 1
-        assert [r.kind for r in await w.sq.ledger.rows()] == ["snapshot"]
+        # The snapshot's image verification, and nothing for the fork.
+        assert (w.sandbox.creates, w.sandbox.releases) == (2, 1)
+        assert [r.kind for r in await w.sq.ledger.rows()] == ["snapshot", "sandbox"]
 
     run(body)
 

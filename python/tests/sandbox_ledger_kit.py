@@ -6,16 +6,18 @@ gc, one release per row however many gc runs race."""
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from sandbox_backend import FakeBackend
+from sandbox_backend import Box, FakeBackend
 from sandbox_contract import Make
 
 from threads.log import BranchId, ThreadId
 from threads.result import Err, Ok
 from threads.sandbox import Sandbox, SandboxError, SandboxSession
+from threads.sandbox.fake import FakeCrashError
 from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, gc, release_session
 from threads.store import SqliteStore, Writer
 from threads.store.lease import TTL_MS
 from threads.store.resources import Resource
+from threads.thread.snapshot import take_snapshot
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000001")
@@ -149,10 +151,92 @@ async def a_stale_owner_can_not_release(w: World) -> None:
     assert w.backend.releases == 0
 
 
+async def _parent(w: World) -> SandboxSession:
+    _, session = await w.acquire()
+    assert await session.upload("/workspace/a.txt", b"A", w.by().context) == Ok(None)
+    return session
+
+
+async def a_snapshot_is_recorded_once_a_ledgered_restore_verifies_it(w: World) -> None:
+    """the image's proof is a scratch sandbox with its own ledger row, released
+    after it verified."""
+    if not w.sandbox.info.capture_classes:
+        return
+    parent = await _parent(w)
+    taken = await take_snapshot(w.store, w.writer, w.sandbox, parent, w.clock)
+    assert isinstance(taken, Ok), taken
+    assert [(r.kind, r.state) for r in await w.store.ledger.rows()] == [
+        ("sandbox", "live"),
+        ("snapshot", "live"),
+        ("sandbox", "released"),
+    ]
+    assert [b.id for b in w.backend.boxes.values() if b.alive] == [parent.id]
+
+
+async def an_image_that_differs_from_its_manifest_is_refused(w: World) -> None:
+    """The A-B-A schedule: A->B just before the capture, B->A just after. The parent looks
+    unchanged; the image holds B. The snapshot is refused and released, and so is the scratch."""
+    if not w.sandbox.info.capture_classes:
+        return
+    parent = await _parent(w)
+
+    def write(data: bytes) -> Callable[[Box], None]:
+        def to(box: Box) -> None:
+            box.files["/workspace/a.txt"] = data
+
+        return to
+
+    w.backend.around_capture = (write(b"B"), write(b"A"))
+    refused = await take_snapshot(w.store, w.writer, w.sandbox, parent, w.clock)
+    assert isinstance(refused, Err)
+    assert refused.error.code == "not_quiescent"
+    rows = await w.store.ledger.rows()
+    assert [(r.kind, r.state) for r in rows] == [
+        ("sandbox", "live"),
+        ("snapshot", "released"),
+        ("sandbox", "released"),
+    ]
+    assert [b.id for b in w.backend.boxes.values() if b.alive] == [parent.id]
+    assert not w.backend.snaps
+
+
+async def a_crash_before_the_scratch_closes_is_released_by_the_next_owner(w: World) -> None:
+    if not w.sandbox.info.capture_classes:
+        return
+    parent = await _parent(w)
+    w.backend.crash_restores = 1
+    try:
+        await take_snapshot(w.store, w.writer, w.sandbox, parent, w.clock)
+    except FakeCrashError:
+        pass
+    else:
+        raise AssertionError("the host was to die mid-verification")
+    (scratch,) = [r for r in await w.store.ledger.rows() if r.state == "pending"]
+    after = await abandon(w.by(await w.take_over()), w.sandbox, scratch)
+    assert (after.state, after.release_outcome) == ("released", "released")
+    assert [b.id for b in w.backend.boxes.values() if b.alive] == [parent.id]
+
+
+async def a_scratch_close_failure_is_retried_by_gc(w: World) -> None:
+    if not w.sandbox.info.capture_classes:
+        return
+    parent = await _parent(w)
+    w.backend.fail_releases = 1
+    taken = await take_snapshot(w.store, w.writer, w.sandbox, parent, w.clock)
+    assert isinstance(taken, Ok), taken
+    assert states(await w.store.ledger.rows()) == ["live", "live", "release_failed"]
+    assert states(await gc(w.store, w.sandbox, w.clock)) == ["live", "live", "released"]
+    assert [b.id for b in w.backend.boxes.values() if b.alive] == [parent.id]
+
+
 LEDGER: tuple[Body, ...] = (
     a_takeover_mid_create_creates_nothing,
     a_lost_answer_found_by_its_key_is_live_once,
     a_crash_after_pending_resolves_by_key,
     a_failed_release_is_retried_by_gc,
     a_stale_owner_can_not_release,
+    a_snapshot_is_recorded_once_a_ledgered_restore_verifies_it,
+    an_image_that_differs_from_its_manifest_is_refused,
+    a_crash_before_the_scratch_closes_is_released_by_the_next_owner,
+    a_scratch_close_failure_is_retried_by_gc,
 )
