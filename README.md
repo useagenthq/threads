@@ -1,20 +1,27 @@
-# threads
+<div align="center">
+  <h1>threads</h1>
+  <h3>Stop rebuilding the same agent plumbing.</h3>
+  <a href="https://github.com/useagenthq/threads/actions/workflows/typescript.yml"><img src="https://github.com/useagenthq/threads/actions/workflows/typescript.yml/badge.svg" alt="TypeScript CI"></a>
+  <a href="https://github.com/useagenthq/threads/actions/workflows/python.yml"><img src="https://github.com/useagenthq/threads/actions/workflows/python.yml/badge.svg" alt="Python CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
+  <img src="https://img.shields.io/badge/status-alpha-orange.svg" alt="Status: alpha">
+</div>
 
-**Stop rebuilding the same agent plumbing, and turn every run into a replayable, forkable test.**
+<br>
 
-Teams building agents keep rebuilding the same pieces: a sandbox, a Slack bot, a WhatsApp bot, hooks, a knowledge base, memory, evals. threads brings those pieces into one framework for **TypeScript and Python**. You write what your agent does and connect your accounts.
+Every team building agents writes the same pieces again: a sandbox, a Slack bot, a WhatsApp bot, hooks, a knowledge base, memory, evals. threads ships them built in, for **TypeScript and Python**. You write what your agent does and add your API keys.
 
-> **Status: alpha, not yet published.** Every feature below is built and covered by tests (provider coverage per language is in the table below), but the packages aren't on npm or PyPI yet and the APIs may still change. Install from source (below) to try it.
+> [!NOTE]
+> Alpha: not on npm or PyPI yet, and APIs may change. [Install from source](#install-from-source) to try it.
 
-## What you get
+## What's built in
 
-- **Sandboxes:** your agent's code and tools run in E2B, Daytona or Modal. Snapshots let you fork a run with its files restored.
-- **Channels:** the same agent in Slack, WhatsApp and GitHub, through an optional host with a typed HTTP API.
-- **Knowledge base and memory:** search your docs and remember facts per user or repo, never mixed between tenants. Local SQLite built in; Supermemory and Zep adapters.
-- **Hooks, permissions and approvals:** allow, block or ask a person before a risky action; every decision is recorded.
-- **Tools, MCP, skills and subagents:** typed tools, any MCP server in one line, skills loaded on demand, helper agents, handoffs and teams.
-- **Built-in tools:** shell, files, search, web fetch and search, git, code intelligence, notebooks and computer use.
-- **Timeline, fork and tests:** every step is recorded. Go back to a saved step, restore the sandbox, try again, and keep the run as a CI test.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/features-dark.svg">
+  <img alt="Built in: timeline and fork (thread.fork), evals (thread.saveCase), sandboxes (E2B, Daytona, Modal), channels (Slack, WhatsApp, GitHub), knowledge base (localKnowledge), memory (localMemory, Supermemory, Zep), hooks (extension hooks), tools, MCP and subagents (mcp)" src=".github/assets/features-light.svg" width="100%">
+</picture>
+
+Also built in: permissions and approvals, skills loaded on demand, handoffs and teams, and tools for shell, files, search, web, git, code intelligence, notebooks and computer use.
 
 ## What it looks like
 
@@ -95,13 +102,135 @@ The core is a plain library: no server needed. Channels, schedules and the HTTP 
 | Channels | Slack, WhatsApp, GitHub | Slack, WhatsApp, GitHub |
 | Memory | local, Supermemory, Zep | local, Supermemory, Zep |
 
+
+Each provider is one line. Keys come from your environment unless you pass them.
+
+### Sandboxes
+
+```ts
+import { e2b } from "@threads/e2b";
+import { daytona } from "@threads/daytona";
+
+sandbox: e2b({ template: "base" }),                          // E2B_API_KEY (runs on Bun)
+sandbox: daytona({ apiKey: process.env["DAYTONA_API_KEY"] ?? "" }),
+// Modal: Python only for now (its JS SDK's transport can't be fenced yet)
+```
+
+```python
+from threads.daytona import daytona
+from threads.e2b import e2b
+from threads.modal import modal
+
+sandbox=e2b(template="base")         # E2B_API_KEY
+sandbox=daytona()                    # DAYTONA_API_KEY
+sandbox=modal(image_id="im-...")     # MODAL_TOKEN_ID, MODAL_TOKEN_SECRET
+```
+
+Sandboxes have no internet by default; pass `internet: true` (TS e2b), `network: "open"` (TS daytona) or `allow_internet=True` (Python) to open it.
+
+### Models
+
+```ts
+import { anthropic } from "@threads/anthropic";
+import { openai } from "@threads/openai";
+import { aiSdk } from "@threads/ai-sdk";
+
+model: anthropic({ model: "claude-sonnet-5", maxTokens: 8192, contextWindow: 200_000, maxOutputTokens: 8192 }), // ANTHROPIC_API_KEY
+model: openai({ model: "gpt-5.5", contextWindow: 400_000, maxOutputTokens: 8192 }),                              // OPENAI_API_KEY
+model: aiSdk({ model: (fetch) => yourProvider({ fetch })("model-id"), contextWindow: 128_000, maxOutputTokens: 8192 }), // any AI SDK provider
+```
+
+```python
+from threads.anthropic import anthropic
+from threads.litellm import litellm
+from threads.openai import openai
+
+model=anthropic("claude-sonnet-5", context_window=200_000, max_output_tokens=8192)  # ANTHROPIC_API_KEY
+model=openai("gpt-5.5", context_window=400_000, max_output_tokens=8192)             # OPENAI_API_KEY
+model=litellm("openai/my-model", base_url="http://localhost:4000", context_window=128_000, max_output_tokens=8192)
+```
+
+### Channels
+
+Channels run in the optional host. Start it with `threads dev`; it prints each channel's webhook URL.
+
+```ts
+import { secret, sqlite } from "@threads/core";
+import { host } from "@threads/host";
+import { slack } from "@threads/slack";
+import { whatsapp } from "@threads/whatsapp";
+import { github } from "@threads/github";
+
+export default host({
+  store: sqlite(".threads"),
+  agents: { fixer },
+  channels: {
+    slack: slack({ agent: "fixer", signingSecret: secret("SLACK_SIGNING_SECRET"), botToken: secret("SLACK_BOT_TOKEN") }),
+    whatsapp: whatsapp({ agent: "fixer", appSecret: secret("WHATSAPP_APP_SECRET"), accessToken: secret("WHATSAPP_ACCESS_TOKEN") }),
+    github: github({ agent: "fixer", webhookSecret: secret("GITHUB_WEBHOOK_SECRET"), token: secret("GITHUB_TOKEN") }),
+  },
+});
+```
+
+```python
+from threads import secret, sqlite
+from threads.github import github
+from threads.host import host
+from threads.slack import slack
+from threads.whatsapp import whatsapp
+
+app = host(
+    store=sqlite(".threads"),
+    agents={"fixer": fixer},
+    channels={
+        "slack": slack(agent="fixer", signing_secret=secret("SLACK_SIGNING_SECRET"), bot_token=secret("SLACK_BOT_TOKEN")),
+        "whatsapp": whatsapp(
+            agent="fixer",
+            app_secret=secret("WHATSAPP_APP_SECRET"),
+            access_token=secret("WHATSAPP_ACCESS_TOKEN"),
+            verify_token=secret("WHATSAPP_VERIFY_TOKEN"),
+            phone_number_id="1234567890",
+        ),
+        "github": github(agent="fixer", webhook_secret=secret("GITHUB_WEBHOOK_SECRET"), token=secret("GITHUB_TOKEN")),
+    },
+)
+```
+
+### Memory, knowledge and MCP
+
+```ts
+import { localKnowledge, localMemory, secret } from "@threads/core";
+import { mcp } from "@threads/mcp";
+import { supermemory } from "@threads/supermemory";
+import { zep } from "@threads/zep";
+
+memory: localMemory(),                                          // SQLite, in the run's store
+memory: supermemory({ apiKey: secret("SUPERMEMORY_API_KEY") }),
+memory: zep({ apiKey: secret("ZEP_API_KEY") }),
+knowledge: localKnowledge({ paths: ["./docs"] }),
+tools: [mcp({ name: "docs", url: "https://example.com/mcp" })],
+```
+
+```python
+from threads import local_knowledge, local_memory
+from threads.mcp import mcp
+from threads.supermemory import supermemory
+from threads.zep import zep
+
+memory=local_memory()                # SQLite, in the run's store
+memory=supermemory()                 # SUPERMEMORY_API_KEY
+memory=zep()                         # ZEP_API_KEY
+knowledge=local_knowledge(paths=["./docs"])
+tools=[mcp(name="docs", url="https://example.com/mcp")]
+```
+
 A provider is only supported when threads can check ownership on its real network calls; one that can't be checked is refused at setup rather than half-supported.
 
-## Three rules it's built on
+## Why you can trust it in production
 
-1. **Every step is recorded** in an append-only log: what the agent saw, decided and did. State is rebuilt from the log.
-2. **No blind retries.** If an action's outcome is uncertain after a crash, threads checks before retrying, or pauses and asks you. Only one process may act on a thread at a time.
-3. **Isolated test runs.** Forks and saved tests run in a separate sandbox, with outside actions blocked or replayed from the recording.
+- **Every step is recorded.** A full audit trail of what the agent saw, decided and did.
+- **No double actions.** After a crash, an action that may already have happened is checked or handed to you, never blindly retried.
+- **Safe to experiment.** Forks and tests run in a separate sandbox, never against real customers.
 
 ## Install from source
 
