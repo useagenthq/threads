@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import arr, num, obj, text
+from .common import MAX_SAFE, arr, num, obj, text
 
 if TYPE_CHECKING:
     from .jcs import JsonValue, Obj
@@ -106,6 +106,8 @@ def cost(log: Log) -> Obj | None:
         complete = complete and u == k
         bounded = bounded and u is not None
         upper += k if u is None else u
+    if known > MAX_SAFE or upper > MAX_SAFE:
+        return {"error": "cost_overflow"}
     return {
         "currency": pol["currency"],
         "known_nanos": known,
@@ -138,7 +140,8 @@ def cache_breaks(log: Log) -> list[JsonValue] | None:
         if t in CAUSES:
             seen.append(t)
             continue
-        if t != "model_response" or purpose[obj(e["data"])["request_event_id"]] != "turn":
+        responded = t in ("model_response", "model_response_recovered")
+        if not responded or purpose[obj(e["data"])["request_event_id"]] != "turn":
             continue
         d = obj(e["data"])
         cr = obj(d["usage"]).get("cache_read_tokens")

@@ -1,0 +1,9 @@
+{
+  "name": "usage-overflow-counts-unknown",
+  "family": "cancellation_resume",
+  "kind": "reduce",
+  "description": "Each response reports more than half of 2^53-1 input tokens. The second would take the input total past the wire's integers, so it adds neither count and is counted in unknown_responses: a total is never out of range, rounded or saturated.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

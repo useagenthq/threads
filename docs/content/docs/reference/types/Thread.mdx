@@ -386,7 +386,7 @@ async def set_mode(
 
 ### usage
 
-Token totals over this branch (a fork counts its parent's prefix). A response whose counts the provider didn't report is counted in unknown_responses, never as zero.
+Token totals over this branch (a fork counts its parent's prefix). A response whose counts the provider didn't report, or that would take a total past 2^53-1, is counted in unknown_responses: never as zero and never out of range.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

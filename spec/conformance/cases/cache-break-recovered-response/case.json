@@ -1,0 +1,9 @@
+{
+  "name": "cache-break-recovered-response",
+  "family": "context_compaction",
+  "kind": "reduce",
+  "description": "The second turn's response was recovered by lookup after a crash. A recovered response is a turn response like any other, so its cache reads falling from 8000 to 1000 is a break (unknown cause), and its usage counts.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -79,3 +79,7 @@ def tool(name: str, desc: str, props: Obj, eclass: str, window: int | None = Non
 
 def tokens(i: int, o: int) -> Obj:
     return {"input_tokens": i, "output_tokens": o}
+
+
+MAX_SAFE = 2**53 - 1
+"""The wire integer range (Int): totals past it are never recorded."""

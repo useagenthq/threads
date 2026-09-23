@@ -1,0 +1,9 @@
+{
+  "name": "cost-overflow-projection",
+  "family": "cancellation_resume",
+  "kind": "reduce",
+  "description": "The known cost passes 2^53-1 nanos. The cost projection is the typed overflow outcome {error: cost_overflow}, never an out-of-range, rounded or saturated amount.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

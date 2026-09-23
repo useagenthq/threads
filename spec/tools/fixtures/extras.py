@@ -5,11 +5,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import ALICE, T0, obj, sha, tokens, tool
+from .common import ALICE, MAX_SAFE, T0, obj, sha, tokens, tool
 from .jcs import JsonValue, Obj, canonical
 from .log import Log
 from .pieces import answer, call, reduce_case, render_case, result, started, user
-from .policies import MODELS, SMALL_SETTINGS, permissions, policy
+from .policies import CONTEXT, MODELS, SMALL_SETTINGS, permissions, policy
 from .projections import cache_breaks, cost
 
 if TYPE_CHECKING:
@@ -26,6 +26,9 @@ def build(root: pathlib.Path) -> None:
     _hooks(root)
     _unpinned_projections(root)
     _unpriced_epoch(root)
+    _recovered_cache_break(root)
+    _usage_overflow(root)
+    _cost_overflow(root)
 
 
 def _ask_call(log: Log, cid: str, cmd: str) -> Obj:
@@ -218,6 +221,87 @@ def _unpriced_epoch(root: pathlib.Path) -> None:
             "The pinned model declares no price. Its response is known usage but has no known "
             "cost: cost adds nothing for it and is neither complete nor bounded, never an exact "
             "zero.",
+        ),
+        log,
+        {"cost": cost(log)},
+    )
+
+
+def _recovered_cache_break(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [], policy=policy(context=CONTEXT))
+    for i, cache_read in enumerate((8000, 1000)):
+        user(log, f"Question {i + 1}.")
+        r = log.model_request()
+        usage: Obj = {**tokens(100, 10), "cache_read_tokens": cache_read, "cache_write_tokens": 0}
+        reply: list[JsonValue] = [{"type": "text", "text": f"Answer {i + 1}."}]
+        if i == 0:
+            log.model_response(r, reply, "end_turn", usage)
+        else:
+            recovered: Obj = {
+                "request_event_id": r["event_id"],
+                "provider_request_id": "msg_02",
+                "content": reply,
+                "stop_reason": "end_turn",
+                "usage": usage,
+                "completeness": "complete",
+            }
+            log.add("model_response_recovered", recovered, actor="recovery")
+        log.add("turn_completed", {"reason": "end_turn"})
+    reduce_case(
+        root,
+        (
+            "cache-break-recovered-response",
+            "context_compaction",
+            "The second turn's response was recovered by lookup after a crash. A recovered "
+            "response is a turn response like any other, so its cache reads falling from 8000 to "
+            "1000 is a break (unknown cause), and its usage counts.",
+        ),
+        log,
+        {"cache_breaks": cache_breaks(log)},
+    )
+
+
+def _usage_overflow(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [])
+    half = MAX_SAFE // 2 + 1
+    for i in range(2):
+        user(log, f"Question {i + 1}.")
+        r = log.model_request()
+        reply: list[JsonValue] = [{"type": "text", "text": f"Answer {i + 1}."}]
+        log.model_response(r, reply, "end_turn", tokens(half, 10))
+        log.add("turn_completed", {"reason": "end_turn"})
+    reduce_case(
+        root,
+        (
+            "usage-overflow-counts-unknown",
+            "cancellation_resume",
+            "Each response reports more than half of 2^53-1 input tokens. The second would take "
+            "the input total past the wire's integers, so it adds neither count and is counted "
+            "in unknown_responses: a total is never out of range, rounded or saturated.",
+        ),
+        log,
+        {},
+    )
+
+
+def _cost_overflow(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [], policy=policy())
+    user(log, "Question.")
+    r = log.model_request()
+    # 4e12 input tokens at 3000 nanos each: 1.2e16 nanos, past 2^53-1.
+    reply: list[JsonValue] = [{"type": "text", "text": "Answer."}]
+    log.model_response(r, reply, "end_turn", tokens(4_000_000_000_000, 10))
+    log.add("turn_completed", {"reason": "end_turn"})
+    reduce_case(
+        root,
+        (
+            "cost-overflow-projection",
+            "cancellation_resume",
+            "The known cost passes 2^53-1 nanos. The cost projection is the typed overflow "
+            "outcome {error: cost_overflow}, never an out-of-range, rounded or saturated amount.",
         ),
         log,
         {"cost": cost(log)},

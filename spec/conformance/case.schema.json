@@ -1084,13 +1084,25 @@
           "$ref": "urn:threads:schema:events:v1#/$defs/ModelRef"
         },
         "cost": {
-          "description": "null when policy.currency or policy.models is absent.",
+          "description": "null when policy.currency or policy.models is absent; {error: cost_overflow} when an amount passes 2^53-1 nanos (never an out-of-range, rounded or saturated amount).",
           "anyOf": [
             {
               "$ref": "urn:threads:schema:events:v1#/$defs/Cost"
             },
             {
               "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "error"
+              ],
+              "properties": {
+                "error": {
+                  "const": "cost_overflow"
+                }
+              }
             }
           ]
         },

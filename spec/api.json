@@ -1462,7 +1462,7 @@
           "ts": "usage",
           "py": "usage",
           "async": true,
-          "doc": "Token totals over this branch (a fork counts its parent's prefix). A response whose counts the provider didn't report is counted in unknown_responses, never as zero.",
+          "doc": "Token totals over this branch (a fork counts its parent's prefix). A response whose counts the provider didn't report, or that would take a total past 2^53-1, is counted in unknown_responses: never as zero and never out of range.",
           "params": [],
           "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/UsageTotals"}, "errors": ["log_corrupt", "unsupported_format", "unsupported_critical_event"]}
         },

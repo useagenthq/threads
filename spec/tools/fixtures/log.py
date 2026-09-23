@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, TypedDict, Unpack
 
-from .common import BRANCH, T0, THREAD, aref, eid, num, obj, sha, text
+from .common import BRANCH, MAX_SAFE, T0, THREAD, aref, eid, num, obj, sha, text
 from .jcs import JsonValue, Obj, canonical
 from .render import COMPACT_INSTRUCTION, GUIDE_PREFIX, render, transcript
 
@@ -242,10 +242,15 @@ class _Reducer:
 
     def model_response(self, _e: Obj, d: Obj) -> None:
         usage = obj(d["usage"])
-        i, o = usage["input_tokens"], usage["output_tokens"]
-        self.input_tokens += 0 if i is None else num(i)
-        self.output_tokens += 0 if o is None else num(o)
-        self.unknown += i is None or o is None
+        i = 0 if usage["input_tokens"] is None else num(usage["input_tokens"])
+        o = 0 if usage["output_tokens"] is None else num(usage["output_tokens"])
+        if self.input_tokens + i > MAX_SAFE or self.output_tokens + o > MAX_SAFE:
+            # A total past the wire's integers can't be carried: the response counts as unknown.
+            self.unknown += 1
+            return
+        self.input_tokens += i
+        self.output_tokens += o
+        self.unknown += usage["input_tokens"] is None or usage["output_tokens"] is None
 
     def tool_call(self, e: Obj, d: Obj) -> None:
         self.pending.append(text(d["call_id"]))
