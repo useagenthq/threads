@@ -1,5 +1,7 @@
 """The function and type reference pages."""
 
+from typeexpr_render import Render, type_link
+
 from .json_access import Obj, doc_of, obj, objs, text
 from .members import (
     Explain,
@@ -9,10 +11,10 @@ from .members import (
     lang_of,
     member_doc,
     param_fields,
+    refusals_line,
 )
-from .render import Render, type_link
 from .signatures import signature
-from .tables import NOT_BUILT, ONLY_IN
+from .tables import LANG_LABEL, NOT_BUILT, ONLY_IN
 from .text import after_first_sentence, code_group, first_sentence, frontmatter, mdx
 
 ROLE_ICONS = {"protocol": "Plug", "handle": "Box", "opaque": "Package"}
@@ -30,17 +32,29 @@ def both_names(node: Obj) -> str:
     return ts if ts == py else f"{ts} / {py}"
 
 
+def import_line(pkg: Obj, lang: str | None) -> str:
+    """Where to import a function from, in the languages it exists in."""
+    where = [
+        f"`{text(pkg[k])}` ({LANG_LABEL[k]})"
+        for k in ("ts", "py")
+        if k in pkg and lang in (None, k)
+    ]
+    return f"Import from {' or '.join(where)}."
+
+
 def function_page(explain: Explain, api: Obj, key: str, f: Obj) -> str:
     params = annotate(key, objs(f["params"]))
-    pkg = obj(obj(api["packages"])[text(f["package"])])
-    ts_sig = signature(text(f["ts"]), f, params, "ts", method=False)
-    py_sig = signature(text(f["py"]), f, params, "py", method=False)
+    pkg = obj(obj(api["packages"])[text(f.get("package", "core"))])
+    lang = lang_of(f)
+    ts_sig = None if lang == "py" else signature(text(f["ts"]), f, params, "ts", method=False)
+    py_sig = None if lang == "ts" else signature(text(f["py"]), f, params, "py", method=False)
     desc = first_sentence(doc_of(f)) or f"The {text(f['ts'])} function."
+    icon = "Plug" if pkg.get("kind") == "adapter" else "SquareFunction"
     body = [
-        frontmatter(both_names(f), desc, "SquareFunction"),
+        frontmatter(both_names(f), desc, icon),
         mdx(after_first_sentence(doc_of(f))),
         "",
-        f"Import from `{text(pkg['ts'])}` (TypeScript) or `{text(pkg['py'])}` (Python).",
+        import_line(pkg, lang),
         "",
         code_group(ts_sig, py_sig),
     ]
@@ -52,9 +66,9 @@ def function_page(explain: Explain, api: Obj, key: str, f: Obj) -> str:
         link = type_link(ret)
         name = Render("ts").expr(obj(ret.get("result", ret)))
         body += ["", "## Returns", "", f"[`{name}`]({link})" if link else f"`{name}`"]
-    extra = errors_line(f)
-    if extra:
-        body += ["", extra]
+    for extra in (errors_line(f), refusals_line(f)):
+        if extra:
+            body += ["", extra]
     return "\n".join(body) + "\n"
 
 

@@ -9,23 +9,46 @@
     "async": "async true: TS returns a Promise, Python is async def. A stream is TS AsyncIterable, Python AsyncIterator.",
     "refs": "urn:threads:schema:events:v1 is spec/schema/events.v1.schema.json, urn:threads:schema:host-api:v1 is spec/schema/host-api/host-api.v1.schema.json, urn:threads:schema:conformance:v1 is spec/conformance/case.schema.json. #/types/X is a type in this file.",
     "generics": "Deps defaults to null (TS undefined, Python None); Output defaults to string (the final text). Agent<Deps, Output> carries both into RunContext and RunResult.",
-    "adapters": "Model, Sandbox, MemoryProvider, KnowledgeProvider, ChannelAdapter and SearchBackend are protocols. Concrete factories (anthropic(), e2b(), mem0(), slack(), ...) live in adapter packages, take a secret() for credentials and return one of these. Credentials: a single-account adapter (model, sandbox, memory provider) takes its credential as an option that defaults to secret(\"<ENV>\"), with the env name documented per factory. It is resolved in the adapter's setup (check() or the first run), never by the factory. A missing value is missing_secret, and the message names the option and the env variable. An explicit value is registered for redaction exactly as a revealed Secret is, under the same rules (at least 8 characters, not a schema literal). Channel adapters, search backends and MCP servers take every secret explicitly. Credential values are never pinned, logged, rendered or passed into a sandbox (invariant 4)."
+    "adapters": "Model, Sandbox, MemoryProvider, KnowledgeProvider, ChannelAdapter and SearchBackend are protocols. A provider factory is a function of an adapter package (packages kind adapter): it returns one of these protocols and lists the ConfigError codes it can raise in config_errors. Params whose doc starts with Seam: exist in one language to swap a transport or clock in tests. Factories not yet in this file are listed in spec/api-surface-factory-decisions.json. Credentials: a single-account adapter (model, sandbox, memory provider) takes its credential as an option that defaults to secret(\"<ENV>\"), with the env name documented per factory. It is resolved in the adapter's setup (check() or the first run), never by the factory. A missing value is missing_secret, and the message names the option and the env variable. An explicit value is registered for redaction exactly as a revealed Secret is, under the same rules (at least 8 characters, not a schema literal). Channel adapters, search backends and MCP servers take every secret explicitly; search backends also resolve theirs at setup. Credential values are never pinned, logged, rendered or passed into a sandbox (invariant 4)."
   },
   "packages": {
     "core": {
+      "kind": "core",
       "ts": "@threads/core",
       "py": "threads",
       "doc": "Pure library. Runtime dependency: zod / pydantic only. Names pending an npm/PyPI check."
     },
     "host": {
+      "kind": "core",
       "ts": "@threads/host",
       "py": "threads.host",
       "doc": "Channels, schedules, the HTTP API (spec/schema/host-api/) and the CLI."
     },
     "mcp": {
+      "kind": "core",
       "ts": "@threads/mcp",
       "py": "threads.mcp",
       "doc": "The MCP client (official MCP SDK) and a JSON Schema validator for server-declared tool inputs. Core has no general JSON Schema evaluator, so both stay out of it."
+    },
+    "supermemory": {
+      "kind": "adapter",
+      "ts": "@threads/supermemory",
+      "py": "threads.supermemory",
+      "provider": "Supermemory",
+      "doc": "Hosted memory on the official Supermemory SDK (Python extra supermemory). Every request goes through the run's fenced transport."
+    },
+    "zep": {
+      "kind": "adapter",
+      "ts": "@threads/zep",
+      "py": "threads.zep",
+      "provider": "Zep",
+      "doc": "Hosted memory on the official Zep SDK (Python extra zep). Every request goes through the run's fenced transport."
+    },
+    "search": {
+      "kind": "adapter",
+      "ts": "@threads/core",
+      "py": "threads.search",
+      "doc": "web_search backends: exa(), tavily() and brave(). Each sends one JSON request per search through the host's fenced web transport; no provider SDK."
     }
   },
   "choices": [
@@ -830,6 +853,73 @@
         }
       ],
       "returns": {"$ref": "#/types/Host"}
+    },
+    "supermemory": {
+      "ts": "supermemory",
+      "py": "supermemory",
+      "package": "supermemory",
+      "doc": "A MemoryProvider that stores records in Supermemory. Pass it as agent({memory: supermemory()}). Each scope is its own container; saves are effects that park when uncertain, since Supermemory documents no dedup window.",
+      "async": false,
+      "params": [
+        {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"SUPERMEMORY_API_KEY\")", "doc": "The Supermemory API key: a secret() or a string. Omitted: secret(\"SUPERMEMORY_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. A string is redacted like a revealed secret."},
+        {"name": "base_url", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The Supermemory API base URL. Omitted: the SDK's default endpoint."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch the SDK sends through (a proxy, a test server); the run's fence wraps it either way. Omitted: globalThis.fetch."}
+      ],
+      "returns": {"$ref": "#/types/MemoryProvider"},
+      "config_errors": [{"code": "missing_secret"}]
+    },
+    "zep": {
+      "ts": "zep",
+      "py": "zep",
+      "package": "zep",
+      "doc": "A MemoryProvider that stores records in Zep. Pass it as agent({memory: zep()}). Each scope is its own Zep graph; saves are effects that park when uncertain, since Zep documents no dedup window.",
+      "async": false,
+      "params": [
+        {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"ZEP_API_KEY\")", "doc": "The Zep API key: a secret() or a string. Omitted: secret(\"ZEP_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. A string is redacted like a revealed secret."},
+        {"name": "base_url", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The Zep API base URL. Omitted: the SDK's default endpoint."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch the SDK sends through (a proxy, a test server); the run's fence wraps it either way. Omitted: globalThis.fetch."}
+      ],
+      "returns": {"$ref": "#/types/MemoryProvider"},
+      "config_errors": [{"code": "missing_secret"}]
+    },
+    "exa": {
+      "ts": "exa",
+      "py": "exa",
+      "package": "search",
+      "doc": "A web_search backend that searches with Exa (exa.ai). Pass it as agent({web: {search: exa(secret(\"EXA_API_KEY\"))}}). It returns at most 10 hits per search.",
+      "async": false,
+      "params": [
+        {"name": "api_key", "kind": "positional", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "A secret() naming the host environment variable that holds the Exa API key. It is resolved on the host at setup (check() or the first run): an unset variable is missing_secret naming it, before anything runs. A search sent without setup reads it then, and an unset variable fails that search as unavailable."},
+        {"name": "transport", "kind": "positional", "lang": "ts", "type": {"platform": {"ts": "WebTransport"}}, "required": false, "default_doc": "the host's live web transport", "doc": "Seam: where the request is sent, for tests. Omitted: the host's live web transport, which vets each address before it connects."}
+      ],
+      "returns": {"$ref": "#/types/SearchBackend"},
+      "config_errors": [{"code": "missing_secret"}]
+    },
+    "tavily": {
+      "ts": "tavily",
+      "py": "tavily",
+      "package": "search",
+      "doc": "A web_search backend that searches with Tavily (tavily.com). Pass it as agent({web: {search: tavily(secret(\"TAVILY_API_KEY\"))}}). It returns at most 10 hits per search.",
+      "async": false,
+      "params": [
+        {"name": "api_key", "kind": "positional", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "A secret() naming the host environment variable that holds the Tavily API key. It is resolved on the host at setup (check() or the first run): an unset variable is missing_secret naming it, before anything runs. A search sent without setup reads it then, and an unset variable fails that search as unavailable."},
+        {"name": "transport", "kind": "positional", "lang": "ts", "type": {"platform": {"ts": "WebTransport"}}, "required": false, "default_doc": "the host's live web transport", "doc": "Seam: where the request is sent, for tests. Omitted: the host's live web transport, which vets each address before it connects."}
+      ],
+      "returns": {"$ref": "#/types/SearchBackend"},
+      "config_errors": [{"code": "missing_secret"}]
+    },
+    "brave": {
+      "ts": "brave",
+      "py": "brave",
+      "package": "search",
+      "doc": "A web_search backend that searches with Brave (search.brave.com). Pass it as agent({web: {search: brave(secret(\"BRAVE_API_KEY\"))}}). It returns at most 10 hits per search.",
+      "async": false,
+      "params": [
+        {"name": "api_key", "kind": "positional", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "A secret() naming the host environment variable that holds the Brave API key. It is resolved on the host at setup (check() or the first run): an unset variable is missing_secret naming it, before anything runs. A search sent without setup reads it then, and an unset variable fails that search as unavailable."},
+        {"name": "transport", "kind": "positional", "lang": "ts", "type": {"platform": {"ts": "WebTransport"}}, "required": false, "default_doc": "the host's live web transport", "doc": "Seam: where the request is sent, for tests. Omitted: the host's live web transport, which vets each address before it connects."}
+      ],
+      "returns": {"$ref": "#/types/SearchBackend"},
+      "config_errors": [{"code": "missing_secret"}]
     }
   },
   "types": {
@@ -3186,6 +3276,17 @@
           ],
           "returns": {"result": {"array": {"$ref": "#/types/SearchHit"}}, "errors": ["unavailable", "timeout"]},
           "doc": "Search the web for a query and return hits. The framework applies the domain filters again to what you return, parses every hit, and shows them to the model as untrusted reference."
+        },
+        "setup": {
+          "ts": "setup",
+          "py": "setup",
+          "doc": "Resolve the search key and check configuration on the host. Called by check() or the first run, before anything is pinned; never at import or construction. Retried on the next check() or run after a failure.",
+          "async": true,
+          "optional": true,
+          "capability": "SetsUp",
+          "params": [],
+          "returns": {"prim": "void"},
+          "throws": ["ConfigError"]
         }
       },
       "doc": "A web_search backend adapter (Exa, Brave, Tavily)."

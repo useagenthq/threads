@@ -5,11 +5,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from api_docs import Entry, Kind, resolved_doc, walk_type
+from api_factories import expanded_errors, langs
+from typeexpr_render import Render, camel, ref_name
 
 from .json_access import Json, Obj, array, obj, text
-from .render import Render, ref_name
 from .tables import DOC_OVERRIDES, LANG_LABEL, NOT_BUILT, NOTES, ONLY_IN
-from .text import attr, camel, clean, field
+from .text import attr, clean, field
 
 
 def annotate(container: str, members: list[Obj]) -> list[Obj]:
@@ -172,3 +173,18 @@ def errors_line(spec: Obj) -> str:
         names = ", ".join(f"`{t}`" for t in array(throws))
         lines.append(f"**Throws** {names} for a definition that can't run.")
     return "\n\n".join(lines)
+
+
+def refusals_line(f: Obj) -> str:
+    """A factory's config_errors, with the language named on a code that applies to only one of
+    the languages the factory exists in."""
+    by_code: dict[str, set[str]] = {}
+    for code, lang in expanded_errors(f):
+        by_code.setdefault(code, set()).add(lang)
+    items = [
+        f"`{code}`" if found == set(langs(f)) else f"`{code}` ({LANG_LABEL[min(found)]} only)"
+        for code, found in by_code.items()
+    ]
+    if not items:
+        return ""
+    return f"**Throws** `ConfigError` with one of these codes: {', '.join(items)}."

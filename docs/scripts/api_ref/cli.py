@@ -29,7 +29,8 @@ def outputs(api: Obj, explain: Explain) -> dict[Path, str]:
     groups = type_groups(api)
     for name, t in obj(api["types"]).items():
         files[REF / "types" / f"{name}.mdx"] = type_page(explain, name, obj(t))
-    files[REF / "overview.mdx"] = overview_page(api, groups)
+    decisions = obj(load(SPEC / "api-surface-factory-decisions.json"))
+    files[REF / "overview.mdx"] = overview_page(api, groups, decisions)
     files[OPENAPI] = json.dumps(bundle_openapi(), indent=2) + "\n"
     files[REF / "meta.json"] = sidebar_meta(api, groups)
     return files

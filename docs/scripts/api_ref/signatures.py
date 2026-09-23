@@ -1,7 +1,8 @@
 """Function and method signatures, as each language declares them."""
 
+from typeexpr_render import Render, default_text, visible
+
 from .json_access import Obj, obj, text
-from .render import Render, default_text, visible
 from .tables import PY_TYPES
 
 
@@ -25,7 +26,11 @@ def signature(name: str, spec: Obj, members: list[Obj], lang: str, method: bool)
 def ts_params(positional: list[Obj], options: list[Obj]) -> str:
     """Positional parameters, then one trailing options object."""
     r = Render("ts")
-    lines = [f"{r.key(text(p['name']), 'api')}: {r.expr(obj(p['type']))}" for p in positional]
+    lines = [
+        f"{r.key(text(p['name']), 'api')}{'' if p.get('required') else '?'}: "
+        f"{r.expr(obj(p['type']))}"
+        for p in positional
+    ]
     if options:
         body = "\n".join(
             f"  {r.key(text(p['name']), 'api')}{'' if p.get('required') else '?'}: "

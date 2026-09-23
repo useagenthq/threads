@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { secret } from "../../src";
+import { agent, scriptedModel, secret } from "../../src";
 import { brave, exa, tavily } from "../../src/tools/search-backends";
 import {
   liveTransport,
@@ -128,6 +128,68 @@ describe("search backends", () => {
       ok: false,
     });
   });
+});
+
+// spec/api.json config_errors: <factory>!missing_secret@ts. The key resolves at setup, so
+// check() reports it before any run, and nothing is sent.
+describe("search backend refusals", () => {
+  for (const [name, make] of [
+    ["exa", exa],
+    ["tavily", tavily],
+    ["brave", brave],
+  ] as const) {
+    test(`${name}: check() reports an unset key as missing_secret`, async () => {
+      const t = scripted(Response.json({}));
+      const checked = await agent({
+        model: scriptedModel({ responses: [] }),
+        web: { search: make(secret("THREADS_TEST_UNSET_KEY"), t) },
+      }).check();
+      expect(checked).toEqual({
+        ok: false,
+        error: {
+          code: "missing_secret",
+          message: `${name}: set apiKey or THREADS_TEST_UNSET_KEY`,
+        },
+      });
+      expect(t.sent).toEqual([]);
+    });
+  }
+
+  test("a key resolved at setup is kept for the searches that follow", async () => {
+    const t = scripted(Response.json({ results: [] }));
+    const backend = exa(secret(VAR), t);
+    await backend.setup?.();
+    const before = process.env[VAR];
+    delete process.env[VAR];
+    try {
+      expect((await backend.search("q", {})).ok).toBe(true);
+    } finally {
+      process.env[VAR] = before;
+    }
+  });
+});
+
+describe("an unset key without setup", () => {
+  // The runtime fallback, the same in Python: a search sent without setup answers unavailable,
+  // naming the variable, and sends nothing.
+  for (const [name, make] of [
+    ["exa", exa],
+    ["tavily", tavily],
+    ["brave", brave],
+  ] as const) {
+    test(`${name}: each search is unavailable, names the variable and sends nothing`, async () => {
+      const t = scripted(Response.json({}));
+      const got = await make(secret("THREADS_TEST_UNSET_KEY"), t).search(
+        "q",
+        {},
+      );
+      expect(got).toMatchObject({ ok: false, error: { code: "unavailable" } });
+      expect(got.ok ? "" : got.error.message).toContain(
+        "THREADS_TEST_UNSET_KEY",
+      );
+      expect(t.sent).toEqual([]);
+    });
+  }
 });
 
 describe("the live transport", () => {

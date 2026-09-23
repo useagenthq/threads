@@ -1,0 +1,70 @@
+{
+  "packages": {
+    "core": {
+      "kind": "core",
+      "ts": "@threads/core",
+      "doc": "Replaced by the test with the core source path."
+    },
+    "fix": {
+      "kind": "adapter",
+      "ts": "./pkg",
+      "doc": "The fixture package the test writes next to the checks."
+    }
+  },
+  "functions": {
+    "make": {
+      "ts": "make",
+      "py": "make",
+      "package": "fix",
+      "async": false,
+      "params": [
+        {
+          "name": "id",
+          "kind": "positional",
+          "type": { "prim": "string" },
+          "required": true
+        },
+        {
+          "name": "region",
+          "kind": "option",
+          "type": { "prim": "string" },
+          "required": true
+        },
+        {
+          "name": "tenant",
+          "kind": "option",
+          "type": {
+            "fn": {
+              "async": false,
+              "params": [
+                {
+                  "name": "phone_number_id",
+                  "kind": "positional",
+                  "type": { "prim": "string" },
+                  "required": true
+                }
+              ],
+              "returns": { "prim": "string" }
+            }
+          },
+          "required": false
+        },
+        {
+          "name": "fetch",
+          "kind": "option",
+          "lang": "ts",
+          "type": { "platform": { "ts": "typeof globalThis.fetch" } },
+          "required": false
+        },
+        {
+          "name": "transport",
+          "kind": "option",
+          "lang": "ts",
+          "type": { "platform": { "ts": "Transport" } },
+          "required": false
+        }
+      ],
+      "returns": { "$ref": "#/types/SearchBackend" }
+    }
+  }
+}

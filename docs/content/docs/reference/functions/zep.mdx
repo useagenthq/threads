@@ -1,0 +1,54 @@
+---
+title: "zep"
+description: "A MemoryProvider that stores records in Zep."
+icon: "Plug"
+---
+
+Pass it as agent(&#123;memory: zep()&#125;). Each scope is its own Zep graph; saves are effects that park when uncertain, since Zep documents no dedup window.
+
+Import from `@threads/zep` (TypeScript) or `threads.zep` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function zep(options?: {
+  apiKey?: string | Secret;
+  baseUrl?: string;
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+}): MemoryProvider
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def zep(
+    *,
+    api_key: str | Secret | None = None,
+    base_url: str | None = None,
+) -> MemoryProvider
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="apiKey / api_key" type={"string | Secret"}>
+  The Zep API key: a secret() or a string. Omitted: secret("ZEP_API_KEY"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. A string is redacted like a revealed secret.
+</Field>
+
+<Field name="baseUrl / base_url" type={"string"}>
+  The Zep API base URL. Omitted: the SDK's default endpoint.
+</Field>
+
+<Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
+  TypeScript only. Seam: the fetch the SDK sends through (a proxy, a test server); the run's fence wraps it either way. Omitted: globalThis.fetch.
+</Field>
+
+## Returns
+
+[`MemoryProvider`](/docs/reference/types/MemoryProvider)
+
+**Throws** `ConfigError` with one of these codes: `missing_secret`.

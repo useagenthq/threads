@@ -1,6 +1,7 @@
 """web_search backends (spec/api.json `SearchBackend`): `exa()`, `brave()` and
-`tavily()`. Each takes its API key as a `secret()`, resolved on the host when a search is sent,
-and sends through the host transport fenced by the run. No SDK: each is one JSON request."""
+`tavily()`. Each takes its API key as a `secret()`, resolved on the host at setup (check() or
+the first run), and sends through the host transport fenced by the run. No SDK: each is one JSON
+request."""
 
 import json
 from collections.abc import Callable, Mapping, Sequence
@@ -10,8 +11,9 @@ from urllib.parse import urlencode
 
 from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
 
+from threads.agents.config import ConfigError
 from threads.result import Err, Ok
-from threads.secrets import Secret, resolve
+from threads.secrets import Secret, credential
 from threads.web.guard import Resolve, system_resolve, vet
 from threads.web.http import Request, StdlibTransport, Transport
 from threads.web.search import SearchError, SearchHit, admitted, bound_fence
@@ -45,15 +47,28 @@ type _Build = Callable[[str, str, Sequence[str], Sequence[str]], tuple[str, Requ
 type _Parse = Callable[[bytes], list[_Hit]]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, weakref_slot=True)
 class HttpSearch:
-    """One backend: how a query becomes a request, and the response its hits."""
+    """One backend: how a query becomes a request, and the response its hits. Held weakly by the
+    setup memory, hence the weakref slot."""
 
+    factory: str
     key: Secret
     build: _Build
     parse: _Parse
     transport: Transport = field(default_factory=StdlibTransport)
     resolver: Resolve = system_resolve
+    _resolved: Callable[[], str] = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        # The key is resolved once, at setup, and kept for the searches that follow.
+        object.__setattr__(
+            self, "_resolved", credential(self.factory, "api_key", self.key, self.key.name)
+        )
+
+    async def setup(self) -> None:
+        """spec/api.json `SearchBackend.setup`: an unset key is missing_secret from check()."""
+        self._resolved()
 
     async def search(
         self,
@@ -62,7 +77,14 @@ class HttpSearch:
         allowed_domains: Sequence[str] = (),
         blocked_domains: Sequence[str] = (),
     ) -> Ok[Sequence[SearchHit]] | Err[SearchError]:
-        url, request = self.build(query, resolve(self.key), allowed_domains, blocked_domains)
+        try:
+            # Kept from setup; only a backend used without setup reads the env here.
+            key = self._resolved()
+        except ConfigError as error:
+            # As in TypeScript: without setup, an unset key fails this search, naming the
+            # variable, and the run goes on. Only setup raises.
+            return Err(SearchError("unavailable", str(error)))
+        url, request = self.build(query, key, allowed_domains, blocked_domains)
         target = await vet(url, self.resolver)
         if isinstance(target, Err):
             return Err(SearchError("unavailable", target.error))
@@ -102,7 +124,7 @@ def exa(api_key: Secret) -> HttpSearch:
             body["excludeDomains"] = list(block)
         return "https://api.exa.ai/search", _json({"x-api-key": key}, body)
 
-    return HttpSearch(api_key, build, lambda b: _Results.model_validate_json(b).results)
+    return HttpSearch("exa", api_key, build, lambda b: _Results.model_validate_json(b).results)
 
 
 def tavily(api_key: Secret) -> HttpSearch:
@@ -115,7 +137,7 @@ def tavily(api_key: Secret) -> HttpSearch:
         auth = {"Authorization": f"Bearer {key}"}
         return "https://api.tavily.com/search", _json(auth, body)
 
-    return HttpSearch(api_key, build, lambda b: _Results.model_validate_json(b).results)
+    return HttpSearch("tavily", api_key, build, lambda b: _Results.model_validate_json(b).results)
 
 
 def brave(api_key: Secret) -> HttpSearch:
@@ -126,7 +148,7 @@ def brave(api_key: Secret) -> HttpSearch:
         headers = {"Accept": "application/json", "X-Subscription-Token": key}
         return f"https://api.search.brave.com/res/v1/web/search?{query}", Request("GET", headers)
 
-    return HttpSearch(api_key, build, lambda b: _Brave.model_validate_json(b).web.results)
+    return HttpSearch("brave", api_key, build, lambda b: _Brave.model_validate_json(b).web.results)
 
 
 __all__ = ["HttpSearch", "SearchHit", "brave", "exa", "tavily"]

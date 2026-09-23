@@ -13,12 +13,14 @@ from __future__ import annotations
 
 # Our own CI's test report, not untrusted input.
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from surface_contract import Gap, Member, needs_coverage, obj
 
 if TYPE_CHECKING:
     import pathlib
+    from collections.abc import Mapping
 
     from check_api import Json
 
@@ -94,29 +96,52 @@ def _entry_ids(name: str, entry: Json, lang: str) -> tuple[list[str], list[str]]
     return [i for i in ids if isinstance(i, str)], []
 
 
-def check_coverage(
-    doc: Json, contract: dict[str, Member], gaps: list[Gap], lang: str, junit: pathlib.Path
-) -> list[str]:
+@dataclass(frozen=True, slots=True)
+class Owed:
+    """What needs test evidence: the contract's members (minus listed gaps), and the factory
+    evidence names (`exa!missing_secret`, `e2b.lifetime_ms=default`) with the languages each is
+    owed in (factory_coverage.py)."""
+
+    contract: dict[str, Member]
+    gaps: list[Gap]
+    factories: Mapping[str, frozenset[str]]
+
+    def expected(self, lang: str) -> set[str]:
+        owed = {n for n, langs in self.factories.items() if lang in langs}
+        return _expected(self.contract, self.gaps, lang) | owed
+
+    def unknown(self, name: str, listed: bool, lang: str) -> str | None:
+        """Why an entry shouldn't be in the registry, or None."""
+        if name in self.factories:
+            wrong = listed and lang not in self.factories[name]
+            return (
+                f"api-coverage.json {name}.{lang}: not owed in {lang}; delete it" if wrong else None
+            )
+        member = self.contract.get(name)
+        if member is None or not needs_coverage(member):
+            return (
+                f"api-coverage.json {name}: not a function, required method or required option "
+                "in spec/api.json; delete the entry"
+            )
+        if listed and name not in self.expected(lang):
+            return (
+                f"api-coverage.json {name}.{lang}: not a function, required method or required "
+                f"option that exists in {lang}; delete the entry"
+            )
+        return None
+
+
+def check_coverage(doc: Json, owed: Owed, lang: str, junit: pathlib.Path) -> list[str]:
     if not isinstance(doc, dict):
         return ["api-coverage.json: expected an object of {name: {ts?, py?}}"]
-    expected = _expected(contract, gaps, lang)
     errs: list[str] = []
     results, more = junit_results(junit, lang)
     errs += more
     for name, entry in doc.items():
         ids, problems = _entry_ids(name, entry, lang)
         errs += problems
-        member = contract.get(name)
-        if member is None or not needs_coverage(member):
-            errs.append(
-                f"api-coverage.json {name}: not a function, required method or required option "
-                "in spec/api.json; delete the entry"
-            )
-        elif ids and name not in expected:
-            errs.append(
-                f"api-coverage.json {name}.{lang}: not a function, required method or required "
-                f"option that exists in {lang}; delete the entry"
-            )
+        why = owed.unknown(name, bool(ids), lang)
+        errs += [why] if why else []
         for test_id in [] if more else ids:
             outcome = results.get(normalize(test_id, lang), "absent from the JUnit report")
             if outcome != "passed":
@@ -124,6 +149,6 @@ def check_coverage(
     listed = {n for n, e in doc.items() if _entry_ids(n, e, lang)[0]}
     errs += [
         f"api-coverage.json: {name} has no {lang} test; add the ID of a test that exercises it"
-        for name in sorted(expected - listed)
+        for name in sorted(owed.expected(lang) - listed)
     ]
     return errs

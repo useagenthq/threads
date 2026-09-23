@@ -1,0 +1,44 @@
+---
+title: "exa"
+description: "A web_search backend that searches with Exa (exa.ai)."
+icon: "Plug"
+---
+
+Pass it as agent(&#123;web: &#123;search: exa(secret("EXA_API_KEY"))&#125;&#125;). It returns at most 10 hits per search.
+
+Import from `@threads/core` (TypeScript) or `threads.search` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function exa(apiKey: Secret, transport?: WebTransport): SearchBackend
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def exa(
+    api_key: Secret,
+) -> SearchBackend
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="apiKey / api_key" type={"Secret"} required>
+  A secret() naming the host environment variable that holds the Exa API key. It is resolved on the host at setup (check() or the first run): an unset variable is missing_secret naming it, before anything runs. A search sent without setup reads it then, and an unset variable fails that search as unavailable. See [Secret](/docs/reference/types/Secret).
+</Field>
+
+<Field name="transport" type={"WebTransport"}>
+  TypeScript only. Seam: where the request is sent, for tests. Omitted: the host's live web transport, which vets each address before it connects.
+</Field>
+
+## Returns
+
+[`SearchBackend`](/docs/reference/types/SearchBackend)
+
+**Throws** `ConfigError` with one of these codes: `missing_secret`.

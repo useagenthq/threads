@@ -95,7 +95,7 @@ export function supermemory(options: SupermemoryOptions = {}): MemoryProvider {
     return client;
   };
   return {
-    // A missing key is a ConfigError at setup, not a failed first call.
+    // A missing key fails setup (missing_secret), not a first call.
     setup: async () => {
       apiKey();
     },

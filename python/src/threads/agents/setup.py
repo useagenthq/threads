@@ -23,8 +23,8 @@ from threads.redaction import redact_secrets
 @runtime_checkable
 class SetsUp(Protocol):
     """spec/api.json `setup`, the optional capability of a `Model`, `Sandbox`,
-    `MemoryProvider` or `KnowledgeProvider`: resolve credentials and check configuration on the
-    host. Raises `ConfigError`; creates no connection or client."""
+    `MemoryProvider`, `KnowledgeProvider` or `SearchBackend`: resolve credentials and check
+    configuration on the host. Raises `ConfigError`; creates no connection or client."""
 
     async def setup(self) -> None: ...
 
@@ -113,7 +113,14 @@ async def set_up[D](definition: Definition[D]) -> None:
     """Sets up `definition` and every agent it may start. Raises `ConfigError`."""
     for e in definition.extensions:
         await _once(e, partial(_extension, e))
-    for adapter in (definition.model, definition.sandbox, definition.memory, definition.knowledge):
+    adapters = (
+        definition.model,
+        definition.sandbox,
+        definition.memory,
+        definition.knowledge,
+        definition.catalog.search,
+    )
+    for adapter in adapters:
         if isinstance(adapter, SetsUp):
             await _once(adapter, adapter.setup)
     for child in (*definition.subagents, *definition.handoffs):

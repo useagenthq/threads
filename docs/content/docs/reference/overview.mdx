@@ -12,7 +12,7 @@ say so.
 
 - Functions and methods are `lowerCamelCase` in TypeScript and `snake_case` in Python: `openThread` and `open_thread`.
 - Types have the same `PascalCase` name in both.
-- Required inputs are positional. Everything else is one trailing options object in TypeScript and keyword-only arguments in Python, with the same names and defaults.
+- Required inputs are positional. Everything else is one trailing options object in TypeScript and keyword-only arguments in Python, with the same names and defaults. The one exception is a test seam: a provider factory may take an optional TypeScript-only positional, such as the `transport` of `exa`, marked "Seam:".
 - Expected failures are values, not exceptions: TypeScript returns `{ ok: true, value }` or `{ ok: false, error: { code, message } }`, Python returns `Ok[T]` or `Err[Failure]`. Only `ConfigError`, for a definition that can't run, is thrown.
 
 ## Packages
@@ -22,9 +22,9 @@ say so.
 | core | `@threads/core` | `threads` |
 | host | `@threads/host` | `threads.host` |
 | mcp | `@threads/mcp` | `threads.mcp` |
-
-Model, sandbox, channel and memory providers live in their own packages (`@threads/anthropic`, `threads.anthropic`, ...).
-See [Models](/docs/agents/models), [Sandboxes](/docs/sandboxes/overview), [Host server](/docs/host/overview) and [Memory](/docs/memory/memory).
+| supermemory | `@threads/supermemory` | `threads.supermemory` |
+| zep | `@threads/zep` | `threads.zep` |
+| search | `@threads/core` | `threads.search` |
 
 ## Functions
 
@@ -42,6 +42,32 @@ See [Models](/docs/agents/models), [Sandboxes](/docs/sandboxes/overview), [Host 
 | [`scriptedModel`](/docs/reference/functions/scriptedModel) | `scripted_model` | Test kit. |
 | [`fakeSandbox`](/docs/reference/functions/fakeSandbox) | `fake_sandbox` | Test kit. |
 | [`host`](/docs/reference/functions/host) | `host` | Bind agents to a store, channels and schedules. |
+
+## Providers
+
+A provider factory connects an agent to an outside service and returns one of the protocol types below. Its page lists every option in both languages and the `ConfigError` codes it can raise. Options whose description starts with "Seam:" exist in one language to swap a transport or clock in tests.
+
+| TypeScript | Python | What it does |
+|---|---|---|
+| [`supermemory`](/docs/reference/functions/supermemory) | `supermemory` | A MemoryProvider that stores records in Supermemory. |
+| [`zep`](/docs/reference/functions/zep) | `zep` | A MemoryProvider that stores records in Zep. |
+| [`exa`](/docs/reference/functions/exa) | `exa` | A web_search backend that searches with Exa (exa.ai). |
+| [`tavily`](/docs/reference/functions/tavily) | `tavily` | A web_search backend that searches with Tavily (tavily.com). |
+| [`brave`](/docs/reference/functions/brave) | `brave` | A web_search backend that searches with Brave (search.brave.com). |
+
+These providers exist but are not in the reference yet; their guides describe them: [Models](/docs/agents/models), [Sandboxes](/docs/sandboxes/overview), [Host server](/docs/host/overview) and [Memory](/docs/memory/memory).
+
+- `anthropic`: Claude models.
+- `openai`: OpenAI models.
+- `aiSdk`: Any AI SDK model (TypeScript only).
+- `litellm`: Models through LiteLLM (Python only).
+- `e2b`: E2B sandboxes.
+- `daytona`: Daytona sandboxes.
+- `modal`: Modal sandboxes (Python; the TypeScript factory always refuses).
+- `mem0`: Mem0 memory (refused in both languages today).
+- `slack`: The Slack channel.
+- `github`: The GitHub channel.
+- `whatsapp`: The WhatsApp channel.
 
 ## Types
 

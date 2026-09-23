@@ -16,8 +16,6 @@ from surface_kit import PY_JUNIT, TS_JUNIT, api, coverage
 REPO = pathlib.Path(__file__).resolve().parents[3]
 WORKFLOWS = REPO / ".github" / "workflows"
 SHA_LINE = re.compile(r"^[0-9a-f]{40}\n$")
-TOOLS = ("api_docs.py", "check_api.py", "check_surface.py", "surface_contract.py",
-         "surface_coverage.py", "surface_py.py")  # fmt: skip
 FAKE_PACKAGE = {
     "fakepkg/__init__.py": """from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
@@ -113,8 +111,12 @@ class Clone:
     def install(repo: pathlib.Path) -> None:
         tools = repo / "spec" / "tools"
         tools.mkdir(parents=True)
-        for name in TOOLS:
-            shutil.copy(REPO / "spec" / "tools" / name, tools / name)
+        # Every tool module: the gate imports check_api, which imports the factory checks.
+        for source in (REPO / "spec" / "tools").glob("*.py"):
+            shutil.copy(source, tools / source.name)
+        # The gate reads which factory defaults are review-only from the decisions file.
+        decisions = "api-surface-factory-decisions.json"
+        shutil.copy(REPO / "spec" / decisions, repo / "spec" / decisions)
         (repo / "scripts").mkdir()
         shutil.copy(REPO / "scripts" / "surface-base.sh", repo / "scripts" / "surface-base.sh")
         for path, source in FAKE_PACKAGE.items():

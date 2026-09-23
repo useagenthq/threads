@@ -68,6 +68,7 @@ from threads.sandbox import (  # noqa: E402
 from threads.secrets import Secret, secret  # noqa: E402
 from threads.thread.case import CaseExpectation, SavedCase  # noqa: E402
 from threads.thread.handle import open_thread  # noqa: E402
+from threads.web.search import SearchBackend, SearchHit  # noqa: E402
 
 __all__ = [
     "VERSION",
@@ -116,6 +117,8 @@ __all__ = [
     "SandboxSession",
     "SavedCase",
     "Scope",
+    "SearchBackend",
+    "SearchHit",
     "Secret",
     "SetsUp",
     "Skill",

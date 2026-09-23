@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Secret } from "../agent/secret";
+import { credential, type Secret } from "../agent/secret";
 import { err, ok } from "../result";
 import type { SearchBackend, SearchHit } from "./web-search";
 import {
@@ -52,22 +52,29 @@ const hitOf = (h: Hit): SearchHit => ({
 });
 
 function backend(
+  factory: string,
   apiKey: Secret,
   build: Build,
   parse: (raw: unknown) => readonly Hit[] | undefined,
   transport: WebTransport,
 ): SearchBackend {
+  const key = credential(factory, "apiKey", apiKey, apiKey.name);
   return {
+    // An unset key fails setup (missing_secret), so check() reports it before any run.
+    setup: async () => {
+      key();
+    },
     search: async (query, options) => {
-      let key: string;
+      let resolved: string;
       try {
-        key = apiKey.reveal();
+        // Kept from setup; only a backend used without setup reads the env here.
+        resolved = key();
       } catch (error) {
         return err({ code: "unavailable", message: String(error) });
       }
       const { url, init } = build(
         query,
-        key,
+        resolved,
         options.allowedDomains ?? [],
         options.blockedDomains ?? [],
       );
@@ -112,6 +119,7 @@ export function exa(
   transport: WebTransport = liveTransport,
 ): SearchBackend {
   return backend(
+    "exa",
     apiKey,
     (query, key, allow, block) => ({
       url: "https://api.exa.ai/search",
@@ -136,6 +144,7 @@ export function tavily(
   transport: WebTransport = liveTransport,
 ): SearchBackend {
   return backend(
+    "tavily",
     apiKey,
     (query, key, allow, block) => ({
       url: "https://api.tavily.com/search",
@@ -159,6 +168,7 @@ export function brave(
   transport: WebTransport = liveTransport,
 ): SearchBackend {
   return backend(
+    "brave",
     apiKey,
     (query, key, allow, block) => {
       // Brave has no domain parameters: its query operators carry them.

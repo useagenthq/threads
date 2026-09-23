@@ -44,8 +44,8 @@ assistant = agent(
 | Provider | TypeScript | Python | Stored in |
 |---|---|---|---|
 | Local | `localMemory()` from `@threads/core` | `local_memory()` from `threads` | The run's own SQLite store. Full-text search, no extra service. |
-| Supermemory | `supermemory()` from `@threads/supermemory` | `supermemory()` from `threads.supermemory` | Supermemory. Reads `SUPERMEMORY_API_KEY` unless you pass `apiKey` / `api_key`. |
-| Zep | `zep()` from `@threads/zep` | `zep()` from `threads.zep` | Zep Cloud. Reads `ZEP_API_KEY` unless you pass `apiKey` / `api_key`. |
+| Supermemory | [`supermemory()`](/docs/reference/functions/supermemory) from `@threads/supermemory` | `supermemory()` from `threads.supermemory` | Supermemory. Reads `SUPERMEMORY_API_KEY` unless you pass `apiKey` / `api_key`. |
+| Zep | [`zep()`](/docs/reference/functions/zep) from `@threads/zep` | `zep()` from `threads.zep` | Zep Cloud. Reads `ZEP_API_KEY` unless you pass `apiKey` / `api_key`. |
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -72,7 +72,7 @@ memory = zep()                        # ZEP_API_KEY
 </Tab>
 </Tabs>
 
-Both hosted providers also take a base URL (`baseUrl` / `base_url`) for a proxy or self-hosted endpoint. The key is read on the host when a call is made, never at setup.
+Both hosted providers also take a base URL (`baseUrl` / `base_url`) for a proxy or self-hosted endpoint. The key is resolved on the host at setup, so `agent.check()` reports a missing key as `missing_secret` before anything runs, and the run keeps what setup resolved.
 
 <Callout>
 A `mem0()` factory exists in both languages, but it is refused when the agent is set up (`transport_fence_unsupported`): the mem0 SDK sends requests threads can't safely wrap. Use Supermemory or Zep instead.
