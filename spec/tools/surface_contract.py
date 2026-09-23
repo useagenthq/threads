@@ -16,17 +16,19 @@ from check_api import Json, callables, camel
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-type Role = Literal["function", "option", "type", "property", "method"]
+type Role = Literal["function", "option", "type", "property", "field", "method"]
 
 LANGS = frozenset({"ts", "py"})
 KINDS: dict[str, frozenset[Role]] = {
-    "missing": frozenset({"function", "option", "type", "property", "method"}),
-    "required_mismatch": frozenset({"option", "method"}),
+    "missing": frozenset({"function", "option", "type", "property", "field", "method"}),
+    "required_mismatch": frozenset({"option", "property", "field", "method"}),
     "placement": frozenset({"type", "method"}),
 }
 # A lane file name (plans/specs/lanes/NN-name.md), or unassigned when no lane owns the gap yet.
 LANE = re.compile(r"^(\d\d-[a-z0-9-]+|unassigned)$")
 GAP_KEYS = frozenset({"name", "lang", "kind", "lane"})
+# A placement gap also names the other public entry that exports the member ("at").
+PLACEMENT_KEYS = GAP_KEYS | {"at"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +52,7 @@ class Gap:
     lang: str
     kind: str
     lane: str
+    at: str | None = None
 
     @property
     def key(self) -> tuple[str, str, str]:
@@ -110,12 +113,20 @@ def _type(name: str, t: dict[str, Json]) -> Iterator[Member]:
     package = str(t.get("package", "core"))
     count = len(_list(t.get("generics")))
     yield Member(name, "type", LANGS, True, package, name, name, generics=count)
-    for key, field in obj(t.get("properties")).items():
-        f = obj(field)
+    wire = t.get("casing") == "wire"
+    for role, key, f in _members_of(t):
         yield Member(
-            f"{name}.{key}", "property", _langs(f), f.get("required") is True, package,
-            camel(key), key, parent=name,
+            f"{name}.{key}", role, _langs(f), f.get("required") is True, package,
+            key if wire else camel(key), key, parent=name,
         )  # fmt: skip
+
+
+def _members_of(t: dict[str, Json]) -> Iterator[tuple[Role, str, dict[str, Json]]]:
+    """An interface's properties and a data type's fields (a wire type keeps snake_case)."""
+    for key, field in obj(t.get("properties")).items():
+        yield "property", key, obj(field)
+    for key, field in obj(t.get("fields")).items():
+        yield "field", key, obj(field)
 
 
 def members(api: Json) -> dict[str, Member]:
@@ -146,9 +157,19 @@ def _applies(gap: Gap, m: Member) -> bool:
 
 def _gap(entry: Json, at: str, contract: dict[str, Member]) -> tuple[Gap | None, list[str]]:
     e = obj(entry)
-    if frozenset(e) != GAP_KEYS or not all(isinstance(v, str) for v in e.values()):
-        return None, [f"{at}: a gap is exactly {{name, lang, kind, lane}}, all strings"]
-    gap = Gap(str(e["name"]), str(e["lang"]), str(e["kind"]), str(e["lane"]))
+    keys = PLACEMENT_KEYS if e.get("kind") == "placement" else GAP_KEYS
+    if frozenset(e) != keys or not all(isinstance(v, str) for v in e.values()):
+        return None, [
+            f"{at}: a gap is exactly {{name, lang, kind, lane}}, plus at for a placement, "
+            "all strings"
+        ]
+    gap = Gap(
+        str(e["name"]),
+        str(e["lang"]),
+        str(e["kind"]),
+        str(e["lane"]),
+        str(e["at"]) if "at" in e else None,
+    )
     member = contract.get(gap.name)
     errs: list[str] = []
     if member is None:
@@ -157,6 +178,10 @@ def _gap(entry: Json, at: str, contract: dict[str, Member]) -> tuple[Gap | None,
         errs.append(f"{at}: {gap.name} does not exist in {gap.lang} (lang: {gap.lang!r})")
     elif not _applies(gap, member):
         errs.append(f"{at}: kind {gap.kind!r} does not apply to {member.role} {gap.name}")
+    elif gap.at is not None and gap.at not in {m.package for m in contract.values()} - {
+        member.package
+    }:
+        errs.append(f"{at}: at {gap.at!r} is not another package of the contract")
     if not LANE.match(gap.lane):
         errs.append(f"{at}: lane {gap.lane!r} is not NN-name or unassigned")
     return (None, errs) if errs else (gap, [])

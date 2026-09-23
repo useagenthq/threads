@@ -22,9 +22,10 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.log import Permissions, ToolResultEvent
+from threads.log import Permissions, ThreadStartedEvent, ToolResultEvent
 from threads.loop.model import ModelChunk, NotFound
 from threads.loop.scripted import SCRIPTED_INFO
+from threads.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALLOW_ECHO = Permissions(
@@ -87,6 +88,14 @@ def test_a_tool_call_parses_through_its_input_model_and_runs() -> None:
         result = await bot.run("say hello", store=store, deps=None)
         assert isinstance(result, Completed)
         assert result.output == "Done."
+        # name, description and the input model's schema are what thread_started pins.
+        timeline = await result.thread.timeline()
+        assert isinstance(timeline, Ok)
+        started = next(e.event for e in timeline.value.entries if e.event.type == "thread_started")
+        assert isinstance(started, ThreadStartedEvent)
+        pinned = next(t for t in started.data.tools if t.name == "echo")
+        assert pinned.description == "Echo text."
+        assert pinned.input_schema == Echo.model_json_schema()
 
     asyncio.run(main())
     assert seen == ["hello"]

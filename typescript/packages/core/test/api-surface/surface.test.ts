@@ -20,6 +20,7 @@ const fixtures = join(here, "fixtures");
 const pkg = readFileSync(join(fixtures, "pkg.d.ts"), "utf8");
 const api = readFileSync(join(fixtures, "api.json"), "utf8");
 const gaps = readFileSync(join(fixtures, "gaps.json"), "utf8");
+const host = readFileSync(join(fixtures, "host.d.ts"), "utf8");
 const work = mkdtempSync(join(tmpdir(), "threads-api-surface-"));
 let cases = 0;
 
@@ -37,6 +38,7 @@ function compile(inputs: {
   const dir = join(work, `case-${cases}`);
   mkdirSync(dir);
   writeFileSync(join(dir, "pkg.d.ts"), inputs.pkg ?? pkg);
+  writeFileSync(join(dir, "host.d.ts"), host);
   writeFileSync(join(dir, "api.json"), inputs.api ?? api);
   writeFileSync(join(dir, "gaps.json"), inputs.gaps ?? gaps);
   copyFileSync(join(here, "helpers.ts"), join(dir, "helpers.ts"));
@@ -62,7 +64,10 @@ function tsconfig(dir: string): string {
     extends: join(root, "typescript", "tsconfig.base.json"),
     compilerOptions: {
       noEmit: true,
-      paths: { "@fixture/core": [join(dir, "pkg.d.ts")] },
+      paths: {
+        "@fixture/core": [join(dir, "pkg.d.ts")],
+        "@fixture/host": [join(dir, "host.d.ts")],
+      },
     },
     include: ["generated/surface.ts"],
   });
@@ -109,6 +114,7 @@ describe("optional methods and gaps", () => {
     const absent = pkg.replace("  readonly lookup?: () => void;\n", "");
     expect(compile({ pkg: absent }).failed).toEqual([
       'export type method_Model_lookup_present = Assert<HasKey<core.Model, "lookup">>;',
+      'export type method_Model_lookup_callable = Assert<IsCallable<core.Model["lookup"]>>;',
       'export type method_Model_lookup_overloads = Assert<AtMostFourOverloads<core.Model["lookup"]>>;',
     ]);
   });
@@ -142,12 +148,52 @@ describe("optional methods and gaps", () => {
     ]);
   });
 
-  test("a listed type gap whose type now exists is red", () => {
+  test("a listed missing type that now exists is red", () => {
     const fixed = `${pkg}export type Absent = { readonly id: string };\n`;
     const verdict = compile({ pkg: fixed });
     expect(verdict.ok).toBe(false);
     expect(verdict.failed).toContain(
       'export type type_Absent_missing = Assert<Equals<keyof core.Absent, "__surfaceGap">>;',
+    );
+  });
+
+  test("a placement gap is red when the type isn't at the entry it names either", () => {
+    const gone = pkg.replace(
+      "export type Moved = { readonly id: string };\n",
+      "",
+    );
+    expect(compile({ pkg: gone }).failed).toEqual([
+      "export type type_Moved_at_core = core.Moved;",
+    ]);
+  });
+});
+
+describe("fields and callability", () => {
+  test("a required field of an object type deleted is red", () => {
+    const deleted = pkg.replace("readonly name: string; ", "");
+    expect(compile({ pkg: deleted }).failed).toEqual([
+      'export type field_Skill_name_present = Assert<HasKey<core.Skill, "name">>;',
+      'export type field_Skill_name_required = Assert<Equals<Req<core.Skill, "name">, true>>;',
+    ]);
+  });
+
+  test("a required field made optional is red", () => {
+    const optional = pkg.replace(
+      "readonly name: string; ",
+      "readonly name?: string; ",
+    );
+    expect(compile({ pkg: optional }).failed).toEqual([
+      'export type field_Skill_name_required = Assert<Equals<Req<core.Skill, "name">, true>>;',
+    ]);
+  });
+
+  test("a method that is not callable is red", () => {
+    const value = pkg.replace(
+      "readonly send: () => void;",
+      "readonly send: number;",
+    );
+    expect(compile({ pkg: value }).failed).toContain(
+      'export type method_Model_send_callable = Assert<IsCallable<core.Model["send"]>>;',
     );
   });
 });

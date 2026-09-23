@@ -89,7 +89,7 @@
       "packages/host/test/runs.test.ts > POST /v1/runs > lost response: the same key and body replay the receipt and start nothing (F12.11)"
     ],
     "py": [
-      "tests/agents/test_run_ceiling.py::test_a_host_ceiling_caps_the_runs_it_starts"
+      "tests/host/test_http.py::test_a_run_is_accepted_once_per_key_and_bound_to_its_principal"
     ]
   },
   "Host.startRun.principal": {
@@ -97,12 +97,12 @@
       "packages/host/test/runs.test.ts > POST /v1/runs > another principal of the tenant with the same key is refused and learns nothing (F12.12)"
     ],
     "py": [
-      "tests/agents/test_run_ceiling.py::test_a_host_ceiling_caps_the_runs_it_starts"
+      "tests/host/test_http.py::test_a_run_is_accepted_once_per_key_and_bound_to_its_principal"
     ]
   },
   "Host.stop": {
     "ts": [
-      "packages/host/test/schedules.test.ts > scheduler > ready triggers nothing; the due occurrence fires once with schedule_fired then its input"
+      "packages/host/test/channels.test.ts > stop() > drains the in-flight item to its reply, then releases every lease"
     ],
     "py": [
       "tests/host/test_channel_recovery.py::test_the_same_host_started_again_waits_for_its_new_recovery_pass"

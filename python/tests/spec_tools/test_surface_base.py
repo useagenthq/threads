@@ -16,10 +16,11 @@ from surface_kit import PY_JUNIT, TS_JUNIT, api, coverage
 REPO = pathlib.Path(__file__).resolve().parents[3]
 WORKFLOWS = REPO / ".github" / "workflows"
 SHA_LINE = re.compile(r"^[0-9a-f]{40}\n$")
-TOOLS = ("check_api.py", "check_surface.py", "surface_contract.py", "surface_coverage.py",
-         "surface_py.py")  # fmt: skip
+TOOLS = ("api_docs.py", "check_api.py", "check_surface.py", "surface_contract.py",
+         "surface_coverage.py", "surface_py.py")  # fmt: skip
 FAKE_PACKAGE = {
-    "fakepkg/__init__.py": """from typing import Protocol, runtime_checkable
+    "fakepkg/__init__.py": """from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
 
 class Model(Protocol):
@@ -39,7 +40,13 @@ def agent(*, model: str, name: str = "") -> None: ...
 def run_sync() -> None: ...
 
 
-__all__ = ["LooksUp", "Model", "agent", "run_sync"]
+@dataclass(frozen=True)
+class Skill:
+    name: str
+    note: str = ""
+
+
+__all__ = ["LooksUp", "Model", "Skill", "agent", "run_sync"]
 """,
     "fakepkg/host.py": """from typing import Protocol
 

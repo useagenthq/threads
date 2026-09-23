@@ -22,12 +22,17 @@ type Member = tuple[str, str | None]
 def _missing() -> dict[Member, set[str]]:
     """(container, member) of each missing gap, with the languages it is missing from."""
     gaps = [obj(entry) for entry in array(load(SPEC / "api-surface-gaps.json"))]
-    # A method on its base protocol that the contract wants on a capability protocol is built;
-    # its missing gap is the capability's, so it isn't hidden or marked one-language.
-    on_base = {text(g["name"]) for g in gaps if text(g["kind"]) == "required_mismatch"}
+    # An optional method's missing gap in Python is its capability protocol's (not exported
+    # yet), not the method's, so the docs neither hide it nor mark it one-language.
+    capabilities = {
+        f"{type_name}.{name}"
+        for type_name, t in obj(obj(load(SPEC / "api.json"))["types"]).items()
+        for name, m in obj(obj(t).get("methods", {})).items()
+        if "capability" in obj(m)
+    }
     out: dict[Member, set[str]] = {}
     for gap in gaps:
-        if text(gap["kind"]) == "missing" and text(gap["name"]) not in on_base:
+        if text(gap["kind"]) == "missing" and text(gap["name"]) not in capabilities:
             container, _, name = text(gap["name"]).rpartition(".")
             out.setdefault((container, name), set()).add(text(gap["lang"]))
     return out
@@ -74,8 +79,6 @@ NOTES: dict[Member, str] = {
     ("Thread", "forkPoints"): "TypeScript returns the list itself; Python returns Ok or Err.",
     ("Thread", "todos"): "TypeScript returns the list itself; Python returns Ok or Err.",
     ("Thread", "children"): "TypeScript returns the list itself; Python returns Ok or Err.",
-    ("Thread", "answer"): "No built-in tool asks the user a question yet (ask_user is not built), "
-    "so there is no open question to answer.",
     ("RunResult", None): "In TypeScript, thread is a ThreadRef (id, branch, store): pass it to "
     "openThread for the full Thread handle. In Python it is the Thread handle.",
 }

@@ -22,7 +22,7 @@ import re
 import sys
 from typing import TYPE_CHECKING
 
-from surface_contract import Member, members, obj, parse_gaps
+from surface_contract import Gap, Member, members, obj, parse_gaps
 
 if TYPE_CHECKING:
     from check_api import Json
@@ -37,22 +37,23 @@ HEADER = (
 )
 MARKER = "__surfaceGap"
 HELPERS = (
-    "Assert", "AtMostFourOverloads", "Equals", "HasKey", "IsMissing", "OptionPresent",
-    "OptionRequired", "Req",
+    "Assert", "AtMostFourOverloads", "Equals", "HasKey", "IsCallable", "IsMissing",
+    "OptionPresent", "OptionRequired", "Req",
 )  # fmt: skip
 
 
 class Emitter:
     """The Assert lines for one contract and its TypeScript gaps."""
 
-    def __init__(self, contract: dict[str, Member], gaps: set[tuple[str, str]]) -> None:
+    def __init__(self, contract: dict[str, Member], gaps: list[Gap]) -> None:
         self.contract = contract
-        self.gaps = gaps
+        self.gaps = {g.name: g for g in gaps}
         self.lines: list[str] = []
         self.absent_types: dict[str, list[str]] = {}
 
     def gap(self, m: Member) -> str | None:
-        return next((k for n, k in self.gaps if n == m.name), None)
+        gap = self.gaps.get(m.name)
+        return gap.kind if gap else None
 
     def _out(self, m: Member, what: str, check: str) -> None:
         """One line, named after the member and what it checks, so a tsc error reads as both."""
@@ -60,14 +61,20 @@ class Emitter:
         self.lines.append(f"export type {m.role}_{ident}_{what} = {check};")
 
     def _usable(self, m: Member) -> bool:
-        """A member is checked only when its owner (and the owner's owner) resolves."""
+        """A member is checked only when its owner (and the owner's owner) resolves: exported
+        from its declared entry, or from the entry a placement gap names."""
         parent = self.contract.get(m.parent)
-        return parent is None or (self.gap(parent) is None and self._usable(parent))
+        if parent is None:
+            return True
+        gap = self.gaps.get(parent.name)
+        return (gap is None or gap.at is not None) and self._usable(parent)
 
     def type_ref(self, name: str) -> str:
-        t = self.contract[name]
+        """The type as the generated file reaches it: from the entry a placement gap names, or
+        from its declared entry."""
+        t, gap = self.contract[name], self.gaps.get(name)
         args = f"<{', '.join(['never'] * t.generics)}>" if t.generics else ""
-        return f"{t.package}.{t.ts}{args}"
+        return f"{gap.at if gap and gap.at else t.package}.{t.ts}{args}"
 
     def callable_ref(self, m: Member) -> str:
         if m.role == "function":
@@ -75,7 +82,8 @@ class Emitter:
         return f'{self.type_ref(m.parent)}["{m.ts}"]'
 
     def keyed(self, m: Member, owner: str) -> None:
-        """A function, property or method: present, and its required flag."""
+        """A function, property, field or method: present, its required flag, and a function
+        or method is callable."""
         kind, key = self.gap(m), f'"{m.ts}"'
         if kind == "missing":
             self._out(m, "missing", f"Assert<IsMissing<{owner}, {key}>>")
@@ -87,6 +95,7 @@ class Emitter:
                 m, "required", f"Assert<Equals<Req<{owner}, {key}>, {_ts(m.required != flip)}>>"
             )
         if m.role in ("function", "method"):
+            self._out(m, "callable", f"Assert<IsCallable<{self.callable_ref(m)}>>")
             self._out(m, "overloads", f"Assert<AtMostFourOverloads<{self.callable_ref(m)}>>")
 
     def option(self, m: Member) -> None:
@@ -109,12 +118,19 @@ class Emitter:
                 self._out(m, "exported", self.type_ref(m.name))
             else:
                 self.absent_types.setdefault(m.package, []).append(m.ts)
+                self.placed(m)
         elif m.role == "option":
             self.option(m)
         elif m.role == "function":
             self.keyed(m, f"typeof {m.package}")
         elif m.required or m.role == "method":
             self.keyed(m, self.type_ref(m.parent))
+
+    def placed(self, m: Member) -> None:
+        """A placement gap names the entry that exports the type instead: it must be there."""
+        gap = self.gaps[m.name]
+        if gap.at:
+            self._out(m, f"at_{gap.at}", self.type_ref(m.name))
 
     def augmentations(self, packages: dict[str, str]) -> list[str]:
         """A listed missing type is declared into its package: that compiles only while the
@@ -141,7 +157,7 @@ def render(api: Json, gaps_doc: Json) -> str:
     gaps, errs = parse_gaps(gaps_doc, contract, "api-surface-gaps.json")
     if errs:
         raise SystemExit("\n".join(errs))
-    emitter = Emitter(contract, {(g.name, g.kind) for g in gaps if g.lang == "ts"})
+    emitter = Emitter(contract, [g for g in gaps if g.lang == "ts"])
     for m in contract.values():
         emitter.member(m)
     packages = {k: str(obj(v).get("ts")) for k, v in obj(obj(api).get("packages")).items()}

@@ -1,5 +1,6 @@
 """check_surface.py's Python checks, against a fixture contract and a fake package."""
 
+from dataclasses import dataclass
 from typing import Protocol, TypedDict, Unpack, runtime_checkable
 
 from check_api import Json, check_names
@@ -121,11 +122,16 @@ def test_capability_protocol_missing_fails() -> None:
 
 
 def test_capability_protocol_not_exported_fails() -> None:
-    # Defined in the package (fakepkg.host has it) but not exported from core: placement.
+    # Exported from host, not from core where the contract puts it: placement at host.
     found = problems(
         core=without(core_members(), "LooksUp"), host=host_members() | {"LooksUp": LooksUp}
     )
-    assert found[0].startswith("surface gate: Model.lookup (py) is placement")
+    assert found[0].startswith(
+        "surface gate: Model.lookup (py) is placement (exported from host) and not listed"
+    )
+    listed = Gap("Model.lookup", "py", "placement", "unassigned", "host")
+    host = host_members() | {"LooksUp": LooksUp}
+    assert problems((listed,), core=without(core_members(), "LooksUp"), host=host) == []
 
 
 def test_capability_protocol_without_method_fails() -> None:
@@ -168,7 +174,7 @@ def test_lang_ts_callable_is_not_checked_in_py() -> None:
 def test_type_missing_from_declared_package_fails() -> None:
     assert problems(host={})[0].startswith("surface gate: Channel (py) is missing")
     elsewhere = problems(host={}, core=core_members() | host_members())
-    assert elsewhere[0].startswith("surface gate: Channel (py) is placement")
+    assert elsewhere[0].startswith("surface gate: Channel (py) is placement (exported from core)")
 
 
 def test_type_reexported_elsewhere_passes() -> None:
@@ -194,3 +200,36 @@ def test_options_are_read_from_unpacked_typed_dicts() -> None:
         del flag, rest
 
     assert options(fn) == [{"flag": False, "model": True, "name": False}]
+
+
+def test_a_required_field_of_a_data_type_deleted_fails() -> None:
+    @dataclass(frozen=True, slots=True)
+    class NoName:
+        note: str = ""
+
+    found = problems(core=core_members() | {"Skill": NoName})
+    assert found[0].startswith("surface gate: Skill.name (py) is missing")
+
+
+def test_a_required_field_made_optional_fails() -> None:
+    @dataclass(frozen=True, slots=True)
+    class OptionalName:
+        name: str = ""
+        note: str = ""
+
+    found = problems(core=core_members() | {"Skill": OptionalName})
+    assert found[0].startswith("surface gate: Skill.name (py) is required_mismatch")
+
+
+def test_a_function_that_is_not_callable_fails() -> None:
+    found = problems(core=core_members() | {"agent": 0})
+    assert found[0].startswith("surface gate: agent (py) is missing")
+
+
+def test_a_method_that_is_not_callable_fails() -> None:
+    class ValueSend(Protocol):
+        info: str
+        send = 0
+
+    found = problems(core=core_members() | {"Model": ValueSend})
+    assert found[0].startswith("surface gate: Model.send (py) is missing")

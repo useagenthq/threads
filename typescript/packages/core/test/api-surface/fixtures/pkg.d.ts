@@ -34,3 +34,8 @@ export type Model = {
   readonly send: () => void;
   readonly lookup?: () => void;
 };
+
+export type Skill = { readonly name: string; readonly shortNote?: string };
+
+// Declared in host by the contract, exported from core instead: a listed placement gap.
+export type Moved = { readonly id: string };

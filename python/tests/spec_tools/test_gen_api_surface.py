@@ -61,7 +61,7 @@ def test_a_required_mismatch_gap_asserts_the_other_flag() -> None:
 
 
 def test_a_type_gap_is_declared_into_its_package_and_its_members_skipped() -> None:
-    gap: Json = {"name": "Model", "lang": "ts", "kind": "placement", "lane": "unassigned"}
+    gap: Json = {"name": "Model", "lang": "ts", "kind": "missing", "lane": "unassigned"}
     out = lines([gap])
     assert 'declare module "@fake/core" {' in out
     assert "  interface Model { readonly __surfaceGap: true }" in out
@@ -87,3 +87,23 @@ def test_an_invalid_registry_is_refused() -> None:
         render(
             api(), [{"name": "agent.nope", "lang": "ts", "kind": "missing", "lane": "unassigned"}]
         )
+
+
+def test_a_placement_gap_checks_the_named_entry_and_reaches_members_through_it() -> None:
+    gap: Json = {"name": "Channel", "lang": "ts", "kind": "placement", "lane": "unassigned"}
+    gap = {**gap, "at": "core"}
+    found = checks([gap])
+    assert found["type_Channel_at_core"] == "core.Channel"
+    assert "type_Channel_exported" not in found
+
+
+def test_functions_and_methods_are_asserted_callable() -> None:
+    found = checks()
+    assert found["function_agent_callable"] == "Assert<IsCallable<typeof core.agent>>"
+    assert found["method_Model_send_callable"] == 'Assert<IsCallable<core.Model["send"]>>'
+
+
+def test_required_fields_of_data_types_are_asserted() -> None:
+    found = checks()
+    assert found["field_Skill_name_required"] == 'Assert<Equals<Req<core.Skill, "name">, true>>'
+    assert "field_Skill_note_present" not in found

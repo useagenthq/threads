@@ -69,17 +69,22 @@ def normalize(test_id: str, lang: str) -> str:
 
 
 def _expected(contract: dict[str, Member], gaps: list[Gap], lang: str) -> set[str]:
+    """Names that need a test in this language: not missing themselves, and for an option, its
+    function or method isn't missing. A member of a type missing from its entry still exists."""
     missing = {g.name for g in gaps if g.lang == lang and g.kind == "missing"}
     return {
         m.name
         for m in contract.values()
-        if needs_coverage(m) and lang in m.langs and not {m.name, m.parent} & missing
+        if needs_coverage(m)
+        and lang in m.langs
+        and m.name not in missing
+        and not (m.role == "option" and m.parent in missing)
     }
 
 
 def _entry_ids(name: str, entry: Json, lang: str) -> tuple[list[str], list[str]]:
     langs = obj(entry)
-    if not isinstance(entry, dict) or not set(langs) <= {"ts", "py"}:
+    if not isinstance(entry, dict) or not langs or not set(langs) <= {"ts", "py"}:
         return [], [f"api-coverage.json {name}: expected {{ts?, py?}} lists of test IDs"]
     ids = langs.get(lang)
     if ids is None:
@@ -101,7 +106,13 @@ def check_coverage(
     for name, entry in doc.items():
         ids, problems = _entry_ids(name, entry, lang)
         errs += problems
-        if ids and name not in expected:
+        member = contract.get(name)
+        if member is None or not needs_coverage(member):
+            errs.append(
+                f"api-coverage.json {name}: not a function, required method or required option "
+                "in spec/api.json; delete the entry"
+            )
+        elif ids and name not in expected:
             errs.append(
                 f"api-coverage.json {name}.{lang}: not a function, required method or required "
                 f"option that exists in {lang}; delete the entry"

@@ -180,9 +180,12 @@ def test_coverage_for_a_member_a_language_lacks_fails(repo: Repo) -> None:
         (gap("agent", lang="go"), "agent does not exist in go"),
         (gap("agent", kind="absent"), "kind 'absent' does not apply to function agent"),
         (gap("nope"), "nope is not in spec/api.json"),
-        (gap("agent", kind="placement"), "kind 'placement' does not apply to function agent"),
-        (gap("Model.send", "ts", "placement"), "kind 'placement' does not apply to method"),
-        (gap("agent") | {"why": "x"}, "a gap is exactly {name, lang, kind, lane}, all strings"),
+        (gap("agent", kind="placement") | {"at": "host"}, "kind 'placement' does not apply to"),
+        (gap("Model.send", "ts", "placement") | {"at": "host"}, "does not apply to method"),
+        (gap("Channel", "ts", "placement"), "plus at for a placement"),
+        (gap("Channel", "ts", "placement") | {"at": "mars"}, "at 'mars' is not another package"),
+        (gap("Channel", "ts", "placement") | {"at": "host"}, "at 'host' is not another package"),
+        (gap("agent") | {"why": "x"}, "a gap is exactly {name, lang, kind, lane}, plus at"),
         (gap("agent") | {"lane": "later"}, "lane 'later' is not NN-name or unassigned"),
     ],
 )
@@ -204,12 +207,27 @@ def test_a_duplicate_gap_is_rejected() -> None:
         ({"ts": [""]}, "api-coverage.json agent.ts: expected a non-empty list of test IDs"),
         ({"go": ["x"]}, "api-coverage.json agent: expected {ts?, py?} lists of test IDs"),
         (["x"], "api-coverage.json agent: expected {ts?, py?} lists of test IDs"),
+        ({}, "api-coverage.json agent: expected {ts?, py?} lists of test IDs"),
     ],
 )
 def test_malformed_coverage_entries_are_rejected(repo: Repo, entry: Json, problem: str) -> None:
     base = commit(repo.root, "base")
     repo.write("api-surface-gaps.json", [])
     repo.write("api-coverage.json", with_entry("agent", entry))
+    assert problem in repo.gate("ts", "--bootstrap", base)
+
+
+@pytest.mark.parametrize("name", ["agent.name", "nope"])
+def test_coverage_for_a_name_that_needs_none_is_rejected_in_every_job(
+    repo: Repo, name: str
+) -> None:
+    base = commit(repo.root, "base")
+    repo.write("api-surface-gaps.json", [])
+    repo.write("api-coverage.json", with_entry(name, {"py": RUNS["py"]}))
+    problem = (
+        f"api-coverage.json {name}: not a function, required method or required option in "
+        "spec/api.json; delete the entry"
+    )
     assert problem in repo.gate("ts", "--bootstrap", base)
 
 

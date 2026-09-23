@@ -11,6 +11,9 @@ checks the registries only. For --lang py it imports `threads`, so run it in the
 environment (`uv run --project python`). --bootstrap is only for the one PR that adds
 spec/api-surface-gaps.json (the base commit doesn't have it); after that, --baseline takes the
 base commit's gaps file and api.json, and a new gap passes only for a member new in this PR.
+
+The gate checks existence, callability, export entries and required flags, not signatures:
+parameter and return types are left to each language's type checker and tests.
 """
 
 from __future__ import annotations
@@ -44,7 +47,11 @@ def _read(path: pathlib.Path) -> tuple[Json, list[str]]:
 
 
 def _label(g: Gap) -> str:
-    return f"{g.name} ({g.lang}, {g.kind}, lane {g.lane})"
+    return f"{g.name} ({g.lang}, {_kind(g.kind, g.at)}, lane {g.lane})"
+
+
+def _kind(kind: str, at: str | None) -> str:
+    return f"{kind} (exported from {at})" if at else kind
 
 
 def check_bootstrap(base: str) -> list[str]:
@@ -79,15 +86,15 @@ def check_python(
     from surface_py import Package, PythonSurface  # noqa: PLC0415 - imports threads
 
     found = PythonSurface(contract, Package(entries)).findings()
-    listed = {(g.name, g.kind): g for g in gaps if g.lang == "py"}
+    listed = {(g.name, g.kind, g.at): g for g in gaps if g.lang == "py"}
     errs = [
-        f"surface gate: {name} (py) is {kind} and not listed in {GAPS_IN_GIT}; "
+        f"surface gate: {name} (py) is {_kind(kind, at)} and not listed in {GAPS_IN_GIT}; "
         "fix the package, or list the gap with its owning lane"
-        for name, kind in sorted(found - listed.keys())
+        for name, kind, at in sorted(found - listed.keys(), key=str)
     ]
     errs += [
         f"surface gate: {_label(listed[k])} is listed but fixed; delete its entry"
-        for k in sorted(listed.keys() - found)
+        for k in sorted(listed.keys() - found, key=str)
     ]
     return errs
 

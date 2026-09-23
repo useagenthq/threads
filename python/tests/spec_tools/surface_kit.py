@@ -5,6 +5,7 @@ import sys
 import types
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Protocol, Required, TypedDict, Unpack, runtime_checkable
 
 from check_api import Json
@@ -34,8 +35,8 @@ def _opt(name: str, *, required: bool, **extra: Json) -> dict[str, Json]:
 
 
 def api() -> dict[str, Json]:
-    """agent({model, name?}), run_sync (Python only), Model {info; send; lookup?} and Channel in
-    host. A fresh copy each call, so a test can edit it."""
+    """agent({model, name?}), run_sync (Python only), Model {info; send; lookup?}, the data type
+    Skill {name, note?} and Channel in host. A fresh copy each call, so a test can edit it."""
     return copy.deepcopy(_API)
 
 
@@ -61,6 +62,14 @@ _API: dict[str, Json] = {
             },
         },
         "Channel": {"kind": "interface", "role": "protocol", "package": "host"},
+        "Skill": {
+            "kind": "object",
+            "casing": "api",
+            "fields": {
+                "name": {"type": {"prim": "string"}, "required": True},
+                "note": {"type": {"prim": "string"}, "required": False},
+            },
+        },
     },
 }
 
@@ -111,6 +120,12 @@ class Channel(Protocol):
     def verify(self) -> None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class Skill:
+    name: str
+    note: str = ""
+
+
 class AgentOptions(TypedDict, total=False):
     model: Required[str]
     name: str
@@ -132,7 +147,13 @@ def _module(name: str, members: dict[str, object]) -> types.ModuleType:
 
 
 def core_members() -> dict[str, object]:
-    return {"Model": Model, "LooksUp": LooksUp, "agent": agent, "run_sync": run_sync}
+    return {
+        "Model": Model,
+        "LooksUp": LooksUp,
+        "Skill": Skill,
+        "agent": agent,
+        "run_sync": run_sync,
+    }
 
 
 def host_members() -> dict[str, object]:
