@@ -1,0 +1,9 @@
+{
+  "name": "output-schema-exclusive-maximum-rejected",
+  "family": "tools_streaming",
+  "kind": "reduce",
+  "description": "output_validated{accepted} whose share breaks only the exclusive-maximum keyword of the pinned output schema: invalid_transition. Every keyword is checked, never skipped.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

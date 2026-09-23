@@ -1,0 +1,9 @@
+{
+  "name": "output-schema-min-items-rejected",
+  "family": "tools_streaming",
+  "kind": "reduce",
+  "description": "output_validated{accepted} whose tags breaks only the min-items keyword of the pinned output schema: invalid_transition. Every keyword is checked, never skipped.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

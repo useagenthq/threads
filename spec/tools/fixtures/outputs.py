@@ -1,15 +1,15 @@
 # pyright: strict
-"""Structured output in tool mode (ADR 0012 5a): what counts as a failed candidate, how a
-nested output schema is checked, and what a structured subagent reports to its parent."""
+"""Structured output in tool mode (ADR 0012 5a): what counts as a failed candidate, and what a
+structured subagent reports to its parent."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import NOW, sha, tokens
+from .common import NOW, tokens
 from .jcs import JsonValue, Obj, canonical
 from .log import Log, reduce
-from .pieces import answer, call, case, reduce_case, reject, result, started, user, write_case
+from .pieces import answer, call, case, reduce_case, result, started, user, write_case
 from .policies import FINAL_OUTPUT, OUTPUT, policy
 from .projections import children
 from .teams import catalog_specs
@@ -22,32 +22,11 @@ ASK = "Return the final result by calling final_output."
 BAD: Obj = {"fixed": "yes"}
 GOOD: Obj = {"fixed": True}
 KID = "0192a000-0000-7000-8000-0000000000d1"
-# What a Pydantic model with a nested model writes: titles, a default, and $defs by $ref.
-LINE: Obj = {
-    "properties": {
-        "sku": {"title": "Sku", "type": "string"},
-        "qty": {"title": "Qty", "type": "integer"},
-    },
-    "required": ["sku", "qty"],
-    "title": "Line",
-    "type": "object",
-}
-INVOICE: Obj = {
-    "$defs": {"Line": LINE},
-    "properties": {
-        "lines": {"items": {"$ref": "#/$defs/Line"}, "title": "Lines", "type": "array"},
-        "note": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": None, "title": "Note"},
-    },
-    "required": ["lines"],
-    "title": "Invoice",
-    "type": "object",
-}
 
 
 def build(root: pathlib.Path) -> None:
     _exhausted(root)
     _asks(root)
-    _nested(root)
     _subagent(root)
 
 
@@ -146,53 +125,6 @@ def _asks(root: pathlib.Path) -> None:
             {"type": "turn_completed", "data": {"reason": "end_turn"}},
         ],
         [said, _step("call_1", GOOD)],
-    )
-
-
-def _invoice(value: Obj) -> Log:
-    """A thread whose pinned output schema nests a model, and an accepted candidate `value`."""
-    output: Obj = {**OUTPUT, "schema": INVOICE, "schema_sha256": sha(canonical(INVOICE))}
-    tool: Obj = {**FINAL_OUTPUT, "input_schema": INVOICE}
-    log = Log()
-    started(log, [tool], policy=policy(output=output))
-    user(log, "Invoice the order.")
-    c = call(log, "final_output", value)
-    validated: Obj = {
-        "source_event_id": c["event_id"],
-        "schema_sha256": output["schema_sha256"],
-        "outcome": "accepted",
-        "value": value,
-    }
-    log.add("output_validated", validated)
-    return log
-
-
-def _nested(root: pathlib.Path) -> None:
-    good: Obj = {"lines": [{"sku": "A-1", "qty": 2}], "note": None}
-    log = _invoice(good)
-    result(log, "call_1", canonical(good).decode())
-    log.add("turn_completed", {"reason": "end_turn"})
-    reduce_case(
-        root,
-        (
-            "output-validated-nested-schema-accepted",
-            FAM,
-            "The pinned output schema is what a Pydantic model with a nested model writes: "
-            "titles and a default (annotations, never constraints) and a $defs entry used by "
-            "$ref. An accepted value that satisfies it is valid.",
-        ),
-        log,
-        {},
-    )
-    reject(
-        root,
-        (
-            "output-validated-nested-schema-mismatch-rejected",
-            FAM,
-            "output_validated{accepted} whose nested value fails the $ref'd definition (qty "
-            '"2" is not an integer): invalid_transition. A reference is checked, never skipped.',
-        ),
-        _invoice({"lines": [{"sku": "A-1", "qty": "2"}]}),
     )
 
 

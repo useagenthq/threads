@@ -1,9 +1,0 @@
-{
-  "name": "output-validated-nested-schema-mismatch-rejected",
-  "family": "tools_streaming",
-  "kind": "reduce",
-  "description": "output_validated{accepted} whose nested value fails the $ref'd definition (qty \"2\" is not an integer): invalid_transition. A reference is checked, never skipped.",
-  "clock": {
-    "now": 1790000060000
-  }
-}
