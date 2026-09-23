@@ -282,6 +282,6 @@ export const ScheduleSkipped: EventDef<
   type: "schedule_skipped",
   critical: false,
   description:
-    "An occurrence that was reserved but not run: missed (it fell due while no host ran), overlap (the schedule's previous run was still going) or removed (its agent is no longer served). Skipping it cannot change reduce or render output.",
+    "An occurrence that was reserved but not run: missed (it fell due while no host ran), overlap (the schedule's previous run was still going) or removed (its agent is no longer served, or now pins another config than the thread was started with). Skipping it cannot change reduce or render output.",
   data: ScheduleSkippedData,
 });

@@ -1,4 +1,4 @@
-import { canonicalize, JsonValue, storeConnection } from "@threads/core/host";
+import { storeConnection } from "@threads/core/host";
 import type { HostContext } from "../context";
 import { occurrences } from "../cron";
 import type { Bound } from "./bind";
@@ -6,16 +6,15 @@ import { decideThread, type Pass } from "./decide";
 import {
   lastOccurrence,
   pendingRows,
-  reserve,
-  scheduleThread,
+  reserveDue,
   scheduleThreads,
 } from "./rows";
 
-// A scheduler pass. A schedule keeps one thread; an occurrence is (tenant, schedule id,
-// scheduled instant UTC). A due occurrence is first reserved as a pending row, with the agent,
-// input and timezone it fires with frozen, and then decided under its thread's writer. Every
-// pass first decides the tenant's pending rows, whatever schedules are configured now, so a
-// reservation outlives a restart or its schedule's removal.
+// A scheduler pass. A schedule runs on one thread while its agent's config is unchanged; an
+// occurrence is (tenant, schedule id, scheduled instant UTC). A due occurrence is first reserved
+// as a pending row, with the agent, input and timezone it fires with frozen, and then decided
+// under its thread's writer. Every pass decides all of the tenant's pending rows, whatever
+// schedules are configured now, so a reservation outlives a restart or its schedule's removal.
 
 const LOCAL_TENANT = "local";
 /** Enough to see both instances of a fall-back hour, so its second one is never run. */
@@ -32,9 +31,11 @@ export async function tick(
   const { db } = await storeConnection(ctx.store);
   const { log } = await ctx.open(tenant);
   const pass: Pass = { ctx, db, log, tenant };
-  await sweep(pass);
-  for (const b of bound) await reserveDue(pass, b, startedAt, now);
-  await sweep(pass);
+  for (const b of bound) await reserve(pass, b, startedAt, now);
+  // Reserved first, so a thread's backlog and its newly due occurrences are decided in one
+  // writer hold, in occurrence order.
+  const threads = new Set(pendingRows(db, tenant).map((r) => r.thread_id));
+  for (const thread of threads) await decideThread(pass, thread);
   // A run whose input is durable but that never went (its host died, or the writer was held
   // when it fired) runs on from the log (found by the F10.5 drill).
   for (const id of scheduleThreads(db, tenant)) {
@@ -45,16 +46,8 @@ export async function tick(
   }
 }
 
-/** Decides every pending row of the tenant, thread by thread in occurrence order. */
-async function sweep(pass: Pass): Promise<void> {
-  const threads = new Set(
-    pendingRows(pass.db, pass.tenant).map((r) => r.thread_id),
-  );
-  for (const thread of threads) await decideThread(pass, thread);
-}
-
 /** Reserves the schedule's occurrences due since its last one (or since ready). */
-async function reserveDue(
+async function reserve(
   pass: Pass,
   b: Bound,
   startedAt: number,
@@ -67,24 +60,17 @@ async function reserveDue(
     (at) => at > after,
   );
   if (due.length === 0) return;
-  const threadId = await scheduleThread(db, log, id, () =>
-    b.hosted.runner.started(),
+  reserveDue(
+    db,
+    log,
+    await b.hosted.runner.started(),
+    due.map((at) => ({
+      schedule_id: id,
+      occurrence_at: at,
+      agent: b.hosted.key,
+      input: b.schedule.input,
+      timezone: b.timezone,
+      missed: at <= startedAt,
+    })),
   );
-  const input = canonicalize(JsonValue.parse(b.schedule.input));
-  if (!input.ok) throw new Error("a parsed input is canonical JSON");
-  for (const at of due)
-    reserve(
-      db,
-      tenant,
-      {
-        schedule_id: id,
-        occurrence_at: at,
-        thread_id: threadId,
-        agent: b.hosted.key,
-        input_json: input.value,
-        timezone: b.timezone,
-        missed: at <= startedAt,
-      },
-      log.now(),
-    );
 }

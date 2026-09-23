@@ -1,5 +1,5 @@
 {
-  "description": "One thread per schedule. Each case replays its steps on one store, with a schedule and a scripted agent 'bot' that answers every run. Steps: start (a new scheduler, named by the value, ready at 'at'; optional tenant, default local; optional schedules, default [schedule]; optional agents served, default ['bot']); tick (one pass of that scheduler at 'at', then its runs settle); race (the named schedulers tick at 'at' at once, then settle); hold (an outside holder takes the local schedule thread's writer: 'run' also appends a user_input and leaves the turn open, 'outbound' only holds the lease); release ('done': the holder lets go and a held run finishes its turn; 'crash': the lease is let go and the turn is left open); delete (the local schedule thread is deleted); expect (per tenant: log is the schedule thread's schedule_fired and schedule_skipped events in order as 'fired <occurrence_id>' or 'skipped <reason> <occurrence_id>', empty when the schedule has no thread; rows are the tenant's schedule_occurrences as [occurrence_at as RFC 3339 UTC with milliseconds, state, reason] in occurrence order; threads, when given, is the tenant's thread count; inputs, when given, are the texts of the schedule thread's user_inputs whose source is schedule).",
+  "description": "One thread per schedule. Each case replays its steps on one store, with a schedule and a scripted agent 'bot' that answers every run. Steps: start (a new scheduler, named by the value, ready at 'at'; optional tenant, default local; optional schedules, default [schedule]; optional agents served, default ['bot'], each named by its key; optional instructions for those agents, default none); tick (one pass of that scheduler at 'at', then its runs settle); race (the named schedulers tick at 'at' at once, then settle); hold (an outside holder takes the local schedule thread's writer: 'run' also appends a user_input and leaves the turn open, 'outbound' only holds the lease); release ('done': the holder lets go and a held run finishes its turn; 'crash': the lease is let go and the turn is left open); delete (the local schedule thread is deleted); expect (per tenant: log is the schedule thread's schedule_fired and schedule_skipped events in order as 'fired <occurrence_id>' or 'skipped <reason> <occurrence_id>', empty when the schedule has no thread; rows are the tenant's schedule_occurrences as [occurrence_at as RFC 3339 UTC with milliseconds, state, reason] in occurrence order; threads, when given, is the tenant's thread count; inputs, when given, are the texts of the schedule thread's user_inputs whose source is schedule; one_hold, when given, are log entries whose events share one epoch, so one writer hold appended them all).",
   "schedule": {
     "id": "daily",
     "agent": "bot",
@@ -512,7 +512,11 @@
                   null
                 ]
               ],
-              "threads": 1
+              "threads": 1,
+              "one_hold": [
+                "skipped overlap daily@2026-05-02T09:00:00.000Z",
+                "fired daily@2026-05-03T09:00:00.000Z"
+              ]
             }
           }
         }
@@ -873,6 +877,155 @@
               "inputs": [
                 "Report.",
                 "Report, with totals."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-agent-changed-starts-new-thread",
+      "note": "A thread's pin never changes: when the schedule's agent changes, the next occurrence starts a new thread with the new agent.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-01T10:00:00Z",
+          "agents": [
+            "bot",
+            "helper"
+          ],
+          "schedules": [
+            {
+              "id": "daily",
+              "agent": "helper",
+              "cron": "0 9 * * *",
+              "input": "Report."
+            }
+          ]
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 2,
+              "inputs": [
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-agent-config-changed",
+      "note": "A pending reservation whose agent now pins another config than its thread's is logged as removed, never fired into a run the pin refuses; the next occurrence starts a new thread.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "outbound"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "release": "done"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-02T09:30:00Z",
+          "instructions": "Be brief."
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:30:00Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped removed daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "removed"
+                ]
+              ],
+              "threads": 1
+            }
+          }
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-03T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-03T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "removed"
+                ],
+                [
+                  "2026-05-03T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 2,
+              "inputs": [
+                "Report."
               ]
             }
           }

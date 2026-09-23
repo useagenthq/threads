@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { sqlite } from "@threads/core";
 import {
+  deleteThread,
   openStore,
   storeConnection,
   ThreadId,
@@ -11,7 +12,7 @@ import { HostContext } from "../src/context";
 import { occurrences, parseCron } from "../src/cron";
 import { bindSchedules, tick } from "../src/schedules";
 import { logOccurrence } from "../src/schedules/decide";
-import { pendingRows } from "../src/schedules/rows";
+import { pendingRows, reserveDue } from "../src/schedules/rows";
 import { eventsOf, mailer, say } from "./kit";
 
 // Cron parsing and DST rules, and the single winner of a pending occurrence. The schedule lifecycle
@@ -79,7 +80,7 @@ async function scheduleThread(store: ReturnType<typeof sqlite>) {
   if (row === undefined) throw new Error("no schedule thread");
   const main = log.mainBranch(row.thread_id);
   if (!main.ok) throw new Error(main.error.message);
-  return { db, log, branch: main.value };
+  return { db, log, thread: row.thread_id, branch: main.value };
 }
 
 function host(store: ReturnType<typeof sqlite>) {
@@ -136,5 +137,60 @@ describe("scheduler", () => {
     ]);
     await a.ctx.stop();
     await b.ctx.stop();
+  });
+
+  test("a deletion before a reservation leaves no stranded row, and a retired key is never reserved again", async () => {
+    const store = sqlite(":memory:");
+    const a = host(store);
+    await tick(a.ctx, a.bound, nine - 60_000, nine + 1_000);
+    await a.ctx.idle();
+    const { db, log, thread, branch } = await scheduleThread(store);
+    const outbound = log.acquire(branch, "outbound");
+    if (!outbound.ok) throw new Error(outbound.error.message);
+    await tick(a.ctx, a.bound, nine - 60_000, nine + DAY + 1_000);
+    outbound.value.release();
+    const done = deleteThread(db, "local", thread, Date.now());
+    if (!done.ok) throw new Error(done.error.message);
+    const started = await a.bound[0]?.hosted.runner.started();
+    if (started === undefined) throw new Error("no schedule");
+    const due = (at: number) => ({
+      schedule_id: "daily",
+      occurrence_at: at,
+      agent: "support",
+      input: "Report.",
+      timezone: "UTC",
+      missed: false,
+    });
+    // The retired key and a new one, reserved after the deletion committed: the retired row
+    // stays retired, and the new one lands on a new thread, never the deleted one.
+    reserveDue(db, log, started, [due(nine + DAY), due(nine + 2 * DAY)]);
+    const [identity] = z
+      .array(z.strictObject({ thread_id: ThreadId }))
+      .parse(db.all("SELECT thread_id FROM schedule_threads", []));
+    expect(identity?.thread_id).not.toBe(thread);
+    expect(
+      db.all(
+        "SELECT state, thread_id = ? AS on_new FROM schedule_occurrences ORDER BY occurrence_at",
+        [identity?.thread_id ?? ""],
+      ),
+    ).toEqual([
+      { state: "fired", on_new: 0 },
+      { state: "retired", on_new: 0 },
+      { state: "pending", on_new: 1 },
+    ]);
+    await a.ctx.stop();
+  });
+
+  test("a stored pending row whose frozen input is not an Input is reported as corrupt", async () => {
+    const store = sqlite(":memory:");
+    const { db } = await storeConnection(store);
+    db.run(
+      `INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state, thread_id,
+        claimed_at, agent, input_json, timezone)
+        VALUES ('local', 'daily', 1, 'pending', '0192a000-0000-7000-8000-000000000001', 1,
+        'support', '{"not": "an input"}', 'UTC')`,
+      [],
+    );
+    expect(() => pendingRows(db, "local")).toThrow("schedule rows are corrupt");
   });
 });

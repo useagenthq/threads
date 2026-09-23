@@ -54,6 +54,7 @@ class Expected(_Strict):
     rows: list[tuple[str, str, str | None]]
     threads: int | None = None
     inputs: list[str] | None = None
+    one_hold: list[str] | None = None
 
 
 class Start(_Strict):
@@ -62,6 +63,7 @@ class Start(_Strict):
     tenant: str = "local"
     schedules: list[ScheduleJson] | None = None
     agents: list[str] = ["bot"]
+    instructions: str | None = None
 
 
 class Tick(_Strict):
@@ -160,7 +162,11 @@ class Replay:
 
     def start(self, step: Start) -> None:
         bots = {
-            key: agent(name=key, model=scripted_model({"responses": [REPLY] * 12}))
+            key: agent(
+                name=key,
+                model=scripted_model({"responses": [REPLY] * 12}),
+                instructions=step.instructions or "",
+            )
             for key in step.agents
         }
         runner = Runner(self.store, bots, {})
@@ -226,13 +232,17 @@ class Replay:
             # The schedule's thread opens with its one thread_started.
             assert isinstance(events[0], ThreadStartedEvent)
             assert sum(isinstance(e, ThreadStartedEvent) for e in events) == 1
-        log = [
-            f"fired {e.data.occurrence_id}"
-            if isinstance(e, ScheduleFiredEvent)
-            else f"skipped {e.data.reason} {e.data.occurrence_id}"
+        logged = [
+            (
+                f"fired {e.data.occurrence_id}"
+                if isinstance(e, ScheduleFiredEvent)
+                else f"skipped {e.data.reason} {e.data.occurrence_id}",
+                e.epoch,
+            )
             for e in events
             if isinstance(e, ScheduleFiredEvent | ScheduleSkippedEvent)
         ]
+        held = {epoch for line, epoch in logged if line in (want.one_hold or [])}
         inputs = [
             e.data.text
             for e in events
@@ -241,10 +251,15 @@ class Replay:
             and isinstance(e.data.text, str)
         ]
         return Expected(
-            log=log,
+            log=[line for line, _ in logged],
             rows=[(_iso(at), state, reason) for at, state, reason in rows],
             threads=None if want.threads is None else count,
             inputs=None if want.inputs is None else inputs,
+            one_hold=None
+            if want.one_hold is None
+            else want.one_hold
+            if len(held) == 1
+            else [str(e) for e in held],
         )
 
     async def events(self, tenant: str) -> list[object]:

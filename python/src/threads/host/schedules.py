@@ -1,9 +1,10 @@
 """Schedules (spec/api.json `Schedule`): a cron expression in an IANA zone starts
-a run of a host agent at each occurrence, on the schedule's one thread.
+a run of a host agent at each occurrence, on the schedule's thread (one while its agent's config
+is unchanged: a config change starts a new thread).
 
 A due occurrence (tenant, schedule id, scheduled instant UTC) is first reserved as a pending row,
 with the agent, input and timezone it fires with frozen, and then decided under its thread's
-writer (`host.occurrences`). Every pass first decides the tenant's pending rows, whatever
+writer (`host.occurrences`). Every pass decides all of the tenant's pending rows, whatever
 schedules are configured now, so a reservation outlives a restart or its schedule's removal.
 Operator config: the local tenant, and the schedule itself as the principal.
 """
@@ -21,11 +22,9 @@ from threads.agents.run import pinned_start
 from threads.agents.store import now_ms, open_store
 from threads.host.occurrences import Pass, decide_thread
 from threads.host.runs import Runner
-from threads.log.jcs import canonicalize
-from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.store import LOCAL_TENANT
-from threads.store.schedules import Pending
+from threads.store.schedules import Due
 
 MINUTE_MS: Final = 60_000
 _RANGES: Final = ((0, 59), (0, 23), (1, 31), (1, 12), (0, 6))
@@ -153,9 +152,10 @@ class Scheduler:
 
     async def tick(self, started_at: int, now: int) -> None:
         """One pass at `now`; `started_at` is when this host became ready."""
-        await self._sweep()
         for schedule in self._schedules:
             await self._reserve_due(schedule, started_at, now)
+        # Reserved first, so a thread's backlog and its newly due occurrences are decided in one
+        # writer hold, in occurrence order.
         await self._sweep()
         await self._resume_open()
 
@@ -179,19 +179,14 @@ class Scheduler:
         if not due:
             return
         definition = self._runner.bound_to(schedule.agent).definition
-        thread = await rows.thread(
-            schedule.id, lambda: pinned_start(definition, self._pass.store), self._clock()
-        )
-        given = schedule.input
-        text = canonicalize(given if isinstance(given, str) else [to_json(p) for p in given])
-        if not isinstance(text, Ok):
-            raise AssertionError("a parsed input is canonical JSON")
-        for at in due:
-            missed = "missed" if at <= started_at else None
-            row = Pending(
-                schedule.id, at, thread, missed, schedule.agent, text.value, schedule.timezone
+        started = await pinned_start(definition, self._pass.store)
+        found = [
+            Due(
+                schedule.id, at, schedule.agent, schedule.input, schedule.timezone, at <= started_at
             )
-            await rows.reserve(row, self._clock())
+            for at in due
+        ]
+        await rows.reserve_due(started, found, self._clock())
 
     async def _resume_open(self) -> None:
         """A run whose input is durable but that never went (its host died, or the writer was

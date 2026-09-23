@@ -30,6 +30,7 @@ const Expected = z.strictObject({
   rows: z.array(z.tuple([z.string(), z.string(), z.string().nullable()])),
   threads: z.int().optional(),
   inputs: z.array(z.string()).optional(),
+  one_hold: z.array(z.string()).optional(),
 });
 const Step = z.union([
   z.strictObject({
@@ -38,6 +39,7 @@ const Step = z.union([
     tenant: z.string().optional(),
     schedules: z.array(ScheduleJson).optional(),
     agents: z.array(z.string()).optional(),
+    instructions: z.string().optional(),
   }),
   z.strictObject({ tick: z.string(), at: z.string() }),
   z.strictObject({ race: z.array(z.string()), at: z.string() }),
@@ -110,6 +112,9 @@ class Replay {
           agent({
             name: key,
             model: scriptedModel({ responses: Array(12).fill(say("ok")) }),
+            ...(step.instructions === undefined
+              ? {}
+              : { instructions: step.instructions }),
           }),
         ]),
       ),
@@ -208,11 +213,25 @@ class Replay {
     }
     const Occurrence = z.object({
       type: z.enum(["schedule_fired", "schedule_skipped"]),
+      epoch: z.int(),
       data: z.object({
         occurrence_id: z.string(),
         reason: z.string().optional(),
       }),
     });
+    const logged = events.flatMap((e) => {
+      const o = Occurrence.safeParse(e);
+      if (!o.success) return [];
+      const { occurrence_id: id, reason } = o.data.data;
+      const line =
+        o.data.type === "schedule_fired"
+          ? `fired ${id}`
+          : `skipped ${reason} ${id}`;
+      return [{ line, epoch: o.data.epoch }];
+    });
+    const held = new Set(
+      logged.filter((l) => want.one_hold?.includes(l.line)).map((l) => l.epoch),
+    );
     const Input = z.object({
       type: z.literal("user_input"),
       data: z.object({ source: z.literal("schedule"), text: z.string() }),
@@ -225,16 +244,7 @@ class Replay {
         ]),
       );
     return {
-      log: events.flatMap((e) => {
-        const o = Occurrence.safeParse(e);
-        if (!o.success) return [];
-        const { occurrence_id: id, reason } = o.data.data;
-        return [
-          o.data.type === "schedule_fired"
-            ? `fired ${id}`
-            : `skipped ${reason} ${id}`,
-        ];
-      }),
+      log: logged.map((l) => l.line),
       rows: rows.map((r) => [
         new Date(r.occurrence_at).toISOString(),
         r.state,
@@ -248,6 +258,11 @@ class Replay {
               const i = Input.safeParse(e);
               return i.success ? [i.data.data.text] : [];
             }),
+          }),
+      ...(want.one_hold === undefined
+        ? {}
+        : {
+            one_hold: held.size === 1 ? want.one_hold : [...held].map(String),
           }),
     };
   }

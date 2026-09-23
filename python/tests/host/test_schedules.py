@@ -8,6 +8,7 @@ import pytest
 from pydantic import JsonValue
 
 from threads import ConfigError, agent, scripted_model, sqlite
+from threads.agents.run import pinned_start
 from threads.agents.store import Store, now_ms, open_store
 from threads.host import Schedule, host
 from threads.host.occurrences import log_occurrence
@@ -15,6 +16,8 @@ from threads.host.runs import Runner
 from threads.host.schedules import Scheduler, parse_cron
 from threads.log import ScheduleFiredEvent, ScheduleSkippedEvent
 from threads.result import Ok
+from threads.store.retention import delete_thread
+from threads.store.schedules import Due
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 REPLY: JsonValue = {
@@ -86,6 +89,65 @@ def test_two_schedulers_holding_one_pending_row_the_stale_one_appends_nothing() 
         assert states == [("fired", 1), ("fired", 1)]
         await a.stop()
         await b.stop()
+
+    asyncio.run(main())
+
+
+NINE = int(datetime(2026, 5, 1, 9, 0, tzinfo=UTC).timestamp() * 1000)
+DAY = 86_400_000
+DAILY = Schedule(id="daily", agent="bot", cron="0 9 * * *", input="Report.")
+
+
+def test_a_deletion_before_a_reservation_strands_nothing_and_a_retired_key_stays_retired() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        bot = agent(name="bot", model=scripted_model({"responses": [REPLY] * 2}))
+        runner = Runner(store, {"bot": bot}, {})
+        scheduler = Scheduler(runner, [DAILY])
+        await scheduler.tick(NINE - 60_000, NINE + 1_000)
+        await runner.settled()
+        sq = await open_store(store)
+        rows = sq.tables.schedules
+        (thread,) = await rows.threads()
+        root = await sq.root(thread)
+        assert isinstance(root, Ok)
+        outbound = await sq.acquire(root.value, "outbound", now_ms)
+        assert isinstance(outbound, Ok)
+        await scheduler.tick(NINE - 60_000, NINE + DAY + 1_000)
+        await outbound.value.release()
+        await sq.run(lambda c: delete_thread(c, "local", thread, now_ms()))
+        # The retired key and a new one, reserved after the deletion committed: the retired row
+        # stays retired, and the new one lands on a new thread, never the deleted one.
+        started = await pinned_start(bot.definition, store)
+        due = [Due("daily", NINE + n * DAY, "bot", "Report.", "UTC", missed=False) for n in (1, 2)]
+        await rows.reserve_due(started, due, now_ms())
+        (identity,) = await rows.threads()
+        assert identity != thread
+        found = await sq.run(
+            lambda c: c.execute(
+                "SELECT state, thread_id = ? FROM schedule_occurrences ORDER BY occurrence_at",
+                (identity,),
+            ).fetchall()
+        )
+        assert found == [("fired", 0), ("retired", 0), ("pending", 1)]
+        await runner.stop()
+
+    asyncio.run(main())
+
+
+def test_a_stored_pending_row_whose_input_is_not_an_input_is_reported_as_corrupt() -> None:
+    async def main() -> None:
+        sq = await open_store(sqlite(":memory:"))
+        await sq.run(
+            lambda c: c.execute(
+                "INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state,"
+                " thread_id, claimed_at, agent, input_json, timezone) VALUES ('local', 'daily', 1,"
+                " 'pending', '0192a000-0000-7000-8000-000000000001', 1, 'bot',"
+                " '{\"not\": \"an input\"}', 'UTC')"
+            )
+        )
+        with pytest.raises(TypeError, match="schedule rows are corrupt"):
+            await sq.tables.schedules.pending()
 
     asyncio.run(main())
 

@@ -1,32 +1,58 @@
-"""The scheduler's rows (store.sql `schedule_threads`, `schedule_occurrences`): a schedule's one
-thread and its occurrences, every read and write scoped by tenant.
+"""The scheduler's rows (store.sql `schedule_threads`, `schedule_occurrences`): a schedule's thread
+and its occurrences, every read and write scoped by tenant.
 
 A due occurrence is reserved as a `pending` row with what firing it needs frozen (agent, input,
 timezone), then decided under its thread's writer by a conditional update in the transaction of
 the append that logs it, so a scheduler holding a stale copy of the row appends nothing."""
 
 import sqlite3
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
 
-from threads.log import BranchId, Header, ParseError, ThreadId
+from pydantic import TypeAdapter, ValidationError
+
+from threads._generated.host_api_v1 import Input
+from threads.log import BranchId, Header, ParseError, ThreadId, ThreadStartedEvent
 from threads.log.digest import sha256_hex
+from threads.log.jcs import canonicalize
 from threads.reduce import Fold, apply, enter_segment
-from threads.result import Err
+from threads.reduce.handlers import to_json
+from threads.result import Err, Ok
 from threads.store.companion import Companion
 from threads.store.lines import Draft, Position, event_line, header_line, uuid7
-from threads.store.sql import Branch, insert_branch, insert_events, int_of, text_of, transaction
+from threads.store.sql import (
+    Branch,
+    blob_of,
+    insert_branch,
+    insert_events,
+    int_of,
+    text_of,
+    transaction,
+)
 from threads.store.verify import StoredEvent
 from threads.store.worker import Worker
 
 type Reason = Literal["missed", "overlap", "removed"]
 _REASONS: Final[tuple[Reason, ...]] = ("missed", "overlap", "removed")
+_INPUT: TypeAdapter[Input] = TypeAdapter(Input, config={"strict": True})
 _PENDING: Final = (
     "SELECT schedule_id, occurrence_at, thread_id, reason, agent, input_json, timezone"
     " FROM schedule_occurrences WHERE tenant_id = ? AND state = 'pending'"
 )
 _ORDER: Final = " ORDER BY occurrence_at, thread_id, schedule_id"
+
+
+@dataclass(frozen=True, slots=True)
+class Due:
+    """A due occurrence to reserve on its schedule's thread."""
+
+    schedule_id: str
+    occurrence_at: int
+    agent: str
+    input: Input
+    timezone: str
+    missed: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,8 +65,7 @@ class Pending:
     reason: Reason | None
     """`missed` from reservation, `overlap` once the thread's log showed a turn open."""
     agent: str
-    input_json: str
-    """The schedule's input as canonical JSON."""
+    input: Input
     timezone: str
 
 
@@ -57,10 +82,23 @@ class ScheduleRows:
         tenant = self._tenant
         return await self._worker.call(lambda c: _pending(c, tenant, thread_id))
 
-    async def reserve(self, row: Pending, now: int) -> None:
-        """Reserves a due occurrence; another scheduler's reservation of the key wins silently."""
+    async def reserve_due(self, started: Draft, due: Sequence[Due], now: int) -> None:
+        """Reserves due occurrences on the schedule's thread, in one transaction with finding
+        that thread: a deletion commits wholly before (a new thread is made) or after (these rows
+        are retired). A schedule without a thread, or whose thread was started with another
+        config than `started` pins, gets a new thread (a config change starts a new thread): its
+        identity row, branch and thread_started are written together. Another scheduler's
+        reservation of a key wins silently."""
+        if not due:
+            return
         tenant = self._tenant
-        await self._worker.call(lambda c: _reserve(c, tenant, row, now))
+        thread_id, branch_id = ThreadId(uuid7(now)), BranchId(uuid7(now))
+        header = header_line(thread_id, branch_id, now)
+        line = _first_line(started, Position(thread_id, branch_id, 1, 1, header, now))
+        row = Branch(
+            branch_id, thread_id, tenant, None, None, header, "ready", 1, sha256_hex(line[1])
+        )
+        await self._worker.call(lambda c: _reserve_due(c, row, line, due, now))
 
     async def mark_overlaps(self, thread_id: ThreadId) -> None:
         """The thread's log shows a turn still open: its undecided pending rows are overlaps."""
@@ -97,26 +135,6 @@ class ScheduleRows:
         )
         return tuple(ThreadId(text_of(t)) for (t,) in rows)
 
-    async def thread(
-        self, schedule_id: str, first: Callable[[], Awaitable[Draft]], now: int
-    ) -> ThreadId:
-        """The schedule's thread, created on first use in one transaction with its identity row,
-        branch and `first` event (its thread_started). A scheduler that loses the identity insert
-        stores nothing and uses the winner's thread: never an orphan branch or a second thread."""
-        tenant = self._tenant
-        found = await self._worker.call(lambda c: _thread_of(c, tenant, schedule_id))
-        if found is not None:
-            return found
-        thread_id, branch_id = ThreadId(uuid7(now)), BranchId(uuid7(now))
-        header = header_line(thread_id, branch_id, now)
-        line = _first_line(await first(), header, Position(thread_id, branch_id, 1, 1, header, now))
-        row = Branch(
-            branch_id, thread_id, tenant, None, None, header, "ready", 1, sha256_hex(line[1])
-        )
-        return await self._worker.call(
-            lambda c: _create_thread(c, (tenant, schedule_id, now), row, line)
-        )
-
 
 def decided(tenant_id: str, row: Pending, reason: Reason | None) -> Companion:
     """Decides the row in the transaction of the append that logs it; a row that is no longer
@@ -148,18 +166,27 @@ def _pending(
     else:
         where = _PENDING + " AND thread_id = ?" + _ORDER
         rows = conn.execute(where, (tenant_id, thread_id)).fetchall()
-    return tuple(
-        Pending(
+    return tuple(_parsed(*row) for row in rows)
+
+
+def _parsed(*row: object) -> Pending:
+    """A stored pending row, every column checked: a row that fails is corruption, reported."""
+    schedule, at, thread, reason, agent, input_json, timezone = row
+    try:
+        found = Pending(
             text_of(schedule),
             int_of(at),
             ThreadId(text_of(thread)),
             _reason(reason),
             text_of(agent),
-            text_of(input_json),
+            _INPUT.validate_json(text_of(input_json)),
             text_of(timezone),
         )
-        for schedule, at, thread, reason, agent, input_json, timezone in rows
-    )
+    except (TypeError, ValidationError) as error:
+        raise TypeError(f"schedule rows are corrupt: {error}") from None
+    if not (found.schedule_id and found.thread_id and found.agent and found.timezone):
+        raise TypeError(f"schedule rows are corrupt: an empty column in {row!r}")
+    return found
 
 
 def _reason(value: object) -> Reason | None:
@@ -171,23 +198,46 @@ def _reason(value: object) -> Reason | None:
     raise TypeError(f"a stored skip reason {value!r} is not one of {_REASONS}")
 
 
-def _reserve(conn: sqlite3.Connection, tenant_id: str, row: Pending, now: int) -> None:
-    conn.execute(
-        "INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state, reason,"
-        " thread_id, claimed_at, agent, input_json, timezone)"
-        " VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
-        (
-            tenant_id,
-            row.schedule_id,
-            row.occurrence_at,
-            row.reason,
-            row.thread_id,
-            now,
-            row.agent,
-            row.input_json,
-            row.timezone,
-        ),
-    )
+def _reserve_due(
+    conn: sqlite3.Connection,
+    new: Branch,
+    first: tuple[ThreadStartedEvent, bytes],
+    due: Sequence[Due],
+    now: int,
+) -> None:
+    tenant_id, schedule_id = new.tenant_id, due[0].schedule_id
+    with transaction(conn):
+        found = _thread_of(conn, tenant_id, schedule_id)
+        thread = found
+        if found is None or _pin_of(conn, tenant_id, found) != first[0].data.config_hash:
+            conn.execute(
+                "INSERT INTO schedule_threads (tenant_id, schedule_id, thread_id, created_at)"
+                " VALUES (?, ?, ?, ?) ON CONFLICT (tenant_id, schedule_id)"
+                " DO UPDATE SET thread_id = excluded.thread_id, created_at = excluded.created_at",
+                (tenant_id, schedule_id, new.thread_id, now),
+            )
+            insert_branch(conn, new)
+            insert_events(conn, (first,), new.head_hash)
+            thread = new.thread_id
+        conn.executemany(
+            "INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state,"
+            " reason, thread_id, claimed_at, agent, input_json, timezone)"
+            " VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+            [
+                (
+                    tenant_id,
+                    d.schedule_id,
+                    d.occurrence_at,
+                    "missed" if d.missed else None,
+                    thread,
+                    now,
+                    d.agent,
+                    _canonical(d.input),
+                    d.timezone,
+                )
+                for d in due
+            ],
+        )
 
 
 def _thread_of(conn: sqlite3.Connection, tenant_id: str, schedule_id: str) -> ThreadId | None:
@@ -198,37 +248,38 @@ def _thread_of(conn: sqlite3.Connection, tenant_id: str, schedule_id: str) -> Th
     return None if found is None else ThreadId(text_of(found[0]))
 
 
-def _first_line(first: Draft, header: bytes, at: Position) -> tuple[StoredEvent, bytes]:
-    """A new branch's first event, checked like any append: failing is a bug, not an outcome."""
+def _pin_of(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId) -> str | None:
+    """The config_hash the thread was started with, parsed from its stored line."""
+    found: tuple[object] | None = conn.execute(
+        "SELECT e.line FROM branches b JOIN events e ON e.branch_id = b.branch_id"
+        " WHERE b.thread_id = ? AND b.tenant_id = ? AND b.parent_branch_id IS NULL"
+        " AND e.type = 'thread_started'",
+        (thread_id, tenant_id),
+    ).fetchone()
+    if found is None:
+        return None
+    return ThreadStartedEvent.model_validate_json(blob_of(found[0])).data.config_hash
+
+
+def _first_line(first: Draft, at: Position) -> tuple[ThreadStartedEvent, bytes]:
+    """A new branch's thread_started, checked like any append: failing is a bug, not an
+    outcome."""
     built = event_line(first, at)
     if isinstance(built, Err):
         raise ValueError(built.error.message)
+    event = built.value[0]
+    if not isinstance(event, ThreadStartedEvent):
+        raise TypeError("a schedule thread opens with thread_started")
     fold = Fold(now=at.now)
-    enter_segment(fold, Header.model_validate_json(header))
-    error = apply(fold, built.value[0])
+    enter_segment(fold, Header.model_validate_json(at.prev_line))
+    error = apply(fold, event)
     if error is not None:
         raise ValueError(error.message)
-    return built.value
+    return event, built.value[1]
 
 
-def _create_thread(
-    conn: sqlite3.Connection,
-    key: tuple[str, str, int],
-    row: Branch,
-    first: tuple[StoredEvent, bytes],
-) -> ThreadId:
-    tenant_id, schedule_id, now = key
-    with transaction(conn):
-        won = conn.execute(
-            "INSERT INTO schedule_threads (tenant_id, schedule_id, thread_id, created_at)"
-            " VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
-            (tenant_id, schedule_id, row.thread_id, now),
-        )
-        if won.rowcount == 1:
-            insert_branch(conn, row)
-            insert_events(conn, (first,), row.head_hash)
-            return row.thread_id
-    winner = _thread_of(conn, tenant_id, schedule_id)
-    if winner is None:
-        raise AssertionError("a lost identity insert has a winner")
-    return winner
+def _canonical(given: Input) -> str:
+    text = canonicalize(given if isinstance(given, str) else [to_json(p) for p in given])
+    if not isinstance(text, Ok):
+        raise AssertionError("a parsed input is canonical JSON")
+    return text.value

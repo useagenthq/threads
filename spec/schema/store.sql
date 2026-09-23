@@ -224,8 +224,10 @@ CREATE TABLE IF NOT EXISTS approvals (
 -- pending row is decided in occurrence order by one conditional UPDATE ... WHERE state =
 -- 'pending' in the transaction that appends its schedule_fired or schedule_skipped, which sets
 -- state, reason and logged_seq (the event's seq); a stale scheduler's update matches nothing and
--- its append rolls back. A thread's deletion turns its pending rows 'retired': never logged, and
--- never an occurrence outcome; the row only keeps the key from being reserved again.
+-- its append rolls back. An occurrence whose agent is gone, or now pins another config than its
+-- thread's, is skipped as 'removed', never fired into a run its thread's pin would refuse. A
+-- thread's deletion turns its pending rows 'retired': never logged, and never an occurrence
+-- outcome; the row only keeps the key from being reserved again.
 CREATE TABLE IF NOT EXISTS schedule_occurrences (
   tenant_id TEXT NOT NULL,
   schedule_id TEXT NOT NULL,
@@ -248,9 +250,10 @@ CREATE TABLE IF NOT EXISTS schedule_occurrences (
 CREATE INDEX IF NOT EXISTS schedule_occurrences_pending
   ON schedule_occurrences (tenant_id, occurrence_at) WHERE state = 'pending';
 
--- A schedule's one thread. A scheduler inserts the row, creates the thread's branch and appends
--- its thread_started in one transaction; one that loses the insert rolls back and uses the
--- winner's thread. Deleted with its thread; the next due occurrence starts a new one.
+-- A schedule's thread: one while its agent's pinned config is unchanged. A scheduler finds it,
+-- or writes this row, the thread's branch and its thread_started, in the same transaction as the
+-- reservations it makes on it, so a concurrent deletion lands wholly before or after. Deleted with
+-- its thread; the next due occurrence, or one whose agent pins another config, starts a new one.
 CREATE TABLE IF NOT EXISTS schedule_threads (
   tenant_id TEXT NOT NULL,
   schedule_id TEXT NOT NULL,

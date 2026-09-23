@@ -1,4 +1,3 @@
-import { Input } from "@threads/core";
 import {
   type ChainEvent,
   type EventDraft,
@@ -15,9 +14,11 @@ import {
 import type { HostContext } from "../context";
 import {
   decide,
+  hashOf,
   markOverlaps,
   type Pending,
   pendingOf,
+  pinOf,
   type Reason,
 } from "./rows";
 
@@ -44,13 +45,17 @@ export async function decideThread(
   const read = main.ok ? log.read(main.value) : undefined;
   if (!main.ok || read?.ok !== true) return;
   if (read.value.fold.turnOpen) markOverlaps(db, tenant, threadId);
+  const pins = await pinsOf(ctx, pendingOf(db, tenant, threadId));
   const writer = await briefly(log, main.value);
   // Contention is not an overlap: the rows stay pending for the next tick.
   if (!writer.ok) return;
+  const pinned = pinOf(log, threadId);
   let fired: Pending | undefined;
   try {
     for (const row of pendingOf(db, tenant, threadId)) {
-      const reason = classify(row, writer.value.chain.fold.turnOpen, ctx);
+      const { turnOpen } = writer.value.chain.fold;
+      const runs = pins.get(row.agent) === pinned;
+      const reason = classify(row, turnOpen, runs);
       // Another scheduler decided it first: its state is current, so stop here.
       if (!logOccurrence(pass, writer.value, row, reason)) break;
       if (reason === null) fired = row;
@@ -66,15 +71,32 @@ export async function decideThread(
   });
 }
 
-/** In order: missed, then an open turn, then fire with the frozen agent if it is still served. */
+/**
+ * In order: missed, then an open turn, then fire with the frozen agent, if it is still served
+ * with the config the thread was started with (a thread's pin never changes).
+ */
 function classify(
   row: Pending,
   turnOpen: boolean,
-  ctx: HostContext,
+  runs: boolean,
 ): Reason | null {
   if (row.reason !== null) return row.reason;
   if (turnOpen) return "overlap";
-  return ctx.agents.has(row.agent) ? null : "removed";
+  return runs ? null : "removed";
+}
+
+/** The config each served agent of the rows would pin now, by agent key. */
+async function pinsOf(
+  ctx: HostContext,
+  rows: readonly Pending[],
+): Promise<ReadonlyMap<string, string | undefined>> {
+  const pins = new Map<string, string | undefined>();
+  for (const key of new Set(rows.map((r) => r.agent))) {
+    const hosted = ctx.agents.get(key);
+    if (hosted !== undefined)
+      pins.set(key, hashOf(await hosted.runner.started()));
+  }
+  return pins;
 }
 
 /**
@@ -143,9 +165,7 @@ function input(
   actor: EventDraft["actor"],
   cause: string,
 ): EventDraft {
-  // The row's frozen input: canonical JSON the reservation wrote, parsed back (storage is a
-  // boundary).
-  const given = Input.parse(JSON.parse(row.input_json));
+  const given = row.input;
   return {
     type: "user_input",
     type_version: 1,

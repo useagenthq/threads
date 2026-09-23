@@ -11,11 +11,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
 
-from pydantic import JsonValue, TypeAdapter
+from pydantic import JsonValue
 
+from threads.agents.run import pinned_start
 from threads.agents.store import Store, now_ms, open_store
 from threads.host.runs import Runner
-from threads.log import BranchId, Principal, ThreadId
+from threads.log import BranchId, Principal, ThreadId, ThreadStartedEvent
 from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.store import Draft, SqliteStore, Writer
@@ -24,7 +25,6 @@ from threads.store.schedules import Pending, Reason, decided
 from threads.thread.handle import Thread
 
 HOLD_TRIES: Final = 10
-_JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,14 +47,17 @@ async def decide_thread(p: Pass, thread_id: ThreadId) -> None:
     rows = sq.tables.schedules
     if read.value.fold.in_turn:
         await rows.mark_overlaps(thread_id)
+    pins = await _pins(p, await rows.pending(thread_id))
     writer = await _briefly(sq, root.value)
     if writer is None:
         # Contention is not an overlap: the rows stay pending for the next tick.
         return
+    pinned = _pin(writer)
     fired: Pending | None = None
     try:
         for row in await rows.pending(thread_id):
-            reason = _classify(row, in_turn=writer.fold.in_turn, runner=p.runner)
+            runs = pinned is not None and pins.get(row.agent) == pinned
+            reason = _classify(row, in_turn=writer.fold.in_turn, runs=runs)
             if not await log_occurrence(writer, p.tenant, row, reason):
                 # Another scheduler decided it first: its state is current, so stop here.
                 break
@@ -68,13 +71,29 @@ async def decide_thread(p: Pass, thread_id: ThreadId) -> None:
         p.runner.launch(p.runner.bound_to(fired.agent), None, thread, who)
 
 
-def _classify(row: Pending, *, in_turn: bool, runner: Runner) -> Reason | None:
-    """In order: missed, then an open turn, then fire with the frozen agent if it is served."""
+def _classify(row: Pending, *, in_turn: bool, runs: bool) -> Reason | None:
+    """In order: missed, then an open turn, then fire with the frozen agent, if it is still
+    served with the config the thread was started with (a thread's pin never changes)."""
     if row.reason is not None:
         return row.reason
     if in_turn:
         return "overlap"
-    return None if runner.agent(row.agent) is not None else "removed"
+    return None if runs else "removed"
+
+
+async def _pins(p: Pass, rows: tuple[Pending, ...]) -> dict[str, JsonValue]:
+    """The config_hash each served agent of the rows would pin now, by agent key."""
+    pins: dict[str, JsonValue] = {}
+    for key in dict.fromkeys(r.agent for r in rows):
+        if p.runner.agent(key) is not None:
+            started = await pinned_start(p.runner.bound_to(key).definition, p.store)
+            pins[key] = started.data.get("config_hash")
+    return pins
+
+
+def _pin(writer: Writer) -> str | None:
+    started = next((e for e in writer.fold.events if isinstance(e, ThreadStartedEvent)), None)
+    return None if started is None else started.data.config_hash
 
 
 async def log_occurrence(writer: Writer, tenant: str, row: Pending, reason: Reason | None) -> bool:
@@ -103,9 +122,10 @@ async def log_occurrence(writer: Writer, tenant: str, row: Pending, reason: Reas
 
 
 def _input(row: Pending, cause: str) -> dict[str, JsonValue]:
-    # The frozen input the reservation wrote; the line's own schema checks it on append.
-    given = _JSON.validate_json(row.input_json)
-    body: dict[str, JsonValue] = {"text": given} if isinstance(given, str) else {"content": given}
+    given = row.input
+    body: dict[str, JsonValue] = (
+        {"text": given} if isinstance(given, str) else {"content": [to_json(p) for p in given]}
+    )
     return {"source": "schedule", "delivery_event_id": cause, **body}
 
 
