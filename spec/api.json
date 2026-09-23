@@ -1469,7 +1469,7 @@
         "cost": {
           "ts": "cost",
           "py": "cost",
-          "doc": "null when this thread pins no currency or no models. tree adds each descendant's, recursively through its main branch: nanos summed, complete and bounded ANDed; a descendant with no cost or another currency makes complete and bounded false and adds nothing. A descendant never started adds nothing; one whose log can't be read fails the call with its read error, naming the child.",
+          "doc": "What the thread spent, in nano-units of its pinned currency, with a conservative upper bound. null when this thread pins no currency or no models. tree adds every descendant at any depth, each read from its own main branch: nanos summed, complete and bounded ANDed. A descendant with no cost or another currency adds nothing and makes complete and bounded false; it never stops the walk. A descendant never started adds nothing; one whose log can't be read fails the call with its read error, naming the child.",
           "async": true,
           "params": [
             {

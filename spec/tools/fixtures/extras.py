@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import ALICE, T0, sha, tokens, tool
+from .common import ALICE, T0, obj, sha, tokens, tool
 from .jcs import JsonValue, Obj, canonical
 from .log import Log
 from .pieces import answer, call, reduce_case, render_case, result, started, user
@@ -25,6 +25,7 @@ def build(root: pathlib.Path) -> None:
     _reminder(root)
     _hooks(root)
     _unpinned_projections(root)
+    _unpriced_epoch(root)
 
 
 def _ask_call(log: Log, cid: str, cmd: str) -> Obj:
@@ -198,4 +199,26 @@ def _unpinned_projections(root: pathlib.Path) -> None:
         ),
         log,
         {"cost": cost(log), "cache_breaks": cache_breaks(log)},
+    )
+
+
+def _unpriced_epoch(root: pathlib.Path) -> None:
+    unpriced = {k: v for k, v in obj(MODELS[0]).items() if k != "price"}
+    log = Log()
+    started(log, [], policy={"models": [unpriced], "currency": "USD"})
+    user(log, "Question.")
+    r = log.model_request()
+    log.model_response(r, [{"type": "text", "text": "Answer."}], "end_turn", tokens(100, 10))
+    log.add("turn_completed", {"reason": "end_turn"})
+    reduce_case(
+        root,
+        (
+            "cost-unpriced-model-incomplete",
+            "cancellation_resume",
+            "The pinned model declares no price. Its response is known usage but has no known "
+            "cost: cost adds nothing for it and is neither complete nor bounded, never an exact "
+            "zero.",
+        ),
+        log,
+        {"cost": cost(log)},
     )

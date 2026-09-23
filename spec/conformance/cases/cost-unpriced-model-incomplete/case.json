@@ -1,0 +1,9 @@
+{
+  "name": "cost-unpriced-model-incomplete",
+  "family": "cancellation_resume",
+  "kind": "reduce",
+  "description": "The pinned model declares no price. Its response is known usage but has no known cost: cost adds nothing for it and is neither complete nor bounded, never an exact zero.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

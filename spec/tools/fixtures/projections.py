@@ -87,12 +87,16 @@ def cost(log: Log) -> Obj | None:
     known = upper = 0
     complete = bounded = True
     for req, settings, response, abandon in _attempts(log):
-        m = obj(settings["model"])
-        model = models[(text(m["provider"]), text(m["name"]))]
-        ib = req.get("input_bound_tokens")
-        bound = reservation(model, obj(settings["model_params"]), None if ib is None else num(ib))
         if response is None and _not_billed(abandon):
             continue
+        m = obj(settings["model"])
+        model = models[(text(m["provider"]), text(m["name"]))]
+        if "price" not in model:
+            # An unpriced epoch can be neither costed nor bounded; it is never a zero.
+            complete = bounded = False
+            continue
+        ib = req.get("input_bound_tokens")
+        bound = reservation(model, obj(settings["model_params"]), None if ib is None else num(ib))
         k, u = (
             (0, bound)
             if response is None
