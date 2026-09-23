@@ -82,8 +82,12 @@ const DocRow = z.object({
 const IndexRow = z.object({ rowid: z.int(), content_sha256: z.string() });
 
 type Local = KnowledgeProvider & {
-  /** Drops the index and refills it from the admitted artifacts (F14.3). */
-  readonly rebuild: () => void;
+  /**
+   * Drops the index and refills it from the admitted artifacts (F14.3), in one transaction. A
+   * source holding a value registered since it was admitted refuses the rebuild (invalid)
+   * before anything is cleared: the index stays as it was (C5).
+   */
+  readonly rebuild: () => Result<void, ProviderError>;
 };
 
 export type LocalKnowledgeOptions = { readonly paths: readonly string[] };
@@ -350,19 +354,28 @@ function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
       }),
     revision: async () => guard(() => ok(revision())),
     rebuild: () => {
-      db.run("DELETE FROM local_knowledge_fts", []);
       const rows = IndexRow.array().parse(
         db.all("SELECT rowid, content_sha256 FROM local_knowledge_docs", []),
       );
-      for (const r of rows) {
+      const sources = rows.map((r) => {
         const got = artifacts.get(r.content_sha256);
         const text = got.ok ? decodeText(got.value) : undefined;
-        if (text === undefined)
+        if (!got.ok || text === undefined)
           throw new Error(
             `an admitted version's artifact is gone: ${r.content_sha256}`,
           );
-        index(r.rowid, text);
-      }
+        return { rowid: r.rowid, bytes: got.value, text };
+      });
+      if (sources.some((s) => containsSecret(s.bytes)))
+        return err({
+          code: "invalid",
+          message: "a source holds a registered secret; index kept",
+        });
+      return db.transaction(() => {
+        db.run("DELETE FROM local_knowledge_fts", []);
+        for (const s of sources) index(s.rowid, s.text);
+        return ok(undefined);
+      });
     },
   };
 }

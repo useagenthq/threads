@@ -187,6 +187,37 @@ describe("the local knowledge provider refuses a source holding a value (#359 HI
   });
 });
 
+describe("a rebuild of the knowledge index checks every source first", () => {
+  test("a source holding a value registered since keeps the old index", async () => {
+    const raced = "raced-abcdefgh";
+    const bound = bindLocalKnowledge(
+      localKnowledge({ paths: [] }),
+      openBunSqlite(":memory:"),
+      memoryArtifacts(),
+    );
+    if (bound === undefined) throw new Error("localKnowledge binds");
+    const scope = { tenant_id: "t", agent: "a", scope: "u" };
+    const content = encoder.encode(`hello ${raced}`);
+    unwrap(
+      await bound.local.ingest(
+        scope,
+        {
+          source_id: "doc.md",
+          media_type: "text/markdown",
+          content,
+          binding: { namespace: "n", record_id: "doc" },
+        },
+        "doc@1",
+      ),
+    );
+    const before = unwrap(await bound.local.search(scope, "hello"));
+    register(raced, "later");
+    const rebuilt = bound.local.rebuild();
+    expect(rebuilt.ok ? "ok" : rebuilt.error.code).toBe("invalid");
+    expect(unwrap(await bound.local.search(scope, "hello"))).toEqual(before);
+  });
+});
+
 describe("an import's torn tail is checked (#359 MEDIUM)", () => {
   test("a torn tail holding a value refuses the import", () => {
     const later = "sk-l9-torn-7a8b";

@@ -16,7 +16,7 @@ from threads.memory.local_knowledge import LocalKnowledge
 from threads.memory.types import Binding, KnowledgeSource
 from threads.redaction import SecretInStoredBytesError, register
 from threads.result import Err, Ok
-from threads.store import Draft, ForkRequest, verify_export
+from threads.store import Draft, ForkRequest, SqliteStore, verify_export
 from threads.store import sqlite as store_sqlite
 from threads.store.forking import ChildStart, Forking
 from threads.store.worker import Worker
@@ -245,6 +245,41 @@ def test_a_cancelled_append_the_store_refused_leaves_the_writer_usable(
         exported = await store.export(ROOT)
         assert isinstance(exported, Ok)
         assert RACED.encode() not in exported.value
+        await store.close()
+
+    asyncio.run(main())
+
+
+def test_a_source_admitted_while_the_index_rebuilds_stays_searchable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rebuild that read its sources before another ingest committed must not drop it."""
+
+    def source(name: str, text: str) -> KnowledgeSource:
+        return KnowledgeSource(
+            source_id=name,
+            media_type="text/markdown",
+            content=text.encode(),
+            binding=Binding(namespace="n", record_id=name),
+        )
+
+    async def main() -> None:
+        store = await opened()
+        provider = await LocalKnowledge(()).bind(store)
+        assert isinstance(await provider.ingest(A, source("a.md", "alpha first"), "a"), Ok)
+        read = SqliteStore.get_artifact
+        late: list[KnowledgeSource] = [source("b.md", "zebra second")]
+
+        async def reading(self: SqliteStore, sha256: str) -> Ok[bytes] | Err[ParseError]:
+            if late:
+                assert isinstance(await provider.ingest(A, late.pop(), "b"), Ok)
+            return await read(self, sha256)
+
+        monkeypatch.setattr(SqliteStore, "get_artifact", reading)
+        assert await provider.rebuild_index() == Ok(None)
+        found = await provider.search(A, "zebra")
+        assert isinstance(found, Ok)
+        assert [hit.doc_id for hit in found.value] == ["b.md"]
         await store.close()
 
     asyncio.run(main())

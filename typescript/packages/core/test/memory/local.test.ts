@@ -103,7 +103,7 @@ describe("localKnowledge", () => {
       unwrap(await p.ingest(S, s.source, s.key));
     }
     const before = unwrap(await p.search(S, "beta"));
-    p.rebuild();
+    unwrap(p.rebuild());
     expect(unwrap(await p.search(S, "beta"))).toEqual(before);
     expect(before.length).toBe(2);
   });

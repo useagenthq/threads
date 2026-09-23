@@ -61,6 +61,9 @@ WHERE local_knowledge_fts MATCH ? AND {_LIVE}
 """
 _UNBOUND: Final = Err(ProviderError("unavailable", "local_knowledge isn't bound to a store"))
 _TEXT: Final = ("text/", "application/json")
+_REBUILD_ATTEMPTS: Final = 3
+"""A rebuild reads its sources outside the transaction; an ingest in between means reading
+again, a few times, before giving up with unavailable."""
 
 type _Row = tuple[str, str, int, int, str, str, str, float]
 
@@ -218,21 +221,31 @@ class LocalKnowledge:
         if store is None:
             return _UNBOUND
 
-        def rows(conn: sqlite3.Connection) -> list[tuple[int, str]]:
-            return conn.execute("SELECT rowid, content_sha256 FROM local_knowledge_docs").fetchall()
+        for _ in range(_REBUILD_ATTEMPTS):
+            try:
+                if await _rebuilt(store):
+                    return Ok(None)
+            except SecretInStoredBytesError:
+                return Err(
+                    ProviderError("invalid", "a source holds a registered secret; index kept")
+                )
+        return Err(ProviderError("unavailable", "sources kept changing during the rebuild"))
 
-        sources: list[tuple[int, bytes]] = []
-        for rowid, sha in await store.run(rows):
-            got = await store.get_artifact(sha)
-            if isinstance(got, Err):
-                raise AssertionError(f"an admitted version's artifact is gone: {sha}")
-            sources.append((rowid, got.value))
-        try:
-            pieces = [content for _, content in sources]
-            await store.run(transaction(lambda c: published(pieces, lambda: _refill(c, sources))))
-        except SecretInStoredBytesError:
-            return Err(ProviderError("invalid", "a source holds a registered secret; index kept"))
-        return Ok(None)
+
+async def _rebuilt(store: SqliteStore) -> bool:
+    """One rebuild attempt: reads the admitted sources, then checks them and refills the index
+    in one transaction with registration paused. False when an ingest moved the rows."""
+    read = await store.run(_admitted)
+    sources: list[tuple[int, bytes]] = []
+    for rowid, sha in read:
+        got = await store.get_artifact(sha)
+        if isinstance(got, Err):
+            raise AssertionError(f"an admitted version's artifact is gone: {sha}")
+        sources.append((rowid, got.value))
+    pieces = [content for _, content in sources]
+    return await store.run(
+        transaction(lambda c: published(pieces, lambda: _refill(c, read, sources)))
+    )
 
 
 def _insert(
@@ -302,10 +315,23 @@ def _admit(
     return write
 
 
-def _refill(conn: sqlite3.Connection, sources: Sequence[tuple[int, bytes]]) -> None:
+def _admitted(conn: sqlite3.Connection) -> list[tuple[int, str]]:
+    return conn.execute(
+        "SELECT rowid, content_sha256 FROM local_knowledge_docs ORDER BY rowid"
+    ).fetchall()
+
+
+def _refill(
+    conn: sqlite3.Connection, read: list[tuple[int, str]], sources: Sequence[tuple[int, bytes]]
+) -> bool:
+    """Clears and refills the index, in the caller's transaction, only if the admitted rows are
+    still the ones `sources` was read from: an ingest in between would be dropped (False)."""
+    if _admitted(conn) != read:
+        return False
     conn.execute("DELETE FROM local_knowledge_fts")
     for rowid, content in sources:
         _index(conn, rowid, content.decode("utf-8"))
+    return True
 
 
 def _version(doc_id: str, version: str, digest: str, revision: int) -> DocVersion:
