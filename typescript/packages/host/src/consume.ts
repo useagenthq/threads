@@ -9,6 +9,7 @@ import {
   type EventDraft,
   type EventId,
   knownEvents,
+  stopWhenIdle,
   storeConnection,
   type ThreadId,
   uuidv7,
@@ -25,7 +26,7 @@ import {
 // The run side of channel intake (step 6; spec/schema/README.md, "Channel
 // replies"): items leave the inbox under the branch lease, a message as channel_delivery then
 // user_input{source: channel}, a decision as an approval by a principal with approval
-// authority, a control as a cancel. An item is consumed in the transaction that applies it, so a
+// authority, a control as a cancel or a stop_when_idle. An item is consumed in the transaction that applies it, so a
 // busy branch leaves it queued; a decision or control never waits behind a message the branch
 // can't take yet.
 
@@ -55,16 +56,13 @@ async function step(
   threadId: ThreadId,
   items: readonly InboxItem[],
 ): Promise<boolean> {
-  const { db } = await storeConnection(ctx.store);
   let messagesWait = false;
   for (const next of items) {
     if (next.item.kind === "message" && messagesWait) continue;
+    // An item whose channel or pinned agent this host lacks waits, like a busy one, for a host
+    // that has them: every host sweeps every pending row, so discarding it here would lose it.
     const t = await target(ctx, tenant, threadId, next);
-    if (t === undefined) {
-      consumed(db, next.inbox_id, 0);
-      return true;
-    }
-    if ((await item(ctx, t, next)) === "done") return true;
+    if (t !== undefined && (await item(ctx, t, next)) === "done") return true;
     if (next.item.kind !== "message") return false;
     messagesWait = true;
   }
@@ -162,8 +160,9 @@ async function message(
   } finally {
     writer.value.release();
   }
-  // The run's replies follow it in the same lane (outbound.ts).
-  await ctx.resume(t.hosted, tenant, next.item.principal, {
+  // The run goes on alone, its replies after it in the same lane (outbound.ts): awaited, it
+  // would hold this thread's consumer, and a cancel sent during the run would wait for its end.
+  void ctx.resume(t.hosted, tenant, next.item.principal, {
     id: t.threadId,
     branch: branchId,
   });
@@ -212,7 +211,7 @@ function input(next: Message, cause: EventId): EventDraft {
 }
 
 /**
- * A decision from a principal with approval authority on the root run, or a cancel, appended
+ * A decision from a principal with approval authority on the root run, or a control, appended
  * with the item's consumption in one transaction. branch_busy keeps the item queued; any other
  * refusal is final and consumes it with nothing appended.
  */
@@ -238,9 +237,10 @@ async function applied(
     consumed(db, next.inbox_id, 0);
     return "done";
   }
-  if (item.kind === "control")
+  // Only a hard cancel reaches the tree; a soft stop lets running children finish.
+  if (item.kind === "control" && item.command === "cancel")
     await cancelChildren(log, t.threadId, item.principal);
-  await ctx.resume(t.hosted, tenant, item.principal, {
+  void ctx.resume(t.hosted, tenant, item.principal, {
     id: t.threadId,
     branch: main.value,
   });
@@ -271,7 +271,9 @@ async function planOf(
       );
     }
     case "control":
-      return item.command === "cancel" ? cancel(item.principal) : undefined;
+      return item.command === "cancel"
+        ? cancel(item.principal)
+        : stopWhenIdle(item.principal);
     case "message":
       return undefined;
     default:

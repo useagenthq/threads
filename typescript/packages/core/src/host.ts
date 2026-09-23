@@ -54,5 +54,5 @@ export { deleteTenant, deleteThread, sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control, decide } from "./thread/control";
-export { cancel } from "./thread/settings";
+export { cancel, stopWhenIdle } from "./thread/settings";
 export type { ChainEvent, LogError, VerifiedLog } from "./verify";

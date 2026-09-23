@@ -49,6 +49,28 @@ export function cancel(
   };
 }
 
+/**
+ * A channel's soft stop: finish what is in flight, start nothing new. It releases nothing the
+ * branch waits on and stops no child.
+ */
+export function stopWhenIdle(
+  principal: Principal,
+): (
+  events: readonly KnownEvent[],
+  writer: Writer,
+) => Result<Plan, ControlError> {
+  return () =>
+    ok({
+      record: {
+        type: "stop_when_idle",
+        type_version: 1,
+        critical: true,
+        actor: { kind: "user", principal },
+        data: { reason: "requested by the thread's principal" },
+      },
+    });
+}
+
 /** setMode: mode_changed from the current mode; rule checks are the log's. */
 export function setMode(
   mode: Mode,

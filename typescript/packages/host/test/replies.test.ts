@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { sqlite } from "@threads/core";
-import { storeConnection } from "@threads/core/host";
+import { openStore, storeConnection, tenantStore } from "@threads/core/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
 import { hostTicked } from "../src/host";
@@ -151,6 +151,41 @@ describe("a crash between turn_completed and the reply", () => {
     expect(third.slack.performed).toHaveLength(0);
     expect(sends(await threadEvents(store))).toHaveLength(1);
   }, 15_000);
+});
+
+describe("a run lost after its input is durable", () => {
+  test("the host that consumed the message runs it on a later tick and replies", async () => {
+    const slack = fakeChannel("support");
+    const store = sqlite(":memory:");
+    const h = host({
+      store,
+      authenticate,
+      agents: { support: mailer({ responses: [say("Hello back")] }) },
+      channels: { slack },
+    });
+    hosts.push(h);
+    await h.ready();
+    // Past the first tick, which looks only at the conversations that existed at startup.
+    await Bun.sleep(1_200);
+    // Another host's short lease takes the branch between the user_input's append and the run's
+    // own lease, once: the turn stays open, and no run is going on it anywhere.
+    const { log } = await openStore(tenantStore(store, TENANT));
+    const acquire = log.acquire.bind(log);
+    let lost = false;
+    log.acquire = (branch, holder, ttl) => {
+      if (lost || !holder.startsWith("run-"))
+        return acquire(branch, holder, ttl);
+      lost = true;
+      return {
+        ok: false,
+        error: { code: "branch_busy", message: "another host's lease" },
+      };
+    };
+    await post(h, hook("E1", [message("hi", "E1#0")]));
+    await until(async () => lost);
+    await until(async () => slack.performed.length === 1, 5_000);
+    expect(slack.performed[0]?.op).toMatchObject({ text: "Hello back" });
+  }, 10_000);
 });
 
 describe("approvals go to the originating channel", () => {

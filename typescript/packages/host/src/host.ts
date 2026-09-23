@@ -98,19 +98,27 @@ export function host(options: HostOptions): Host {
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking: Promise<void> | undefined;
   let tickWaiters: (() => void)[] = [];
-  /** Channel threads a crash may have left mid-run or owing replies, not yet settled. */
-  let unreplied: Map<string, { tenant: string; id: ThreadId }> | undefined;
+  /**
+   * Channel threads not yet seen settled: every one a crash may have left mid-run or owing
+   * replies (from the first tick), and every one this host consumed an item on since.
+   */
+  const unreplied = new Map<string, { tenant: string; id: ThreadId }>();
+  let seeded = false;
 
   /** One consumer per thread in this process; a kick while one runs is picked up by it. */
   const kick = (tenant: string, threadId: string): void => {
     if (consuming.has(threadId)) return;
+    const id = ThreadId.parse(threadId);
     const running = (async (): Promise<void> => {
       try {
-        await consume(ctx, tenant, ThreadId.parse(threadId));
+        await consume(ctx, tenant, id);
       } catch (error) {
         console.error(`threads host: consuming ${threadId} failed`, error);
       } finally {
         consuming.delete(threadId);
+        // Watched until settled: another host's short lease can take the branch between an
+        // input's append and its run's own lease, and then no process runs the open turn.
+        unreplied.set(threadId, { tenant, id });
       }
     })();
     consuming.set(threadId, running);
@@ -142,13 +150,12 @@ export function host(options: HostOptions): Host {
 
   /** From the first tick after ready(), never inside it: ready() sends nothing. */
   const recoverReplies = async (): Promise<void> => {
-    const { db } = await storeConnection(ctx.store);
-    unreplied ??= new Map(
-      channelThreads(db).map((r) => [
-        r.thread_id,
-        { tenant: r.tenant_id, id: r.thread_id },
-      ]),
-    );
+    if (!seeded) {
+      const { db } = await storeConnection(ctx.store);
+      for (const r of channelThreads(db))
+        unreplied.set(r.thread_id, { tenant: r.tenant_id, id: r.thread_id });
+      seeded = true;
+    }
     for (const [key, t] of unreplied) {
       const { log } = await ctx.open(t.tenant);
       const main = log.mainBranch(t.id);
