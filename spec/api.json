@@ -2276,7 +2276,7 @@
         "send": {
           "ts": "send",
           "py": "send",
-          "doc": "Stream one attempt. Every failure before content is the one terminal rejected chunk, never a thrown error, and its reason is one of returns.errors: a provider rejection class; stale_epoch when context.fence() refused at the real network send point, after any SDK queueing, so nothing left; content_unsupported or continuation_unsupported when the adapter can't encode a rendered part, so nothing left and nothing is re-sent. A throw after dispatch is a broken stream (unknown outcome).",
+          "doc": "Stream one attempt. Every failure before content is the one terminal rejected chunk, never a thrown error, and its reason is one of returns.errors: a provider rejection class; stale_epoch when context.fence() refused at the real network send point, after any SDK queueing, so nothing left; content_unsupported or continuation_unsupported when the adapter can't encode a rendered part, so nothing left and nothing is re-sent. transport_fence_unsupported when a bridge model already detected that its sends bypass the fenced transport, so nothing left and nothing is re-sent. A throw after dispatch is a broken stream (unknown outcome).",
           "async": false,
           "params": [
             {"name": "request", "kind": "positional", "type": {"$ref": "#/types/ModelRequest"}, "required": true},
@@ -2299,7 +2299,8 @@
               "provider_error",
               "stale_epoch",
               "content_unsupported",
-              "continuation_unsupported"
+              "continuation_unsupported",
+              "transport_fence_unsupported"
             ]
           }
         },
@@ -2325,7 +2326,7 @@
           "returns": {"result": {"prim": "integer"}, "errors": ["unavailable", "timeout"]}
         }
       },
-      "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off. Every send and lookup awaits context.fence() at its real network send, after any SDK or bridge queueing (AGENTS invariant 2: a send can carry provider-hosted tools, so a stale send is never treated as harmless). An adapter or bridge route whose real transport it cannot wrap is refused when the model is constructed: ConfigError transport_fence_unsupported; it is never shipped with a weaker fence. A bridge that takes a caller's model factory (the TypeScript AI SDK bridge) qualifies only providers that actually send through the fenced fetch it hands over; this is enforced at runtime: a send whose stream arrives with no request through that fetch ends as a broken stream (unknown outcome: it left unfenced, and its output is not kept), and that model refuses every later send before anything leaves.",
+      "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off. Every send and lookup awaits context.fence() at its real network send, after any SDK or bridge queueing (AGENTS invariant 2: a send can carry provider-hosted tools, so a stale send is never treated as harmless). An adapter or bridge route whose real transport it cannot wrap is refused when the model is constructed: ConfigError transport_fence_unsupported; it is never shipped with a weaker fence. A bridge that takes a caller's model factory (the TypeScript AI SDK bridge) qualifies only providers whose implementation sends through the fenced fetch it hands over on every path; that qualification comes from the provider implementation and its conformance tests, under the trusted-host-code boundary. The bridge also counts fenced fetches per send as misuse detection and containment, not proof of qualification: a send whose stream arrives with zero requests through that fetch ends as a broken stream (unknown outcome: it may have left unfenced, and its output is not kept), and that model refuses every later send before anything leaves with the rejected reason transport_fence_unsupported, recorded as not_sent (not billed, never retried).",
       "source": ""
     },
     "ModelContext": {
@@ -2460,11 +2461,12 @@
                   "provider_error",
                   "stale_epoch",
                   "content_unsupported",
-                  "continuation_unsupported"
+                  "continuation_unsupported",
+                  "transport_fence_unsupported"
                 ]
               },
               "required": true,
-              "doc": "The terminal error of a send: exactly Model.send returns.errors. Provider classes are recorded as model_attempt_abandoned{provider_outcome: failed}; stale_epoch appends nothing (the writer lost its lease); content_unsupported and continuation_unsupported are recorded as not_sent and end the turn with that code."
+              "doc": "The terminal error of a send: exactly Model.send returns.errors. Provider classes are recorded as model_attempt_abandoned{provider_outcome: failed}; stale_epoch appends nothing (the writer lost its lease); content_unsupported, continuation_unsupported and transport_fence_unsupported are recorded as not_sent and end the turn with that code, never retried."
             },
             "http_status": {"type": {"prim": "integer"}, "required": false},
             "retry_after_ms": {"type": {"prim": "integer"}, "required": false},

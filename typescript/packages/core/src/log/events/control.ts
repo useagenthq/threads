@@ -139,6 +139,7 @@ export const StopWhenIdle: EventDef<
 const TURN_ERROR_CODES = [
   "content_unsupported",
   "continuation_unsupported",
+  "transport_fence_unsupported",
 ] as const;
 const TURN_COMPLETED_DATA_RULE = {
   if: { required: ["code"] },
@@ -156,7 +157,7 @@ export const TurnCompletedData: Ruled<
     code: z
       .enum(TURN_ERROR_CODES)
       .describe(
-        "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request.",
+        "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried).",
       )
       .optional(),
   }),

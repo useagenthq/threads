@@ -4769,10 +4769,11 @@
           },
           "properties": {
             "code": {
-              "description": "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request.",
+              "description": "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried).",
               "enum": [
                 "content_unsupported",
-                "continuation_unsupported"
+                "continuation_unsupported",
+                "transport_fence_unsupported"
               ]
             },
             "reason": {

@@ -209,7 +209,9 @@ What the loop does after a turn response with no `tool_use` part (a response wit
 | `context_window_exceeded` | `turn_completed{context_exhausted}`, never a completed run | `context-window-exceeded-ends-turn` |
 | `other` | A reason the adapter can't name: `turn_completed{error}`, never a completed run | |
 
-**Capability pre-check.** Before appending a `model_request`, the loop checks the rendered request against the model's declared capabilities: an `image_ref`, `document_ref` or `audio_ref` in a user or tool line that `accepts` doesn't list, or a `reasoning` or `hosted_tool` part whose `provider` isn't the model's. On a mismatch no `model_request` is appended and the turn ends `turn_completed{reason: error, code: content_unsupported | continuation_unsupported}` (`content-unsupported-before-dispatch`, `continuation-unsupported-before-dispatch`). An adapter that still refuses at send time returns a typed non-retryable rejection (`provider_error`), never an unknown outcome that would be re-sent.
+**Capability pre-check.** Before appending a `model_request`, the loop checks the rendered request against the model's declared capabilities: an `image_ref`, `document_ref` or `audio_ref` in a user or tool line that `accepts` doesn't list, or a `reasoning` or `hosted_tool` part whose `provider` isn't the model's. On a mismatch no `model_request` is appended and the turn ends `turn_completed{reason: error, code: content_unsupported | continuation_unsupported}` (`content-unsupported-before-dispatch`, `continuation-unsupported-before-dispatch`). An adapter that still refuses at send time returns a typed non-retryable rejection (`content_unsupported` or `continuation_unsupported`), never an unknown outcome that would be re-sent.
+
+**Transport fence refusal.** A send rejected with `transport_fence_unsupported` (a bridge model that has detected its sends bypass the fenced transport, spec/api.json) is recorded as `model_attempt_abandoned{provider_outcome: not_sent}` and ends the turn `turn_completed{reason: error, code: transport_fence_unsupported}`. It is never retried.
 
 ## Versioning policy
 
