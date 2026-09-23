@@ -4,6 +4,7 @@ import {
   BranchId,
   openStore,
   storeConnection,
+  ThreadId,
   tenantStore,
 } from "@threads/core/host";
 import { z } from "zod";
@@ -139,6 +140,32 @@ describe("channel queue", () => {
     expect(
       db.all("SELECT consumed_seq FROM inbox WHERE item_key = 'E2#0'", []),
     ).toEqual([{ consumed_seq: granted?.["seq"] ?? -1 }]);
+  });
+
+  test("a message whose thread another host has just created, still empty, is not dropped", async () => {
+    const slack = fakeChannel("support");
+    h = harness({
+      agents: { support: mailer({ responses: [say("hi back")] }) },
+      channels: { slack },
+    });
+    // Received before ready(): durable in the inbox, not consumed yet.
+    await h.call("POST", "/channels/slack/events", hook("E1", say_("hi")));
+    const { db } = await storeConnection(h.store);
+    const [queued] = z
+      .array(z.object({ thread_id: ThreadId }))
+      .parse(db.all("SELECT thread_id FROM inbox", []));
+    // Another host made the thread's root and has not yet appended its thread_started.
+    const { log } = await openStore(tenantStore(h.store, TENANT));
+    const made = log.createBranch(
+      ThreadId.parse(queued?.thread_id),
+      BranchId.parse(crypto.randomUUID()),
+    );
+    if (!made.ok) throw new Error(made.error.message);
+    await h.host.ready();
+    await until(async () => slack.performed.length === 1);
+    expect(db.all("SELECT consumed_seq > 0 AS applied FROM inbox", [])).toEqual(
+      [{ applied: 1 }],
+    );
   });
 
   test("after a handoff the conversation continues with the target agent", async () => {

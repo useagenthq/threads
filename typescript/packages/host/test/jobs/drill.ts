@@ -165,10 +165,6 @@ export function sends(where: string): readonly string[] {
   return rows(where, "sends.jsonl").map((r) => String(r["key"]));
 }
 
-export function pids(where: string, file: string): ReadonlySet<number> {
-  return new Set(rows(where, file).map((r) => Number(r["pid"])));
-}
-
 /** No interleaved appends: contiguous seqs and non-decreasing epochs. */
 export function oneWriterAtATime(all: readonly KnownEvent[]): void {
   const seqs = all.map((e) => e.seq);

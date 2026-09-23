@@ -90,10 +90,12 @@ async function target(
   const { log } = await ctx.open(tenant);
   const main = log.mainBranch(threadId);
   const read = main.ok ? log.read(main.value) : undefined;
-  const hosted =
-    read?.ok === true
-      ? ctx.agentOf(knownEvents(read.value))
-      : ctx.agents.get(adapter.agent);
+  const events = read?.ok === true ? knownEvents(read.value) : [];
+  // A root another host just made has no thread_started yet: it pins no agent, like no root.
+  // Read as "no host agent", the item would be discarded and the message lost (F9.6 drill).
+  const hosted = events.some((e) => e.type === "thread_started")
+    ? ctx.agentOf(events)
+    : ctx.agents.get(adapter.agent);
   if (hosted === undefined) return undefined;
   const conversation = {
     tenant,
