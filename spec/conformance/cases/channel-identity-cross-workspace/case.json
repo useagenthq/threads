@@ -1,0 +1,37 @@
+{
+  "name": "channel-identity-cross-workspace",
+  "family": "channels",
+  "kind": "intake",
+  "description": "The same channel, user id and delivery id arrive from two workspaces. They are different installations, so different inbox rows and different threads: message content or ids never select another workspace's thread.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "webhooks": [
+      {
+        "channel": "slack",
+        "installation_id": "T024BE7LD",
+        "delivery_id": "Ev11",
+        "items": [
+          {
+            "conversation": "C1",
+            "sender": "U1",
+            "text": "hello"
+          }
+        ]
+      },
+      {
+        "channel": "slack",
+        "installation_id": "T999OTHER",
+        "delivery_id": "Ev11",
+        "items": [
+          {
+            "conversation": "C1",
+            "sender": "U1",
+            "text": "hello"
+          }
+        ]
+      }
+    ]
+  }
+}

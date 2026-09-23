@@ -1,0 +1,14 @@
+{
+  "outcome": "ok",
+  "responses": [
+    401,
+    200
+  ],
+  "inbox": [
+    {
+      "channel": "slack",
+      "item_key": "Ev07#0"
+    }
+  ],
+  "threads": 1
+}

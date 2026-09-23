@@ -1,0 +1,18 @@
+{
+  "outcome": "ok",
+  "responses": [
+    200,
+    200
+  ],
+  "inbox": [
+    {
+      "channel": "slack",
+      "item_key": "Ev11#0"
+    },
+    {
+      "channel": "slack",
+      "item_key": "Ev11#0"
+    }
+  ],
+  "threads": 2
+}

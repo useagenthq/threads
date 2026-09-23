@@ -107,6 +107,7 @@ class _View:
         self.cleared: set[str] = set()
         self.redactions: dict[tuple[str, int], list[JsonValue]] = {}
         self.denied: set[JsonValue] = set()
+        self.host_calls = _host_calls(events)
         ranges: list[Obj] = []
         for e in events:
             d, t = obj(e["data"]), e["type"]
@@ -181,9 +182,11 @@ class _View:
         parts = [p for p in arr(d["content"]) if not (old and obj(p)["type"] in OPAQUE)]
         return {"role": "assistant", "content": parts} if parts else None
 
-    def result(self, e: Obj) -> Obj:
+    def result(self, e: Obj) -> Obj | None:
         d = obj(e["data"])
         cid = text(d["call_id"])
+        if cid in self.host_calls:
+            return None
         parts: list[JsonValue]
         if cid in self.cleared:
             parts = [{"type": "text", "text": CLEARED.format(cid)}]
@@ -224,6 +227,22 @@ class _View:
                 ]
                 if kept:
                     yield kept[-1], _bind(_View.tools_changed, self, kept[-1])
+
+
+def _host_calls(events: list[Obj]) -> set[str]:
+    """Calls no model response proposed: host-originated (a channel_send reply)."""
+    proposed = {
+        text(obj(p)["call_id"])
+        for e in events
+        if e["type"] in ("model_response", "model_response_recovered")
+        for p in arr(obj(e["data"])["content"])
+        if obj(p)["type"] == "tool_use"
+    }
+    return {
+        text(obj(e["data"])["call_id"])
+        for e in events
+        if e["type"] == "tool_call" and text(obj(e["data"])["call_id"]) not in proposed
+    }
 
 
 def _bind(fn: Callable[[_View, Obj], Obj | None], v: _View, e: Obj) -> Callable[[], Obj | None]:

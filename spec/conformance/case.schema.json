@@ -46,6 +46,7 @@
             "fork",
             "stub",
             "intake",
+            "host",
             "security",
             "parity",
             "policy"
@@ -122,6 +123,13 @@
             "text": {
               "description": "stub: the user_input the runner sends once the log is imported (a saved case's next input after its snapshot). saveCase always writes it.",
               "type": "string"
+            },
+            "requests": {
+              "description": "host: POST /v1/runs requests in order, each as its authenticated principal.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostRequest"
+              }
             }
           }
         },
@@ -394,6 +402,39 @@
         "projections": {
           "description": "Named projections beyond ReducedState, compared by deep equality only for the keys listed (ADRs 0019-0023).",
           "$ref": "#/$defs/Projections"
+        },
+        "threads": {
+          "description": "intake: distinct threads the inbox rows map to.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "api": {
+          "description": "host: one answer per request, in order. receipt is the index of the request whose 202 receipt this one equals (its own index for a new run); code is the error code of a non-2xx answer.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "integer"
+              },
+              "receipt": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "code": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "user_inputs": {
+          "description": "host: user_input events in the logs of every thread a receipt names.",
+          "type": "integer",
+          "minimum": 0
         }
       },
       "allOf": [
@@ -914,6 +955,10 @@
               }
             }
           }
+        },
+        "forged": {
+          "description": "intake: the fake adapter's verify refuses this delivery (a bad signature or a replay).",
+          "type": "boolean"
         }
       }
     },
@@ -1143,6 +1188,29 @@
               "type": "boolean"
             }
           }
+        }
+      }
+    },
+    "HostRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "principal",
+        "idempotency_key",
+        "body"
+      ],
+      "properties": {
+        "principal": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Principal"
+        },
+        "idempotency_key": {
+          "description": "The Idempotency-Key header (1 to 255 characters).",
+          "type": "string",
+          "minLength": 1
+        },
+        "body": {
+          "description": "The POST /v1/runs body as sent: a host-api StartRunRequest (urn:threads:schema:host-api:v1#/$defs/StartRunRequest).",
+          "type": "object"
         }
       }
     }

@@ -1,0 +1,9 @@
+{
+  "name": "render-host-channel-send-hidden",
+  "family": "channels",
+  "kind": "render",
+  "description": "A host-issued channel_send reply (a tool_call no model response proposed) is recorded as an effect but never rendered: the model's own final text is already in history, and a host reply is not a model tool call, so no orphan tool result.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

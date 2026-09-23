@@ -1,0 +1,49 @@
+{
+  "name": "channel-redelivery-no-dup",
+  "family": "channels",
+  "kind": "intake",
+  "description": "The provider redelivers the same message three times, including after a crash before and after our response. Each redelivery is answered and inserts nothing: one inbox row, so one run and one reply.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "webhooks": [
+      {
+        "channel": "slack",
+        "installation_id": "T024BE7LD",
+        "delivery_id": "Ev09",
+        "items": [
+          {
+            "conversation": "C1",
+            "sender": "U1",
+            "text": "hello"
+          }
+        ]
+      },
+      {
+        "channel": "slack",
+        "installation_id": "T024BE7LD",
+        "delivery_id": "Ev09",
+        "items": [
+          {
+            "conversation": "C1",
+            "sender": "U1",
+            "text": "hello"
+          }
+        ]
+      },
+      {
+        "channel": "slack",
+        "installation_id": "T024BE7LD",
+        "delivery_id": "Ev09",
+        "items": [
+          {
+            "conversation": "C1",
+            "sender": "U1",
+            "text": "hello"
+          }
+        ]
+      }
+    ]
+  }
+}

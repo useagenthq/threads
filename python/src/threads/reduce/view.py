@@ -24,7 +24,11 @@ from threads.log import (
     ReasoningPart,
     SettingsChangedEvent,
     Span,
+    ToolCallEvent,
+    ToolResultEvent,
+    ToolResultLateEvent,
     ToolsChangedEvent,
+    ToolUsePart,
 )
 
 
@@ -42,6 +46,9 @@ class RenderView:
     """Tool results a context_edited cleared."""
     redactions: Mapping[tuple[CallId, int], tuple[Span, ...]]
     """UTF-8 byte spans to redact, per (call_id, part index)."""
+    host_calls: frozenset[CallId]
+    """Calls no model response proposed (a host's channel_send reply): their results render
+    nothing, since the model never asked for them."""
 
 
 @dataclass(slots=True)
@@ -54,8 +61,16 @@ class _Builder:
     redactions: dict[tuple[CallId, int], tuple[Span, ...]] = field(
         default_factory=dict[tuple[CallId, int], tuple[Span, ...]]
     )
+    proposed: set[CallId] = field(default_factory=set[CallId])
+    calls: list[CallId] = field(default_factory=list[CallId])
 
     def add(self, event: Event) -> None:
+        if isinstance(event, ModelResponseEvent | ModelResponseRecoveredEvent):
+            self.proposed.update(
+                p.call_id for p in event.data.content if isinstance(p, ToolUsePart)
+            )
+        elif isinstance(event, ToolCallEvent):
+            self.calls.append(event.data.call_id)
         if isinstance(event, HookDecisionEvent):
             self._hook(event)
         elif isinstance(event, ModelRequestEvent) and event.data.purpose == "compaction":
@@ -95,6 +110,14 @@ def render_view(events: Sequence[Event]) -> RenderView:
         outer,
         frozenset(b.cleared),
         dict(b.redactions),
+        frozenset(c for c in b.calls if c not in b.proposed),
+    )
+
+
+def _host_result(view: RenderView, event: Event) -> bool:
+    return (
+        isinstance(event, ToolResultEvent | ToolResultLateEvent)
+        and event.data.call_id in view.host_calls
     )
 
 
@@ -120,7 +143,7 @@ def walk(view: RenderView, events: Sequence[Event]) -> Iterator[Event]:
     for event in events:
         compacted = next((c for c in view.ranges if covers(c, event.seq)), None)
         if compacted is None:
-            if not isinstance(event, CompactedEvent):
+            if not isinstance(event, CompactedEvent) and not _host_result(view, event):
                 yield event
         elif event.seq == compacted.data.from_seq:
             yield compacted

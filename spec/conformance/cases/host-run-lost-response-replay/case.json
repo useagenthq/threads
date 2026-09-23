@@ -1,0 +1,49 @@
+{
+  "name": "host-run-lost-response-replay",
+  "family": "channels",
+  "kind": "host",
+  "description": "A client POSTs /v1/runs, the user_input becomes durable and the response is lost. The retry with the same Idempotency-Key and body replays the same receipt (the same run_id, the user_input's event_id) and starts nothing; the same key with another body is idempotency_key_reused.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "requests": [
+      {
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "idempotency_key": "k-1",
+        "body": {
+          "agent": "demo",
+          "input": "Deploy it."
+        }
+      },
+      {
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "idempotency_key": "k-1",
+        "body": {
+          "agent": "demo",
+          "input": "Deploy it."
+        }
+      },
+      {
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "idempotency_key": "k-1",
+        "body": {
+          "agent": "demo",
+          "input": "Deploy staging."
+        }
+      }
+    ]
+  }
+}

@@ -24,7 +24,7 @@ cases/<name>/
   artifacts/<sha256>  optional: content-addressed bytes referenced by the log
 ```
 
-`log.jsonl` is absent only for the `intake` and `policy` kinds, and for `recover` and `stub`, which append. Only the implementation named in a header's `writer.impl` may append to that branch, so each `recover` and `stub` case has `log.threads-py.jsonl` and `log.threads-ts.jsonl` from the same script, differing only in the header's writer and the hashes that follow, with the matching `expected.<impl>.json` (only `state.head.hash` differs). A runner uses the pair named for itself. Reading and forking are portable, so every other kind has one `log.jsonl`. In `recover-foreign-writer-refused` each runner gets the other implementation's log: it opens it read-only and refuses to append (`writer_mismatch` at seq 0). `case.schema.json` defines `case.json` (`$defs/Case`), `expected.json` (`$defs/Expected`), `model.json` (`$defs/ModelScript`), `sandbox.json` (`$defs/SandboxScript`) and `stubs.json` (`$defs/StubScript`). Line shapes come from `../schema/events.v1.schema.json`. Every line of every `log.jsonl` validates, except the torn line in `torn-tail-truncated` and the lines a negative case breaks on purpose.
+`log.jsonl` is absent only for the `intake`, `host` and `policy` kinds, and for `recover` and `stub`, which append. Only the implementation named in a header's `writer.impl` may append to that branch, so each `recover` and `stub` case has `log.threads-py.jsonl` and `log.threads-ts.jsonl` from the same script, differing only in the header's writer and the hashes that follow, with the matching `expected.<impl>.json` (only `state.head.hash` differs). A runner uses the pair named for itself. Reading and forking are portable, so every other kind has one `log.jsonl`. In `recover-foreign-writer-refused` each runner gets the other implementation's log: it opens it read-only and refuses to append (`writer_mismatch` at seq 0). `case.schema.json` defines `case.json` (`$defs/Case`), `expected.json` (`$defs/Expected`), `model.json` (`$defs/ModelScript`), `sandbox.json` (`$defs/SandboxScript`) and `stubs.json` (`$defs/StubScript`). Line shapes come from `../schema/events.v1.schema.json`. Every line of every `log.jsonl` validates, except the torn line in `torn-tail-truncated` and the lines a negative case breaks on purpose.
 
 ### log.jsonl is an export
 
@@ -36,10 +36,10 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 |---|---|
 | `name` | Equals the directory name |
 | `family` | The v0.1 feature family it evidences (`log`, `cancellation_resume`, `log_fork_test`, ...) |
-| `kind` | `reduce`, `render`, `recover`, `fork`, `stub`, `intake`, `policy`, `security` or `parity` |
+| `kind` | `reduce`, `render`, `recover`, `fork`, `stub`, `intake`, `host`, `policy`, `security` or `parity` |
 | `clock.now` | The injected clock. Runners never read wall time |
 | `model_script`, `sandbox_script`, `stub_script` | Present when the case needs them |
-| `input` | Kind-specific input: `fork_at_event_id`, `new_branch_id` and optional `knowledge_policy` (fork; absent means `pinned`), `text` (stub: the user_input sent once the log is imported), `webhooks` (intake), `workspace`, `permissions` and `calls` (policy) |
+| `input` | Kind-specific input: `fork_at_event_id`, `new_branch_id` and optional `knowledge_policy` (fork; absent means `pinned`), `text` (stub: the user_input sent once the log is imported), `webhooks` (intake), `requests` (host), `workspace`, `permissions` and `calls` (policy) |
 | `expect` | stub, written by `saveCase`: `{must, expect}` `EventMatcher` lists. Each `must` matcher matches at least one appended event, else the case fails; `expect` is only reported. `appended` in expected.json still means exactly the events appended |
 
 ### expected.json
@@ -57,7 +57,8 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 | `resources` | fork: `creates` (provider create calls the fake sandbox saw) and the resource-ledger `rows` `{kind, state}` the operation left |
 | `render` | `next_request_sha256` and `declared_prefix` |
 | `stubs` | `consumed` and `unmatched` counts |
-| `responses`, `inbox` | intake: HTTP status per webhook, and the inbox rows in insertion order |
+| `responses`, `inbox`, `threads` | intake: HTTP status per webhook, the inbox rows in insertion order, and how many distinct threads they map to |
+| `api`, `user_inputs` | host: one answer per request (`status`, `receipt` as the index of the request whose receipt it equals, `code` of a failure), and the user_input events in the logs of every thread a receipt names |
 | `decisions` | policy: one `{decision, source, rule?}` per input call, in order |
 | `projections` | Named projections of the input log beyond `ReducedState` (below). Only the listed keys are compared |
 
@@ -148,7 +149,13 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 
 **`intake`**
 1. Deliver `input.webhooks` in order to the host intake pipeline with a fake verifying adapter. A repeated delivery simulates provider redelivery after a crash that followed the inbox insert.
-2. Compare the HTTP `responses` and the `inbox` rows. Each item has its own row, keyed by the provider's item id or `<delivery_id>#<index>`, and the whole parsed batch is inserted in one transaction before the response.
+   The fake adapter's tenant is `<channel>:<installation_id>`; each item is a message from principal `{issuer: <channel>:<installation_id>, tenant, subject: sender}` at address `conversation`, keyed by its `item_id` or `<delivery_id>#<index>`. A webhook with `forged: true` fails verify.
+2. Compare the HTTP `responses`, the `inbox` rows and the number of distinct `threads` they map to. Each item has its own row, keyed by the provider's item id or `<delivery_id>#<index>`, and the whole parsed batch is inserted in one transaction before the response.
+
+**`host`**
+1. Build a host whose only agent is `demo` (a scripted model answering `Done.` to every request) and whose `authenticate` answers each request's `principal`.
+2. POST each of `input.requests` to `/v1/runs` in order, with its `Idempotency-Key` and `body`. A repeat simulates a client retry after a lost response.
+3. Compare `api`: each answer's status, a 202's receipt (equal to the receipt of the request `receipt` names), and a failure's `error.code`; a failure body never carries another request's receipt. Then stop the host and compare `user_inputs`.
 
 **`policy`**
 1. Build the permission engine from `input.permissions` with `input.workspace` as the workspace root.

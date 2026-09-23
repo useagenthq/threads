@@ -1,0 +1,49 @@
+{
+  "name": "host-run-idempotency-other-principal",
+  "family": "channels",
+  "kind": "host",
+  "description": "Principal B of the same tenant reuses principal A's Idempotency-Key with the same body. B gets idempotency_key_principal_mismatch, never A's receipt, and nothing starts; B's own key is its own run.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "requests": [
+      {
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "idempotency_key": "k-1",
+        "body": {
+          "agent": "demo",
+          "input": "Deploy it."
+        }
+      },
+      {
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "bob"
+        },
+        "idempotency_key": "k-1",
+        "body": {
+          "agent": "demo",
+          "input": "Deploy it."
+        }
+      },
+      {
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "bob"
+        },
+        "idempotency_key": "k-2",
+        "body": {
+          "agent": "demo",
+          "input": "Deploy it."
+        }
+      }
+    ]
+  }
+}

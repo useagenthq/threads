@@ -29,6 +29,8 @@ export type View = {
   readonly cut: number;
   /** Outermost compacted ranges: a compacted event inside a later range is dropped with it. */
   readonly ranges: readonly Compacted[];
+  /** Calls no model response proposed (a host's channel_send reply): their results render nothing. */
+  readonly hostCalls: ReadonlySet<string>;
 };
 
 function covers(c: Compacted, seq: number): boolean {
@@ -57,7 +59,27 @@ export function view(events: readonly KnownEvent[]): View {
     ranges: compacted.filter(
       (c) => !compacted.some((outer) => covers(outer, c.seq)),
     ),
+    hostCalls: hostCalls(events),
   };
+}
+
+function hostCalls(events: readonly KnownEvent[]): ReadonlySet<string> {
+  const proposed = new Set(
+    events.flatMap((e) =>
+      e.type === "model_response" || e.type === "model_response_recovered"
+        ? e.data.content.flatMap((p) =>
+            p.type === "tool_use" ? [p.call_id] : [],
+          )
+        : [],
+    ),
+  );
+  return new Set(
+    events.flatMap((e) =>
+      e.type === "tool_call" && !proposed.has(e.data.call_id)
+        ? [e.data.call_id]
+        : [],
+    ),
+  );
 }
 
 /** The input a before_input hook denied (or failed on); it renders nothing. */
@@ -79,7 +101,7 @@ export function* walk(
   for (const e of events) {
     const range = v.ranges.find((c) => covers(c, e.seq));
     if (range === undefined) {
-      const shown = visible(e);
+      const shown = hidden(v, e) ? undefined : visible(e);
       if (shown !== undefined) yield { kind: "event", event: shown };
     } else if (e.seq === range.data.from_seq) {
       yield { kind: "summary", compacted: range };
@@ -102,6 +124,13 @@ export function assistantParts(
   return e.data.content.filter(
     (part) =>
       !(old && (part.type === "reasoning" || part.type === "hosted_tool")),
+  );
+}
+
+function hidden(v: View, e: KnownEvent): boolean {
+  return (
+    (e.type === "tool_result" || e.type === "tool_result_late") &&
+    v.hostCalls.has(e.data.call_id)
   );
 }
 

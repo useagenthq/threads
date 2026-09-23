@@ -13,6 +13,7 @@ import tempfile
 from . import (
     agents,
     changes,
+    channels,
     children,
     content,
     context,
@@ -50,6 +51,7 @@ FAMILIES = (
     rules,
     renders,
     host,
+    channels,
     changes,
     content,
     context,

@@ -19,6 +19,7 @@ const KINDS = [
   "fork",
   "stub",
   "intake",
+  "host",
   "security",
   "parity",
   "policy",
@@ -96,6 +97,9 @@ const ExpectedFile = z.strictObject({
   stubs: z.strictObject({ consumed: z.int(), unmatched: z.int() }).optional(),
   responses: z.unknown().optional(),
   inbox: z.unknown().optional(),
+  threads: z.unknown().optional(),
+  api: z.unknown().optional(),
+  user_inputs: z.unknown().optional(),
   decisions: z.unknown().optional(),
 });
 

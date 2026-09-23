@@ -247,6 +247,18 @@
       }
     },
     "/channels/{channel}/events": {
+      "get": {
+        "operationId": "channelChallenge",
+        "description": "A provider's subscription check (WhatsApp's hub.challenge): the query goes to the adapter's challenge, which verifies its token. Not authenticated by bearer. A channel whose adapter has no challenge is not_found.",
+        "security": [],
+        "x-error-codes": ["unverified", "not_found"],
+        "parameters": [{ "name": "channel", "in": "path", "required": true, "description": "A key of host({channels}).", "schema": { "$ref": "../events.v1.schema.json#/$defs/Name" } }],
+        "responses": {
+          "200": { "description": "The adapter's answer (the echoed challenge)." },
+          "401": { "description": "The token did not verify.", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unverified"] } } } } }] } } } },
+          "404": { "description": "Unknown channel, or one without a challenge.", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["not_found"] } } } } }] } } } }
+        }
+      },
       "post": {
         "operationId": "channelWebhook",
         "description": "Channel intake. The raw bytes and headers go to the adapter's verify; the whole batch is inserted into the inbox in one transaction before the adapter's ack response is returned. Not authenticated by bearer: the adapter verifies the provider's signature.",

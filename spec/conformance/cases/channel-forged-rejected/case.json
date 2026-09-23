@@ -1,0 +1,38 @@
+{
+  "name": "channel-forged-rejected",
+  "family": "channels",
+  "kind": "intake",
+  "description": "A webhook that fails the adapter's verification is answered 401 and nothing is stored, before any append; the authentic delivery after it is stored once.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "webhooks": [
+      {
+        "channel": "slack",
+        "installation_id": "T024BE7LD",
+        "delivery_id": "Ev07",
+        "items": [
+          {
+            "conversation": "C1",
+            "sender": "U1",
+            "text": "hello"
+          }
+        ],
+        "forged": true
+      },
+      {
+        "channel": "slack",
+        "installation_id": "T024BE7LD",
+        "delivery_id": "Ev07",
+        "items": [
+          {
+            "conversation": "C1",
+            "sender": "U1",
+            "text": "hello"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -244,4 +244,13 @@ CREATE TABLE IF NOT EXISTS run_receipts (
   PRIMARY KEY (tenant_id, operation, idempotency_key)
 ) STRICT;
 
+-- Deleted threads: one transaction removes a thread's log rows
+-- and projections, moves its live resources to releasing, and writes this tombstone, which
+-- outlives them as the audit of the deletion.
+CREATE TABLE IF NOT EXISTS tombstones (
+  thread_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  deleted_at INTEGER NOT NULL
+) STRICT;
+
 PRAGMA user_version = 1;

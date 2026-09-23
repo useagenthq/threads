@@ -1,0 +1,18 @@
+{
+  "outcome": "ok",
+  "api": [
+    {
+      "status": 202,
+      "receipt": 0
+    },
+    {
+      "status": 409,
+      "code": "idempotency_key_principal_mismatch"
+    },
+    {
+      "status": 202,
+      "receipt": 2
+    }
+  ],
+  "user_inputs": 2
+}
