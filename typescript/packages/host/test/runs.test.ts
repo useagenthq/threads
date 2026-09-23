@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { agent, scriptedModel, tool } from "@threads/core";
 import { openStore, tenantStore } from "@threads/core/host";
+import { z } from "zod";
 import {
   alice,
   bob,
@@ -238,6 +240,82 @@ describe("approvals over the API", () => {
       await Bun.sleep(20);
       const t = await (await call("GET", timeline, { as: alice })).json();
       types = t.entries.map((e: { event: { type: string } }) => e.event.type);
+    }
+    expect(types).toContain("turn_completed");
+    expect(sent).toEqual(["bob"]);
+  });
+
+  test("approving a parked child's call resumes its root parent to the end", async () => {
+    const sent: string[] = [];
+    const send = tool({
+      name: "send_email",
+      description: "Send an email.",
+      input: z.object({ to: z.string() }),
+      runs: "host",
+      execute: async ({ to }) => {
+        sent.push(to);
+        return "sent";
+      },
+    });
+    const worker = agent({
+      name: "worker",
+      model: scriptedModel({
+        responses: [use("send_email", { to: "bob" }, "m1"), say("Mailed.")],
+      }),
+      tools: [send],
+    });
+    const lead = agent({
+      name: "lead",
+      model: scriptedModel({
+        responses: [
+          use("spawn_agent", { agent: "worker", prompt: "Mail bob." }, "s1"),
+          say("All done."),
+        ],
+      }),
+      tools: [send],
+      subagents: [worker],
+    });
+    h = harness({ agents: { lead } });
+    const { call, store } = h;
+    const accepted = await (
+      await call("POST", "/v1/runs", {
+        as: alice,
+        body: { agent: "lead", input: "Go." },
+        headers: key,
+      })
+    ).json();
+    const parked = (
+      await sseMessages(
+        await call(
+          "GET",
+          `/v1/threads/${accepted.thread_id}/runs/${accepted.run_id}/events`,
+          { as: alice },
+        ),
+      )
+    ).at(-1);
+    expect(parked).toMatchObject({
+      result: { status: "parked", pending: [{ kind: "child" }] },
+    });
+    const child = z
+      .object({
+        result: z.object({ pending: z.array(z.object({ id: z.string() })) }),
+      })
+      .parse(parked).result.pending[0]?.id;
+    const list = await (
+      await call("GET", `/v1/threads/${child}/approvals`, { as: alice })
+    ).json();
+    const granted = await call(
+      "POST",
+      `/v1/threads/${child}/approvals/${list[0].challenge_id}`,
+      { as: alice, body: { decision: "grant" } },
+    );
+    expect(granted.status).toBe(200);
+    let types: string[] = [];
+    for (let i = 0; i < 100 && !types.includes("turn_completed"); i += 1) {
+      await Bun.sleep(20);
+      types = (await eventsOf(store, "acme", accepted.branch_id)).map(
+        (e) => e.type,
+      );
     }
     expect(types).toContain("turn_completed");
     expect(sent).toEqual(["bob"]);

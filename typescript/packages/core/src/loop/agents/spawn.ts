@@ -1,13 +1,14 @@
 import type { EventOf } from "../../fold/state";
-import { ThreadId } from "../../log";
+import { type Principal, ThreadId } from "../../log";
 import { uuidv7 } from "../../store/encode";
 import { SpawnAgentInput } from "../../tools/agent-inputs";
 import { draft, TOOL } from "../drafts";
 import { inheritedBy } from "../ledger";
 import type { Session } from "../session";
 import { recordOutput } from "../spill";
-import type { ChildEnd, Halt } from "../types";
+import type { ChildDone, ChildEnd, Halt } from "../types";
 import { continues, startGate, stopGate } from "./gates";
+import { parkOn } from "./park";
 import { teamOf } from "./team";
 
 // spawn_agent. agent_spawned is durable before the child's thread_started, so
@@ -26,7 +27,10 @@ export async function spawnAgent(
   if (spawned === undefined) return start(s, call);
   if (spawned.data.mode === "background") return background(s, spawned);
   const end = await rounds(s, spawned);
-  return "code" in end ? end : finish(s, spawned, end, false);
+  if ("code" in end) return end;
+  return end.status === "parked"
+    ? parkOn(s, spawned, end.reason)
+    : finish(s, spawned, end, false);
 }
 
 export function spawnedFor(s: Session, callId: string): Spawned | undefined {
@@ -99,6 +103,7 @@ export function launch(s: Session, spawned: Spawned): void {
 async function rounds(s: Session, spawned: Spawned): Promise<ChildEnd | Halt> {
   for (;;) {
     const end = await runChild(s, spawned);
+    if (end.status === "parked") return end;
     const next = await stopGate(s, spawned, finished(s, spawned, end));
     if (next !== "continue") return next === "stop" ? end : next;
   }
@@ -120,6 +125,7 @@ function inputsOf(s: Session, spawned: Spawned): readonly string[] {
 export async function runChild(
   s: Session,
   spawned: Spawned,
+  cancel?: Principal,
 ): Promise<ChildEnd> {
   const sub = s.config.agents?.subagent(spawned.data.agent_name);
   if (sub === undefined)
@@ -140,13 +146,14 @@ export async function runChild(
     tools: new Set(s.fold.tools.map((t) => t.name)),
     team: teamOf(s),
     covering: inheritedBy(s),
+    ...(cancel === undefined ? {} : { cancel }),
   });
 }
 
 export function finished(
   s: Session,
   spawned: Spawned,
-  end: ChildEnd,
+  end: ChildDone,
 ): EventOf<"agent_finished">["data"] {
   return {
     child_thread_id: spawned.data.child_thread_id,
@@ -160,7 +167,7 @@ export function finished(
 export function finish(
   s: Session,
   spawned: Spawned,
-  end: ChildEnd,
+  end: ChildDone,
   late: boolean,
 ): Halt | undefined {
   const { call_id } = spawned.data;

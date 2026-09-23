@@ -1,6 +1,8 @@
 import { assertNever } from "../assert-never";
 import type { EventOf } from "../fold/state";
 import { settleBackground } from "./agents/background";
+import { parkOn } from "./agents/park";
+import { finish as record, runChild, spawnedFor } from "./agents/spawn";
 import { runCalls } from "./dispatch";
 import { draft } from "./drafts";
 import { afterStep, finish } from "./lifecycle";
@@ -30,7 +32,7 @@ export async function runLoop(s: Session): Promise<LoopEnd> {
       case "parked":
         return step;
       case "cancel":
-        stopped = cancel(s, step.request);
+        stopped = await cancel(s, step.request);
         break;
       case "calls":
         stopped = await runCalls(s);
@@ -57,13 +59,25 @@ export async function runLoop(s: Session): Promise<LoopEnd> {
 
 /**
  * calls that never began close as not_executed; cancelled is appended only
- * once no effect is begun or unknown (those park instead, through recovery).
+ * once no effect is begun or unknown (those park instead, through recovery). A running child is
+ * cancelled and its end recorded first; one that parks parks this thread (F7.6).
  */
-function cancel(
+async function cancel(
   s: Session,
   request: EventOf<"cancel_requested">,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   for (const callId of [...s.fold.pending]) {
+    const spawned = spawnedFor(s, callId);
+    if (
+      spawned !== undefined &&
+      s.fold.children.get(spawned.data.child_thread_id) === "running"
+    ) {
+      const end = await runChild(s, spawned, request.actor.principal);
+      if (end.status === "parked") return parkOn(s, spawned, end.reason);
+      const stopped = record(s, spawned, end, false);
+      if (stopped !== undefined) return stopped;
+      continue;
+    }
     const stopped = s.append(
       draft.toolResult(
         {

@@ -175,12 +175,20 @@ export type Covering = {
 };
 
 /** The terminal result of a child thread (agent_finished, F7.5). */
-export type ChildEnd = {
+export type ChildDone = {
   readonly status: EventOf<"agent_finished">["data"]["status"];
   /** The final text, or the accepted structured value as canonical JSON. */
   readonly output: string;
   readonly usage: Usage;
 };
+
+/** How a child run ended: terminal, or parked, which parks its parent instead of finishing. */
+export type ChildEnd =
+  | ChildDone
+  | {
+      readonly status: "parked";
+      readonly reason: EventOf<"parked">["data"]["reason"];
+    };
 
 /** What a parent hands one child run. */
 export type ChildRun = {
@@ -200,6 +208,11 @@ export type ChildRun = {
   readonly team: Team;
   /** Every budget covering the parent, which covers the child too. */
   readonly covering: readonly Covering[];
+  /**
+   * The parent is cancelled, by this principal: the child gets a barrier and no new input, and
+   * one that never started is not created (spec/schema/README.md, Subagent cancellation).
+   */
+  readonly cancel?: Principal;
 };
 
 export type Subagent = {

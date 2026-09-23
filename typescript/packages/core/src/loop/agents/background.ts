@@ -1,6 +1,7 @@
 import type { Session } from "../session";
-import type { Halt } from "../types";
+import type { ChildEnd, Halt } from "../types";
 import { stopGate } from "./gates";
+import { parkOn } from "./park";
 import { finish, finished, launch, spawnedFor } from "./spawn";
 
 // Background children: each runs concurrently in this process and
@@ -12,16 +13,25 @@ export async function settleBackground(s: Session): Promise<Halt | undefined> {
   for (const [callId, end] of [...s.finished]) {
     s.finished.delete(callId);
     s.background.delete(callId);
-    const spawned = spawnedFor(s, callId);
-    if (spawned === undefined)
-      throw new Error("a background child was spawned");
-    const next = await stopGate(s, spawned, finished(s, spawned, end));
-    if (next === "continue") launch(s, spawned);
-    else {
-      const stopped = next === "stop" ? finish(s, spawned, end, true) : next;
-      if (stopped !== undefined) return stopped;
-    }
+    const stopped = await settle(s, callId, end);
+    if (stopped !== undefined) return stopped;
   }
+  return undefined;
+}
+
+/** A parked child parks this thread; an ended one goes through subagent_stop. */
+async function settle(
+  s: Session,
+  callId: string,
+  end: ChildEnd,
+): Promise<Halt | undefined> {
+  const spawned = spawnedFor(s, callId);
+  if (spawned === undefined) throw new Error("a background child was spawned");
+  if (end.status === "parked") return parkOn(s, spawned, end.reason);
+  const next = await stopGate(s, spawned, finished(s, spawned, end));
+  if (next !== "continue")
+    return next === "stop" ? finish(s, spawned, end, true) : next;
+  launch(s, spawned);
   return undefined;
 }
 

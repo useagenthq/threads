@@ -2,6 +2,7 @@ import { ConfigError } from "../agent/errors";
 import { isTestKit } from "../model/guard";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import { drainBackground, resumeBackground } from "./agents/background";
+import { unparkChildren } from "./agents/park";
 import { observe } from "./hooks";
 import { sessionStart } from "./lifecycle";
 import { recover } from "./recover";
@@ -17,6 +18,7 @@ export { type RecordedStubs, recordedStubs } from "./stubs";
 export type {
   Agents,
   Authorization,
+  ChildDone,
   ChildEnd,
   ChildRun,
   Clock,
@@ -79,6 +81,8 @@ async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
     : "startup";
   const denied = await sessionStart(s, source);
   if (denied !== undefined) return { kind: "halted", halt: denied };
+  const unparked = await unparkChildren(s);
+  if (unparked !== undefined) return { kind: "halted", halt: unparked };
   resumeBackground(s);
   const end = await turns(s, input);
   if (end.kind === "halted") return end;

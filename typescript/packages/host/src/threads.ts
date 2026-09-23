@@ -75,17 +75,29 @@ async function parsed<T>(
     : failure("invalid_request", body.error.message);
 }
 
-/** After a control appended, the branch continues from the log (a resumed or a cancel). */
+/**
+ * After a control appended, the branch continues from the log (a resumed or a cancel). A
+ * subagent's thread continues through its root: the parent parked on it re-runs it and resumes.
+ */
 async function resume(call: Call, thread: Thread): Promise<void> {
   const { log } = await call.ctx.open(call.principal.tenant);
-  const read = log.read(thread.branch);
-  if (!read.ok) return;
-  const hosted = call.ctx.agentOf(knownEvents(read.value));
-  if (hosted === undefined) return;
-  void call.ctx.resume(hosted, call.principal.tenant, call.principal, {
-    id: thread.id,
-    branch: thread.branch,
-  });
+  let at = { id: thread.id, branch: thread.branch };
+  for (;;) {
+    const read = log.read(at.branch);
+    if (!read.ok) return;
+    const events = knownEvents(read.value);
+    const started = events.find((e) => e.type === "thread_started");
+    const parent =
+      started?.type === "thread_started" ? started.data.parent : undefined;
+    if (parent?.relation === "subagent") {
+      at = { id: parent.thread_id, branch: parent.branch_id };
+      continue;
+    }
+    const hosted = call.ctx.agentOf(events);
+    if (hosted === undefined) return;
+    void call.ctx.resume(hosted, call.principal.tenant, call.principal, at);
+    return;
+  }
 }
 
 export async function timeline(call: Call): Promise<Response> {

@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { assertNever } from "../assert-never";
 import { canonicalize } from "../log";
-import type { ChildEnd, Subagent } from "../loop";
+import type { ChildDone, ChildEnd, Subagent } from "../loop";
 import { reduce } from "../reduce";
 import type { EventDraft } from "../store";
+import { cancelTree } from "../thread/cancel";
 import type { ChildEnv, ChildFactory } from "./registry";
 import type { RunResult } from "./result";
 import { execute, type Resolved } from "./run";
@@ -28,7 +29,16 @@ export function subagent<Deps, Output>(
   return (env): Subagent => ({
     ...(def.budget === undefined ? {} : { budget: def.budget }),
     run: async (child) => {
-      const inputs = child.inputs.map((text) => input(env, text));
+      const { log } = await openStore(env.store);
+      // A cancelled parent never starts a child; a started one gets its barrier and no input.
+      if (child.cancel !== undefined) {
+        if (!log.mainBranch(child.threadId).ok) return CANCELLED;
+        await cancelTree(log, child.threadId, child.cancel);
+      }
+      const inputs =
+        child.cancel === undefined
+          ? child.inputs.map((text) => input(env, text))
+          : [];
       const result = await execute(
         asText,
         {
@@ -44,6 +54,12 @@ export function subagent<Deps, Output>(
   });
 }
 
+const CANCELLED: ChildEnd = {
+  status: "cancelled",
+  output: "cancelled",
+  usage: { input_tokens: null, output_tokens: null },
+};
+
 function input(env: ChildEnv, text: string): EventDraft {
   return {
     type: "user_input",
@@ -58,7 +74,7 @@ function input(env: ChildEnv, text: string): EventDraft {
 async function usage(
   env: ChildEnv,
   result: RunResult<string>,
-): Promise<ChildEnd["usage"]> {
+): Promise<ChildDone["usage"]> {
   const { log } = await openStore(env.store);
   const read = log.read(result.thread.branch);
   if (!read.ok) return { input_tokens: null, output_tokens: null };
@@ -70,7 +86,7 @@ async function usage(
   };
 }
 
-function ended(result: RunResult<string>, usage: ChildEnd["usage"]): ChildEnd {
+function ended(result: RunResult<string>, usage: ChildDone["usage"]): ChildEnd {
   switch (result.status) {
     case "completed":
       return { status: "completed", output: result.output, usage };
@@ -85,12 +101,7 @@ function ended(result: RunResult<string>, usage: ChildEnd["usage"]): ChildEnd {
     case "failed":
       return { status: "failed", output: result.error.message, usage };
     case "parked":
-      // ponytail: a child can't wait for an approval or answer yet; add a child park address.
-      return {
-        status: "failed",
-        output: `parked: ${result.reason}`,
-        usage,
-      };
+      return { status: "parked", reason: result.reason };
     case "handed_off":
       return { status: "failed", output: "handed off", usage };
     default:

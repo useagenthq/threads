@@ -15,6 +15,7 @@ import type { Sandbox, SnapshotData } from "../sandbox/protocol";
 import type { LogStore } from "../store";
 import { uuidv7 } from "../store/encode";
 import { type LogError, logError, type VerifiedLog } from "../verify";
+import { cancelChildren } from "./cancel";
 import {
   type Appended,
   answer,
@@ -307,7 +308,11 @@ function controls(
         principal,
         resolveParked(key, resolution, principal),
       ),
-    cancel: (principal) => control(log, branchId, principal, cancel(principal)),
+    cancel: async (principal) => {
+      const done = await control(log, branchId, principal, cancel(principal));
+      if (done.ok) await cancelChildren(log, threadId, principal);
+      return done;
+    },
     setModel: (settings, principal) =>
       control(log, branchId, principal, setModel(settings, principal)),
     setMode: (mode, principal) =>
