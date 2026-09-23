@@ -14,6 +14,7 @@ import {
   SquareCode,
   Users,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CodeSample } from "@/components/home/code-sample";
@@ -27,6 +28,20 @@ type Feature = { title: string; icon: LucideIcon; href: string; tags: string[]; 
 
 const FEATURES: Feature[] = [
   {
+    title: "Evals & testing",
+    icon: FlaskConical,
+    href: "/docs/evals/saved-cases",
+    tags: ["saveCase", "Scripted model", "Fake sandbox"],
+    body: "Save a real run as a regression case and replay it with a scripted model: no API keys, no network.",
+  },
+  {
+    title: "Sandboxes",
+    icon: Box,
+    href: "/docs/sandboxes/overview",
+    tags: ["E2B", "Daytona", "Modal · Python"],
+    body: "Run code in an isolated machine with no internet by default. Your keys never enter it.",
+  },
+  {
     title: "Agents & tools",
     icon: Bot,
     href: "/docs/agents/agents",
@@ -39,13 +54,6 @@ const FEATURES: Feature[] = [
     href: "/docs/multi-agent/subagents",
     tags: ["Subagents", "Handoffs", "Teams"],
     body: "Let an agent start helpers, hand the conversation to a specialist, or share a task board.",
-  },
-  {
-    title: "Sandboxes",
-    icon: Box,
-    href: "/docs/sandboxes/overview",
-    tags: ["E2B", "Daytona", "Modal · Python"],
-    body: "Run code in an isolated machine with no internet by default. Your keys never enter it.",
   },
   {
     title: "Channels",
@@ -67,13 +75,6 @@ const FEATURES: Feature[] = [
     href: "/docs/production/durability",
     tags: ["Crash-safe", "Approvals", "Budgets"],
     body: "Resume after a crash without repeating an action. Park risky steps for a human to decide.",
-  },
-  {
-    title: "Evals & testing",
-    icon: FlaskConical,
-    href: "/docs/evals/timeline",
-    tags: ["Timeline", "Fork", "Scripted model"],
-    body: "Inspect every step, fork a past run to try a fix, and test with no real model calls.",
   },
   {
     title: "Hooks & permissions",
@@ -157,12 +158,12 @@ function Hero() {
           Alpha · Open source · Apache-2.0
         </Link>
         <h1 className="max-w-4xl text-4xl leading-[1.08] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
-          An agent framework for TypeScript and Python, built on an{" "}
-          <span className="text-fd-primary">append-only event log</span>.
+          Agents you can <span className="text-fd-primary">replay</span>,{" "}
+          <span className="text-fd-primary">fork</span> and <span className="text-fd-primary">trust</span>.
         </h1>
         <p className="mt-6 max-w-2xl text-base leading-7 text-pretty text-fd-muted-foreground sm:text-lg">
-          Sandboxes, channels, memory, hooks and evals come built in. You write what your agent does and add
-          your API keys.
+          {tagline} Sandboxes, channels, memory, hooks and evals come built in. You write what your agent does
+          and add your API keys.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
@@ -276,6 +277,7 @@ function Reasons() {
           Every run is an append-only log of what the agent saw and did. That one record is what makes these
           work.
         </SectionHeading>
+        <LogDiagram />
         <div className="mt-12 grid gap-10 md:grid-cols-3">
           {REASONS.map((r) => (
             <div key={r.title} className="flex flex-col gap-3 border-l-2 border-fd-primary/40 pl-5">
@@ -287,6 +289,33 @@ function Reasons() {
         </div>
       </div>
     </section>
+  );
+}
+
+function LogDiagram() {
+  const alt =
+    "Every run is a log: thread_started, user_input, model_request, model_response, tool_call, " +
+    "permission_decision, tool_result, turn_completed. Replay (timeline), resume (run again), fork and " +
+    "evals (saveCase) are all read from it.";
+  return (
+    <div className="mt-12 max-w-4xl">
+      <Image
+        src="/images/run-is-a-log-light.svg"
+        alt={alt}
+        width={880}
+        height={516}
+        unoptimized
+        className="h-auto w-full dark:hidden"
+      />
+      <Image
+        src="/images/run-is-a-log-dark.svg"
+        alt={alt}
+        width={880}
+        height={516}
+        unoptimized
+        className="hidden h-auto w-full dark:block"
+      />
+    </div>
   );
 }
 
