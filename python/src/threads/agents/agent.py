@@ -125,6 +125,8 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D] | Agent[None]:
 def _definition[T](options: AgentOptions, tools: tuple[AppTool[T], ...]) -> Definition[T]:
     sandbox = options.get("sandbox")
     egress = options.get("egress", ())
+    if egress != "unenforced" and egress:
+        raise ConfigError("egress_policy_unsupported", "egress host allowlists aren't supported")
     if sandbox is not None and sandbox.info.egress == "unenforced" and egress != "unenforced":
         # A provider that can't enforce egress needs an explicit opt-in.
         raise ConfigError("egress_policy_unsupported", f"{sandbox.info.provider}: egress")

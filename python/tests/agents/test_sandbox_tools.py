@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from local_sandbox import LOCAL_INFO, LocalSandbox
 from pydantic import BaseModel, JsonValue
+from pydantic.experimental.missing_sentinel import MISSING
 
 from threads import Completed, ConfigError, Parked, RunContext, agent, scripted_model, sqlite, tool
 from threads.agents.definition import Definition
@@ -69,7 +70,7 @@ def test_builtins_are_pinned_first_and_bash_runs_in_the_sandbox(tmp_path: Path) 
         logged = await events(result)
         started = next(e for e in logged if isinstance(e, ThreadStartedEvent)).data
         names = [t.name for t in started.tools]
-        assert names == ["bash", "edit", "glob", "grep", "ls", "read", "write"]
+        assert names == ["bash", "edit", "glob", "grep", "ls", "read", "read_tool_result", "write"]
         assert started.sandbox_provider == "local"
         done = next(e for e in logged if isinstance(e, ToolResultEvent))
         assert json.loads(done.data.preview)["stdout"] == "hi\n"
@@ -145,6 +146,30 @@ def test_a_provider_without_egress_enforcement_needs_an_opt_in(tmp_path: Path) -
     agent(model=model, sandbox=loose, egress="unenforced")
     specs = Definition("a", model, "", (), sandbox=loose, egress="unenforced").specs()
     assert next(s for s in specs if s.name == "bash").effect_class == "unguarded"
+
+
+def test_read_tool_result_reads_spilled_output_back(tmp_path: Path) -> None:
+    box = LocalSandbox(tmp_path)
+    read_back: JsonValue = {"call_id": "call_1", "offset": 0, "length": 6}
+    script: JsonValue = {
+        "responses": [
+            use("bash", {"command": "seq 1 20000"}),
+            use("read_tool_result", read_back, "call_2"),
+            text("Done."),
+        ]
+    }
+    bot = agent(model=scripted_model(script), sandbox=box, permissions=perms("bypass"))
+
+    async def main() -> None:
+        result = await bot.run("go", store=sqlite(str(tmp_path / "db" / "threads.db")))
+        assert isinstance(result, Completed)
+        results = [e for e in await events(result) if isinstance(e, ToolResultEvent)]
+        spilled, read = results
+        assert spilled.data.ref is not MISSING
+        size = spilled.data.ref.bytes
+        assert read.data.preview == f"[bytes 0-6 of {size}]\n1\n2\n3\n"
+
+    asyncio.run(main())
 
 
 class Probe(BaseModel):

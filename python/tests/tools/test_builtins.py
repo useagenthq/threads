@@ -11,6 +11,7 @@ from local_sandbox import LocalSession
 from pydantic import JsonValue
 from sandbox_kit import KitContext
 
+from threads._generated import tools_v1
 from threads.log import CallId, JsonObject, Spill, ToolSpec
 from threads.log.digest import sha256_hex
 from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
@@ -19,7 +20,7 @@ from threads.store import SqliteStore
 from threads.tools import SandboxTools, specs
 
 LIMITS = Spill(threshold_bytes=64, head_bytes=16, tail_bytes=8, request_budget_bytes=4096)
-SPECS = {s.name: s for s in specs(egress_denied=True)}
+SPECS = {s.name: s for s in specs(sandbox=True, egress_denied=True)}
 
 type Call = Callable[[str, JsonObject], Awaitable[Dispatched]]
 
@@ -51,8 +52,18 @@ def test_specs_are_sorted_and_bash_is_unguarded_without_deny_all_egress() -> Non
     assert list(SPECS) == sorted(SPECS)
     assert SPECS["bash"].effect_class == "sandbox_local"
     assert SPECS["read"].effect_class == "read_only"
-    open_egress = {s.name: s for s in specs(egress_denied=False)}
+    open_egress = {s.name: s for s in specs(sandbox=True, egress_denied=False)}
     assert open_egress["bash"].effect_class == "unguarded"
+
+
+def test_specs_are_the_shared_catalog_and_read_tool_result_is_always_there() -> None:
+    catalog: JsonValue = json.loads(tools_v1.TOOL_CATALOG)
+    pinned = [
+        {"name": s.name, "description": s.description, "input_schema": s.input_schema}
+        for s in SPECS.values()
+    ]
+    assert json.loads(json.dumps(pinned)) == catalog
+    assert [s.name for s in specs(sandbox=False, egress_denied=True)] == ["read_tool_result"]
 
 
 def test_bash_returns_exit_code_and_streams_as_json(tmp_path: Path) -> None:
@@ -108,11 +119,9 @@ def test_commands_run_with_an_empty_environment(tmp_path: Path) -> None:
 def test_read_write_and_edit(tmp_path: Path) -> None:
     async def body(call: Call, _s: LocalSession, _st: SqliteStore) -> None:
         output(await call("write", {"path": "src/a.py", "content": "x = 1\ny = 2\n"}))
-        assert output(await call("read", {"path": "src/a.py"})).text == (
-            "     1\tx = 1\n     2\ty = 2\n"
-        )
+        assert output(await call("read", {"path": "src/a.py"})).text == ("1\tx = 1\n2\ty = 2\n3\t")
         more = output(await call("read", {"path": "/workspace/src/a.py", "limit": 1}))
-        assert more.text.endswith("[1 more lines]\n")
+        assert more.text == "1\tx = 1"
         output(await call("edit", {"path": "src/a.py", "old_string": "y = 2", "new_string": "z"}))
         assert (tmp_path / "src/a.py").read_text() == "x = 1\nz\n"
 
@@ -123,9 +132,13 @@ def test_read_write_and_edit(tmp_path: Path) -> None:
     ("tool", "input", "error"),
     [
         ("read", {"path": "missing.txt"}, "not_found:"),
-        ("edit", {"path": "a.txt", "old_string": "a", "new_string": "b"}, "ambiguous:"),
-        ("edit", {"path": "a.txt", "old_string": "q", "new_string": "b"}, "not_found:"),
-        ("write", {"path": "a.txt", "content": "new", "expected_sha256": "0" * 64}, "conflict:"),
+        ("edit", {"path": "a.txt", "old_string": "a", "new_string": "b"}, "old_string matches"),
+        ("edit", {"path": "a.txt", "old_string": "q", "new_string": "b"}, "old_string not found"),
+        (
+            "write",
+            {"path": "a.txt", "content": "new", "expected_sha256": "0" * 64},
+            "expected_sha256",
+        ),
     ],
 )
 def test_file_failures_are_typed_and_change_nothing(
@@ -163,9 +176,9 @@ def test_ls_glob_and_grep(tmp_path: Path) -> None:
     async def body(call: Call, _s: LocalSession, _st: SqliteStore) -> None:
         assert output(await call("ls", {"path": "pkg"})).text == "a.py\nc.txt\nsub/\n"
         found = output(await call("glob", {"pattern": "**/*.py", "path": "pkg"})).text
-        assert sorted(found.split()) == ["pkg/a.py", "pkg/sub/b.py"]
+        assert sorted(found.split()) == ["/workspace/pkg/a.py", "/workspace/pkg/sub/b.py"]
         hits = output(await call("grep", {"pattern": "needle", "glob": "*.py"})).text
-        assert hits == "pkg/sub/b.py:1:print('needle')\n"
+        assert hits == "/workspace/pkg/sub/b.py:1:print('needle')"
         none = output(await call("grep", {"pattern": "absent"}))
         assert (none.text, none.is_error) == ("no matches", False)
 

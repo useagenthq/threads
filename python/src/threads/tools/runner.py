@@ -12,8 +12,18 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Final
 
 from pydantic import BaseModel, JsonValue, ValidationError
+from pydantic.experimental.missing_sentinel import MISSING
 from pydantic_core import to_json
 
+from threads._generated.tools_v1 import (
+    BashInput,
+    EditInput,
+    GlobInput,
+    GrepInput,
+    LsInput,
+    ReadInput,
+    WriteInput,
+)
 from threads.log import JsonObject, ParseError, Spill, ToolSpec
 from threads.log.jcs import canonicalize
 from threads.loop.model import LookupResult, LookupUnknown
@@ -25,19 +35,12 @@ from threads.sandbox.exec import Command, run_exec
 from threads.sandbox.protocol import ExecResult, SandboxContext, SandboxError, SandboxSession
 from threads.store import SqliteStore
 from threads.tools import files
-from threads.tools.specs import (
-    BashInput,
-    EditInput,
-    GlobInput,
-    GrepInput,
-    LsInput,
-    ReadInput,
-    WriteInput,
-    input_model,
-)
+from threads.tools.specs import MODELS
 
 DEFAULT_TIMEOUT_MS: Final = 120_000
-
+LISTING_BYTES: Final = 1 << 20
+"""Listing output the host reads per stream. ponytail: a listing past 1 MiB is cut to its head
+and tail; page with a narrower path."""
 
 type Open = Callable[[], Awaitable[Ok[SandboxSession] | Err[SandboxError | ParseError]]]
 
@@ -73,11 +76,11 @@ class SandboxTools:
         return self._session
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
-        parsed = _parse(spec.name, input)
+        parsed = parse(spec.name, input)
         return parsed.error if isinstance(parsed, Err) else None
 
     async def dispatch(self, call: Invocation) -> Dispatched:
-        parsed = _parse(call.spec.name, call.input)
+        parsed = parse(call.spec.name, call.input)
         if isinstance(parsed, Err):
             raise AssertionError(f"a dispatched call was parsed first: {parsed.error}")
         # No session: the command was never handed to a provider.
@@ -100,7 +103,7 @@ class SandboxTools:
             case GrepInput() as args:
                 return await self._grep(args, call)
             case other:
-                raise AssertionError(f"no built-in takes {type(other).__name__}")
+                raise AssertionError(f"no sandbox built-in takes {type(other).__name__}")
 
     async def lookup(self, call: Invocation) -> LookupResult[str]:
         return LookupUnknown(f"{call.spec.name} has no lookup")
@@ -116,15 +119,22 @@ class SandboxTools:
         return None
 
     async def _exec(
-        self, argv: Sequence[str], key: str, timeout_ms: int | None = None
+        self, argv: Sequence[str], key: str, timeout_ms: int = DEFAULT_TIMEOUT_MS, keep: int = 0
     ) -> Ok[ExecResult] | Err[Dispatched]:
-        command = Command(argv, key, timeout_ms=timeout_ms or DEFAULT_TIMEOUT_MS)
+        """`keep`: preview bytes per stream, when the host must read the output itself."""
+        command = Command(argv, key, timeout_ms=timeout_ms)
         spill = await self._store.spill()
-        ran = await run_exec(self._box, command, self._context, spill, self._limits())
+        limits = self._limits()
+        if keep:
+            limits = limits.model_copy(
+                update={"threshold_bytes": keep, "head_bytes": keep // 2, "tail_bytes": keep // 2}
+            )
+        ran = await run_exec(self._box, command, self._context, spill, limits)
         return ran if isinstance(ran, Ok) else Err(outcome(ran.error))
 
     async def _bash(self, args: BashInput, call: Invocation) -> Dispatched:
-        ran = await self._exec(["bash", "-c", args.command], call.effect_key, args.timeout_ms)
+        deadline = DEFAULT_TIMEOUT_MS if args.timeout_ms is MISSING else args.timeout_ms
+        ran = await self._exec(["bash", "-c", args.command], call.effect_key, deadline)
         if isinstance(ran, Err):
             return ran.error
         result = ran.value
@@ -139,74 +149,92 @@ class SandboxTools:
         text = to_json(body).decode("utf-8")
         return Output(text, result.exit_code != 0, result.full_output)
 
-    async def _listing(self, argv: Sequence[str], call: Invocation, empty: str) -> Dispatched:
-        """A read-only command: its stdout is the result; exit 1 with no output is `empty`."""
-        ran = await self._exec(argv, call.effect_key)
-        if isinstance(ran, Err):
-            return ran.error
-        result = ran.value
-        if result.exit_code not in (0, 1) or (result.exit_code == 1 and result.stderr):
-            return Output(result.stderr or f"exit {result.exit_code}", True)
-        return Output(result.stdout or empty, False, result.full_output)
+    async def _listing(self, argv: Sequence[str], call: Invocation) -> ExecResult | Dispatched:
+        """A read-only command's result, or the outcome that stands for it."""
+        ran = await self._exec(argv, call.effect_key, keep=LISTING_BYTES)
+        return ran.error if isinstance(ran, Err) else ran.value
 
     async def _ls(self, args: LsInput, call: Invocation) -> Dispatched:
-        return await self._listing(["ls", "-1Ap", "--", files.relative(args.path)], call, "")
+        found = await self._listing(["ls", "-1Ap", "--", files.absolute(args.path)], call)
+        if not isinstance(found, ExecResult):
+            return found
+        if found.exit_code != 0:
+            return Output(found.stderr, True)
+        return Output(found.stdout or "empty directory", False, found.full_output)
+
+    async def _matching(self, root: str, pattern: str, call: Invocation) -> list[str] | Dispatched:
+        """Files under `root` whose path relative to it matches the gitignore-style `pattern`:
+        `find` lists them (portable), the host matches them."""
+        found = await self._listing(["find", root, "-type", "f"], call)
+        if not isinstance(found, ExecResult):
+            return found
+        if found.exit_code != 0:
+            return Output(found.stderr, True)
+        names = [line for line in found.stdout.split("\n") if line]
+        return [n for n in names if glob_matches(pattern, posixpath.relpath(n, root))]
 
     async def _glob(self, args: GlobInput, call: Invocation) -> Dispatched:
-        """`find` lists the files (portable, unlike bash globstar); the pattern is matched on
-        the host with the permission rules' gitignore globs, relative to `path`."""
-        root = files.relative(args.path)
-        found = await self._listing(["find", root, "-type", "f"], call, "")
-        if not isinstance(found, Output) or found.is_error:
-            return found
-        names = [posixpath.normpath(line) for line in found.text.splitlines()]
-        hits = [n for n in names if glob_matches(args.pattern, posixpath.relpath(n, root))]
-        more = "\n[listing truncated; narrow path]" if found.full_output is not None else ""
-        return Output("\n".join(sorted(hits)) + more if hits else "no files" + more)
+        hits = await self._matching(files.absolute(args.path), args.pattern, call)
+        if not isinstance(hits, list):
+            return hits
+        return Output("\n".join(hits) if hits else "no files match")
 
     async def _grep(self, args: GrepInput, call: Invocation) -> Dispatched:
-        argv = ["grep", "-rnIE"]
-        if args.glob is not None:
-            argv.append(f"--include={args.glob}")
-        argv += ["--", args.pattern, files.relative(args.path)]
-        found = await self._listing(argv, call, "no matches")
-        if not isinstance(found, Output) or found.is_error:
+        root = files.absolute(args.path)
+        only = None if args.glob is MISSING else await self._matching(root, args.glob, call)
+        if only is not None and not isinstance(only, list):
+            return only
+        found = await self._listing(["grep", "-rnIE", "-e", args.pattern, "--", root], call)
+        if not isinstance(found, ExecResult):
             return found
-        lines = found.text.splitlines(keepends=True)
-        text = "".join(line.removeprefix("./") for line in lines)
-        return Output(text, False, found.full_output)
+        # grep exits 1 for no match and 2 or more for an error.
+        if found.exit_code not in (0, 1):
+            return Output(found.stderr, True)
+        lines = [
+            line
+            for line in found.stdout.split("\n")
+            if line and (only is None or any(line.startswith(f"{f}:") for f in only))
+        ]
+        return Output("\n".join(lines) if lines else "no matches", False, found.full_output)
 
     async def _read(self, args: ReadInput) -> Dispatched:
-        got = await self._box.download(files.absolute(args.path), self._context)
+        path = files.absolute(args.path)
+        got = await self._box.download(path, self._context)
         if isinstance(got, Err):
             return outcome(got.error)
-        shown = files.numbered(got.value, args)
-        return Output(shown.value) if isinstance(shown, Ok) else Output(shown.error, True)
+        body = files.text(got.value, path)
+        if isinstance(body, Err):
+            return Output(body.error, True)
+        return Output(files.numbered(body.value, args))
 
     async def _write(self, args: WriteInput) -> Dispatched:
         path = files.absolute(args.path)
-        current = None
-        if args.expected_sha256 is not None:
+        if args.expected_sha256 is not MISSING:
             got = await self._box.download(path, self._context)
             if isinstance(got, Err) and got.error.code != "not_found":
                 return outcome(got.error)
-            current = got.value if isinstance(got, Ok) else None
-        data = files.written(current, args)
-        if isinstance(data, Err):
-            return Output(data.error, True)
-        return await self._upload(path, data.value)
+            now = got.value if isinstance(got, Ok) else None
+            mismatch = files.stale(now, args.expected_sha256)
+            if mismatch is not None:
+                return Output(mismatch, True)
+        return await self._upload(path, args.content)
 
     async def _edit(self, args: EditInput) -> Dispatched:
         path = files.absolute(args.path)
         got = await self._box.download(path, self._context)
         if isinstance(got, Err):
             return outcome(got.error)
-        data = files.edited(got.value, args)
-        if isinstance(data, Err):
-            return Output(data.error, True)
-        return await self._upload(path, data.value)
+        body = files.text(got.value, path)
+        mismatch = files.stale(got.value, args.expected_sha256)
+        if isinstance(body, Err) or mismatch is not None:
+            return Output(body.error if isinstance(body, Err) else str(mismatch), True)
+        new = files.edited(body.value, args)
+        if isinstance(new, Err):
+            return Output(new.error, True)
+        return await self._upload(path, new.value)
 
-    async def _upload(self, path: str, data: bytes) -> Dispatched:
+    async def _upload(self, path: str, content: str) -> Dispatched:
+        data = content.encode("utf-8")
         done = await self._box.upload(path, data, self._context)
         if isinstance(done, Err):
             return outcome(done.error)
@@ -223,14 +251,15 @@ def outcome(error: SandboxError) -> Dispatched:
         case "stale_epoch":
             return NotSent()
         case _:
-            return Output(files.failure(error), True)
+            return Output(f"{error.code}: {error.message}", True)
 
 
-def _parse(name: str, input: JsonObject) -> Ok[BaseModel] | Err[str]:
+def parse(name: str, input: JsonObject) -> Ok[BaseModel] | Err[str]:
+    """The arguments through the tool's generated input model (strict, JSON mode)."""
     text = canonicalize(dict(input))
     if not isinstance(text, Ok):
         return Err("the arguments are not canonical JSON")
     try:
-        return Ok(input_model(name).model_validate_json(text.value, strict=True))
+        return Ok(MODELS[name].model_validate_json(text.value, strict=True))
     except ValidationError as error:
         return Err(f"invalid arguments for {name}: {error.error_count()} error(s): {error}")

@@ -15,7 +15,7 @@ from threads.sandbox.protocol import Sandbox, SandboxError, SandboxSession
 from threads.store import SqliteStore, Writer
 from threads.store.worker import Clock
 from threads.thread.snapshot import take_snapshot
-from threads.tools import NAMES, SandboxTools
+from threads.tools import HOST, SANDBOXED, ReadResults, SandboxTools
 
 type Egress = Sequence[str] | Literal["unenforced"]
 
@@ -68,14 +68,20 @@ async def snapshot_turn_end(
 
 
 class Routed:
-    """Built-in names go to the sandbox; every other name to the app tools."""
+    """Sandbox built-ins go to the sandbox, read_tool_result to the host reader, every other
+    name to the app tools."""
 
-    def __init__(self, builtins: ToolRunner, app: ToolRunner) -> None:
-        self._builtins = builtins
+    def __init__(self, sandbox: ToolRunner | None, results: ReadResults, app: ToolRunner) -> None:
+        self._sandbox = sandbox
+        self._results = results
         self._app = app
 
     def _for(self, name: str) -> ToolRunner:
-        return self._builtins if name in NAMES else self._app
+        if name in HOST:
+            return self._results
+        if name in SANDBOXED and self._sandbox is not None:
+            return self._sandbox
+        return self._app
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
         return self._for(spec.name).invalid(spec, input)

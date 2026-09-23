@@ -58,8 +58,11 @@ class LocalSession:
         if isinstance(await context.fence(), Err):
             return Err(SandboxError("stale_epoch", "fenced"))
         self.envs.append(dict(env))
+        # Sandbox paths in argv are the temp tree's, and the tree's paths in output read back
+        # as /workspace, so commands see and report sandbox paths.
+        argv = [str(self._host(a)) if a.startswith("/workspace") else a for a in command]
         proc = await asyncio.create_subprocess_exec(
-            *command,
+            *argv,
             cwd=self._host(cwd),
             env=dict(env),
             stdout=asyncio.subprocess.PIPE,
@@ -70,7 +73,9 @@ class LocalSession:
         if proc.stdout is None or proc.stderr is None:
             raise AssertionError("pipes were requested")
         exit_code = asyncio.ensure_future(proc.wait())
-        return Ok(ExecOutput(exit_code, _read(proc.stdout), _read(proc.stderr)))
+        home = str(self.root).encode()
+        out, err = _read(proc.stdout, home), _read(proc.stderr, home)
+        return Ok(ExecOutput(exit_code, out, err))
 
     async def terminate(
         self, process_key: str, context: SandboxContext
@@ -163,6 +168,6 @@ class LocalSandbox:
         return Ok("released")
 
 
-async def _read(stream: asyncio.StreamReader) -> AsyncIterator[bytes]:
+async def _read(stream: asyncio.StreamReader, home: bytes) -> AsyncIterator[bytes]:
     while chunk := await stream.read(65536):
-        yield chunk
+        yield chunk.replace(home, b"/workspace")

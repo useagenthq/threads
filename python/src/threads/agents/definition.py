@@ -42,8 +42,10 @@ class Definition[D]:
         return pinned
 
     def specs(self) -> tuple[ToolSpec, ...]:
-        """Built-ins sorted by name, then app tools in declared order."""
-        builtins = () if self.sandbox is None else specs(egress_denied=egress_denied(self.egress))
+        """Built-ins sorted by name (read_tool_result always, the sandbox tools with a
+        sandbox), then app tools in declared order."""
+        denied = egress_denied(self.egress)
+        builtins = specs(sandbox=self.sandbox is not None, egress_denied=denied)
         return (*builtins, *(t.spec() for t in self.tools))
 
     @property

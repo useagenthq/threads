@@ -44,11 +44,11 @@ from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import SqliteStore, StoredEvent, Writer
 from threads.store.lines import uuid7
+from threads.tools import ReadResults
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-    from threads.loop.tools import ToolRunner
 
 LOCAL_OPERATOR: Final = Principal(issuer="api", tenant="local", subject="operator")
 """The default principal of a local run."""
@@ -101,11 +101,10 @@ async def execute[D](
         principal = options.get("principal", LOCAL_OPERATOR)
         ctx = RunContext(deps, handle.id, handle.branch, principal)
         stream = _Stream(emit)
-        tools: ToolRunner = AppTools(definition.tools, ctx)
         box = definition.sandbox
         builtins = None if box is None else sandbox_tools(sq, box, writer, now_ms)
-        if builtins is not None:
-            tools = Routed(builtins, tools)
+        results = ReadResults(sq, lambda: writer.fold.events)
+        tools = Routed(builtins, results, AppTools(definition.tools, ctx))
         rt = Runtime(
             sq,
             writer,
