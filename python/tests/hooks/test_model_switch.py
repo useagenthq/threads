@@ -4,7 +4,7 @@ import asyncio
 from dataclasses import replace
 
 from corpus import Clock
-from kit import T0, USER, Tools, acquire, allow_all, open_store
+from kit import T0, USER, Tools, acquire, allow_all, open_store, text
 from pydantic import JsonValue
 
 from threads.agents.context import RunContext
@@ -13,13 +13,14 @@ from threads.hooks.types import SwitchGate
 from threads.log import BranchId, ModelSettings, Principal, ThreadId
 from threads.loop.drafts import draft
 from threads.loop.drive import drive
-from threads.loop.runtime import Idle, Runtime
+from threads.loop.runtime import Idle, Runtime, serving
 from threads.loop.scripted import scripted_model
 from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.store.lines import uuid7
 
 OVERLOADED: JsonValue = {"error": {"reason": "overloaded", "http_status": 529}}
+DONE = text("Done.")
 SMALL: JsonValue = {
     "adapter": {"name": "scripted", "settings": {}, "version": "1"},
     "model": {"name": "scripted-small", "provider": "scripted"},
@@ -52,13 +53,15 @@ RETRY: JsonValue = {
 }
 
 
-def test_a_denied_model_switch_appends_no_settings_change() -> None:
+def test_a_denied_model_switch_keeps_the_epoch_and_retries_on_it() -> None:
+    """ADR 0020: a deny keeps the old epoch; the attempt is retried on it, not given up."""
+
     async def deny(_settings: ModelSettings, _ctx: RunContext[None]) -> SwitchGate:
         return {"decision": "deny", "reason": "stay on the pinned model"}
 
     async def main() -> list[str]:
         clock = Clock(T0)
-        model = scripted_model({"responses": [OVERLOADED]})
+        model = scripted_model({"responses": [OVERLOADED, DONE]})
         store = await open_store()
         thread, branch = ThreadId(uuid7(clock())), BranchId(uuid7(clock()))
         assert await store.create(thread, branch, clock()) == Ok(None)
@@ -82,14 +85,21 @@ def test_a_denied_model_switch_appends_no_settings_change() -> None:
         principal = Principal(issuer="api", tenant="t", subject="u")
         ctx = RunContext(None, thread, branch, principal)
         hooks = bind([extension(name="ops", hooks={"before_model_switch": deny})], ctx)
-        rt = Runtime(store, writer, model, tools, allow_all, clock, clock.wait_until, hooks=hooks)
+        rt = Runtime(
+            store, writer, serving(model), tools, allow_all, clock, clock.wait_until, hooks=hooks
+        )
         user = replace(draft("user_input", {"source": "api", "text": "go"}), actor=USER)
         assert isinstance(await rt.append(draft("thread_started", started), user), Ok)
         halt = await drive(rt)
-        assert isinstance(halt, Idle)
-        assert halt.reason == "model_unavailable"
+        assert halt == Idle("end_turn")
         return [e.type for e in rt.events]
 
     appended = asyncio.run(main())
     assert "settings_changed" not in appended
-    assert appended[-2:] == ["hook_decision", "turn_completed"]
+    denied = appended.index("hook_decision")
+    assert appended[denied - 1 : denied + 3] == [
+        "model_attempt_abandoned",
+        "hook_decision",
+        "retry_scheduled",
+        "model_request",
+    ]

@@ -61,7 +61,7 @@ class Tool[I: BaseModel, O, D]:
         data: dict[str, JsonValue] = {
             "name": self.name,
             "description": self.description,
-            "input_schema": _OBJECT.validate_python(self.input.model_json_schema()),
+            "input_schema": json_schema(self.input),
             "effect_class": self.effect,
         }
         if self.dedup_window_ms is not None:
@@ -72,14 +72,8 @@ class Tool[I: BaseModel, O, D]:
 
     def invalid(self, input: JsonObject) -> str | None:
         """Why the model's arguments fail the input model, or None."""
-        text = canonicalize(dict(input))
-        if not isinstance(text, Ok):
-            return "the arguments are not canonical JSON"
-        try:
-            self.input.model_validate_json(text.value, strict=True)
-        except ValidationError as error:
-            return f"invalid arguments for {self.name}: {error.error_count()} error(s): {error}"
-        return None
+        why = invalid(self.input, dict(input))
+        return None if why is None else f"invalid arguments for {self.name}: {why}"
 
     async def run(self, input: JsonObject, ctx: RunContext[D]) -> Output:
         """Runs the body. Its value is the result; an error it raises is an error result the
@@ -106,6 +100,24 @@ class Tool[I: BaseModel, O, D]:
             # Finality is the tool's declared capability, never inferred from an answer.
             return NotFoundNonfinal()
         return answer
+
+
+def json_schema(model: type[BaseModel]) -> dict[str, JsonValue]:
+    """The model's JSON Schema as pinned: a tool's input_schema, an agent's output schema."""
+    return _OBJECT.validate_python(model.model_json_schema())
+
+
+def invalid(model: type[BaseModel], value: JsonValue) -> str | None:
+    """Why a value the model sent fails `model`, or None. Strict and in JSON mode: `"1"` is not
+    an int. One check for tool arguments and final_output candidates alike."""
+    text = canonicalize(value)
+    if not isinstance(text, Ok):
+        return "not canonical JSON"
+    try:
+        model.model_validate_json(text.value, strict=True)
+    except ValidationError as error:
+        return f"{error.error_count()} error(s): {error}"
+    return None
 
 
 def render_value(value: object) -> str:

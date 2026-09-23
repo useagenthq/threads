@@ -17,6 +17,7 @@ from threads.log import (
     Threshold1,
     Threshold2,
 )
+from threads.loop import epoch
 from threads.reduce.fold import Fold, policy
 
 RETRY: Final = Retry(
@@ -51,7 +52,7 @@ CONTEXT: Final = Context(
 """The default context policy."""
 
 WINDOW: Final = 200_000
-"""The context window assumed when the policy lists no models."""
+"""The context window assumed when the policy doesn't list the current model."""
 
 
 def retry(fold: Fold) -> Retry:
@@ -76,12 +77,9 @@ def fallbacks(fold: Fold) -> tuple[ModelSettings, ...]:
 
 
 def effective_window(fold: Fold) -> int:
-    """W: the context window less `reserve_tokens`. ponytail: the primary
-    model's window; a fallback's own window when settings_changed names one."""
-    pinned = policy(fold)
-    window = WINDOW
-    if pinned is not None and pinned.models is not MISSING:
-        window = pinned.models[0].context_window
+    """W: the current epoch model's context window less `reserve_tokens`."""
+    model = epoch.limits(fold)
+    window = WINDOW if model is None else model.context_window
     return window - context(fold).reserve_tokens
 
 

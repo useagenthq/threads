@@ -88,7 +88,7 @@ def holds(schema: JsonValue, value: object) -> bool:
     if "additionalProperties" in schema and not _additional(schema, value):
         return False
     for keyword, argument in schema.items():
-        if keyword in ("if", "then", "else", "description", "additionalProperties"):
+        if keyword in ("if", "then", "else", "additionalProperties") or keyword in _ANNOTATIONS:
             continue
         check = _CHECKS.get(keyword)
         if check is None:
@@ -96,6 +96,10 @@ def holds(schema: JsonValue, value: object) -> bool:
         if not check(argument, value):
             return False
     return True
+
+
+_ANNOTATIONS = frozenset({"description", "title", "default", "examples"})
+"""Keywords that describe a value and never constrain it (a Pydantic schema writes them)."""
 
 
 def _is_object(value: object) -> TypeGuard[Mapping[str, object]]:

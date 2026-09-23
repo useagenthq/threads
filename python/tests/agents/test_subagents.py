@@ -174,7 +174,7 @@ def test_a_subagents_tools_are_filtered_to_its_parents_pinned_names() -> None:
 
 
 def test_the_model_is_told_which_agents_it_can_start_and_hand_off_to() -> None:
-    def named(name: str) -> Agent[None]:
+    def named(name: str) -> Agent[None, str]:
         return agent(name=name, model=scripted_model({"responses": []}))
 
     lead = agent(

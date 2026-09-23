@@ -22,16 +22,16 @@ from threads.log import (
     ModelRequestEvent,
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
-    SettingsChangedEvent,
     ThreadId,
     ThreadStartedEvent,
     Usage,
     UserInputEvent,
 )
+from threads.loop import epoch
 from threads.loop.covering import Covering
 from threads.loop.drafts import draft
 from threads.loop.runtime import Failed, Runtime, lost
-from threads.reduce.fold import Fold, policy
+from threads.reduce.fold import Fold
 from threads.reduce.projections import bound, dispositions
 from threads.result import Err
 from threads.store.budgets import Cover, LimitName
@@ -72,21 +72,6 @@ def _cover(c: Covering) -> Cover | None:
     return Cover(c.budget_id, limits) if limits else None
 
 
-def _epoch(fold: Fold) -> tuple[Model | None, JsonValue]:
-    """The current settings epoch's pinned model limits and its max_tokens."""
-    pinned = policy(fold)
-    started = next(e for e in fold.events if isinstance(e, ThreadStartedEvent)).data
-    settings = next(
-        (e.data.settings for e in reversed(fold.events) if isinstance(e, SettingsChangedEvent)),
-        None,
-    )
-    ref = started.model if settings is None else settings.model
-    params = started.model_params if settings is None else settings.model_params
-    models: Sequence[Model] = () if pinned is None or pinned.models is MISSING else pinned.models
-    model = next((m for m in models if (m.provider, m.name) == (ref.provider, ref.name)), None)
-    return model, params.get("max_tokens")
-
-
 def bounds(model: Model | None, max_tokens: JsonValue) -> dict[LimitName, int | None]:
     """An attempt's bound per limit; None where the model has none: no
     max_tokens, no input bound, or no price (spec/schema/README.md, Budget enforcement)."""
@@ -114,7 +99,7 @@ def unbounded(budget: Budget, model: Model, max_tokens: JsonValue) -> LimitName 
 
 def _reserve(fold: Fold) -> dict[LimitName, int | None]:
     """The next attempt's bound per limit."""
-    return bounds(*_epoch(fold))
+    return bounds(epoch.limits(fold), epoch.current(fold).model_params.get("max_tokens"))
 
 
 def _known(amounts: dict[LimitName, int | None]) -> dict[LimitName, int]:

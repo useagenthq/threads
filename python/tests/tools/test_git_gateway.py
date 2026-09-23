@@ -351,7 +351,7 @@ def test_a_push_interrupted_by_a_crash_is_settled_by_the_forge_branch(
         await pushed(self, args, bundle, sha)
         raise _CrashError
 
-    def bot(responses: list[JsonValue]) -> Agent[None]:
+    def bot(responses: list[JsonValue]) -> Agent[None, str]:
         return agent(
             model=scripted_model({"responses": responses}),
             sandbox=box,

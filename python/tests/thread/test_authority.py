@@ -39,7 +39,7 @@ def _drop(_item: object) -> None:
 
 def _bot(
     sent: list[str], gate: asyncio.Event | None = None, approvers: list[Principal] | None = None
-) -> Agent[None]:
+) -> Agent[None, str]:
     async def send(args: Note, _ctx: RunContext[None]) -> str:
         sent.append(args.text)
         if gate is not None:
@@ -56,7 +56,7 @@ def _bot(
     return agent(model=model, tools=[send_tool], approvers=approvers)
 
 
-async def _parked_by_alice(bot: Agent[None], store: Store) -> Thread:
+async def _parked_by_alice(bot: Agent[None, str], store: Store) -> Thread:
     parked = await execute(bot.definition, "go", {"store": store, "principal": ALICE}, None, _drop)
     assert isinstance(parked, Parked)
     return parked.thread

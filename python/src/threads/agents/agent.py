@@ -5,9 +5,12 @@ store, the principal and the deps.
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import replace
-from typing import Literal, Required, TypedDict, Unpack, overload
+from functools import partial
+from typing import Final, Literal, Required, TypedDict, Unpack, overload
+
+from pydantic import BaseModel
 
 from threads.agents import narrowing
 from threads.agents.bindings import AppTool, ToolServer
@@ -15,8 +18,8 @@ from threads.agents.builtins import Egress
 from threads.agents.catalog import GitOptions, LspOptions, WebOptions, catalog
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
-from threads.agents.results import RunResult, StreamEvent
-from threads.agents.run import Input, RunOptions, execute
+from threads.agents.results import Completed, RunResult, StreamEvent
+from threads.agents.run import Emit, Input, RunOptions, execute
 from threads.agents.skills import Skill, checked
 from threads.hooks.extension import Extension
 from threads.log import Budget, Context, Permissions, Principal, Retry
@@ -38,6 +41,12 @@ class AgentOptions(TypedDict, total=False):
     retry: Retry
     context: Context
     """The context ladder's settings; absent: the ADR defaults."""
+    fallback: Sequence[Model]
+    """Models to fall back to, in order, when the current one stays overloaded. With the default
+    fallback_scope "turn", the next input reverts to the settings before the fallback."""
+    output_retries: int
+    """Failed candidates per turn (a rejected final_output or a plain-text end) before the run
+    fails output_invalid; default 2. A non-negative integer."""
     sandbox: Sandbox
     """Absent: no sandbox tools. Present: bash, read, write, edit, ls, glob and grep."""
     egress: Egress
@@ -52,9 +61,10 @@ class AgentOptions(TypedDict, total=False):
     """search_knowledge over host-ingested sources."""
     skills: Sequence[Skill]
     """Host-pinned skills: listed in line 0, a body loaded on demand."""
-    subagents: "Sequence[Agent[None]]"
-    """Agents spawn_agent may start, by name; the team tools come with them."""
-    handoffs: "Sequence[Agent[None]]"
+    subagents: "Sequence[Agent[None, object]]"
+    """Agents spawn_agent may start, by name; the team tools come with them. A structured
+    subagent reports the canonical JSON of its output."""
+    handoffs: "Sequence[Agent[None, object]]"
     """Agents this one may hand the conversation to, pinned as policy.handoffs."""
     web: WebOptions
     """Host-side web_fetch and web_search."""
@@ -80,31 +90,40 @@ class ToolAgentOptions[D](AgentOptions, total=False):
     """App tools and MCP servers (`threads.mcp.mcp`)."""
 
 
+class OutputAgentOptions[O: BaseModel](AgentOptions, total=False):
+    output: Required[type[O]]
+    """The structured final output: the model returns it through final_output, checked strictly
+    against this model, and a completed run's output is an O."""
+
+
+class ServerOutputAgentOptions[O: BaseModel](OutputAgentOptions[O], total=False):
+    tools: Required[Sequence[ToolServer]]
+
+
+class ToolOutputAgentOptions[D, O: BaseModel](OutputAgentOptions[O], total=False):
+    tools: Required[Sequence[AppTool[D] | ToolServer]]
+
+
 class _Options[D](AgentOptions, total=False):
     tools: Sequence[AppTool[D] | ToolServer]
+    output: object
 
 
-class RunStream:
+class RunStream[O]:
     """spec/api.json `RunStream`: the run's committed events as they are appended, then its
     result. A subscription to the log, not a second loop."""
 
-    def __init__(self) -> None:
-        self._queue: asyncio.Queue[StreamEvent | None] = asyncio.Queue()
-        self._task: asyncio.Task[RunResult[str]] | None = None
-
-    def attach(self, task: asyncio.Task[RunResult[str]]) -> None:
-        """Binds the run this stream reports."""
-        self._task = task
-        task.add_done_callback(lambda _: self._queue.put_nowait(None))
-
-    def emit(self, item: StreamEvent) -> None:
-        self._queue.put_nowait(item)
+    def __init__(
+        self, queue: asyncio.Queue[StreamEvent | None], task: asyncio.Task[RunResult[O]]
+    ) -> None:
+        """`queue` receives the run's items; the run is done when its task is."""
+        self._queue: Final = queue
+        self._task: Final = task
+        task.add_done_callback(lambda _: queue.put_nowait(None))
 
     @property
-    def result(self) -> asyncio.Task[RunResult[str]]:
+    def result(self) -> asyncio.Task[RunResult[O]]:
         """Await it for the `RunResult`."""
-        if self._task is None:
-            raise AssertionError("a stream starts its run when it is made")
         return self._task
 
     def __aiter__(self) -> AsyncIterator[StreamEvent]:
@@ -115,12 +134,19 @@ class RunStream:
             yield item
 
 
-class Agent[D]:
-    """spec/api.json `Agent`: reusable; every run is a separate thread unless `thread` is given."""
+class Agent[D, O]:
+    """spec/api.json `Agent`: reusable; every run is a separate thread unless `thread` is given.
+    A completed run's output is an `O`: the final text, or the `output` model."""
 
-    def __init__(self, definition: Definition[D], default_deps: tuple[D] | tuple[()]) -> None:
+    def __init__(
+        self,
+        definition: Definition[D],
+        default_deps: tuple[D] | tuple[()],
+        decode: Callable[[str], O],
+    ) -> None:
         self._definition = definition
         self._default_deps = default_deps
+        self._decode: Final = decode
 
     @property
     def name(self) -> str:
@@ -138,42 +164,82 @@ class Agent[D]:
             return self._default_deps[0]
         raise ConfigError("invalid_config", f"agent {self.name} needs deps for its tools")
 
-    async def run(self, input: Input, **options: Unpack[RunOptions[D]]) -> RunResult[str]:
+    async def run(self, input: Input, **options: Unpack[RunOptions[D]]) -> RunResult[O]:
         """Runs one input to a terminal result. Needs no server."""
-        return await execute(self._definition, input, options, self._deps(options), _drop)
+        return await self._run(input, options, self._deps(options), _drop)
 
-    def stream(self, input: Input, **options: Unpack[RunOptions[D]]) -> RunStream:
+    def stream(self, input: Input, **options: Unpack[RunOptions[D]]) -> RunStream[O]:
         """The same run as `run`, streamed. Call it inside a running event loop."""
-        stream = RunStream()
-        deps = self._deps(options)
-        run = execute(self._definition, input, options, deps, stream.emit)
-        stream.attach(asyncio.get_running_loop().create_task(run))
-        return stream
+        queue: asyncio.Queue[StreamEvent | None] = asyncio.Queue()
+        run = self._run(input, options, self._deps(options), queue.put_nowait)
+        return RunStream(queue, asyncio.get_running_loop().create_task(run))
+
+    async def _run(self, input: Input, options: RunOptions[D], deps: D, emit: Emit) -> RunResult[O]:
+        # A run reports its output as text: the final text, or the accepted value as canonical
+        # JSON, which parses back into the output model.
+        done = await execute(self._definition, input, options, deps, emit)
+        if isinstance(done, Completed):
+            return Completed(self._decode(done.output), done.thread)
+        return done
 
 
 def _drop(_item: StreamEvent) -> None:
     pass
 
 
+def _text(text: str) -> str:
+    return text
+
+
 @overload
-def agent(**options: Unpack[AgentOptions]) -> Agent[None]: ...
+def agent(**options: Unpack[AgentOptions]) -> Agent[None, str]: ...
 @overload
-def agent(**options: Unpack[ServerAgentOptions]) -> Agent[None]: ...
+def agent(**options: Unpack[ServerAgentOptions]) -> Agent[None, str]: ...
 @overload
-def agent[D](**options: Unpack[ToolAgentOptions[D]]) -> Agent[D]: ...
-def agent[D](**options: Unpack[_Options[D]]) -> Agent[D] | Agent[None]:
-    """spec/api.json `agent`. Pure: no I/O. Raises ConfigError for duplicate tool names."""
+def agent[D](**options: Unpack[ToolAgentOptions[D]]) -> Agent[D, str]: ...
+@overload
+def agent[O: BaseModel](**options: Unpack[OutputAgentOptions[O]]) -> Agent[None, O]: ...
+@overload
+def agent[O: BaseModel](**options: Unpack[ServerOutputAgentOptions[O]]) -> Agent[None, O]: ...
+@overload
+def agent[D, O: BaseModel](**options: Unpack[ToolOutputAgentOptions[D, O]]) -> Agent[D, O]: ...
+def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, object]:
+    """spec/api.json `agent`. Pure: no I/O. Raises ConfigError for duplicate tool names, an
+    output that is not a Pydantic model class, or output_retries that is not a non-negative
+    integer."""
+    output = _output(options.get("output"))
+    decode: Callable[[str], object] = _text
+    if output is not None:
+        decode = partial(output.model_validate_json, strict=True)
     given = options.get("tools", ())
     servers = tuple(t for t in given if isinstance(t, ToolServer))
     tools = tuple(t for t in given if not isinstance(t, ToolServer))
     if not tools:
         empty: tuple[AppTool[None], ...] = ()
-        return Agent(_definition(options, empty, servers), (None,))
-    return Agent(_definition(options, tools, servers), ())
+        return Agent(_definition(options, empty, servers, output), (None,), decode)
+    return Agent(_definition(options, tools, servers, output), (), decode)
+
+
+def _output(output: object) -> type[BaseModel] | None:
+    if output is None or (isinstance(output, type) and issubclass(output, BaseModel)):
+        return output
+    raise ConfigError("invalid_config", f"output must be a Pydantic model class, got {output!r}")
+
+
+def _retries(options: AgentOptions) -> int:
+    retries = options.get("output_retries", 2)
+    # bool is an int subclass, and True is not a retry count.
+    if type(retries) is not int or retries < 0:
+        why = f"output_retries must be a non-negative integer, got {retries!r}"
+        raise ConfigError("invalid_config", why)
+    return retries
 
 
 def _definition[T](
-    options: AgentOptions, tools: tuple[AppTool[T], ...], servers: tuple[ToolServer, ...]
+    options: AgentOptions,
+    tools: tuple[AppTool[T], ...],
+    servers: tuple[ToolServer, ...],
+    output: type[BaseModel] | None,
 ) -> Definition[T]:
     sandbox = options.get("sandbox")
     egress = options.get("egress", ())
@@ -208,6 +274,9 @@ def _definition[T](
             computer=options.get("computer", False),
             lsp=options.get("lsp"),
         ),
+        output=output,
+        output_retries=_retries(options),
+        fallback=tuple(options.get("fallback", ())),
     )
     if "approvers" in options:
         definition = replace(definition, approvers=tuple(options["approvers"]))

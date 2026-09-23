@@ -7,6 +7,7 @@ import uuid
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
+from functools import partial
 from typing import TypedDict
 
 from threads.agents import narrowing
@@ -40,6 +41,7 @@ from threads.agents.start import (
 )
 from threads.agents.store import LIVE, Store, now_ms, open_store, sqlite
 from threads.agents.stubbed import stub_mode
+from threads.agents.tool import invalid
 from threads.hooks.extension import bind, extension_tools
 from threads.hooks.observers import ObserverPump
 from threads.log import (
@@ -54,7 +56,7 @@ from threads.log import (
 )
 from threads.loop import gates
 from threads.loop.drive import drive
-from threads.loop.runtime import Halt, Idle, Parked, RunErrorCode, Runtime
+from threads.loop.runtime import Halt, Idle, Parked, RunErrorCode, Runtime, serving
 from threads.loop.stubs import Stub
 from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, provider_tools
@@ -166,11 +168,13 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         rt = Runtime(
             sq,
             writer,
-            definition.model,
+            serving(definition.model, *definition.fallback),
             tools,
             with_memory_write(capped(frame.ceilings), definition.memory_write),
             now_ms,
             stream.wait_until,
+            # A final_output candidate is checked against the output model, strictly.
+            None if definition.output is None else partial(invalid, definition.output),
             observe=stream.observe,
             read_file=None if builtins is None else builtins.read_file,
             hooks=bind(definition.extensions, hook_ctx),

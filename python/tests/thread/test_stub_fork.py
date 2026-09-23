@@ -67,7 +67,7 @@ def bot(
     sent: list[str],
     responses: list[JsonValue],
     worker: list[JsonValue] | None = None,
-) -> Agent[None]:
+) -> Agent[None, str]:
     """One agent config for every run of the thread (a changed config starts a new thread),
     with a worker subagent that can send too."""
 
@@ -164,7 +164,7 @@ def test_a_stub_run_refuses_a_live_model_with_hosted_tools() -> None:
             "claude-test", hosted_tools=[search], context_window=1, max_output_tokens=1
         )
         hosted = bot(box, [], [])
-        hosted = Agent(replace(hosted.definition, model=live), (None,))
+        hosted = Agent(replace(hosted.definition, model=live), (None,), str)
         with pytest.raises(ConfigError) as raised:
             await hosted.run("go", deps=None, thread=child)
         assert raised.value.code == "hosted_tool_unsupported"

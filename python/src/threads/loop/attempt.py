@@ -17,8 +17,8 @@ from threads.loop import budget, guard
 from threads.loop.calls import call_drafts
 from threads.loop.capabilities import mismatch
 from threads.loop.drafts import draft
-from threads.loop.model import Done, ModelRequest, ModelResponse, PartChunk, Rejected
-from threads.loop.runtime import Failed, Runtime, WriterContext, fence, lost
+from threads.loop.model import Done, Model, ModelRequest, ModelResponse, PartChunk, Rejected
+from threads.loop.runtime import Failed, Runtime, WriterContext, epoch_model, fence, lost
 from threads.reduce.handlers import to_json
 from threads.result import Err
 from threads.store import Draft
@@ -36,7 +36,10 @@ async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Faile
             return Failed(code, rendered.error.message)
         raise AssertionError(f"the next request can't render: {rendered.error}")
     body, line0 = rendered.value.body, rendered.value.line0
-    unsupported = mismatch(body, rt.model.info)
+    model = epoch_model(rt)
+    if model is None:
+        return Failed("model_error", "no adapter for this settings epoch's model")
+    unsupported = mismatch(body, model.info)
     if unsupported is not None:
         data = {"reason": "error", "code": unsupported}
         ended = await rt.append(draft("turn_completed", data))
@@ -58,19 +61,21 @@ async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Faile
     event = appended.value[0]
     if not isinstance(event, ModelRequestEvent):
         raise AssertionError("a model_request draft stored another type")
-    sent = await _dispatch(rt, event, body)
+    sent = await _dispatch(rt, model, event, body)
     await budget.settle(rt)
     return sent
 
 
-async def _dispatch(rt: Runtime, event: ModelRequestEvent, body: bytes) -> Failed | EventId | None:
+async def _dispatch(
+    rt: Runtime, model: Model, event: ModelRequestEvent, body: bytes
+) -> Failed | EventId | None:
     """Sends the durable request and records its outcome in one batch."""
-    guard.check(rt.model)
+    guard.check(model)
     stale = await fence(rt)
     if stale is not None:
         return stale
     req = ModelRequest(f"{rt.writer.branch_id}:{event.event_id}", body)
-    outcome = await _collect(rt, req)
+    outcome = await _collect(rt, model, req)
     if isinstance(outcome, Rejected) and outcome.reason == "stale_epoch":
         # The adapter's fence refused at its send point: this writer can't append anything.
         return Failed("branch_busy", "the lease moved before the send")
@@ -84,10 +89,10 @@ type Outcome = ModelResponse | Rejected | None
 """A response, a rejection before any content, or None when the outcome is unknown."""
 
 
-async def _collect(rt: Runtime, req: ModelRequest) -> Outcome:
+async def _collect(rt: Runtime, model: Model, req: ModelRequest) -> Outcome:
     parts: list[OutputPart] = []
     try:
-        async for chunk in rt.model.send(req, WriterContext(rt)):
+        async for chunk in model.send(req, WriterContext(rt)):
             match chunk:
                 case PartChunk(part=part):
                     parts.append(part)
