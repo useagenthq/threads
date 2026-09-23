@@ -5,6 +5,12 @@ export {
   fileArtifacts,
   memoryArtifacts,
 } from "./artifacts";
+export {
+  BudgetLedger,
+  type Claim,
+  type LimitName,
+  type Refused,
+} from "./budget";
 export type { SqliteDriver, SqlValue } from "./driver";
 export {
   ResourceLedger,

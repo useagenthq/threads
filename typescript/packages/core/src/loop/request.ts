@@ -61,6 +61,8 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
   }
   const gated = await gates(s);
   if (gated !== undefined) return gated === "ended" ? undefined : gated;
+  // A compaction side request the budget refused already recorded why.
+  if (s.fold.budgetBlocked) return endTurn(s, "budget_exhausted");
   const got = await attempt(s, "turn", nextAttempt(s.events, s.fold));
   switch (got.kind) {
     case "halt":
@@ -72,6 +74,8 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
       return rejected(s, got.rejection.reason);
     case "unsupported":
       return s.append(draft.turnCompleted("error", got.refused.code));
+    case "budget":
+      return endTurn(s, "budget_exhausted");
     default:
       return assertNever(got);
   }

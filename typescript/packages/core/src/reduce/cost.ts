@@ -18,6 +18,7 @@ export type Cost = {
 };
 
 type Attempt = {
+  readonly id: string;
   readonly request: EventOf<"model_request">["data"];
   readonly settings: Settings;
   response?: EventOf<"model_response">["data"];
@@ -38,7 +39,7 @@ function attempts(events: readonly KnownEvent[]): readonly Attempt[] {
   for (const e of events) {
     settings = epochSettings(e) ?? settings;
     if (e.type === "model_request" && settings !== undefined)
-      byId.set(e.event_id, { request: e.data, settings });
+      byId.set(e.event_id, { id: e.event_id, request: e.data, settings });
     else settle(byId, e);
   }
   return [...byId.values()];
@@ -70,15 +71,14 @@ export function reservation(
   params: Settings["params"],
   inputBound: number | undefined,
 ): number | undefined {
-  const bound =
-    inputBound ??
-    (model.input_billing_bound === "context_window"
-      ? model.context_window
-      : undefined);
-  const { max_tokens: maxTokens } = params;
-  if (bound === undefined || typeof maxTokens !== "number") return undefined;
+  const bounds = tokenBounds(model, params, inputBound);
+  if (bounds.input === undefined || bounds.output === undefined)
+    return undefined;
   const { input, cache_read = 0, cache_write = 0, output } = price;
-  return bound * Math.max(input, cache_read, cache_write) + maxTokens * output;
+  return (
+    bounds.input * Math.max(input, cache_read, cache_write) +
+    bounds.output * output
+  );
 }
 
 /** Known nanos, and the upper bound (undefined when unbounded) for one response. */
@@ -107,6 +107,79 @@ function notBilled(attempt: Attempt): boolean {
   );
 }
 
+/** One attempt's [known, upper bound] nanos; undefined when its model has no price. */
+function disposition(
+  attempt: Attempt,
+  models: readonly PolicyModel[],
+): readonly [number, number | undefined] | undefined {
+  if (attempt.response === undefined && notBilled(attempt)) return [0, 0];
+  const { provider, name } = attempt.settings.model;
+  const model = models.find((m) => m.provider === provider && m.name === name);
+  const price = model?.price;
+  if (model === undefined || price === undefined) return undefined;
+  const bound = reservation(
+    model,
+    price,
+    attempt.settings.params,
+    attempt.request.input_bound_tokens,
+  );
+  return attempt.response === undefined
+    ? [0, bound]
+    : responseCost(attempt.response.usage, price, bound);
+}
+
+/**
+ * One attempt as the budget ledger settles it: its cost at the upper bound,
+ * and its tokens, each measured or else at the attempt's bound; nothing when proven unbilled.
+ */
+export function settlement(
+  events: readonly KnownEvent[],
+  policy: Policy | undefined,
+  requestId: string,
+): {
+  readonly cost: number | undefined;
+  readonly input: number | undefined;
+  readonly output: number | undefined;
+} {
+  const attempt = attempts(events).find((a) => a.id === requestId);
+  if (attempt === undefined) throw new Error(`no attempt ${requestId}`);
+  const models = policy?.models ?? [];
+  const d = disposition(attempt, models);
+  const { provider, name } = attempt.settings.model;
+  const model = models.find((m) => m.provider === provider && m.name === name);
+  const bounds = tokenBounds(
+    model,
+    attempt.settings.params,
+    attempt.request.input_bound_tokens,
+  );
+  if (attempt.response === undefined && notBilled(attempt))
+    return { cost: 0, input: 0, output: 0 };
+  const usage = attempt.response?.usage;
+  return {
+    cost: d?.[1],
+    input: usage?.input_tokens ?? bounds.input,
+    output: usage?.output_tokens ?? bounds.output,
+  };
+}
+
+/** An attempt's token bounds: the declared input bound and the epoch's max_tokens. */
+export function tokenBounds(
+  model: PolicyModel | undefined,
+  params: Settings["params"],
+  inputBound: number | undefined,
+): { readonly input?: number; readonly output?: number } {
+  const input =
+    inputBound ??
+    (model?.input_billing_bound === "context_window"
+      ? model.context_window
+      : undefined);
+  const { max_tokens: output } = params;
+  return {
+    ...(input === undefined ? {} : { input }),
+    ...(typeof output === "number" ? { output } : {}),
+  };
+}
+
 /** Projection `cost`: known cost and a conservative bound. */
 export function cost(
   events: readonly KnownEvent[],
@@ -114,35 +187,19 @@ export function cost(
 ): Cost | undefined {
   if (policy?.currency === undefined || policy.models === undefined)
     return undefined;
-  const models = policy.models;
   let known = 0;
   let upper = 0;
   let complete = true;
   let bounded = true;
   for (const attempt of attempts(events)) {
-    if (attempt.response === undefined && notBilled(attempt)) continue;
-    const { provider, name } = attempt.settings.model;
-    const model = models.find(
-      (m) => m.provider === provider && m.name === name,
-    );
-    const price = model?.price;
+    const d = disposition(attempt, policy.models);
     // An unpriced model can be neither costed nor bounded.
-    if (model === undefined || price === undefined) {
+    if (d === undefined) {
       complete = false;
       bounded = false;
       continue;
     }
-    const { params } = attempt.settings;
-    const bound = reservation(
-      model,
-      price,
-      params,
-      attempt.request.input_bound_tokens,
-    );
-    const [k, u] =
-      attempt.response === undefined
-        ? [0, bound]
-        : responseCost(attempt.response.usage, price, bound);
+    const [k, u] = d;
     known += k;
     complete &&= u === k;
     bounded &&= u !== undefined;

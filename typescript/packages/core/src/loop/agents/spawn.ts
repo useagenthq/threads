@@ -3,6 +3,7 @@ import { ThreadId } from "../../log";
 import { uuidv7 } from "../../store/encode";
 import { SpawnAgentInput } from "../../tools/agent-inputs";
 import { draft, TOOL } from "../drafts";
+import { inheritedBy } from "../ledger";
 import type { Session } from "../session";
 import { recordOutput } from "../spill";
 import type { ChildEnd, Halt } from "../types";
@@ -138,6 +139,7 @@ export async function runChild(
     ceiling: (call) => s.config.authorize(call, s.fold),
     tools: new Set(s.fold.tools.map((t) => t.name)),
     team: teamOf(s),
+    covering: inheritedBy(s),
   });
 }
 

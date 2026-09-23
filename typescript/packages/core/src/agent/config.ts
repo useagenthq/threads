@@ -10,6 +10,7 @@ import {
 import { toolSpec } from "../loop/turn";
 import type { Model } from "../model";
 import { category, decide } from "../permissions";
+import type { BudgetLedger } from "../store";
 import { loopExtension } from "./extension";
 import { extensionTools } from "./pin";
 import { childFactory } from "./registry";
@@ -31,6 +32,7 @@ export type RunEnv<Deps> = {
   readonly builtin: readonly ToolImpl[];
   readonly readFile?: (path: string) => Promise<Uint8Array | undefined>;
   readonly child?: ChildRun;
+  readonly ledger: BudgetLedger;
 };
 
 export function loopConfig<Deps, Output>(
@@ -78,6 +80,7 @@ export function loopConfig<Deps, Output>(
     skewMarginMs: 1000,
     redact: redactSecrets,
     agents: agents(def, env),
+    budgets: { ledger: env.ledger, inherited: env.child?.covering ?? [] },
     ...(readFile === undefined ? {} : { readFile }),
     ...(def.output === undefined ? {} : { output: def.output }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),

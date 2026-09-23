@@ -63,6 +63,7 @@ export async function compact(
       );
     case "broken":
     case "unsupported":
+    case "budget":
       return failed(s, "model_error");
     default:
       return assertNever(got);

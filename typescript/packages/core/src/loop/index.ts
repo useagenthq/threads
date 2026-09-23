@@ -18,6 +18,7 @@ export type {
   ChildEnd,
   ChildRun,
   Clock,
+  Covering,
   Halt,
   LoopConfig,
   RunErrorCode,

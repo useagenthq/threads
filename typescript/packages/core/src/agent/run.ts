@@ -175,6 +175,7 @@ export async function execute<Deps, Output>(
         },
       },
       builtin: builtin.tools,
+      ledger: log.budgets,
       ...(builtin.readFile === undefined ? {} : { readFile: builtin.readFile }),
       ...(child === undefined ? {} : { child }),
     });

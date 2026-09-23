@@ -8,6 +8,7 @@ import type { ProviderRejection } from "../model/protocol";
 import { parseRender } from "../model/render-lines";
 import { compactionInstruction, refReader, render } from "../render";
 import { draft } from "./drafts";
+import { reserve, settleOpen } from "./ledger";
 import type { Session } from "./session";
 import type { Halt } from "./types";
 
@@ -24,6 +25,8 @@ export type Attempted =
   | { readonly kind: "broken" }
   /** Refused before sending, by the loop's pre-check or the adapter. */
   | { readonly kind: "unsupported"; readonly refused: Unsupported }
+  /** A covering budget refused the reservation; budget_exceeded is recorded. */
+  | { readonly kind: "budget" }
   | { readonly kind: "halt"; readonly halt: Halt };
 
 type Collected =
@@ -63,6 +66,14 @@ export async function attempt(
   const { bytes, prefix } = rendered.value;
   const refused = unsupported(parseRender(bytes), model.info);
   if (refused !== undefined) return { kind: "unsupported", refused };
+  // Reserved right before the request is appended, at the seq it will take.
+  const over = reserve(s);
+  if (over !== undefined) {
+    const stopped = s.append(draft.budgetExceeded(over));
+    return stopped === undefined
+      ? { kind: "budget" }
+      : { kind: "halt", halt: stopped };
+  }
   const stopped = s.append(
     draft.modelRequest({
       attempt: number,
@@ -77,7 +88,9 @@ export async function attempt(
   const fenced = s.fence();
   if (fenced !== undefined) return { kind: "halt", halt: fenced };
   const collected = await collect(s, model, requestId, bytes);
-  return record(s, requestId, collected);
+  const recorded = record(s, requestId, collected);
+  settleOpen(s);
+  return recorded;
 }
 
 async function collect(

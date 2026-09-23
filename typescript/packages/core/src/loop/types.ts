@@ -12,6 +12,7 @@ import type {
   Usage,
 } from "../log";
 import type { LookupResult, Model } from "../model";
+import type { BudgetLedger } from "../store/budget";
 
 /**
  * RunResult failed.error.code: host-api RunErrorCode (spec/schema/host-api), closed. A test
@@ -133,6 +134,21 @@ export type LoopConfig = {
   readonly redact?: (text: string) => string;
   /** Subagents and the team; absent: spawn_agent and team tools have no agents. */
   readonly agents?: Agents;
+  /** The tree-wide budget ledger; absent: no cost, token or request budget. */
+  readonly budgets?: {
+    readonly ledger: BudgetLedger;
+    /** The ancestors' budgets that cover this thread too. */
+    readonly inherited: readonly Covering[];
+  };
+};
+
+/** A budget covering a thread, as the ledger names it. */
+export type Covering = {
+  readonly budgetId: string;
+  readonly budget: NonNullable<Policy["budget"]>;
+  /** An ancestor's budget names its thread; the thread's own and its run's don't. */
+  readonly owner?: ThreadId;
+  readonly scope: "thread" | "run" | "ancestor";
 };
 
 /** The terminal result of a child thread (agent_finished, F7.5). */
@@ -159,6 +175,8 @@ export type ChildRun = {
   readonly tools: ReadonlySet<string>;
   /** The parent's team, which the child joins as a member. */
   readonly team: Team;
+  /** Every budget covering the parent, which covers the child too. */
+  readonly covering: readonly Covering[];
 };
 
 export type Subagent = {

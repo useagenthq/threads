@@ -6,6 +6,7 @@ import { type Chain, tipHash, type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import type { ArtifactStore } from "./artifacts";
 import { newBranch } from "./branch";
+import { BudgetLedger } from "./budget";
 import { ObserverCursors } from "./cursors";
 import type { SqliteDriver } from "./driver";
 import { forkEligible, forkingBranches, loadChain } from "./forking";
@@ -332,6 +333,11 @@ export class LogStore {
   /** The resource ledger, fenced by the owner's writer. */
   get ledger(): ResourceLedger {
     return new ResourceLedger(this.#db, this.#now, this.#tenant);
+  }
+
+  /** The tree-wide budget ledger. */
+  get budgets(): BudgetLedger {
+    return new BudgetLedger(this.#db);
   }
 
   /** Durable observer cursors. */
