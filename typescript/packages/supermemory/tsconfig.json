@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    // The e2b SDK's own .d.ts doesn't compile under exactOptionalPropertyTypes; our code does.
+    "skipLibCheck": true
+  },
+  "include": ["src", "test"]
+}

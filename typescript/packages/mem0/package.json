@@ -1,0 +1,11 @@
+{
+  "name": "@threads/mem0",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@threads/core": "workspace:*"
+  }
+}

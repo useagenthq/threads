@@ -1,0 +1,13 @@
+{
+  "name": "@threads/supermemory",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@threads/core": "workspace:*",
+    "supermemory": "4.25.4",
+    "zod": "^4.6.5"
+  }
+}

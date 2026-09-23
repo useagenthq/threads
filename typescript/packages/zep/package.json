@@ -1,0 +1,13 @@
+{
+  "name": "@threads/zep",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@threads/core": "workspace:*",
+    "@getzep/zep-cloud": "3.28.0",
+    "zod": "^4.6.5"
+  }
+}
