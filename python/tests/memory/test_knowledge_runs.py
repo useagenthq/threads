@@ -11,7 +11,7 @@ from pydantic import JsonValue
 from threads import Completed, ConfigError, agent, fake_sandbox, scripted_model, sqlite
 from threads.agents.results import Thread
 from threads.agents.store import Store
-from threads.log import InjectedEvent, Permissions, SnapshotEvent, ToolResultEvent
+from threads.log import InjectedEvent, Permissions, Principal, SnapshotEvent, ToolResultEvent
 from threads.memory.local_knowledge import local_knowledge
 from threads.result import Ok
 from threads.sandbox.fake import FakeSandbox
@@ -137,5 +137,26 @@ def test_an_unparseable_source_fails_setup_and_an_empty_search_is_explicit(tmp_p
         )
         with pytest.raises(ConfigError, match="not UTF-8"):
             await bad.run("refunds?", store=store)
+
+    asyncio.run(main())
+
+
+def test_each_agent_and_tenant_admits_a_shared_file_into_its_own_scope(tmp_path: Path) -> None:
+    doc = tmp_path / "faq.md"
+    doc.write_text("Refunds take five business days.\n")
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        for name, tenant in (("support", "acme"), ("sales", "acme"), ("support", "globex")):
+            script = [use("search_knowledge", {"query": "refunds"}, "c1"), text("?")]
+            bot = agent(
+                model=scripted_model({"responses": script}),
+                name=name,
+                knowledge=local_knowledge(paths=[str(doc)]),
+            )
+            who = Principal(issuer="api", tenant=tenant, subject="u")
+            result = await bot.run("refunds?", store=store, principal=who)
+            assert isinstance(result, Completed), result
+            assert len(await excerpts(result.thread)) == 1, (name, tenant)
 
     asyncio.run(main())

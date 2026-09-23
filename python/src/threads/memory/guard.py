@@ -154,7 +154,10 @@ class ScopedKnowledge:
             binding=binding,
         )
         scope = self.owner.scope
-        return await self._call(lambda: self.provider.ingest(scope, source, key))
+        # The host's key (path@sha) is the same in every scope; the binding's record_id is that
+        # key within this scope, so a provider that dedups on it never answers across scopes.
+        scoped = binding.record_id
+        return await self._call(lambda: self.provider.ingest(scope, source, scoped))
 
     async def remove(self, doc_id: str, key: str) -> Outcome[None]:
         scope = self.owner.scope
