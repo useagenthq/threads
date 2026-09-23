@@ -92,6 +92,10 @@ def _status(fold: Fold) -> Status:
     return "in_turn" if fold.in_turn else "idle"
 
 
+def usage_totals(fold: Fold) -> UsageTotals:
+    return UsageTotals(fold.input_tokens, fold.output_tokens, fold.unknown_responses)
+
+
 def reduced_state(fold: Fold, head: HeadRef) -> ReducedState:
     """ReducedState of a folded resolved chain whose last line is `head`."""
     if fold.thread_id is None or fold.segment is None:
@@ -108,7 +112,7 @@ def reduced_state(fold: Fold, head: HeadRef) -> ReducedState:
         ),
         parked=tuple(fold.parked),
         fork_points=tuple(ForkPoint(seq, event_id) for seq, event_id in fold.fork_points),
-        usage=UsageTotals(fold.input_tokens, fold.output_tokens, fold.unknown_responses),
+        usage=usage_totals(fold),
         transcript=transcript(fold.events),
         head=head,
     )

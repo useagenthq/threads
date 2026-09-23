@@ -213,3 +213,19 @@ export function cost(
     bounded,
   };
 }
+
+/**
+ * A tree total: `part` added into `total`. A part with no cost, or in another currency, can't be
+ * added, so the total stops claiming to be complete or a bound rather than undercounting.
+ */
+export function mergeCost(total: Cost, part: Cost | undefined): Cost {
+  if (part === undefined || part.currency !== total.currency)
+    return { ...total, complete: false, bounded: false };
+  return {
+    currency: total.currency,
+    known_nanos: total.known_nanos + part.known_nanos,
+    upper_bound_nanos: total.upper_bound_nanos + part.upper_bound_nanos,
+    complete: total.complete && part.complete,
+    bounded: total.bounded && part.bounded,
+  };
+}

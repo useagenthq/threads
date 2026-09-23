@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import JsonValue
+from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
@@ -65,7 +66,11 @@ class Definition[D]:
 
     def policy(self) -> dict[str, JsonValue]:
         """The resolved runtime policy: each section absent (ADR defaults) or complete."""
-        pinned: dict[str, JsonValue] = {"models": [to_json(self.model.info.limits)]}
+        limits = self.model.info.limits
+        pinned: dict[str, JsonValue] = {"models": [to_json(limits)]}
+        if limits.price is not MISSING:
+            # Prices are nano-USD (spec/schema/README.md); without a currency cost() is None.
+            pinned["currency"] = "USD"
         if self.permissions is not None:
             pinned["permissions"] = to_json(self.permissions)
         if self.budget is not None:

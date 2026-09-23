@@ -1,5 +1,10 @@
-export type { Cost } from "./cost";
-export { type Projections, projections } from "./projections";
+export { type Cost, cost, mergeCost } from "./cost";
+export {
+  type CacheBreak,
+  cacheBreaks,
+  type Projections,
+  projections,
+} from "./projections";
 export {
   type BranchStatus,
   knownEvents,

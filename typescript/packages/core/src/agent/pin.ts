@@ -277,6 +277,8 @@ function policy(o: PinOptions): Policy {
           (x) => x.provider === m.provider && x.name === m.name,
         ) === i,
     ),
+    // Prices are nano-USD (spec/schema/README.md); without a currency cost() would be null.
+    ...(models.some((m) => m.price !== undefined) ? { currency: "USD" } : {}),
     permissions: { ...DEFAULT_PERMISSIONS, ...o.permissions },
     retry: { ...RETRY_DEFAULTS, ...o.retry },
     context: { ...CONTEXT_DEFAULTS, ...o.context },

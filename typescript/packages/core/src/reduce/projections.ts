@@ -4,9 +4,17 @@ import type { Chain } from "../verify/chain";
 import { type Cost, cost } from "./cost";
 import { knownEvents } from "./reduce";
 
-type CacheBreak = {
+const CAUSES = [
+  "settings_changed",
+  "compacted",
+  "context_edited",
+  "tools_changed",
+] as const;
+type Cause = (typeof CAUSES)[number];
+
+export type CacheBreak = {
   readonly request_event_id: string;
-  readonly likely_cause: string;
+  readonly likely_cause: Cause | "ttl_expired" | "unknown";
 };
 
 /** Named projections beyond ReducedState (spec/conformance/README.md, "Projections"). */
@@ -35,9 +43,10 @@ export function projections(chain: Chain): Projections {
   const { fold } = chain;
   const events = knownEvents(chain);
   const maxFailures = fold.policy?.context?.compact.max_failures;
+  const ttl = fold.policy?.context?.cache_ttl_ms;
   return {
     cost: cost(events, fold.policy),
-    cache_breaks: cacheBreaks(events, fold.policy?.context?.cache_ttl_ms),
+    cache_breaks: ttl === undefined ? undefined : cacheBreaks(events, ttl),
     compaction:
       maxFailures === undefined
         ? undefined
@@ -61,23 +70,16 @@ export function projections(chain: Chain): Projections {
   };
 }
 
-const CAUSES = new Set([
-  "settings_changed",
-  "compacted",
-  "context_edited",
-  "tools_changed",
-]);
 const DROP_MIN = 2000;
 
 /**
  * A turn response whose cache reads fell below 95% of the previous turn response's, by at
  * least 2000 tokens, attributed to the first cause between them.
  */
-function cacheBreaks(
+export function cacheBreaks(
   events: readonly KnownEvent[],
-  ttl: number | undefined,
-): readonly CacheBreak[] | undefined {
-  if (ttl === undefined) return undefined;
+  ttl: number,
+): readonly CacheBreak[] {
   const turnRequests = new Map(
     events.flatMap((e) =>
       e.type === "model_request" && e.data.purpose !== "compaction"
@@ -87,9 +89,9 @@ function cacheBreaks(
   );
   const out: CacheBreak[] = [];
   let previous: { reads: number; time: number } | undefined;
-  let seen: string[] = [];
+  let seen: Cause[] = [];
   for (const e of events) {
-    if (CAUSES.has(e.type)) seen.push(e.type);
+    if (isCause(e.type)) seen.push(e.type);
     if (e.type !== "model_response") continue;
     const requestId = e.data.request_event_id;
     const requestTime = turnRequests.get(requestId);
@@ -112,9 +114,9 @@ function breakCause(
   previous: Reads | undefined,
   current: Reads,
   requestTime: number,
-  seen: readonly string[],
+  seen: readonly Cause[],
   ttl: number,
-): string | undefined {
+): CacheBreak["likely_cause"] | undefined {
   if (previous === undefined) return undefined;
   const dropped =
     20 * current.reads < 19 * previous.reads &&
@@ -123,4 +125,8 @@ function breakCause(
   return (
     seen[0] ?? (requestTime - previous.time > ttl ? "ttl_expired" : "unknown")
   );
+}
+
+function isCause(type: string): type is Cause {
+  return CAUSES.some((c) => c === type);
 }

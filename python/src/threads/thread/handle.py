@@ -5,7 +5,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
-from threads._generated.host_api_v1 import BranchInfo, PendingApproval, SettingsChange
+from threads._generated.host_api_v1 import (
+    BranchInfo,
+    CacheBreak,
+    Cost,
+    PendingApproval,
+    SettingsChange,
+)
 from threads.agents.store import HOLDER, Store, now_ms, open_store
 from threads.log import (
     AgentFinishedEvent,
@@ -24,7 +30,10 @@ from threads.log import (
     Todo,
     TodosUpdatedEvent,
 )
+from threads.loop import defaults
 from threads.loop.stubs import Stub, parse_stubs
+from threads.reduce.projections import cache_breaks, cost
+from threads.reduce.state import UsageTotals, usage_totals
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import VerifiedLog
@@ -40,6 +49,8 @@ from threads.thread.case import (
 )
 from threads.thread.control import Controlled
 from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch, fork_point
+from threads.thread.read import read_log, reader_error
+from threads.thread.usage import tree_cost
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +202,28 @@ class Thread:
                 children[child] = Child(child, e.data.status)
         return Ok(tuple(children.values()))
 
+    async def usage(self) -> Ok[UsageTotals] | Err[ParseError]:
+        """Usage over this branch's resolved chain (a fork includes its parent's prefix)."""
+        read = await read_log(self.store, self.branch)
+        return read if isinstance(read, Err) else Ok(usage_totals(read.value.fold))
+
+    async def cost(self, *, tree: bool = False) -> Ok[Cost | None] | Err[ParseError]:
+        """None when the thread pins no currency or no models. `tree` adds every descendant's,
+        read from its own log."""
+        read = await read_log(self.store, self.branch)
+        if isinstance(read, Err):
+            return read
+        return await tree_cost(self.store, read.value) if tree else Ok(cost(read.value.fold))
+
+    async def cache_breaks(self) -> Ok[tuple[CacheBreak, ...]] | Err[ParseError]:
+        """Under the effective context policy, so a thread that pinned none still gets a
+        tuple."""
+        read = await read_log(self.store, self.branch)
+        if isinstance(read, Err):
+            return read
+        fold = read.value.fold
+        return Ok(cache_breaks(fold, defaults.context(fold).cache_ttl_ms))
+
     async def branches(self) -> tuple[BranchInfo, ...]:
         """The thread's visible branches; a forking or failed fork is never listed."""
         rows = await (await open_store(self.store)).tables.branches(self.id)
@@ -303,17 +336,7 @@ async def open_thread(
         return branch
     read = await sq.read(branch.value, now_ms())
     if isinstance(read, Err):
-        return Err(_open_error(read.error))
+        return Err(reader_error(read.error))
     if read.value.fold.thread_id != thread_id:
         return Err(ParseError("not_found", f"no branch {branch.value} in thread {thread_id}"))
     return Ok(Thread(thread_id, branch.value, store, sandbox=sandbox))
-
-
-def _open_error(error: ParseError) -> ParseError:
-    match error.code:
-        case "branch_not_found":
-            return ParseError("not_found", error.message)
-        case "unsupported_format" | "unsupported_critical_event":
-            return error
-        case _:
-            return ParseError("log_corrupt", f"{error.code}: {error.message}", error.seq)

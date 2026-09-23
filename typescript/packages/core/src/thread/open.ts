@@ -32,8 +32,10 @@ import {
   type PendingApproval,
   pendingApprovals,
 } from "./pending";
+import { readLog } from "./read";
 import { type SaveCaseOptions, type SavedCase, saveCase } from "./save-case";
 import { cancel, setMode, setModel } from "./settings";
+import { type ThreadUsage, usageMethods } from "./usage";
 
 // openThread() (spec/api.json): a handle for inspection and control that reads
 // through the store and needs no agent in memory.
@@ -77,7 +79,8 @@ export type Thread = ThreadRef & {
   readonly todos: () => Promise<Projections["todos"]>;
   /** One entry per spawned child, running until its agent_finished. */
   readonly children: () => Promise<Projections["children"]>;
-} & ThreadControl;
+} & ThreadUsage &
+  ThreadControl;
 
 type Controlled = Promise<Result<Appended, ControlError>>;
 
@@ -144,19 +147,6 @@ export function forkPoints(
         ]
       : [],
   );
-}
-
-/** A branch's log as a reader sees it; a failure other than an unsupported line is log_corrupt. */
-function readLog(
-  log: LogStore,
-  branchId: BranchId,
-): Result<VerifiedLog, LogError> {
-  const read = log.read(branchId);
-  if (read.ok) return read;
-  const { code, message, seq } = read.error;
-  return code === "unsupported_format" || code === "unsupported_critical_event"
-    ? read
-    : err(logError("log_corrupt", message, seq));
 }
 
 /** The listed branch of this thread: ready or inspection-only, never forking or failed. */
@@ -248,6 +238,7 @@ export async function openThread(
       const current = readLog(log, branchId);
       return current.ok ? projections(current.value).children : [];
     },
+    ...usageMethods(log, branchId),
     ...controls(log, threadId, branchId),
     saveCase: async (name, caseOptions) =>
       saveCase(log, branchId, name, caseOptions, {

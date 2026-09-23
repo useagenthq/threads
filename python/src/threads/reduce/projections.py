@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads._generated.host_api_v1 import CacheBreak, Cost
 from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
@@ -154,7 +155,8 @@ def dispositions(fold: Fold) -> list[tuple[int, int, int | None]]:
     return out
 
 
-def cost(fold: Fold) -> JsonValue:
+def cost(fold: Fold) -> Cost | None:
+    """None without a pinned currency and models: there is nothing to price against."""
     pinned = policy(fold)
     if pinned is None or pinned.models is MISSING or pinned.currency is MISSING:
         return None
@@ -165,23 +167,46 @@ def cost(fold: Fold) -> JsonValue:
         complete = complete and u == k
         bounded = bounded and u is not None
         upper += k if u is None else u
-    return {
-        "currency": pinned.currency,
-        "known_nanos": known,
-        "upper_bound_nanos": upper,
-        "complete": complete,
-        "bounded": bounded,
-    }
+    return Cost(
+        currency=pinned.currency,
+        known_nanos=known,
+        upper_bound_nanos=upper,
+        complete=complete,
+        bounded=bounded,
+    )
 
 
-def cache_breaks(fold: Fold) -> JsonValue:
-    """Cache reads falling below 95% of the previous turn response's by at least 2000."""
+def merge_cost(total: Cost, part: Cost | None) -> Cost:
+    """A tree total: `part` added into `total`. A part with no cost, or in another currency,
+    can't be added, so the total stops claiming to be complete or a bound rather than
+    undercounting."""
+    if part is None or part.currency != total.currency:
+        return total.model_copy(update={"complete": False, "bounded": False})
+    return Cost(
+        currency=total.currency,
+        known_nanos=total.known_nanos + part.known_nanos,
+        upper_bound_nanos=total.upper_bound_nanos + part.upper_bound_nanos,
+        complete=total.complete and part.complete,
+        bounded=total.bounded and part.bounded,
+    )
+
+
+def _cost(fold: Fold) -> JsonValue:
+    found = cost(fold)
+    return None if found is None else to_json(found)
+
+
+def _cache_breaks(fold: Fold) -> JsonValue:
     pinned = policy(fold)
     if pinned is None or pinned.context is MISSING:
         return None
-    ttl = pinned.context.cache_ttl_ms
+    return [to_json(b) for b in cache_breaks(fold, pinned.context.cache_ttl_ms)]
+
+
+def cache_breaks(fold: Fold, ttl: int) -> tuple[CacheBreak, ...]:
+    """Cache reads falling below 95% of the previous turn response's by at least 2000."""
     requests = {e.event_id: e for e in fold.events if isinstance(e, ModelRequestEvent)}
-    breaks: list[JsonValue] = []
+    breaks: list[CacheBreak] = []
     previous: tuple[int, int] | None = None  # (cache reads, response time)
     seen: list[str] = []
     for event in fold.events:
@@ -197,9 +222,10 @@ def cache_breaks(fold: Fold) -> JsonValue:
         if previous is not None and _dropped(previous[0], reads):
             gap = request.time - previous[1]
             cause = seen[0] if seen else ("ttl_expired" if gap > ttl else "unknown")
-            breaks.append({"request_event_id": request.event_id, "likely_cause": cause})
+            found: JsonValue = {"request_event_id": request.event_id, "likely_cause": cause}
+            breaks.append(CacheBreak.model_validate(found))
         previous, seen = (reads, event.time), []
-    return breaks
+    return tuple(breaks)
 
 
 def _dropped(previous: int, reads: int) -> bool:
@@ -251,8 +277,8 @@ def mode(fold: Fold) -> JsonValue:
 
 
 PROJECTIONS: Mapping[str, Callable[[Fold], JsonValue]] = {
-    "cost": cost,
-    "cache_breaks": cache_breaks,
+    "cost": _cost,
+    "cache_breaks": _cache_breaks,
     "compaction": compaction,
     "todos": todos,
     "children": children,

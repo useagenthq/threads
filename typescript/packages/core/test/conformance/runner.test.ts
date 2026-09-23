@@ -38,8 +38,9 @@ function checkState(c: Case, log: VerifiedLog): void {
   if (c.state !== undefined) expect(plain(reduce(log, c.now))).toEqual(c.state);
   if (c.projections !== undefined) {
     const all: Record<string, unknown> = { ...projections(log) };
+    // An absent projection (undefined here) is null in expected.json.
     for (const [key, value] of Object.entries(c.projections))
-      expect(plain(all[key])).toEqual(value);
+      expect(plain(all[key] ?? null)).toEqual(value);
   }
   if (c.committedBytes !== undefined)
     expect(log.committedBytes).toBe(c.committedBytes);
