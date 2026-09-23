@@ -167,10 +167,12 @@ describe("approvals", () => {
     const added = (await events(store, thread)).find(
       (e) => e.type === "permission_rule_added",
     );
-    expect(added?.type === "permission_rule_added" && added.data).toEqual({
-      rule: "send_email",
-      decision: "allow",
-      challenge_id: pending.challenge_id,
+    expect(added).toMatchObject({
+      data: {
+        rule: "send_email",
+        decision: "allow",
+        challenge_id: pending.challenge_id,
+      },
     });
   });
 });

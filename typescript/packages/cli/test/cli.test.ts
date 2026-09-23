@@ -132,6 +132,46 @@ describe("threads delete and gc", () => {
     ]);
   });
 
+  test("delete takes its subagent threads along, never a handoff target", async () => {
+    const a = temp();
+    const use = (name: string, input: Record<string, unknown>, id: string) => ({
+      content: [{ type: "tool_use", call_id: id, name, input }],
+      stop_reason: "tool_use",
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    const worker = agent({
+      name: "worker",
+      model: scriptedModel({ responses: [say("Done.")] }),
+    });
+    const billing = agent({
+      name: "billing",
+      model: scriptedModel({ responses: [say("Billing here.")] }),
+    });
+    const lead = agent({
+      name: "lead",
+      model: scriptedModel({
+        responses: [
+          use("spawn_agent", { agent: "worker", prompt: "Look." }, "s1"),
+          use("handoff", { agent: "billing" }, "h1"),
+        ],
+      }),
+      subagents: [worker],
+      handoffs: [billing],
+    });
+    const result = await lead.run("Go.", { store: sqlite(a) });
+    const { db } = await storeConnection(sqlite(a));
+    expect(db.all("SELECT thread_id FROM threads", [])).toHaveLength(3);
+    const done = await cli(["delete", result.thread.id, "--store", a]);
+    expect(done.code).toBe(0);
+    expect(db.all("SELECT thread_id FROM tombstones", [])).toHaveLength(2);
+    const left = db.all(
+      "SELECT e.line FROM events e JOIN branches b ON b.branch_id = e.branch_id WHERE e.seq = 1",
+      [],
+    );
+    expect(left).toHaveLength(1);
+    expect(JSON.stringify(left)).not.toContain('"subagent"');
+  });
+
   test("gc sweeps old unreferenced artifacts and keeps referenced ones", async () => {
     const a = temp();
     await seeded(a);

@@ -213,38 +213,59 @@ export function decide(
       call_id: asked.data.call_id,
       args_hash: asked.data.args_hash,
     };
-    const record: EventDraft = answer.grant
-      ? {
-          type: "approval_granted",
-          type_version: 1,
-          critical: true,
-          actor: { kind: "approver", principal },
-          data: binding,
-        }
-      : {
-          type: "approval_denied",
-          type_version: 1,
-          critical: true,
-          actor: { kind: "approver", principal },
-          data: {
-            ...binding,
-            ...(answer.reason === undefined ? {} : { reason: answer.reason }),
-          },
-        };
+    const record = decision(answer, binding, principal);
     const resume = resumeIf(writer, { kind: "approval", id: challengeId });
     if (rule === undefined)
       return ok(resume === undefined ? { record } : { record, after: resume });
-    const added: EventDraft = {
-      type: "permission_rule_added",
-      type_version: 1,
-      critical: true,
-      actor: { kind: "approver", principal },
-      data: { rule, decision: "allow", challenge_id: challengeId },
-    };
+    const added = ruleAdded(rule, challengeId, principal);
     return ok({
       record,
       after: (id) => [added, ...(resume === undefined ? [] : resume(id))],
     });
+  };
+}
+
+function decision(
+  answer: { readonly grant: boolean; readonly reason?: string },
+  binding: {
+    readonly challenge_id: string;
+    readonly call_id: string;
+    readonly args_hash: string;
+  },
+  principal: Principal,
+): EventDraft {
+  return answer.grant
+    ? {
+        type: "approval_granted",
+        type_version: 1,
+        critical: true,
+        actor: { kind: "approver", principal },
+        data: binding,
+      }
+    : {
+        type: "approval_denied",
+        type_version: 1,
+        critical: true,
+        actor: { kind: "approver", principal },
+        data: {
+          ...binding,
+          ...(answer.reason === undefined ? {} : { reason: answer.reason }),
+        },
+      };
+}
+
+/** The approver's "allow for this thread" rule. */
+function ruleAdded(
+  rule: string,
+  challengeId: string,
+  principal: Principal,
+): EventDraft {
+  return {
+    type: "permission_rule_added",
+    type_version: 1,
+    critical: true,
+    actor: { kind: "approver", principal },
+    data: { rule, decision: "allow", challenge_id: challengeId },
   };
 }
 

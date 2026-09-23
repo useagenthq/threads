@@ -77,36 +77,24 @@ export function suggestedRules(
     : [`bash(${command})`, `bash(${words.slice(0, 2).join(" ")}:*)`];
 }
 
-/** POSIX shell words as Python's shlex.split makes them; undefined when a quote is unclosed. */
+// A shell word: bare characters, a backslash escape, a single-quoted or a double-quoted run.
+const WORD = /(?:[^\s\\'"]+|\\[\s\S]|'[^']*'|"(?:[^"\\]|\\[\s\S])*")+/g;
+const PART = /\\([\s\S])|'([^']*)'|"((?:[^"\\]|\\[\s\S])*)"/g;
+
+/**
+ * POSIX shell words as Python's shlex.split makes them; undefined when a quote is unclosed or a
+ * backslash ends the text.
+ */
 function shellWords(text: string): readonly string[] | undefined {
-  const words: string[] = [];
-  let word: string | undefined;
-  let quote: "'" | '"' | undefined;
-  for (let i = 0; i < text.length; i += 1) {
-    const c = text.charAt(i);
-    if (quote === "'") {
-      if (c === "'") quote = undefined;
-      else word += c;
-    } else if (c === "\\") {
-      i += 1;
-      if (i === text.length) return undefined;
-      const next = text.charAt(i);
-      // Inside double quotes a backslash escapes only `"` and itself.
-      word = `${word ?? ""}${quote === '"' && next !== '"' && next !== "\\" ? c : ""}${next}`;
-    } else if (quote === '"') {
-      if (c === '"') quote = undefined;
-      else word += c;
-    } else if (c === "'" || c === '"') {
-      quote = c;
-      word ??= "";
-    } else if (/\s/.test(c)) {
-      if (word !== undefined) words.push(word);
-      word = undefined;
-    } else word = `${word ?? ""}${c}`;
-  }
-  if (quote !== undefined) return undefined;
-  if (word !== undefined) words.push(word);
-  return words;
+  if (text.replace(WORD, "").trim() !== "") return undefined;
+  return (text.match(WORD) ?? []).map((word) =>
+    word.replace(
+      PART,
+      (_all, escaped?: string, single?: string, double?: string) =>
+        // Inside double quotes a backslash escapes only `"` and itself.
+        escaped ?? single ?? double?.replace(/\\(["\\])/g, "$1") ?? "",
+    ),
+  );
 }
 
 // ponytail: every branch reports mode live; a stub fork records no mode yet.
