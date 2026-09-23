@@ -1,0 +1,147 @@
+/*
+ * Look modeled on the Mintlify "Aspen" docs theme: warm neutral grays, Inter, pill controls,
+ * 16px-radius surfaces, a top bar with section tabs. Accent is our brand blue.
+ * Blue #2563EB on white is 5.2:1; #60A5FA on the dark background is 8:1.
+ * Rules are unlayered on purpose: they must win over Fumadocs' Tailwind utilities.
+ */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-fd-background: #ffffff;
+  --color-fd-foreground: #1d1b16;
+  --color-fd-muted: #f4f2ee;
+  --color-fd-muted-foreground: #76746f;
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #1d1b16;
+  --color-fd-card: #f9f7f2;
+  --color-fd-card-foreground: #1d1b16;
+  --color-fd-border: #ebe8e3;
+  --color-fd-primary: #2563eb;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: #f9f7f2;
+  --color-fd-secondary-foreground: #1d1b16;
+  --color-fd-accent: #f4f2ee;
+  --color-fd-accent-foreground: #1d1b16;
+  --color-fd-ring: #2563eb;
+  --prose-body: #45423e;
+}
+
+.dark {
+  --color-fd-background: #0d0c0b;
+  --color-fd-foreground: #f4f2ee;
+  --color-fd-muted: #1d1b18;
+  --color-fd-muted-foreground: #a5a29e;
+  --color-fd-popover: #121110;
+  --color-fd-popover-foreground: #f4f2ee;
+  --color-fd-card: #151412;
+  --color-fd-card-foreground: #f4f2ee;
+  --color-fd-border: rgb(255 255 255 / 0.1);
+  --color-fd-primary: #60a5fa;
+  --color-fd-primary-foreground: #0d0c0b;
+  --color-fd-secondary: #151412;
+  --color-fd-secondary-foreground: #f4f2ee;
+  --color-fd-accent: #23211d;
+  --color-fd-accent-foreground: #f4f2ee;
+  --color-fd-ring: #60a5fa;
+  --prose-body: #a5a29e;
+}
+
+/* Top bar: one bottom border under logo row and tabs, pill search. */
+#nd-subnav > div:first-child {
+  border-bottom-width: 0;
+}
+button[data-search-full] {
+  height: 2.25rem;
+  border-color: transparent;
+  border-radius: 9999px;
+  padding-inline: 0.875rem 0.75rem;
+  background: color-mix(in oklab, var(--color-fd-foreground) 4%, transparent);
+}
+button[data-search-full] kbd {
+  border: 0;
+  background: transparent;
+  padding-inline: 0;
+}
+
+/* Sidebar: uppercase section labels, 12px-radius items with a tinted active state. */
+#nd-sidebar p {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-fd-foreground);
+}
+#nd-sidebar a[data-active] {
+  border-radius: 0.75rem;
+  padding-block: 0.375rem;
+}
+#nd-sidebar a[data-active="true"] {
+  font-weight: 500;
+}
+
+/* Page heading and typography. */
+#nd-page h1 {
+  font-size: 2.25rem;
+  line-height: 2.5rem;
+  letter-spacing: -0.025em;
+}
+#nd-page h1 + p {
+  font-size: 1.125rem;
+  color: var(--prose-body);
+}
+.prose {
+  --tw-prose-body: var(--prose-body);
+  line-height: 1.75;
+}
+.prose h2 {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  letter-spacing: -0.025em;
+}
+.prose h3 {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  letter-spacing: -0.025em;
+}
+.prose :not(pre) > code {
+  border: 0;
+  border-radius: 0.375rem;
+  padding: 0.125rem 0.375rem;
+  font-weight: 500;
+  background: var(--color-fd-muted);
+}
+
+/* Code blocks: 16px radius, flat, the code body on the page color and a tinted title bar. */
+figure.shiki,
+div:has(> [role="tablist"]) {
+  border-radius: 1rem;
+  box-shadow: none;
+}
+figure.shiki:not(:has(figcaption)) {
+  background: var(--color-fd-background);
+}
+.dark figure.shiki {
+  background: #0b0b0c;
+}
+
+/* Callouts and cards: flat 16px surfaces with a type-tinted fill. */
+#nd-page div[style*="--callout-color"] {
+  border-radius: 1rem;
+  border-color: color-mix(in oklab, var(--callout-color) 25%, transparent);
+  background: color-mix(in oklab, var(--callout-color) 7%, var(--color-fd-background));
+  box-shadow: none;
+  padding: 1rem 1.25rem;
+}
+#nd-page div[style*="--callout-color"] > div:first-child {
+  display: none;
+}
+.prose a.block.rounded-xl.border,
+details,
+#nd-page .rounded-lg.border.p-4 {
+  border-radius: 1rem;
+}
+
+/* On-page nav: active entry reads as the accent in medium weight. */
+#nd-toc a[data-active="true"] {
+  font-weight: 500;
+}

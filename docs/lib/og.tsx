@@ -9,8 +9,8 @@ export function brandImage(title: string, description?: string): ImageResponse {
     title,
     description,
     site: appName,
-    icon: <LogoMark width={48} height={48} />,
-    primaryColor: "rgba(52, 82, 209, 0.35)",
-    primaryTextColor: "#8EA2F8",
+    icon: <LogoMark width={55} height={48} color="#60A5FA" />,
+    primaryColor: "rgba(37, 99, 235, 0.35)",
+    primaryTextColor: "#60A5FA",
   });
 }

@@ -1,12 +1,19 @@
 import type { SVGProps } from "react";
 
-/** The mark: log lines of an append-only record, with a thread running through them. */
+/** The mark: three threads running into their ends. Drawn in currentColor, so the parent sets its color. */
 export function LogoMark(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true" {...props}>
-      <rect width="32" height="32" rx="8" fill="#3452D1" />
-      <path d="M8 10h16M8 16h12M8 22h8" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M25 6c-6 4 2 10-4 14s-2 7 2 7" stroke="#8EA2F8" strokeWidth="2.4" strokeLinecap="round" />
+    <svg viewBox="0 0 1000 880" aria-hidden="true" {...props}>
+      <g fill="none" stroke="currentColor" strokeWidth="72" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M110 280 H420 C480 280 500 250 500 200 V155 C500 105 530 80 585 80 H790" />
+        <path d="M110 440 H515 C570 440 590 410 590 360 V315 C590 265 620 240 675 240 H875" />
+        <path d="M110 600 H485 C540 600 565 630 565 680 V715 C565 765 595 785 650 785 H830" />
+      </g>
+      <g fill="currentColor">
+        <circle cx="820" cy="80" r="58" />
+        <circle cx="905" cy="240" r="58" />
+        <circle cx="860" cy="785" r="58" />
+      </g>
     </svg>
   );
 }
@@ -14,7 +21,7 @@ export function LogoMark(props: SVGProps<SVGSVGElement>) {
 export function Logo() {
   return (
     <span className="inline-flex items-center gap-2">
-      <LogoMark className="size-6" />
+      <LogoMark className="h-5.5 w-auto text-fd-primary" />
       <span className="text-[0.95rem] font-semibold tracking-tight">
         Threads <span className="text-fd-muted-foreground">AI</span>
       </span>

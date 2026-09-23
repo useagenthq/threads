@@ -20,6 +20,7 @@ import { CodeSample } from "@/components/home/code-sample";
 import { CopyCommand } from "@/components/home/copy-command";
 import { EventLog } from "@/components/home/event-log";
 import { GitHubIcon } from "@/components/home/github-icon";
+import { LogoMark } from "@/components/logo";
 import { githubUrl, tagline } from "@/lib/shared";
 
 type Feature = { title: string; icon: LucideIcon; href: string; tags: string[]; body: string };
@@ -122,7 +123,7 @@ function Code({ children }: { children: ReactNode }) {
 }
 
 const buttonBase =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors";
+  "inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium transition-colors";
 
 export default function HomePage() {
   return (
@@ -147,6 +148,7 @@ function Hero() {
         className="pointer-events-none absolute -top-40 left-1/2 h-[28rem] w-[56rem] max-w-[140vw] -translate-x-1/2 rounded-full bg-fd-primary/15 blur-3xl"
       />
       <div className="relative mx-auto flex max-w-6xl flex-col items-center px-4 pt-16 pb-16 text-center sm:px-6 sm:pt-24 lg:pb-24">
+        <LogoMark className="mb-6 h-12 w-auto text-fd-primary sm:h-14" />
         <Link
           href={githubUrl}
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-fd-border bg-fd-background/70 px-3 py-1 text-xs font-medium text-fd-muted-foreground backdrop-blur transition-colors hover:text-fd-foreground"
