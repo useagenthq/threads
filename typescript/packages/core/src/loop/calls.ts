@@ -1,3 +1,4 @@
+import { authorize } from "./authorize";
 import { draft } from "./drafts";
 import { FINAL_OUTPUT } from "./output";
 import { parseErrors } from "./schema";
@@ -15,20 +16,23 @@ type ToolUse = Extract<
   { type: "tool_use" }
 >;
 
-export function recordCalls(s: Session, response: Response): Halt | undefined {
+export async function recordCalls(
+  s: Session,
+  response: Response,
+): Promise<Halt | undefined> {
   for (const use of response.data.content) {
     if (use.type !== "tool_use") continue;
-    const stopped = recordCall(s, use, response.data.request_event_id);
+    const stopped = await recordCall(s, use, response.data.request_event_id);
     if (stopped !== undefined) return stopped;
   }
   return undefined;
 }
 
-function recordCall(
+async function recordCall(
   s: Session,
   use: ToolUse,
   requestEventId: string,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const { call_id, name, input } = use;
   const stopped = s.append(
     draft.toolCall({ call_id, name, input, request_event_id: requestEventId }),
@@ -45,15 +49,7 @@ function recordCall(
   const call = s.events.at(-1);
   if (call?.type !== "tool_call")
     throw new Error("the tool_call was just appended");
-  const decided = s.config.authorize(call, s.fold);
-  return s.append(
-    draft.permission({
-      call_id,
-      decision: decided.decision,
-      source: decided.source,
-      ...(decided.rule_id === undefined ? {} : { rule_id: decided.rule_id }),
-    }),
-  );
+  return authorize(s, call);
 }
 
 /** Unknown, deferred or invalid calls fail before any effect, with a reason the model sees. */

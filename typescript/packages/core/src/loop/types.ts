@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { EventOf, Fold } from "../fold/state";
+import type { LoopExtension } from "../hooks/types";
 import type { KnownEvent, Principal, ToolSpec } from "../log";
 import type { LookupResult, Model } from "../model";
 
@@ -112,4 +113,11 @@ export type LoopConfig = {
   /** Transient stream items (text deltas, retry waits); never logged. */
   readonly onDelta?: (requestEventId: string, text: string) => void;
   readonly onEvent?: (event: KnownEvent) => void;
+  /** Extensions whose hooks gate, feed and observe the loop, in declaration order. */
+  readonly extensions?: readonly LoopExtension[];
+  /**
+   * L3 restore: reads a file the dropped range touched, as a framework
+   * read_only operation. Absent when there is no sandbox: no file is restored.
+   */
+  readonly readFile?: (path: string) => Promise<Uint8Array | undefined>;
 };

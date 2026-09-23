@@ -5,6 +5,14 @@ import { attempt } from "./attempt";
 import { refusal } from "./budget";
 import { compact } from "./compact";
 import { draft } from "./drafts";
+import {
+  batchGate,
+  type Gated,
+  inputGate,
+  modelGate,
+  resultsGate,
+} from "./gates";
+import { switchGate } from "./lifecycle";
 import { retryPolicy } from "./policy";
 import type { Session } from "./session";
 import { nextAttempt, stepEvents } from "./turn";
@@ -48,6 +56,8 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
     const stopped = s.append(draft.budgetExceeded(refused));
     return stopped ?? endTurn(s, "budget_exhausted");
   }
+  const gated = await gates(s);
+  if (gated !== undefined) return gated === "ended" ? undefined : gated;
   const got = await attempt(s, "turn", nextAttempt(s.events, s.fold));
   switch (got.kind) {
     case "halt":
@@ -62,6 +72,19 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
     default:
       return assertNever(got);
   }
+}
+
+/**
+ * What stands between a step and its turn request, in order: the input guardrail, the
+ * tool-output guardrail, after_tool_batch, the context ladder, then before_model.
+ */
+async function gates(s: Session): Promise<Gated> {
+  return (
+    (await inputGate(s)) ??
+    (await resultsGate(s)) ??
+    (await batchGate(s)) ??
+    (await modelGate(s))
+  );
 }
 
 /** Recovery after a crash waits only until a recorded retry's not_before. */
@@ -93,7 +116,9 @@ async function rejected(
     overloadedInEpoch(step) >= retry.fallback_after
   ) {
     const next = fallbackSettings(s);
-    if (next !== undefined)
+    const allowed = next === undefined ? false : await switchGate(s, next);
+    if (typeof allowed !== "boolean") return allowed;
+    if (next !== undefined && allowed)
       return s.append(
         draft.settingsChanged({
           reason: "fallback",

@@ -1,4 +1,6 @@
 import type { ArtifactStore, EventDraft, Writer } from "../store";
+import { observe } from "./hooks";
+import { sessionStart } from "./lifecycle";
 import { recover } from "./recover";
 import { type LoopEnd, runLoop } from "./run";
 import { Session } from "./session";
@@ -37,9 +39,21 @@ export async function resume(
   if (stopped !== undefined) return { kind: "halted", halt: stopped };
   if (options.loop === false)
     return { kind: s.fold.parked.length > 0 ? "parked" : "idle" };
+  const end = await session(s, options.input);
+  // session_end observes; its failure is recorded and changes nothing.
+  if (end.kind !== "halted") await observe(s, "session_end", []);
+  return end;
+}
+
+async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
+  const source = s.events.some((e) => e.type === "user_input")
+    ? "resume"
+    : "startup";
+  const denied = await sessionStart(s, source);
+  if (denied !== undefined) return { kind: "halted", halt: denied };
   const earlier = await runLoop(s);
-  if (earlier.kind !== "idle" || options.input === undefined) return earlier;
-  const appended = s.append(options.input);
+  if (earlier.kind !== "idle" || input === undefined) return earlier;
+  const appended = s.append(input);
   return appended === undefined
     ? runLoop(s)
     : { kind: "halted", halt: appended };

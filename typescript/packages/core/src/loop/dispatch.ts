@@ -4,7 +4,9 @@ import { effectKey } from "../fold/state";
 import { sha256Hex } from "../hash";
 import { canonicalize } from "../log";
 import type { EventDraft } from "../store";
+import { authorize } from "./authorize";
 import { draft, TOOL } from "./drafts";
+import { observe } from "./hooks";
 import { FINAL_OUTPUT, validateCandidate } from "./output";
 import type { Session } from "./session";
 import { settleUnknown } from "./settle";
@@ -23,10 +25,30 @@ export async function runCalls(s: Session): Promise<Halt | undefined> {
       (e) => e.type === "tool_call" && e.data.call_id === callId,
     );
     if (call?.type !== "tool_call") continue;
-    const stopped = await runCall(s, call);
+    const before = s.fold.seq;
+    const stopped =
+      (await runCall(s, call)) ?? (await afterTool(s, call, before));
     if (stopped !== undefined || s.fold.parked.length > 0) return stopped;
   }
   return undefined;
+}
+
+/** after_tool observes a result this call just recorded; it can't deny or undo the effect. */
+async function afterTool(
+  s: Session,
+  call: EventOf<"tool_call">,
+  before: number,
+): Promise<Halt | undefined> {
+  const result = s.fold.calls.get(call.data.call_id)?.result;
+  if (
+    result?.type !== "tool_result" ||
+    result.seq <= before ||
+    result.data.origin !== "executed"
+  )
+    return undefined;
+  return observe(s, "after_tool", [call.data, result.data], {
+    call_id: call.data.call_id,
+  });
 }
 
 async function runCall(
@@ -39,15 +61,7 @@ async function runCall(
   );
   if (decision?.type !== "permission_decision") {
     // Recorded, then the process stopped before authorizing it: authorize it now.
-    const decided = s.config.authorize(call, s.fold);
-    return s.append(
-      draft.permission({
-        call_id: callId,
-        decision: decided.decision,
-        source: decided.source,
-        ...(decided.rule_id === undefined ? {} : { rule_id: decided.rule_id }),
-      }),
-    );
+    return authorize(s, call);
   }
   if (s.fold.calls.get(callId)?.allowed === true) return dispatch(s, call);
   if (decision.data.decision === "deny")

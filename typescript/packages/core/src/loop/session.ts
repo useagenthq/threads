@@ -2,7 +2,7 @@ import type { Fold } from "../fold/state";
 import type { ArtifactRef, BranchId, KnownEvent } from "../log";
 import type { ModelContext } from "../model";
 import { contextReader } from "../model/context";
-import { knownEvents } from "../reduce";
+import { knownEvents, type ReducedState, reduce } from "../reduce";
 import { err, ok } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import type { Chain } from "../verify";
@@ -47,6 +47,11 @@ export class Session {
 
   now(): number {
     return this.config.clock.now();
+  }
+
+  /** reduce(log) now: what state-taking hooks see. */
+  state(): ReducedState {
+    return reduce(this.#writer.chain, this.now());
   }
 
   /**

@@ -1,13 +1,12 @@
 import { assertNever } from "../assert-never";
 import type { EventOf } from "../fold/state";
-import { recordCalls } from "./calls";
 import { runCalls } from "./dispatch";
 import { draft } from "./drafts";
-import { missingCandidate } from "./output";
-import { contextPolicy } from "./policy";
+import { afterStep, finish } from "./lifecycle";
 import { endTurn, requestTurn } from "./request";
+import { respond } from "./respond";
 import type { Session } from "./session";
-import { nextStep, type Response, turnEvents } from "./turn";
+import { nextStep } from "./turn";
 import type { Halt } from "./types";
 
 // The loop: every step is decided from the committed log (turn.ts), so a fresh run, a resumed
@@ -17,9 +16,6 @@ export type LoopEnd =
   | { readonly kind: "idle" }
   | { readonly kind: "parked" }
   | { readonly kind: "halted"; readonly halt: Halt };
-
-const CONTINUE =
-  "Output limit reached. Continue exactly where you stopped. Do not repeat earlier output.";
 
 export async function runLoop(s: Session): Promise<LoopEnd> {
   for (;;) {
@@ -40,60 +36,20 @@ export async function runLoop(s: Session): Promise<LoopEnd> {
         stopped = await requestTurn(s);
         break;
       case "respond":
-        stopped = respond(s, step.response);
+        stopped = await respond(s, step.response);
         break;
       case "end_turn":
-        stopped = endTurn(s, "end_turn");
+        stopped = await finish(s);
         break;
       default:
         return assertNever(step);
     }
+    stopped ??= await afterStep(s, seq);
     if (stopped !== undefined) return { kind: "halted", halt: stopped };
     // Every step appends; one that doesn't would spin forever, which is a bug.
     if (s.fold.seq === seq)
       throw new Error(`loop step ${step.kind} made no progress`);
   }
-}
-
-/** spec/schema/README.md, "Turn endings by stop_reason". */
-function respond(s: Session, response: Response): Halt | undefined {
-  if (response.data.content.some((p) => p.type === "tool_use"))
-    return recordCalls(s, response);
-  const stop = response.data.stop_reason;
-  switch (stop) {
-    case "end_turn":
-    case "stop_sequence":
-    case "refusal":
-    case "tool_use":
-      return missingCandidate(s);
-    case "max_tokens":
-      return continuation(s);
-    case "context_window_exceeded":
-      return endTurn(s, "context_exhausted");
-    // A pause within the cap re-requests before respond (turn.ts); here it is past the cap.
-    case "pause_turn":
-    case "other":
-      return endTurn(s, "error");
-    default:
-      return assertNever(stop);
-  }
-}
-
-/** ask to continue, up to max_output_continuations per turn, then max_output. */
-function continuation(s: Session): Halt | undefined {
-  const asked = turnEvents(s.events).filter(
-    (e) => e.type === "injected" && e.data.text === CONTINUE,
-  ).length;
-  if (asked >= contextPolicy(s.fold.policy).max_output_continuations)
-    return endTurn(s, "max_output");
-  return s.append(
-    draft.injected({
-      source: "recovery",
-      trust: "trusted_instruction",
-      origin: { id: "max_output" },
-      text: CONTINUE,
-    }),
-  );
 }
 
 /**
