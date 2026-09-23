@@ -99,28 +99,34 @@ class ChannelIntake:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
     async def _drain(self, store: Store, thread_id: ThreadId) -> None:
+        """Consumes the thread's items in arrival order. A message waits while the thread can't
+        take input (a run in flight, a park), and every later message waits behind it; answers
+        and controls never wait, since the answer a park needs may be queued behind a message."""
         lock = self._locks.setdefault(thread_id, asyncio.Lock())
         async with lock:
             tables = (await open_store(store)).tables
-            while rows := await tables.pending(thread_id):
-                if not await self._one(store, rows[0]):
-                    return
+            progressed = True
+            while progressed:
+                progressed = False
+                blocked = False
+                for row in await tables.pending(thread_id):
+                    item = _INBOUND.validate_json(row.item)
+                    if isinstance(item, Message) and blocked:
+                        continue
+                    took = await self._one(store, row, item)
+                    blocked = blocked or not took
+                    progressed = progressed or took
 
-    async def _one(self, store: Store, row: inbox.Row) -> bool:
-        """Consumes one item; False when the thread can't take it now (a run in flight, a
-        park): it stays in the inbox until the thread moves on."""
+    async def _one(self, store: Store, row: inbox.Row, item: Inbound) -> bool:
+        """Consumes one item; False when it must wait for the thread to move on."""
         bound = await self._runner.bound(store, row.thread_id)
-        if bound is None:
-            return False
         branch = await _branch(store, row.thread_id)
-        if isinstance(branch, Err) or self._runner.running(branch.value):
+        if bound is None or isinstance(branch, Err):
             return False
         thread = Thread(row.thread_id, branch.value, store, approvers=bound.approvers)
-        item = _INBOUND.validate_json(row.item)
         match item:
             case Message():
-                if await _parked(store, branch.value):
-                    # A parked thread takes no input; the item waits for its answer.
+                if self._runner.running(branch.value) or await _parked(store, branch.value):
                     return False
                 return await self._message(bound, thread, row, item)
             case Decision() | Control():
