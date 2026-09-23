@@ -196,7 +196,7 @@ def test_a_pr_adding_a_contract_member_with_its_gap_is_green(clone: Clone) -> No
     functions["replay"] = {"ts": "replay", "py": "replay", "async": True, "params": [],
                            "returns": {"prim": "void"}}  # fmt: skip
     clone.write("api.json", contract)
-    gaps: list[Json] = [{"name": "replay", "lang": lang, "kind": "missing", "lane": "unassigned"}
+    gaps: list[Json] = [{"name": "replay", "lang": lang, "kind": "missing", "lane": "01-gate"}
             for lang in ("py", "ts")]  # fmt: skip
     clone.write("api-surface-gaps.json", gaps)
     commit(clone.root, "spec-first: replay")
@@ -209,13 +209,18 @@ def test_a_pr_removing_a_member_and_listing_its_gap_is_red(clone: Clone) -> None
     mode = later_pr(clone)
     package = clone.root / "spec" / "tools" / "fakepkg" / "__init__.py"
     package.write_text(package.read_text().replace('"run_sync"]', "]"))
-    dropped: Json = {"name": "runSync", "lang": "py", "kind": "missing", "lane": "unassigned"}
+    dropped: Json = {
+        "name": "runSync",
+        "lang": "py",
+        "kind": "missing",
+        "lane": "01-gate",
+    }
     clone.write("api-surface-gaps.json", [dropped])
     clone.write("api-coverage.json", {k: v for k, v in coverage().items() if k != "runSync"})
     commit(clone.root, "drop run_sync")
     done = clone.gate("python.yml", mode)
     assert done.returncode == 1
-    assert "new gap runSync (py, missing, lane unassigned) for a member that exists" in done.stdout
+    assert "new gap runSync (py, missing, lane 01-gate) for a member that exists" in done.stdout
 
 
 def test_a_push_resolves_to_its_before_sha(clone: Clone) -> None:

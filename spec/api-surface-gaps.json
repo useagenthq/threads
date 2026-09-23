@@ -8,6 +8,8 @@
   {"name": "KnowledgeProvider.revision", "lang": "py", "kind": "missing", "lane": "02-protocol-optionality"},
   {"name": "LookupCapability", "lang": "py", "kind": "placement", "lane": "01-api-surface-gate", "at": "host"},
   {"name": "McpServer", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
+  {"name": "MemoryProvider.dedup_window_ms", "lang": "py", "kind": "missing", "lane": "02-protocol-optionality"},
+  {"name": "MemoryProvider.write_effect", "lang": "py", "kind": "missing", "lane": "02-protocol-optionality"},
   {"name": "Model.lookup", "lang": "py", "kind": "missing", "lane": "02-protocol-optionality"},
   {"name": "Model.lookup", "lang": "py", "kind": "required_mismatch", "lane": "02-protocol-optionality"},
   {"name": "ModelContext", "lang": "ts", "kind": "missing", "lane": "01-api-surface-gate"},

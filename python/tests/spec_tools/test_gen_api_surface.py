@@ -45,7 +45,12 @@ def test_an_optional_method_is_an_optional_property() -> None:
 
 
 def test_a_missing_gap_is_asserted_missing() -> None:
-    gap: Json = {"name": "Model.send", "lang": "ts", "kind": "missing", "lane": "unassigned"}
+    gap: Json = {
+        "name": "Model.send",
+        "lang": "ts",
+        "kind": "missing",
+        "lane": "01-gate",
+    }
     assert checks([gap])["method_Model_send_missing"] == 'Assert<IsMissing<core.Model, "send">>'
 
 
@@ -54,24 +59,24 @@ def test_a_required_mismatch_gap_asserts_the_other_flag() -> None:
         "name": "agent.model",
         "lang": "ts",
         "kind": "required_mismatch",
-        "lane": "unassigned",
+        "lane": "01-gate",
     }
     flipped = 'Assert<Equals<OptionRequired<typeof core.agent, 0, "model">, false>>'
     assert checks([gap])["option_agent_model_required"] == flipped
 
 
 def test_a_type_gap_is_declared_into_its_package_and_its_members_skipped() -> None:
-    gap: Json = {"name": "Model", "lang": "ts", "kind": "missing", "lane": "unassigned"}
+    gap: Json = {"name": "Model", "lang": "ts", "kind": "missing", "lane": "01-gate"}
     out = lines([gap])
     assert 'declare module "@fake/core" {' in out
-    assert "  interface Model { readonly __surfaceGap: true }" in out
+    assert "  type Model = { readonly __surfaceGap: true };" in out
     assert not any(
         line.startswith(("export type method_Model", "export type property_Model")) for line in out
     )
 
 
 def test_py_gaps_are_ignored() -> None:
-    gap: Json = {"name": "agent", "lang": "py", "kind": "missing", "lane": "unassigned"}
+    gap: Json = {"name": "agent", "lang": "py", "kind": "missing", "lane": "01-gate"}
     assert lines([gap]) == lines()
 
 
@@ -85,12 +90,25 @@ def test_generics_are_filled_with_never() -> None:
 def test_an_invalid_registry_is_refused() -> None:
     with pytest.raises(SystemExit, match=r"agent\.nope is not in spec/api\.json"):
         render(
-            api(), [{"name": "agent.nope", "lang": "ts", "kind": "missing", "lane": "unassigned"}]
+            api(),
+            [
+                {
+                    "name": "agent.nope",
+                    "lang": "ts",
+                    "kind": "missing",
+                    "lane": "01-gate",
+                }
+            ],
         )
 
 
 def test_a_placement_gap_checks_the_named_entry_and_reaches_members_through_it() -> None:
-    gap: Json = {"name": "Channel", "lang": "ts", "kind": "placement", "lane": "unassigned"}
+    gap: Json = {
+        "name": "Channel",
+        "lang": "ts",
+        "kind": "placement",
+        "lane": "01-gate",
+    }
     gap = {**gap, "at": "core"}
     found = checks([gap])
     assert found["type_Channel_at_core"] == "core.Channel"
@@ -103,7 +121,8 @@ def test_functions_and_methods_are_asserted_callable() -> None:
     assert found["method_Model_send_callable"] == 'Assert<IsCallable<core.Model["send"]>>'
 
 
-def test_required_fields_of_data_types_are_asserted() -> None:
+def test_fields_of_data_types_are_asserted_with_their_required_flag() -> None:
     found = checks()
     assert found["field_Skill_name_required"] == 'Assert<Equals<Req<core.Skill, "name">, true>>'
-    assert "field_Skill_note_present" not in found
+    assert found["field_Skill_note_present"] == 'Assert<HasKey<core.Skill, "note">>'
+    assert found["field_Skill_note_required"] == 'Assert<Equals<Req<core.Skill, "note">, false>>'

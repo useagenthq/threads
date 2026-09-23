@@ -24,8 +24,8 @@ KINDS: dict[str, frozenset[Role]] = {
     "required_mismatch": frozenset({"option", "property", "field", "method"}),
     "placement": frozenset({"type", "method"}),
 }
-# A lane file name (plans/specs/lanes/NN-name.md), or unassigned when no lane owns the gap yet.
-LANE = re.compile(r"^(\d\d-[a-z0-9-]+|unassigned)$")
+# The owning lane: its file name under plans/specs/lanes/ (NN-name). Every gap has an owner.
+LANE = re.compile(r"^\d\d-[a-z0-9-]+$")
 GAP_KEYS = frozenset({"name", "lang", "kind", "lane"})
 # A placement gap also names the other public entry that exports the member ("at").
 PLACEMENT_KEYS = GAP_KEYS | {"at"}
@@ -183,7 +183,7 @@ def _gap(entry: Json, at: str, contract: dict[str, Member]) -> tuple[Gap | None,
     }:
         errs.append(f"{at}: at {gap.at!r} is not another package of the contract")
     if not LANE.match(gap.lane):
-        errs.append(f"{at}: lane {gap.lane!r} is not NN-name or unassigned")
+        errs.append(f"{at}: lane {gap.lane!r} is not a lane name (NN-name)")
     return (None, errs) if errs else (gap, [])
 
 

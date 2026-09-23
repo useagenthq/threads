@@ -123,7 +123,7 @@ class Emitter:
             self.option(m)
         elif m.role == "function":
             self.keyed(m, f"typeof {m.package}")
-        elif m.required or m.role == "method":
+        else:
             self.keyed(m, self.type_ref(m.parent))
 
     def placed(self, m: Member) -> None:
@@ -133,13 +133,13 @@ class Emitter:
             self._out(m, f"at_{gap.at}", self.type_ref(m.name))
 
     def augmentations(self, packages: dict[str, str]) -> list[str]:
-        """A listed missing type is declared into its package: that compiles only while the
-        package has no such export (a second declaration is a duplicate or merges, which the
-        Assert on its keys rejects)."""
+        """A listed missing type is declared into its package as a type alias: that compiles
+        only while the package has no type of that name (an alias can't merge with anything, so
+        any existing interface, alias or class, even an empty one, is a duplicate)."""
         out: list[str] = []
         for package, names in sorted(self.absent_types.items()):
             out.append(f'declare module "{packages[package]}" {{')
-            out += [f"  interface {n} {{ readonly {MARKER}: true }}" for n in sorted(names)]
+            out += [f"  type {n} = {{ readonly {MARKER}: true }};" for n in sorted(names)]
             out.append("}")
             out += [
                 f'export type type_{n}_missing = Assert<Equals<keyof {package}.{n}, "{MARKER}">>;'

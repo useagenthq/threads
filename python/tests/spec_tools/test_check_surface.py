@@ -1,7 +1,7 @@
 """check_surface.py's Python checks, against a fixture contract and a fake package."""
 
 from dataclasses import dataclass
-from typing import Protocol, TypedDict, Unpack, runtime_checkable
+from typing import ClassVar, Protocol, TypedDict, Unpack, runtime_checkable
 
 from check_api import Json, check_names
 from check_surface import check_python
@@ -35,7 +35,7 @@ def without(members_: dict[str, object], name: str) -> dict[str, object]:
 
 
 def gap(name: str, kind: str = "missing") -> Gap:
-    return Gap(name, "py", kind, "unassigned")
+    return Gap(name, "py", kind, "01-gate")
 
 
 def test_the_fixture_package_passes() -> None:
@@ -129,7 +129,7 @@ def test_capability_protocol_not_exported_fails() -> None:
     assert found[0].startswith(
         "surface gate: Model.lookup (py) is placement (exported from host) and not listed"
     )
-    listed = Gap("Model.lookup", "py", "placement", "unassigned", "host")
+    listed = Gap("Model.lookup", "py", "placement", "01-gate", "host")
     host = host_members() | {"LooksUp": LooksUp}
     assert problems((listed,), core=without(core_members(), "LooksUp"), host=host) == []
 
@@ -189,7 +189,7 @@ def test_unlisted_gap_fails_and_a_listed_one_passes() -> None:
 
 def test_stale_gap_entry_fails() -> None:
     assert problems((gap("agent"),)) == [
-        "surface gate: agent (py, missing, lane unassigned) is listed but fixed; delete its entry"
+        "surface gate: agent (py, missing, lane 01-gate) is listed but fixed; delete its entry"
     ]
 
 
@@ -233,3 +233,62 @@ def test_a_method_that_is_not_callable_fails() -> None:
 
     found = problems(core=core_members() | {"Model": ValueSend})
     assert found[0].startswith("surface gate: Model.send (py) is missing")
+
+
+def test_an_optional_field_deleted_fails() -> None:
+    @dataclass(frozen=True, slots=True)
+    class NoNote:
+        name: str
+
+    found = problems(core=core_members() | {"Skill": NoNote})
+    assert found[0].startswith("surface gate: Skill.note (py) is missing")
+
+
+def test_an_optional_field_made_required_fails() -> None:
+    @dataclass(frozen=True, slots=True)
+    class RequiredNote:
+        name: str
+        note: str
+
+    found = problems(core=core_members() | {"Skill": RequiredNote})
+    assert found[0].startswith("surface gate: Skill.note (py) is required_mismatch")
+
+
+def test_a_required_field_as_a_class_variable_fails() -> None:
+    class ClassName:
+        name: ClassVar[str] = "x"
+        note: str = ""
+
+    found = problems(core=core_members() | {"Skill": ClassName})
+    assert found[0].startswith("surface gate: Skill.name (py) is missing")
+
+
+def test_a_required_field_with_a_plain_class_default_fails() -> None:
+    class Defaulted:
+        name: str = "x"
+        note: str = ""
+
+    found = problems(core=core_members() | {"Skill": Defaulted})
+    assert found[0].startswith("surface gate: Skill.name (py) is required_mismatch")
+
+
+def test_a_required_instance_annotation_on_a_plain_class_passes() -> None:
+    class Plain:
+        name: str
+        note: str = ""
+
+    assert problems(core=core_members() | {"Skill": Plain}) == []
+
+
+def test_a_capability_exported_elsewhere_still_needs_the_method() -> None:
+    @runtime_checkable
+    class LooksUpNothing(Protocol):
+        pass
+
+    listed = Gap("Model.lookup", "py", "placement", "01-gate", "host")
+    found = problems(
+        (listed,),
+        core=without(core_members(), "LooksUp"),
+        host=host_members() | {"LooksUp": LooksUpNothing},
+    )
+    assert found[0].startswith("surface gate: Model.lookup (py) is missing")

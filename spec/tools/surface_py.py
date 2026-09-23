@@ -13,7 +13,7 @@ import importlib
 import inspect
 import sys
 import typing
-from typing import TYPE_CHECKING, TypeGuard
+from typing import TYPE_CHECKING, Literal, TypeGuard
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Mapping
@@ -72,12 +72,6 @@ class Package:
         return _defined_anywhere(name, self.root), [("missing", None)]
 
 
-def _has(owner: object, name: str) -> bool:
-    return hasattr(owner, name) or any(
-        name in getattr(k, "__annotations__", {}) for k in inspect.getmro(_cls(owner))
-    )
-
-
 def _cls(owner: object) -> type:
     return owner if isinstance(owner, type) else type(owner)
 
@@ -87,28 +81,65 @@ def _callable_member(owner: object, name: str) -> bool:
     return callable(getattr(owner, name, None))
 
 
-def _required_field(owner: object, name: str) -> bool:
-    """Whether a data type's field can be omitted: a dataclass or Pydantic default, or a
-    TypedDict's optional key. Other classes (a Protocol, an exception) declare no default."""
+type State = Literal["absent", "required", "optional"]
+
+
+def _state(required: bool) -> State:
+    return "required" if required else "optional"
+
+
+def field_state(owner: object, name: str) -> State:
+    """Whether a field or property is declared, and whether it can be omitted. A dataclass or
+    Pydantic model counts only its real fields (a ClassVar or a plain attribute is not one), a
+    TypedDict its keys; any other class (a Protocol, an exception) its instance attributes."""
     if dataclasses.is_dataclass(owner) and isinstance(owner, type):
         field = next((f for f in dataclasses.fields(owner) if f.name == name), None)
+        if field is None:
+            return "absent"
         missing = dataclasses.MISSING
-        return field is None or (field.default is missing and field.default_factory is missing)
-    info: object = _mapping_get(getattr(owner, "model_fields", None), name)
-    if info is not None:
+        return _state(field.default is missing and field.default_factory is missing)
+    model_fields: object = getattr(owner, "model_fields", None)
+    if _is_mapping(model_fields):
+        info = model_fields.get(name)
         is_required: object = getattr(info, "is_required", None)
-        return callable(is_required) and is_required() is True
+        return "absent" if info is None else _state(callable(is_required) and is_required() is True)
     if typing.is_typeddict(owner):
-        return name in _strs(getattr(owner, "__required_keys__", None))
-    return True
+        if name in _strs(getattr(owner, "__required_keys__", None)):
+            return "required"
+        return "optional" if name in _strs(getattr(owner, "__optional_keys__", None)) else "absent"
+    return _attribute_state(_cls(owner), name)
+
+
+def _attribute_state(cls: type, name: str) -> State:
+    """An instance annotation (not a ClassVar) is required unless the class gives it a default;
+    a property is required; a plain class attribute is only a default, so optional."""
+    annotated = [a[name] for a in map(_own_annotations, inspect.getmro(cls)) if name in a]
+    if annotated and _is_class_var(annotated[0]):
+        return "absent"
+    if isinstance(inspect.getattr_static(cls, name, None), property):
+        return "required"
+    if annotated:
+        return _state(not hasattr(cls, name))
+    return "optional" if hasattr(cls, name) else "absent"
+
+
+def _own_annotations(cls: type) -> Mapping[str, object]:
+    """One class's own annotations (Python 3.14 evaluates them lazily). One that can't be
+    evaluated counts as undeclared, which fails the gate rather than passing it."""
+    try:
+        return inspect.get_annotations(cls)
+    except NameError:
+        return {}
+
+
+def _is_class_var(annotation: object) -> bool:
+    if isinstance(annotation, str):
+        return annotation.partition("[")[0] in ("ClassVar", "typing.ClassVar")
+    return annotation is typing.ClassVar or typing.get_origin(annotation) is typing.ClassVar
 
 
 def _is_mapping(v: object) -> TypeGuard[Mapping[object, object]]:
     return isinstance(v, dict)
-
-
-def _mapping_get(mapping: object, key: str) -> object | None:
-    return mapping.get(key) if _is_mapping(mapping) else None
 
 
 def _unpacked(fn: Callable[..., object], param: inspect.Parameter) -> Options:
@@ -166,18 +197,16 @@ class PythonSurface:
     def type(self, m: Member) -> Found:
         return self.package.locate(m.package, m.py)[1]
 
-    def property(self, m: Member) -> Found:
-        owner = self._type(m.parent)
-        return [] if not m.required or owner is None or _has(owner, m.py) else [("missing", None)]
-
     def field(self, m: Member) -> Found:
-        """A required field of a data type: present, and not given a default."""
+        """A field of a data type or a property of a handle or protocol: declared, and
+        omittable exactly when the contract says it is optional."""
         owner = self._type(m.parent)
-        if not m.required or owner is None:
+        if owner is None:
             return []
-        if not _has(owner, m.py):
+        state = field_state(owner, m.py)
+        if state == "absent":
             return [("missing", None)]
-        return [] if _required_field(owner, m.py) else [("required_mismatch", None)]
+        return [] if (state == "required") == m.required else [("required_mismatch", None)]
 
     def method(self, m: Member) -> Found:
         owner = self._type(m.parent)
@@ -189,8 +218,9 @@ class PythonSurface:
         found: Found = [("required_mismatch", None)] if on_base else []
         cap, gap = self._capability(m)
         runtime = getattr(cap, "_is_runtime_protocol", False) is True
-        if not gap and not (runtime and _callable_member(cap, m.py)):
-            gap = [("missing", None)]
+        # Wherever the protocol is exported (even from another entry), it must declare the method.
+        if not (runtime and _callable_member(cap, m.py)) and ("missing", None) not in gap:
+            gap = [*gap, ("missing", None)]
         return found + gap
 
     def option(self, m: Member) -> Found:
@@ -205,7 +235,7 @@ class PythonSurface:
 
     def findings(self) -> set[Finding]:
         checks: dict[str, Callable[[Member], Found]] = {
-            "function": self.function, "type": self.type, "property": self.property,
+            "function": self.function, "type": self.type, "property": self.field,
             "field": self.field, "method": self.method, "option": self.option,
         }  # fmt: skip
         return {

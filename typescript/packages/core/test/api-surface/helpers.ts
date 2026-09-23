@@ -13,12 +13,15 @@ export type Equals<A, B> =
 
 export type HasKey<T, K extends PropertyKey> = K extends keyof T ? true : false;
 
-/** A function or method must be callable: a property that merely exists is not one. */
-export type IsCallable<F> = [NonNullable<F>] extends [
-  (...args: never) => unknown,
-]
-  ? true
-  : false;
+/**
+ * A function or method must be callable: a property that merely exists is not one, and
+ * `never` (which extends every type) isn't either.
+ */
+export type IsCallable<F> = [NonNullable<F>] extends [never]
+  ? false
+  : [NonNullable<F>] extends [(...args: never) => unknown]
+    ? true
+    : false;
 
 export type IsMissing<T, K extends PropertyKey> = K extends keyof T
   ? false

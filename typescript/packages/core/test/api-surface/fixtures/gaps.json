@@ -3,19 +3,19 @@
     "name": "Absent",
     "lang": "ts",
     "kind": "missing",
-    "lane": "unassigned"
+    "lane": "01-api-surface-gate"
   },
   {
     "name": "Model.close",
     "lang": "ts",
     "kind": "missing",
-    "lane": "unassigned"
+    "lane": "01-api-surface-gate"
   },
   {
     "name": "Moved",
     "lang": "ts",
     "kind": "placement",
-    "lane": "unassigned",
+    "lane": "01-api-surface-gate",
     "at": "core"
   }
 ]

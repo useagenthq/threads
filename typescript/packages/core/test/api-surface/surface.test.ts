@@ -123,7 +123,7 @@ describe("optional methods and gaps", () => {
     const absent = pkg.replace("  readonly lookup?: () => void;\n", "");
     const listed = gaps.replace(
       "[\n",
-      '[\n  {"name": "Model.lookup", "lang": "ts", "kind": "missing", "lane": "unassigned"},\n',
+      '[\n  {"name": "Model.lookup", "lang": "ts", "kind": "missing", "lane": "01-api-surface-gate"},\n',
     );
     expect(compile({ pkg: absent, gaps: listed })).toEqual({
       ok: true,
@@ -194,6 +194,37 @@ describe("fields and callability", () => {
     );
     expect(compile({ pkg: value }).failed).toContain(
       'export type method_Model_send_callable = Assert<IsCallable<core.Model["send"]>>;',
+    );
+  });
+
+  test("a method typed never is red", () => {
+    const never = pkg.replace(
+      "readonly send: () => void;",
+      "readonly send: never;",
+    );
+    expect(compile({ pkg: never }).failed).toContain(
+      'export type method_Model_send_callable = Assert<IsCallable<core.Model["send"]>>;',
+    );
+  });
+
+  test("an optional field deleted is red", () => {
+    const deleted = pkg.replace(" readonly shortNote?: string", "");
+    expect(compile({ pkg: deleted }).failed).toEqual([
+      'export type field_Skill_short_note_present = Assert<HasKey<core.Skill, "shortNote">>;',
+    ]);
+  });
+
+  test("an optional field made required is red", () => {
+    const required = pkg.replace("readonly shortNote?:", "readonly shortNote:");
+    expect(compile({ pkg: required }).failed).toEqual([
+      'export type field_Skill_short_note_required = Assert<Equals<Req<core.Skill, "shortNote">, false>>;',
+    ]);
+  });
+
+  test("a listed missing type exported as an empty interface is red", () => {
+    const empty = `${pkg}export interface Absent {}\n`;
+    expect(compile({ pkg: empty }).failed).toContain(
+      "  type Absent = { readonly __surfaceGap: true };",
     );
   });
 });

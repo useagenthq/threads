@@ -13,7 +13,7 @@ from surface_kit import PY_JUNIT, RUNS, TS_JUNIT, api, core_members, coverage, i
 
 
 def gap(name: str, lang: str = "py", kind: str = "missing") -> dict[str, Json]:
-    return {"name": name, "lang": lang, "kind": kind, "lane": "unassigned"}
+    return {"name": name, "lang": lang, "kind": kind, "lane": "01-gate"}
 
 
 def with_entry(name: str, entry: Json) -> dict[str, Json]:
@@ -94,7 +94,7 @@ def test_later_pr_new_gap_for_existing_member_fails(repo: Repo) -> None:
     repo.write("api-surface-gaps.json", [gap("runSync")])
     no_py_run_sync_coverage(repo)
     assert repo.gate("py", *repo.baseline(base), core=without_run_sync()) == [
-        "surface gate: new gap runSync (py, missing, lane unassigned) for a member that exists "
+        "surface gate: new gap runSync (py, missing, lane 01-gate) for a member that exists "
         "at the base; restore the member instead of listing it"
     ]
 
@@ -131,7 +131,7 @@ def test_release_with_gaps_fails(repo: Repo) -> None:
     repo.write("api-surface-gaps.json", [gap("runSync")])
     no_py_run_sync_coverage(repo)
     assert repo.gate("py", "--bootstrap", base, "--release", core=without_run_sync()) == [
-        "surface gate: release with an open gap: runSync (py, missing, lane unassigned)"
+        "surface gate: release with an open gap: runSync (py, missing, lane 01-gate)"
     ]
 
 
@@ -186,7 +186,8 @@ def test_coverage_for_a_member_a_language_lacks_fails(repo: Repo) -> None:
         (gap("Channel", "ts", "placement") | {"at": "mars"}, "at 'mars' is not another package"),
         (gap("Channel", "ts", "placement") | {"at": "host"}, "at 'host' is not another package"),
         (gap("agent") | {"why": "x"}, "a gap is exactly {name, lang, kind, lane}, plus at"),
-        (gap("agent") | {"lane": "later"}, "lane 'later' is not NN-name or unassigned"),
+        (gap("agent") | {"lane": "later"}, "lane 'later' is not a lane name (NN-name)"),
+        (gap("agent") | {"lane": "unassigned"}, "lane 'unassigned' is not a lane name"),
     ],
 )
 def test_malformed_gap_entries_are_rejected(entry: Json, problem: str) -> None:
