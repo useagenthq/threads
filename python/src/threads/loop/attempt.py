@@ -15,6 +15,7 @@ from threads.log import EventId, ModelRequestEvent, OutputPart, ToolUsePart
 from threads.log.digest import sha256_hex
 from threads.loop import guard
 from threads.loop.calls import call_drafts
+from threads.loop.capabilities import mismatch
 from threads.loop.drafts import draft
 from threads.loop.model import Done, ModelRequest, ModelResponse, PartChunk, Rejected
 from threads.loop.runtime import Failed, Runtime, WriterContext, fence, lost
@@ -25,8 +26,9 @@ from threads.store import Draft
 type Purpose = Literal["turn", "compaction"]
 
 
-async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Failed | EventId:
-    """Sends one attempt and records its outcome. Returns the model_request's event id."""
+async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Failed | EventId | None:
+    """Sends one attempt and records its outcome. Returns the model_request's event id, or None
+    when the capability pre-check ended the turn before any model_request."""
     rendered = await rt.store.render(rt.events, compaction=purpose == "compaction")
     if isinstance(rendered, Err):
         code = rendered.error.code
@@ -34,6 +36,11 @@ async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Faile
             return Failed(code, rendered.error.message)
         raise AssertionError(f"the next request can't render: {rendered.error}")
     body, line0 = rendered.value.body, rendered.value.line0
+    unsupported = mismatch(body, rt.model.info)
+    if unsupported is not None:
+        data = {"reason": "error", "code": unsupported}
+        ended = await rt.append(draft("turn_completed", data))
+        return lost(ended.error) if isinstance(ended, Err) else None
     sha = await rt.store.put_artifact(body)
     data: dict[str, JsonValue] = {
         "attempt": attempt,

@@ -50,7 +50,7 @@ async def _summarize(rt: Runtime, bounds: tuple[Event, Event]) -> Halt | None:
     once."""
     for side_attempt in (1, 2):
         sent = await attempt.request(rt, side_attempt, "compaction")
-        if isinstance(sent, Failed):
+        if sent is None or isinstance(sent, Failed):
             return sent
         outcome = rt.events[-1]
         if isinstance(outcome, ModelResponseEvent):
