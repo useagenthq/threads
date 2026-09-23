@@ -1,8 +1,11 @@
+import { assertNever } from "../assert-never";
 import type { ArtifactRef } from "../log";
-import { ok, type Result } from "../result";
+import type { ToolRun } from "../loop/types";
+import { err, ok, type Result } from "../result";
 import type { ArtifactStore } from "../store/artifacts";
 import type {
   ExecOptions,
+  ExecOutput,
   Failure,
   SandboxContext,
   SandboxSession,
@@ -74,6 +77,38 @@ async function pump(
   }
 }
 
+export type ExecFailure =
+  | Failure<"timeout" | "invalid_path" | "unavailable">
+  | Stale;
+
+/**
+ * An exec's outcome as a tool run: a timeout or a
+ * transport failure after dispatch is uncertain (effect_unknown), never a result; a refused
+ * fence sent nothing.
+ */
+export function toolRunOf(result: Result<ExecResult, ExecFailure>): ToolRun {
+  if (result.ok)
+    return {
+      kind: "done",
+      output: JSON.stringify(result.value),
+      isError: result.value.exit_code !== 0,
+    };
+  const { code, message } = result.error;
+  switch (code) {
+    case "timeout":
+      return { kind: "unknown", reason: "timeout" };
+    case "unavailable":
+      return { kind: "unknown", reason: "transport_error" };
+    case "stale_epoch":
+    case "cleanup_claim_lost":
+      return { kind: "not_sent" };
+    case "invalid_path":
+      return { kind: "done", output: message, isError: true };
+    default:
+      return assertNever(code);
+  }
+}
+
 /** Runs `command` in the session and spills its output at the source. */
 export async function execute(
   session: SandboxSession,
@@ -82,15 +117,35 @@ export async function execute(
   options: ExecOptions,
   artifacts: ArtifactStore,
   keep: number = PREVIEW_BYTES,
-): Promise<
-  Result<
-    ExecResult,
-    Failure<"timeout" | "invalid_path" | "unavailable"> | Stale
-  >
-> {
+): Promise<Result<ExecResult, ExecFailure>> {
   const started = await session.exec(command, context, options);
   if (!started.ok) return started;
-  const output = started.value;
+  const { timeoutMs } = options;
+  const collected = collect(started.value, artifacts, keep);
+  if (timeoutMs === undefined) return collected;
+  // After a timeout nobody awaits it; a stream that breaks later is not a crash.
+  collected.catch(() => undefined);
+  // Once the deadline passes the outcome is a timeout, whatever the process does next: the
+  // kill is best effort and unconfirmed, so the effect stays unknown.
+  const deadline = Promise.withResolvers<Result<ExecResult, ExecFailure>>();
+  const timer = setTimeout(() => {
+    deadline.resolve(
+      err({ code: "timeout", message: `no exit within ${timeoutMs} ms` }),
+    );
+    void session.terminate(options.processKey, context);
+  }, timeoutMs);
+  try {
+    return await Promise.race([collected, deadline.promise]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function collect(
+  output: ExecOutput,
+  artifacts: ArtifactStore,
+  keep: number,
+): Promise<Result<ExecResult, ExecFailure>> {
   const sink = artifacts.sink();
   const out = new Preview(keep);
   const errs = new Preview(keep);

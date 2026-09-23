@@ -1,6 +1,12 @@
 export { type Captured, captureSnapshot } from "./capture";
 export { cleanupContext, ownerContext } from "./context";
-export { type ExecResult, execute, PREVIEW_BYTES } from "./exec";
+export {
+  type ExecFailure,
+  type ExecResult,
+  execute,
+  PREVIEW_BYTES,
+  toolRunOf,
+} from "./exec";
 export {
   type FakeSandbox,
   fakeSandbox,

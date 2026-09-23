@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Sandbox } from "../../../src/sandbox";
-import { manifestHash } from "../../../src/sandbox";
+import { execute, manifestHash } from "../../../src/sandbox";
+import { memoryArtifacts } from "../../../src/store/artifacts";
 import { code, unwrap } from "../../store/helpers";
 import { CTX } from "../context";
 import { created, drained, LOST_CLAIM, run, staleContext } from "./kit";
@@ -68,13 +69,19 @@ export function contractSuite(name: string, make: () => Contract): void {
       expect(unwrap(await box.terminate("k1", CTX))).toBe("unknown");
     });
 
-    test("a timeout kills the process", async () => {
-      const { sandbox } = make();
+    test("a timeout is reported as one, and the process is killed best effort", async () => {
+      const { sandbox, world } = make();
       const box = await created(sandbox);
-      const out = unwrap(
-        await box.exec(["sleep"], CTX, { processKey: "k2", timeoutMs: 5 }),
+      const ran = await execute(
+        box,
+        ["sleep"],
+        CTX,
+        { processKey: "k2", timeoutMs: 5 },
+        memoryArtifacts(),
       );
-      expect((await drained(out)).exit).toBe(137);
+      expect(code(ran)).toBe("timeout");
+      await Bun.sleep(20);
+      expect(world.machine(box.id).procs.has("k2")).toBe(false);
     });
 
     test("upload and download round-trip bytes; paths fail typed", async () => {

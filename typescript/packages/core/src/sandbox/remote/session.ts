@@ -122,16 +122,9 @@ export function remoteSession(
           { stdout: stdout.push, stderr: stderr.push },
           options.processKey,
         );
-        const timer =
-          options.timeoutMs === undefined
-            ? undefined
-            : setTimeout(() => {
-                // A timeout kills what the provider tracks; the effect
-                // still parks, since the kill can't be confirmed.
-                void terminate(options.processKey, context);
-              }, options.timeoutMs);
+        // The deadline (timeoutMs) is the sandbox layer's: execute() reports it as a timeout
+        // and calls terminate (sandbox/exec.ts).
         const exit = started.exit.finally(() => {
-          clearTimeout(timer);
           stdout.end();
           stderr.end();
         });
