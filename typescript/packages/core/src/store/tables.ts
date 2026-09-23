@@ -113,6 +113,26 @@ const TenantRow: Strict<{ tenant_id: z.ZodString }> = z.strictObject({
   tenant_id: z.string(),
 });
 
+const BranchIdRow: Strict<{ branch_id: typeof BranchId }> = z.strictObject({
+  branch_id: BranchId,
+});
+
+/** A thread's main branch: its root, the one without a parent. */
+export function rootBranch(
+  db: SqliteDriver,
+  threadId: string,
+  tenantId: string,
+): Result<BranchId | undefined, LogError> {
+  const rows = parseRows(
+    BranchIdRow,
+    db.all(
+      "SELECT branch_id FROM branches WHERE thread_id = ? AND tenant_id = ? AND parent_branch_id IS NULL",
+      [threadId, tenantId],
+    ),
+  );
+  return rows.ok ? ok(rows.value[0]?.branch_id) : rows;
+}
+
 /** The tenant that owns a thread, if the thread is stored. */
 export function threadOwner(
   db: SqliteDriver,

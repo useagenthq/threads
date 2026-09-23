@@ -1,4 +1,3 @@
-import type { z } from "zod";
 import type { EventOf } from "../fold/state";
 import { canonicalize } from "../log";
 import { draft, TOOL } from "./drafts";
@@ -114,15 +113,4 @@ export function missingCandidate(s: Session): Halt | undefined {
     }),
   );
   return stopped ?? giveUp(s, output.max_retries);
-}
-
-/** The accepted value of this turn, if any. */
-export function acceptedValue(s: Session): z.core.util.JSONType | undefined {
-  const accepted = turnEvents(s.events).findLast(
-    (e) => e.type === "output_validated" && e.data.outcome === "accepted",
-  );
-  return accepted?.type === "output_validated" &&
-    accepted.data.outcome === "accepted"
-    ? accepted.data.value
-    : undefined;
 }

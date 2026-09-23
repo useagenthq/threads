@@ -29,6 +29,7 @@ import {
   LOCAL_TENANT,
   ownedBranch,
   putLease,
+  rootBranch,
 } from "./tables";
 import { IMPL, Writer, writerMismatch } from "./writer";
 
@@ -117,6 +118,15 @@ export class LogStore {
   read(branchId: BranchId): Result<VerifiedLog, LogError> {
     const bytes = this.exportBranch(branchId);
     return bytes.ok ? verifyExport(bytes.value) : bytes;
+  }
+
+  /** A thread's main branch, or `branch_not_found`. */
+  mainBranch(threadId: ThreadId): Result<BranchId, LogError> {
+    const root = rootBranch(this.#db, threadId, this.#tenant);
+    if (!root.ok) return root;
+    return root.value === undefined
+      ? err(logError("branch_not_found", `no thread ${threadId}`))
+      : ok(root.value);
   }
 
   /** `threads export`: ancestor segments, the branch's lines, then its head line. */

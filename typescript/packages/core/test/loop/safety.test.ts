@@ -240,7 +240,11 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
   // the provider's window runs from the first send; a deduplicated re-send doesn't
   // renew it. 10 s window, sent at t=0, re-sent at t=8, recovery at t=16: that parks.
   test("the dedup window is measured from the earliest begin, not the latest", async () => {
-    const charge = { ...EMAIL, effect_class: "idempotent", dedup_window_ms: 10_000 } as const;
+    const charge = {
+      ...EMAIL,
+      effect_class: "idempotent",
+      dedup_window_ms: 10_000,
+    } as const;
     const h = harness([charge], [userInput("charge")], []);
     const t0 = h.clock.now;
     crashedCall(h, [
@@ -249,7 +253,11 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
         type_version: 1,
         critical: true,
         actor: recovery,
-        data: { call_id: "call_1", outcome: "safe_to_retry", by: "provider_dedup" },
+        data: {
+          call_id: "call_1",
+          outcome: "safe_to_retry",
+          by: "provider_dedup",
+        },
       },
     ]);
     h.clock.now = t0 + 8000;
