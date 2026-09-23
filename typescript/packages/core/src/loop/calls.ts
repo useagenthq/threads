@@ -1,3 +1,4 @@
+import { AGENT_TOOLS, entry } from "../tools/catalog";
 import { authorize } from "./authorize";
 import { draft } from "./drafts";
 import { FINAL_OUTPUT } from "./output";
@@ -60,9 +61,11 @@ function preEffectFailure(s: Session, use: ToolUse): string | undefined {
   if (use.name === FINAL_OUTPUT) return undefined;
   if (spec.defer_loading === true)
     return `tool_not_loaded: ${use.name}; find it with tool_search first`;
-  const impl = s.config.tools.get(use.name);
+  const input = AGENT_TOOLS.has(use.name)
+    ? entry(use.name).input
+    : s.config.tools.get(use.name)?.input;
   // Arguments parse with the tool's own schema; a tool without one fails closed.
-  if (impl === undefined) return `no implementation for ${use.name}`;
-  const errors = parseErrors(impl.input, use.input);
+  if (input === undefined) return `no implementation for ${use.name}`;
+  const errors = parseErrors(input, use.input);
   return errors === undefined ? undefined : `invalid input: ${errors}`;
 }

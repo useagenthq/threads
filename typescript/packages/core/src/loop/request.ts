@@ -16,6 +16,7 @@ import { breakerOpen, ladder } from "./ladder";
 import { switchGate } from "./lifecycle";
 import { retryPolicy } from "./policy";
 import type { Session } from "./session";
+import { todoReminder } from "./todos";
 import { nextAttempt, stepEvents } from "./turn";
 import type { Halt } from "./types";
 
@@ -82,6 +83,7 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
 async function gates(s: Session): Promise<Gated> {
   return (
     (await inputGate(s)) ??
+    todoReminder(s) ??
     (await resultsGate(s)) ??
     (await batchGate(s)) ??
     (await ladder(s)) ??

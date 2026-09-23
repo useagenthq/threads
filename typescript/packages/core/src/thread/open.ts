@@ -1,7 +1,7 @@
 import type { ThreadRef } from "../agent/result";
 import { openStore, type Store } from "../agent/sqlite";
 import { BranchId, type EventId, type ThreadId } from "../log";
-import { knownEvents, reduce } from "../reduce";
+import { knownEvents, type Projections, projections, reduce } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { Sandbox, SnapshotData } from "../sandbox/protocol";
 import type { LogStore } from "../store";
@@ -48,6 +48,10 @@ export type Thread = ThreadRef & {
     name: string,
     options: SaveCaseOptions,
   ) => Promise<Result<SavedCase, LogError>>;
+  /** The latest todo list. */
+  readonly todos: () => Promise<Projections["todos"]>;
+  /** One entry per spawned child, running until its agent_finished. */
+  readonly children: () => Promise<Projections["children"]>;
 };
 
 export type OpenThreadOptions = {
@@ -173,6 +177,14 @@ export async function openThread(
       });
       if (!forked.ok) return forked;
       return openThread(store, threadId, { ...options, branchId: child });
+    },
+    todos: async () => {
+      const current = readLog(log, branchId);
+      return current.ok ? projections(current.value).todos : [];
+    },
+    children: async () => {
+      const current = readLog(log, branchId);
+      return current.ok ? projections(current.value).children : [];
     },
     saveCase: async (name, caseOptions) =>
       saveCase(log, branchId, name, caseOptions, {

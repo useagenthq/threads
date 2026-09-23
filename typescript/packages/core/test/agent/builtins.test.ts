@@ -39,7 +39,7 @@ const results = (events: readonly KnownEvent[]) =>
   events.flatMap((e) => (e.type === "tool_result" ? [e.data] : []));
 
 describe("built-in sandbox tools", () => {
-  test("pinned sorted by name before app tools; no sandbox pins only read_tool_result", async () => {
+  test("pinned sorted by name before app tools; no sandbox pins read_tool_result and todo_write", async () => {
     const echo = tool({
       name: "echo",
       description: "Echo.",
@@ -64,6 +64,7 @@ describe("built-in sandbox tools", () => {
     };
     expect(await names(false)).toEqual([
       "read_tool_result:read_only",
+      "todo_write:read_only",
       "echo:read_only",
     ]);
     expect(await names(true)).toEqual([
@@ -74,6 +75,7 @@ describe("built-in sandbox tools", () => {
       "ls:read_only",
       "read:read_only",
       "read_tool_result:read_only",
+      "todo_write:read_only",
       "write:sandbox_local",
       "echo:read_only",
     ]);

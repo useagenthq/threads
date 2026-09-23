@@ -6,8 +6,8 @@ import { canonicalize } from "../log";
 import type { EventDraft } from "../store";
 import { authorize } from "./authorize";
 import { draft, TOOL } from "./drafts";
+import { frameworkTool } from "./framework";
 import { observe } from "./hooks";
-import { FINAL_OUTPUT, validateCandidate } from "./output";
 import type { Session } from "./session";
 import { settleUnknown } from "./settle";
 import { type Recorded, recordOutput } from "./spill";
@@ -123,7 +123,8 @@ async function dispatch(
   call: EventOf<"tool_call">,
 ): Promise<Halt | undefined> {
   const { name, call_id: callId } = call.data;
-  if (name === FINAL_OUTPUT) return validateCandidate(s, call);
+  const framework = frameworkTool(name);
+  if (framework !== undefined) return framework(s, call);
   const spec = toolSpec(s.fold, name);
   if (spec?.effect_class === "read_only") {
     const fenced = s.fence();

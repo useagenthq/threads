@@ -16,6 +16,7 @@ import { DEFAULT_PERMISSIONS } from "../permissions";
 import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
 import { builtins, type Egress } from "../tools";
+import { frameworkSpec } from "../tools/framework";
 import { ConfigError } from "./errors";
 import { type Extension, hookNames } from "./extension";
 import { jsonSchema, type Tool } from "./tool";
@@ -46,7 +47,10 @@ export function pin(o: PinOptions): {
   readonly started: EventDraft;
 } {
   const specs = [
-    ...builtins(o.sandbox, o.egress).map((b) => b.spec),
+    ...[
+      ...builtins(o.sandbox, o.egress).map((b) => b.spec),
+      frameworkSpec("todo_write"),
+    ].toSorted((a, b) => (a.name < b.name ? -1 : 1)),
     ...o.tools.map((t) => t.spec()),
     ...extensionTools(o.extensions).map((t) => t.spec()),
     ...finalOutput(o.output),
