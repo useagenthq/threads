@@ -2,8 +2,8 @@ import { Database } from "bun:sqlite";
 import type { SqliteDriver } from "./driver";
 
 /**
- * A SqliteDriver on `bun:sqlite`: WAL, synchronous=FULL, and full fsync on
- * darwin, so a committed append is durable when the call returns. `":memory:"` gives an
+ * A SqliteDriver on `bun:sqlite`: WAL, synchronous=FULL, and full fsync (acted on only by
+ * darwin), so a committed append is durable when the call returns. `":memory:"` gives an
  * in-memory store for tests with the same code path.
  */
 export function openBunSqlite(path: string): SqliteDriver {
@@ -13,10 +13,9 @@ export function openBunSqlite(path: string): SqliteDriver {
   walMode(db);
   db.exec("PRAGMA synchronous = FULL");
   db.exec("PRAGMA foreign_keys = ON");
-  if (process.platform === "darwin") {
-    db.exec("PRAGMA fullfsync = ON");
-    db.exec("PRAGMA checkpoint_fullfsync = ON");
-  }
+  // Only darwin acts on these; set everywhere, as Python does, so one test reads them back.
+  db.exec("PRAGMA fullfsync = ON");
+  db.exec("PRAGMA checkpoint_fullfsync = ON");
   return {
     exec: (sql) => {
       db.exec(sql);

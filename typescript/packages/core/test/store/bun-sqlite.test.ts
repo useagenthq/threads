@@ -18,4 +18,22 @@ describe("bun:sqlite driver", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // fullfsync only acts on darwin, but it is set everywhere so this runs on every platform.
+  test("a file store is opened for durable commits", () => {
+    const dir = mkdtempSync(join(tmpdir(), "threads-durable-"));
+    const db = openBunSqlite(join(dir, "threads.db"));
+    try {
+      const read = (pragma: string) => db.all(`PRAGMA ${pragma}`, []);
+      expect(read("journal_mode")).toEqual([{ journal_mode: "wal" }]);
+      expect(read("synchronous")).toEqual([{ synchronous: 2 }]);
+      expect(read("fullfsync")).toEqual([{ fullfsync: 1 }]);
+      expect(read("checkpoint_fullfsync")).toEqual([
+        { checkpoint_fullfsync: 1 },
+      ]);
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

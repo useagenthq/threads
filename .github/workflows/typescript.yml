@@ -2,9 +2,9 @@ name: typescript
 
 on:
   push:
-    paths: ["typescript/**", "spec/**", ".github/workflows/typescript.yml"]
+    paths: ["typescript/**", "spec/**", "scripts/**", ".github/workflows/typescript.yml"]
   pull_request:
-    paths: ["typescript/**", "spec/**", ".github/workflows/typescript.yml"]
+    paths: ["typescript/**", "spec/**", "scripts/**", ".github/workflows/typescript.yml"]
 
 jobs:
   check:
