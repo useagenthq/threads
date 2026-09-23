@@ -13,9 +13,9 @@ from pydantic import BaseModel, JsonValue
 from starlette.requests import Request
 
 from threads import Agent, RunContext, agent, scripted_model, sqlite, tool
-from threads.agents.store import open_store, scoped
+from threads.agents.store import now_ms, open_store, scoped
 from threads.host import Host, host
-from threads.log import Principal, UserInputEvent
+from threads.log import BranchId, Principal, UserInputEvent
 from threads.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
@@ -254,5 +254,48 @@ def test_thread_routes_are_scoped_parsed_and_recorded() -> None:
                 "cancel_requested",
                 "bob",
             )
+
+    run(main)
+
+
+def test_a_control_on_a_branch_another_process_holds_is_branch_busy() -> None:
+    """The branch's lease is held elsewhere (another host process): every control route that
+    appends answers 409 branch_busy and records nothing; the challenge stays open."""
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        served_host = host(store=store, agents={"support": sender([])}, authenticate=bearer)
+        async with served_host:
+            transport = httpx.ASGITransport(app=served_host.asgi)
+            async with httpx.AsyncClient(transport=transport, base_url="http://host") as client:
+                receipt = (
+                    await start(client, "alice", "k", {"agent": "support", "input": "hi"})
+                ).json()
+                base = f"/v1/threads/{receipt['thread_id']}"
+                events = f"{base}/runs/{receipt['run_id']}/events"
+                sse(await client.get(events, headers=as_("alice")))
+                (challenge,) = (await client.get(f"{base}/approvals", headers=as_("alice"))).json()
+                sq = await open_store(scoped(store, "acme"))
+                held = await sq.acquire(BranchId(receipt["branch_id"]), "elsewhere", now_ms)
+                assert isinstance(held, Ok)
+                before = len(held.value.fold.events)
+                routes: list[tuple[str, JsonValue]] = [
+                    ("/cancel", None),
+                    ("/mode", {"mode": "plan"}),
+                    ("/settings", {"model": {"provider": "scripted", "name": "other"}}),
+                    (f"/approvals/{challenge['challenge_id']}", {"decision": "grant"}),
+                    (f"/approvals/{challenge['challenge_id']}", {"decision": "deny"}),
+                    ("/questions/call_1/answer", {"answer": "yes"}),
+                    ("/parked/b:call_1/resolve", {"resolution": "assume_done"}),
+                ]
+                for path, payload in routes:
+                    answered = await client.post(base + path, json=payload, headers=as_("alice"))
+                    got = (answered.status_code, answered.json()["error"]["code"])
+                    assert got == (HTTPStatus.CONFLICT, "branch_busy"), path
+                read = await sq.read(held.value.branch_id, now_ms())
+                assert isinstance(read, Ok)
+                assert len(read.value.fold.events) == before
+                still = (await client.get(f"{base}/approvals", headers=as_("alice"))).json()
+                assert still == [challenge]
 
     run(main)

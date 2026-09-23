@@ -19,7 +19,7 @@ from threads import (
 )
 from threads._generated.host_api_v1 import SettingsChange
 from threads.agents.run import execute
-from threads.agents.store import open_store, scoped, sqlite
+from threads.agents.store import LIVE, now_ms, open_store, scoped, sqlite
 from threads.log import (
     ApprovalGrantedEvent,
     CallId,
@@ -171,5 +171,27 @@ def test_a_control_reaches_a_run_in_flight_through_its_writer() -> None:
         bot = agent(model=scripted_model(script), tools=[stop_tool])
         result = await bot.run("go", store=store, deps=None)
         assert isinstance(result, Cancelled), result
+
+    asyncio.run(main())
+
+
+def test_a_control_through_a_writer_that_lost_its_lease_is_branch_busy() -> None:
+    """The run in flight here lost the branch to another holder: the control is refused as
+    branch_busy, the same answer as a lease held elsewhere, never a writer's internal code."""
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        done = await agent(model=scripted_model({"responses": [text("hi")]})).run("go", store=store)
+        sq = await open_store(store)
+        taken = await sq.acquire(done.thread.branch, "run", now_ms)
+        assert isinstance(taken, Ok)
+        await taken.value.release()
+        LIVE[done.thread.branch] = taken.value
+        try:
+            refused = await done.thread.cancel(LOCAL_OPERATOR)
+        finally:
+            LIVE.pop(done.thread.branch)
+        assert isinstance(refused, Err)
+        assert refused.error.code == "branch_busy"
 
     asyncio.run(main())

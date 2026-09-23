@@ -25,6 +25,7 @@ from threads.log import (
     ThreadStartedEvent,
     UserInputEvent,
 )
+from threads.loop.runtime import LOST
 from threads.reduce import Fold
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
@@ -67,6 +68,10 @@ async def append(
             return drafts
         done = await writer.append(drafts.value, companion)
         if isinstance(done, Err):
+            if done.error.code in LOST:
+                # The run here lost the branch to another holder: to the caller that is the
+                # same as a lease held elsewhere.
+                return Err(ParseError("branch_busy", done.error.message))
             return done
         return Ok(Appended(event_id=done.value[0].event_id))
 
