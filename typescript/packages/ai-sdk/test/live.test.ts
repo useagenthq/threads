@@ -4,8 +4,8 @@ import { memoryContext } from "@threads/core/adapter";
 import { type AiSdkOptions, aiSdk } from "../src";
 
 // Live gate: the bridge is qualified per provider package, which this repo
-// doesn't install. Point THREADS_LIVE_AI_SDK at a module whose default export is a
-// LanguageModelV4, and set THREADS_LIVE=1.
+// doesn't install. Point THREADS_LIVE_AI_SDK at a module whose default export is a factory
+// `(fetch) => LanguageModelV4` that builds its provider with that fetch, and set THREADS_LIVE=1.
 
 const target = process.env["THREADS_LIVE_AI_SDK"];
 const live = process.env["THREADS_LIVE"] === "1" && target !== undefined;

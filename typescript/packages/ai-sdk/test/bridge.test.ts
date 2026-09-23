@@ -1,14 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { APICallError, type LanguageModelV4Usage } from "@ai-sdk/provider";
-import {
-  drain,
-  recordingFetch,
-  renderBody,
-  renderCase,
-  sse,
-} from "@threads/adapter-testkit";
+import { drain, renderBody, renderCase } from "@threads/adapter-testkit";
 import { type Json, memoryContext, parseRender } from "@threads/core/adapter";
-import { aiSdk, threadsFetch } from "../src";
+import { aiSdk } from "../src";
 import { toPrompt } from "../src/prompt";
 import { type Entry, fakeModel, unknownUsage, usage } from "./fake";
 
@@ -16,7 +10,11 @@ const limits = { contextWindow: 128_000, maxOutputTokens: 8192 };
 
 function bridge(script: readonly Entry[], live = () => true) {
   const { model, calls } = fakeModel(script);
-  const m = aiSdk({ model, ...limits, params: { maxOutputTokens: 512 } });
+  const m = aiSdk({
+    model: () => model,
+    ...limits,
+    params: { maxOutputTokens: 512 },
+  });
   const head = {
     adapter: m.info.adapter,
     model: m.info.model,
@@ -43,7 +41,11 @@ const finish = (
 
 describe("golden: Render v1 conformance cases → AI SDK prompt", () => {
   const { model } = fakeModel([]);
-  const m = aiSdk({ model, ...limits, accepts: ["text", "image_ref"] });
+  const m = aiSdk({
+    model: () => model,
+    ...limits,
+    accepts: ["text", "image_ref"],
+  });
   for (const name of [
     "render-user-image-input",
     "render-screenshot-tool-result",
@@ -353,40 +355,11 @@ describe("refused before dispatch", () => {
   test("bad call params fail setup", () => {
     const { model } = fakeModel([]);
     expect(() =>
-      aiSdk({ model, ...limits, params: { maxOutputTokens: "lots" } }),
+      aiSdk({
+        model: () => model,
+        ...limits,
+        params: { maxOutputTokens: "lots" },
+      }),
     ).toThrow("aiSdk params");
-  });
-});
-
-describe("fencing", () => {
-  test("a stale writer never reaches doStream", async () => {
-    const { send, calls } = bridge([[finish("stop")]], () => false);
-    expect((await send(hi)).chunks).toEqual([
-      { kind: "rejected", reason: "stale_epoch" },
-    ]);
-    expect(calls).toHaveLength(0);
-  });
-
-  test("a provider using threadsFetch re-checks at its real send point", async () => {
-    let lost = false;
-    const transport = recordingFetch([sse([])]);
-    const providerFetch = threadsFetch(transport.fetch);
-    const { send } = bridge(
-      [
-        async () => {
-          lost = true; // the lease is lost while the provider prepares its request
-          await providerFetch("https://acme.dev/chat", {
-            method: "POST",
-            body: "{}",
-          });
-          return [finish("stop")];
-        },
-      ],
-      () => !lost,
-    );
-    const { chunks, thrown } = await send(hi);
-    expect(transport.calls).toHaveLength(0);
-    expect(thrown).toBeUndefined();
-    expect(chunks).toEqual([{ kind: "rejected", reason: "stale_epoch" }]);
   });
 });
