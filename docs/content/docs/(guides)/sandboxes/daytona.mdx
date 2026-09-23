@@ -12,10 +12,7 @@ icon: Server
 ```ts
 import { daytona } from "@threads/daytona";
 
-const daytonaSandbox = daytona({
-  apiKey: process.env["DAYTONA_API_KEY"] ?? "",
-  ttlMinutes: 60,
-});
+const daytonaSandbox = daytona({ ttlMinutes: 60 }); // DAYTONA_API_KEY
 ```
 
 </Tab>
@@ -31,14 +28,14 @@ daytona_sandbox = daytona(snapshot="my-snapshot", lifetime_ms=60 * 60_000)  # DA
 </Tabs>
 
 <Callout>
-In TypeScript, `apiKey` is required. Python falls back to the `DAYTONA_API_KEY` environment variable.
+The key comes from the `DAYTONA_API_KEY` environment variable unless you pass `apiKey` / `api_key`. It is read when you call `check()` or start the first run, not when you build the sandbox.
 </Callout>
 
 ## Options
 
 | TypeScript | Python | Default | What it does |
 |---|---|---|---|
-| `apiKey` | `api_key` | required (TS), `DAYTONA_API_KEY` (Python) | Authenticates threads' calls to Daytona. Never enters the sandbox. |
+| `apiKey` | `api_key` | `DAYTONA_API_KEY` | Authenticates threads' calls to Daytona. Never enters the sandbox. |
 | `apiUrl` | `api_url` | `https://app.daytona.io/api` | Daytona API endpoint. |
 | `image` | `snapshot` | Daytona's default | The Daytona snapshot new sandboxes start from. |
 | `ttlMinutes` | `lifetime_ms` | 60 minutes (TS), none (Python) | How long a sandbox lives before Daytona deletes it. |
@@ -52,7 +49,7 @@ In TypeScript, `apiKey` is required. Python falls back to the `DAYTONA_API_KEY` 
 ```ts
 const open = agent({
   model,
-  sandbox: daytona({ apiKey: process.env["DAYTONA_API_KEY"] ?? "", network: "open" }),
+  sandbox: daytona({ network: "open" }),
   egress: "unenforced",
 });
 ```

@@ -44,19 +44,18 @@ assistant = agent(
 | Provider | TypeScript | Python | Stored in |
 |---|---|---|---|
 | Local | `localMemory()` from `@threads/core` | `local_memory()` from `threads` | The run's own SQLite store. Full-text search, no extra service. |
-| Supermemory | `supermemory({ apiKey })` from `@threads/supermemory` | `supermemory()` from `threads.supermemory` | Supermemory. Python reads `SUPERMEMORY_API_KEY`. |
-| Zep | `zep({ apiKey })` from `@threads/zep` | `zep()` from `threads.zep` | Zep Cloud. Python reads `ZEP_API_KEY`. |
+| Supermemory | `supermemory()` from `@threads/supermemory` | `supermemory()` from `threads.supermemory` | Supermemory. Reads `SUPERMEMORY_API_KEY` unless you pass `apiKey` / `api_key`. |
+| Zep | `zep()` from `@threads/zep` | `zep()` from `threads.zep` | Zep Cloud. Reads `ZEP_API_KEY` unless you pass `apiKey` / `api_key`. |
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
 ```ts
-import { secret } from "@threads/core";
 import { supermemory } from "@threads/supermemory";
 import { zep } from "@threads/zep";
 
-memory: supermemory({ apiKey: secret("SUPERMEMORY_API_KEY") }),
-memory: zep({ apiKey: secret("ZEP_API_KEY") }),
+memory: supermemory(), // SUPERMEMORY_API_KEY
+memory: zep(), // ZEP_API_KEY
 ```
 
 </Tab>
