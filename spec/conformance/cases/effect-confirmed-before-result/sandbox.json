@@ -1,0 +1,7 @@
+{
+  "tools": {
+    "send_email": {
+      "output": "sent message_id=<m-002>"
+    }
+  }
+}

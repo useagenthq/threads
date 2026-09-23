@@ -1,0 +1,11 @@
+{
+  "name": "effect-dedup-window-from-first-attempt",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "An idempotent effect crashed twice: the first attempt was settled safe_to_retry by provider dedup and re-sent, and the re-send crashed too. A deduped re-send doesn't renew the provider's retention, so the window runs from the FIRST attempt under the key. It has passed, so recovery marks the effect unknown and parks it, although the last attempt alone would still be inside the window.",
+  "clock": {
+    "now": 1790000018000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

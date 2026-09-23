@@ -1,0 +1,11 @@
+{
+  "name": "effect-confirmed-before-result",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Crash after effect_resolved{confirmed_success} but before its tool_result. The settlement is final: recovery appends the result from the resolution's result_ref and never dispatches the tool again, whatever its class. Only safe_to_retry, not_sent and assume_not_done may lead to another dispatch.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

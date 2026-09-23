@@ -1,0 +1,7 @@
+{
+  "tools": {
+    "charge_card": {
+      "output": "charged ch_999 amount_cents=2000"
+    }
+  }
+}

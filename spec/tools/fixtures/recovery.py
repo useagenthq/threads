@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import ALICE, NOW, T0, sha
+from .common import ALICE, BRANCH, DAY, NOW, T0, sha, tool
 from .jcs import canonical
 from .log import Log, reduce
 from .pieces import (
@@ -23,6 +23,8 @@ from .pieces import (
 
 if TYPE_CHECKING:
     import pathlib
+
+    from .jcs import Obj
 
 
 def build(root: pathlib.Path) -> None:
@@ -184,5 +186,130 @@ def build(root: pathlib.Path) -> None:
         extra={
             "model.json": NO_MODEL,
             "sandbox.json": {"tools": {"send_email": {"output": "sent"}}},
+        },
+    )
+    _confirmed_before_result(root)
+    _dedup_window_from_first_attempt(root)
+
+
+def _confirmed_before_result(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [EMAIL])
+    effect_call(log, EMAIL, EMAIL_IN, "Email bob that the build is green.")
+    log.add("effect_begin", {"call_id": "call_1", "attempt": 1})
+    log.add("effect_unknown", {"call_id": "call_1", "reason": "crash_after_begin"})
+    out = b"sent message_id=<m-001@example.com>"
+    resolved: Obj = {
+        "call_id": "call_1",
+        "outcome": "confirmed_success",
+        "by": "reconcile",
+        "result_ref": log.art(out, "text/plain"),
+    }
+    log.add("effect_resolved", resolved)
+    write_case(
+        root,
+        case(
+            "effect-confirmed-before-result",
+            "cancellation_resume",
+            "recover",
+            "Crash after effect_resolved{confirmed_success} but before its tool_result. The "
+            "settlement is final: recovery appends the result from the resolution's result_ref "
+            "and never dispatches the tool again, whatever its class. Only safe_to_retry, "
+            "not_sent and assume_not_done may lead to another dispatch.",
+            model_script="model.json",
+            sandbox_script="sandbox.json",
+        ),
+        log,
+        {
+            "outcome": "ok",
+            "state": reduce(log, NOW),
+            "appended": [
+                {
+                    "type": "tool_result",
+                    "actor_kind": "recovery",
+                    "epoch": 2,
+                    "data": {
+                        "call_id": "call_1",
+                        "is_error": False,
+                        "origin": "executed",
+                        "preview": out.decode(),
+                    },
+                },
+                *TAIL,
+            ],
+            "sandbox": {"dispatches": {"send_email": 0}, "new_executions": {"send_email": 0}},
+        },
+        extra={
+            "model.json": {"responses": [FINAL]},
+            "sandbox.json": {"tools": {"send_email": {"output": "sent message_id=<m-002>"}}},
+        },
+    )
+
+
+def _dedup_window_from_first_attempt(root: pathlib.Path) -> None:
+    # A 10 s dedup window. The first send (seq 7, T0 + 7 s) was deduped and re-sent at seq 10
+    # (T0 + 10 s), which crashed too. At T0 + 18 s the key is 11 s past its FIRST acceptance:
+    # outside the window, even though the last send is only 8 s old.
+    charge = tool(
+        "charge_card",
+        "Charge a customer card.",
+        {"amount_cents": {"type": "integer"}, "customer": {"type": "string"}},
+        "idempotent",
+        10_000,
+    )
+    log = Log()
+    started(log, [charge])
+    inp: Obj = {"amount_cents": 2000, "customer": "c_42"}
+    effect_call(log, charge, inp, "Charge customer c_42 $20.")
+    log.add("effect_begin", {"call_id": "call_1", "attempt": 1})
+    log.add("effect_unknown", {"call_id": "call_1", "reason": "crash_after_begin"})
+    retry: Obj = {"call_id": "call_1", "outcome": "safe_to_retry", "by": "provider_dedup"}
+    log.add("effect_resolved", retry)
+    log.add("effect_begin", {"call_id": "call_1", "attempt": 2})
+    now = T0 + 18_000
+    write_case(
+        root,
+        case(
+            "effect-dedup-window-from-first-attempt",
+            "cancellation_resume",
+            "recover",
+            "An idempotent effect crashed twice: the first attempt was settled safe_to_retry by "
+            "provider dedup and re-sent, and the re-send crashed too. A deduped re-send doesn't "
+            "renew the provider's retention, so the window runs from the FIRST attempt under the "
+            "key. It has passed, so recovery marks the effect unknown and parks it, although the "
+            "last attempt alone would still be inside the window.",
+            now,
+            model_script="model.json",
+            sandbox_script="sandbox.json",
+        ),
+        log,
+        {
+            "outcome": "ok",
+            "state": reduce(log, now),
+            "appended": [
+                {
+                    "type": "effect_unknown",
+                    "actor_kind": "recovery",
+                    "epoch": 2,
+                    "data": {"call_id": "call_1", "reason": "crash_after_begin"},
+                },
+                {
+                    "type": "parked",
+                    "actor_kind": "recovery",
+                    "epoch": 2,
+                    "data": {
+                        "address": {"kind": "effect", "id": f"{BRANCH}:call_1"},
+                        "reason": "effect_unknown",
+                        "expires_at": now + DAY,
+                    },
+                },
+            ],
+            "sandbox": {"dispatches": {"charge_card": 0}, "new_executions": {"charge_card": 0}},
+        },
+        extra={
+            "model.json": NO_MODEL,
+            "sandbox.json": {
+                "tools": {"charge_card": {"output": "charged ch_999 amount_cents=2000"}}
+            },
         },
     )

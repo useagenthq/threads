@@ -1046,6 +1046,16 @@
           "kind": "case",
           "ref": "crash-between-begin-commit",
           "status": "planned"
+        },
+        {
+          "kind": "case",
+          "ref": "effect-confirmed-before-result",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "effect-dedup-window-from-first-attempt",
+          "status": "implemented"
         }
       ]
     },
