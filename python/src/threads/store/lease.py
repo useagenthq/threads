@@ -113,19 +113,48 @@ def append(conn: sqlite3.Connection, mine: Lease, now: int, batch: Batch) -> Par
     return None
 
 
-def create(
-    conn: sqlite3.Connection,
-    row: Branch,
-    rows: Sequence[tuple[StoredEvent, bytes]],
-    lease: Lease | None,
-) -> ParseError | None:
-    """Inserts a new branch with its first rows (a child's fork event) and, when it is
-    runnable, its first lease, in one transaction."""
+def create(conn: sqlite3.Connection, row: Branch, lease: Lease | None) -> ParseError | None:
+    """Inserts a new branch and, when given, its first lease, in one transaction. A child
+    starts `forking` with the lease that fences its fork: it is
+    neither listed nor runnable until `finish_fork`."""
     with transaction(conn):
         if branch(conn, row.branch_id) is not None:
             return ParseError("seq_conflict", f"branch {row.branch_id} already exists")
         insert_branch(conn, row)
-        insert_events(conn, rows, row.head_hash)
         if lease is not None:
             _put(conn, row.branch_id, lease)
     return None
+
+
+def finish_fork(
+    conn: sqlite3.Connection,
+    row: Branch,
+    fork: tuple[StoredEvent, bytes],
+    mine: Lease,
+) -> ParseError | None:
+    """Step 4: the child's fork event and its final state in one transaction, only while the
+    fork still holds the child's lease and the branch is still forking. A child that is not
+    runnable (a repair) keeps no lease."""
+    with transaction(conn):
+        if _stale(conn, row.branch_id, mine, fork[0].time):
+            return ParseError("stale_epoch", f"epoch {mine.epoch} no longer holds the lease")
+        stored = branch(conn, row.branch_id)
+        if stored is None or stored.state != "forking":
+            return ParseError("seq_conflict", f"branch {row.branch_id} is not forking")
+        insert_events(conn, (fork,), row.head_hash)
+        conn.execute(
+            "UPDATE branches SET state = ? WHERE branch_id = ?", (row.state, row.branch_id)
+        )
+        if row.state != "ready":
+            conn.execute("DELETE FROM leases WHERE branch_id = ?", (row.branch_id,))
+    return None
+
+
+def fail_fork(conn: sqlite3.Connection, branch_id: BranchId) -> None:
+    """A fork that can't finish: its forking row becomes `fork_failed` and is never listed."""
+    with transaction(conn):
+        conn.execute(
+            "UPDATE branches SET state = 'fork_failed' WHERE branch_id = ? AND state = 'forking'",
+            (branch_id,),
+        )
+        conn.execute("DELETE FROM leases WHERE branch_id = ?", (branch_id,))

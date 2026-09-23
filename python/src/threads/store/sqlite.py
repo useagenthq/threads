@@ -19,7 +19,7 @@ from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
-from threads.store.forking import start_child
+from threads.store.forking import Forking, forking, start_child
 from threads.store.lines import Draft, header_line
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
@@ -77,7 +77,7 @@ class SqliteStore:
         row = sql.Branch(
             branch_id, thread_id, self._tenant, None, None, header, "ready", 0, sha256_hex(header)
         )
-        return _result(await self._worker.call(lambda c: lease.create(c, row, (), None)))
+        return _result(await self._worker.call(lambda c: lease.create(c, row, None)))
 
     async def import_log(self, log: VerifiedLog) -> Ok[None] | Err[ParseError]:
         """Stores a verified export's lines byte for byte: parents referenced, never copied.
@@ -192,27 +192,57 @@ class SqliteStore:
     async def fork(
         self, request: ForkRequest, holder_id: str, clock: Clock
     ) -> Ok[Writer | None] | Err[ParseError]:
-        """Creates a child at the parent's line `at_seq`: its own header and `fork` event in
-        one transaction, with its first lease. Parent rows are referenced, never copied. A
-        repair child is inspection-only and gets no writer.
+        """Creates a child at the parent's line `at_seq` with nothing to restore (a repair, or a
+        test): `begin_fork` then `finish_fork`. Parent rows are referenced, never copied. A
+        repair child is inspection-only and gets no writer."""
+        begun = await self.begin_fork(
+            request.parent, request.at_seq, request.child, holder_id, clock
+        )
+        if isinstance(begun, Err):
+            return begun
+        finished = await self.finish_fork(begun.value, request.data, clock)
+        if isinstance(finished, Err):
+            await self.fail_fork(begun.value)
+        return finished
 
-        Fork-point eligibility (semantic rule 16) and the sandbox restore belong to the fork
-        operation above the store."""
+    async def begin_fork(
+        self, parent: BranchId, at_seq: int, child: BranchId, holder_id: str, clock: Clock
+    ) -> Ok[Forking] | Err[ParseError]:
+        """Stores the child as `forking` with its first lease, which fences the ledger rows of
+        whatever the fork restores. Fork-point eligibility (semantic rule 16) and the restore
+        belong to the fork operation above the store."""
         now = clock()
-        read = await self._prefix(request.parent, request.at_seq, now)
+        read = await self._prefix(parent, at_seq, now)
         if isinstance(read, Err):
             return read
-        started = start_child(read.value, self._tenant, request.child, request.data, now)
-        if isinstance(started, Err):
-            return started
-        start = started.value
-        taken = lease.Lease(holder_id, start.epoch, now + lease.TTL_MS) if start.runnable else None
-        error = await self._worker.call(lambda c: lease.create(c, start.row, (start.fork,), taken))
+        started = forking(read.value, self._tenant, child, holder_id, now)
+        held = started.owner.lease
+        error = await self._worker.call(lambda c: lease.create(c, started.row, held))
+        return Err(error) if error is not None else Ok(started)
+
+    async def finish_fork(
+        self, started: Forking, data: Mapping[str, JsonValue], clock: Clock
+    ) -> Ok[Writer | None] | Err[ParseError]:
+        """Writes the child's `fork` event and makes it ready (or inspection-only) in one
+        transaction, fenced by the fork's lease."""
+        built = start_child(started, data, clock())
+        if isinstance(built, Err):
+            return built
+        start, held = built.value, started.owner.lease
+        error = await self._worker.call(lambda c: lease.finish_fork(c, start.row, start.fork, held))
         if error is not None:
             return Err(error)
-        if taken is None:
+        if not start.runnable:
             return Ok(None)
-        return Ok(Writer(self._worker, taken, start.fold, start.fork[1], clock))
+        return Ok(Writer(self._worker, held, start.fold, start.fork[1], clock))
+
+    async def fail_fork(self, started: Forking) -> None:
+        """The fork failed: the child becomes `fork_failed` and is never listed."""
+        await self._worker.call(lambda c: lease.fail_fork(c, started.row.branch_id))
+
+    async def branch(self, branch_id: BranchId) -> Ok[sql.Branch] | Err[ParseError]:
+        """The branch's row, in any state; another tenant's is branch_not_found."""
+        return await self._owned(branch_id)
 
     async def _prefix(
         self, parent: BranchId, at_seq: int, now: int

@@ -19,10 +19,14 @@ checkpoint. Unknown critical events never parse: they refuse the log."""
 
 @dataclass(frozen=True, slots=True)
 class ParseError:
-    code: ErrorCode | Literal["branch_not_found", "branch_exists"]
+    code: (
+        ErrorCode
+        | Literal["branch_not_found", "branch_exists", "capability_missing", "invalid_request"]
+    )
     """A wire ErrorCode, or an ApiErrorCode (spec/schema/api.schema.json) the store returns and
     never logs: branch_not_found for a branch that is absent or another tenant's,
-    branch_exists for a thread another tenant owns."""
+    branch_exists for a thread another tenant owns, capability_missing for a fork with no
+    sandbox adapter for its snapshot's provider, invalid_request for a malformed call."""
     message: str
     seq: int | None = None
     """The line's seq when it has a readable one; 0 for a header (schema README wire rule 8)."""
