@@ -1,5 +1,6 @@
 import type { EventOf, Fold } from "../fold/state";
 import type { KnownEvent, ToolSpec } from "../log";
+import { maxPauseContinuations } from "./policy";
 
 // What the open turn looks like, read from the log. The loop decides every step from these,
 // so a fresh run and a recovered one continue the same way (invariant 1).
@@ -69,8 +70,30 @@ export function nextStep(events: readonly KnownEvent[], fold: Fold): Step {
   const after = turn.slice(at + 1);
   if (after.some(isTurnRequest)) return { kind: "request" };
   if (!after.some((e) => e.type === "tool_call" || e.type === "injected"))
-    return { kind: "respond", response };
+    return resumesPause(turn, response, fold)
+      ? { kind: "request" }
+      : { kind: "respond", response };
   return endsTurn(after, fold) ? { kind: "end_turn" } : { kind: "request" };
+}
+
+/**
+ * pause_turn: ask again with nothing added, so the paused content goes back as-is, while the
+ * turn's pauses stay within the cap. Past it, respond ends the turn.
+ */
+function resumesPause(
+  turn: readonly KnownEvent[],
+  response: Response,
+  fold: Fold,
+): boolean {
+  if (
+    response.data.stop_reason !== "pause_turn" ||
+    response.data.content.some((p) => p.type === "tool_use")
+  )
+    return false;
+  const pauses = turn.filter(
+    (e) => isTurnResponse(e, fold) && e.data.stop_reason === "pause_turn",
+  ).length;
+  return pauses <= maxPauseContinuations(fold.policy);
 }
 
 /** A tool with ends_turn returned a success: no further model call. */

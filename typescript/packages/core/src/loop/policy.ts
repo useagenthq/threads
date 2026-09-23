@@ -60,6 +60,11 @@ export function contextPolicy(policy: Policy | undefined): Context {
   return policy?.context ?? CONTEXT_DEFAULTS;
 }
 
+/** pause_turn re-requests per turn; absent means 3 (spec/schema/README.md, turn endings). */
+export function maxPauseContinuations(policy: Policy | undefined): number {
+  return policy?.context?.max_pause_continuations ?? 3;
+}
+
 /** A Threshold in tokens: permille of the effective window W. */
 export function tokens(
   threshold: z.infer<typeof Threshold>,

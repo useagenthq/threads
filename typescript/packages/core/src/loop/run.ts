@@ -55,11 +55,28 @@ export async function runLoop(s: Session): Promise<LoopEnd> {
   }
 }
 
+/** spec/schema/README.md, "Turn endings by stop_reason". */
 function respond(s: Session, response: Response): Halt | undefined {
   if (response.data.content.some((p) => p.type === "tool_use"))
     return recordCalls(s, response);
-  if (response.data.stop_reason === "max_tokens") return continuation(s);
-  return missingCandidate(s);
+  const stop = response.data.stop_reason;
+  switch (stop) {
+    case "end_turn":
+    case "stop_sequence":
+    case "refusal":
+    case "tool_use":
+      return missingCandidate(s);
+    case "max_tokens":
+      return continuation(s);
+    case "context_window_exceeded":
+      return endTurn(s, "context_exhausted");
+    // A pause within the cap re-requests before respond (turn.ts); here it is past the cap.
+    case "pause_turn":
+    case "other":
+      return endTurn(s, "error");
+    default:
+      return assertNever(stop);
+  }
 }
 
 /** ask to continue, up to max_output_continuations per turn, then max_output. */
