@@ -424,7 +424,7 @@ async def cancel(
 
 ### compact
 
-Records a compaction request (compaction_requested) while the thread is idle; the thread's next run summarizes everything up to the request before its first model request, then answers from the summary. The outcome, compacted or compaction_failed, is in the timeline, not an error of compact(). branch_busy: a turn is in progress, one parked on an approval or a question included; try again when it ends. invalid_transition: a compaction is already requested, or there is nothing to compact yet. branch_not_runnable: an inspection-only branch.
+Records a compaction request (compaction_requested) while the thread is idle; the thread's next run summarizes everything up to the request before its first model request, then answers from the summary. The outcome, compacted or compaction_failed, is in the timeline, not an error of compact(). branch_busy: a turn is in progress, one parked on an approval or a question included; try again when it ends. invalid_request: instructions is an empty string. invalid_transition: a compaction is already requested, or there is nothing to compact yet. branch_not_runnable: an inspection-only branch.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -454,10 +454,10 @@ async def compact(
 </Field>
 
 <Field name="instructions" type={"string"}>
-  Extra guidance for the summary, for example what to keep. Omitted: the default summary instructions.
+  Extra guidance for the summary, for example what to keep; non-empty. Omitted: the default summary instructions.
 </Field>
 
-**Returns an error value** with one of these codes: `forbidden`, `branch_busy`, `branch_not_runnable`, `invalid_transition`.
+**Returns an error value** with one of these codes: `forbidden`, `invalid_request`, `branch_busy`, `branch_not_runnable`, `invalid_transition`.
 
 ### setModel / set_model
 

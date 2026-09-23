@@ -56,7 +56,7 @@ describe("agent outputStyles", () => {
     }
     // Untyped config, as from a JSON file: the check still refuses a non-string text.
     const untyped: Record<string, string> = JSON.parse('{"concise": 3}');
-    const run = plain(untyped).run("hi");
+    const run = plain(untyped).run("hi", { store: sqlite(":memory:") });
     await expect(run).rejects.toBeInstanceOf(ConfigError);
   });
 
@@ -143,7 +143,7 @@ describe("Thread.setOutputStyle", () => {
 describe("rule 29 at the boundary", () => {
   const style = (
     text: string,
-    kind: "user" | "model",
+    kind: "user" | "model" | "host",
     id = "concise",
   ): EventDraft => ({
     type: "injected",
@@ -167,6 +167,8 @@ describe("rule 29 at the boundary", () => {
         style("Shout.", "user"),
         style(STYLES.concise, "user", "loud"),
         style(STYLES.concise, "model"),
+        // The host re-appends a style only as the restore right after a compaction.
+        style(STYLES.concise, "host"),
       ])
         expect(code(writer.append([bad]))).toBe("invalid_transition");
       expect(code(writer.append([style(STYLES.concise, "user")]))).toBe("ok");
@@ -180,6 +182,9 @@ describe("rule 29 at the boundary", () => {
       "output-style-text-mismatch-rejected",
       "output-style-unknown-name-rejected",
       "output-style-by-model-rejected",
+      "output-style-host-orphan-rejected",
+      "output-style-host-open-turn-rejected",
+      "output-style-host-late-rejected",
     ]) {
       const c = loadCase(name);
       const imported = caseStore(c).store.importLog(c.log ?? new Uint8Array());

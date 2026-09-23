@@ -12,10 +12,13 @@ from .thread_methods import CONCISE, FAM, STYLES, base, compacted, style, summar
 if TYPE_CHECKING:
     import pathlib
 
+    from .log import Log
+
 
 def build(root: pathlib.Path) -> None:
     _style_rendered(root)
     _style_rejections(root)
+    _host_rejections(root)
     _style_restored(root)
 
 
@@ -56,6 +59,31 @@ def _style_rejections(root: pathlib.Path) -> None:
         log = base(output_styles=STYLES)
         style(log, *injected)
         reject(root, (name, "log", desc + " Semantic rule 29: invalid_transition."), log)
+
+
+def _host_rejections(root: pathlib.Path) -> None:
+    """The host re-appends a style only as the first restore after the compaction that dropped
+    it: never on its own, never later, never mid-turn."""
+    log = base(output_styles=STYLES)
+    style(log, "concise", CONCISE, actor="host")
+    _host(root, "output-style-host-orphan-rejected", "A host style with no compaction.", log)
+    log = base(output_styles=STYLES)
+    user(log, "Next?")
+    style(log, "concise", CONCISE, actor="host")
+    _host(root, "output-style-host-open-turn-rejected", "A host style inside a turn.", log)
+    log = base(output_styles=STYLES)
+    first = log.events[1]
+    style(log, "concise", CONCISE)
+    last = log.events[-1]
+    user(log, "Continue.")
+    compacted(log, (first, last), summarize(log))
+    log.add("heartbeat", {"running_call_ids": []})
+    style(log, "concise", CONCISE, actor="host")
+    _host(root, "output-style-host-late-rejected", "A host style after the restore slot.", log)
+
+
+def _host(root: pathlib.Path, name: str, desc: str, log: Log) -> None:
+    reject(root, (name, "log", desc + " Semantic rule 29: invalid_transition."), log)
 
 
 def _style_restored(root: pathlib.Path) -> None:

@@ -146,12 +146,13 @@ async def _append(thread: Thread, drafts: list[Draft]) -> Ok[object] | Err[Parse
         ({"text": "Shout."}, "user"),
         ({"origin": {"id": "loud"}}, "user"),
         ({}, "model"),
+        ({}, "host"),
         (
             {"text": None, "ref": {"sha256": "0" * 64, "bytes": 1, "media_type": "text/plain"}},
             "user",
         ),
     ],
-    ids=["other text", "unknown name", "by the model", "a ref"],
+    ids=["other text", "unknown name", "by the model", "a host style with no compaction", "a ref"],
 )
 def test_rule_29_refuses_a_style_the_pin_doesnt_hold(
     change: dict[str, JsonValue], actor: str

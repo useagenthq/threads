@@ -17,6 +17,8 @@ export function apply(fold: Fold, line: EventLine): void {
   fold.seq = event.seq;
   fold.epoch = event.epoch;
   fold.eventIds.add(event.event_id);
+  // The restore slot is open for one event only.
+  fold.restoreStyle = undefined;
   if (line.kind === "event") applyKnown(fold, line.event);
   fold.boundaries[event.seq] =
     fold.pending.size === 0 && fold.awaiting.size === 0;
@@ -84,8 +86,10 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "schedule_fired":
       applyAgents(fold, e);
       return;
-    case "steer":
     case "injected":
+      if (e.data.source === "output_style") fold.outputStyle = e;
+      return;
+    case "steer":
     case "heartbeat":
     case "hook_decision":
     case "park_escalated":
@@ -333,6 +337,9 @@ function applyControl(fold: Fold, e: ControlEvent): void {
     case "compacted":
       fold.ranges.push([e.data.from_seq, e.data.to_seq]);
       fold.compactionFailures = 0;
+      fold.restoreStyle = dropped(fold.outputStyle, e)
+        ? fold.outputStyle
+        : undefined;
       answer(fold, e.data.cause_event_id);
       return;
     case "compaction_failed":
@@ -345,6 +352,14 @@ function applyControl(fold: Fold, e: ControlEvent): void {
     default:
       assertNever(e);
   }
+}
+
+function dropped(
+  style: EventOf<"injected"> | undefined,
+  compacted: EventOf<"compacted">,
+): boolean {
+  const { from_seq, to_seq } = compacted.data;
+  return style !== undefined && style.seq >= from_seq && style.seq <= to_seq;
 }
 
 /** An outcome naming the unanswered compaction request answers it (rule 30 checked the name). */

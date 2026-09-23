@@ -67,7 +67,20 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
   await waitScheduled(s, step);
   const refused = refusal(s.events, s.fold.policy, s.now());
   if (refused !== undefined) {
-    const stopped = s.append(draft.budgetExceeded(refused));
+    // The run ends before its ladder: an unanswered compaction request is answered with the
+    // refusal, so it never outlives the run that should have carried it out.
+    const request = s.fold.compactionRequest;
+    const answered =
+      request === undefined
+        ? []
+        : [
+            draft.compactionFailed({
+              stage: "summary",
+              reason: "model_error",
+              cause_event_id: request.event_id,
+            }),
+          ];
+    const stopped = s.append(draft.budgetExceeded(refused), ...answered);
     return stopped ?? endTurn(s, "budget_exhausted");
   }
   const gated = await gates(s);

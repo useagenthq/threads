@@ -17,6 +17,11 @@ export function compact(
   instructions: string | undefined,
 ): Planned {
   return (_events, writer) => {
+    if (instructions === "")
+      return err({
+        code: "invalid_request",
+        message: "instructions must be non-empty text, or omitted",
+      });
     const { fold } = writer.chain;
     if (fold.compactionRequest !== undefined)
       return err({

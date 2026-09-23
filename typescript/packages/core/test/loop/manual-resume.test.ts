@@ -189,7 +189,10 @@ describe("resuming a requested compaction", () => {
       type: "injected",
       type_version: 1,
       critical: true,
-      actor: { kind: "host" },
+      actor: {
+        kind: "user",
+        principal: { issuer: "api", tenant: "acme", subject: "operator" },
+      },
       data: {
         source: "output_style",
         trust: "trusted_instruction",
@@ -200,6 +203,7 @@ describe("resuming a requested compaction", () => {
     const h = asked(
       [reply(SUMMARY_TEXT)],
       { output_styles: { concise: "Be brief." } },
+      [],
       [style],
     );
     const writer = unwrap(h.store.acquire(ROOT, "crashing"));

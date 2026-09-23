@@ -1,0 +1,9 @@
+{
+  "name": "output-style-host-late-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A host style after the restore slot. Semantic rule 29: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

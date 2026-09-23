@@ -73,8 +73,29 @@ def _failed(fold: Fold, event: CompactionFailedEvent) -> ParseError | None:
     return error
 
 
+def _restore_slot(fold: Fold, event: InjectedEvent) -> bool:
+    """The event right before is a `compacted` whose range holds the latest style, this one."""
+    before = fold.events[-1] if fold.events else None
+    if not isinstance(before, CompactedEvent) or before.seq != event.seq - 1:
+        return False
+    latest = next(
+        (
+            e
+            for e in reversed(fold.events)
+            if isinstance(e, InjectedEvent) and e.data.source == "output_style"
+        ),
+        None,
+    )
+    return (
+        latest is not None
+        and before.data.from_seq <= latest.seq <= before.data.to_seq
+        and latest.data.origin.id == event.data.origin.id
+    )
+
+
 def _style(fold: Fold, event: InjectedEvent) -> ParseError | None:
-    """Rule 29: the pinned text, set by an operator between turns or restored by the host."""
+    """Rule 29: the pinned text, set by an operator between turns, or re-appended by the host as
+    the first restore after a compaction that dropped it."""
     data = event.data
     pinned = policy(fold)
     styles = None if pinned is None or pinned.output_styles is MISSING else pinned.output_styles
@@ -84,7 +105,10 @@ def _style(fold: Fold, event: InjectedEvent) -> ParseError | None:
         return reject(event, f"output style {data.origin.id} is not the pinned text")
     actor = event.actor
     if actor.kind == "host":
-        return None
+        if _restore_slot(fold, event):
+            return None
+        why = "the host re-appends an output style only right after the compaction that dropped it"
+        return reject(event, why)
     if actor.kind != "user" or actor.principal is MISSING:
         return reject(event, "an output style is set by an operator or the host")
     return reject(event, "an output style set while a turn is open") if fold.in_turn else None

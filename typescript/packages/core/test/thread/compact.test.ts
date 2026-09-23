@@ -97,6 +97,31 @@ describe("Thread.compact", () => {
     expect(unwrap(await thread.replay())).toBeUndefined();
   });
 
+  for (const budget of [{ max_turns: 1 }, { max_wall_ms: 500 }]) {
+    test(`a run refused by ${Object.keys(budget)[0]} before its ladder still answers the request`, async () => {
+      const { bot, ref, thread } = await finished([say("Hi.")], { budget });
+      unwrap(await thread.compact(operator));
+      // The first run fits the wall budget; the pause before the next one does not.
+      await Bun.sleep(600);
+      const next = await bot.run("next", { store: ref.store, thread: ref });
+      expect(next.status).toBe("budget_exhausted");
+      const log = await events(ref);
+      const tail = log.slice(
+        log.findIndex((e) => e.type === "budget_exceeded"),
+      );
+      expect(tail.map((e) => e.type)).toEqual([
+        "budget_exceeded",
+        "compaction_failed",
+        "turn_completed",
+      ]);
+      expect(tail[1]?.data).toMatchObject({
+        reason: "model_error",
+        cause_event_id: last(log, "compaction_requested").event_id,
+      });
+      expect(log.filter((e) => e.type === "model_request")).toHaveLength(1);
+    });
+  }
+
   test("a budget refusal of the summary records its failure with budget_exceeded", async () => {
     const { bot, ref, thread } = await finished([say("Hi.")], {
       budget: { max_model_requests: 1 },
@@ -118,6 +143,16 @@ describe("Thread.compact", () => {
       },
     });
     expect(log.filter((e) => e.type === "model_request")).toHaveLength(1);
+  });
+
+  test("empty instructions are invalid_request, and nothing is appended", async () => {
+    const { ref, thread } = await finished([say("Hi.")]);
+    const before = (await events(ref)).length;
+    expect(await thread.compact(operator, { instructions: "" })).toMatchObject({
+      ok: false,
+      error: { code: "invalid_request" },
+    });
+    expect((await events(ref)).length).toBe(before);
   });
 
   test("a second request before the run is invalid_transition; after the outcome one is accepted", async () => {

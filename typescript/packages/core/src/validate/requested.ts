@@ -49,8 +49,9 @@ export function checkRequestedCompacted(
 }
 
 /**
- * Rule 29: an output style is the pinned text, set by an operator between turns or restored by
- * the host; never invented, and never the agent's own.
+ * Rule 29: an output style is the pinned text, set by an operator between turns or re-appended
+ * by the host as the first restore after a compaction that dropped it; never invented, and never
+ * the agent's own.
  */
 export function checkOutputStyle(
   fold: Fold,
@@ -63,7 +64,12 @@ export function checkOutputStyle(
   if (pinned !== e.data.text)
     return invalid(`output style ${e.data.origin.id} is not the pinned text`);
   const { kind, principal } = e.actor;
-  if (kind === "host") return undefined;
+  if (kind === "host")
+    return fold.restoreStyle?.data.origin.id === e.data.origin.id
+      ? undefined
+      : invalid(
+          "the host re-appends an output style only right after the compaction that dropped it",
+        );
   if (kind !== "user" || principal === undefined)
     return invalid("an output style is set by an operator or the host");
   return fold.turnOpen

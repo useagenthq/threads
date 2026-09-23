@@ -4,6 +4,7 @@ before its first turn request, and answered by exactly one outcome that names it
 import asyncio
 from pathlib import Path
 
+import pytest
 from compact_kit import SUMMARY, body, kinds, logged, rejected, request_of, requests, text
 from pydantic import BaseModel, JsonValue
 
@@ -241,6 +242,43 @@ def test_a_budget_refusal_answers_the_request_before_the_turn_ends() -> None:
         tail = logged_kinds[-3:]
         assert tail == ["budget_exceeded", "compaction_failed", "turn_completed"]
         assert logged_kinds.count("model_request") == 1
+
+    asyncio.run(main())
+
+
+@pytest.mark.parametrize("limit", [{"max_turns": 1}, {"max_wall_ms": 500}], ids=["turns", "wall"])
+def test_a_run_limit_before_the_ladder_still_answers_the_request(limit: dict[str, int]) -> None:
+    async def main() -> None:
+        bot = agent(
+            model=scripted_model({"responses": [text("Hi.")]}), budget=Budget.model_validate(limit)
+        )
+        store = sqlite(":memory:")
+        first = await bot.run("hi", store=store)
+        assert isinstance(await first.thread.compact(OP), Ok)
+        await asyncio.sleep(0.6)
+        await bot.run(NEXT, store=store, thread=first.thread)
+        events = await logged(first.thread)
+        request = request_of(events)
+        at = kinds(events).index("budget_exceeded")
+        assert kinds(events)[at:] == ["budget_exceeded", "compaction_failed", "turn_completed"]
+        failed = events[at + 1]
+        assert isinstance(failed, CompactionFailedEvent)
+        assert (failed.data.reason, failed.data.cause_event_id) == ("model_error", request.event_id)
+        assert kinds(events).count("model_request") == 1
+
+    asyncio.run(main())
+
+
+def test_empty_instructions_are_an_invalid_request() -> None:
+    async def main() -> None:
+        first = await agent(model=scripted_model({"responses": [text("Hi.")]})).run(
+            "hi", store=sqlite(":memory:")
+        )
+        before = len(await logged(first.thread))
+        refused = await first.thread.compact(OP, instructions="")
+        assert isinstance(refused, Err)
+        assert refused.error.code == "invalid_request"
+        assert len(await logged(first.thread)) == before
 
     asyncio.run(main())
 

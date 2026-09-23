@@ -45,6 +45,7 @@ export function asked(
   responses: readonly unknown[],
   policy?: Policy,
   before: readonly EventDraft[] = [],
+  idle: readonly EventDraft[] = [],
 ): Harness {
   return harness(
     [],
@@ -52,6 +53,7 @@ export function asked(
       userInput("first"),
       ...before,
       turnDone,
+      ...idle,
       requested("Keep the numbers."),
       userInput("next"),
     ],

@@ -25,6 +25,8 @@ async def compact(
     model request, and records the outcome."""
     if principal.tenant != store.tenant:
         return forbidden("another tenant's thread")
+    if instructions == "":
+        return Err(ParseError("invalid_request", "instructions must be non-empty text, or omitted"))
 
     def build(fold: Fold) -> Ok[Sequence[Draft]] | Err[ParseError]:
         if fold.compaction_request is not None:

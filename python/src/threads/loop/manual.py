@@ -5,7 +5,7 @@ anything else, and answered by exactly one outcome. Every step is decided from t
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, assert_never
 
 from threads.log import (
     CompactionRequestedEvent,
@@ -123,6 +123,8 @@ async def _advance(rt: Runtime, request: CompactionRequestedEvent, step: Stage) 
             raise AssertionError("recovery settles an open side request before the loop runs")
         case "summary" | "failed":
             return await _answer(rt, request, step, "host")
+        case _:
+            assert_never(step.kind)
 
 
 async def _send(rt: Runtime, request: CompactionRequestedEvent, number: int) -> Halt | None:

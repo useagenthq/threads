@@ -104,6 +104,13 @@ export type Fold = {
   compactionRequest: EventOf<"compaction_requested"> | undefined;
   /** The first user_input of the resolved chain: where a requested compaction's range starts. */
   firstInput: EventOf<"user_input"> | undefined;
+  /** The latest output style set on the chain (rule 29). */
+  outputStyle: EventOf<"injected"> | undefined;
+  /**
+   * The style the L3 restore may re-append as the host, open only for the event right after a
+   * `compacted` whose dropped range holds the latest style (rule 29).
+   */
+  restoreStyle: EventOf<"injected"> | undefined;
   readonly approvals: Map<
     string,
     { readonly callId: string; readonly argsHash: string; consumed: boolean }
@@ -147,6 +154,8 @@ export function emptyFold(): Fold {
     compactionFailures: 0,
     compactionRequest: undefined,
     firstInput: undefined,
+    outputStyle: undefined,
+    restoreStyle: undefined,
     approvals: new Map(),
     budgetBlocked: false,
     handedOff: false,
