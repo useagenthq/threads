@@ -33,13 +33,17 @@ export class Command {
     for (const wake of this.wakes) wake();
   }
 
-  /** A socket replaying the output, each frame split in two, closing after the exit. */
-  socket(): LogSocket {
+  /**
+   * A socket replaying the output, each frame split in two, closing after the exit. Unmarked
+   * (as Daytona answers a client that names no SDK version), the markers are left out.
+   */
+  socket(marked: boolean): LogSocket {
     const messages: Listener[] = [];
     const closes: Listener[] = [];
     let sent = 0;
     let closed = false;
-    const send = (chunk: Uint8Array) => {
+    const send = (frame: Uint8Array) => {
+      const chunk = marked ? frame : frame.subarray(3);
       const half = Math.ceil(chunk.length / 2);
       for (const part of [chunk.slice(0, half), chunk.slice(half)])
         for (const listener of messages) listener({ data: part.buffer });

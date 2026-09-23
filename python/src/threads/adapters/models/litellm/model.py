@@ -12,7 +12,7 @@ routes are refused at setup (`transport_fence_unsupported`), never run with a we
 
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable, Mapping
 from functools import partial
-from typing import TypeGuard, Unpack
+from typing import Protocol, TypeGuard, Unpack
 
 import litellm as bridge
 import openai as sdk
@@ -68,26 +68,31 @@ class LiteLLMModel:
             yield prepared
             return
         _, body = prepared
-        assembler = Assembler()
-        started = False
         try:
             with transport.attempt(context):
                 stream = await self._complete(**body, num_retries=0, max_retries=0)
-            if not _is_stream(stream):
-                raise TypeError("LiteLLM returned no stream")
-            async for raw in stream:
-                for chunk in assembler.feed(raw):
-                    started = True
-                    yield chunk
         except sdk.APIError as error:
             if transport.stale(error):
                 yield Rejected("stale_epoch")
                 return
-            if started or not isinstance(error, sdk.APIStatusError):
+            if not isinstance(error, sdk.APIStatusError):
                 raise
             too_long = isinstance(error, ContextWindowExceededError)
             yield transport.rejection(error.status_code, _headers(error), too_long)
             return
+        if not _is_stream(stream):
+            raise TypeError("LiteLLM returned no stream")
+        # The provider answered 200: a later failure is uncertainty to raise, even the status
+        # error LiteLLM makes up for it (MidStreamFallbackError, 500). The stream is closed
+        # here, before send ends: left open, the event loop's shutdown closes its HTTP body
+        # generator while it runs ("aclose(): asynchronous generator is already running").
+        assembler = Assembler()
+        try:
+            async for raw in stream:
+                for chunk in assembler.feed(raw):
+                    yield chunk
+        finally:
+            await stream.aclose()
         for chunk in assembler.finish():
             yield chunk
 
@@ -106,8 +111,14 @@ def _is_headers(value: object) -> TypeGuard[Mapping[str, str]]:
     return isinstance(value, Mapping)
 
 
-def _is_stream(value: object) -> TypeGuard[AsyncIterable[object]]:
-    return isinstance(value, AsyncIterable)
+class _Stream(AsyncIterable[object], Protocol):
+    """LiteLLM's stream wrapper: iterated, then closed (it closes the HTTP response)."""
+
+    async def aclose(self) -> None: ...
+
+
+def _is_stream(value: object) -> TypeGuard[_Stream]:
+    return hasattr(value, "aclose") and isinstance(value, AsyncIterable)
 
 
 def litellm(name: str, **options: Unpack[ModelOptions]) -> LiteLLMModel:

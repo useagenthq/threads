@@ -177,4 +177,54 @@ describe("daytona declarations", () => {
     expect(body).toContain('"networkBlockAll":true');
     expect(body).toContain('"name":"threads-op-7"');
   });
+
+  test("a sandbox is private and can't outlive a leak: finite auto-stop, then auto-delete", async () => {
+    const { sandbox, backend } = adapter(new World());
+    unwrap(await sandbox.create("op", CTX));
+    const body = backend
+      .traffic()
+      .split("\n")
+      .find((line) => line.startsWith(`POST ${API}/sandbox `));
+    expect(body).toContain('"public":false');
+    expect(body).toContain('"autoStopInterval":60');
+    expect(body).toContain('"autoDeleteInterval":60');
+    const backend2 = daytonaBackend(new World());
+    const custom = daytona({
+      apiKey: CANARY,
+      apiUrl: API,
+      fetch: backend2.fetch,
+      openSocket: backend2.open,
+      autoStopMinutes: 5,
+      pollMs: 0,
+    });
+    unwrap(await custom.create("op", CTX));
+    expect(backend2.traffic()).toContain('"autoStopInterval":5');
+    for (const autoStopMinutes of [0, -1, 1.5])
+      expect(() => daytona({ apiKey: CANARY, autoStopMinutes })).toThrow(
+        "autoStopMinutes",
+      );
+  });
+});
+
+describe("the hosted Daytona, as seen live", () => {
+  test("the toolbox runs as a non-root user: create makes /workspace with sudo", async () => {
+    const world = new World();
+    const { sandbox } = adapter(world);
+    const box = unwrap(await sandbox.create("op", CTX));
+    unwrap(await box.upload("a.txt", new TextEncoder().encode("x"), CTX));
+    expect(world.creates).toBe(1);
+  });
+
+  test("a create that reports failure leaves a sandbox its lookup finds; a retry creates nothing new", async () => {
+    const world = new World();
+    const { sandbox, backend } = adapter(world);
+    backend.failPrepares = 1;
+    expect(code(await sandbox.create("op", CTX))).toBe("unavailable");
+    if (sandbox.lookup === undefined) throw new Error("daytona looks up");
+    const found = unwrap(await sandbox.lookup("op", CTX));
+    expect(found.status).toBe("found");
+    const again = unwrap(await sandbox.create("op", CTX));
+    expect(found.status === "found" && found.value.id).toBe(again.id);
+    expect(world.creates).toBe(1);
+  });
 });

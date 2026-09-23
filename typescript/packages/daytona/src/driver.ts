@@ -15,6 +15,8 @@ export type DriverOptions = {
   /** The Daytona snapshot new sandboxes start from; undefined: Daytona's default. */
   readonly image: string | undefined;
   readonly ttlMinutes: number;
+  /** Idle minutes before Daytona stops a sandbox; a stopped one is deleted after as long. */
+  readonly autoStopMinutes: number;
   readonly networkBlockAll: boolean;
   readonly pollMs: number;
   readonly waitMs: number;
@@ -26,6 +28,19 @@ export const nameOf = (operationKey: string): string =>
 
 const GONE = new Set(["destroyed", "destroying"]);
 const FAILED = new Set(["error", "build_failed"]);
+const CONFLICT = 409;
+
+/**
+ * Daytona's toolbox runs as the image's user (`daytona`, not root, whatever `user` says), and /
+ * is root's, so /workspace is made with the image's passwordless sudo and handed to that user.
+ */
+const PREPARE_WORKSPACE = [
+  ": threads-daytona-workspace",
+  "mkdir -p /workspace 2>/dev/null",
+  '[ -w /workspace ] || { sudo -n mkdir -p /workspace && sudo -n chown "$(id -u):$(id -g)" /workspace; }',
+].join("\n");
+
+const quiet = { stdout: () => undefined, stderr: () => undefined };
 
 /** Runs `call`, reading a 404 as undefined. */
 async function unless404<T>(call: () => Promise<T>): Promise<T | undefined> {
@@ -40,6 +55,7 @@ async function unless404<T>(call: () => Promise<T>): Promise<T | undefined> {
 export function daytonaDriver(options: DriverOptions): SandboxDriver {
   const { sandboxes, snapshots } = options.clients;
   const proxies = new Map<string, string>();
+  const exec = sessions(options, (id) => toolbox(id));
 
   const get = (id: string) =>
     unless404(async () => (await sandboxes.getSandbox(id)).data);
@@ -90,10 +106,10 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
     throw new Error(`snapshot ${name} didn't become active`);
   };
 
-  return {
-    create: async (key, snapshot) => {
-      const image = snapshot ?? options.image;
-      const made = await unless404(
+  /** Creates the key's sandbox; a name is unique, so a 409 is this key's earlier create. */
+  const post = async (key: string, image: string | undefined) => {
+    try {
+      return await unless404(
         async () =>
           (
             await sandboxes.createSandbox({
@@ -102,12 +118,26 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
               env: {},
               labels: { threads_operation_key: key },
               user: "root",
+              public: false,
               networkBlockAll: options.networkBlockAll,
-              autoStopInterval: 0,
+              // The safety net for a leak the ledger misses: an idle sandbox stops, then goes.
+              autoStopInterval: options.autoStopMinutes,
+              autoDeleteInterval: options.autoStopMinutes,
               ttlMinutes: options.ttlMinutes,
             })
           ).data,
       );
+    } catch (error) {
+      if (statusOf(error) !== CONFLICT) throw error;
+      const found = await get(nameOf(key));
+      if (found === undefined) throw error;
+      return found;
+    }
+  };
+
+  return {
+    create: async (key, snapshot) => {
+      const made = await post(key, snapshot ?? options.image);
       if (made === undefined)
         return {
           kind: "snapshot_missing",
@@ -115,6 +145,13 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
         };
       const id = remember(made);
       await until(id, "started");
+      const prepared = await (
+        await exec.run(id, PREPARE_WORKSPACE, quiet, undefined)
+      ).exit;
+      if (prepared !== 0)
+        throw new Error(
+          `sandbox ${id} can't make /workspace (exit ${prepared})`,
+        );
       return { kind: "created", id };
     },
     find: async (key) => {
@@ -135,7 +172,7 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
       await until(id, undefined);
       return "killed";
     },
-    ...sessions(options, toolbox),
+    ...exec,
     snapshot: {
       // A cold snapshot: Daytona documents a whole-process pause only for Linux VM and Windows
       // sandboxes, and a live snapshot of a container can't be proven quiescent. A stop is a
@@ -193,9 +230,11 @@ function sessions(
   ): Promise<number> => {
     const deadline = Date.now() + options.waitMs;
     while (Date.now() < deadline) {
-      const exit = (await box.process.getSessionCommand(session, command)).data
-        .exitCode;
-      if (exit !== undefined) return exit;
+      // A running command's exitCode is null on the wire, despite the client's type.
+      const exit: unknown = (
+        await box.process.getSessionCommand(session, command)
+      ).data.exitCode;
+      if (typeof exit === "number") return exit;
       await sleep(options.pollMs);
     }
     throw new Error(`command ${command} reported no exit code`);

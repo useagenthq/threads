@@ -26,7 +26,7 @@ from daytona_toolbox_api_client_async.models.session_execute_request import (
 from threads.adapters.sandboxes.daytona.control import NOT_FOUND, StatusError, body
 from threads.adapters.sandboxes.daytona.logs import Demux, Stream, Unbase64
 from threads.adapters.sandboxes.daytona.wire import Command, Executed
-from threads.adapters.sandboxes.posix import RUN_DIR
+from threads.adapters.sandboxes.posix import RUN_DIR, collect
 from threads.adapters.sandboxes.streams import Pipe, pump
 from threads.log.digest import sha256_hex
 from threads.sandbox.protocol import ExecOutput
@@ -43,7 +43,17 @@ wait "$__t_o" "$__t_e"; rm -rf "$__t_d"; exit "$__t_c"
 in the sandbox before it reaches Daytona's log channel, whose in-band stdout/stderr markers
 would otherwise swallow output that contains them; base64 never does."""
 
+PREPARE_WORKSPACE = """mkdir -p /workspace 2>/dev/null
+[ -w /workspace ] || {
+  sudo -n mkdir -p /workspace && sudo -n chown "$(id -u):$(id -g)" /workspace
+}
+"""
+"""Daytona's toolbox runs as the image's user (`daytona`, not root), and / is root's, so
+/workspace is made with the image's passwordless sudo and handed to that user."""
+
 _BAD_REQUEST = 400
+_NORMAL = 1000
+_DATA = frozenset({aiohttp.WSMsgType.BINARY, aiohttp.WSMsgType.TEXT})
 
 
 def session_id(process_key: str) -> str:
@@ -113,6 +123,13 @@ class Toolbox:
         task.add_done_callback(self._tasks.discard)
         return pipe.output()
 
+    async def prepare(self) -> None:
+        """Makes /workspace usable by the toolbox user; raises when it can't."""
+        ran = await self.start(["/bin/sh", "-c", PREPARE_WORKSPACE], {}, "/", "threads-prepare")
+        code, _, err = await collect(ran)
+        if code != 0:
+            raise StatusError(0, b"/workspace can't be made: " + err)
+
     async def kill(self, key: str) -> None:
         """Deletes the key's session; Daytona ends its processes. Nothing confirms the whole
         group is gone (a command can detach descendants)."""
@@ -128,20 +145,20 @@ class Toolbox:
         demux = Demux()
         decoded: dict[Stream, Unbase64] = {"stdout": Unbase64(), "stderr": Unbase64()}
         async with ws:
-            async for message in ws:
-                if message.type not in (aiohttp.WSMsgType.BINARY, aiohttp.WSMsgType.TEXT):
-                    raise StatusError(0, f"log stream: {message.type}".encode())
+            while (message := await ws.receive()).type in _DATA:
                 data = message.data if isinstance(message.data, bytes) else b""
                 if isinstance(message.data, str):
                     data = message.data.encode("utf-8")
                 for stream, chunk in demux.feed(data):
                     await _deliver(pipe, stream, decoded[stream].feed(chunk))
+        # The peer's close frame says the stream ended, not ws.close_code: the hosted proxy
+        # drops the connection right after it, so aiohttp can't answer and reports 1006.
+        if message.type is not aiohttp.WSMsgType.CLOSE or message.data != _NORMAL:
+            raise StatusError(0, f"log stream ended with {message.type} {message.data}".encode())
         for stream, chunk in demux.flush():
             await _deliver(pipe, stream, decoded[stream].feed(chunk))
         for stream in decoded.values():
             stream.end()
-        if ws.close_code not in (None, 1000):
-            raise StatusError(0, f"log stream closed with {ws.close_code}".encode())
         return await self._exit_code(sid, cmd)
 
     async def _exit_code(self, sid: str, cmd: str) -> int:

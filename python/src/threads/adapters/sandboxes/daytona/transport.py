@@ -36,6 +36,8 @@ def session(api_key: str, extra: Sequence[aiohttp.TraceConfig] = ()) -> aiohttp.
     """A session that fences every request and authenticates it to the Daytona API and its
     toolbox proxy (host side; the key never enters a sandbox). `extra` traces are for tests.
     Built inside the running loop: aiohttp binds its connector to it."""
-    auth = {"Authorization": f"Bearer {api_key}"}
+    # Daytona's log stream marks stdout and stderr only for a client that names its SDK
+    # version (the pinned client's); without it both arrive unmarked and can't be told apart.
+    auth = {"Authorization": f"Bearer {api_key}", "X-Daytona-SDK-Version": "0.216.0"}
     connector = aiohttp.TCPConnector(force_close=True)
     return aiohttp.ClientSession(connector=connector, headers=auth, trace_configs=[trace(), *extra])

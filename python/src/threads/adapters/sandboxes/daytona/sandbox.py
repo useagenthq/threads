@@ -8,6 +8,9 @@ What this adapter declares (Daytona 0.216, container sandboxes; ):
   so a repeated create answers 409 and is the same sandbox, and lookup is a GET by name.
   Lookup is nonfinal: a create that passed its fence may still be in flight at the provider.
 - Expiry: `lifetime_ms` becomes Daytona's `ttlMinutes`, after which it destroys the sandbox.
+- Private, with a leak backstop: `public` is always false, and an idle sandbox auto-stops after
+  `auto_stop_minutes` (default 60) and is auto-deleted as long after. The ledger owns cleanup.
+- The toolbox runs as the image's non-root user, so create makes /workspace with sudo.
 - Egress: denied by default (`networkBlockAll`, enforced by Daytona); `allow_internet=True`
   lifts it and the adapter declares egress unenforced.
 - Close deletes and waits until Daytona reports the sandbox destroyed.
@@ -72,6 +75,7 @@ class DaytonaSandbox:
         target: str | None = None,
         lifetime_ms: int | None = None,
         allow_internet: bool = False,
+        auto_stop_minutes: int = 60,
         name: str = "daytona",
         poll_s: float = 1.0,
         wait_s: float = 300.0,
@@ -79,10 +83,14 @@ class DaytonaSandbox:
     ) -> None:
         if _PROVIDER.fullmatch(name) is None:
             raise ConfigError("invalid_config", f"provider name {name!r}: [a-z][a-z0-9_]*")
+        if auto_stop_minutes <= 0:
+            raise ConfigError("invalid_config", f"auto_stop_minutes {auto_stop_minutes}: > 0")
         self.lifetime_ms: int | None = lifetime_ms
         """The declared provider expiry of a created sandbox, when set."""
         ttl = None if lifetime_ms is None else -(-lifetime_ms // 60_000)
-        self._placed = Placement(target, ttl, block_network=not allow_internet)
+        self._placed = Placement(
+            target, ttl, auto_stop_minutes=auto_stop_minutes, block_network=not allow_internet
+        )
         self._key, self._api_url, self._base = api_key, api_url, snapshot
         self._name, self._poll_s, self._wait_s, self._traces = name, poll_s, wait_s, traces
         self._session: aiohttp.ClientSession | None = None
@@ -184,7 +192,9 @@ class DaytonaSandbox:
         return Ok((child, tree.value))
 
     async def _create(self, name: str, snapshot: str | None, placed: Placement) -> DaytonaSession:
-        return self._open(await self._controls().create(name, snapshot, placed))
+        dto = await self._controls().create(name, snapshot, placed)
+        await self._toolbox(dto).prepare()
+        return self._open(dto)
 
     async def _restore(
         self, snapshot: str, name: str, placed: Placement
@@ -203,16 +213,17 @@ class DaytonaSandbox:
         return None if found is None else self._open(found)
 
     def _open(self, dto: SandboxDto) -> DaytonaSession:
-        session = self._http()
-        toolbox = Toolbox(
+        return DaytonaSession(dto.id, self._name, self._controls(), self._toolbox(dto))
+
+    def _toolbox(self, dto: SandboxDto) -> Toolbox:
+        return Toolbox(
             dto.toolbox_proxy_url,
             dto.id,
-            session=session,
+            session=self._http(),
             poll_s=self._poll_s,
             wait_s=self._wait_s,
             tasks=self._pumps,
         )
-        return DaytonaSession(dto.id, self._name, self._controls(), toolbox)
 
     def _http(self) -> aiohttp.ClientSession:
         if self._session is None:
@@ -234,6 +245,7 @@ def daytona(  # noqa: PLR0913 - the provider's options
     target: str | None = None,
     lifetime_ms: int | None = None,
     allow_internet: bool = False,
+    auto_stop_minutes: int = 60,
     name: str = "daytona",
 ) -> DaytonaSandbox:
     """A Daytona sandbox provider (the `daytona()` of spec/api.json conventions.adapters).
@@ -248,5 +260,6 @@ def daytona(  # noqa: PLR0913 - the provider's options
         target=target,
         lifetime_ms=lifetime_ms,
         allow_internet=allow_internet,
+        auto_stop_minutes=auto_stop_minutes,
         name=name,
     )

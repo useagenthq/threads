@@ -1,4 +1,5 @@
 import {
+  ConfigError,
   type Fetch,
   type ProviderSandbox,
   remoteSandbox,
@@ -36,6 +37,11 @@ export type DaytonaOptions = {
   readonly image?: string;
   /** Wall-clock lifetime; Daytona destroys the sandbox after it. Defaults to 60. */
   readonly ttlMinutes?: number;
+  /**
+   * Idle minutes before Daytona stops a sandbox, and minutes after that before it deletes it: a
+   * backstop for a leak, never the normal cleanup (the ledger's). A positive integer; default 60.
+   */
+  readonly autoStopMinutes?: number;
   /** "open" lifts Daytona's network block (egress unenforced). Defaults to "blocked". */
   readonly network?: "blocked" | "open";
   /** The transport under the fence. Defaults to the global fetch. */
@@ -52,6 +58,12 @@ const openSocket: OpenSocket = (url, headers) =>
 
 export function daytona(options: DaytonaOptions): ProviderSandbox {
   const ttlMinutes = options.ttlMinutes ?? 60;
+  const autoStopMinutes = options.autoStopMinutes ?? 60;
+  if (!Number.isInteger(autoStopMinutes) || autoStopMinutes <= 0)
+    throw new ConfigError(
+      "invalid_config",
+      `daytona: autoStopMinutes must be a positive integer, not ${autoStopMinutes}`,
+    );
   const blocked = (options.network ?? "blocked") === "blocked";
   const inner: Fetch = (input, init) =>
     (options.fetch ?? globalThis.fetch)(input, init);
@@ -64,6 +76,7 @@ export function daytona(options: DaytonaOptions): ProviderSandbox {
     open: options.openSocket ?? openSocket,
     image: options.image,
     ttlMinutes,
+    autoStopMinutes,
     networkBlockAll: blocked,
     pollMs: options.pollMs ?? 1000,
     waitMs: options.waitMs ?? 300_000,

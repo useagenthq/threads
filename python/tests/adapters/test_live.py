@@ -57,11 +57,14 @@ ADAPTERS: dict[str, tuple[tuple[str, ...], Make]] = {
     ),
     "litellm": (
         ("THREADS_LIVE_LITELLM_MODEL",),
-        lambda name: litellm(name, context_window=32_000, max_output_tokens=64),
+        # A reasoning model (gpt-5) can spend 64 tokens on reasoning alone, with no text.
+        lambda name: litellm(name, context_window=32_000, max_output_tokens=1024),
     ),
 }
 
 
+# LiteLLM's own stream handler reads a Pydantic attribute that Pydantic 2.11 deprecates.
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince211")
 @pytest.mark.parametrize("adapter", sorted(ADAPTERS))
 def test_one_real_turn_completes(adapter: str) -> None:
     env, make = ADAPTERS[adapter]

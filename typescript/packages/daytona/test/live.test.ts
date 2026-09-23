@@ -22,8 +22,22 @@ describe.skipIf(!live)("live gate: daytona", () => {
 
   test("create, exec, files, terminate and close against real Daytona", async () => {
     const adapter = sandbox();
-    const box = unwrap(await adapter.create(crypto.randomUUID(), CTX));
+    const op = crypto.randomUUID();
+    const box = unwrap(await adapter.create(op, CTX));
     try {
+      if (adapter.lookup === undefined) throw new Error("daytona looks up");
+      const found = unwrap(await adapter.lookup(op, CTX));
+      expect(found.status === "found" && found.value.id).toBe(box.id);
+      const record = await fetch(
+        `${url ?? "https://app.daytona.io/api"}/sandbox/${box.id}`,
+        { headers: { Authorization: `Bearer ${key}` } },
+      );
+      expect(await record.json()).toMatchObject({
+        public: false,
+        networkBlockAll: true,
+        autoStopInterval: 60,
+        autoDeleteInterval: 60,
+      });
       const out = await run(
         box,
         ["sh", "-c", "echo out; echo err >&2; exit 3"],
@@ -89,7 +103,9 @@ describe.skipIf(!live)("live gate: daytona", () => {
           [
             "/bin/sh",
             "-c",
-            "cat /proc/[0-9]*/environ /proc/[0-9]*/cmdline 2>/dev/null; tar -cf - /etc /home /root /tmp /workspace /var /opt /run 2>/dev/null; true",
+            // Compressed in the guest: the hex-framed log stream carries ~170 KB/s, too slow
+            // for the raw tens of MB.
+            "{ cat /proc/[0-9]*/environ /proc/[0-9]*/cmdline 2>/dev/null; tar -cf - /etc /home /root /tmp /workspace /var /opt /run 2>/dev/null; } | gzip -1",
           ],
           CTX,
           { processKey: "canary", env: { PATH: "/usr/bin:/bin" } },
@@ -100,7 +116,7 @@ describe.skipIf(!live)("live gate: daytona", () => {
         Array.fromAsync(dump.stderr),
       ]);
       await dump.exit_code;
-      const guest = Buffer.concat(out);
+      const guest = Buffer.from(Bun.gunzipSync(Buffer.concat(out)));
       expect(guest.includes(probe)).toBe(true);
       expect(guest.includes(key ?? "")).toBe(false);
     } finally {

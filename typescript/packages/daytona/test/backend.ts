@@ -8,6 +8,12 @@ import { Command } from "./command";
 // Daytona's wire, mocked over a World: the control plane (<api>/sandbox, /snapshots), each
 // sandbox's toolbox behind the proxy (sessions, files) and the log WebSocket, as the pinned
 // clients and SDK speak them. Every request and socket URL is recorded for the canary.
+//
+// As the hosted service behaves (seen live, Daytona 0.216): a sandbox name is unique (a second
+// create answers 409); the toolbox runs as the image's non-root user, so / is read-only to it
+// and /workspace exists only once made with sudo; the log stream carries its stdout/stderr
+// markers only for a client that sends X-Daytona-SDK-Version; a running command's exitCode is
+// null.
 
 export const API = "https://daytona.test/api";
 const PROXY = "https://proxy.daytona.test/toolbox";
@@ -25,6 +31,10 @@ const CreateBody = z.object({
   name: z.string(),
   snapshot: z.string().optional(),
   labels: z.record(z.string(), z.string()),
+  public: z.literal(false),
+  networkBlockAll: z.boolean(),
+  autoStopInterval: z.number().int().positive(),
+  autoDeleteInterval: z.number().int().positive(),
 });
 const ExecBody = z.object({ command: z.string(), runAsync: z.boolean() });
 const Named = z.object({ name: z.string() });
@@ -56,12 +66,16 @@ export type DaytonaBackend = {
   readonly traffic: () => string;
   /** Sandbox states, by id. */
   readonly states: Map<string, string>;
+  /** How many more /workspace preparations fail (sudo refused). */
+  failPrepares: number;
 };
 
 export function daytonaBackend(world: World): DaytonaBackend {
   const log: string[] = [];
   const states = new Map<string, string>();
   const commands = new Map<string, Command>();
+  /** Sandboxes whose /workspace was made (with sudo) for the toolbox user. */
+  const prepared = new Set<string>();
   let serial = 0;
 
   const dto = (id: string) => ({
@@ -83,10 +97,10 @@ export function daytonaBackend(world: World): DaytonaBackend {
 
   const create = async (req: Request) => {
     const body = CreateBody.parse(await req.json());
-    const made = world.create(
-      body.labels["threads_operation_key"] ?? "",
-      body.snapshot,
-    );
+    const key = body.labels["threads_operation_key"] ?? "";
+    if (world.find(key) !== undefined)
+      return json(409, { message: `sandbox ${body.name} already exists` });
+    const made = world.create(key, body.snapshot);
     if ("missing" in made) return missing("snapshot");
     if (made.lost) throw new TypeError("fetch failed: connection reset");
     return json(200, dto(made.id));
@@ -145,21 +159,31 @@ export function daytonaBackend(world: World): DaytonaBackend {
     const wrapper = shellWords(command)[2] ?? "";
     const inner = wrapper.slice(wrapper.indexOf("\nsh -c ") + 1);
     const script = shellWords(inner)[2] ?? "";
+    const tag = shellWords(script.split("\n")[0] ?? "")[1];
     const od = (bytes: Uint8Array) =>
       new TextEncoder().encode(
         `${[...bytes].map((b) => ` ${b.toString(16).padStart(2, "0")}`).join("")}\n`,
       );
+    const prepare = () => {
+      if (backend.failPrepares <= 0) prepared.add(box);
+      else backend.failPrepares -= 1;
+      return { exit: Promise.resolve(prepared.has(box) ? 0 : 1) };
+    };
     commands.set(
       `${box}/${session}/${cmdId}`,
       new Command((sinks) =>
-        world.machine(box).start(
-          script,
-          {
-            stdout: (b) => sinks.stdout(od(b)),
-            stderr: (b) => sinks.stderr(od(b)),
-          },
-          session,
-        ),
+        tag === "threads-daytona-workspace"
+          ? prepare()
+          : tag === "threads-init" && !prepared.has(box)
+            ? { exit: Promise.resolve(1) }
+            : world.machine(box).start(
+                script,
+                {
+                  stdout: (b) => sinks.stdout(od(b)),
+                  stderr: (b) => sinks.stderr(od(b)),
+                },
+                session,
+              ),
       ),
     );
     return json(200, { cmdId });
@@ -173,11 +197,7 @@ export function daytonaBackend(world: World): DaytonaBackend {
     cmd: string,
   ) => {
     const exit = commands.get(`${box}/${session}/${cmd}`)?.exit;
-    return json(200, {
-      id: cmd,
-      command: "",
-      ...(exit === undefined ? {} : { exitCode: exit }),
-    });
+    return json(200, { id: cmd, command: "", exitCode: exit ?? null });
   };
 
   const upload = async (req: Request, url: URL, box: string) => {
@@ -235,7 +255,7 @@ export function daytonaBackend(world: World): DaytonaBackend {
       : json(502, { message: "the sandbox isn't running" });
   };
 
-  const open: OpenSocket = (url) => {
+  const open: OpenSocket = (url, headers) => {
     log.push(`WS ${url}`);
     const at =
       /toolbox\/([^/]+)\/process\/session\/([^/]+)\/command\/([^/]+)\/logs/.exec(
@@ -243,8 +263,15 @@ export function daytonaBackend(world: World): DaytonaBackend {
       );
     const command = commands.get(`${at?.[1]}/${at?.[2]}/${at?.[3]}`);
     if (command === undefined) throw new Error(`no command at ${url}`);
-    return command.socket();
+    return command.socket(headers["X-Daytona-SDK-Version"] !== undefined);
   };
 
-  return { fetch, open, traffic: () => log.join("\n"), states };
+  const backend: DaytonaBackend = {
+    fetch,
+    open,
+    traffic: () => log.join("\n"),
+    states,
+    failPrepares: 0,
+  };
+  return backend;
 }

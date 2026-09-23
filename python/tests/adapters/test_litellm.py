@@ -3,9 +3,10 @@ real OpenAI route against a scripted HTTP transport, rejections, retries off, an
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass, field
 from functools import partial
+from typing import cast
 
 import httpx2
 import openai
@@ -17,7 +18,7 @@ from threads.adapters.models.litellm.model import ACOMPLETION, LiteLLMModel
 from threads.agents.config import ConfigError
 from threads.litellm import litellm
 from threads.log import CallId, TextPart, ToolUsePart, Usage
-from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
+from threads.loop.model import Delta, Done, ModelChunk, ModelRequest, PartChunk, Rejected
 
 ROUTE = "openai/gpt-test"
 INFO = litellm(ROUTE, context_window=128_000, max_output_tokens=4096, api_key="k").info
@@ -174,3 +175,67 @@ def test_credentials_are_passed_per_call_never_pinned() -> None:
     assert "sk-secret" not in json.dumps(made.info.params)
     assert made.info.params == {"max_tokens": 8}
     assert made.info.lookup == "none"
+
+
+class Cut(httpx2.AsyncByteStream):
+    """An SSE body that sends its first event, then loses the connection; records its close."""
+
+    def __init__(self, first: JsonValue) -> None:
+        self.first = b"data: " + json.dumps(first).encode() + b"\n\n"
+        self.closed = False
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        yield self.first
+        raise httpx2.ReadError("connection reset")
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def cut(first: JsonValue) -> tuple[Cut, httpx2.Response]:
+    body = Cut(first)
+    return body, httpx2.Response(200, headers={"content-type": "text/event-stream"}, stream=body)
+
+
+class Garbled(Cut):
+    """Its second event isn't JSON; the connection stays open after it."""
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        yield self.first
+        yield b"data: {not json\n\n"
+        yield self.first
+
+
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince211")
+@pytest.mark.parametrize("failing", [Cut, Garbled])
+def test_a_stream_failing_after_the_answer_began_is_raised_and_closed(failing: type[Cut]) -> None:
+    # LiteLLM rewraps a mid-stream failure as a status error it makes up (500): the provider
+    # answered 200, so it is uncertainty to raise, never a Rejected (the live 500). The stream
+    # is closed before send ends, never left to the event loop's shutdown (the live aclose()).
+    body = failing(delta({"role": "assistant", "content": ""}))
+    response = httpx2.Response(200, headers={"content-type": "text/event-stream"}, stream=body)
+    model = through_litellm(Script([response]))
+
+    async def main() -> None:
+        with pytest.raises(openai.APIError):
+            await collect(model.send, one_turn(), FakeContext())
+        assert body.closed
+
+    asyncio.run(main())
+
+
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince211")
+def test_a_consumer_that_stops_early_closes_the_stream() -> None:
+    body = Garbled(delta({"content": "Hi"}))
+    response = httpx2.Response(200, headers={"content-type": "text/event-stream"}, stream=body)
+    model = through_litellm(Script([response]))
+
+    async def main() -> None:
+        # send is an async generator; its declared type (AsyncIterator) has no aclose.
+        sent = model.send(ModelRequest("b:e", one_turn()), FakeContext())
+        stream = cast("AsyncGenerator[ModelChunk]", sent)
+        assert await anext(stream) == Delta("Hi")
+        await stream.aclose()
+        assert body.closed
+
+    asyncio.run(main())

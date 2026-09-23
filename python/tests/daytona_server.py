@@ -1,5 +1,9 @@
 """A mocked Daytona API and toolbox on loopback: aiohttp.web routes that speak Daytona's wire
-calls and act on a FakeBackend (sandbox_backend.py). Every request that reaches it counts."""
+calls and act on a FakeBackend (sandbox_backend.py). Every request that reaches it counts.
+
+As the hosted service behaves (seen live, Daytona 0.216): the toolbox runs as the image's
+non-root user, so /workspace can't be used until made with sudo; the log stream carries its
+stdout/stderr markers only for a client that sends X-Daytona-SDK-Version."""
 
 import asyncio
 import base64
@@ -17,7 +21,7 @@ from sandbox_backend import Box, FakeBackend, LostAnswerError, Proc, Unavailable
 
 from threads.adapters.sandboxes.daytona import DaytonaSandbox
 from threads.adapters.sandboxes.daytona.logs import STDERR, STDOUT
-from threads.adapters.sandboxes.daytona.toolbox import PREFIX
+from threads.adapters.sandboxes.daytona.toolbox import PREFIX, PREPARE_WORKSPACE
 from threads.sandbox.fake import FakeCrashError
 
 API_KEY = "dtn-test-secret-key"
@@ -28,6 +32,9 @@ class _Create(BaseModel):
     name: str
     snapshot: str | None = None
     network_block_all: Literal[True] = Field(alias="networkBlockAll")  # egress denied by default
+    public: Literal[False]
+    auto_stop_interval: int = Field(alias="autoStopInterval", gt=0)
+    auto_delete_interval: int = Field(alias="autoDeleteInterval", gt=0)
 
 
 class _Named(BaseModel):
@@ -44,6 +51,11 @@ class DaytonaServer:
         self.crash = False
         self.states: dict[str, str] = {}
         self.commands: dict[str, Proc] = {}
+        self.created: list[_Create] = []
+        self.prepared: set[str] = set()
+        """Sandboxes whose /workspace was made (with sudo) for the toolbox user."""
+        self.fail_prepares = 0
+        """How many more /workspace preparations fail (sudo refused)."""
         self.app = web.Application(middlewares=[self._count])
         r = self.app.router
         r.add_post("/sandbox", self._create)
@@ -101,6 +113,7 @@ class DaytonaServer:
 
     async def _create(self, request: web.Request) -> web.Response:
         want = _Create.model_validate_json(await request.read())
+        self.created.append(want)
         if any(b.alive and b.key == want.name for b in self.backend.boxes.values()):
             return web.Response(status=409)
         if want.snapshot is None:
@@ -159,6 +172,8 @@ class DaytonaServer:
         field = form["file"]
         if box is None or not isinstance(field, web.FileField):
             return web.Response(status=404)
+        if path.startswith("/workspace/") and box.id not in self.prepared:
+            return web.Response(status=400)  # the toolbox user can't write there
         if self.backend.is_directory(box, path):
             return web.Response(status=400)
         self.backend.write(box, path, field.file.read())
@@ -184,15 +199,31 @@ class DaytonaServer:
             return web.Response(status=404)
         line = shlex.split(_Exec.model_validate_json(await request.read()).command)
         assert line[:4] == ["/bin/sh", "-c", PREFIX, "threads"], line
-        env_file, argv = line[4], line[6:]
+        env_file, cwd, argv = line[4], line[5], line[6:]
+        cmd = f"cmd_{len(self.commands)}"
+        if argv == ["/bin/sh", "-c", PREPARE_WORKSPACE] or (
+            cwd.startswith("/workspace") and box.id not in self.prepared
+        ):
+            self.commands[cmd] = self._prepare(box, argv)
+            return web.json_response({"cmdId": cmd})
         env: dict[str, str] = {}
         if env_file:
             for text in box.files.pop(env_file).decode().splitlines():
                 name, _, value = text.partition("=")
                 env[name] = shlex.split(value)[0] if value else ""
-        cmd = f"cmd_{len(self.commands)}"
         self.commands[cmd] = self.backend.run(box, argv, env, tag=request.match_info["sid"])
         return web.json_response({"cmdId": cmd})
+
+    def _prepare(self, box: Box, argv: list[str]) -> Proc:
+        """The sudo that makes /workspace, or a command that needs it before it exists."""
+        if argv == ["/bin/sh", "-c", PREPARE_WORKSPACE]:
+            if self.fail_prepares > 0:
+                self.fail_prepares -= 1
+            else:
+                self.prepared.add(box.id)
+        exit_code: asyncio.Future[int] = asyncio.get_running_loop().create_future()
+        exit_code.set_result(0 if box.id in self.prepared else 1)
+        return Proc(b"", b"", exit_code)
 
     async def _command(self, request: web.Request) -> web.Response:
         proc = self.commands[request.match_info["cmd"]]
@@ -203,10 +234,11 @@ class DaytonaServer:
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         # As the prefix leaves them in the sandbox: each stream base64-framed.
+        marked = "X-Daytona-SDK-Version" in request.headers
         if proc.stdout:
-            await ws.send_bytes(STDOUT + base64.encodebytes(proc.stdout))
+            await ws.send_bytes((STDOUT if marked else b"") + base64.encodebytes(proc.stdout))
         if proc.stderr:
-            await ws.send_bytes(STDERR + base64.encodebytes(proc.stderr))
+            await ws.send_bytes((STDERR if marked else b"") + base64.encodebytes(proc.stderr))
         # The stream ends when the process does, or when the client goes away first; a handler
         # left waiting on a process nobody reads would keep its socket open past shutdown.
         ended = asyncio.ensure_future(asyncio.shield(proc.exit))
@@ -214,7 +246,11 @@ class DaytonaServer:
         await asyncio.wait({ended, left}, return_when=asyncio.FIRST_COMPLETED)
         for waiting in (ended, left):
             waiting.cancel()
-        await ws.close()
+        # As the hosted proxy does (seen live): a normal close frame, then the connection drops
+        # without waiting for the client's answer, which the client then can't write.
+        if request.transport is not None:
+            request.transport.write(b"\x88\x02\x03\xe8")  # FIN + close, code 1000
+            request.transport.close()
         return ws
 
 

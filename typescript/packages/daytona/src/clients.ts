@@ -26,8 +26,17 @@ export type Clients = {
   readonly headers: Readonly<Record<string, string>>;
 };
 
+/**
+ * The pinned client version. Daytona's log stream marks stdout and stderr only for a client that
+ * names its SDK version; without it both arrive unmarked and can't be told apart.
+ */
+const SDK_VERSION = "0.216.0";
+
 export function clients(apiUrl: string, apiKey: string, inner: Fetch): Clients {
-  const headers = { Authorization: `Bearer ${apiKey}` };
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    "X-Daytona-SDK-Version": SDK_VERSION,
+  };
   // One fenced fetch for the adapter's life: axios caches its fetch adapter per function.
   const baseOptions = {
     headers,

@@ -56,10 +56,11 @@ def client(api_url: str, session: aiohttp.ClientSession) -> ApiClient:
 
 @dataclass(frozen=True, slots=True)
 class Placement:
-    """How every sandbox is created: region, provider expiry and network."""
+    """How every sandbox is created: region, provider expiry, idle backstop and network."""
 
     target: str | None
     ttl_minutes: int | None
+    auto_stop_minutes: int
     block_network: bool
 
 
@@ -77,7 +78,11 @@ class Control:
             snapshot=snapshot,
             target=placed.target,
             ttl_minutes=placed.ttl_minutes,
+            public=False,
             network_block_all=placed.block_network,
+            # The safety net for a leak the ledger misses: an idle sandbox stops, then goes.
+            auto_stop_interval=placed.auto_stop_minutes,
+            auto_delete_interval=placed.auto_stop_minutes,
             env={},
         )
         try:

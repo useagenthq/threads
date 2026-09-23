@@ -14,3 +14,20 @@ Evidence: upstream `daytonaio/daytona@04cc017e45a1b2e9ef65933dd226944101dbe57d`,
 ## Exec output is hex-framed
 
 Daytona's log stream splits stdout from stderr with in-band markers (`01 01 01`, `02 02 02`), and its `PrefixWriter` (`libs/common-go/pkg/log/prefix_writer.go`) doesn't escape them, so output containing those bytes can't be told from a marker. Each command therefore runs under a wrapper that hex-encodes stdout and stderr with `od` in the sandbox, and the adapter decodes them back to the exact bytes (`src/framing.ts`).
+
+## Safe defaults
+
+Every sandbox is created with:
+
+- `public: false`, always. No option makes a sandbox public.
+- `networkBlockAll: true` (egress denied) unless `network: "open"`.
+- `autoStopInterval: autoStopMinutes` (default 60, a positive integer) and `autoDeleteInterval` of the same minutes: an idle sandbox stops, and a stopped one is deleted. This is only a backstop for a leak; the resource ledger owns normal cleanup.
+- `ttlMinutes` (default 60): Daytona destroys the sandbox after it.
+
+The Python adapter (`threads.daytona`, `auto_stop_minutes`) sends the same values.
+
+## The toolbox runs as a non-root user
+
+Daytona's default image runs toolbox commands as `daytona` whatever `user` the create asks for, and `/` belongs to root. Create therefore makes `/workspace` with the image's passwordless `sudo` and hands it to that user before the sandbox is used. An image without `sudo` must already have a writable `/workspace`.
+
+The log stream marks stdout and stderr only for a client that sends `X-Daytona-SDK-Version`; every request carries the pinned client version.
