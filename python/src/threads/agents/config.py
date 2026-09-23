@@ -20,10 +20,7 @@ type ConfigErrorCode = Literal[
 class ConfigError(Exception):
     """A definition that can't run. Every other expected failure is a value."""
 
-    code: ConfigErrorCode
-    message: str
-
     def __init__(self, code: ConfigErrorCode, message: str) -> None:
         super().__init__(f"{code}: {message}")
-        self.code = code
+        self.code: ConfigErrorCode = code
         self.message = message

@@ -1,49 +1,14 @@
-"""check_surface.py reads Python annotations the way the package declares them: postponed
-strings, aliases and TypedDict Required/NotRequired, failing closed on what it can't resolve."""
+"""check_surface.py over real source written with `from __future__ import annotations`: data
+fields come from constructors, and a TypedDict key's top-level Required or NotRequired decides
+even when the annotation is a postponed string."""
 
 import importlib.util
 import pathlib
 import sys
 import textwrap
 from types import ModuleType
-from typing import ClassVar, Protocol
 
 from surface_kit import core_members, problems
-
-CV = ClassVar  # an alias the postponed-annotation probes resolve through
-__all__ = ["CV"]
-
-
-def test_a_postponed_aliased_class_variable_is_not_a_field() -> None:
-    # A string annotation naming ClassVar through an alias, as `from __future__ import
-    # annotations` with `from typing import ClassVar as CV` writes it.
-    class Aliased:
-        __annotations__ = {"name": "CV[str]", "note": "str"}
-        note = ""
-
-    Aliased.__module__ = __name__
-    found = problems(core=core_members() | {"Skill": Aliased})
-    assert found[0].startswith("surface gate: Skill.name (py) is missing")
-
-
-def test_an_annotation_that_cannot_be_resolved_fails_closed() -> None:
-    class Unresolved:
-        __annotations__ = {"name": "NoSuchType", "note": "str"}
-        note = ""
-
-    found = problems(core=core_members() | {"Skill": Unresolved})
-    assert found[0].startswith("surface gate: Skill.name (py) is missing")
-
-
-def test_a_postponed_aliased_class_variable_protocol_property_fails() -> None:
-    class InfoOnClass(Protocol):
-        __annotations__ = {"info": "CV[str]"}
-
-        def send(self) -> None: ...
-
-    InfoOnClass.__module__ = __name__
-    found = problems(core=core_members() | {"Model": InfoOnClass})
-    assert found[0].startswith("surface gate: Model.info (py) is missing")
 
 
 def source(tmp_path: pathlib.Path, text: str) -> ModuleType:
@@ -108,19 +73,21 @@ def test_a_postponed_not_required_typed_dict_field_fails(tmp_path: pathlib.Path)
     assert found[0].startswith("surface gate: Skill.name (py) is required_mismatch")
 
 
-def test_only_the_head_of_an_annotation_needs_to_resolve(tmp_path: pathlib.Path) -> None:
-    # A type imported only for type checking is fine inside the annotation; the head decides.
+def test_a_postponed_typed_dict_may_name_types_that_exist_for_type_checking_only(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Only a key's top-level wrapper matters, so the rest of the annotation needn't resolve.
     module = source(
         tmp_path,
         """
-        from typing import TYPE_CHECKING
+        from typing import TYPE_CHECKING, NotRequired, TypedDict
 
         if TYPE_CHECKING:
             from nowhere import Checked
 
-        class Skill:
+        class Skill(TypedDict):
             name: list[Checked]
-            note: str = ""
+            note: NotRequired[str]
         """,
     )
     assert problems(core=core_members() | {"Skill": module.Skill}) == []

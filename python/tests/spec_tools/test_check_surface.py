@@ -237,30 +237,33 @@ def test_an_optional_field_made_required_fails() -> None:
     assert found[0].startswith("surface gate: Skill.note (py) is required_mismatch")
 
 
-def test_a_required_field_as_a_class_variable_fails() -> None:
-    class ClassName:
+def test_a_class_attribute_is_not_a_field() -> None:
+    # A data type's fields are what its constructor takes; a class default or ClassVar isn't one.
+    class Defaulted:
         name: ClassVar[str] = "x"
         note: str = ""
 
-    found = problems(core=core_members() | {"Skill": ClassName})
+    found = problems(core=core_members() | {"Skill": Defaulted})
     assert found[0].startswith("surface gate: Skill.name (py) is missing")
 
 
-def test_a_required_field_with_a_plain_class_default_fails() -> None:
+def test_a_constructor_that_takes_the_fields_passes() -> None:
+    class Plain:
+        def __init__(self, name: str, note: str = "") -> None:
+            self.name = name
+            self.note = note
+
+    assert problems(core=core_members() | {"Skill": Plain}) == []
+
+
+def test_a_constructor_that_defaults_a_required_field_fails() -> None:
     class Defaulted:
-        name: str = "x"
-        note: str = ""
+        def __init__(self, name: str = "", note: str = "") -> None:
+            self.name = name
+            self.note = note
 
     found = problems(core=core_members() | {"Skill": Defaulted})
     assert found[0].startswith("surface gate: Skill.name (py) is required_mismatch")
-
-
-def test_a_required_instance_annotation_on_a_plain_class_passes() -> None:
-    class Plain:
-        name: str
-        note: str = ""
-
-    assert problems(core=core_members() | {"Skill": Plain}) == []
 
 
 def test_a_capability_exported_elsewhere_still_needs_the_method() -> None:
