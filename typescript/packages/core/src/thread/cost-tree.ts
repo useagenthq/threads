@@ -51,17 +51,6 @@ export function treeCost(
 type Spawned = EventOf<"agent_spawned">;
 type Finished = EventOf<"agent_finished">;
 
-/** The parent's agent_finished for `child`, when it recorded one. */
-function finishOf(
-  events: readonly KnownEvent[],
-  child: ThreadId,
-): Finished | undefined {
-  for (const e of events)
-    if (e.type === "agent_finished" && e.data.child_thread_id === child)
-      return e;
-  return undefined;
-}
-
 /**
  * spec/schema/README.md, Subagent cancellation: a child with no thread is recorded cancelled,
  * with unknown usage, and never created. A started child cancelled with unknown usage writes the
@@ -72,19 +61,21 @@ const neverCreated = ({ data }: Finished): boolean =>
   data.usage.input_tokens === null &&
   data.usage.output_tokens === null;
 
-/** A thread to walk, and the path of child ids that leads to it, for error messages. */
-type Visit = {
-  readonly at: VerifiedLog;
+/** A spawned child still to read and walk, with the path of child ids that leads to it. */
+type Pending = {
+  readonly spawn: Spawned;
+  readonly finish: Finished | undefined;
   readonly path: string;
 };
 
 /**
  * Every thread of the tree rooted at `root`, depth first in spawn order, with an explicit stack
- * so a tree of any depth is walked. Each child is read from its own main branch and must name,
- * as its parent, the agent_spawned that started it; a child that doesn't, or a thread named
- * twice (a cycle, or two spawns of one id), makes the tree log_corrupt. A child with no log
- * counts as an unpriced thread that ran: nothing proves it spent nothing (its log may have been
- * deleted), so the total is incomplete and unbounded, never falsely complete.
+ * so a tree of any depth is walked, and each child read only on its turn, so the first broken
+ * path depth first is the one reported. Each child must name, as its parent, the agent_spawned
+ * that started it; a child that doesn't, or a thread named twice (a cycle, or two spawns of one
+ * id), makes the tree log_corrupt. A child with no log counts as an unpriced thread that ran:
+ * nothing proves it spent nothing (its log may have been deleted), so the total is incomplete
+ * and unbounded, never falsely complete.
  */
 function treeParts(
   log: LogStore,
@@ -93,36 +84,71 @@ function treeParts(
 ): Result<readonly TreePart[], CostError> {
   const parts: TreePart[] = [];
   const seen = new Set<ThreadId>([root]);
-  const stack: Visit[] = [{ at: chain, path: "" }];
-  for (let next = stack.pop(); next !== undefined; next = stack.pop()) {
-    const { at, path } = next;
-    const own = ownCost(at);
-    if (!own.ok) return err(within(path, own.error));
-    const events = knownEvents(at);
+  const stack: Pending[] = [];
+  let next: { readonly at: VerifiedLog; readonly path: string } | undefined = {
+    at: chain,
+    path: "",
+  };
+  while (next !== undefined) {
+    const own = ownCost(next.at);
+    if (!own.ok) return err(within(next.path, own.error));
+    const events = knownEvents(next.at);
     parts.push({
       cost: own.value,
       ran: events.some((e) => e.type === "model_request"),
     });
-    const children: Visit[] = [];
-    for (const spawn of events.filter((e) => e.type === "agent_spawned")) {
-      const child = spawn.data.child_thread_id;
-      const where = `${path}child ${child}: `;
-      if (seen.has(child))
-        return err(
-          readError(
-            "log_corrupt",
-            `${where}thread ${child} appears twice in the tree`,
-          ),
-        );
-      seen.add(child);
-      const read = childLog(log, spawn, finishOf(events, child));
-      if (!read.ok) return err(within(where, read.error));
-      if (read.value === undefined) parts.push({ cost: undefined, ran: true });
-      else children.push({ at: read.value, path: where });
-    }
-    stack.push(...children.toReversed());
+    stack.push(...pending(events, next.path).toReversed());
+    const read = nextChild(log, stack, seen, parts);
+    if (!read.ok) return read;
+    next = read.value;
   }
   return ok(parts);
+}
+
+/** The spawns of `events`, in order, each with the parent's agent_finished for its child. */
+function pending(events: readonly KnownEvent[], path: string): Pending[] {
+  const finishes = new Map<ThreadId, Finished>();
+  for (const e of events)
+    if (e.type === "agent_finished") finishes.set(e.data.child_thread_id, e);
+  return events.flatMap((e) =>
+    e.type === "agent_spawned"
+      ? [
+          {
+            spawn: e,
+            finish: finishes.get(e.data.child_thread_id),
+            path: `${path}child ${e.data.child_thread_id}: `,
+          },
+        ]
+      : [],
+  );
+}
+
+/**
+ * Pops pending children until one has a log to walk; each without a log adds its unpriced part
+ * instead. Undefined when the stack is empty.
+ */
+function nextChild(
+  log: LogStore,
+  stack: Pending[],
+  seen: Set<ThreadId>,
+  parts: TreePart[],
+): Result<{ at: VerifiedLog; path: string } | undefined, CostError> {
+  for (let top = stack.pop(); top !== undefined; top = stack.pop()) {
+    const child = top.spawn.data.child_thread_id;
+    if (seen.has(child))
+      return err(
+        readError(
+          "log_corrupt",
+          `${top.path}thread ${child} appears twice in the tree`,
+        ),
+      );
+    seen.add(child);
+    const read = childLog(log, top.spawn, top.finish);
+    if (!read.ok) return err(within(top.path, read.error));
+    if (read.value !== undefined) return ok({ at: read.value, path: top.path });
+    parts.push({ cost: undefined, ran: true });
+  }
+  return ok(undefined);
 }
 
 /**

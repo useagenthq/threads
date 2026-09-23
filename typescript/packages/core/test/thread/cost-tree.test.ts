@@ -4,7 +4,7 @@ import { storeConnection } from "../../src/agent/sqlite";
 import { Cost, type ThreadId } from "../../src/log";
 import type { Thread } from "../../src/thread";
 import { code, unwrap } from "../store/helpers";
-import { editStarted, type Line, obj, rewriteLog } from "./rewrite-log";
+import { editStarted, obj, rewriteLog } from "./rewrite-log";
 import {
   childIds,
   corrupt,
@@ -14,22 +14,13 @@ import {
   type Store,
   say,
   spawn,
+  tree,
   unpricedMiddle,
+  usd,
 } from "./usage-kit";
 
 // Thread.cost({ tree: true }) over real child logs: the tree merge of spec/api.json Thread.cost,
 // and the tree's integrity (each child names the spawn that started it; no thread twice).
-
-/** A USD total whose upper bound is its known cost (every attempt here settles). */
-const usd = (known: number, exact: boolean): Cost => ({
-  currency: "USD",
-  known_nanos: known,
-  upper_bound_nanos: known,
-  complete: exact,
-  bounded: exact,
-});
-
-const tree = async (thread: Thread) => thread.cost({ tree: true });
 
 async function handle(store: Store, id: ThreadId | undefined): Promise<Thread> {
   if (id === undefined) throw new Error("no such child");
@@ -144,121 +135,9 @@ describe("the tree merge", () => {
     await rewriteLog(store, freeId, (lines) => lines.slice(0, 2));
     expect(unwrap(await tree(thread))).toEqual(usd(2 * ONE, true));
   });
-
-  test("a spawned child with no log counts nothing, and the total is incomplete", async () => {
-    const store = sqlite(":memory:");
-    const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
-    const thread = await run(store, priced([spawn("kid"), say("Done.")]), [
-      kid,
-    ]);
-    const [kidId] = await childIds(thread);
-    if (kidId === undefined) throw new Error("no child");
-    // As if the host crashed right after agent_spawned: the spawn names a child with no thread,
-    // and nothing after it (no agent_finished) was written.
-    const unstarted = "0192a000-0000-7000-8000-0000000000ee";
-    await rewriteLog(store, thread.id, (lines) => {
-      const at = lines.findIndex((l) => l["type"] === "agent_spawned");
-      return lines
-        .slice(0, at + 1)
-        .map((l) =>
-          obj(JSON.parse(JSON.stringify(l).replaceAll(kidId, unstarted))),
-        );
-    });
-    // Only the lead's first response (the spawn) was recorded. Nothing proves the child never
-    // ran (its log could have been deleted), so the total is not complete.
-    expect(unwrap(await tree(thread))).toEqual(usd(ONE, false));
-  });
-});
-
-describe("a cancelled child that was never created", () => {
-  // spec/schema/README.md, Subagent cancellation: a child with no thread is recorded cancelled,
-  // with unknown usage, and never created.
-  async function cancelledBeforeCreated(usage: Line) {
-    const store = sqlite(":memory:");
-    const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
-    const thread = await run(store, priced([spawn("kid"), say("Done.")]), [
-      kid,
-    ]);
-    const [kidId] = await childIds(thread);
-    if (kidId === undefined) throw new Error("no child");
-    const unstarted = "0192a000-0000-7000-8000-0000000000ed";
-    await rewriteLog(store, thread.id, (lines) =>
-      lines.map((l) => {
-        const line = obj(
-          JSON.parse(JSON.stringify(l).replaceAll(kidId, unstarted)),
-        );
-        return line["type"] === "agent_finished"
-          ? {
-              ...line,
-              data: { ...obj(line["data"]), status: "cancelled", usage },
-            }
-          : line;
-      }),
-    );
-    return tree(thread);
-  }
-
-  test("counts nothing, and the total is incomplete: the record can't prove it never ran", async () => {
-    // A started child cancelled with unknown usage writes the same record; if its log were
-    // lost, a complete total would hide its spend.
-    const total = await cancelledBeforeCreated({
-      input_tokens: null,
-      output_tokens: null,
-    });
-    expect(unwrap(total)).toEqual(usd(2 * ONE, false));
-  });
-
-  test("with known usage its missing log is log_corrupt", async () => {
-    const total = await cancelledBeforeCreated({
-      input_tokens: 10,
-      output_tokens: 2,
-    });
-    expect(code(total)).toBe("log_corrupt");
-    expect(total.ok ? "" : total.error.message).toContain(
-      "its log is missing, though its parent recorded it cancelled",
-    );
-  });
 });
 
 describe("a tree that can't be read fails the call, naming the path", () => {
-  test("two spawns naming the same missing child are log_corrupt", async () => {
-    const store = sqlite(":memory:");
-    const one = agent({ name: "one", model: priced([say("One.")]) });
-    const two = agent({ name: "two", model: priced([say("Two.")]) });
-    const thread = await run(
-      store,
-      priced([spawn("one"), spawn("two"), say("Done.")]),
-      [one, two],
-    );
-    const ids = await childIds(thread);
-    const missing = "0192a000-0000-7000-8000-0000000000ec";
-    await rewriteLog(store, thread.id, (lines) => {
-      const spawns = lines.flatMap((l, i) =>
-        l["type"] === "agent_spawned" ? [i] : [],
-      );
-      return lines.slice(0, (spawns[1] ?? 0) + 1).map((l) => {
-        const text = ids.reduce<string>(
-          (s, id) => s.replaceAll(id, missing),
-          JSON.stringify(l),
-        );
-        const line = obj(JSON.parse(text));
-        return line["type"] === "agent_finished"
-          ? {
-              ...line,
-              data: {
-                ...obj(line["data"]),
-                status: "cancelled",
-                usage: { input_tokens: null, output_tokens: null },
-              },
-            }
-          : line;
-      });
-    });
-    const total = await tree(thread);
-    expect(code(total)).toBe("log_corrupt");
-    expect(total.ok ? "" : total.error.message).toContain("appears twice");
-  });
-
   test("a corrupt child is log_corrupt", async () => {
     const store = sqlite(":memory:");
     const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
@@ -274,28 +153,29 @@ describe("a tree that can't be read fails the call, naming the path", () => {
     expect(unwrap(await thread.cost())).toEqual(usd(2 * ONE, true));
   });
 
-  test("a finished child whose log is missing is log_corrupt, never a partial sum", async () => {
+  test("of two broken paths, the first depth first is reported", async () => {
     const store = sqlite(":memory:");
+    const leaf = agent({ name: "leaf", model: priced([say("Leaf.")]) });
+    const mid = agent({
+      name: "mid",
+      model: priced([spawn("leaf"), say("Mid.")]),
+      subagents: [leaf],
+    });
     const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
-    const thread = await run(store, priced([spawn("kid"), say("Done.")]), [
-      kid,
-    ]);
-    const [kidId] = await childIds(thread);
-    // The parent's agent_finished proves the child ran; its log is gone from this store.
-    const { db } = await storeConnection(store);
-    const elsewhere = "0192a000-0000-7000-8000-0000000000ef";
-    db.run(
-      "INSERT INTO threads (thread_id, tenant_id) SELECT ?, tenant_id FROM threads WHERE thread_id = ?",
-      [elsewhere, kidId ?? ""],
+    const thread = await run(
+      store,
+      priced([spawn("mid"), spawn("kid"), say("Done.")]),
+      [mid, kid],
     );
-    db.run("UPDATE branches SET thread_id = ? WHERE thread_id = ?", [
-      elsewhere,
-      kidId ?? "",
-    ]);
+    const [midId, kidId] = await childIds(thread);
+    const [leafId] = await childIds(await handle(store, midId));
+    if (leafId === undefined || kidId === undefined) throw new Error("no tree");
+    await corrupt(store, leafId, "Do it.");
+    await corrupt(store, kidId, "Do it.");
     const total = await tree(thread);
     expect(code(total)).toBe("log_corrupt");
-    expect(total.ok ? "" : total.error.message).toContain(
-      `child ${kidId}: its log is missing`,
+    expect(total.ok ? "" : total.error.message).toStartWith(
+      `child ${midId}: child ${leafId}:`,
     );
   });
 

@@ -2,6 +2,9 @@
 its own main branch, so the logs stay the only truth (the budget ledger is a cache, never reused
 here)."""
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.store import Store, open_store
@@ -9,6 +12,7 @@ from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
     Cost,
+    Event,
     ModelRequestEvent,
     ParseError,
     ThreadId,
@@ -20,56 +24,73 @@ from threads.store import VerifiedLog
 from threads.thread.read import read_log
 
 
+@dataclass(frozen=True, slots=True)
+class _Pending:
+    """A spawned child still to read and walk, with the path of child ids that leads to it."""
+
+    spawn: AgentSpawnedEvent
+    finish: AgentFinishedEvent | None
+    path: str
+
+
 async def tree_cost(
     store: Store, root: ThreadId, log: VerifiedLog
 ) -> Ok[Cost | None] | Err[ParseError]:
     """Every thread of the tree, depth first in spawn order, with an explicit stack so a tree of
-    any depth is walked. Each child must name, as its parent, the agent_spawned that started it;
-    a child that doesn't, or a thread named twice (a cycle, or two spawns of one id), makes the
-    tree log_corrupt. A child with no log counts as an unpriced thread that ran: nothing proves
-    it spent nothing (its log may have been deleted), so the total is incomplete and unbounded,
-    never falsely complete."""
+    any depth is walked, and each child read only on its turn, so the first broken path depth
+    first is the one reported. Each child must name, as its parent, the agent_spawned that
+    started it; a child that doesn't, or a thread named twice (a cycle, or two spawns of one id),
+    makes the tree log_corrupt. A child with no log counts as an unpriced thread that ran:
+    nothing proves it spent nothing (its log may have been deleted), so the total is incomplete
+    and unbounded, never falsely complete."""
     parts: list[TreePart] = []
     seen = {root}
-    stack = [(log, "")]
-    while stack:
-        at, path = stack.pop()
+    stack: list[_Pending] = []
+    walk: tuple[VerifiedLog, str] | None = (log, "")
+    while walk is not None:
+        at, path = walk
         own = cost(at.fold)
         if isinstance(own, Err):
             return _within(path, own)
-        parts.append(
-            TreePart(own.value, any(isinstance(e, ModelRequestEvent) for e in at.fold.events))
-        )
-        children = await _children(store, at, path, seen, parts)
-        if isinstance(children, Err):
-            return children
-        stack.extend(reversed(children.value))
+        events = at.fold.events
+        parts.append(TreePart(own.value, any(isinstance(e, ModelRequestEvent) for e in events)))
+        stack.extend(reversed(_pending(events, path)))
+        read = await _next_child(store, stack, seen, parts)
+        if isinstance(read, Err):
+            return read
+        walk = read.value
     return merge_tree(parts)
 
 
-async def _children(
-    store: Store, at: VerifiedLog, path: str, seen: set[ThreadId], parts: list[TreePart]
-) -> Ok[list[tuple[VerifiedLog, str]]] | Err[ParseError]:
-    """The logs of `at`'s spawned children to walk next, in spawn order; a child with no log
-    adds its unpriced part to `parts` instead."""
-    events = at.fold.events
+def _pending(events: Sequence[Event], path: str) -> list[_Pending]:
+    """The spawns of `events`, in order, each with the parent's agent_finished for its child."""
     finished = {e.data.child_thread_id: e for e in events if isinstance(e, AgentFinishedEvent)}
-    found: list[tuple[VerifiedLog, str]] = []
-    for spawn in (e for e in events if isinstance(e, AgentSpawnedEvent)):
-        child = spawn.data.child_thread_id
-        where = f"{path}child {child}: "
+    return [
+        _Pending(e, finished.get(e.data.child_thread_id), f"{path}child {e.data.child_thread_id}: ")
+        for e in events
+        if isinstance(e, AgentSpawnedEvent)
+    ]
+
+
+async def _next_child(
+    store: Store, stack: list[_Pending], seen: set[ThreadId], parts: list[TreePart]
+) -> Ok[tuple[VerifiedLog, str] | None] | Err[ParseError]:
+    """Pops pending children until one has a log to walk; each without a log adds its unpriced
+    part instead. None when the stack is empty."""
+    while stack:
+        top = stack.pop()
+        child = top.spawn.data.child_thread_id
         if child in seen:
-            why = f"{where}thread {child} appears twice in the tree"
+            why = f"{top.path}thread {child} appears twice in the tree"
             return Err(ParseError("log_corrupt", why))
         seen.add(child)
-        read = await _child_log(store, spawn, finished.get(child))
+        read = await _child_log(store, top.spawn, top.finish)
         if isinstance(read, Err):
-            return _within(where, read)
-        if read.value is None:
-            parts.append(TreePart(None, ran=True))
-        else:
-            found.append((read.value, where))
-    return Ok(found)
+            return _within(top.path, read)
+        if read.value is not None:
+            return Ok((read.value, top.path))
+        parts.append(TreePart(None, ran=True))
+    return Ok(None)
 
 
 def _within(path: str, failed: Err[ParseError]) -> Err[ParseError]:

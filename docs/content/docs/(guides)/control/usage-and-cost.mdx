@@ -129,7 +129,7 @@ total = await thread.cost(tree=True)
 </Tab>
 </Tabs>
 
-The total never hides spend it can't count. `complete` and `bounded` turn `false` when a subagent called a model with no price, or was priced in another currency, or when a subagent has no log to prove it spent nothing (for example one a cancel stopped before it started). If a subagent's log can't be read, the whole call returns that error, naming the subagent, rather than a partial sum.
+The total never hides spend it can't count. It is in the root's currency, or the first priced subagent's; if no thread in the tree has a price it is `null`, which means unknown, not free. `complete` and `bounded` turn `false` when a subagent called a model with no price, or was priced in another currency, or when a subagent has no log to prove it spent nothing (for example one a cancel stopped before it started). If a subagent's log can't be read, the whole call returns that error, naming the subagent, rather than a partial sum.
 
 ## Prompt-cache breaks
 
