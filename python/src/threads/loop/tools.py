@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-from threads.log import ArtifactRef, CallId, JsonObject, ToolSpec
+from threads.log import ArtifactRef, CallId, JsonObject, ResultPart, ToolSpec
 from threads.loop.model import LookupResult
 
 type Termination = Literal["terminated", "already_exited", "unknown"]
@@ -45,6 +45,9 @@ class Output:
     """Output spilled at the source (a sandbox exec over its preview): the result's `ref`, so
     `read_tool_result` reads it."""
     references: tuple[Reference, ...] = ()
+    content: tuple[ResultPart, ...] = ()
+    """Ordered media and citation parts: when present, the model sees exactly these
+    and `text` is their plain-text rendering for logs and channels."""
 
 
 @dataclass(frozen=True, slots=True)

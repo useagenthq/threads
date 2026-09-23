@@ -39,6 +39,7 @@ from threads.adapters.models.render import UnsupportedContentError, store_json
 from threads.log import (
     CallId,
     CitationPart,
+    HostedToolPart,
     OutputPart,
     ReasoningPart,
     TextPart,
@@ -136,8 +137,27 @@ class Assembler:
                 return [await self._reasoning("thinking", whole)]
             case "redacted_thinking":
                 return [await self._reasoning("redacted_thinking", block.start)]
+            case str():
+                return [await self._hosted(kind, block, text)]
             case _:
                 raise UnsupportedContentError("content_unsupported", f"{kind} block")
+
+    async def _hosted(self, kind: str, block: _Block, text: str) -> HostedToolPart:
+        """A server tool use or result block, kept whole and never dispatched.
+        A server_tool_use streams its input as JSON deltas; result blocks arrive whole."""
+        whole = dict(block.start)
+        if text:
+            whole["input"] = ARGS.validate_json(text)
+        name = whole.get("name")
+        ref = await store_json(self.context, whole)
+        return HostedToolPart(
+            type="hosted_tool",
+            provider=PROVIDER,
+            model=self.model,
+            format=kind,
+            name=name if isinstance(name, str) else kind,
+            ref=ref,
+        )
 
     async def _reasoning(self, form: str, block: JsonValue) -> ReasoningPart:
         ref = await store_json(self.context, block)

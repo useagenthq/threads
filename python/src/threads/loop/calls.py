@@ -206,8 +206,11 @@ async def _read_only(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | No
         return stale
     references: list[Draft] = []
     match await rt.tools.dispatch(inv):
-        case Output(text=text, is_error=is_error, full_output=full, references=recalled):
-            result = await result_draft(rt, inv.call_id, text, As("executed", is_error), full)
+        case Output(
+            text=text, is_error=is_error, full_output=full, references=recalled, content=parts
+        ):
+            how = As("executed", is_error)
+            result = await result_draft(rt, inv.call_id, text, how, full, content=parts)
             references = reference_drafts(recalled)
         case Uncertain(reason=reason):
             text = f"{reason}: the read did not finish"

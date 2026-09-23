@@ -5,13 +5,14 @@ retry. The SDK sends through a fenced HTTP client, so a writer that lost its
 lease while the SDK prepared or queued the request sends nothing.
 """
 
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Unpack
 
 import httpx2
 import openai as sdk
 
 from threads.adapters.models import transport
+from threads.adapters.models.hosted import HostedTool, declare
 from threads.adapters.models.openai.request import PROVIDER, build
 from threads.adapters.models.openai.stream import Assembler, ProviderStreamError
 from threads.adapters.models.openai.wire import parse
@@ -95,15 +96,27 @@ def _too_long(error: sdk.APIStatusError) -> bool:
     return error.code == _TOO_LONG
 
 
-def openai(name: str, **options: Unpack[ModelOptions]) -> OpenAIModel:
+class OpenAIOptions(ModelOptions, total=False):
+    hosted_tools: Sequence[HostedTool]
+    """Hosted tools, sent as given and pinned in line 0: web search only (`web_search*`);
+    anything else raises hosted_tool_unsupported."""
+
+
+def _web(kind: str) -> bool:
+    return kind.startswith("web_search")
+
+
+def openai(name: str, **options: Unpack[OpenAIOptions]) -> OpenAIModel:
     """An OpenAI model (the `openai()` of spec/api.json conventions.adapters).
     `max_output_tokens` is pinned as the request's cap; other `params` are Responses API
     fields. `api_key` falls back to OPENAI_API_KEY."""
+    settings, hosted = declare(options.get("hosted_tools", ()), _web, "type")
     declared = info(
         ModelRef(provider=PROVIDER, name=name),
-        AdapterRef(name=ADAPTER, version=VERSION, settings={}),
+        AdapterRef(name=ADAPTER, version=VERSION, settings=settings),
         options,
         {"max_output_tokens": options["max_output_tokens"]},
+        hosted,
     )
     return OpenAIModel(declared, client(options.get("api_key"), options.get("base_url")))
 

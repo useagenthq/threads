@@ -33,6 +33,7 @@ from threads.adapters.models.render import UnsupportedContentError, store_json
 from threads.log import (
     CallId,
     CitationPart,
+    HostedToolPart,
     OutputPart,
     ReasoningPart,
     TextPart,
@@ -42,6 +43,7 @@ from threads.log import (
 from threads.loop.model import Delta, Done, ModelChunk, ModelContext, PartChunk, StopReason
 
 _ARGS: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
+_LOCAL = frozenset({"message", "function_call", "reasoning"})
 _INCOMPLETE: dict[str, StopReason] = {"max_output_tokens": "max_tokens"}
 """Any other incomplete reason (content_filter, max_messages, steered) is one the loop has no
 name for: other, which ends the turn with error."""
@@ -85,6 +87,20 @@ class Assembler:
                 assert_never(event)
 
     async def _item(self, raw: dict[str, JsonValue]) -> list[OutputPart]:
+        kind = raw.get("type")
+        if isinstance(kind, str) and kind not in _LOCAL:
+            # A hosted tool item (web search): kept whole, never dispatched.
+            ref = await store_json(self.context, raw)
+            return [
+                HostedToolPart(
+                    type="hosted_tool",
+                    provider=PROVIDER,
+                    model=self.model,
+                    format=kind,
+                    name=kind,
+                    ref=ref,
+                )
+            ]
         try:
             item = ITEM.validate_python(raw)
         except ValidationError as error:

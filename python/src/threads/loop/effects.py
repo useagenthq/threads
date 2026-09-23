@@ -44,10 +44,11 @@ async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
     if stale is not None:
         return stale
     match await rt.tools.dispatch(inv):
-        case Output(text=text, is_error=is_error, full_output=full):
+        case Output(text=text, is_error=is_error, full_output=full, content=parts):
             ref = await text_ref(rt, text)
             commit = draft("effect_commit", {"call_id": inv.call_id, "result_ref": ref})
-            result = await result_draft(rt, inv.call_id, text, As("executed", is_error), full)
+            how = As("executed", is_error)
+            result = await result_draft(rt, inv.call_id, text, how, full, content=parts)
             done = await rt.append(commit, result)
             return lost(done.error) if isinstance(done, Err) else None
         case Uncertain(reason=reason):

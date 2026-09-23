@@ -88,6 +88,9 @@ def test_a_render_case_maps_to_its_golden_request(case: str) -> None:
 
 def test_hosted_tool_parts_are_refused_before_dispatch() -> None:
     body, context = render_case("render-hosted-search-citations", "anthropic", "anthropic")
+    # A hosted part another provider recorded can't go back to this one.
+    ours = b'"name":"web_search","provider":"anthropic"'
+    body = body.replace(ours, b'"name":"web_search","provider":"scripted"')
     script = Script([])
     assert run(script, body, context) == [Rejected("continuation_unsupported")]
     assert script.sent == []

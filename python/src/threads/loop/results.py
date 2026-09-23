@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import JsonValue
 
-from threads.log import ArtifactRef, CallId
+from threads.log import ArtifactRef, CallId, ResultPart
 from threads.loop.defaults import context
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.runtime import Runtime
@@ -58,8 +58,14 @@ def reference_drafts(references: Sequence[Reference]) -> list[Draft]:
     return out
 
 
-async def result_draft(
-    rt: Runtime, call_id: CallId, text: str, how: As, full: ArtifactRef | None = None
+async def result_draft(  # noqa: PLR0913 - the result's parts ride with it
+    rt: Runtime,
+    call_id: CallId,
+    text: str,
+    how: As,
+    full: ArtifactRef | None = None,
+    *,
+    content: Sequence[ResultPart] = (),
 ) -> Draft:
     """The result the model sees. Spilled bytes are a durable artifact before this draft;
     `full` is output the source already spilled, and the text is then its bounded preview."""
@@ -70,6 +76,8 @@ async def result_draft(
         "origin": how.origin,
         "preview": text,
     }
+    if content:
+        data["content"] = [to_json(p) for p in content]
     raw = text.encode("utf-8")
     spill = context(rt.fold).spill
     if full is not None:

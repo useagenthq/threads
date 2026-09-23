@@ -33,6 +33,7 @@ def info(
     adapter: AdapterRef,
     options: ModelOptions,
     defaults: Mapping[str, JsonValue],
+    hosted: tuple[str, ...] = (),
 ) -> ModelInfo:
     """No adapter here offers response lookup by client request id, so lookup is `none`."""
     limits = ModelLimits(
@@ -46,4 +47,4 @@ def info(
     if price is not None:
         limits = limits.model_copy(update={"price": price})
     params = {**defaults, **options.get("params", {})}
-    return ModelInfo(ref, adapter, params, limits, "none", ACCEPTS)
+    return ModelInfo(ref, adapter, params, limits, "none", ACCEPTS, hosted)

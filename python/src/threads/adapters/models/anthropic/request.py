@@ -17,6 +17,7 @@ from typing import assert_never
 from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads.adapters.models.hosted import pinned
 from threads.adapters.models.render import (
     AssistantLine,
     Request,
@@ -82,7 +83,9 @@ class _Builder:
                     blocks.append(await self.reasoning(part))
                 case CitationPart():
                     pass
-                case HostedToolPart() | ImagePart():
+                case HostedToolPart():
+                    blocks.append(await self.hosted(part))
+                case ImagePart():
                     raise UnsupportedContentError("continuation_unsupported", part.type)
                 case _:
                     assert_never(part)
@@ -105,6 +108,14 @@ class _Builder:
     async def reasoning(self, part: ReasoningPart) -> Block:
         if part.provider != PROVIDER or part.format not in REASONING_FORMATS:
             raise UnsupportedContentError("continuation_unsupported", f"{part.provider} reasoning")
+        return _BLOCK.validate_json(await read(self.context, part.ref))
+
+    async def hosted(self, part: HostedToolPart) -> Block:
+        """A server tool block goes back exactly as recorded."""
+        if part.provider != PROVIDER:
+            raise UnsupportedContentError(
+                "continuation_unsupported", f"{part.provider} hosted tool"
+            )
         return _BLOCK.validate_json(await read(self.context, part.ref))
 
     async def part(self, part: TextPart | ImagePart | DocumentPart | AudioPart) -> Block:
@@ -170,6 +181,7 @@ async def build(request: Request, context: ModelContext) -> Body:
     }
     if head.system:
         body["system"] = head.system
-    if request.tools:
-        body["tools"] = [_tool(t) for t in request.tools]
+    tools = [*(_tool(t) for t in request.tools), *pinned(head.adapter.settings)]
+    if tools:
+        body["tools"] = tools
     return Body(body, tuple(builder.documents))

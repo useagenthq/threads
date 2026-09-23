@@ -5,9 +5,9 @@ retry. The SDK sends through a fenced HTTP client, so a writer that lost its
 lease while the SDK prepared or queued the request sends nothing.
 """
 
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Unpack
+from typing import Unpack
 
 import anthropic as sdk
 import httpx2
@@ -16,6 +16,7 @@ from threads.adapters.models import transport
 from threads.adapters.models.anthropic.request import PROVIDER, build
 from threads.adapters.models.anthropic.stream import Assembler, ProviderStreamError
 from threads.adapters.models.anthropic.wire import parse
+from threads.adapters.models.hosted import HostedTool, declare
 from threads.adapters.models.options import ModelOptions, info
 from threads.adapters.models.render import prepare
 from threads.log import AdapterRef, ModelRef
@@ -29,9 +30,6 @@ from threads.loop.model import (
     ModelResponse,
     Rejected,
 )
-
-if TYPE_CHECKING:
-    from pydantic import JsonValue
 
 ADAPTER = "anthropic"
 VERSION = "1"
@@ -99,18 +97,28 @@ def _too_long(error: sdk.APIStatusError) -> bool:
 class AnthropicOptions(ModelOptions, total=False):
     citations: bool
     """Enables citations on documents (an adapter setting, so pinned in line 0)."""
+    hosted_tools: Sequence[HostedTool]
+    """Server tools, sent as given and pinned in line 0: web search and web fetch only
+    (`web_search_*`, `web_fetch_*`); anything else raises hosted_tool_unsupported."""
+
+
+def _web(kind: str) -> bool:
+    return kind.startswith(("web_search_", "web_fetch_"))
 
 
 def anthropic(name: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel:
     """An Anthropic model (the `anthropic()` of spec/api.json conventions.adapters).
     `max_tokens` defaults to `max_output_tokens`; other `params` are Messages API fields.
     `api_key` falls back to ANTHROPIC_API_KEY."""
-    settings: dict[str, JsonValue] = {"citations": True} if options.get("citations") else {}
+    settings, hosted = declare(options.get("hosted_tools", ()), _web, "name")
+    if options.get("citations"):
+        settings["citations"] = True
     declared = info(
         ModelRef(provider=PROVIDER, name=name),
         AdapterRef(name=ADAPTER, version=VERSION, settings=settings),
         options,
         {"max_tokens": options["max_output_tokens"]},
+        hosted,
     )
     return AnthropicModel(declared, client(options.get("api_key"), options.get("base_url")))
 
