@@ -42,6 +42,8 @@ from threads.thread import approvals, control, tree
 from threads.thread.handle import Thread
 
 _INBOUND: TypeAdapter[Inbound] = TypeAdapter(Inbound)
+RETRY_S = 0.5
+"""How soon an answer that met another process's lease is tried again."""
 
 
 class ChannelIntake:
@@ -50,6 +52,7 @@ class ChannelIntake:
         self._channels = channels
         self._locks: dict[ThreadId, asyncio.Lock] = {}
         self._tasks: set[asyncio.Task[None]] = set()
+        self._retries: set[asyncio.TimerHandle] = set()
 
     async def receive(self, channel: str, raw: RawRequest) -> Ok[RawResponse] | Err[ParseError]:
         """Steps 1-5: the webhook's answer, after its whole batch is durable."""
@@ -94,7 +97,11 @@ class ChannelIntake:
         task.add_done_callback(self._tasks.discard)
 
     async def drain(self) -> None:
-        """Waits for intake in flight (stop)."""
+        """Waits for intake in flight (stop). Pending retries are dropped: the rows are durable
+        and the next start consumes them."""
+        for handle in self._retries:
+            handle.cancel()
+        self._retries.clear()
         while self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
@@ -114,11 +121,23 @@ class ChannelIntake:
                     if isinstance(item, Message) and blocked:
                         continue
                     took = await self._one(store, row, item)
+                    if took is None:
+                        # The branch is held elsewhere: this answer and everything after it wait,
+                        # in order, until the lease frees.
+                        self._later(store, thread_id)
+                        return
                     blocked = blocked or not took
                     progressed = progressed or took
 
-    async def _one(self, store: Store, row: inbox.Row, item: Inbound) -> bool:
-        """Consumes one item; False when it must wait for the thread to move on."""
+    def _later(self, store: Store, thread_id: ThreadId) -> None:
+        # ponytail: a fixed retry while another process holds the branch; a lease-expiry wake
+        # would need the holder's TTL.
+        handle = asyncio.get_running_loop().call_later(RETRY_S, self.consume, store, thread_id)
+        self._retries.add(handle)
+
+    async def _one(self, store: Store, row: inbox.Row, item: Inbound) -> bool | None:
+        """Consumes one item; False when it must wait for the thread to move on, None when an
+        answer or control must wait for another process's lease."""
         bound = await self._runner.bound(store, row.thread_id)
         branch = await _branch(store, row.thread_id)
         if bound is None or isinstance(branch, Err):
@@ -165,7 +184,7 @@ class ChannelIntake:
 
     async def _control(
         self, bound: Bound, thread: Thread, row: inbox.Row, item: Decision | Control
-    ) -> bool:
+    ) -> bool | None:
         consume = inbox.consume(row.inbox_id)
         if isinstance(item, Decision):
             decision = "granted" if item.decision == "grant" else "denied"
@@ -190,6 +209,8 @@ class ChannelIntake:
                 kind="stop_when_idle",
                 companion=consume,
             )
+        if isinstance(done, Err) and done.error.code == "branch_busy":
+            return None
         if isinstance(done, Err):
             # Refused (not an approver, a stale button): consumed, and nothing appended.
             await (await open_store(thread.store)).tables.discard(row.inbox_id)
