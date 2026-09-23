@@ -51,7 +51,9 @@ async function start(s: Session, call: Call): Promise<Halt | undefined> {
       ? `unknown agent: ${input.agent}`
       : isolation !== "none"
         ? `isolation ${isolation} is not supported yet; use none`
-        : undefined;
+        : active(s, input.agent)
+          ? `member_active: ${input.agent} is still running`
+          : undefined;
   if (refused !== undefined) return closed(s, call_id, "not_executed", refused);
   const denied = await startGate(s, call);
   if (typeof denied !== "string") return denied;
@@ -67,6 +69,19 @@ async function start(s: Session, call: Call): Promise<Halt | undefined> {
     }),
   );
   return stopped ?? spawnAgent(s, call);
+}
+
+/**
+ * A member is its agent name, so a name has at most one unfinished child of this lead
+ * (spec/schema/README.md, Team tools).
+ */
+function active(s: Session, name: string): boolean {
+  return s.events.some(
+    (e) =>
+      e.type === "agent_spawned" &&
+      e.data.agent_name === name &&
+      s.fold.children.get(e.data.child_thread_id) === "running",
+  );
 }
 
 /** A background child answers its call at once; its result arrives as tool_result_late. */
