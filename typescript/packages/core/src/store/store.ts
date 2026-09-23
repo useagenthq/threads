@@ -1,4 +1,5 @@
 import type { BranchId, SandboxId, ThreadId } from "../log";
+import { containsSecret } from "../redact";
 import { knownEvents } from "../reduce";
 import { refReader, verifyRequests } from "../render";
 import { err, ok, type Result } from "../result";
@@ -136,6 +137,15 @@ export class LogStore {
    * model request must replay from the log and the artifacts already stored (C7, Render v1).
    */
   importLog(bytes: Uint8Array): Result<VerifiedLog, LogError> {
+    // Imported bytes are stored exactly as exported, torn tail included: one holding a
+    // registered value is refused (C5).
+    if (containsSecret(bytes))
+      return err(
+        logError(
+          "secret_in_stored_bytes",
+          "the export holds a registered secret; nothing imported",
+        ),
+      );
     const log = verifyExport(bytes);
     if (!log.ok) return log;
     const replayed = verifyRequests(

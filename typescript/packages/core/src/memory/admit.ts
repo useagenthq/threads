@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { extname } from "node:path";
 import { ConfigError } from "../agent/errors";
 import { sha256Hex } from "../hash";
+import { containsSecret } from "../redact";
 import type { HostBindings } from "../store/bindings";
 import type { KnowledgeProvider, Scope } from "./protocol";
 
@@ -42,6 +43,12 @@ export async function admitPaths(
         `knowledge path ${path}: ${String(error)}`,
       );
     }
+    // Byte-exact (its digest is its version): a source holding a registered value is refused.
+    if (containsSecret(content))
+      throw new ConfigError(
+        "invalid_config",
+        `knowledge path ${path}: holds a registered secret; not ingested`,
+      );
     // The provider key is the binding's record_id, per scope: another agent or tenant adding the
     // same file is another ingest (spec/schema/README.md, "Knowledge ingest key").
     const binding = bindings.issue(

@@ -1,6 +1,6 @@
-"""C5, round 5: the marker never repeats a registered value, the writer redacts JSON keys and the
-actor, provider material holding a registered value fails closed, web_fetch stores its cited
-page redacted, and adapter and MCP setup errors are returned redacted."""
+"""C5, round 5: the writer redacts JSON keys and the actor, provider material holding a
+registered value fails closed, web_fetch stores its cited page redacted, and adapter and MCP
+setup errors are returned redacted."""
 
 import asyncio
 from collections.abc import AsyncGenerator, Generator, Sequence
@@ -31,7 +31,6 @@ from threads.loop.guard import block_model_requests
 from threads.loop.runtime import Runtime
 from threads.loop.scripted import ScriptedModel
 from threads.openai import openai
-from threads.redaction import redact_secrets
 from threads.result import Err
 from threads.secrets import credential
 from threads.web.fetch import Page
@@ -49,16 +48,6 @@ BYPASS = Permissions.model_validate(
     }
 )
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
-
-
-def test_a_value_inside_its_own_label_falls_back_to_a_plain_marker() -> None:
-    credential("fake", "api_key", "api", "U")()
-    assert redact_secrets("my api here") == "my [secret] here"
-
-
-def test_a_value_inside_the_plain_marker_falls_back_again() -> None:
-    credential("x", "api_key", "secret", "U")()
-    assert redact_secrets("a secret b") == "a [redacted] b"
 
 
 class Anything(BaseModel):

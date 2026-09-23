@@ -81,9 +81,8 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
     case "unsupported":
       return s.append(draft.turnCompleted("error", got.refused.code));
     case "leaked":
-      return s.append(
-        draft.turnCompleted("error", "secret_in_provider_output"),
-      );
+      // The attempt already ended the turn, in the same batch as its abandonment.
+      return undefined;
     case "budget":
       return endTurn(s, "budget_exhausted");
     default:
@@ -221,7 +220,7 @@ async function reactive(s: Session): Promise<Halt | undefined> {
     return endTurn(s, "context_exhausted");
   const done = await compact(s, "reactive");
   if (done.kind === "halt") return done.halt;
-  return done.kind === "compacted"
+  return done.kind === "compacted" || done.kind === "ended"
     ? undefined
     : endTurn(s, "context_exhausted");
 }

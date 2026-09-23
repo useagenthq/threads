@@ -67,11 +67,11 @@ function nothingHolds(dir: string, sent: readonly string[], key: string): void {
 const storeDir = (): string =>
   join(mkdtempSync(join(tmpdir(), "threads-redact4-")), "store");
 
-/** `abc-l9` and `abc-l9-123`, registered for one test (each test starts with none). */
+/** `abc-lane9` and `abc-lane9-123`, registered for one test (each test starts with none). */
 function overlapping(): { readonly short: string; readonly long: string } {
   return {
-    short: credential("short", "apiKey", "abc-l9", "U")(),
-    long: credential("long", "apiKey", "abc-l9-123", "U")(),
+    short: credential("short", "apiKey", "abc-lane9", "U")(),
+    long: credential("long", "apiKey", "abc-lane9-123", "U")(),
   };
 }
 
@@ -80,7 +80,7 @@ describe("streaming redaction never leaks across a chunk boundary", () => {
     const { long } = overlapping();
     const stream = redactStream();
     const shown =
-      stream.feed("x abc-l9") + stream.feed("-123 y") + stream.end();
+      stream.feed("x abc-lane9") + stream.feed("-123 y") + stream.end();
     expect(shown).toBe("x [secret long.apiKey] y");
     expect(shown).not.toContain(long);
   });

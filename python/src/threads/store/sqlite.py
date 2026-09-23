@@ -14,6 +14,7 @@ from pydantic import JsonValue
 from threads import VERSION
 from threads.log import BranchId, Event, ParseError, ThreadId
 from threads.log.digest import sha256_hex
+from threads.redaction import contains_secret
 from threads.render import Rendered, render
 from threads.render.verify import verify_requests
 from threads.result import Err, Ok
@@ -141,6 +142,10 @@ class SqliteStore:
         Every model request must first replay from the log and the artifacts already in the
         store (C7, Render v1): the first failing request's error is the result."""
         tenant, artifacts = self._tenant, self._artifacts
+        if contains_secret(_imported_bytes(log)):
+            # Imported bytes are stored exactly as exported, torn tail included (C5).
+            message = "the export holds a registered secret; nothing imported"
+            return Err(ParseError("secret_in_stored_bytes", message))
 
         def store(conn: sqlite3.Connection) -> ParseError | None:
             replayed = verify_requests(log.fold.events, artifacts.get)
@@ -387,3 +392,9 @@ def _corrupt(cause: ParseError) -> ParseError:
     # A stored branch that fails verification refuses writable opens; the precise code is the
     # cause (spec/schema/README.md wire rule 14). Readers still get the precise error.
     return ParseError("log_corrupt", f"{cause.code}: {cause.message}", cause.seq)
+
+
+def _imported_bytes(log: VerifiedLog) -> bytes:
+    """Every byte an import stores: each segment's header and event lines, and a torn tail."""
+    lines = [line for s in log.segments for line in (s.header_line, *(b for _, b in s.events))]
+    return b"\n".join(lines) + b"\n" + log.dropped

@@ -16,7 +16,7 @@ from threads.secrets import secret
 from threads.slack import slack
 from threads.whatsapp import whatsapp
 
-SECRET = "shh"  # noqa: S105 - a test signing secret
+SECRET = "shh-signing"  # noqa: S105 - a test signing secret
 NOW = 1_790_000_000
 CHALLENGE = "0192c000-0000-7000-8000-00000000000a"
 
@@ -24,8 +24,8 @@ CHALLENGE = "0192c000-0000-7000-8000-00000000000a"
 @pytest.fixture(autouse=True)
 def secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SIGNING", SECRET)
-    monkeypatch.setenv("TOKEN", "tok")
-    monkeypatch.setenv("VERIFY", "v")
+    monkeypatch.setenv("TOKEN", "tok-test-1")
+    monkeypatch.setenv("VERIFY", "verify-token")
 
 
 def slack_signed(body: bytes, form: bool = False) -> RawRequest:

@@ -18,6 +18,8 @@ import type { Halt } from "./types";
 export type Compaction =
   | { readonly kind: "compacted" }
   | { readonly kind: "failed" }
+  /** The summary request's response held a registered secret: the turn has ended. */
+  | { readonly kind: "ended" }
   | { readonly kind: "halt"; readonly halt: Halt };
 
 type Reason = "threshold" | "compaction_fallback";
@@ -61,9 +63,10 @@ export async function compact(
           ? "prompt_too_long"
           : "model_error",
       );
+    case "leaked":
+      return { kind: "ended" };
     case "broken":
     case "unsupported":
-    case "leaked":
     case "budget":
       return failed(s, "model_error");
     default:

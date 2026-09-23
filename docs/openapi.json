@@ -1568,7 +1568,8 @@
           "branch_not_runnable",
           "resource_unknown",
           "writer_mismatch",
-          "secret_in_provider_output"
+          "secret_in_provider_output",
+          "secret_in_stored_bytes"
         ]
       },
       "events_Event": {

@@ -52,7 +52,7 @@ def reply(*events: Ev) -> httpx2.Response:
 
 def model(script: Script) -> AnthropicModel:
     declared = anthropic("claude-test", context_window=WINDOW, max_output_tokens=4096).info
-    return AnthropicModel(declared, "key", http=httpx2.MockTransport(script))
+    return AnthropicModel(declared, "sk-test-1", http=httpx2.MockTransport(script))
 
 
 def one_turn() -> bytes:
@@ -197,7 +197,7 @@ def _raises(error: type[httpx2.TransportError]) -> AnthropicModel:
         raise error("down", request=request)
 
     info = anthropic("claude-test", context_window=WINDOW, max_output_tokens=10).info
-    return AnthropicModel(info, "k", http=httpx2.MockTransport(handle))
+    return AnthropicModel(info, "sk-test-1", http=httpx2.MockTransport(handle))
 
 
 def test_a_refused_connection_is_server_error_and_a_broken_read_is_uncertain() -> None:

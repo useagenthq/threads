@@ -165,7 +165,7 @@ def test_a_stub_run_refuses_a_live_model_with_hosted_tools() -> None:
             hosted_tools=[search],
             context_window=1,
             max_output_tokens=1,
-            api_key="k",
+            api_key="sk-test-1",
         )
         hosted = bot(box, [], [])
         hosted = Agent(replace(hosted.definition, model=live), (None,), str)

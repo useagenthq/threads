@@ -21,7 +21,7 @@ from threads.log import CallId, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, ModelRequest, PartChunk, Rejected
 
 ROUTE = "openai/gpt-test"
-INFO = litellm(ROUTE, context_window=128_000, max_output_tokens=4096, api_key="k").info
+INFO = litellm(ROUTE, context_window=128_000, max_output_tokens=4096, api_key="sk-test-1").info
 
 
 @dataclass
@@ -53,13 +53,13 @@ def one_turn() -> bytes:
 
 def bridged(complete: Complete) -> LiteLLMModel:
     """The model over `complete`, whatever key it is given."""
-    return LiteLLMModel(INFO, "k", lambda _key: complete)
+    return LiteLLMModel(INFO, "sk-test-1", lambda _key: complete)
 
 
 def through_litellm(script: Script) -> LiteLLMModel:
     """LiteLLM's real OpenAI route, its SDK client sending to the scripted transport."""
     http = httpx2.AsyncClient(transport=httpx2.MockTransport(script))
-    sdk = openai.AsyncOpenAI(api_key="k", max_retries=0, http_client=http)
+    sdk = openai.AsyncOpenAI(api_key="sk-test-1", max_retries=0, http_client=http)
     return bridged(partial(ACOMPLETION, client=sdk))
 
 

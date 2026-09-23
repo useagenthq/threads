@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { agent, fakeSandbox, scriptedModel, sqlite } from "../../src";
+import { credential } from "../../src/agent/secret";
 import { openStore } from "../../src/agent/sqlite";
+import { sha256Hex } from "../../src/hash";
 import { type KnownEvent, SandboxId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { err, ok } from "../../src/result";
@@ -163,6 +165,19 @@ describe("computer_screenshot", () => {
     });
     if (image?.type !== "image_ref") throw new Error("no image");
     expect(tool.artifacts.get(image.ref.sha256).ok).toBe(true);
+  });
+
+  test("a capture holding a registered value is refused, never stored (#328 HIGH 8)", async () => {
+    const key = credential("fake", "apiKey", "sk-l9-shot-3a4b", "U")();
+    const shot = new Uint8Array([
+      ...png(1280, 800),
+      ...new TextEncoder().encode(`tEXt ${key}`),
+    ]);
+    const tool = bound(computerScreenshot, desktopSession("", shot));
+    const run = await tool.run({});
+    expect(run).toMatchObject({ kind: "done", isError: true });
+    expect(run.kind === "done" && run.output).toContain("registered secret");
+    expect(tool.artifacts.get(sha256Hex(shot)).ok).toBe(false);
   });
 
   test("no desktop answering is unavailable, never an empty success", async () => {

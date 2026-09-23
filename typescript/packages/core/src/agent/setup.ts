@@ -55,18 +55,29 @@ async function once(target: object, setup: () => Promise<void>): Promise<void> {
   return promise;
 }
 
-/** A setup error as check() returns it and a run throws it: a resolved secret redacted. */
-function redacted(error: unknown): unknown {
-  return error instanceof ConfigError
-    ? new ConfigError(error.code, redactSecrets(error.message))
-    : error;
+/**
+ * A setup failure as check() returns it and a run throws it: always a ConfigError, its message
+ * redacted. An unexpected exception becomes `fallback`, naming what failed.
+ */
+function redacted(
+  error: unknown,
+  fallback: ConfigError["code"],
+  what: string,
+): ConfigError {
+  if (error instanceof ConfigError)
+    return new ConfigError(error.code, redactSecrets(error.message));
+  const why = error instanceof Error ? error.message : String(error);
+  return new ConfigError(fallback, redactSecrets(`${what}: ${why}`));
 }
 
-async function redactedSetup(setup: () => Promise<void>): Promise<void> {
+async function redactedSetup(
+  setup: () => Promise<void>,
+  what: string,
+): Promise<void> {
   try {
     await setup();
   } catch (error) {
-    throw redacted(error);
+    throw redacted(error, "invalid_config", what);
   }
 }
 
@@ -93,7 +104,9 @@ export async function setUp<Deps>(
   for (const e of extensions) await once(e, () => extensionSetup(e));
   for (const a of adapters)
     if (a?.setup !== undefined)
-      await once(a, () => redactedSetup(async () => a.setup?.()));
+      await once(a, () =>
+        redactedSetup(async () => a.setup?.(), "adapter setup failed"),
+      );
   for (const agent of agents) await setupOf(agent)?.();
 }
 
@@ -115,10 +128,12 @@ export async function connectAll(
   const close = async (): Promise<void> => {
     await Promise.all(sessions.map((s) => s.close()));
   };
-  const failed = opened.find((o) => o.status === "rejected");
-  if (failed !== undefined) {
+  const failed = opened.findIndex((o) => o.status === "rejected");
+  const reason = opened[failed];
+  if (reason?.status === "rejected") {
     await close();
-    throw redacted(failed.reason);
+    const name = servers[failed]?.name ?? "";
+    throw redacted(reason.reason, "mcp_unreachable", `mcp server ${name}`);
   }
   return {
     tools: sessions.flatMap((s) => s.tools),

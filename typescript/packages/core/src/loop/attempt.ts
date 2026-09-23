@@ -28,7 +28,7 @@ export type Attempted =
   | { readonly kind: "unsupported"; readonly refused: Unsupported }
   /**
    * The response held a registered secret in provider material that can't be redacted (C5):
-   * nothing of it is stored, and the turn ends with secret_in_provider_output.
+   * nothing of it is stored, and the turn has ended with secret_in_provider_output.
    */
   | { readonly kind: "leaked" }
   /** A covering budget refused the reservation; budget_exceeded is recorded. */
@@ -180,13 +180,15 @@ function record(s: Session, requestId: string, c: Collected): Attempted {
       return stopped === undefined ? c : { kind: "halt", halt: stopped };
     }
     case "leaked": {
-      // The response arrived (it may be billed) but none of it is kept.
+      // The response arrived (it may be billed) but none of it is kept. The abandonment and
+      // the turn's end are one batch: a crash between them can't leave the turn open.
       const stopped = s.append(
         draft.abandoned({
           request_event_id: requestId,
           provider_outcome: "unknown",
           reason: "provider_error",
         }),
+        draft.turnCompleted("error", "secret_in_provider_output"),
       );
       return stopped === undefined ? c : { kind: "halt", halt: stopped };
     }

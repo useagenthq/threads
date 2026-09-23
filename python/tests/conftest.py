@@ -5,8 +5,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from threads import redaction
 from threads.loop.guard import block_model_requests
+from threads.redaction import forget_secrets
 
 block_model_requests()
 
@@ -14,4 +14,4 @@ block_model_requests()
 @pytest.fixture(autouse=True)
 def _no_resolved_secrets() -> Iterator[None]:
     yield
-    redaction._REGISTERED.clear()  # pyright: ignore[reportPrivateUsage] - reset between tests
+    forget_secrets()

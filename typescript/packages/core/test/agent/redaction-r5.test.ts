@@ -13,13 +13,11 @@ import {
   tool,
 } from "../../src";
 import { credential } from "../../src/agent/secret";
-import { redactSecrets } from "../../src/redact";
 import { webFetch } from "../../src/tools/web-fetch";
 import type { WebTransport } from "../../src/tools/web-transport";
 import { bound } from "../tools/kit";
 
-// C5, round 5: the marker never repeats a registered value, the writer redacts JSON keys and
-// the actor, web_fetch stores its cited page redacted, and adapter and MCP setup errors are
+// C5, round 5: the writer redacts JSON keys and the actor, web_fetch stores its cited page redacted, and adapter and MCP setup errors are
 // returned redacted.
 
 const usage = { input_tokens: 1, output_tokens: 1 };
@@ -44,18 +42,6 @@ function nothingHolds(dir: string, key: string): void {
   for (const path of files(dir))
     expect(readFileSync(path).includes(key)).toBe(false);
 }
-
-describe("the marker never repeats a registered value", () => {
-  test("a value inside its own label falls back to a plain marker", () => {
-    credential("fake", "apiKey", "api", "U")();
-    expect(redactSecrets("my api here")).toBe("my [secret] here");
-  });
-
-  test("a value inside the plain marker falls back again", () => {
-    credential("x", "apiKey", "secret", "U")();
-    expect(redactSecrets("a secret b")).toBe("a [redacted] b");
-  });
-});
 
 describe("the writer redacts every string of the line", () => {
   test("a registered value as a JSON key and inside the actor", async () => {

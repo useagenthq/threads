@@ -1,6 +1,6 @@
 import { sha256Hex } from "../hash";
 import type { ToolContext, ToolRun } from "../loop/types";
-import { redactBytes } from "../redact";
+import { containsSecret, redactBytes } from "../redact";
 import { type Builtin, builtin, done } from "./builtin";
 import { WebFetchInput } from "./gateway-inputs";
 import { htmlTitle, htmlToMarkdown } from "./html";
@@ -103,6 +103,9 @@ function record(
       `${head}unsupported content type ${type}; nothing to read`,
       true,
     );
+  // An escaped form the redaction can't replace (a JSON page) is refused, never stored.
+  if (containsSecret(bytes))
+    return done(`${head}the page holds a registered secret; not kept`, true);
   const raw = new TextDecoder().decode(bytes);
   const html = type === "text/html" || type === "application/xhtml+xml";
   const page = html ? htmlToMarkdown(raw) : raw;

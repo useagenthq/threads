@@ -44,6 +44,7 @@ const ERROR_CODES = [
   "resource_unknown",
   "writer_mismatch",
   "secret_in_provider_output",
+  "secret_in_stored_bytes",
 ] as const;
 
 export const ErrorCode: EnumOf<typeof ERROR_CODES> = z.enum(ERROR_CODES).meta({

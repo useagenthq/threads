@@ -79,6 +79,7 @@ export async function ladder(s: Session): Promise<Gated> {
   ) {
     const got = await compact(s, "threshold");
     if (got.kind === "halt") return got.halt;
+    if (got.kind === "ended") return "ended";
   }
   const estimated = estimate(s);
   return estimated >= window ? preflight(s, estimated, window) : undefined;
@@ -106,7 +107,7 @@ async function preflight(
     return s.append(draft.turnCompleted("context_exhausted")) ?? "ended";
   const got = await compact(s, "reactive");
   if (got.kind === "halt") return got.halt;
-  return got.kind === "compacted"
+  return got.kind === "compacted" || got.kind === "ended"
     ? "ended"
     : (s.append(draft.turnCompleted("context_exhausted")) ?? "ended");
 }

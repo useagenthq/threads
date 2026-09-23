@@ -54,12 +54,12 @@ def fed(stream: StreamRedactor, chunks: Sequence[bytes]) -> bytes:
 
 
 def test_a_value_that_a_longer_one_continues_is_held_until_decided() -> None:
-    credential("short", "api_key", "abc-l9", "U")()
-    long = credential("long", "api_key", "abc-l9-123", "U")()
-    shown = fed(StreamRedactor(), [b"x abc-l9", b"-123 y"])
+    credential("short", "api_key", "abc-lane9", "U")()
+    long = credential("long", "api_key", "abc-lane9-123", "U")()
+    shown = fed(StreamRedactor(), [b"x abc-lane9", b"-123 y"])
     assert shown == b"x [secret long.api_key] y"
     assert long.encode() not in shown
-    assert fed(StreamRedactor(), [b"x abc-l9"]) == b"x [secret short.api_key]"
+    assert fed(StreamRedactor(), [b"x abc-lane9"]) == b"x [secret short.api_key]"
 
 
 def test_a_value_split_inside_a_multi_byte_character_is_replaced() -> None:

@@ -30,7 +30,7 @@ from threads.slack import slack
 from threads.store import StoredEvent
 from threads.whatsapp import whatsapp
 
-SECRET = "shh"  # noqa: S105 - a test signing secret
+SECRET = "shh-signing"  # noqa: S105 - a test signing secret
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 REPLY: JsonValue = {
     "content": [{"type": "text", "text": "Hi there."}],
@@ -158,8 +158,8 @@ def test_an_unverified_webhook_is_401_and_stores_nothing() -> None:
 def test_the_webhook_url_answers_a_subscription_check_only_for_a_channel_that_has_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("WA_APP", "a")
-    monkeypatch.setenv("WA_TOKEN", "t")
+    monkeypatch.setenv("WA_APP", "wa-app-secret")
+    monkeypatch.setenv("WA_TOKEN", "wa-token-1")
     monkeypatch.setenv("WA_VERIFY", "hub-token")
     phone = whatsapp(
         app_secret=secret("WA_APP"),

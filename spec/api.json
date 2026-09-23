@@ -9,7 +9,7 @@
     "async": "async true: TS returns a Promise, Python is async def. A stream is TS AsyncIterable, Python AsyncIterator.",
     "refs": "urn:threads:schema:events:v1 is spec/schema/events.v1.schema.json, urn:threads:schema:host-api:v1 is spec/schema/host-api/host-api.v1.schema.json, urn:threads:schema:conformance:v1 is spec/conformance/case.schema.json. #/types/X is a type in this file.",
     "generics": "Deps defaults to null (TS undefined, Python None); Output defaults to string (the final text). Agent<Deps, Output> carries both into RunContext and RunResult.",
-    "adapters": "Model, Sandbox, MemoryProvider, KnowledgeProvider, ChannelAdapter and SearchBackend are protocols. Concrete factories (anthropic(), e2b(), mem0(), slack(), ...) live in adapter packages, take a secret() for credentials and return one of these. Credentials: a single-account adapter (model, sandbox, memory provider) takes its credential as an option that defaults to secret(\"<ENV>\"), with the env name documented per factory. It is resolved in the adapter's setup (check() or the first run), never by the factory. A missing value is missing_secret, and the message names the option and the env variable. An explicit value is registered for redaction exactly as a revealed Secret is. Channel adapters, search backends and MCP servers take every secret explicitly. Credential values are never pinned, logged, rendered or passed into a sandbox (invariant 4)."
+    "adapters": "Model, Sandbox, MemoryProvider, KnowledgeProvider, ChannelAdapter and SearchBackend are protocols. Concrete factories (anthropic(), e2b(), mem0(), slack(), ...) live in adapter packages, take a secret() for credentials and return one of these. Credentials: a single-account adapter (model, sandbox, memory provider) takes its credential as an option that defaults to secret(\"<ENV>\"), with the env name documented per factory. It is resolved in the adapter's setup (check() or the first run), never by the factory. A missing value is missing_secret, and the message names the option and the env variable. An explicit value is registered for redaction exactly as a revealed Secret is, under the same rules (at least 8 characters, not a schema literal). Channel adapters, search backends and MCP servers take every secret explicitly. Credential values are never pinned, logged, rendered or passed into a sandbox (invariant 4)."
   },
   "packages": {
     "core": {
@@ -658,7 +658,7 @@
       "ts": "secret",
       "py": "secret",
       "package": "core",
-      "doc": "A reference to a host secret, resolved only in the host. Values never reach the log, prompts or the sandbox.",
+      "doc": "A reference to a host secret, resolved only in the host. Values never reach the log, prompts or the sandbox. A resolved value must be at least 8 characters and not a literal of the event schema, or resolving it is ConfigError invalid_config (spec/schema/README.md, Secret redaction).",
       "async": false,
       "params": [{"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The name of the host environment variable that holds the value. It is read only when host code needs it; an unset or empty variable is a setup error missing_secret."}],
       "returns": {"$ref": "#/types/Secret"}

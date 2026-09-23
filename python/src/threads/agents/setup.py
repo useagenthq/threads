@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable
 from functools import partial
 from typing import Protocol, runtime_checkable
 
-from threads.agents.config import ConfigError
+from threads.agents.config import ConfigError, ConfigErrorCode
 from threads.agents.definition import Definition
 from threads.hooks.extension import Extension
 from threads.redaction import redact_secrets
@@ -68,12 +68,20 @@ async def _attempt(target: object, setup: Callable[[], Awaitable[None]]) -> None
 
 
 async def redacted(setup: Callable[[], Awaitable[object]]) -> None:
-    """Runs `setup`; its ConfigError is what check() returns and a run raises, so a resolved
-    secret in its message is redacted (C5)."""
+    """Runs `setup`. Whatever it raises is what check() returns and a run raises: always a
+    ConfigError, its message redacted (C5); an unexpected exception is invalid_config."""
     try:
         await setup()
-    except ConfigError as error:
-        raise ConfigError(error.code, redact_secrets(error.message)) from None
+    except Exception as error:
+        raise redacted_error(error, "invalid_config", "adapter setup failed") from None
+
+
+def redacted_error(error: Exception, fallback: ConfigErrorCode, what: str) -> ConfigError:
+    """`error` as a ConfigError with its message redacted; an unexpected one becomes
+    `fallback`, naming what failed."""
+    if isinstance(error, ConfigError):
+        return ConfigError(error.code, redact_secrets(error.message))
+    return ConfigError(fallback, redact_secrets(f"{what}: {error}"))
 
 
 def _weakly_held(target: object) -> None:

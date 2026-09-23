@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { ToolRun } from "../loop/types";
+import { containsSecret } from "../redact";
 import { execute, toolRunOf } from "../sandbox/exec";
 import {
   type Builtin,
@@ -132,6 +133,12 @@ async function capture(
     );
   const got = await session.value.download(SHOT, env.context);
   if (!got.ok) return failed(got.error);
+  // Byte-exact: an image holding a registered value (a text chunk) is refused, never stored.
+  if (containsSecret(got.value))
+    return done(
+      "refused: the capture holds a registered secret; not stored",
+      true,
+    );
   const size = pngSize(got.value);
   if (size === undefined)
     return done("unavailable: the capture isn't a PNG", true);

@@ -2,7 +2,11 @@ import type { Fold } from "../fold/state";
 import type { ArtifactRef, BranchId, KnownEvent, ThreadId } from "../log";
 import type { ModelContext } from "../model";
 import { contextReader } from "../model/context";
-import { holdsSecret, redactSecrets, SecretInProviderOutput } from "../redact";
+import {
+  containsSecret,
+  redactSecrets,
+  SecretInProviderOutput,
+} from "../redact";
 import { knownEvents, type ReducedState, reduce } from "../reduce";
 import { err, ok } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
@@ -112,7 +116,7 @@ export class Session {
       read: contextReader(this.artifacts),
       put: async (data, mediaType) => {
         // Replayed byte-exact, so never edited: a secret in it ends the turn instead.
-        if (holdsSecret(data)) throw new SecretInProviderOutput();
+        if (containsSecret(data)) throw new SecretInProviderOutput();
         return this.store(data, mediaType);
       },
     };
