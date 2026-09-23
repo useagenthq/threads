@@ -11,7 +11,8 @@ import type {
 import type { KnowledgeProvider, MemoryProvider } from "../memory/protocol";
 import type { Model } from "../model";
 import type { Sandbox } from "../sandbox";
-import type { Egress } from "../tools";
+import type { Capabilities, Egress } from "../tools";
+import type { GitOptions } from "../tools/git/host";
 import { subagent } from "./child";
 import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
@@ -48,6 +49,14 @@ export type AgentOptions<Deps, Output> = {
   readonly sandbox?: Sandbox;
   /** Sandbox egress: absent is deny-all; "unenforced" opts in to a provider that can't enforce it. */
   readonly egress?: Egress;
+  /** Host-side web_fetch (fetch: true) and web_search (a SearchBackend). */
+  readonly web?: Capabilities["web"];
+  /** The git gateway: git_clone, git_fetch, git_push, open_pull_request. */
+  readonly git?: GitOptions;
+  /** computer_screenshot and computer; the sandbox must have a desktop. */
+  readonly computer?: boolean;
+  /** lsp for these languages, run by the sandbox image's servers. */
+  readonly lsp?: { readonly languages: readonly string[] };
   /** Instructions, tools, hooks and observers, in this order. */
   readonly extensions?: readonly Extension<Deps>[];
   /** Agents spawn_agent may start, by name. Team tools come with them. */
@@ -140,6 +149,7 @@ function build<Deps, Output>(
     context: options.context ?? {},
     sandbox: options.sandbox,
     egress: options.egress,
+    capabilities: capabilitiesOf(options),
     extensions: options.extensions ?? [],
     hookable: options.extensions ?? [],
     memory: options.memory,
@@ -175,6 +185,17 @@ function build<Deps, Output>(
     host: hosted(def, options.approvers),
   });
   return handle;
+}
+
+function capabilitiesOf<Deps, Output>(
+  o: AgentOptions<Deps, Output>,
+): Capabilities {
+  return {
+    ...(o.web === undefined ? {} : { web: o.web }),
+    ...(o.git === undefined ? {} : { git: o.git }),
+    ...(o.computer === undefined ? {} : { computer: o.computer }),
+    ...(o.lsp === undefined ? {} : { lsp: o.lsp }),
+  };
 }
 
 /** The agents spawn_agent and handoff may name, and their names as pinned. */

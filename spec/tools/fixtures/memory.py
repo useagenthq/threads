@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from .jcs import JsonValue, Obj
 
 
-def _catalog(name: str, eclass: str, window: int | None = None) -> Obj:
+def catalog_spec(name: str, eclass: str, window: int | None = None) -> Obj:
     """A built-in's pinned spec: the catalog entry plus the effect class the config gives it."""
     entries: list[JsonValue] = json.loads(CATALOG.read_bytes())
     entry = next(obj(e) for e in entries if obj(e)["name"] == name)
@@ -42,9 +42,9 @@ def _catalog(name: str, eclass: str, window: int | None = None) -> Obj:
     return spec
 
 
-SAVE = _catalog("save_memory", "idempotent", DAY)
-RECALL = _catalog("search_memory", "read_only")
-SEARCH_KB = _catalog("search_knowledge", "read_only")
+SAVE = catalog_spec("save_memory", "idempotent", DAY)
+RECALL = catalog_spec("search_memory", "read_only")
+SEARCH_KB = catalog_spec("search_knowledge", "read_only")
 MCP_SEND = tool(
     "mcp__mail__send_email",
     "Send an email.",

@@ -1,0 +1,116 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [
+      "call_1"
+    ],
+    "effects": [
+      {
+        "effect_key": "0192b000-0000-7000-8000-000000000001:call_1",
+        "call_id": "call_1",
+        "status": "begun"
+      }
+    ],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 80,
+      "output_tokens": 25,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 7,
+      "hash": "dc0ac562e20269426cda45dfdae4edd2697e841aa3a46f315d27a2b8faff653d"
+    }
+  },
+  "appended": [
+    {
+      "type": "effect_unknown",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "reason": "crash_after_begin"
+      }
+    },
+    {
+      "type": "effect_resolved",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "outcome": "confirmed_success",
+        "by": "reconcile",
+        "result_ref": {
+          "sha256": "985584df01ac91ba9ab74ad2727649bfa0780119d75163023716a2cc7603db76",
+          "bytes": 65,
+          "media_type": "text/plain"
+        }
+      }
+    },
+    {
+      "type": "tool_result",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "is_error": false,
+        "origin": "executed",
+        "preview": "pushed 3f2a9c1d0e8b7a6f5e4d3c2b1a0f9e8d7c6b5a49 to acme/api fix-1"
+      }
+    },
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "sandbox": {
+    "dispatches": {
+      "git_push": 0
+    },
+    "new_executions": {
+      "git_push": 0
+    },
+    "lookups": {
+      "git_push": 1
+    }
+  }
+}

@@ -180,6 +180,11 @@
       "step1": false,
       "evidence": [
         {
+          "kind": "case",
+          "ref": "render-web-fetch-citation",
+          "status": "implemented"
+        },
+        {
           "kind": "live_gate",
           "ref": "web-fetch-ssrf-and-record",
           "status": "planned"
@@ -193,6 +198,11 @@
         {
           "kind": "case",
           "ref": "render-hosted-search-citations",
+          "status": "implemented"
+        },
+        {
+          "kind": "case",
+          "ref": "render-web-search-citations",
           "status": "implemented"
         },
         {
@@ -1427,6 +1437,11 @@
       "step1": false,
       "evidence": [
         {
+          "kind": "case",
+          "ref": "computer-action-crash-parks",
+          "status": "implemented"
+        },
+        {
           "kind": "live_gate",
           "ref": "gui-action-crash-parks",
           "status": "planned"
@@ -1459,6 +1474,11 @@
       "id": "F11.12",
       "step1": false,
       "evidence": [
+        {
+          "kind": "case",
+          "ref": "git-push-crash-reconciled",
+          "status": "implemented"
+        },
         {
           "kind": "live_gate",
           "ref": "git-push-via-gateway",

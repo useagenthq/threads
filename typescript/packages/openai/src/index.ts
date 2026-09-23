@@ -9,6 +9,7 @@ import type {
 } from "@threads/core/adapter";
 import {
   ConfigError,
+  checkHostedTools,
   fencedFetch,
   parseRender,
   rejectionFor,
@@ -59,6 +60,9 @@ const RESERVED = [
   "background",
 ];
 
+/** Hosted tools read-only toward the outside world: web search only. */
+const HOSTED_READ_ONLY = /^web_search(_preview)?(_\d{4}_\d{2}_\d{2})?$/;
+
 export function openai(options: OpenAIOptions): Model {
   const params = options.params ?? {};
   const clash = RESERVED.find((key) => Object.hasOwn(params, key));
@@ -68,6 +72,7 @@ export function openai(options: OpenAIOptions): Model {
       `openai params can't set ${clash}: the adapter derives it from the render`,
     );
   const hosted = options.hostedTools ?? [];
+  checkHostedTools("openai", hosted, HOSTED_READ_ONLY);
   const info: ModelInfo = {
     model: { provider: "openai", name: options.model },
     adapter: {

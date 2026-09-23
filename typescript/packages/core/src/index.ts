@@ -26,5 +26,12 @@ export * from "./reduce";
 export * from "./sandbox";
 export * from "./store";
 export * from "./thread";
+export type {
+  Capabilities,
+  SearchBackend,
+  SearchHit,
+} from "./tools";
+export type { GitOptions } from "./tools/git/host";
+export type { WebTransport } from "./tools/web-fetch";
 export * from "./verify";
 export { VERSION } from "./version";

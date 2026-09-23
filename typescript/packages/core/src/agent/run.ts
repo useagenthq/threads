@@ -161,6 +161,7 @@ export async function execute<Deps, Output>(
         writer,
         artifacts,
       },
+      def.capabilities,
     );
     const providers = await bindProviders(def, {
       log,

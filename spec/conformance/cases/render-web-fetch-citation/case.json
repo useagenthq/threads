@@ -1,0 +1,9 @@
+{
+  "name": "render-web-fetch-citation",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "A host-side web_fetch result: the final URL, status and content hash, the page as untrusted reference text, and a web citation whose ref is the fetched bytes. It renders exactly as recorded, so replay makes no network call.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

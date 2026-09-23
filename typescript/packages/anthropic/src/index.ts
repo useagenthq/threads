@@ -14,6 +14,7 @@ import type {
 } from "@threads/core/adapter";
 import {
   ConfigError,
+  checkHostedTools,
   fencedFetch,
   type JsonObject,
   parseRender,
@@ -58,6 +59,8 @@ const RESERVED = [
   "max_tokens",
 ];
 const ADAPTER = { name: "anthropic", version: "1" } as const;
+/** Server tools read-only toward the outside world: web search and web fetch. */
+const HOSTED_READ_ONLY = /^(web_search|web_fetch)_\d{8}$/;
 
 export function anthropic(options: AnthropicOptions): Model {
   const params = options.params ?? {};
@@ -68,6 +71,7 @@ export function anthropic(options: AnthropicOptions): Model {
       `anthropic params can't set ${clash}: the adapter derives it from the render`,
     );
   const hosted = options.hostedTools ?? [];
+  checkHostedTools("anthropic", hosted, HOSTED_READ_ONLY);
   const info: ModelInfo = {
     model: { provider: "anthropic", name: options.model },
     adapter: {

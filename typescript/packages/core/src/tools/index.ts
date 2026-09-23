@@ -9,6 +9,7 @@ import type { ResourceLedger } from "../store/ledger";
 import type { Writer } from "../store/writer";
 import type { Builtin, BuiltinEnv } from "./builtin";
 import { edit, read, write } from "./files";
+import { type Capabilities, gated } from "./gated";
 import { notebookEdit } from "./notebook";
 import { readToolResult } from "./read-result";
 import { glob, grep, ls } from "./search";
@@ -16,6 +17,8 @@ import { lazySession } from "./session";
 import { bash } from "./shell";
 
 export type { Builtin } from "./builtin";
+export type { Capabilities } from "./gated";
+export type { SearchBackend, SearchHit } from "./web-search";
 
 /** The run's sandbox session, shared by the tools and the end-of-turn snapshot. */
 export type SessionGetter = BuiltinEnv["session"];
@@ -26,11 +29,16 @@ export type SessionGetter = BuiltinEnv["session"];
 /** spec/api.json agent `egress`: absent is deny-all; host allowlists aren't enforced yet. */
 export type Egress = readonly string[] | "unenforced";
 
+const byName = (a: Builtin, b: Builtin): number =>
+  a.spec.name < b.spec.name ? -1 : 1;
+
 export function builtins(
   sandbox: Sandbox | undefined,
   egress: Egress | undefined,
+  capabilities: Capabilities = {},
 ): readonly Builtin[] {
-  if (sandbox === undefined) return [readToolResult];
+  const extra = gated(capabilities, sandbox);
+  if (sandbox === undefined) return [readToolResult, ...extra].toSorted(byName);
   if (Array.isArray(egress) && egress.length > 0)
     throw new ConfigError(
       "egress_policy_unsupported",
@@ -52,8 +60,9 @@ export function builtins(
     read,
     readToolResult,
     write,
+    ...extra,
   ];
-  return all.toSorted((a, b) => (a.spec.name < b.spec.name ? -1 : 1));
+  return all.toSorted(byName);
 }
 
 /** The built-ins bound to one run: its writer's lease, the branch's ledger and artifacts. */
@@ -65,6 +74,7 @@ export function bindBuiltins(
     readonly writer: Writer;
     readonly artifacts: ArtifactStore;
   },
+  capabilities: Capabilities = {},
 ): {
   readonly tools: readonly ToolImpl[];
   readonly session: SessionGetter;
@@ -82,7 +92,7 @@ export function bindBuiltins(
     artifacts,
     events: () => knownEvents(writer.chain),
   };
-  const tools = builtins(sandbox, egress).map((b) => b.bind(env));
+  const tools = builtins(sandbox, egress, capabilities).map((b) => b.bind(env));
   if (sandbox === undefined) return { tools, session };
   const readFile = async (path: string): Promise<Uint8Array | undefined> => {
     const open = await session();

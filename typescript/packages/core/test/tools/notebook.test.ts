@@ -149,7 +149,9 @@ describe("notebook_edit in the sandbox", () => {
       true,
       "x.ipynb is not a Jupyter notebook; nothing written",
     ]);
-    expect(shown[5]?.[1]).toContain('"source": "# U"');
-    expect(shown[5]?.[1]).toContain('"nbformat_minor": 5');
+    // read shows the cells by id: cell b kept its source and outputs.
+    expect(shown[5]?.[1]).toBe(
+      "1\t--- cell a (markdown) ---\n2\t# U\n3\t--- cell b (code) ---\n4\tx = 1\n5\t[out] 1",
+    );
   });
 });

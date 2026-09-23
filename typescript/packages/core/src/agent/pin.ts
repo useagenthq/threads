@@ -17,8 +17,9 @@ import type { Model } from "../model";
 import { DEFAULT_PERMISSIONS } from "../permissions";
 import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
-import { builtins, type Egress } from "../tools";
+import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec } from "../tools/framework";
+import { requireCapabilities } from "../tools/gated";
 import { ConfigError } from "./errors";
 import { type Extension, hookNames } from "./extension";
 import { jsonSchema, type Tool } from "./tool";
@@ -40,6 +41,8 @@ export type PinOptions = {
   readonly context: Partial<z.infer<typeof ContextPolicy>>;
   readonly sandbox: Sandbox | undefined;
   readonly egress: Egress | undefined;
+  /** The capability-gated built-ins: web, git, computer, lsp. */
+  readonly capabilities: Capabilities;
   readonly extensions: readonly Extension<never>[];
   /** Agent names spawn_agent may start. */
   readonly subagents: readonly string[];
@@ -79,11 +82,13 @@ export function pin(
 } {
   const within = child?.tools;
   const o = within === undefined ? options : { ...options, sandbox: undefined };
+  // A child runs without a sandbox and within its parent's tools, which were checked already.
+  if (within === undefined) requireCapabilities(o.capabilities, o.sandbox);
   // Built-ins (the framework and provider tools among them) sorted by name, then app tools,
   // then extension and MCP tools sorted by namespaced name.
   const all = [
     ...[
-      ...builtins(o.sandbox, o.egress).map((b) => b.spec),
+      ...builtins(o.sandbox, o.egress, o.capabilities).map((b) => b.spec),
       ...agentTools(o, within !== undefined).map(frameworkSpec),
       ...(o.memory === undefined ? [] : memorySpecs(o.memory)),
       ...(o.knowledge === undefined ? [] : knowledgeSpecs()),

@@ -43,6 +43,8 @@ type Def<S extends z.ZodType> = {
     env: BuiltinEnv,
   ) => Promise<ToolRun>;
   readonly terminate?: (env: BuiltinEnv) => NonNullable<ToolImpl["terminate"]>;
+  /** reconcilable: the lookup that settles an unknown call. */
+  readonly reconcile?: (env: BuiltinEnv) => NonNullable<ToolImpl["reconcile"]>;
 };
 
 export function builtin<S extends z.ZodType>(def: Def<S>): Builtin {
@@ -59,11 +61,13 @@ export function builtin<S extends z.ZodType>(def: Def<S>): Builtin {
     spec,
     bind: (env) => {
       const terminate = def.terminate?.(env);
+      const reconcile = def.reconcile?.(env);
       return {
         spec,
         input: def.input,
         run: async (input, ctx) => def.run(def.input.parse(input), ctx, env),
         ...(terminate === undefined ? {} : { terminate }),
+        ...(reconcile === undefined ? {} : { reconcile }),
       };
     },
   };

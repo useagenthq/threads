@@ -11,6 +11,7 @@ import {
   sessionOf,
 } from "./builtin";
 import { EditInput, ReadInput, WriteInput } from "./catalog";
+import { notebookText } from "./notebook";
 
 // read, write and edit: one POSIX implementation over the session's download and
 // upload. Paths are the model's, resolved by the provider under /workspace; permission rules
@@ -51,7 +52,11 @@ export const read: Builtin = builtin({
     if (!session.ok) return session.error;
     const file = await text(env, session.value, path);
     if (!file.ok) return file.error;
-    return done(numbered(file.value.text, offset, limit));
+    // A notebook reads as its cells with ids and outputs, the ids notebook_edit takes.
+    const cells = path.endsWith(".ipynb")
+      ? notebookText(file.value.bytes)
+      : undefined;
+    return done(numbered(cells ?? file.value.text, offset, limit));
   },
 });
 

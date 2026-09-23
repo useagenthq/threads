@@ -1,0 +1,10 @@
+{
+  "tools": {
+    "computer": {
+      "output": "click done",
+      "executed_keys": {
+        "0192b000-0000-7000-8000-000000000001:call_1": "click done"
+      }
+    }
+  }
+}

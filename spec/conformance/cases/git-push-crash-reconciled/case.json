@@ -1,0 +1,11 @@
+{
+  "name": "git-push-crash-reconciled",
+  "family": "sandboxes",
+  "kind": "recover",
+  "description": "git_push is reconcilable. The host crashed after effect_begin, mid-push. Recovery looks the push up by the remote ref, finds the pushed commit, settles the effect confirmed_success with the lookup's answer as its result, and never pushes again.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

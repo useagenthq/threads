@@ -40,6 +40,49 @@ function parse(bytes: Uint8Array): z.infer<typeof Notebook> | undefined {
   }
 }
 
+// A cell output as nbformat stores it; only the readable parts are shown.
+const Output = z.object({
+  output_type: z.string(),
+  text: z.union([z.string(), z.array(z.string())]).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
+  ename: z.string().optional(),
+  evalue: z.string().optional(),
+});
+const joined = (s: string | readonly string[]): string =>
+  typeof s === "string" ? s : s.join("");
+
+function outputText(raw: unknown): string {
+  const o = Output.safeParse(raw);
+  if (!o.success) return "[output]";
+  if (o.data.text !== undefined) return joined(o.data.text);
+  if (o.data.ename !== undefined) return `${o.data.ename}: ${o.data.evalue ?? ""}`;
+  const plain = z.union([z.string(), z.array(z.string())]).safeParse(o.data.data?.["text/plain"]);
+  if (plain.success) return joined(plain.data);
+  return `[${Object.keys(o.data.data ?? {}).join(", ") || o.data.output_type} output]`;
+}
+
+/**
+ * read's view of a notebook: each cell with its id, type and source, and a
+ * code cell's outputs; undefined when the bytes aren't a notebook.
+ */
+export function notebookText(bytes: Uint8Array): string | undefined {
+  const notebook = parse(bytes);
+  if (notebook === undefined) return undefined;
+  return notebook.cells
+    .map((cell) => {
+      const outputs = Array.isArray(cell["outputs"]) ? cell["outputs"] : [];
+      const shown = outputs.map(
+        (o) => `[out] ${outputText(o).replace(/\n$/, "")}`,
+      );
+      return [
+        `--- cell ${cell.id ?? "(no id)"} (${cell.cell_type}) ---`,
+        joined(cell.source).replace(/\n$/, ""),
+        ...shown,
+      ].join("\n");
+    })
+    .join("\n");
+}
+
 /** A code cell carries outputs and an execution count; a markdown cell carries neither. */
 function shaped(cell: Cell, type: "code" | "markdown", source: string): Cell {
   const { outputs: _o, execution_count: _e, ...rest } = cell;

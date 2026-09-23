@@ -8,6 +8,7 @@ import type {
   KnownEvent,
   Policy,
   Principal,
+  ResultPart,
   ThreadId,
   ToolSpec,
   Usage,
@@ -56,6 +57,11 @@ export type ToolRun =
       readonly isError: boolean;
       readonly receipt?: string;
       /**
+       * The ordered parts the model sees instead of `output` (an image_ref
+       * screenshot, citations); `output` is then the plain-text preview for logs and channels.
+       */
+      readonly content?: readonly ResultPart[];
+      /**
        * Model-visible context the result brings, appended with it (recalled memory, retrieved
        * knowledge: always untrusted reference, ).
        */
@@ -91,7 +97,11 @@ export type ToolImpl = {
   ) => Promise<ToolRun>;
   /** reconcilable: the adapter's lookup by effect key, and whether its not_found is final. */
   readonly reconcile?: {
-    readonly lookup: (effectKey: string) => Promise<LookupResult<string>>;
+    /** `input` is the call's recorded input, for a lookup keyed by what was asked. */
+    readonly lookup: (
+      effectKey: string,
+      input: EventOf<"tool_call">["data"]["input"],
+    ) => Promise<LookupResult<string>>;
     readonly finality: "final" | "nonfinal";
   };
   /** sandbox_local: kill the call's process group and confirm it is gone. */

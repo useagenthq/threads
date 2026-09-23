@@ -61,6 +61,7 @@ export {
 } from "./model/context";
 /** Test kit: lets a model whose transport is mocked past the global model-request guard. */
 export { markTestKit } from "./model/guard";
+export { checkHostedTools } from "./model/hosted";
 export {
   loadedTools,
   parseRender,

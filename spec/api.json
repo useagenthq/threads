@@ -330,7 +330,13 @@
         {
           "name": "git",
           "kind": "option",
-          "type": {"object": {"credential": {"type": {"$ref": "#/types/Secret"}, "required": true}}},
+          "type": {
+            "object": {
+              "credential": {"type": {"$ref": "#/types/Secret"}, "required": true},
+              "forge_url": {"type": {"prim": "string"}, "required": false, "default": "https://github.com", "doc": "A repo owner/name lives at <forge_url>/<owner>/<name>.git."},
+              "api_url": {"type": {"prim": "string"}, "required": false, "default": "https://api.github.com", "doc": "The forge REST API open_pull_request uses."}
+            }
+          },
           "required": false,
           "doc": "Enables the git gateway tools git_clone, git_fetch, git_push and open_pull_request. The forge is GitHub; the credential is revealed only on the host and never enters the sandbox."
         },

@@ -12,6 +12,7 @@ import tempfile
 
 from . import (
     agents,
+    catalog_tools,
     changes,
     channels,
     children,
@@ -66,6 +67,7 @@ FAMILIES = (
     guards,
     summaries,
     memory,
+    catalog_tools,
 )
 
 

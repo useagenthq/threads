@@ -1,0 +1,9 @@
+{
+  "name": "render-web-search-citations",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "A host-side web_search result: a text list of hits as untrusted reference, each hit's text followed by its web citation part, rendered in order.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -43,7 +43,7 @@ export async function settleUnknown(
           )
         : park(s, callId, actor);
     case "reconcilable":
-      return reconcile(s, callId, impl, actor);
+      return reconcile(s, call, impl, actor);
     case "sandbox_local":
       return interrupt(s, callId, impl, actor);
     case "unguarded":
@@ -92,15 +92,19 @@ function earliestSent(s: Session, callId: string): number | undefined {
 
 async function reconcile(
   s: Session,
-  callId: string,
+  call: EventOf<"tool_call">,
   impl: ToolImpl | undefined,
   actor: Actor,
 ): Promise<Halt | undefined> {
+  const callId = call.data.call_id;
   const contract = impl?.reconcile;
   if (contract === undefined) return park(s, callId, actor);
   const fenced = s.fence();
   if (fenced !== undefined) return fenced;
-  const answer = await contract.lookup(effectKey(s.fold, callId, s.branchId));
+  const answer = await contract.lookup(
+    effectKey(s.fold, callId, s.branchId),
+    call.data.input,
+  );
   if (answer.status === "found") {
     const ref = s.store(answer.value, "text/plain");
     // The resolution and its result commit together.

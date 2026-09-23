@@ -2,7 +2,7 @@ import { assertNever } from "../assert-never";
 import type { EventOf } from "../fold/state";
 import { effectKey } from "../fold/state";
 import { sha256Hex } from "../hash";
-import { canonicalize } from "../log";
+import { canonicalize, type ResultPart } from "../log";
 import { err, ok } from "../result";
 import type { EventDraft } from "../store";
 import { authorize } from "./authorize";
@@ -238,7 +238,7 @@ function settle(
             ? {}
             : { provider_receipt: run.receipt }),
         }),
-        resultOf(callId, run.isError, shown),
+        resultOf(callId, run.isError, shown, contentOf(s, run)),
         ...injections(run),
       );
     }
@@ -278,7 +278,23 @@ function result(
   callId: string,
   run: Extract<ToolRun, { kind: "done" }>,
 ): EventDraft {
-  return resultOf(callId, run.isError, recordOutput(s, callId, run.output));
+  return resultOf(
+    callId,
+    run.isError,
+    recordOutput(s, callId, run.output),
+    contentOf(s, run),
+  );
+}
+
+/** A result's own ordered parts, text redacted like the output (C5). */
+function contentOf(
+  s: Session,
+  run: Extract<ToolRun, { kind: "done" }>,
+): readonly ResultPart[] | undefined {
+  const redact = s.config.redact ?? ((text: string) => text);
+  return run.content?.map((part) =>
+    part.type === "text" ? { ...part, text: redact(part.text) } : part,
+  );
 }
 
 /** The context a result brings, after it and before the next request (C6). */
@@ -290,6 +306,7 @@ function resultOf(
   callId: string,
   isError: boolean,
   shown: Recorded,
+  content?: readonly ResultPart[],
 ): EventDraft {
   return draft.toolResult(
     {
@@ -298,6 +315,7 @@ function resultOf(
       origin: "executed",
       preview: shown.preview,
       ...(shown.ref === undefined ? {} : { ref: shown.ref }),
+      ...(content === undefined ? {} : { content: [...content] }),
     },
     TOOL,
   );
