@@ -1,5 +1,5 @@
 """The store commands: timeline, export, import, repair, delete, gc. Each is a thin wrapper over
-the typed API or the store."""
+the typed API or the store (7 and 8)."""
 
 import json
 import sys

@@ -1,4 +1,4 @@
-"""A crash-drill host process.
+"""A crash-drill host process (F9.6, F10.5).
 
 The drills in this folder run it as a real child process on a shared SQLite store and kill it
 with SIGKILL. `python worker.py <role> <dir>`:

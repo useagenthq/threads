@@ -1,4 +1,4 @@
-"""Approval authority (spec/schema/README.md, "Approval authority"; ): who may
+"""Approval authority (spec/schema/README.md, "Approval authority"): who may
 answer a thread's challenges and settle its parked effects.
 
 A host handle carries `Checked`: decisions are taken under the approver set of the root run (the

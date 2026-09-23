@@ -1,4 +1,4 @@
-"""todo_write through agent.run (F8, ): the list is a todos_updated event read back
+"""todo_write through agent.run (F8): the list is a todos_updated event read back
 by Thread.todos(); a malformed list or repeated ids is an error result with nothing appended;
 the reminder shows open items once after ten turns without a todo_write."""
 

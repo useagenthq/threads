@@ -1,4 +1,4 @@
-"""The agent options end to end: gated tools pinned only with their capability, setup
+"""the agent options end to end: gated tools pinned only with their capability, setup
 errors naming a missing one, the permission class of web tools, and a web_fetch run whose
 result is text plus a web citation naming the fetched artifact."""
 

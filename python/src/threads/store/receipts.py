@@ -1,4 +1,4 @@
-"""POST /v1/runs idempotency receipts.
+"""POST /v1/runs idempotency receipts (store.sql `run_receipts`).
 
 The key is unique per tenant and operation. The receipt is inserted in the transaction that
 appends the run's user_input, so a lost response replays it and a crash leaves neither.

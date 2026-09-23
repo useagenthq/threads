@@ -1,5 +1,5 @@
-"""A channel thread's replies, derived from its log (spec/schema/README.md, "Channel replies";
-), never from how its run started.
+"""A channel thread's replies, derived from its log (spec/schema/README.md, "Channel replies"),
+never from how its run started.
 
 Sources: the last response of each turn that ended `end_turn`, and each `approval_requested`
 whose challenge is open. Op `i` of `adapter.render(source)` is the host-issued `channel_send`

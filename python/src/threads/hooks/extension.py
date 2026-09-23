@@ -1,4 +1,4 @@
-"""`extension()` (spec/api.json, ): the one extension primitive. Trusted host code,
+"""`extension()` (spec/api.json): the one extension primitive. Trusted host code,
 not a security boundary. Hooks and observers come only through it."""
 
 import re

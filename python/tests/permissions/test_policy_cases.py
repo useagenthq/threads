@@ -1,4 +1,4 @@
-"""Conformance runner for the `policy` kind (spec/conformance/README.md, ).
+"""Conformance runner for the `policy` kind (spec/conformance/README.md).
 
 Builds the engine from `input.permissions`, decides each call under its own mode and, with
 `input.ceiling`, under the ceiling too. Unknown keys in any fixture file fail the case.

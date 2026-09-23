@@ -1,4 +1,4 @@
-"""The channel adapter contract (spec/api.json `ChannelAdapter`, ).
+"""The channel adapter contract (spec/api.json `ChannelAdapter`).
 
 An adapter (slack(), whatsapp(), github()) turns a provider's webhook into verified, keyed
 inbound items and performs outbound ops. verify, parse, ack and render are pure; perform and

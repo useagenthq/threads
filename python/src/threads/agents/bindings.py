@@ -26,7 +26,7 @@ PROTECTED: Final = (
     "**/.gitconfig",
     "**/.ssh/**",
 )
-"""defaults."""
+""" defaults."""
 DEFAULT_PERMISSIONS: Final = Permissions(
     mode="default",
     allow=[],
@@ -126,15 +126,14 @@ def permissions(fold: Fold) -> Permissions:
 
 
 def authorize(fold: Fold, call: ToolCallData, spec: ToolSpec) -> Decision:
-    """The fold against the pinned permissions and the current mode."""
+    """the fold against the pinned permissions and the current mode."""
     request = Call(spec.name, category(spec), dict(call.input))
     return decide(permissions(fold), WORKSPACE, fold.mode, request)
 
 
 def capped(ceilings: Sequence[Permissions]) -> Authorize:
     """Each call decided under the thread's own policy and under every ceiling (each ancestor of
-    a subagent, a handoff target's principal and host), each in its own mode; the strictest wins
-   ."""
+    a subagent, a handoff target's principal and host), each in its own mode; the strictest wins."""
     if not ceilings:
         return authorize
 

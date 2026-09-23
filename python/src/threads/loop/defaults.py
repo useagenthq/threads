@@ -30,7 +30,7 @@ RETRY: Final = Retry(
     fallback_scope="turn",
     heartbeat_ms=15_000,
 )
-"""."""
+"""The default retry policy."""
 
 CONTEXT: Final = Context(
     reserve_tokens=20_000,
@@ -48,7 +48,7 @@ CONTEXT: Final = Context(
     defer_threshold=Threshold2(permille=100),
     server_edits="disabled",
 )
-"""."""
+"""The default context policy."""
 
 WINDOW: Final = 200_000
 """The context window assumed when the policy lists no models."""

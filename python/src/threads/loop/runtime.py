@@ -91,8 +91,8 @@ type Halt = Idle | Parked | Failed
 
 
 class Framework(Protocol):
-    """The framework tools the agents layer runs on the log (spawn_agent, handoff, the team
-    tools; ): each advances its call to a result, or halts."""
+    """The framework tools the agents layer runs on the log (spawn_agent, handoff, the team tools):
+    each advances its call to a result, or halts."""
 
     @property
     def names(self) -> frozenset[str]: ...

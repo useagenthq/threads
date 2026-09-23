@@ -1,5 +1,5 @@
-"""A child thread's terminal result as its parent records it: `agent_finished{status, usage}`
-. Usage is the child's aggregate, its own children's included, with an
+"""A child thread's terminal result as its parent records it: `agent_finished{status, usage}`(F7.5).
+Usage is the child's aggregate, its own children's included, with an
 unknown total as null. A parked child has no terminal result: it parks its parent instead."""
 
 from typing import Final, assert_never

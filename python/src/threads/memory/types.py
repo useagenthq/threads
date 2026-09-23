@@ -1,4 +1,4 @@
-"""Memory and knowledge values (spec/api.json `Scope` ... `Doc`, ).
+"""Memory and knowledge values (spec/api.json `Scope` ... `Doc`, 6 and 8).
 
 What a provider returns crosses a trust boundary, so these are strict, frozen models: a provider
 adapter parses its SDK's response into them, and the framework parses whatever a provider

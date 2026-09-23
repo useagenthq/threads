@@ -2,8 +2,8 @@
 (0x01 x3) and stderr (0x02 x3). Markers can split across frames, so a trailing partial marker is
 held back until the next frame.
 
-The markers are in-band and have no escape, so raw output containing them would be misread
-. The sandbox base64-encodes each stream before it reaches the channel
+The markers are in-band and have no escape, so raw output containing them would be misread. The
+sandbox base64-encodes each stream before it reaches the channel
 (toolbox.PREFIX); base64 never contains a marker byte, and `Unbase64` restores the exact bytes.
 """
 

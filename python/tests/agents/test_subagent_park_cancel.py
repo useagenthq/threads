@@ -1,5 +1,5 @@
-"""Subagent parking and tree-wide cancellation (spec/schema/README.md, "Subagent cancellation
-and parking"; ): a child that parks parks its parent on {kind: child} and resumes it
+"""Subagent parking and tree-wide cancellation (spec/schema/README.md, "Subagent cancellation and
+parking"): a child that parks parks its parent on {kind: child} and resumes it
 once settled; cancelling a parent bars every unfinished descendant, the child's agent_finished
 and result land before the parent's cancelled, and nothing is dispatched after a barrier."""
 

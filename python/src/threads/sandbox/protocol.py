@@ -1,8 +1,8 @@
 """The sandbox adapter protocol (spec/api.json `Sandbox`, `SandboxSession`, `SandboxInfo`,
-`ExecOutput`, `ExecResult`; ).
+`ExecOutput`, `ExecResult`).
 
-Every create and restore carries an operation key that the resource ledger recorded first
-. Expected failures are `SandboxError` values; an adapter raises only for bugs.
+Every create and restore carries an operation key that the resource ledger recorded first. Expected
+failures are `SandboxError` values; an adapter raises only for bugs.
 """
 
 import posixpath

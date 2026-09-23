@@ -1,4 +1,4 @@
-"""Observers: committed events after append, in log order, with a durable
+"""Observers (F6.5): committed events after append, in log order, with a durable
 cursor; a failing observer never touches the log or the run, and is retried from its cursor."""
 
 import asyncio

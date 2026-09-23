@@ -3,7 +3,7 @@
 session fenced at the send point (transport.py). The SDK's high-level `AsyncDaytona` is not
 used: some of its paths open their own httpx clients, which can't be fenced.
 
-What this adapter declares (Daytona 0.216, container sandboxes; ):
+What this adapter declares (Daytona 0.216, container sandboxes):
 - Create: the sandbox is named `threads-<operation key>`. Names are unique per organization,
   so a repeated create answers 409 and is the same sandbox, and lookup is a GET by name.
   Lookup is nonfinal: a create that passed its fence may still be in flight at the provider.
@@ -24,7 +24,7 @@ What this adapter declares (Daytona 0.216, container sandboxes; ):
   snapshot lookup is none. Restore verifies the manifest and deletes a mismatched child.
 - The manifest a snapshot returns is the parent's just before the stop: a claim. Core proves
   it against the image by a ledgered restore before recording the snapshot, and refuses one
-  whose image differs (thread/snapshot.py, ).
+  whose image differs (thread/snapshot.py).
 """
 
 import asyncio

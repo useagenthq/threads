@@ -1,4 +1,4 @@
-"""The `threads` CLI (spec/api.json cli, ): a thin wrapper over the typed
+"""The `threads` CLI (spec/api.json cli): a thin wrapper over the typed
 API. Serving needs the `host` extra.
 
     threads dev [module] [--port 8787]      serve on localhost, print each channel's webhook URL

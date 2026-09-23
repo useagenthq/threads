@@ -1,4 +1,4 @@
-"""The tree-wide budget ledger: one row per budget,
+"""The tree-wide budget ledger (store.sql `budget_ledger`): one row per budget,
 limit and model attempt. A reservation checks every covering budget and inserts its rows in one
 transaction, so concurrent threads of a tree can't overspend together."""
 

@@ -1,4 +1,4 @@
-"""Single-use approval challenges.
+"""Single-use approval challenges (store.sql `approvals`).
 
 A row is inserted in the transaction that appends its approval_requested, and consumed by one
 conditional update in the transaction that appends approval_granted or approval_denied. The

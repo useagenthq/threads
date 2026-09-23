@@ -243,7 +243,8 @@ async def resolve_parked(
     resolution: Literal["assume_done", "assume_not_done"],
     principal: Principal,
 ) -> Controlled:
-    """A human settles an effect in doubt: effect_resolved{by: human}, then resumed (). The caller has checked the principal's authority (threads.thread.authority)."""
+    """A human settles an effect in doubt: effect_resolved{by: human}, then resumed. The caller has
+    checked the principal's authority (threads.thread.authority)."""
     address = ParkAddress(kind="effect", id=effect_key)
 
     def build(fold: Fold) -> Ok[Sequence[Draft]] | Err[ParseError]:

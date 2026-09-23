@@ -1,4 +1,4 @@
-"""Schedules (spec/api.json `Schedule`, ): a cron expression in an IANA zone starts
+"""Schedules (spec/api.json `Schedule`): a cron expression in an IANA zone starts
 a run of a host agent at each occurrence.
 
 An occurrence is claimed in `schedule_occurrences` before its schedule_fired is appended, so two

@@ -1,4 +1,4 @@
-"""`local_memory()` (spec/api.json, ): records in the run's store, recalled with
+"""`local_memory()` (spec/api.json): records in the run's store, recalled with
 FTS5. Writes are idempotent on their key forever, so a replayed or retried save never
 duplicates and a retried forget never double-deletes."""
 

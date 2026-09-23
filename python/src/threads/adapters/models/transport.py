@@ -2,7 +2,8 @@
 
 An SDK may prepare, queue for a pooled connection, or wait on auth before any byte leaves. The
 lease can move in that time, so the fence runs where the request's first byte is written: the
-connection's `send_request_headers` trace, after the pool handed out a connection (spec/api.json `Model.send`). A failed fence raises there and nothing is written.
+connection's `send_request_headers` trace, after the pool handed out a connection (spec/api.json
+`Model.send`). A failed fence raises there and nothing is written.
 """
 
 from collections.abc import AsyncIterator, Awaitable, Callable, Generator, Mapping, Sequence

@@ -1,5 +1,5 @@
-"""A subagent that parks, and one run on under its parent's cancel (spec/schema/README.md,
-"Subagent cancellation and parking"; ).
+"""A subagent that parks, and one run on under its parent's cancel (spec/schema/README.md, "Subagent
+cancellation and parking").
 
 A child run that ends parked records no `agent_finished`: its parent parks once on
 `{kind: child, id: <child_thread_id>}` with the child's reason, and the spawn call stays pending.

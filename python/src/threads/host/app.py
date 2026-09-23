@@ -1,4 +1,4 @@
-"""`host()` (spec/api.json `host`, `Host`; ): agents bound to a
+"""`host()` (spec/api.json `host`, `Host`): agents bound to a
 store, channels and schedules, served over the typed HTTP API.
 
 `host()` starts nothing. `ready()` confirms the bindings, sends nothing and starts no run; it

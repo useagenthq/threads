@@ -1,4 +1,4 @@
-"""`secret()` (spec/api.json, ): a host secret by name.
+"""`secret()` (spec/api.json): a host secret by name.
 
 A `Secret` holds only its name, so whatever serializes, logs or renders one can't leak a value.
 The value is read from the host process environment by `resolve`, called by host code (a host

@@ -1,5 +1,4 @@
-"""before_model_switch gates a fallback's settings_changed; after_model_switch only observes
-."""
+"""before_model_switch gates a fallback's settings_changed; after_model_switch only observes."""
 
 import asyncio
 from dataclasses import replace

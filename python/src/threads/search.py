@@ -1,4 +1,4 @@
-"""web_search backends (spec/api.json `SearchBackend`, ): `exa()`, `brave()` and
+"""web_search backends (spec/api.json `SearchBackend`): `exa()`, `brave()` and
 `tavily()`. Each takes its API key as a `secret()`, resolved on the host when a search is sent,
 and sends through the host transport fenced by the run. No SDK: each is one JSON request."""
 

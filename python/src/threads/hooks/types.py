@@ -1,4 +1,4 @@
-"""The hook set. Every decision is a value of the wire
+"""The hook set (spec/api.json `Hooks`). Every decision is a value of the wire
 `hook_decision.decision` enum; a hook returns a wire-cased object, and injections ride on
 `allow` / `proceed` as a separate list, never as a decision."""
 

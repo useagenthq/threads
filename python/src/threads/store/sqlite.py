@@ -1,6 +1,6 @@
 """The log store: SQLite holding each canonical line's exact bytes (ADRs 0004-0006, 0008).
 
-Statements run on the store's own thread (`Worker`, ). `SqliteStore.open()`
+Statements run on the store's own thread (`Worker`). `SqliteStore.open()`
 with the default ":memory:" path is the in-memory store tests use: the same code, no file.
 """
 
@@ -214,8 +214,8 @@ class SqliteStore:
     ) -> Ok[Writer] | Err[ParseError]:
         """Takes the branch lease at the next epoch. Fails with branch_busy while
         another holder's lease is live, and with branch_not_runnable for an inspection-only
-        branch, and with writer_mismatch at the header for one that another implementation writes
-       ."""
+        branch, and with writer_mismatch at the header for one that another implementation
+        writes."""
         owned = await self._owned(branch_id)
         if isinstance(owned, Err):
             return owned

@@ -1,4 +1,4 @@
-"""`github()` (extra `github`, ): issue and pull-request comments.
+"""`github()` (extra `github`): issue and pull-request comments.
 
 A webhook is verified by `X-Hub-Signature-256` with the webhook secret; the App installation is
 the installation and `github:<installation id>` the tenant, and the sender is named by its

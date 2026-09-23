@@ -1,4 +1,4 @@
-"""Skills (spec/api.json `Skill`, , ): host config, pinned by hash at
+"""Skills (spec/api.json `Skill`): host config, pinned by hash at
 thread start. Only what the host passes to `agent(skills=...)` is a skill; a skill-shaped file in
 the sandbox or repo is data and never loads as one (F4.3). Line 0 lists each name and
 description; load_skill appends a body as a trusted `injected{source: skill}` (F4.1)."""

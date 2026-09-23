@@ -40,7 +40,7 @@ def manifest_of(files: Mapping[str, bytes]) -> list[ManifestEntry]:
 
 
 def manifest_hash(manifest: list[ManifestEntry]) -> str:
-    """The manifest's canonical hash."""
+    """The manifest's canonical hash (Domain A)."""
     value: list[JsonValue] = [
         {"path": e["path"], "mode": e["mode"], "size": e["size"], "sha256": e["sha256"]}
         for e in manifest

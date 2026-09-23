@@ -20,7 +20,7 @@ from threads.store.lines import head_line
 from threads.store.verify import Segment, StoredEvent, VerifiedLog
 
 LOCAL_TENANT: Final = "local"
-"""The tenant of local use: the local operator's (spec/api.json, )."""
+"""The tenant of local use: the local operator's (spec/api.json)."""
 
 
 @dataclass(frozen=True, slots=True)

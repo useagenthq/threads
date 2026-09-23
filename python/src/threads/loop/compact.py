@@ -1,4 +1,4 @@
-"""Reactive compaction: once per step after the provider says the
+"""Reactive compaction (with L1 and L2): once per step after the provider says the
 prompt is too long. Every layer is an appended event; nothing edits history.
 
 The summarizer call is an ordinary recorded attempt (`model_request{purpose: compaction}`), so

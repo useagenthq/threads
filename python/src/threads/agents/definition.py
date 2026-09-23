@@ -46,16 +46,16 @@ class Definition[D]:
     subagents: "tuple[Definition[None], ...]" = ()
     """What spawn_agent may start, by name."""
     handoffs: "tuple[Definition[None], ...]" = ()
-    """What handoff may hand the conversation to, pinned as policy.handoffs (item 2)."""
+    """What handoff may hand the conversation to, pinned as policy.handoffs."""
     member: bool = False
-    """Started as a subagent: a team member, offered the team tools (item 3)."""
+    """Started as a subagent: a team member, offered the team tools."""
     allowed: frozenset[str] | None = None
     """A subagent's tools are its own filtered to these, its parent's pinned names: a child only
     narrows. final_output is exempt."""
     catalog: Catalog = NO_CATALOG
     skills: tuple[Skill, ...] = ()
     """Host-pinned skills; keyword only, like catalog)."""
-    """The capabilities configured: web, git, computer use and lsp."""
+    """the capabilities configured: web, git, computer use and lsp."""
     on_unknown_usage: Literal["upper_bound", "stop"] | None = None
     """Pinned as policy.on_unknown_usage when set; "stop" lets a limit with no per-attempt bound
     through setup, refused at run time instead."""

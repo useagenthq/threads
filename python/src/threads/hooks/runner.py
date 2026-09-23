@@ -77,8 +77,8 @@ class HookRunner:
         return any(hook in b.hooks for b in self._bound)
 
     async def run[T](self, hook: HookName, parse: TypeAdapter[T], *args: object) -> list[Ran[T]]:
-        """Every extension's hook, `before*` in declaration order and `after*` reversed
-       , one at a time: a later hook sees the log the earlier one led to."""
+        """Every extension's hook, `before*` in declaration order and `after*` reversed, one at a
+        time: a later hook sees the log the earlier one led to."""
         order = reversed(self._bound) if hook.startswith("after") else iter(self._bound)
         return [await _one(b, hook, parse, args) for b in order if hook in b.hooks]
 
@@ -122,8 +122,8 @@ def decision_draft(
 
 
 def injected(extension: str, texts: Sequence[str]) -> list[Draft]:
-    """Hook injections: after the declared prefix, inside the untrusted-reference wrapper
-   . Never instructions, never line 0."""
+    """Hook injections: after the declared prefix, inside the untrusted-reference wrapper. Never
+    instructions, never line 0."""
     return [
         draft(
             "injected",

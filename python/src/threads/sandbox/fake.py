@@ -179,7 +179,7 @@ class FakeSandbox:
     def _capture(self, session: FakeSession, key: str) -> SnapshotData:
         name = self._name("snap")
         # The manifest is measured on the running sandbox; the image is what the capture took.
-        # They differ when a write lands in between (the A-B-A schedule, ).
+        # They differ when a write lands in between (the A-B-A schedule).
         manifest = manifest_of(session.files)
         before, after = self.around_capture or (_nothing, _nothing)
         self.around_capture = None

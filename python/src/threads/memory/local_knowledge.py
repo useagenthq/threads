@@ -1,4 +1,4 @@
-"""`local_knowledge()` (spec/api.json, ): admitted versions stored as
+"""`local_knowledge()` (spec/api.json): admitted versions stored as
 artifacts, an FTS5 index over their passages, and a monotonic revision.
 
 Admitted versions are immutable and removes are tombstones, so a search can be answered as of

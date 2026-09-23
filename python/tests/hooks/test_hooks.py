@@ -266,7 +266,7 @@ def test_the_hook_set_is_pinned_and_a_changed_one_starts_no_run() -> None:
 
 
 def test_a_gate_that_swallows_its_cancellation_still_fails_at_the_deadline() -> None:
-    """: a hook that catches the timeout's cancellation and answers late must not
+    """a hook that catches the timeout's cancellation and answers late must not
     authorize anything; the deadline alone decides."""
 
     async def late(_state: ReducedState, _ctx: RunContext[None]) -> ModelGate:

@@ -1,4 +1,5 @@
-"""The run ceiling (spec/api.json Agent.run/stream `ceiling`, host `ceiling`; ): every decision of the run, and of every handoff target it starts, is
+"""The run ceiling (spec/api.json Agent.run/stream `ceiling`, host `ceiling`): every decision of the
+run, and of every handoff target it starts, is
 also decided under it and the stricter wins. A handoff target is capped by the ceilings of the
 run that handed off, never by the source agent's own policy."""
 

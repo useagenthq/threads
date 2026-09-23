@@ -1,4 +1,4 @@
-"""Tool calls from a response to their result: record, authorize, then run or settle ().
+"""Tool calls from a response to their result: record, authorize, then run or settle.
 
 A call that fails before `effect_begin` (unknown tool, bad arguments, a denial) gets an error
 `tool_result` and nothing runs. Only an allowed call reaches the effect path.
@@ -131,8 +131,8 @@ async def close(
 
 
 async def recheck(rt: Runtime, state: CallState) -> Halt | None:
-    """An allow recorded before a crash is re-checked against current policy before dispatch
-   ; a changed decision is recorded and followed instead."""
+    """An allow recorded before a crash is re-checked against current policy before dispatch; a
+    changed decision is recorded and followed instead."""
     spec = rt.fold.tools[state.call.data.name]
     if rt.authorize(rt.fold, state.call.data, spec).decision == "allow":
         return None

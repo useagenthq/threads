@@ -3,7 +3,7 @@ the snapshot's ledger row is written before the provider call, the image is prov
 tree its manifest names, and the `snapshot` event is appended only then.
 
 The proof is a restore of the image into a scratch sandbox, whose adapter verifies the
-manifest (a manifest measured on the running parent can differ from what was
+manifest (: a manifest measured on the running parent can differ from what was
 captured). The scratch sandbox is a provider resource like any other: its
 own pending row before the restore, live after, released after; a crash in between is settled
 by lookup or parks as unknown, and a failed close stays release_failed for gc."""

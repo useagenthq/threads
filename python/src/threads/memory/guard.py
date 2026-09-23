@@ -1,4 +1,4 @@
-"""The framework side of every provider call.
+"""The framework side of every provider call (4 and 5).
 
 A provider is only storage. Here the host issues each write's binding before the provider sees
 it, parses whatever the provider returns, keeps only items whose binding the host recorded for

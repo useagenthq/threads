@@ -1,4 +1,4 @@
-"""A fork run in stub mode (spec/api.json Thread.fork `mode`; ): every
+"""A fork run in stub mode (spec/api.json Thread.fork `mode`): every
 mediated operation is answered from what the parent branch recorded after the fork point, by
 (tool, args_hash, occurrence); an unmatched one fails closed and never goes live. A live model
 with hosted tools is refused before recovery or any dispatch, since hosted calls can't be

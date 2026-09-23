@@ -1,4 +1,4 @@
-"""The git gateway as a tool runner. The forge credential stays on
+"""The git gateway as a tool runner (invariant 4). The forge credential stays on
 the host: clone and fetch run on the host and hand the sandbox a git bundle, and push takes a
 bundle of the branch out of the sandbox and pushes it from the host. The sandbox's remote URL
 has no credential. Push and open_pull_request are reconcilable: a push is found when the

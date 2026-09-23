@@ -1,4 +1,4 @@
-"""`mcp()` (spec/api.json, ): an MCP server in one line, on the official
+"""`mcp()` (spec/api.json): an MCP server in one line, on the official
 MCP Python SDK. The host owns the connection and the credentials: `secret()` values are resolved
 here, sent only in the host's own requests or the host-spawned process, and never reach the log,
 a prompt or the sandbox.

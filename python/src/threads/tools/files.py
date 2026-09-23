@@ -1,6 +1,6 @@
 """The file tools, one POSIX implementation over the provider contract: read,
-write and edit through download and upload. Every failure is a typed result the model sees
-, never an empty success; a failed check changes nothing."""
+write and edit through download and upload. Every failure is a typed result the model sees, never an
+empty success; a failed check changes nothing."""
 
 import posixpath
 from typing import Final

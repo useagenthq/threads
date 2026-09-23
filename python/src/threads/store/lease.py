@@ -158,7 +158,7 @@ def append(
 
 def create(conn: sqlite3.Connection, row: Branch, lease: Lease | None) -> ParseError | None:
     """Inserts a new branch and, when given, its first lease, in one transaction. A child
-    starts `forking` with the lease that fences its fork: it is
+    starts `forking` with the lease that fences its fork (step 1): it is
     neither listed nor runnable until `finish_fork`."""
     with transaction(conn):
         if branch(conn, row.branch_id) is not None:

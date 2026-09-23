@@ -1,4 +1,4 @@
-"""Conformance runner for `host` cases (spec/conformance/README.md, ): each
+"""Conformance runner for `host` cases (spec/conformance/README.md): each
 request goes to POST /v1/runs of a host whose only agent is `demo`, as the principal the case
 names, and the answers and the recorded user_inputs are compared."""
 

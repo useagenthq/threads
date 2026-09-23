@@ -1,4 +1,4 @@
-"""Subagents through agent.run: a child thread with its own log linked to
+"""Subagents through agent.run (F7): a child thread with its own log linked to
 the parent's agent_spawned, one terminal agent_finished per child, background children with a
 deferred placeholder and a late result, narrowing at setup and at dispatch, the tree-wide budget,
 the subagent hooks, and a crash mid-child that resumes the same child."""

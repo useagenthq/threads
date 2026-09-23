@@ -5,7 +5,7 @@ tree, the attempt's bound is reserved in the store's `budget_ledger` against eve
 budget (this thread's, its run's, and each ancestor's) in one transaction; the request is
 appended only after that commits. When a reservation doesn't fit, `budget_exceeded` is recorded
 and no request is made, so no response can overshoot. A settled attempt replaces its bound with
-its disposition (item 7): known usage, or the bound when usage is unknown.
+its disposition: known usage, or the bound when usage is unknown.
 
 Turns and wall time are checked from the thread's own log instead (loop/limits.py).
 """

@@ -1,4 +1,4 @@
-"""`Thread.save_case`: a saved case is a `stub` conformance
+"""`Thread.save_case` (spec/api.json `saveCase`): a saved case is a `stub` conformance
 case in exactly the spec/conformance layout, so the same runners replay it.
 
 The log is the branch through the snapshot it restores, once per implementation (only the

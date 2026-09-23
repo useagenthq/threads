@@ -1,4 +1,4 @@
-"""The self-config guard: no agent path
+"""The self-config guard (step 1): no agent path
 writes config, skills, hooks or schedules. Any non-read-only call with a string argument word
 holding a `.threads` path segment is denied before every rule and mode, whatever the tool: the
 file tools, bash, MCP, a GitHub edit or a subagent's task."""

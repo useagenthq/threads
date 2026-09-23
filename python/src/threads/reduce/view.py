@@ -54,7 +54,8 @@ class RenderView:
     """Calls no model response proposed (a host's channel_send reply): their results render
     nothing, since the model never asked for them."""
     withheld: frozenset[EventId] = frozenset()
-    """Recalled memory from a turn another principal started: memory is per principal, so in a shared thread it renders only while that principal's input is current."""
+    """Recalled memory from a turn another principal started: memory is per principal, so in a
+    shared thread it renders only while that principal's input is current."""
 
 
 @dataclass(slots=True)

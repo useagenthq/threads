@@ -1,4 +1,4 @@
-"""Live gates for the host gateway tools: real DNS
+"""Live gates for the host gateway tools (F1.16): real DNS
 and a real page through the SSRF guard, a real search backend, and the metadata address refused
 after resolution. Skipped unless THREADS_LIVE=1 (and the backend's key for search).
 

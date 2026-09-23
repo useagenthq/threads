@@ -1,6 +1,6 @@
 """The model adapter protocol (spec/api.json `Model`, `ModelChunk`, `LookupResult`).
 
-An adapter makes exactly one transport attempt per `send` (SDK retries off, ).
+An adapter makes exactly one transport attempt per `send` (SDK retries off).
 A provider rejection before any content is a `Rejected` chunk, never a raised error. Anything
 that goes wrong after the attempt may have reached the provider is uncertainty: the loop records
 the attempt abandoned as unknown.

@@ -1,5 +1,5 @@
-"""The shared sandbox adapter suite (spec/api.json `Sandbox`, `SandboxSession`; 0017
-item 8): every provider adapter runs these checks over its mocked backend (sandbox_backend.py).
+"""The shared sandbox adapter suite (spec/api.json `Sandbox`, `SandboxSession`): every provider
+adapter runs these checks over its mocked backend (sandbox_backend.py).
 
 A provider's test module supplies `Make`: the adapter wired to a FakeBackend through that
 provider's mocked transport, under a provider name. Checks assert what reached the backend, so
@@ -187,7 +187,7 @@ async def a_snapshot_restores_isolated_and_verified(h: Harness) -> None:
 
 
 async def quiescence_comes_only_from_a_provider_pause_or_stop(h: Harness) -> None:
-    """a capture past a running process is claimed only when the
+    """: a capture past a running process is claimed only when the
     provider paused or stopped the whole sandbox for it."""
     if not h.sandbox.info.capture_classes:
         return

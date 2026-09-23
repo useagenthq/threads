@@ -1,4 +1,4 @@
-"""Handoffs and teams through agent.run.
+"""Handoffs and teams through agent.run (F7.3, F7.10, F7.11).
 
 A handoff records `handoff` and ends the turn `handoff`; the target thread has its own pinned
 line 0, keeps the originating principal, and gets the transcript as untrusted reference; the old

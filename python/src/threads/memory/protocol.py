@@ -1,4 +1,4 @@
-"""The provider interfaces (spec/api.json `MemoryProvider`, `KnowledgeProvider`; ).
+"""The provider interfaces (spec/api.json `MemoryProvider`, `KnowledgeProvider`).
 
 A provider only stores and searches. Scope checks, bindings, logging, trust framing and write
 authority are the framework's (`threads.memory.guard`), so a swapped provider can't weaken them.

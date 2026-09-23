@@ -1,4 +1,4 @@
-"""The durable channel inbox.
+"""The durable channel inbox (store.sql `inbox` and `channel_threads`).
 
 A verified batch is inserted whole in one transaction, each item under its own key, before the
 webhook is answered. A run consumes an item by appending its event with `consume` bound to the

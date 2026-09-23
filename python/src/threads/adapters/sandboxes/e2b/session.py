@@ -119,7 +119,7 @@ class E2BSession:
     async def snapshot(
         self, operation_key: str, context: SandboxContext
     ) -> Ok[SnapshotData] | Err[SandboxError]:
-        """Declared absent (sandbox.py, ): nothing reaches E2B."""
+        """Declared absent (sandbox.py): nothing reaches E2B."""
         return Err(SandboxError("unavailable", "e2b: this adapter takes no snapshots"))
 
     async def close(self, context: SandboxContext) -> Ok[None] | Err[SandboxError]:

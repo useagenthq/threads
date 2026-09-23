@@ -1,4 +1,4 @@
-"""`Host.start_run` (POST /v1/runs, ): the user_input is made durable together
+"""`Host.start_run` (POST /v1/runs): the user_input is made durable together
 with its idempotency receipt, and the run goes on in the host.
 
 The key binds the tenant, the full principal, the operation and the request's hash. The same

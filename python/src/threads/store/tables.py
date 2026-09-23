@@ -39,7 +39,7 @@ class Tables:
     async def intake(
         self, items: Sequence[inbox.Item], now: int, new_thread: Callable[[], ThreadId]
     ) -> frozenset[ThreadId]:
-        """The whole verified batch, in one transaction."""
+        """The whole verified batch, in one transaction (step 4)."""
         tenant = self.tenant_id
         return await self._worker.call(
             lambda c: inbox.insert_batch(c, tenant, items, now, new_thread)

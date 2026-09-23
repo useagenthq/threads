@@ -1,4 +1,4 @@
-"""Schedule occurrence claims: a scheduler
+"""Schedule occurrence claims (store.sql `schedule_occurrences`): a scheduler
 inserts the occurrence's row before it appends schedule_fired, so two schedulers that see the
 same due occurrence start one run."""
 

@@ -1,4 +1,5 @@
-"""Tree-wide cancellation (spec/schema/README.md, "Subagent cancellation and parking"; ): cancelling a thread bars every descendant subagent that hasn't finished.
+"""Tree-wide cancellation (spec/schema/README.md, "Subagent cancellation and parking"): cancelling a
+thread bars every descendant subagent that hasn't finished.
 
 The thread's own `cancel_requested` is the barrier. Then every child its log spawned without an
 `agent_finished` gets `cancel_requested{scope: tree, reason: "ancestor cancelled"}` (actor host,

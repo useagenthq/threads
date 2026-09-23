@@ -1,4 +1,4 @@
-"""Durable observer cursors: how far each observer
+"""Durable observer cursors (store.sql `observer_cursors`): how far each observer
 got on a branch. Observer bookkeeping only: the log never depends on it."""
 
 import sqlite3

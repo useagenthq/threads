@@ -1,4 +1,4 @@
-"""`whatsapp()` (extra `whatsapp`, ): the WhatsApp Cloud API.
+"""`whatsapp()` (extra `whatsapp`): the WhatsApp Cloud API.
 
 A webhook is verified by `X-Hub-Signature-256` over the raw bytes with the app secret, and the
 URL's GET subscription check by the verify token, compared in constant time. The business phone

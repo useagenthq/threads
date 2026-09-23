@@ -1,5 +1,5 @@
 """Team tools: the lead's log holds the shared task list and mailbox, and a
-member changes it only through the lead's writer, so 's single writer makes each claim
+member changes it only through the lead's writer, so single writer makes each claim
 atomic. A redelivered call never claims twice or sends twice: a claim the member already holds
 and a message id already sent are answered without a second event."""
 

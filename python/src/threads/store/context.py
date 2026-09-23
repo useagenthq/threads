@@ -1,5 +1,5 @@
 """The fence a sandbox adapter re-checks at its provider dispatch point (spec/api.json
-`SandboxContext`, `SandboxAuthority`; ). Bound to one authority; nothing on it
+`SandboxContext`, `SandboxAuthority`). Bound to one authority; nothing on it
 selects another."""
 
 from dataclasses import dataclass

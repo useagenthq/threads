@@ -1,4 +1,4 @@
-"""`slack()` (extra `slack`, ): Slack's Events API and interactivity.
+"""`slack()` (extra `slack`): Slack's Events API and interactivity.
 
 Inbound requests are verified with the official SDK's signing-secret check (slack_sdk), over
 the raw bytes and the request timestamp. A message event becomes one item keyed

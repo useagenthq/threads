@@ -1,4 +1,4 @@
-"""`open_thread` and the `Thread` handle (spec/api.json, ): a thread positioned at
+"""`open_thread` and the `Thread` handle (spec/api.json): a thread positioned at
 one branch. Every method reads or appends through the store; none needs the agent in memory."""
 
 from collections.abc import Sequence

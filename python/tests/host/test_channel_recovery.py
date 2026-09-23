@@ -1,5 +1,5 @@
-"""A channel reply survives a crash between the turn's end and the host issuing its send
-: the next run of the branch, or a restarted host, derives the missing
+"""A channel reply survives a crash between the turn's end and the host issuing its send: the next
+run of the branch, or a restarted host, derives the missing
 channel_send from the log and issues it through the effect path, once."""
 
 import asyncio

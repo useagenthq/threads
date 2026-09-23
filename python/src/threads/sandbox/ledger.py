@@ -1,4 +1,5 @@
-"""Provider calls that create or release a resource, recorded in the resource ledger (). The `pending` row and its operation key are durable before the create call. A lost
+"""Provider calls that create or release a resource, recorded in the resource ledger. The `pending`
+row and its operation key are durable before the create call. A lost
 answer is resolved by that key; a key the adapter can't resolve parks as `unknown`
 (resource_unknown). Nothing is ever created twice."""
 

@@ -94,7 +94,7 @@ class DaytonaSession:
         """A cold snapshot: the whole sandbox is stopped (every process ends), captured, then
         started again. Quiescent because stopped, and disruptive for that reason. The manifest
         is the parent's just before the stop: a claim that core proves against the image by a
-        ledgered restore before it records the snapshot (thread/snapshot.py, )."""
+        ledgered restore before it records the snapshot (thread/snapshot.py)."""
         tree = await posix.manifest(self, context)
         if isinstance(tree, Err):
             return tree

@@ -1,4 +1,4 @@
-"""Skills: host-pinned, listed in line 0, loaded on demand by
+"""Skills (spec/api.json `Skill`): host-pinned, listed in line 0, loaded on demand by
 load_skill, and pinned in config_hash. A run produces what the F4 conformance cases record."""
 
 import asyncio

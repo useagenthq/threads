@@ -1,5 +1,5 @@
-"""Host-issued memory and knowledge bindings (store.sql `memory_bindings`,
-`knowledge_bindings`, `provider_audit`).
+"""Host-issued memory and knowledge bindings (store.sql `memory_bindings`, `knowledge_bindings`,
+`provider_audit`).
 
 The host decides which scope owns an item, never the provider: a binding is issued and recorded
 here before the provider sees the write, and a returned item counts only when its binding is a

@@ -1,4 +1,4 @@
-"""Where a sandbox adapter fences (spec/api.json `SandboxContext`; ): at the
+"""Where a sandbox adapter fences (spec/api.json `SandboxContext`): at the
 SDK's real transport, never before the SDK call.
 
 An operation binds its context with `dispatch` around the SDK calls it makes. Each SDK's

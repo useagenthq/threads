@@ -1,4 +1,4 @@
-"""Conformance runner for `intake` cases (spec/conformance/README.md, ): each webhook
+"""Conformance runner for `intake` cases (spec/conformance/README.md): each webhook
 goes through the host's intake pipeline with a fake verifying adapter, and the HTTP statuses
 and the inbox rows, in insertion order, are compared."""
 

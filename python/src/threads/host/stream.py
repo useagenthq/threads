@@ -1,4 +1,4 @@
-"""`Host.subscribe` (GET /v1/threads/{thread_id}/runs/{run_id}/events, ):
+"""`Host.subscribe` (GET /v1/threads/{thread_id}/runs/{run_id}/events):
 one run's committed events, read from the log, then one result message naming the run.
 
 A subscription takes no input and starts nothing: it reads the log, and a run of this host

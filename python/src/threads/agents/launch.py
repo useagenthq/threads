@@ -22,7 +22,7 @@ from threads.tools import SandboxTools
 @dataclass(frozen=True, slots=True)
 class Team:
     """A member's route to its team: every team event is appended by the lead's writer, so
-    claims are atomic under 's single writer."""
+    claims are atomic per the spec's single writer."""
 
     lead: Runtime
     member: str

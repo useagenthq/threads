@@ -1,4 +1,5 @@
-"""The `threads` CLI: thin wrappers over the store and the host (). Export is the stored bytes, import verifies and stores the same bytes, delete
+"""The `threads` CLI: thin wrappers over the store and the host (7 and 8). Export is the stored
+bytes, import verifies and stores the same bytes, delete
 removes a thread whole, gc sweeps only unreferenced artifacts past the grace period, and dev
 prints each channel's webhook URL before serving."""
 

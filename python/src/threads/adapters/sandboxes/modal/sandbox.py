@@ -5,7 +5,7 @@ Why not the high-level `modal.Sandbox`: it runs on synchronicity's own event loo
 opens its channels internally, so no fence could sit at its send point. The generated stubs on
 our own channels give one asyncio loop and a fence at every request's headers.
 
-What Modal 1.5.5 supports here, and nothing broader:
+What Modal 1.5.5 supports here, and nothing broader (#170):
 - create is idempotent on the operation key: the sandbox is named `threads-<key>` and Modal
   refuses a second running sandbox of one name (ALREADY_EXISTS). Lookup by that name is
   nonfinal: a create already past its fence may still land.

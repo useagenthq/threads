@@ -1,8 +1,8 @@
 """Messages API stream events to core chunks. Every event is parsed at this boundary.
 
 Text streams as deltas at once. Parts are held until the stop reason is known: at max_tokens
-the block being generated was cut off, and a cut-off tool call or thinking block never exists
-. Thinking blocks are stored whole, signature included, before their part names
+the block being generated was cut off, and a cut-off tool call or thinking block never exists.
+Thinking blocks are stored whole, signature included, before their part names
 them.
 """
 

@@ -1,5 +1,5 @@
 """The built-in providers pass the published provider suites, and the framework's guard enforces
-scope, bounds and error values whatever a provider does."""
+scope, bounds and error values whatever a provider does (F3.4-F3.7, F14.3-F14.8)."""
 
 import asyncio
 import sqlite3
