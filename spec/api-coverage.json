@@ -502,6 +502,22 @@
       "tests/agents/test_api.py::test_readme_example"
     ]
   },
+  "brave": {
+    "ts": [
+      "packages/core/test/tools/search-backends.test.ts > search backends > brave: a GET with site: operators and the subscription token"
+    ],
+    "py": [
+      "tests/web/test_web.py::test_search_backends_send_the_key_on_the_host_and_parse_hits"
+    ]
+  },
+  "exa": {
+    "ts": [
+      "packages/core/test/tools/search-backends.test.ts > search backends > exa: one JSON POST with the key header and domain filters; hits mapped"
+    ],
+    "py": [
+      "tests/web/test_web.py::test_search_backends_send_the_key_on_the_host_and_parse_hits"
+    ]
+  },
   "extension": {
     "ts": [
       "packages/core/test/agent/extension.test.ts > extension() > instructions and <ext>__<tool> go into line 0; hooks get the run context"
@@ -620,6 +636,14 @@
     ],
     "py": [
       "tests/agents/test_api.py::test_readme_example"
+    ]
+  },
+  "tavily": {
+    "ts": [
+      "packages/core/test/tools/search-backends.test.ts > search backends > tavily: bearer auth and include/exclude domains"
+    ],
+    "py": [
+      "tests/web/test_web.py::test_search_backends_send_the_key_on_the_host_and_parse_hits"
     ]
   },
   "tool": {

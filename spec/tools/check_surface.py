@@ -25,8 +25,9 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
+from factory_coverage import factory_evidence
 from surface_contract import Gap, Member, members, obj, parse_gaps
-from surface_coverage import check_coverage
+from surface_coverage import Owed, check_coverage
 
 if TYPE_CHECKING:
     from check_api import Json
@@ -35,6 +36,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 API = ROOT / "spec" / "api.json"
 GAPS = ROOT / "spec" / "api-surface-gaps.json"
 COVERAGE = ROOT / "spec" / "api-coverage.json"
+DECISIONS = ROOT / "spec" / "api-surface-factory-decisions.json"
 GAPS_IN_GIT = "spec/api-surface-gaps.json"
 
 
@@ -142,7 +144,9 @@ def run(args: argparse.Namespace) -> list[str]:
         entries = {k: str(obj(v).get("py")) for k, v in obj(obj(api).get("packages")).items()}
         errs += check_python(contract, gaps, entries)
     coverage, more = _read(COVERAGE)
-    errs += more or check_coverage(coverage, contract, gaps, lang, args.junit)
+    decisions, also = _read(DECISIONS)
+    owed = factory_evidence(api, decisions)
+    errs += more + also or check_coverage(coverage, Owed(contract, gaps, owed), lang, args.junit)
     if args.release and gaps:
         errs += [f"surface gate: release with an open gap: {_label(g)}" for g in gaps]
     return errs

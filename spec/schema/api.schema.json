@@ -164,7 +164,6 @@
         "ts": { "$ref": "#/$defs/TsName" },
         "py": { "$ref": "#/$defs/PyName" },
         "package": { "description": "A key of packages. Absent: core.", "$ref": "#/$defs/PackageName" },
-        "lang": { "description": "Present only when the callable exists in one language.", "enum": ["ts", "py"] },
         "config_errors": {
           "description": "Factories: the ConfigError codes it can raise, per language. Each applicable language has a passing <factory>!<code>@<lang> test.",
           "type": "array",

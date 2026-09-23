@@ -7,8 +7,8 @@ against spec/api.json and the adapter sources.
 - every one-language param of a contracted factory has a decision row for that language
   (factory, option or *, lang), so a
   new language difference can't be installed undecided;
-- every default of a contracted factory is listed review-only (no observable effect) until the
-  coverage registry can require a `<factory>.<option>=default` behavior test;
+- a review-only default (no observable effect) names a defaulted param; every other default
+  owes a `<factory>.<option>=default` behavior test in the coverage registry (factory_coverage.py);
 - every decision names a known factory;
 - the refusal source scan (factory_scan.py) over each adapter package with contracted factories.
 
@@ -79,18 +79,13 @@ def _params(f: dict[str, Json]) -> list[dict[str, Json]]:
 def _contracted(
     name: str, f: dict[str, Json], entry: dict[str, Json], decided: set[tuple[str, str, str]]
 ) -> list[str]:
-    """Defaults have a review_only reason; one-language params have a decision."""
+    """review_only names defaults; one-language params have a decision."""
     review = _obj(entry.get("review_only"))
     defaults = [str(p.get("name")) for p in _params(f) if "default" in p or "default_doc" in p]
     errs = [
         f"decisions factories.{name}.review_only: {p} has no default in spec/api.json"
         for p in review
         if p not in defaults
-    ]
-    errs += [
-        f"api.json {name}.{p}: a default needs a behavior test or a review_only reason"
-        for p in defaults
-        if p not in review
     ]
     return errs + [
         f"api.json {name}.{p.get('name')}: a {p.get('lang')}-only param needs a decision row"

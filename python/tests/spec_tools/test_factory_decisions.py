@@ -42,24 +42,6 @@ def test_pending_and_installed_must_agree(tmp_path: pathlib.Path) -> None:
     ]
 
 
-def test_a_default_needs_a_review_only_reason(tmp_path: pathlib.Path) -> None:
-    doc = decisions()
-    doc["decisions"] = [
-        {
-            "factory": "fetcher",
-            "option": "transport",
-            "lang": "ts",
-            "decision": "S.",
-            "owner": "15A",
-        }
-    ]
-    assert check_decisions(api(params=[TRANSPORT]), doc, sources(tmp_path)) == [
-        "api.json fetcher.transport: a default needs a behavior test or a review_only reason"
-    ]
-    doc["factories"] = {"fetcher": {"owner": "15A", "review_only": {"transport": "Seam."}}}
-    assert check_decisions(api(params=[TRANSPORT]), doc, sources(tmp_path)) == []
-
-
 def test_a_one_language_param_needs_a_decision_row(tmp_path: pathlib.Path) -> None:
     doc = decisions(fetcher={"owner": "15A", "review_only": {"transport": "Seam."}})
     assert check_decisions(api(params=[TRANSPORT]), doc, sources(tmp_path)) == [
