@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final, TypedDict
 
 from threads.agents.bindings import AppTools, authorize
+from threads.agents.builtins import Routed, sandbox_tools
 from threads.agents.config import ConfigError
 from threads.agents.context import RunContext
 from threads.agents.definition import Definition
@@ -44,6 +45,8 @@ from threads.store.lines import uuid7
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
+
+    from threads.loop.tools import ToolRunner
 
 LOCAL_OPERATOR: Final = Principal(issuer="api", tenant="local", subject="operator")
 """The default principal of a local run."""
@@ -96,7 +99,9 @@ async def execute[D](
         principal = options.get("principal", LOCAL_OPERATOR)
         ctx = RunContext(deps, handle.id, handle.branch, principal)
         stream = _Stream(emit)
-        tools = AppTools(definition.tools, ctx)
+        tools: ToolRunner = AppTools(definition.tools, ctx)
+        if definition.sandbox is not None:
+            tools = Routed(sandbox_tools(sq, definition.sandbox, writer, now_ms), tools)
         rt = Runtime(
             sq,
             writer,

@@ -6,10 +6,11 @@ from typing import Literal
 
 from pydantic import JsonValue
 
-from threads.log import CallId
+from threads.log import ArtifactRef, CallId
 from threads.loop.defaults import context
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.runtime import Runtime
+from threads.reduce.handlers import to_json
 from threads.store import Draft
 
 type Origin = Literal[
@@ -38,8 +39,11 @@ async def text_ref(rt: Runtime, text: str) -> JsonValue:
     return {"sha256": sha, "bytes": len(raw), "media_type": "text/plain"}
 
 
-async def result_draft(rt: Runtime, call_id: CallId, text: str, how: As) -> Draft:
-    """The result the model sees. Spilled bytes are a durable artifact before this draft."""
+async def result_draft(
+    rt: Runtime, call_id: CallId, text: str, how: As, full: ArtifactRef | None = None
+) -> Draft:
+    """The result the model sees. Spilled bytes are a durable artifact before this draft;
+    `full` is output the source already spilled, and the text is then its bounded preview."""
     data: dict[str, JsonValue] = {
         "call_id": call_id,
         "completeness": "complete",
@@ -49,7 +53,9 @@ async def result_draft(rt: Runtime, call_id: CallId, text: str, how: As) -> Draf
     }
     raw = text.encode("utf-8")
     spill = context(rt.fold).spill
-    if len(raw) > spill.threshold_bytes:
+    if full is not None:
+        data["ref"] = to_json(full)
+    elif len(raw) > spill.threshold_bytes:
         head = raw[: spill.head_bytes].decode("utf-8", "ignore")
         tail = raw[len(raw) - spill.tail_bytes :].decode("utf-8", "ignore")
         data["preview"] = head + _MARKER.format(n=len(raw), id=call_id) + tail

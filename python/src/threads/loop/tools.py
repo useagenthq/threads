@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-from threads.log import CallId, JsonObject, ToolSpec
+from threads.log import ArtifactRef, CallId, JsonObject, ToolSpec
 from threads.loop.model import LookupResult
 
 type Termination = Literal["terminated", "already_exited", "unknown"]
@@ -27,6 +27,9 @@ class Output:
 
     text: str
     is_error: bool = False
+    full_output: ArtifactRef | None = None
+    """Output spilled at the source (a sandbox exec over its preview): the result's `ref`, so
+    `read_tool_result` reads it."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -9,12 +9,14 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Required, TypedDict, Unpack, overload
 
 from threads.agents.bindings import AppTool
+from threads.agents.builtins import Egress
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
 from threads.agents.results import RunResult, StreamEvent
 from threads.agents.run import Input, RunOptions, execute
 from threads.log import Budget, Permissions, Retry
 from threads.loop.model import Model
+from threads.sandbox.protocol import Sandbox
 
 
 class AgentOptions(TypedDict, total=False):
@@ -24,6 +26,10 @@ class AgentOptions(TypedDict, total=False):
     permissions: Permissions
     budget: Budget
     retry: Retry
+    sandbox: Sandbox
+    """Absent: no sandbox tools. Present: bash, read, write, edit, ls, glob and grep."""
+    egress: Egress
+    """Sandbox egress allowlist; [] (the default) is deny-all."""
 
 
 class ToolAgentOptions[D](AgentOptions, total=False):
@@ -114,10 +120,12 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D] | Agent[None]:
 
 
 def _definition[T](options: AgentOptions, tools: tuple[AppTool[T], ...]) -> Definition[T]:
-    names = [t.name for t in tools]
-    if len(set(names)) != len(names):
-        raise ConfigError("duplicate_name", f"tool names repeat: {names}")
-    return Definition(
+    sandbox = options.get("sandbox")
+    egress = options.get("egress", ())
+    if sandbox is not None and sandbox.info.egress == "unenforced" and egress != "unenforced":
+        # A provider that can't enforce egress needs an explicit opt-in.
+        raise ConfigError("egress_policy_unsupported", f"{sandbox.info.provider}: egress")
+    definition = Definition(
         options.get("name", "agent"),
         options["model"],
         options.get("instructions", ""),
@@ -125,4 +133,10 @@ def _definition[T](options: AgentOptions, tools: tuple[AppTool[T], ...]) -> Defi
         options.get("permissions"),
         options.get("budget"),
         options.get("retry"),
+        sandbox,
+        egress,
     )
+    names = [s.name for s in definition.specs()]
+    if len(set(names)) != len(names):
+        raise ConfigError("duplicate_name", f"tool names repeat: {names}")
+    return definition

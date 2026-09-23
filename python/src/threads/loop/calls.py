@@ -190,8 +190,8 @@ async def _read_only(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | No
     if stale is not None:
         return stale
     match await rt.tools.dispatch(inv):
-        case Output(text=text, is_error=is_error):
-            result = await result_draft(rt, inv.call_id, text, As("executed", is_error))
+        case Output(text=text, is_error=is_error, full_output=full):
+            result = await result_draft(rt, inv.call_id, text, As("executed", is_error), full)
         case Uncertain(reason=reason):
             text = f"{reason}: the read did not finish"
             result = await result_draft(rt, inv.call_id, text, As("executed", True))
