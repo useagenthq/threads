@@ -43,7 +43,7 @@ def _imports(text: str, lang: str) -> str:
     return IMPORTS[lang].sub(lambda m: m.group(0) if RENAMED.search(m.group(0)) else "", text)
 
 
-def _without_comments(source: str) -> str:
+def without_comments(source: str) -> str:
     """Python source with its comments blanked, found by the tokenizer (never inside a string).
     Source the tokenizer can't read is kept whole, so nothing is hidden."""
     lines = source.splitlines(keepends=True)
@@ -63,7 +63,7 @@ def _without_comments(source: str) -> str:
 
 def unclassified_uses(source: str, lang: str) -> int:
     """Mentions of ConfigError that are not a construction, a plain import or a catch."""
-    text = _imports(_without_comments(source) if lang == "py" else source, lang)
+    text = _imports(without_comments(source) if lang == "py" else source, lang)
     for pattern in ALLOWED[lang]:
         text = pattern.sub("", text)
     return len(NAME.findall(text))

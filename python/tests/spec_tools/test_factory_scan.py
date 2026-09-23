@@ -198,3 +198,8 @@ def test_catching_and_plain_imports_are_not_aliases() -> None:
     assert raised_codes(ts, "ts") == {}
     caught = "if isinstance(error, ConfigError):\n    pass  # ConfigError\n"
     assert raised_codes(caught, "py") == {}
+
+
+def test_a_python_comment_is_never_a_site() -> None:
+    py = '# ConfigError("missing_secret", "x") and resolve(k) in a comment\nresolve(k)\n'
+    assert raised_codes(py, "py") == {"missing_secret": 1}

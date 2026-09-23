@@ -19,7 +19,7 @@ from collections import Counter
 from typing import TYPE_CHECKING
 
 from api_factories import expanded_errors, langs
-from config_error_uses import unclassified_uses
+from config_error_uses import unclassified_uses, without_comments
 
 if TYPE_CHECKING:
     import pathlib
@@ -56,13 +56,16 @@ def raised_codes(source: str, lang: str) -> Counter[str]:
     """How many sites in one source can raise each ConfigError code. A construction whose code
     isn't a string literal, and any mention of ConfigError other than a construction, a plain
     import or a catch (config_error_uses.py), counts as UNREADABLE, which the scan reports."""
-    found: Counter[str] = Counter(m.group(1) for m in CONSTRUCTED.finditer(source))
-    unreadable = len(ANY_CONSTRUCTION.findall(source)) - found.total()
+    # A Python comment is never a site; TS text is counted whole (a comment over-counts, which is
+    # red, never hidden).
+    code_text = without_comments(source) if lang == "py" else source
+    found: Counter[str] = Counter(m.group(1) for m in CONSTRUCTED.finditer(code_text))
+    unreadable = len(ANY_CONSTRUCTION.findall(code_text)) - found.total()
     unreadable += unclassified_uses(source, lang)
     if unreadable:
         found[UNREADABLE] = unreadable
     for pattern, code in HELPERS[lang]:
-        found[code] += len(pattern.findall(source))
+        found[code] += len(pattern.findall(code_text))
     return +found
 
 
