@@ -5,6 +5,7 @@ import asyncio
 import sqlite3
 from collections.abc import Sequence
 
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -152,8 +153,22 @@ def test_passage_spans_are_the_exact_utf8_bytes(parts: list[str]) -> None:
     raw = text.encode("utf-8")
     for (start, end), body in passages.split(text):
         assert raw[start:end].decode("utf-8") == body
-        assert body.strip() == body
+        assert body.strip(passages.WHITESPACE) == body
         assert body
+
+
+@pytest.mark.parametrize(
+    ("text", "spans"),
+    [
+        # Whitespace is ECMAScript's, as in TS: U+FEFF is, U+001C-U+001F and U+0085 aren't.
+        ("A\n\n﻿B﻿", [(0, 1, "A"), (6, 7, "B")]),
+        ("A\n\x1c\nB", [(0, 5, "A\n\x1c\nB")]),
+        ("A\n\n\x1fB\x1f", [(0, 1, "A"), (3, 6, "\x1fB\x1f")]),
+        ("A\n\x85\nB", [(0, 6, "A\n\x85\nB")]),
+    ],
+)
+def test_passage_boundaries_match_typescript(text: str, spans: list[tuple[int, int, str]]) -> None:
+    assert [(s, e, body) for (s, e), body in passages.split(text)] == spans
 
 
 def test_forgetting_an_unknown_id_is_invalid() -> None:
