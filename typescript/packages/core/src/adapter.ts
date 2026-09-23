@@ -17,6 +17,7 @@ export {
   type RawResponse,
   VerifiedDelivery,
 } from "./channel/protocol";
+export { responseText } from "./fold/state";
 export {
   type ArtifactRef,
   type InputPart,

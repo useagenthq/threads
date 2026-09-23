@@ -146,9 +146,9 @@ async function occurrence(
   const first: readonly EventDraft[] = main.ok
     ? []
     : [b.hosted.runner.started()];
-  const writer = log.acquire(branchId, `schedule-${crypto.randomUUID()}`);
+  const writer = await briefly(log, branchId);
   if (!writer.ok) {
-    // The previous run holds the branch: the claim alone records the overlap.
+    // A run still holds the branch past a scheduler's short hold: the claim records the overlap.
     claim(
       db,
       b,
@@ -217,6 +217,21 @@ async function occurrence(
     id: threadId,
     branch: branchId,
   });
+}
+
+const HOLD_TRIES = 10;
+
+/** The lease, waiting out another scheduler's short hold; a run's longer hold stays busy. */
+async function briefly(
+  log: LogStore,
+  branchId: BranchId,
+): Promise<ReturnType<LogStore["acquire"]>> {
+  let writer = log.acquire(branchId, `schedule-${crypto.randomUUID()}`);
+  for (let i = 0; i < HOLD_TRIES && !writer.ok; i += 1) {
+    await Bun.sleep(20);
+    writer = log.acquire(branchId, `schedule-${crypto.randomUUID()}`);
+  }
+  return writer;
 }
 
 function principal(b: Bound): Principal {

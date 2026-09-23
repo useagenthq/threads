@@ -5,9 +5,9 @@ import {
   FenceRefused,
   type Fetch,
   type LookupResult,
+  responseText,
   sandboxFetch,
 } from "@threads/core/adapter";
-import { responseText } from "@threads/core/host";
 import { z } from "zod";
 import type { ButtonValue } from "./inbound";
 
