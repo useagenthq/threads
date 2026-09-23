@@ -10,7 +10,7 @@ from pydantic import ConfigDict, JsonValue, with_config
 
 from threads.log import SnapshotData
 from threads.log.digest import sha256_hex
-from threads.log.jcs import canonicalize
+from threads.log.jcs import canonicalize, utf16_key
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
 from threads.sandbox.protocol import (
@@ -50,12 +50,19 @@ async def fenced(context: SandboxContext) -> Err[SandboxError] | None:
     )
 
 
+WORKSPACE = "/workspace/"
+
+
 def manifest_of(files: Mapping[str, bytes]) -> list[ManifestEntry]:
-    """The captured file tree: path, mode, size and sha256 per file, sorted by path."""
-    return [
-        ManifestEntry(path=path, mode=0o644, size=len(data), sha256=sha256_hex(data))
-        for path, data in sorted(files.items())
+    """The captured file tree: path relative to /workspace, mode, size and sha256 per file,
+    ordered by path in UTF-16 code units (spec/schema/README.md, Snapshot manifest)."""
+    entries = [
+        ManifestEntry(
+            path=path.removeprefix(WORKSPACE), mode=0o644, size=len(data), sha256=sha256_hex(data)
+        )
+        for path, data in files.items()
     ]
+    return sorted(entries, key=lambda e: utf16_key(e["path"]))
 
 
 def manifest_hash(manifest: list[ManifestEntry]) -> str:

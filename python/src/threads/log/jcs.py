@@ -74,7 +74,7 @@ def _write_array(items: list[JsonValue], out: list[str], depth: int) -> None:
 
 def _write_object(obj: dict[str, JsonValue], out: list[str], depth: int) -> None:
     out.append("{")
-    for index, key in enumerate(sorted(obj, key=_utf16_key)):
+    for index, key in enumerate(sorted(obj, key=utf16_key)):
         if index:
             out.append(",")
         out.append(_string(key))
@@ -89,9 +89,12 @@ def _within_depth(depth: int) -> int:
     return depth
 
 
-def _utf16_key(key: str) -> bytes:
-    # RFC 8785 §3.2.3 orders by UTF-16 code units, which differs from code point order above
-    # the BMP (U+1F600 sorts before U+E000). Surrogates are rejected when the key is written.
+def utf16_key(key: str) -> bytes:
+    """Sort key for UTF-16 code-unit order: JCS object keys and snapshot manifest paths.
+
+    It differs from code point order above the BMP (U+1F600 sorts before U+E000). Callers
+    reject surrogates separately.
+    """
     return key.encode("utf-16-be", "surrogatepass")
 
 
