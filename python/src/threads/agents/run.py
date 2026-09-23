@@ -166,7 +166,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         moved = rt.fold.handed_off
         recorded = Recorded(input, principal, options.get("budget"), launch, intake)
         halt = await _turn(rt, definition, recorded, fresh=fresh)
-        await agents.finish(rt)
+        halt = await agents.finish(rt, halt)
         if isinstance(halt, Idle) and box is not None and builtins is not None and shared is None:
             revision = None if provided is None else await provided.knowledge_revision()
             await snapshot_turn_end(sq, writer, box, builtins, now_ms, knowledge_revision=revision)

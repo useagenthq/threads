@@ -1,8 +1,8 @@
 """A child thread's terminal result as its parent records it: `agent_finished{status, usage}`
 . Usage is the child's aggregate, its own children's included, with an
-unknown total as null."""
+unknown total as null. A parked child has no terminal result: it parks its parent instead."""
 
-from typing import assert_never
+from typing import Final, assert_never
 
 from pydantic import JsonValue
 
@@ -20,30 +20,36 @@ from threads.log import AgentFinishedEvent, ThreadId
 from threads.result import Err
 from threads.store import SqliteStore
 
+CANCELLED: Final = "cancelled"
 
-def _status(result: RunResult[str]) -> tuple[str, str | None]:
-    """The terminal status and the output the parent sees (None: nothing to report)."""
+
+def _status(result: RunResult[str]) -> tuple[str, str]:
+    """The terminal status and the output the parent records."""
     match result:
         case Completed(output=output):
             return "completed", output
         case BudgetExhausted(budget=budget):
             return "budget_exhausted", f"budget exhausted: {budget.limit}"
         case Cancelled():
-            return "cancelled", None
+            return "cancelled", CANCELLED
         case Failed(error=error):
-            return "failed", f"failed: {error.code}: {error.message}"
-        case Parked(reason=reason):
-            # ponytail: a child can't park its parent yet; it ends failed and keeps its log.
-            return "failed", f"failed: the subagent parked ({reason})"
+            return "failed", error.message
         case HandedOff():
-            return "failed", "failed: a subagent can't hand off"
+            return "failed", "handed off"
+        case Parked():
+            raise AssertionError("a parked child parks its parent; it has no terminal result")
         case _:
             assert_never(result)
 
 
+def shown(status: str, output: str) -> str:
+    """The spawn call's result text: the output, prefixed by any status but completed."""
+    return output if status == "completed" else f"{status}: {output}"
+
+
 async def finished(
     sq: SqliteStore, child: ThreadId, result: RunResult[str]
-) -> tuple[dict[str, JsonValue], str | None]:
+) -> tuple[dict[str, JsonValue], str]:
     status, output = _status(result)
     usage: dict[str, JsonValue] = {"input_tokens": None, "output_tokens": None}
     read = await sq.read(result.thread.branch, now_ms())

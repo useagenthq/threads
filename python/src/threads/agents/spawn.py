@@ -13,10 +13,12 @@ from typing import Final
 from pydantic import JsonValue
 
 from threads._generated.tools_v1 import SpawnAgentInput
+from threads.agents import stops
 from threads.agents.bindings import permissions
-from threads.agents.children import finished
+from threads.agents.children import finished, shown
 from threads.agents.definition import Definition
 from threads.agents.launch import Launch, Team
+from threads.agents.results import Parked, RunResult
 from threads.agents.scope import Scope
 from threads.hooks.runner import STOP, SWITCH, decision_draft
 from threads.log import (
@@ -28,6 +30,7 @@ from threads.log import (
 )
 from threads.loop.budget import inherited
 from threads.loop.drafts import draft
+from threads.loop.drive import open_cancel
 from threads.loop.gates import MAX_STOP_CONTINUES, said, verdict
 from threads.loop.history import CallState
 from threads.loop.results import As, result_draft, text_ref
@@ -36,6 +39,8 @@ from threads.result import Err
 from threads.store.lines import uuid7
 
 type Tasks = dict[ThreadId, asyncio.Task[None]]
+type Ended = tuple[dict[str, JsonValue], str]
+"""A child's agent_finished data and the spawn call's result text."""
 
 _DEFERRED: Final = "started in background"
 
@@ -59,7 +64,10 @@ async def spawn[D](scope: Scope[D], rt: Runtime, state: CallState, tasks: Tasks)
     if spawned.data.mode == "background":
         start_background(scope, rt, spawned, tasks)
         return None
-    data, text = await _run(scope, rt, spawned, child, args.prompt)
+    ended = await _outcome(scope, rt, spawned, child, args.prompt)
+    if isinstance(ended, Parked):
+        return await stops.park(rt, spawned, ended)
+    data, text = ended
     result = await result_draft(rt, call_id, text, As("executed", data["status"] != "completed"))
     done = await rt.append(draft("agent_finished", data), result)
     return lost(done.error) if isinstance(done, Err) else None
@@ -146,7 +154,11 @@ def start_background[D](
     prompt = SpawnAgentInput.model_validate(dict(rt.fold.calls[spawned.data.call_id].data.input))
 
     async def body() -> None:
-        data, text = await _run(scope, rt, spawned, child, prompt.prompt)
+        ended = await _outcome(scope, rt, spawned, child, prompt.prompt)
+        if isinstance(ended, Parked):
+            await stops.park(rt, spawned, ended)
+            return
+        data, text = ended
         late = await result_draft(rt, spawned.data.call_id, text, As("executed"))
         fields = {k: v for k, v in late.data.items() if k != "origin"}
         fields["is_error"] = data["status"] != "completed"
@@ -155,21 +167,42 @@ def start_background[D](
     tasks[spawned.data.child_thread_id] = asyncio.create_task(body())
 
 
+async def _outcome[D](
+    scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, child: Definition[None], prompt: str
+) -> Ended | Parked:
+    """The child's terminal record, or its park. Under the parent's barrier the child is barred
+    before it runs on, and one whose thread was never created is recorded cancelled."""
+    barrier = open_cancel(rt.events)
+    if barrier is not None and not await stops.bar(scope, spawned, barrier):
+        return await stops.never_started(rt, spawned)
+    return await _run(scope, rt, spawned, child, prompt)
+
+
+async def once[D](scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent) -> RunResult[str]:
+    """The child run once more with what it already has: it appends nothing it holds."""
+    child = _child(scope, spawned.data.agent_name)
+    if child is None:
+        raise AssertionError("a parked child is a configured subagent")
+    inputs = len(_continues(rt, spawned.data.call_id)) + 1
+    return await scope.execute(child, "", _launch(scope, rt, spawned, inputs))
+
+
 async def _run[D](
     scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, child: Definition[None], prompt: str
-) -> tuple[dict[str, JsonValue], str]:
-    """The child to its terminal result; subagent_stop may send it on, at most
+) -> Ended | Parked:
+    """The child to its terminal result, or its park; subagent_stop may send it on, at most
     MAX_STOP_CONTINUES times, counted from the parent's log."""
     call_id = spawned.data.call_id
     while True:
         reasons = _continues(rt, call_id)
         text = reasons[-1] if reasons else prompt
         result = await scope.execute(child, text, _launch(scope, rt, spawned, len(reasons) + 1))
+        if isinstance(result, Parked):
+            return result
         data, output = await finished(scope.sq, spawned.data.child_thread_id, result)
-        if output is not None:
-            data["output_ref"] = await text_ref(rt, output)
+        data["output_ref"] = await text_ref(rt, output)
         if not rt.hooks.has("subagent_stop") or len(reasons) >= MAX_STOP_CONTINUES:
-            return data, output or f"the subagent ended {data['status']}"
+            return data, shown(str(data["status"]), output)
         ran = await rt.hooks.run("subagent_stop", STOP, AgentFinishedData.model_validate(data))
         ids = {"call_id": call_id}
         drafts = [
@@ -178,7 +211,7 @@ async def _run[D](
         ]
         await rt.append(*drafts)
         if all(verdict(r, "stop") != "continue" for r in ran):
-            return data, output or f"the subagent ended {data['status']}"
+            return data, shown(str(data["status"]), output)
 
 
 def _continues(rt: Runtime, call_id: str) -> list[str]:

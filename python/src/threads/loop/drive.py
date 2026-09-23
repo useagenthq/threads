@@ -86,7 +86,7 @@ async def _step(rt: Runtime) -> Halt | None:
         return parked(rt.events, fold.parked)
     if not fold.in_turn:
         return Idle(_last_reason(rt.events))
-    cancel = _open_cancel(rt.events)
+    cancel = open_cancel(rt.events)
     if cancel is not None:
         return await _cancel(rt, cancel)
     if fold.pending:
@@ -121,7 +121,7 @@ def _last_reason(events: Sequence[Event]) -> str:
     return "end_turn" if done is None else done.data.reason
 
 
-def _open_cancel(events: Sequence[Event]) -> CancelRequestedEvent | None:
+def open_cancel(events: Sequence[Event]) -> CancelRequestedEvent | None:
     for event in reversed(turn_events(events)):
         if isinstance(event, CancelledEvent):
             return None

@@ -38,7 +38,7 @@ from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import Draft, StoredEvent, inbox
 from threads.store.lines import uuid7
-from threads.thread import approvals, control
+from threads.thread import approvals, control, tree
 from threads.thread.handle import Thread
 
 _INBOUND: TypeAdapter[Inbound] = TypeAdapter(Inbound)
@@ -180,10 +180,15 @@ class ChannelIntake:
                 installation=row.installation_id,
                 companion=consume,
             )
+        elif item.command == "cancel":
+            done = await tree.cancel_tree(thread.store, thread.branch, item.principal, consume)
         else:
-            kind = "cancel_requested" if item.command == "cancel" else "stop_when_idle"
             done = await control.cancel(
-                thread.store, thread.branch, item.principal, kind=kind, companion=consume
+                thread.store,
+                thread.branch,
+                item.principal,
+                kind="stop_when_idle",
+                companion=consume,
             )
         if isinstance(done, Err):
             # Refused (not an approver, a stale button): consumed, and nothing appended.

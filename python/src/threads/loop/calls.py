@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import CallId, EventId, ToolSpec, ToolUsePart
+from threads.log import AgentSpawnedEvent, CallId, EventId, ToolSpec, ToolUsePart
 from threads.log.digest import canonical_sha256
 from threads.loop import effects, gates, todos, tool_gates
 from threads.loop.drafts import ActorKind, draft
@@ -254,6 +254,10 @@ async def cancel_call(rt: Runtime, call_id: CallId, actor: ActorKind = "host") -
     whose effect may have been sent is settled or parked, never assumed undone."""
     state = call_state(rt.events, call_id)
     spec = rt.fold.tools[state.call.data.name]
+    if rt.framework is not None and _child_started(rt, call_id):
+        # A spawned child is never cancelled over: the parent runs it (barred) to its end and
+        # records its one agent_finished, or parks on it (spec/schema/README.md).
+        return await rt.framework.run(rt, state)
     match state.effect:
         case "begun" | "unknown":
             return await effects.settle(rt, state, spec, state.unknown_reason or "", actor)
@@ -261,3 +265,7 @@ async def cancel_call(rt: Runtime, call_id: CallId, actor: ActorKind = "host") -
             return await close(rt, call_id, "not_executed", "not executed: cancelled", actor)
         case _:
             return await effects.close_settled(rt, state, actor)
+
+
+def _child_started(rt: Runtime, call_id: CallId) -> bool:
+    return any(isinstance(e, AgentSpawnedEvent) and e.data.call_id == call_id for e in rt.events)

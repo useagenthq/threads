@@ -96,7 +96,7 @@ def resumed(fold: Fold, address: ParkAddress, cause: str) -> tuple[Draft, ...]:
     return (Draft("resumed", data),)
 
 
-def _first(kind: str, data: "dict[str, JsonValue]", by: "dict[str, JsonValue]") -> Draft:
+def first(kind: str, data: "dict[str, JsonValue]", by: "dict[str, JsonValue]") -> Draft:
     return Draft(kind, data, by, True, uuid7(now_ms()))
 
 
@@ -117,15 +117,16 @@ async def cancel(
         data: dict[str, JsonValue] = {"reason": "requested by the thread's principal"}
         soft = Draft(kind, data, actor("user", principal))
         return await append(store, branch, lambda _: Ok((soft,)), companion)
-    barrier = _first(kind, {"scope": "thread"}, actor("user", principal))
+    barrier = first(kind, {"scope": "thread"}, actor("user", principal))
+    return await append(store, branch, lambda fold: Ok(barred(fold, barrier)), companion)
 
-    def build(fold: Fold) -> Ok[Sequence[Draft]]:
-        # A question or an approval can't be answered after the barrier: release those parks
-        # so the loop closes their calls. An effect in doubt stays parked.
-        waiting = [a for a in fold.parked if a.kind in ("approval", "input")]
-        return Ok((barrier, *(d for a in waiting for d in resumed(fold, a, _id(barrier)))))
 
-    return await append(store, branch, build, companion)
+def barred(fold: Fold, barrier: Draft) -> tuple[Draft, ...]:
+    """The cancel_requested barrier, then a resumed for each open question or approval: those
+    can't be answered after the barrier, so the loop closes their calls. An effect in doubt
+    stays parked."""
+    waiting = [a for a in fold.parked if a.kind in ("approval", "input")]
+    return (barrier, *(d for a in waiting for d in resumed(fold, a, _id(barrier))))
 
 
 async def set_mode(
@@ -218,7 +219,7 @@ async def answer(
             "preview": preview,
             "origin": "answered",
         }
-        result = _first("tool_result", data, actor("user", principal))
+        result = first("tool_result", data, actor("user", principal))
         return Ok((result, *resumed(fold, address, _id(result))))
 
     return await append(store, branch, build)
@@ -249,7 +250,7 @@ async def resolve_parked(  # noqa: PLR0913 - the control, plus who may take it
             return Err(ParseError("not_parked", f"no parked effect {effect_key}"))
         call = effect_key.split(":", 1)[-1]
         data: dict[str, JsonValue] = {"call_id": call, "outcome": resolution, "by": "human"}
-        settled = _first("effect_resolved", data, actor("approver", principal))
+        settled = first("effect_resolved", data, actor("approver", principal))
         return Ok((settled, *resumed(fold, address, _id(settled))))
 
     return await append(store, branch, build)

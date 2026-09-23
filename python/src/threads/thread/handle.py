@@ -28,7 +28,7 @@ from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import VerifiedLog
 from threads.store.lines import uuid7
-from threads.thread import approvals, control
+from threads.thread import approvals, control, tree
 from threads.thread.case import CaseExpectation, CaseRequest, SavedCase, save_case
 from threads.thread.control import LOCAL_OPERATOR, Controlled
 from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch
@@ -226,8 +226,9 @@ class Thread:
         )
 
     async def cancel(self, principal: Principal) -> Controlled:
-        """Durable cancel_requested; unsettled effects park."""
-        return await control.cancel(self.store, self.branch, principal)
+        """Durable cancel_requested; unsettled effects park. Tree-wide: every unfinished
+        descendant subagent is barred too."""
+        return await tree.cancel_tree(self.store, self.branch, principal)
 
     async def set_model(self, settings: SettingsChange, principal: Principal) -> Controlled:
         """settings_changed{reason: user}."""
