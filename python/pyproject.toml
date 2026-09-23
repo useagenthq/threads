@@ -8,6 +8,17 @@ requires-python = ">=3.12"
 dependencies = ["pydantic>=2,<3"]
 classifiers = ["Private :: Do Not Upload"]
 
+[project.optional-dependencies]
+anthropic = [
+    "anthropic>=1.8.0,<2",
+]
+openai = [
+    "openai>=3.19.0,<4",
+]
+litellm = [
+    "litellm>=1.83.0,<2",
+]
+
 [dependency-groups]
 dev = [
     "pyright",

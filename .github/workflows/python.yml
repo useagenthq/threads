@@ -17,7 +17,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           working-directory: python
-      - run: uv sync --locked
+      - run: uv sync --locked --all-extras
       - run: uv run pyright
       - run: uv run pyright --verifytypes threads --ignoreexternal
       - run: uv run ruff check
