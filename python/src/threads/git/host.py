@@ -29,13 +29,17 @@ def credential_env(token: str | None, home: Path) -> Mapping[str, str]:
         "GIT_TERMINAL_PROMPT": "0",
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CONFIG_GLOBAL": os.devnull,
+        # The push bundle comes out of the sandbox: untrusted objects are checked on the way in.
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "transfer.fsckObjects",
+        "GIT_CONFIG_VALUE_0": "true",
     }
     if token is not None:
         basic = base64.b64encode(f"x-access-token:{token}".encode()).decode("ascii")
         env |= {
-            "GIT_CONFIG_COUNT": "1",
-            "GIT_CONFIG_KEY_0": "http.extraHeader",
-            "GIT_CONFIG_VALUE_0": f"Authorization: Basic {basic}",
+            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_KEY_1": "http.extraHeader",
+            "GIT_CONFIG_VALUE_1": f"Authorization: Basic {basic}",
         }
     return env
 

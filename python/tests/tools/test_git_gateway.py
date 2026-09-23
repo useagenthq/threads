@@ -17,6 +17,7 @@ from threads import Agent, Completed, EventItem, Thread, agent, scripted_model, 
 from threads._generated.tools_v1 import GitPushInput
 from threads.git.forge import GitHub
 from threads.git.gateway import Forge, GitGateway
+from threads.git.host import credential_env
 from threads.log import (
     CallId,
     EffectBeginEvent,
@@ -186,7 +187,7 @@ async def _public(_host: str, _port: int) -> list[str]:
 
 
 def test_open_pull_request_returns_an_existing_one_and_reconciles_by_head(tmp_path: Path) -> None:
-    pr = b'{"number": 7, "html_url": "https://github.com/acme/app/pull/7"}'
+    pr = b'{"number": 7, "html_url": "https://github.com/acme/app/pull/7", "state": "open"}'
     existing = _Api(b"[" + pr + b"]")
     fresh = _Api(b"[]", Response(201, {}, pr))
     lost = _Api(b"[]")
@@ -208,12 +209,60 @@ def test_open_pull_request_returns_an_existing_one_and_reconciles_by_head(tmp_pa
             got = await gw.dispatch(call("open_pull_request", args))
             assert got == want
             path, request = api.requests[0]
-            assert path == "/repos/acme/app/pulls?state=open&head=acme%3Afeature"
+            assert path == "/repos/acme/app/pulls?state=all&head=acme%3Afeature&base=main"
             assert request.headers["Authorization"] == f"Bearer {CANARY}"
             if api is lost:
                 assert await gw.lookup(call("open_pull_request", args)) == NotFound()
 
         run(tmp_path / str(id(api)), body, GitHub("https://api.github.com", api, _public))
+
+
+def test_a_lost_create_later_closed_parks_and_is_never_opened_twice(tmp_path: Path) -> None:
+    """A create landed but its answer was lost, then the pull request was closed: its head
+    still names it, so recovery parks (a human decides) rather than reading "never created"
+    and opening a second one (invariant 3). A closed one for the head is no answer to a new
+    call, which opens a fresh pull request."""
+    closed = b'{"number": 7, "html_url": "https://github.com/acme/app/pull/7", "state": "closed"}'
+    fresh = b'{"number": 8, "html_url": "https://github.com/acme/app/pull/8", "state": "open"}'
+    api = _Api(b"[" + closed + b"]", Response(201, {}, fresh))
+    args: JsonObject = {"repo": "acme/app", "head": "feature", "base": "main", "title": "T"}
+
+    async def body(gw: GitGateway, *_rest: object) -> None:
+        assert await gw.lookup(call("open_pull_request", args)) == NotFoundNonfinal()
+        got = await gw.dispatch(call("open_pull_request", args))
+        assert got == Output("pull request #8: https://github.com/acme/app/pull/8")
+
+    run(tmp_path, body, GitHub("https://api.github.com", api, _public))
+
+
+@pytest.mark.parametrize(
+    ("name", "input"),
+    [
+        ("git_clone", {"repo": "acme/app", "path": "../etc"}),
+        ("git_clone", {"repo": "acme/.."}),
+        ("git_fetch", {"repo": "acme/app", "path": "/etc"}),
+        ("git_push", {"repo": "acme/app", "branch": "main", "path": ".."}),
+        ("git_clone", {"repo": "acme/app", "ref": "--upload-pack=x"}),
+        ("git_fetch", {"repo": "acme/app", "ref": "a..b"}),
+        ("git_push", {"repo": "acme/app", "branch": "main.lock"}),
+        ("git_push", {"repo": "acme/app", "branch": "a b"}),
+    ],
+)
+def test_paths_leaving_the_workspace_and_unsafe_refs_are_refused(
+    tmp_path: Path, name: str, input: JsonObject
+) -> None:
+    async def body(gw: GitGateway, _make: object, ws: Path, _forge: Path) -> None:
+        got = await gw.dispatch(call(name, input))
+        assert isinstance(got, Output)
+        assert got.is_error
+        assert not list(ws.iterdir())
+
+    run(tmp_path, body)
+
+
+def test_the_host_checks_objects_it_takes_from_the_sandbox() -> None:
+    env = credential_env(None, Path("/h"))
+    assert (env["GIT_CONFIG_KEY_0"], env["GIT_CONFIG_VALUE_0"]) == ("transfer.fsckObjects", "true")
 
 
 class _CrashError(Exception):

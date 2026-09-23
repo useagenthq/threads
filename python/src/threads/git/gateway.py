@@ -4,8 +4,9 @@ bundle of the branch out of the sandbox and pushes it from the host. The sandbox
 has no credential. Push and open_pull_request are reconcilable: a push is found when the
 forge's branch is at the pushed commit, a pull request by its head branch."""
 
+import re
 import tempfile
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
@@ -19,7 +20,7 @@ from threads._generated.tools_v1 import (
     GitPushInput,
     OpenPullRequestInput,
 )
-from threads.git.forge import GitHub, Refused
+from threads.git.forge import GitHub, PullRequest, Refused
 from threads.git.host import credential_env, git
 from threads.log import JsonObject, ToolSpec
 from threads.log.digest import sha256_hex
@@ -46,8 +47,28 @@ class Forge:
     api: GitHub = field(default_factory=GitHub)
 
 
-def _where(repo: str, path: str | MISSING) -> str:
-    return files.absolute(repo.split("/", 1)[1] if path is MISSING else path)
+_REF: Final = re.compile(r"[A-Za-z0-9._/-]+")
+
+
+def _safe_ref(ref: str) -> bool:
+    """A plain branch, tag or commit name: never an option, a range or a lock file."""
+    return (
+        _REF.fullmatch(ref) is not None
+        and not ref.startswith("-")
+        and ".." not in ref
+        and not ref.endswith((".lock", "/"))
+    )
+
+
+def _where(repo: str, path: str | MISSING, *refs: str | MISSING) -> Ok[str] | Err[Output]:
+    """The clone's directory, which must stay inside /workspace, once every ref is safe."""
+    bad = next((r for r in refs if r is not MISSING and not _safe_ref(r)), None)
+    if bad is not None:
+        return Err(Output(f"ref {bad} is not a plain branch, tag or commit name", True))
+    where = files.absolute(repo.split("/", 1)[-1] if path is MISSING else path)
+    if not where.startswith(f"{files.WORKSPACE}/"):
+        return Err(Output("path must stay inside /workspace", True))
+    return Ok(where)
 
 
 class GitGateway:
@@ -126,10 +147,13 @@ class GitGateway:
         )
 
     async def _clone(self, args: GitCloneInput, key: str) -> Dispatched:
+        where = _where(args.repo, args.path, args.ref)
+        if isinstance(where, Err):
+            return where.error
+        path = where.value
         staged = await self._bundle_from_forge(args.repo, key)
         if isinstance(staged, Err):
             return staged.error
-        path = _where(args.repo, args.path)
         ref = "" if args.ref is MISSING else args.ref
         script = (
             'git clone --quiet "$1" "$2" && rm -f "$1" && cd "$2" && '
@@ -143,10 +167,13 @@ class GitGateway:
         return Output(f"cloned {args.repo} into {path} at {done.value}")
 
     async def _fetch(self, args: GitFetchInput, key: str) -> Dispatched:
+        where = _where(args.repo, args.path, args.ref)
+        if isinstance(where, Err):
+            return where.error
+        path = where.value
         staged = await self._bundle_from_forge(args.repo, key)
         if isinstance(staged, Err):
             return staged.error
-        path = _where(args.repo, args.path)
         spec = "refs/heads/*" if args.ref is MISSING else f"refs/heads/{args.ref}"
         target = spec.replace("refs/heads/", "refs/remotes/origin/")
         script = (
@@ -158,13 +185,21 @@ class GitGateway:
         return Output(f"fetched {args.repo} into {path}: {target}")
 
     async def _local_head(self, args: GitPushInput, key: str) -> Ok[str] | Err[Dispatched]:
-        path = _where(args.repo, args.path)
+        where = _where(args.repo, args.path, args.branch)
+        if isinstance(where, Err):
+            return where
         return await self._in_sandbox(
-            'cd "$1" && git rev-parse --verify "refs/heads/$2^{commit}"', key, path, args.branch
+            'cd "$1" && git rev-parse --verify "refs/heads/$2^{commit}"',
+            key,
+            where.value,
+            args.branch,
         )
 
     async def _push(self, args: GitPushInput, key: str) -> Dispatched:
-        path = _where(args.repo, args.path)
+        where = _where(args.repo, args.path, args.branch)
+        if isinstance(where, Err):
+            return where.error
+        path = where.value
         staged = f"{STAGING}/{sha256_hex(key.encode())[:16]}.bundle"
         script = (
             'mkdir -p "$(dirname "$3")" && cd "$1" && '
@@ -207,11 +242,11 @@ class GitGateway:
 
     async def _pull_request(self, args: OpenPullRequestInput) -> Dispatched:
         api = self._forge.api
-        found = await api.find(args.repo, args.head, self._token, self._fence)
+        found = await api.find(args.repo, args.head, args.base, self._token, self._fence)
         if isinstance(found, Err):
             return _failed(found.error)
-        if found.value is not None:
-            return Output(f"{found.value.text()} (already open for {args.head})")
+        if (pull := _open_one(found.value)) is not None:
+            return Output(f"{pull.text()} (already open for {args.head})")
         body = "" if args.body is MISSING else args.body
         made = await api.open(
             args.repo,
@@ -229,12 +264,22 @@ class GitGateway:
             case GitPushInput() as args:
                 return await self._pushed(args, call.effect_key)
             case OpenPullRequestInput() as args:
-                found = await self._forge.api.find(args.repo, args.head, self._token, self._fence)
-                if isinstance(found, Err):
-                    return LookupUnknown("the forge did not answer")
-                return NotFound() if found.value is None else Found(found.value.text())
+                return await self._pull_found(args)
             case _:
                 return LookupUnknown(f"{call.spec.name} has no lookup")
+
+    async def _pull_found(self, args: OpenPullRequestInput) -> LookupResult[str]:
+        """Found for an open pull request from the head into the base. None at all means the
+        create never landed (final). Only a closed one is not proof either way: the lost
+        create may have been closed since, or it is an older one; it parks for a human
+        rather than risk a second pull request (invariant 3)."""
+        api = self._forge.api
+        found = await api.find(args.repo, args.head, args.base, self._token, self._fence)
+        if isinstance(found, Err):
+            return LookupUnknown("the forge did not answer")
+        if (pull := _open_one(found.value)) is not None:
+            return Found(pull.text())
+        return NotFoundNonfinal() if found.value else NotFound()
 
     async def _pushed(self, args: GitPushInput, key: str) -> LookupResult[str]:
         """Found when the forge's branch is at the local branch's commit. Anything else is a
@@ -266,6 +311,10 @@ class GitGateway:
 
 def _pushed(args: GitPushInput, sha: str) -> str:
     return f"pushed {sha} to {args.repo} {args.branch}"
+
+
+def _open_one(pulls: Sequence[PullRequest]) -> PullRequest | None:
+    return next((p for p in pulls if p.open), None)
 
 
 def _failed(error: WebError | Refused) -> Dispatched:

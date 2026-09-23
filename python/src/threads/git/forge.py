@@ -1,6 +1,6 @@
 """The forge API behind open_pull_request: GitHub's REST API over the host's
 fenced transport, with the credential in a header on the host only. A pull request is looked up
-by its head branch, which is also how a lost create is reconciled."""
+by its head and base branches, open or closed, which is also how a lost create is reconciled."""
 
 import json
 from dataclasses import dataclass, field
@@ -23,6 +23,7 @@ class _Wire(BaseModel):
 class _Pull(_Wire):
     number: int
     html_url: str
+    state: str
 
 
 _PULLS: Final = TypeAdapter(list[_Pull])
@@ -32,6 +33,7 @@ _PULLS: Final = TypeAdapter(list[_Pull])
 class PullRequest:
     number: int
     url: str
+    open: bool = True
 
     def text(self) -> str:
         return f"pull request #{self.number}: {self.url}"
@@ -75,11 +77,12 @@ class GitHub:
         return sent
 
     async def find(
-        self, repo: str, head: str, token: str, fence: Fence
-    ) -> Ok[PullRequest | None] | Err[WebError | Refused]:
-        """The open pull request whose head is `head` in the repo's own owner."""
+        self, repo: str, head: str, base: str, token: str, fence: Fence
+    ) -> Ok[tuple[PullRequest, ...]] | Err[WebError | Refused]:
+        """Every pull request, open or closed, from `head` in the repo's own owner into
+        `base`, newest first."""
         owner = repo.split("/", 1)[0]
-        query = urlencode({"state": "open", "head": f"{owner}:{head}"})
+        query = urlencode({"state": "all", "head": f"{owner}:{head}", "base": base})
         got = await self._call(f"/repos/{repo}/pulls?{query}", token, fence)
         if isinstance(got, Err):
             return got
@@ -87,7 +90,7 @@ class GitHub:
             pulls = _PULLS.validate_json(got.value.body)
         except ValidationError as error:
             return Err(WebError("unavailable", f"unreadable forge answer: {error}", sent=True))
-        return Ok(PullRequest(pulls[0].number, pulls[0].html_url) if pulls else None)
+        return Ok(tuple(PullRequest(p.number, p.html_url, p.state == "open") for p in pulls))
 
     async def open(  # noqa: PLR0913 - the pull request's fields
         self, repo: str, *, head: str, base: str, title: str, body: str, token: str, fence: Fence
