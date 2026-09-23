@@ -13,7 +13,7 @@ from threads._generated.tools_v1 import (
     TeamTaskUpdateInput,
 )
 from threads.agents.scope import Scope
-from threads.log import InjectedEvent, TeamMessageEvent, TeamTaskCreatedEvent, ToolCallData
+from threads.log import InjectedEvent, TeamMessageEvent, ToolCallData
 from threads.loop.drafts import draft
 from threads.loop.history import CallState
 from threads.loop.results import As, result_draft
@@ -25,7 +25,7 @@ from threads.store import Draft
 async def team_tool[D](scope: Scope[D], rt: Runtime, state: CallState) -> Halt | None:
     lead = scope.lead(rt)
     call = state.call.data
-    event, text, failed = _decide(scope, lead, rt, call)
+    event, text, failed = _decide(scope, lead, call)
     if event is not None and lead is not rt:
         # The lead's writer records the team state; this member's writer records the result.
         done = await lead.append(event)
@@ -41,31 +41,36 @@ type Answer = tuple[Draft | None, str, bool]
 """The team event to append (if any), the result text, and whether it is an error."""
 
 
-def _decide[D](scope: Scope[D], lead: Runtime, rt: Runtime, call: ToolCallData) -> Answer:
+def _decide[D](scope: Scope[D], lead: Runtime, call: ToolCallData) -> Answer:
+    """Ids are keyed to the call (`<member>/<call_id>`), so a call re-run after a crash finds
+    what it already recorded and appends nothing (invariant 3)."""
     input = dict(call.input)
+    member = scope.member()
     match call.name:
         case "team_task_create":
-            return _create(lead, TeamTaskCreateInput.model_validate(input))
+            args = TeamTaskCreateInput.model_validate(input)
+            return _create(lead, f"{member}/{call.call_id}", args)
         case "team_task_claim":
-            return _claim(lead, scope.member(), TeamTaskClaimInput.model_validate(input).task_id)
+            return _claim(lead, member, TeamTaskClaimInput.model_validate(input).task_id)
         case "team_task_update":
-            return _update(lead, scope.member(), TeamTaskUpdateInput.model_validate(input))
+            return _update(lead, member, TeamTaskUpdateInput.model_validate(input))
         case _:
-            message_id = f"{rt.writer.branch_id}:{call.call_id}"
-            return _send(lead, scope.member(), message_id, SendMessageInput.model_validate(input))
+            args_m = SendMessageInput.model_validate(input)
+            return _send(lead, member, f"{member}/{call.call_id}", args_m)
 
 
-def _create(lead: Runtime, args: TeamTaskCreateInput) -> Answer:
+def _create(lead: Runtime, task_id: str, args: TeamTaskCreateInput) -> Answer:
+    if task_id in lead.fold.tasks:
+        return None, task_id, False
     blockers = [] if args.blocked_by is MISSING else [str(b) for b in args.blocked_by]
     unknown = [b for b in blockers if b not in lead.fold.tasks]
     if unknown:
         return None, f"unknown blockers: {', '.join(unknown)}", True
-    task_id = f"t{sum(1 for e in lead.events if isinstance(e, TeamTaskCreatedEvent)) + 1}"
     data: dict[str, JsonValue] = {"task_id": task_id, "subject": args.subject}
     data["blocked_by"] = list[JsonValue](blockers)
     if args.description is not MISSING:
         data["description"] = args.description
-    return draft("team_task_created", data), f"created {task_id}", False
+    return draft("team_task_created", data), task_id, False
 
 
 def _claim(lead: Runtime, member: str, task_id: str) -> Answer:
@@ -74,23 +79,23 @@ def _claim(lead: Runtime, member: str, task_id: str) -> Answer:
     if task is not None and task.status == "claimed" and task.owner == member:
         return None, f"claimed {task_id}", False
     if task is None or task.status != "open":
-        return None, f"task {task_id} is not open", True
+        return None, f"can't claim: task {task_id} is not open", True
     blocked = [b for b in task.blocked_by if b not in tasks or tasks[b].status != "completed"]
     if blocked:
-        return None, f"task {task_id} is blocked by {', '.join(blocked)}", True
-    return (
-        draft("team_task_claimed", {"task_id": task_id, "member": member}),
-        f"claimed {task_id}",
-        False,
-    )
+        return None, f"can't claim: task {task_id} has a blocker that is not completed", True
+    claim = {"task_id": task_id, "member": member}
+    return draft("team_task_claimed", claim), f"claimed {task_id}", False
 
 
 def _update(lead: Runtime, member: str, args: TeamTaskUpdateInput) -> Answer:
     task = lead.fold.tasks.get(args.task_id)
+    done = f"{args.task_id} {args.status}"
+    if task is not None and task.owner == member and task.status == args.status:
+        return None, done, False
     if task is None or task.status != "claimed" or task.owner != member:
-        return None, f"task {args.task_id} is not claimed by {member}", True
+        return None, f"{args.task_id} is not claimed by {member}", True
     data: dict[str, JsonValue] = {"task_id": args.task_id, "status": args.status}
-    return draft("team_task_updated", data), f"{args.status} {args.task_id}", False
+    return draft("team_task_updated", data), done, False
 
 
 def _send(lead: Runtime, member: str, message_id: str, args: SendMessageInput) -> Answer:
@@ -98,14 +103,14 @@ def _send(lead: Runtime, member: str, message_id: str, args: SendMessageInput) -
         isinstance(e, TeamMessageEvent) and e.data.message_id == message_id for e in lead.events
     )
     if sent:
-        return None, f"sent {message_id}", False
+        return None, "sent", False
     data: dict[str, JsonValue] = {
         "message_id": message_id,
         "from": member,
         "to": args.to,
         "text": args.text,
     }
-    return draft("team_message", data), f"sent {message_id}", False
+    return draft("team_message", data), "sent", False
 
 
 async def deliver[D](scope: Scope[D], rt: Runtime) -> Halt | bool:

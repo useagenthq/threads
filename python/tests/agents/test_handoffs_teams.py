@@ -186,10 +186,12 @@ def test_a_team_shares_one_task_list_and_mailbox_in_the_lead_log() -> None:
             model=scripted_model(
                 {
                     "responses": [
-                        call("team_task_claim", {"task_id": "t2"}, "a1"),
-                        call("team_task_claim", {"task_id": "t1"}, "a2"),
+                        call("team_task_claim", {"task_id": "lead/l2"}, "a1"),
+                        call("team_task_claim", {"task_id": "lead/l1"}, "a2"),
                         call("send_message", {"to": "*", "text": "Schema is up."}, "a3"),
-                        call("team_task_update", {"task_id": "t1", "status": "completed"}, "a4"),
+                        call(
+                            "team_task_update", {"task_id": "lead/l1", "status": "completed"}, "a4"
+                        ),
                         text("schema done"),
                     ]
                 }
@@ -203,7 +205,7 @@ def test_a_team_shares_one_task_list_and_mailbox_in_the_lead_log() -> None:
                         call("team_task_create", {"subject": "Write the schema"}, "l1"),
                         call(
                             "team_task_create",
-                            {"subject": "Write the runner", "blocked_by": ["t1"]},
+                            {"subject": "Write the runner", "blocked_by": ["lead/l1"]},
                             "l2",
                         ),
                         call("spawn_agent", {"agent": "alice", "prompt": "Take t1."}, "l3"),
@@ -217,15 +219,19 @@ def test_a_team_shares_one_task_list_and_mailbox_in_the_lead_log() -> None:
         result = await lead.run("Build it.", store=store)
         assert isinstance(result, Completed)
         events = await events_of(result.thread)
-        assert [e.data.task_id for e in only(events, TeamTaskCreatedEvent)] == ["t1", "t2"]
+        assert [e.data.task_id for e in only(events, TeamTaskCreatedEvent)] == [
+            "lead/l1",
+            "lead/l2",
+        ]
         assert [(e.data.task_id, e.data.member) for e in only(events, TeamTaskClaimedEvent)] == [
-            ("t1", "alice")
+            ("lead/l1", "alice")
         ]
         assert [(e.data.task_id, e.data.status) for e in only(events, TeamTaskUpdatedEvent)] == [
-            ("t1", "completed")
+            ("lead/l1", "completed")
         ]
         message = only(events, TeamMessageEvent)[0].data
         assert (message.from_, message.to, message.text) == ("alice", "*", "Schema is up.")
+        assert message.message_id == "alice/a3"
         delivered = [e for e in only(events, InjectedEvent) if e.data.source == "agent"]
         assert [d.data.origin.id for d in delivered] == [message.message_id]
         spawned = next(e for e in events if e.type == "agent_spawned")
@@ -234,7 +240,7 @@ def test_a_team_shares_one_task_list_and_mailbox_in_the_lead_log() -> None:
         inside = await events_of(child.value)
         answers = [(r.data.preview, r.data.is_error) for r in only(inside, ToolResultEvent)]
         assert answers[0][1] is True
-        assert "blocked" in answers[0][0]
+        assert answers[0][0].startswith("can't claim: ")
         assert [a[1] for a in answers[1:]] == [False, False, False]
         assert not any(e.type.startswith("team_task") for e in inside)
 

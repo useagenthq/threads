@@ -10,12 +10,14 @@ from local_sandbox import LocalSandbox
 from pydantic import JsonValue
 
 from threads import Completed, EventItem, Thread, agent, scripted_model, sqlite
+from threads.agents import team
 from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
     Event,
     InjectedEvent,
     Permissions,
+    TeamTaskCreatedEvent,
     ToolResultEvent,
     ToolResultLateEvent,
 )
@@ -151,5 +153,40 @@ def test_a_team_message_is_delivered_into_a_member_once() -> None:
         assert [n.data.text for n in notes] == ["agent: take t1"]
         requests = [e for e in inside if e.type == "model_request"]
         assert len(requests) == len(alice_script)
+
+    asyncio.run(main())
+
+
+def test_a_resent_team_task_create_after_a_crash_creates_the_task_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create = call("team_task_create", {"subject": "Write the schema"}, "m1")
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        member = agent(name="alice", model=scripted_model({"responses": [create, text("made")]}))
+        spawn = call("spawn_agent", {"agent": "alice", "prompt": "Plan."})
+        lead = agent(model=scripted_model({"responses": [spawn]}), subagents=[member])
+        real = team.result_draft
+
+        async def crash(*_args: object, **_kwargs: object) -> object:
+            raise RuntimeError("crash after the lead recorded the task")
+
+        # The lead's event is recorded; the member's result for the call never is.
+        monkeypatch.setattr(team, "result_draft", crash)
+        stream = lead.stream("go", store=store)
+        seen = [item.event async for item in stream if isinstance(item, EventItem)]
+        with pytest.raises(RuntimeError):
+            await stream.result
+        monkeypatch.setattr(team, "result_draft", real)
+        parent = Thread(seen[0].thread_id, seen[0].branch_id, store)
+        resumed = agent(name="alice", model=scripted_model({"responses": [text("made")]}))
+        again = agent(
+            model=scripted_model({"responses": [text("done"), text("next")]}), subagents=[resumed]
+        )
+        result = await again.run("status?", store=store, thread=parent)
+        assert isinstance(result, Completed)
+        created = [e for e in await events_of(parent) if isinstance(e, TeamTaskCreatedEvent)]
+        assert [c.data.task_id for c in created] == ["alice/m1"]
 
     asyncio.run(main())
