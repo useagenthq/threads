@@ -174,11 +174,14 @@ async def close_settled(rt: Runtime, state: CallState, actor: ActorKind) -> Halt
     settlement, and the tool never runs again. Only safe_to_retry, not_sent and assume_not_done
     may lead to another dispatch."""
     match state.effect:
-        case "committed" | "confirmed_success":
-            return await materialize(rt, state, actor)
+        case "committed":
+            return await _materialize(rt, state, As("materialized_from_commit", actor=actor))
+        case "confirmed_success":
+            # The effect was proven performed: its recorded result stands as executed.
+            return await _materialize(rt, state, As("executed", actor=actor))
         case "assume_done":
             text = "done: an approver resolved the uncertain effect as performed"
-            how = As("materialized_from_commit", actor=actor)
+            how = As("executed", actor=actor)
         case "interrupted":
             text = "interrupted: the command may have partly run"
             how = As("interrupted", True, actor)
@@ -189,18 +192,17 @@ async def close_settled(rt: Runtime, state: CallState, actor: ActorKind) -> Halt
     return lost(done.error) if isinstance(done, Err) else None
 
 
-async def materialize(rt: Runtime, state: CallState, actor: ActorKind) -> Halt | None:
-    """A committed effect without its result: the result comes from the commit's artifact, and
-    the tool never runs again."""
+async def _materialize(rt: Runtime, state: CallState, how: As) -> Halt | None:
+    """The result from the settlement's artifact; the tool never runs again."""
     ref = state.commit
     if ref is None:
-        raise AssertionError("materialize needs a committed effect")
+        raise AssertionError("a committed or confirmed effect records its result")
     got = await rt.store.get_artifact(ref.sha256)
     if isinstance(got, Err):
         missing = got.error.code == "artifact_missing"
         return Failed("artifact_missing" if missing else "artifact_corrupt", got.error.message)
-    text = got.value.decode("utf-8", "replace")
-    how = As("materialized_from_commit", actor=actor)
-    result = await result_draft(rt, state.call.data.call_id, text, how)
+    result = await result_draft(
+        rt, state.call.data.call_id, got.value.decode("utf-8", "replace"), how
+    )
     done = await rt.append(result)
     return lost(done.error) if isinstance(done, Err) else None
