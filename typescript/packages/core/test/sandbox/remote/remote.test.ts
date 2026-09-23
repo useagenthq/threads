@@ -4,6 +4,7 @@ import { manifestHash } from "../../../src/sandbox";
 import {
   FenceRefused,
   fenceHere,
+  type Quiescence,
   refusal,
   remoteSandbox,
   within,
@@ -119,12 +120,55 @@ describe("the kit's scripts", () => {
   });
 });
 
-describe("a provider that can't pause a sandbox", () => {
-  test("declares no snapshots; snapshot and restore fail typed", async () => {
+describe("snapshot capability by the provider's declared boundary", () => {
+  const withQuiescence = (world: World, quiescence: Quiescence) => {
+    const driver = memoryDriver(world);
+    const take = driver.snapshot?.take;
+    if (take === undefined) throw new Error("the memory driver captures");
+    return remoteSandbox(
+      { ...driver, snapshot: { quiescence, take } },
+      INFO,
+      EXPIRY,
+    );
+  };
+
+  test("a whole-sandbox pause records every process frozen", async () => {
+    const sandbox = withQuiescence(new World(), "paused");
+    const box = unwrap(await sandbox.create("op", CTX));
+    expect(sandbox.quiescence).toBe("paused");
+    expect(unwrap(await box.snapshot("s", CTX)).quiesced).toEqual({
+      frozen: [box.id],
+      stopped: [],
+      excluded: [],
+    });
+  });
+
+  test("a whole-sandbox stop records every process stopped", async () => {
+    const sandbox = withQuiescence(new World(), "stopped");
+    const box = unwrap(await sandbox.create("op", CTX));
+    expect(sandbox.info.capture_classes).toEqual(["filesystem"]);
+    expect(unwrap(await box.snapshot("s", CTX)).quiesced).toEqual({
+      frozen: [],
+      stopped: [box.id],
+      excluded: [],
+    });
+  });
+
+  test("an unconfirmed boundary declares no snapshots and captures nothing", async () => {
+    const world = new World();
+    const sandbox = withQuiescence(world, "unconfirmed");
+    expect(sandbox.info.capture_classes).toEqual([]);
+    const box = unwrap(await sandbox.create("op", CTX));
+    expect(code(await box.snapshot("s", CTX))).toBe("unavailable");
+    expect(world.snapshots.size).toBe(0);
+  });
+
+  test("no snapshots at all: snapshot and restore fail typed", async () => {
     const world = new World();
     const { snapshot: _, ...driver } = memoryDriver(world);
     const sandbox = remoteSandbox(driver, INFO, EXPIRY);
     expect(sandbox.info.capture_classes).toEqual([]);
+    expect(sandbox.quiescence).toBe("none");
     const box = unwrap(await sandbox.create("op", CTX));
     expect(code(await box.snapshot("s", CTX))).toBe("unavailable");
     expect(

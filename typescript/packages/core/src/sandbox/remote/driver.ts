@@ -15,6 +15,28 @@ export type Sinks = {
 /** A started process: `exit` resolves once both output streams have ended. */
 export type Started = { readonly exit: Promise<number> };
 
+/**
+ * How the provider makes a capture quiescent, declared per provider and mode
+ * from its documentation, never broader:
+ * - paused: a provider-owned pause of the whole sandbox freezes every process for the capture.
+ * - stopped: the provider stops the whole sandbox for it; its processes end, so a snapshot is
+ *   disruptive to the parent.
+ * - unconfirmed: no documented whole-sandbox boundary; the snapshot capability is absent.
+ */
+export type Quiescence = "paused" | "stopped" | "unconfirmed";
+
+export type Capture = {
+  readonly quiescence: Quiescence;
+  /**
+   * Captures the filesystem into a durable snapshot named by `operationKey` behind the
+   * declared boundary, and returns with the sandbox running again.
+   */
+  readonly take: (
+    id: string,
+    operationKey: string,
+  ) => Promise<{ readonly ref: string; readonly expiresAt: number | null }>;
+};
+
 export type Created =
   | { readonly kind: "created"; readonly id: string }
   | {
@@ -53,15 +75,8 @@ export type SandboxDriver = {
   readonly stopProcess: (id: string, processKey: string) => Promise<void>;
   readonly write: (id: string, path: string, data: Uint8Array) => Promise<void>;
   readonly read: (id: string, path: string) => Promise<Uint8Array>;
-  /**
-   * Captures the filesystem into a durable snapshot named by `operationKey`, with the whole
-   * sandbox paused by the provider for the capture. Absent when the provider
-   * has no such pause: the snapshot capability is then declared absent.
-   */
-  readonly snapshot?: (
-    id: string,
-    operationKey: string,
-  ) => Promise<{ readonly ref: string; readonly expiresAt: number | null }>;
+  /** Absent when the provider has no snapshots. */
+  readonly snapshot?: Capture;
   readonly deleteSnapshot: (
     ref: string,
   ) => Promise<"released" | "already_gone">;
@@ -73,5 +88,11 @@ export type ProviderExpiry = {
   readonly snapshotMs: number | null;
 };
 
-/** A provider adapter: the Sandbox protocol plus the provider expiry it declares. */
-export type ProviderSandbox = Sandbox & { readonly expiry: ProviderExpiry };
+/**
+ * A provider adapter: the Sandbox protocol plus what it declares beyond SandboxInfo: when its
+ * resources expire, and how its snapshots are made quiescent ("none": no snapshots).
+ */
+export type ProviderSandbox = Sandbox & {
+  readonly expiry: ProviderExpiry;
+  readonly quiescence: Quiescence | "none";
+};

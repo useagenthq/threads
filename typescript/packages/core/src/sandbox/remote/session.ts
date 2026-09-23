@@ -177,19 +177,19 @@ export function remoteSession(
     );
 
   const capture = driver.snapshot;
-  // The provider pauses the whole sandbox for the capture; the tree hashed before and after
-  // must match, or a writer ran around it and the capture is refused (not_quiescent).
+  // Only a provider-owned whole-sandbox boundary makes a capture quiescent. The tree hashed
+  // before and after must also match, or a writer ran around it (not_quiescent).
   const snapshot: SandboxSession["snapshot"] = (operationKey, context) =>
     guarded<SnapshotData, Failure<"not_quiescent" | "unavailable" | "timeout">>(
       context,
       async () => {
-        if (capture === undefined)
+        if (capture === undefined || capture.quiescence === "unconfirmed")
           return err({
             code: "unavailable",
-            message: `${provider} can't pause a sandbox for a snapshot`,
+            message: `${provider} has no confirmed quiescent snapshot`,
           });
         const before = await treeHash(driver, id);
-        const made = await capture(id, operationKey);
+        const made = await capture.take(id, operationKey);
         const after = await treeHash(driver, id);
         if (before === undefined || before !== after) {
           await driver.deleteSnapshot(made.ref);
@@ -198,6 +198,8 @@ export function remoteSession(
             message: `the tree of ${id} changed around the capture`,
           });
         }
+        // The boundary covered the whole sandbox: every process in it was frozen, or ended.
+        const whole = [id];
         return ok({
           snapshot_id: SnapshotId.parse(made.ref),
           provider,
@@ -205,8 +207,10 @@ export function remoteSession(
           capture_class: "filesystem",
           expires_at: made.expiresAt,
           manifest_hash: before,
-          // The whole sandbox was paused, so every process in it was frozen.
-          quiesced: { frozen: [id], stopped: [], excluded: [] },
+          quiesced:
+            capture.quiescence === "paused"
+              ? { frozen: whole, stopped: [], excluded: [] }
+              : { frozen: [], stopped: whole, excluded: [] },
         });
       },
       unavailable,

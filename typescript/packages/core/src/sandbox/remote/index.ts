@@ -1,8 +1,10 @@
 export { byteStream } from "./bytes";
 export type {
+  Capture,
   Created,
   ProviderExpiry,
   ProviderSandbox,
+  Quiescence,
   SandboxDriver,
   Sinks,
   Started,

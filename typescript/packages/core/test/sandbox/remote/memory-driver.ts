@@ -34,8 +34,14 @@ export function memoryDriver(world: World): SandboxDriver {
     stopProcess: (id, key) => send(() => world.machine(id).stop(key)),
     write: (id, path, data) => send(() => world.machine(id).write(path, data)),
     read: (id, path) => send(() => world.machine(id).read(path)),
-    snapshot: (id, key) =>
-      send(() => ({ ref: world.snapshot(id, `snap-${key}`), expiresAt: null })),
+    snapshot: {
+      quiescence: "paused",
+      take: (id, key) =>
+        send(() => ({
+          ref: world.snapshot(id, `snap-${key}`),
+          expiresAt: null,
+        })),
+    },
     deleteSnapshot: (ref) =>
       send(() => (world.deleteSnapshot(ref) ? "released" : "already_gone")),
   };

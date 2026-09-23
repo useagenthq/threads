@@ -26,6 +26,7 @@ export function remoteSandbox(
   declared: RemoteInfo,
   expiry: ProviderExpiry,
 ): ProviderSandbox {
+  const quiescence = driver.snapshot?.quiescence ?? "none";
   const info: SandboxInfo = {
     ...declared,
     // A lookup by tag or name can find a create, but a create still in flight at the provider
@@ -34,7 +35,10 @@ export function remoteSandbox(
     lookup: { create: "nonfinal", snapshot: "none" },
     // A process kill happens inside the guest, so it never proves a whole group is gone.
     termination: "unconfirmed",
-    capture_classes: driver.snapshot === undefined ? [] : ["filesystem"],
+    capture_classes:
+      quiescence === "none" || quiescence === "unconfirmed"
+        ? []
+        : ["filesystem"],
   };
   const session = (id: string) => remoteSession(driver, info.provider, id);
   const unavailable = (error: unknown) =>
@@ -116,6 +120,7 @@ export function remoteSandbox(
   return {
     info,
     expiry,
+    quiescence,
     create,
     restore,
     lookup: async (operationKey, context) => {
