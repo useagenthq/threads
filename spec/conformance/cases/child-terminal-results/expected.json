@@ -1,0 +1,85 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 1,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 410,
+      "output_tokens": 90,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000009"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-00000000000b"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000010"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000012"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000017"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000019"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-00000000001e"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000020"
+      }
+    ],
+    "status": "idle",
+    "head": {
+      "seq": 33,
+      "hash": "595cf39d240da0b1b56de2b9fa3607299ccaf71e0be67b88f9236d952a05e14f"
+    }
+  },
+  "projections": {
+    "children": [
+      {
+        "child_thread_id": "0192a000-0000-7000-8000-0000000000c1",
+        "status": "completed"
+      },
+      {
+        "child_thread_id": "0192a000-0000-7000-8000-0000000000c2",
+        "status": "failed"
+      },
+      {
+        "child_thread_id": "0192a000-0000-7000-8000-0000000000c3",
+        "status": "cancelled"
+      },
+      {
+        "child_thread_id": "0192a000-0000-7000-8000-0000000000c4",
+        "status": "budget_exhausted"
+      }
+    ]
+  }
+}

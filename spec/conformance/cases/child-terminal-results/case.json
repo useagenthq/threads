@@ -1,0 +1,9 @@
+{
+  "name": "child-terminal-results",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Four children end completed, failed, cancelled and budget_exhausted: exactly one agent_finished each, before its call's result. The children projection lists each terminal status.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

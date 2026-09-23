@@ -1,0 +1,9 @@
+{
+  "name": "child-budget-exhausted",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "A child that hit its budget ends budget_exhausted; its call gets an error result and the parent continues its turn to end_turn.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

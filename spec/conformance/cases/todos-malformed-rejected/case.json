@@ -1,0 +1,9 @@
+{
+  "name": "todos-malformed-rejected",
+  "family": "tasks",
+  "kind": "reduce",
+  "description": "A todo_write whose list fails the tool's schema gets an error result before any effect and appends no todos_updated, so the prior list stands.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

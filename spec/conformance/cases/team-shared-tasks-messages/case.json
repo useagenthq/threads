@@ -1,0 +1,9 @@
+{
+  "name": "team-shared-tasks-messages",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Two members claim one task each from the lead's shared list and exchange addressed messages; every claim and message is an event in the lead's log.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

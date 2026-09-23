@@ -13,6 +13,7 @@ import tempfile
 from . import (
     agents,
     changes,
+    children,
     content,
     context,
     coverage,
@@ -54,6 +55,7 @@ FAMILIES = (
     models,
     agents,
     teams,
+    children,
     policy,
     ladder,
     extras,

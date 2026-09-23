@@ -1,0 +1,9 @@
+{
+  "name": "subagent-background-notify",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "A background child's call gets a deferred placeholder at once; after the turn ends its one agent_finished and tool_result_late arrive, and the late result is the next request's notification.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

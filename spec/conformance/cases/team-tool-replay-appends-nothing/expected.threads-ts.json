@@ -1,0 +1,85 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [
+      "c1",
+      "c2"
+    ],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 80,
+      "output_tokens": 20,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 10,
+      "hash": "ce2822d7ecd37007bf452fbc6deef7a6d6f43cd74eb3a377c058115f0217d62d"
+    }
+  },
+  "appended": [
+    {
+      "type": "tool_result",
+      "actor_kind": "tool",
+      "data": {
+        "call_id": "c1",
+        "is_error": false,
+        "origin": "executed",
+        "preview": "demo/c1"
+      }
+    },
+    {
+      "type": "tool_result",
+      "actor_kind": "tool",
+      "data": {
+        "call_id": "c2",
+        "is_error": false,
+        "origin": "executed",
+        "preview": "sent"
+      }
+    },
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ]
+}

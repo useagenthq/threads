@@ -1,0 +1,10 @@
+{
+  "name": "team-tool-replay-appends-nothing",
+  "family": "agents_teams",
+  "kind": "recover",
+  "description": "A crash after the lead's team_task_created and team_message, before their results. Recovery dispatches both calls again: the task id and message id are the member's call (demo/c1, demo/c2), so each answers from the log and appends only its tool_result; no task or message is duplicated (F7.4).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

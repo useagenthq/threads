@@ -1,0 +1,9 @@
+{
+  "name": "subagent-child-thread",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "A child's own log: thread_started links the parent's agent_spawned (relation subagent) and pins the child's narrowed tools and budget; its first user_input is the prompt from parent_agent under the originating principal. It reduces alone.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

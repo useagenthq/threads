@@ -1,0 +1,49 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 1,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 170,
+      "output_tokens": 30,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000009"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-00000000000b"
+      }
+    ],
+    "status": "idle",
+    "head": {
+      "seq": 12,
+      "hash": "b5332b31aab2db89777d30b460a0e324da3e5affd7e47f1f1dd230c48f03871e"
+    }
+  },
+  "projections": {
+    "children": [
+      {
+        "child_thread_id": "0192a000-0000-7000-8000-0000000000c1",
+        "status": "budget_exhausted"
+      }
+    ]
+  }
+}
