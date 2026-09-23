@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._generated.tools_v1 import HandoffInput
+from threads.agents.bindings import permissions
 from threads.agents.definition import Definition
 from threads.agents.launch import Launch
 from threads.agents.scope import Scope
@@ -96,6 +97,10 @@ def launch[D](scope: Scope[D], rt: Runtime, event: HandoffEvent) -> tuple[Launch
     if event.data.forwarded_ref is not MISSING:
         forwarded["ref"] = event.data.forwarded_ref.model_dump(mode="json")
     who = request.actor.principal
+    ceilings = scope.ceilings
+    if scope.definition.member:
+        # A subagent's target never runs under fewer ceilings than the subagent itself.
+        ceilings = (permissions(rt.fold).model_copy(update={"mode": rt.fold.mode}), *ceilings)
     text = request.data.text if isinstance(request.data.text, str) else ""
     chosen = Launch(
         event.data.to_thread_id,
@@ -104,7 +109,7 @@ def launch[D](scope: Scope[D], rt: Runtime, event: HandoffEvent) -> tuple[Launch
         who,
         1,
         budgets=tuple(inherited(thread_id, rt.fold, rt.budgets)),
-        ceilings=scope.ceilings,
+        ceilings=ceilings,
         before_input=(draft("injected", forwarded),),
     )
     return chosen, text

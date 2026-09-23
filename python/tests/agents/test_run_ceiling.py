@@ -9,8 +9,16 @@ from pydantic import BaseModel, JsonValue
 
 from threads import Agent, HandedOff, RunContext, Thread, agent, scripted_model, sqlite, tool
 from threads.host import host
-from threads.log import Event, Permissions, Principal, ToolResultEvent
+from threads.log import (
+    AgentSpawnedEvent,
+    Event,
+    HandoffEvent,
+    Permissions,
+    Principal,
+    ToolResultEvent,
+)
 from threads.result import Ok
+from threads.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALICE = Principal(issuer="api", tenant="local", subject="alice")
@@ -128,3 +136,51 @@ def test_a_host_ceiling_caps_the_runs_it_starts() -> None:
 
     asyncio.run(main())
     assert sent == []
+
+
+async def _events(thread: Thread) -> list[Event]:
+    timeline = await thread.timeline()
+    assert isinstance(timeline, Ok)
+    return [e.event for e in timeline.value.entries]
+
+
+async def _handed_to(root: Thread) -> Thread:
+    """The thread the root's first subagent handed off to."""
+    spawned = next(e for e in await _events(root) if isinstance(e, AgentSpawnedEvent))
+    child = await open_thread(root.store, spawned.data.child_thread_id)
+    assert isinstance(child, Ok)
+    moved = next(e for e in await _events(child.value) if isinstance(e, HandoffEvent))
+    target = await open_thread(root.store, moved.data.to_thread_id)
+    assert isinstance(target, Ok)
+    return target.value
+
+
+def test_a_subagent_s_handoff_target_is_capped_by_every_ancestor_s_policy() -> None:
+    """spec/schema/README.md, Handoff scope: a subagent's target never runs under fewer
+    ceilings than the subagent (its own policy, its parent's, the run's)."""
+
+    async def moved(root: Permissions, sent: list[str]) -> list[ToolResultEvent]:
+        billing = sender(sent, [call("send", {"text": "x"}), text("done")], "billing")
+        unused = agent(name="unused", model=scripted_model({"responses": []}))
+        mid = agent(
+            name="mid",
+            model=scripted_model({"responses": [call("handoff", {"agent": "billing"})]}),
+            handoffs=[billing],
+            permissions=rules(allow=["send"]),
+        )
+        spawn = call("spawn_agent", {"agent": "mid", "prompt": "Refund me."})
+        front = agent(
+            model=scripted_model({"responses": [spawn, text("ok")]}),
+            subagents=[mid],
+            handoffs=[unused],
+            permissions=root,
+        )
+        done = await front.run("refund", store=sqlite(":memory:"))
+        return await results_of(await _handed_to(done.thread))
+
+    free: list[str] = []
+    (ran,) = asyncio.run(moved(rules(allow=["send"]), free))
+    assert (ran.data.origin, free) == ("executed", ["x"])
+    capped: list[str] = []
+    (denied,) = asyncio.run(moved(rules(deny=["send"]), capped))
+    assert (denied.data.origin, capped) == ("denied", [])
