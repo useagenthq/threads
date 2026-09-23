@@ -50,7 +50,7 @@ from threads.log import (
 )
 from threads.loop import gates
 from threads.loop.drive import drive
-from threads.loop.runtime import Halt, Idle, RunErrorCode, Runtime
+from threads.loop.runtime import Halt, Idle, Parked, RunErrorCode, Runtime
 from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, memory_scope, provider_tools
 from threads.result import Err, Ok
@@ -180,16 +180,20 @@ async def _turn[D](
     rt: Runtime, definition: Definition[D], recorded: Recorded, *, fresh: bool
 ) -> Halt:
     """Pins or recovers the thread, records the input unless the branch can't take one, and
-    drives the loop to its halt; then a host intake's after-turn work. Without an input the run
-    only continues what the log holds (a host resuming a thread its control unparked)."""
+    drives the loop to its halt. A host intake's after work runs once recovery is done (what a
+    crash left undone goes out before the new input) and again at an idle or parked halt.
+    Without an input the run only continues what the log holds (a host resuming a thread)."""
     launch, intake = recorded.launch, recorded.intake
+    after = None if intake is None else intake.after
     halt = await prepare(rt, definition, fresh=fresh, launch=launch)
+    if halt is None and after is not None:
+        halt = await after(rt)
     takes = recorded.input is not None and not rt.fold.handed_off and wants_input(rt, launch)
     if halt is None and takes:
         halt = await record_input(rt, recorded)
     halt = halt or await drive(rt)
-    if intake is not None and intake.after is not None:
-        halt = await intake.after(rt, halt)
+    if after is not None and isinstance(halt, Idle | Parked):
+        halt = await after(rt) or halt
     return halt
 
 

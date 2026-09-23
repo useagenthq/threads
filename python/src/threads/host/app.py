@@ -96,8 +96,14 @@ class Host:
 
     async def _tick(self) -> None:
         sq = await open_store(self._runner.store(LOCAL_TENANT))
-        for tenant, thread in await sq.tables.unconsumed_threads():
+        waiting = await sq.tables.unconsumed_threads()
+        for tenant, thread in waiting:
             self._intake.consume(self._runner.store(tenant), thread)
+        # ponytail: reads every conversation's log once per start; track unsent replies in a
+        # table if hosts carry many conversations.
+        for tenant, thread in await sq.tables.channel_threads():
+            if (tenant, thread) not in waiting:
+                await self._runner.redeliver(self._runner.store(tenant), thread)
         await self._scheduler.run()
 
     async def stop(self) -> None:

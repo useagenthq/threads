@@ -110,6 +110,15 @@ def unconsumed_threads(conn: sqlite3.Connection) -> tuple[tuple[str, ThreadId], 
     return tuple((text_of(t), ThreadId(text_of(th))) for t, th in rows)
 
 
+def channel_threads(conn: sqlite3.Connection) -> tuple[tuple[str, ThreadId], ...]:
+    """(tenant, thread) of every conversation's thread: what a restarted host checks for
+    replies it never sent."""
+    rows: list[tuple[object, object]] = conn.execute(
+        "SELECT tenant_id, thread_id FROM channel_threads"
+    ).fetchall()
+    return tuple((text_of(t), ThreadId(text_of(th))) for t, th in rows)
+
+
 def _rows(conn: sqlite3.Connection, where: str, args: tuple[str, ...]) -> tuple[Row, ...]:
     found: list[tuple[object, ...]] = conn.execute(
         # Fixed WHERE fragments from this module; every value is bound.

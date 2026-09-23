@@ -16,19 +16,14 @@ from pydantic import BaseModel, Field, JsonValue, ValidationError
 
 from threads.agents.bindings import AppTool, Fence
 from threads.agents.context import RunContext
-from threads.agents.intake import After
 from threads.agents.store import Store, now_ms, open_store
 from threads.host.channel import ChannelAdapter, DeliveryError, Sent
-from threads.log import BranchId, CallId, JsonObject, ModelResponseEvent, ToolSpec
+from threads.log import BranchId, CallId, JsonObject, ToolSpec
 from threads.log.jcs import canonicalize
-from threads.loop import calls
-from threads.loop.drafts import draft
 from threads.loop.model import LookupResult, LookupUnknown, NotFound, NotFoundNonfinal
-from threads.loop.runtime import Halt, Idle, Runtime, lost
 from threads.loop.tools import Dispatched, NotSent, Output, Uncertain
 from threads.memory.fence import bound, refused
-from threads.result import Err, Ok
-from threads.store import Draft
+from threads.result import Ok
 
 NAME: Final = "channel_send"
 
@@ -146,50 +141,3 @@ class SendServer:
     @asynccontextmanager
     async def _connected(self, fence: Fence) -> AsyncGenerator[Sequence[AppTool[object]]]:
         yield (ChannelSend(self.to, fence, self.store),)
-
-
-def deliver_final(adapter: ChannelAdapter) -> After:
-    """After a turn ends normally, the host sends its final response: each rendered op is a
-    host-issued channel_send call with the deterministic id `send_<response seq>_<op index>`, so
-    a recovered run finds the same call instead of minting another."""
-
-    async def after(rt: Runtime, halt: Halt) -> Halt:
-        response = _final_response(rt, halt)
-        if response is None:
-            return halt
-        for index, op in enumerate(adapter.render(response)):
-            call_id = CallId(f"send_{response.seq}_{index}")
-            if call_id not in rt.fold.calls:
-                issued = await rt.append(*_issue(call_id, op, response))
-                if isinstance(issued, Err):
-                    return lost(issued.error)
-            stopped = await calls.run_call(rt, call_id)
-            if stopped is not None:
-                return stopped
-        return halt
-
-    return after
-
-
-def _final_response(rt: Runtime, halt: Halt) -> ModelResponseEvent | None:
-    if not (isinstance(halt, Idle) and halt.reason == "end_turn"):
-        return None
-    # ponytail: only the turn that just ended is delivered; a crash between its end and the
-    # first send's tool_call loses that delivery. Scan earlier turns if that matters.
-    return next((e for e in reversed(rt.events) if isinstance(e, ModelResponseEvent)), None)
-
-
-def _issue(call_id: CallId, op: JsonObject, response: ModelResponseEvent) -> tuple[Draft, Draft]:
-    call: dict[str, JsonValue] = {
-        "call_id": call_id,
-        "name": NAME,
-        "input": dict(op),
-        "request_event_id": response.data.request_event_id,
-    }
-    allow: dict[str, JsonValue] = {
-        "call_id": call_id,
-        "decision": "allow",
-        "source": "policy",
-        "rule_id": "host_delivery",
-    }
-    return draft("tool_call", call), draft("permission_decision", allow)

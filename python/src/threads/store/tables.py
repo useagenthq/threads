@@ -67,6 +67,10 @@ class Tables:
         """(tenant, thread) across every tenant: what a restarted host drains."""
         return await self._worker.call(inbox.unconsumed_threads)
 
+    async def channel_threads(self) -> tuple[tuple[str, ThreadId], ...]:
+        """(tenant, thread) of every channel conversation, across every tenant."""
+        return await self._worker.call(inbox.channel_threads)
+
     async def branches(self, thread_id: ThreadId) -> tuple[BranchRow, ...]:
         return await self._worker.call(lambda c: _branches(c, self.tenant_id, thread_id))
 

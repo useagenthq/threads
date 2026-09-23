@@ -18,9 +18,10 @@ from threads.store.companion import Companion
 if TYPE_CHECKING:
     import asyncio
 
-type After = Callable[[Runtime, Halt], Awaitable[Halt]]
-"""Runs under the run's lease once its turn ends (a channel's final delivery) and returns the
-run's halt: the given one, or what the delivery ended in."""
+type After = Callable[[Runtime], Awaitable[Halt | None]]
+"""Host work derived from the log, under the run's lease (a channel's outbound replies): run
+after recovery, before a new input, and again when the run idles or parks. None when it is
+done; otherwise the halt it stopped at."""
 
 
 @dataclass(frozen=True, slots=True)
