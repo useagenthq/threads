@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { sha256Hex } from "../../src/hash";
 import { resume } from "../../src/loop";
+import type { Model } from "../../src/model";
+import { markTestKit } from "../../src/model/guard";
+import type { SendError } from "../../src/model/protocol";
 import type { EventDraft, Writer } from "../../src/store";
 import { ROOT, unwrap, userInput } from "../store/helpers";
 import { events, harness } from "./harness";
@@ -102,5 +105,62 @@ describe("capability pre-check before dispatch", () => {
     });
     expect(requests(writer)).toBe(1);
     expect(h.model.remaining()).toBe(1);
+  });
+});
+
+/** A model whose one send ends in `reason`, counting its sends. */
+function refusing(h: ReturnType<typeof harness>, reason: SendError) {
+  let sends = 0;
+  const model: Model = {
+    info: h.model.info,
+    send: async function* () {
+      sends += 1;
+      yield { kind: "rejected", reason };
+    },
+  };
+  markTestKit(model);
+  return { model, sends: () => sends };
+}
+
+describe("the send's terminal error (Model.send returns.errors)", () => {
+  test("an adapter's send-time refusal is not_sent and ends the turn with its code, once", async () => {
+    const h = harness([], [], []);
+    const m = refusing(h, "continuation_unsupported");
+    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const end = await resume(
+      writer,
+      h.artifacts,
+      h.config({ models: () => m.model }),
+      { input: userInput("hi") },
+    );
+    expect(end).toEqual({ kind: "idle" });
+    expect(m.sends()).toBe(1);
+    expect(events(writer).slice(-2)).toMatchObject([
+      {
+        type: "model_attempt_abandoned",
+        data: { provider_outcome: "not_sent", reason: "provider_error" },
+      },
+      {
+        type: "turn_completed",
+        data: { reason: "error", code: "continuation_unsupported" },
+      },
+    ]);
+  });
+
+  test("stale_epoch appends nothing more and halts: the writer lost its lease", async () => {
+    const h = harness([], [], []);
+    const m = refusing(h, "stale_epoch");
+    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const end = await resume(
+      writer,
+      h.artifacts,
+      h.config({ models: () => m.model }),
+      { input: userInput("hi") },
+    );
+    expect(end).toMatchObject({
+      kind: "halted",
+      halt: { code: "branch_busy" },
+    });
+    expect(events(writer).at(-1)?.type).toBe("model_request");
   });
 });

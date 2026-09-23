@@ -4,6 +4,7 @@ import { sha256Hex } from "../hash";
 import type { OutputPart, Usage } from "../log";
 import { assertModelAllowed, type Model, type ModelChunk } from "../model";
 import { type Unsupported, unsupported } from "../model/capabilities";
+import type { ProviderRejection } from "../model/protocol";
 import { parseRender } from "../model/render-lines";
 import { compactionInstruction, refReader, render } from "../render";
 import { draft } from "./drafts";
@@ -14,12 +15,14 @@ import type { Halt } from "./types";
 // append model_request (durable before dispatch), then exactly one send.
 
 type Rejection = Extract<ModelChunk, { kind: "rejected" }>;
+/** A provider rejection class: what the retry, fallback and compaction rules act on. */
+type Provider = Rejection & { readonly reason: ProviderRejection };
 
 export type Attempted =
   | { readonly kind: "response"; readonly text: string }
-  | { readonly kind: "rejected"; readonly rejection: Rejection }
+  | { readonly kind: "rejected"; readonly rejection: Provider }
   | { readonly kind: "broken" }
-  /** Refused before any model_request. */
+  /** Refused before sending, by the loop's pre-check or the adapter. */
   | { readonly kind: "unsupported"; readonly refused: Unsupported }
   | { readonly kind: "halt"; readonly halt: Halt };
 
@@ -132,20 +135,8 @@ function record(s: Session, requestId: string, c: Collected): Attempted {
       if (stopped !== undefined) return { kind: "halt", halt: stopped };
       return { kind: "response", text: responseText([...c.parts]) };
     }
-    case "rejected": {
-      const { reason, http_status, retry_after_ms, billing } = c.rejection;
-      const stopped = s.append(
-        draft.abandoned({
-          request_event_id: requestId,
-          provider_outcome: "failed",
-          reason,
-          ...(http_status === undefined ? {} : { http_status }),
-          ...(retry_after_ms === undefined ? {} : { retry_after_ms }),
-          ...(billing === undefined ? {} : { billing }),
-        }),
-      );
-      return stopped === undefined ? c : { kind: "halt", halt: stopped };
-    }
+    case "rejected":
+      return rejected(s, requestId, c.rejection);
     case "broken": {
       const stopped = s.append(
         draft.abandoned({
@@ -158,5 +149,46 @@ function record(s: Session, requestId: string, c: Collected): Attempted {
     }
     default:
       return assertNever(c);
+  }
+}
+
+/**
+ * The send's terminal error (spec/api.json Model.send returns.errors). A fence refusal appends
+ * nothing: this writer lost its lease. An adapter refusal was never sent, so it is not_sent and
+ * ends the turn with its code; it is never an unknown outcome that gets re-sent.
+ */
+function rejected(s: Session, requestId: string, r: Rejection): Attempted {
+  const { reason, http_status, retry_after_ms, billing } = r;
+  switch (reason) {
+    case "stale_epoch":
+      return halt("branch_busy", "the fence refused the send: lease lost");
+    case "content_unsupported":
+    case "continuation_unsupported": {
+      const stopped = s.append(
+        draft.abandoned({
+          request_event_id: requestId,
+          provider_outcome: "not_sent",
+          reason: "provider_error",
+        }),
+      );
+      if (stopped !== undefined) return { kind: "halt", halt: stopped };
+      const message = "the adapter refused a rendered part before sending";
+      return { kind: "unsupported", refused: { code: reason, message } };
+    }
+    default: {
+      const stopped = s.append(
+        draft.abandoned({
+          request_event_id: requestId,
+          provider_outcome: "failed",
+          reason,
+          ...(http_status === undefined ? {} : { http_status }),
+          ...(retry_after_ms === undefined ? {} : { retry_after_ms }),
+          ...(billing === undefined ? {} : { billing }),
+        }),
+      );
+      return stopped === undefined
+        ? { kind: "rejected", rejection: { ...r, reason } }
+        : { kind: "halt", halt: stopped };
+    }
   }
 }

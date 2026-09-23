@@ -5,6 +5,7 @@ import {
   OutputPart,
   Usage,
 } from "../log";
+import { ok } from "../result";
 import { markTestKit } from "./guard";
 import type {
   LookupResult,
@@ -109,7 +110,7 @@ export function scriptedModel(script: unknown): ScriptedModel {
       ? {}
       : {
           lookup: async (requestId: string) =>
-            lookupAnswer(answers[eventIdOf(requestId)]),
+            ok(lookupAnswer(answers[eventIdOf(requestId)])),
         }),
   };
   markTestKit(model);

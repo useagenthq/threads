@@ -52,10 +52,14 @@ async function recoverRequest(
   const model = s.fold.model && s.config.models(s.fold.model);
   const fenced = s.fence();
   if (fenced !== undefined) return fenced;
-  const answer =
+  const looked =
     model?.lookup === undefined || model.info.lookup === "none"
       ? undefined
       : await model.lookup(`${s.branchId}:${requestId}`, s.modelContext());
+  // The fence refused at the lookup's real send point: this writer lost its lease.
+  if (looked?.ok === false)
+    return { code: "branch_busy", message: looked.error.message };
+  const answer = looked?.value;
   // model_response_recovered records the provider's id; a found answer without one can't be
   // recorded, so the attempt stays unknown.
   const found = answer?.status === "found" ? answer.value : undefined;

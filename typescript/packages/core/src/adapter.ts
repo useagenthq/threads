@@ -21,6 +21,8 @@ export type {
   ModelInfo,
   ModelRequest,
   ModelResponse,
+  ProviderRejection,
+  SendError,
 } from "./model";
 export {
   memoryContext,

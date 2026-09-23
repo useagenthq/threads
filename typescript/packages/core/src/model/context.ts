@@ -23,6 +23,16 @@ export function contextReader(
 /** Thrown inside an adapter's request mapper and caught at its edge: a part it can't send. */
 export class Unsendable extends Error {
   override readonly name = "Unsendable";
+  /** The send error it becomes: an artifact that can't be read is a provider_error. */
+  readonly code:
+    | "content_unsupported"
+    | "continuation_unsupported"
+    | "provider_error";
+
+  constructor(code: Unsendable["code"], message: string) {
+    super(message);
+    this.code = code;
+  }
 }
 
 /** context.read for a request mapper: an unreadable artifact makes the request unsendable. */
@@ -31,7 +41,7 @@ export function readOrRefuse(
 ): (ref: ArtifactRef) => Promise<Uint8Array> {
   return async (ref) => {
     const read = await context.read(ref);
-    if (!read.ok) throw new Unsendable(read.error.message);
+    if (!read.ok) throw new Unsendable("provider_error", read.error.message);
     return read.value;
   };
 }

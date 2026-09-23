@@ -8,5 +8,7 @@ export type {
   ModelInfo,
   ModelRequest,
   ModelResponse,
+  ProviderRejection,
+  SendError,
 } from "./protocol";
 export { type ScriptedModel, scriptedModel } from "./scripted";

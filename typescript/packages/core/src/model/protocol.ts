@@ -55,6 +55,26 @@ export type ModelResponse = {
   readonly provider_request_id: string | null;
 };
 
+/** A provider rejection class, recorded as model_attempt_abandoned. */
+export type ProviderRejection = Extract<
+  AbandonData["reason"],
+  | "rate_limited"
+  | "overloaded"
+  | "server_error"
+  | "prompt_too_long"
+  | "provider_error"
+>;
+
+/**
+ * Model.send's terminal error set (spec/api.json returns.errors): a provider rejection, the
+ * fence refusing at the real send point, or a rendered part the adapter can't encode.
+ */
+export type SendError =
+  | ProviderRejection
+  | "stale_epoch"
+  | "content_unsupported"
+  | "continuation_unsupported";
+
 /** One streamed item of an attempt. A rejection before any content is a chunk, never a throw. */
 export type ModelChunk =
   | { readonly kind: "delta"; readonly text: string }
@@ -66,7 +86,7 @@ export type ModelChunk =
     }
   | {
       readonly kind: "rejected";
-      readonly reason: AbandonData["reason"];
+      readonly reason: SendError;
       readonly http_status?: number | undefined;
       readonly retry_after_ms?: number | undefined;
       readonly billing?: AbandonData["billing"] | undefined;
@@ -110,7 +130,12 @@ export type Model = {
   readonly lookup?: (
     requestId: string,
     context: ModelContext,
-  ) => Promise<LookupResult<ModelResponse>>;
+  ) => Promise<
+    Result<
+      LookupResult<ModelResponse>,
+      { readonly code: "stale_epoch"; readonly message: string }
+    >
+  >;
   readonly countTokens?: (
     request: ModelRequest,
   ) => Promise<
