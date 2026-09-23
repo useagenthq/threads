@@ -12,7 +12,6 @@ from threads._generated.tools_v1 import (
     TeamTaskCreateInput,
     TeamTaskUpdateInput,
 )
-from threads.agents.scope import Scope
 from threads.log import InjectedEvent, TeamMessageEvent, ToolCallData
 from threads.loop.drafts import draft
 from threads.loop.history import CallState
@@ -20,12 +19,13 @@ from threads.loop.results import As, result_draft
 from threads.loop.runtime import Halt, Runtime, lost
 from threads.result import Err
 from threads.store import Draft
+from threads.tools import TEAM
 
 
-async def team_tool[D](scope: Scope[D], rt: Runtime, state: CallState) -> Halt | None:
-    lead = scope.lead(rt)
+async def team_tool(lead: Runtime, member: str, rt: Runtime, state: CallState) -> Halt | None:
+    """`rt` is the calling thread; `lead` is the team's lead (`rt` itself for the lead)."""
     call = state.call.data
-    event, text, failed = _decide(scope, lead, call)
+    event, text, failed = _decide(lead, member, call)
     if event is not None and lead is not rt:
         # The lead's writer records the team state; this member's writer records the result.
         done = await lead.append(event)
@@ -41,11 +41,10 @@ type Answer = tuple[Draft | None, str, bool]
 """The team event to append (if any), the result text, and whether it is an error."""
 
 
-def _decide[D](scope: Scope[D], lead: Runtime, call: ToolCallData) -> Answer:
+def _decide(lead: Runtime, member: str, call: ToolCallData) -> Answer:
     """Ids are keyed to the call (`<member>/<call_id>`), so a call re-run after a crash finds
     what it already recorded and appends nothing (invariant 3)."""
     input = dict(call.input)
-    member = scope.member()
     match call.name:
         case "team_task_create":
             args = TeamTaskCreateInput.model_validate(input)
@@ -113,19 +112,16 @@ def _send(lead: Runtime, member: str, message_id: str, args: SendMessageInput) -
     return draft("team_message", data), "sent", False
 
 
-async def deliver[D](scope: Scope[D], rt: Runtime) -> Halt | bool:
+async def deliver(lead: Runtime, member: str, rt: Runtime) -> Halt | bool:
     """Messages to this member (or to everyone) it hasn't seen yet, as untrusted reference;
     delivery is deduplicated by message id, so a restart never injects one twice."""
-    if scope.team is None and not scope.definition.subagents:
-        return False
-    member = scope.member()
     seen = {
         e.data.origin.id
         for e in rt.events
         if isinstance(e, InjectedEvent) and e.data.source == "agent"
     }
     drafts: list[Draft] = []
-    for event in scope.lead(rt).events:
+    for event in lead.events:
         if not isinstance(event, TeamMessageEvent):
             continue
         data = event.data
@@ -142,3 +138,24 @@ async def deliver[D](scope: Scope[D], rt: Runtime) -> Halt | bool:
         return False
     done = await rt.append(*drafts)
     return lost(done.error) if isinstance(done, Err) else True
+
+
+class Lead:
+    """A thread that is its own team lead and starts no subagents: only the team tools, acting
+    on its own log (the conformance runner's framework, spec/conformance/README.md)."""
+
+    def __init__(self, member: str) -> None:
+        self._member = member
+
+    @property
+    def names(self) -> frozenset[str]:
+        return TEAM
+
+    async def run(self, rt: Runtime, state: CallState) -> Halt | None:
+        return await team_tool(rt, self._member, rt, state)
+
+    async def flush(self, rt: Runtime) -> Halt | None:
+        return None
+
+    async def deliver(self, rt: Runtime) -> Halt | bool:
+        return await deliver(rt, self._member, rt)

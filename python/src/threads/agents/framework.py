@@ -33,7 +33,8 @@ class Agents[D]:
             case "handoff":
                 return await handoff(self._scope, rt, state)
             case _:
-                return await team_tool(self._scope, rt, state)
+                scope = self._scope
+                return await team_tool(scope.lead(rt), scope.member(), rt, state)
 
     async def flush(self, rt: Runtime) -> Halt | None:
         """Restarts a background child a crash left running: the log says it was spawned and
@@ -50,7 +51,10 @@ class Agents[D]:
         return None
 
     async def deliver(self, rt: Runtime) -> Halt | bool:
-        return await deliver(self._scope, rt)
+        scope = self._scope
+        if scope.team is None and not scope.definition.subagents:
+            return False
+        return await deliver(scope.lead(rt), scope.member(), rt)
 
     async def finish(self, rt: Runtime) -> None:
         """Every background child reaches its result before the run ends (v0.1 has no detached

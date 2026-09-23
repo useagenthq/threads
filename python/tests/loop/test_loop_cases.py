@@ -31,6 +31,7 @@ from corpus import (
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads.agents.team import Lead
 from threads.log import ToolCallData, ToolSpec
 from threads.loop.drafts import draft
 from threads.loop.drive import drive
@@ -106,6 +107,8 @@ async def run_case(case: Path) -> Outcome:
             clock,
             clock.wait_until,
             output,
+            # README recover step 5: the thread is its own team lead, named by its pin.
+            framework=Lead(_agent_name(verified.value.fold)),
         )
         halt = await _resume(rt, meta)
         exported = await store.export(branch)
@@ -130,6 +133,10 @@ def _output_binding(fold: Fold) -> Callable[[JsonValue], str | None] | None:
         return None
     schema: JsonValue = dict(pinned.output.schema_)
     return lambda value: None if json_schema_holds(schema, value) else "does not match the schema"
+
+
+def _agent_name(fold: Fold) -> str:
+    return "" if fold.started is None else fold.started.agent_name
 
 
 def _model(model: ScriptedModel) -> Model:
