@@ -23,7 +23,7 @@ from threads.log import (
     ResultPart,
 )
 from threads.log.jcs import canonicalize
-from threads.loop.model import ModelContext, Rejected
+from threads.loop.model import ModelContext, Rejected, Unencodable
 from threads.render.artifacts import AnyRef
 from threads.result import Err
 
@@ -94,11 +94,9 @@ class UnsupportedContentError(Exception):
     """A part this adapter can't send. Raised before any byte leaves:
     a part is never converted or dropped silently."""
 
-    def __init__(
-        self, code: Literal["content_unsupported", "continuation_unsupported"], what: str
-    ) -> None:
+    def __init__(self, code: Unencodable, what: str) -> None:
         super().__init__(f"{code}: {what}")
-        self.code = code
+        self.code: Unencodable = code
 
 
 def parse(body: bytes) -> Request:
@@ -135,15 +133,15 @@ async def prepare[T](
     context: ModelContext,
     build: Callable[[Request, ModelContext], Awaitable[T]],
 ) -> tuple[Request, T] | Rejected:
-    """The provider request for Render v1 `body`, or the typed, non-retryable rejection of a
-    request this adapter can't send (spec/schema/README.md, "Capability pre-check"): nothing
-    left, so it is never an unknown outcome that gets re-sent."""
+    """The provider request for Render v1 `body`, or the typed rejection of a request this
+    adapter can't encode (spec/api.json Model.send returns.errors): nothing left, so it is never
+    an unknown outcome that gets re-sent."""
     request = parse(body)
     try:
         check_adapter(request.head, adapter)
         return request, await build(request, context)
-    except UnsupportedContentError:
-        return Rejected("provider_error")
+    except UnsupportedContentError as refused:
+        return Rejected(refused.code)
 
 
 def check_adapter(head: Head, name: str) -> None:

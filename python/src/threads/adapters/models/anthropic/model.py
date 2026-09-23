@@ -74,6 +74,7 @@ class AnthropicModel:
             return
         except sdk.APIConnectionError as error:
             if transport.stale(error):
+                yield Rejected("stale_epoch")
                 return
             if transport.not_sent(error):
                 yield Rejected("server_error")

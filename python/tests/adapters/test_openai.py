@@ -97,9 +97,9 @@ def test_a_recorded_reasoning_item_goes_back_byte_for_byte() -> None:
 
 def test_hosted_tool_parts_and_foreign_reasoning_are_refused_before_dispatch() -> None:
     body, context = render_case("render-hosted-search-citations", "openai", "openai")
-    assert run(Script([]), body, context) == [Rejected("provider_error")]
+    assert run(Script([]), body, context) == [Rejected("continuation_unsupported")]
     body, context = render_case("render-thinking-block-replay", "openai", "openai")
-    assert run(Script([]), body, context) == [Rejected("provider_error")]
+    assert run(Script([]), body, context) == [Rejected("continuation_unsupported")]
 
 
 def test_the_stream_maps_to_deltas_parts_and_usage() -> None:

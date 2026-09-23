@@ -13,7 +13,7 @@ from pydantic import JsonValue
 from threads.adapters.models import transport
 from threads.adapters.models.anthropic.model import AnthropicModel, client
 from threads.anthropic import anthropic
-from threads.loop.model import Done, ModelChunk
+from threads.loop.model import Done, ModelChunk, Rejected
 
 _SSE = (
     b'event: message_start\ndata: {"type":"message_start","message":{"usage":'
@@ -78,7 +78,7 @@ def test_the_owner_sends_after_one_fence_at_the_send_point() -> None:
 def test_a_lease_lost_while_the_sdk_prepared_the_request_sends_no_byte() -> None:
     context = FakeContext(owner=False)
     chunks, received = _send(context)
-    assert chunks == []
+    assert chunks == [Rejected("stale_epoch")]
     assert context.fences == 1
     assert b"".join(received) == b""
 

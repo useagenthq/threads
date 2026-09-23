@@ -89,19 +89,19 @@ def test_a_render_case_maps_to_its_golden_request(case: str) -> None:
 def test_hosted_tool_parts_are_refused_before_dispatch() -> None:
     body, context = render_case("render-hosted-search-citations", "anthropic", "anthropic")
     script = Script([])
-    assert run(script, body, context) == [Rejected("provider_error")]
+    assert run(script, body, context) == [Rejected("continuation_unsupported")]
     assert script.sent == []
 
 
 def test_another_providers_reasoning_is_refused_not_dropped() -> None:
     body, context = render_case("render-thinking-block-replay", "anthropic", "anthropic")
     body = body.replace(b'"provider":"anthropic","ref"', b'"provider":"openai","ref"')
-    assert run(Script([]), body, context) == [Rejected("provider_error")]
+    assert run(Script([]), body, context) == [Rejected("continuation_unsupported")]
 
 
 def test_an_epoch_pinned_to_another_adapter_is_refused() -> None:
     body = one_turn().replace(b'"name":"anthropic"', b'"name":"openai"', 1)
-    assert run(Script([]), body) == [Rejected("provider_error")]
+    assert run(Script([]), body) == [Rejected("continuation_unsupported")]
 
 
 def test_the_stream_maps_to_deltas_parts_and_usage() -> None:

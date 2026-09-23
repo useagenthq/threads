@@ -85,10 +85,14 @@ def test_a_render_case_maps_to_its_golden_arguments(case: str) -> None:
 
 
 def test_the_bridge_carries_no_continuation_and_no_media_results() -> None:
-    for case in ("render-thinking-block-replay", "render-screenshot-tool-result"):
+    cases = (
+        ("render-thinking-block-replay", Rejected("continuation_unsupported")),
+        ("render-screenshot-tool-result", Rejected("content_unsupported")),
+    )
+    for case, refused in cases:
         body, context = render_case(case, "litellm", "litellm")
         recorder = Recorder()
-        assert run(LiteLLMModel(INFO, recorder), body, context) == [Rejected("provider_error")]
+        assert run(LiteLLMModel(INFO, recorder), body, context) == [refused]
         assert recorder.calls == []
 
 
@@ -158,7 +162,8 @@ def test_a_provider_rejection_is_a_rejected_chunk_after_one_attempt(
 
 def test_a_lost_lease_calls_nothing() -> None:
     recorder = Recorder()
-    assert run(LiteLLMModel(INFO, recorder), one_turn(), FakeContext(owner=False)) == []
+    lost = FakeContext(owner=False)
+    assert run(LiteLLMModel(INFO, recorder), one_turn(), lost) == [Rejected("stale_epoch")]
     assert recorder.calls == []
 
 

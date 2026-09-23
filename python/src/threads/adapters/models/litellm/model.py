@@ -72,6 +72,7 @@ class LiteLLMModel:
             return
         _, body = prepared
         if isinstance(await context.fence(), Err):
+            yield Rejected("stale_epoch")
             return
         assembler = Assembler()
         started = False
