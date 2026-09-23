@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from threads.log import ToolSpec
 from threads.loop.drafts import ActorKind, draft
-from threads.loop.history import CallState
+from threads.loop.history import CallState, call_state
 from threads.loop.model import Found, NotFound
 from threads.loop.results import As, result_draft, text_ref
 from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
@@ -56,7 +56,9 @@ async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
             )
             if isinstance(unknown, Err):
                 return lost(unknown.error)
-            return await settle(rt, state, spec, reason, "host")
+            # Settle on the state as recorded now, with this attempt's effect_begin in it.
+            fresh = call_state(rt.events, inv.call_id)
+            return await settle(rt, fresh, spec, reason, "host")
         case NotSent(unmatched=unmatched):
             return await _not_sent(rt, inv, unmatched=unmatched)
 
