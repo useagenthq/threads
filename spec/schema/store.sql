@@ -4,7 +4,7 @@
 -- constants, and CI runs it with --check. Change this file, then regenerate.
 --
 -- Tables for later features are added with those features: inbox, approvals,
--- schedule_occurrences, observer_cursors, knowledge_* and memory_*.
+-- schedule_occurrences, knowledge_* and memory_*.
 --
 -- Connection settings, set by each driver before this script runs:
 --   PRAGMA journal_mode = WAL;
@@ -90,6 +90,16 @@ CREATE TABLE IF NOT EXISTS resources (
   released_at INTEGER,
   release_outcome TEXT,
   cleanup_claim TEXT
+) STRICT;
+
+-- Durable observer cursors: the last seq an observer handled on a branch. An
+-- observer resumes after it, so it sees every committed event at least once, in order. It is a
+-- projection's bookkeeping, never log state.
+CREATE TABLE IF NOT EXISTS observer_cursors (
+  observer TEXT NOT NULL,
+  branch_id TEXT NOT NULL REFERENCES branches (branch_id),
+  seq INTEGER NOT NULL,
+  PRIMARY KEY (observer, branch_id)
 ) STRICT;
 
 PRAGMA user_version = 1;

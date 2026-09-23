@@ -6,6 +6,7 @@ import { type Chain, tipHash, type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import type { ArtifactStore } from "./artifacts";
 import { newBranch } from "./branch";
+import { ObserverCursors } from "./cursors";
 import type { SqliteDriver } from "./driver";
 import { forkEligible, forkingBranches, loadChain } from "./forking";
 import { importSegments } from "./import";
@@ -331,6 +332,11 @@ export class LogStore {
   /** The resource ledger, fenced by the owner's writer. */
   get ledger(): ResourceLedger {
     return new ResourceLedger(this.#db, this.#now, this.#tenant);
+  }
+
+  /** Durable observer cursors. */
+  get cursors(): ObserverCursors {
+    return new ObserverCursors(this.#db);
   }
 
   /** Stores the child's row and header, and loads its chain: the parent's through at_seq. */
