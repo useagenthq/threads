@@ -139,9 +139,7 @@ class _Builder:
 
 
 def _tool(tool: ToolLine) -> JsonValue:
-    # A deferred stub has no schema: it is listed so tool_search can load it, and a call to it
-    # fails pre-effect with tool_not_loaded.
-    schema: Block = {"type": "object"} if tool.input_schema is MISSING else tool.input_schema
+    schema = tool.parameters()
     return {"name": tool.name, "description": tool.description, "input_schema": schema}
 
 

@@ -25,6 +25,7 @@ from threads.adapters.models.render import (
     ToolLine,
     UnsupportedContentError,
     UserLine,
+    canonical,
     read,
 )
 from threads.log import (
@@ -37,9 +38,7 @@ from threads.log import (
     TextPart,
     ToolUsePart,
 )
-from threads.log.jcs import canonicalize
 from threads.loop.model import ModelContext
-from threads.result import Ok
 
 type Message = dict[str, JsonValue]
 
@@ -61,7 +60,7 @@ class _Builder:
                 case TextPart(text=text):
                     texts.append(text)
                 case ToolUsePart(call_id=call_id, name=name, input=args):
-                    function: Message = {"name": name, "arguments": _canonical(dict(args))}
+                    function: Message = {"name": name, "arguments": canonical(dict(args))}
                     calls.append({"id": call_id, "type": "function", "function": function})
                 case CitationPart():
                     pass
@@ -114,17 +113,8 @@ class _Builder:
         return f"data:{part.ref.media_type};base64,{data}"
 
 
-def _canonical(value: JsonValue) -> str:
-    text = canonicalize(value)
-    if not isinstance(text, Ok):
-        raise TypeError(text.error)
-    return text.value
-
-
 def _tool(tool: ToolLine) -> JsonValue:
-    # A deferred stub has no schema: it is listed so tool_search can load it, and a call to it
-    # fails pre-effect with tool_not_loaded.
-    schema: Message = {"type": "object"} if tool.input_schema is MISSING else tool.input_schema
+    schema = tool.parameters()
     function: Message = {"name": tool.name, "description": tool.description}
     function["parameters"] = schema
     return {"type": "function", "function": function}

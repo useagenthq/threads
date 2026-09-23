@@ -22,6 +22,7 @@ from threads.log import (
     ParseError,
     ResultPart,
 )
+from threads.log.jcs import canonicalize
 from threads.loop.model import ModelContext
 from threads.render.artifacts import AnyRef
 from threads.result import Err
@@ -34,6 +35,11 @@ class ToolLine(StrictModel):
     description: str
     input_schema: dict[str, JsonValue] | MISSING = MISSING
     deferred: Literal[True] | MISSING = MISSING
+
+    def parameters(self) -> dict[str, JsonValue]:
+        """The input schema; a deferred stub has none, so it is listed with an open object so
+        tool_search can load it, and a call to it fails pre-effect with tool_not_loaded."""
+        return {"type": "object"} if self.input_schema is MISSING else self.input_schema
 
 
 class Head(StrictModel):
@@ -108,6 +114,19 @@ def parse(body: bytes) -> Request:
         else:
             messages.append(line)
     return Request(head, tools, tuple(messages))
+
+
+def canonical(value: JsonValue) -> str:
+    """RFC 8785 text: tool arguments and stored provider JSON are always this form."""
+    text = canonicalize(value)
+    if isinstance(text, Err):
+        raise TypeError(text.error)
+    return text.value
+
+
+async def store_json(context: ModelContext, value: JsonValue) -> ArtifactRef:
+    """Exact provider JSON (a reasoning block or item), durable before a part names it."""
+    return await context.put(canonical(value).encode("utf-8"), "application/json")
 
 
 def check_adapter(head: Head, name: str) -> None:

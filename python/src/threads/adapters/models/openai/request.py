@@ -25,6 +25,7 @@ from threads.adapters.models.render import (
     ToolLine,
     UnsupportedContentError,
     UserLine,
+    canonical,
     read,
 )
 from threads.log import (
@@ -37,9 +38,7 @@ from threads.log import (
     TextPart,
     ToolUsePart,
 )
-from threads.log.jcs import canonicalize
 from threads.loop.model import ModelContext
-from threads.result import Ok
 
 PROVIDER = "openai"
 REASONING_FORMAT = "openai_reasoning"
@@ -65,7 +64,7 @@ class _Builder:
                     self.items.append({"role": "assistant", "content": [said]})
                 case ToolUsePart(call_id=call_id, name=name, input=args):
                     call: Item = {"type": "function_call", "call_id": call_id, "name": name}
-                    call["arguments"] = _canonical(dict(args))
+                    call["arguments"] = canonical(dict(args))
                     self.items.append(call)
                 case ReasoningPart():
                     self.items.append(await self.reasoning(part))
@@ -122,17 +121,8 @@ class _Builder:
         return f"data:{part.ref.media_type};base64,{data}"
 
 
-def _canonical(value: JsonValue) -> str:
-    text = canonicalize(value)
-    if not isinstance(text, Ok):
-        raise TypeError(text.error)
-    return text.value
-
-
 def _tool(tool: ToolLine) -> JsonValue:
-    # A deferred stub has no schema: it is listed so tool_search can load it, and a call to it
-    # fails pre-effect with tool_not_loaded.
-    schema: Item = {"type": "object"} if tool.input_schema is MISSING else tool.input_schema
+    schema = tool.parameters()
     spec: Item = {"type": "function", "name": tool.name, "description": tool.description}
     spec["parameters"] = schema
     spec["strict"] = False

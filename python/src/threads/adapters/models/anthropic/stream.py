@@ -35,7 +35,7 @@ from threads.adapters.models.anthropic.wire import (
     ToolStart,
     Web,
 )
-from threads.adapters.models.render import UnsupportedContentError
+from threads.adapters.models.render import UnsupportedContentError, store_json
 from threads.log import (
     CallId,
     CitationPart,
@@ -45,9 +45,7 @@ from threads.log import (
     ToolUsePart,
     Usage,
 )
-from threads.log.jcs import canonicalize
 from threads.loop.model import Delta, Done, ModelChunk, ModelContext, PartChunk, StopReason
-from threads.result import Ok
 
 
 @dataclass
@@ -142,10 +140,7 @@ class Assembler:
                 raise UnsupportedContentError("content_unsupported", f"{kind} block")
 
     async def _reasoning(self, form: str, block: JsonValue) -> ReasoningPart:
-        canonical = canonicalize(block)
-        if not isinstance(canonical, Ok):
-            raise TypeError(canonical.error)
-        ref = await self.context.put(canonical.value.encode("utf-8"), "application/json")
+        ref = await store_json(self.context, block)
         return ReasoningPart(
             type="reasoning", provider=PROVIDER, model=self.model, format=form, ref=ref
         )

@@ -29,7 +29,7 @@ from threads.adapters.models.openai.wire import (
     TextDelta,
     UrlCitation,
 )
-from threads.adapters.models.render import UnsupportedContentError
+from threads.adapters.models.render import UnsupportedContentError, store_json
 from threads.log import (
     CallId,
     CitationPart,
@@ -39,9 +39,7 @@ from threads.log import (
     ToolUsePart,
     Usage,
 )
-from threads.log.jcs import canonicalize
 from threads.loop.model import Delta, Done, ModelChunk, ModelContext, PartChunk, StopReason
-from threads.result import Ok
 
 _ARGS: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 _INCOMPLETE: dict[str, StopReason] = {"max_output_tokens": "max_tokens"}
@@ -127,10 +125,7 @@ class Assembler:
         ]
 
     async def _reasoning(self, raw: dict[str, JsonValue], summary: str) -> ReasoningPart:
-        canonical = canonicalize(raw)
-        if not isinstance(canonical, Ok):
-            raise TypeError(canonical.error)
-        ref = await self.context.put(canonical.value.encode("utf-8"), "application/json")
+        ref = await store_json(self.context, raw)
         part = ReasoningPart(
             type="reasoning", provider=PROVIDER, model=self.model, format=REASONING_FORMAT, ref=ref
         )
