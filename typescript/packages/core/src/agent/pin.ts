@@ -307,7 +307,7 @@ function checkRetries(n: number): void {
   if (!Number.isSafeInteger(n) || n < 0)
     throw new ConfigError(
       "invalid_config",
-      `outputRetries must be a non-negative integer, got ${n}`,
+      `outputRetries must be an integer from 0 to 2**53 - 1, got ${n}`,
     );
 }
 

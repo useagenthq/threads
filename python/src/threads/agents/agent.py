@@ -237,11 +237,15 @@ def _output(output: object) -> type[BaseModel] | None:
     return output
 
 
+_MAX_SAFE: Final = 2**53 - 1
+"""The largest integer the wire carries (spec/schema/README.md, wire rule 4)."""
+
+
 def _retries(options: AgentOptions) -> int:
     retries = options.get("output_retries", 2)
-    # bool is an int subclass, and True is not a retry count.
-    if type(retries) is not int or retries < 0:
-        why = f"output_retries must be a non-negative integer, got {retries!r}"
+    # bool is an int subclass, and True is not a retry count; the pin is a wire integer.
+    if type(retries) is not int or not 0 <= retries <= _MAX_SAFE:
+        why = f"output_retries must be an integer from 0 to 2**53 - 1, got {retries!r}"
         raise ConfigError("invalid_config", why)
     return retries
 

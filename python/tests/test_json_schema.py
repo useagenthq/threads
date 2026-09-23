@@ -81,7 +81,7 @@ def test_a_recursive_model_is_checked_at_any_depth() -> None:
         ({"type": "string", "format": "hostname"}, "unsupported format 'hostname'"),
         ({"properties": {"pair": {"prefixItems": [{"type": "integer"}]}}}, "'prefixItems'"),
         ({"items": {"$ref": "https://example.com/x"}}, "unsupported $ref"),
-        ({"anyOf": [{"pattern": "("}]}, "doesn't compile"),
+        ({"anyOf": [{"pattern": "("}]}, "outside the portable subset"),
     ],
 )
 def test_unchecked_names_what_holds_cant_check_anywhere(schema: JsonValue, named: str) -> None:
@@ -114,3 +114,19 @@ def test_each_format_accepts_and_rejects(form: str, good: str, bad: str) -> None
     assert holds({"format": form}, good)
     assert not holds({"format": form}, bad)
     assert holds({"format": form}, 7)  # a format constrains strings only
+
+
+def test_pattern_is_the_portable_subset_on_the_shared_vector() -> None:
+    for case in json.loads((VECTOR.parent / "pattern.json").read_text())["cases"]:
+        schema: JsonValue = {"pattern": case["pattern"]}
+        if case["result"] == "unsupported":
+            assert unchecked(schema) is not None, case
+        else:
+            assert unchecked(schema) is None, case
+            assert holds(schema, case["text"]) is (case["result"] == "match"), case
+
+
+def test_const_and_enum_use_json_equality_on_the_shared_vector() -> None:
+    for case in json.loads((VECTOR.parent / "json-equal.json").read_text())["cases"]:
+        assert holds({"const": case["a"]}, case["b"]) is case["equal"], case
+        assert holds({"enum": ["other", case["a"]]}, case["b"]) is case["equal"], case

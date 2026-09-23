@@ -17,6 +17,7 @@ from typing import Final, TypeGuard
 from pydantic import JsonValue
 
 from threads._json_formats import FORMATS, multiple_of
+from threads._json_pattern import compile_pattern
 
 type Root = Mapping[str, JsonValue]
 """The whole schema document: `$ref`s resolve against it."""
@@ -138,10 +139,18 @@ def _map(argument: JsonValue) -> Mapping[str, JsonValue]:
     return argument
 
 
-def json_equal(expected: JsonValue, value: object) -> bool:
-    # JSON true is not 1 and 1.0 is not the integer 1, though Python's
-    # True == 1 == 1.0.
-    return type(expected) is type(value) and expected == value
+def json_equal(a: object, b: object) -> bool:
+    """JSON equality: a boolean equals only the same boolean (Python's True == 1 doesn't hold
+    here), numbers compare by value (1 equals 1.0), arrays item by item, objects key by key."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return isinstance(a, bool) and isinstance(b, bool) and a == b
+    if _is_number(a) and _is_number(b):
+        return a == b
+    if _is_array(a) and _is_array(b):
+        return len(a) == len(b) and all(json_equal(x, y) for x, y in zip(a, b, strict=True))
+    if is_object(a) and is_object(b):
+        return a.keys() == b.keys() and all(json_equal(a[k], b[k]) for k in a)
+    return type(a) is type(b) and a == b
 
 
 def _name(ref: JsonValue) -> str | None:
@@ -178,13 +187,9 @@ def _multiple(argument: JsonValue, value: object, _root: Root) -> bool:
 
 
 def _pattern(argument: JsonValue) -> re.Pattern[str]:
-    # ECMA-262 without the u flag: \d, \w and \s are ASCII.
     if not isinstance(argument, str):
         raise TypeError(f"a pattern is a string: {argument!r}")
-    try:
-        return re.compile(argument, re.ASCII)
-    except re.error as error:
-        raise TypeError(f"pattern {argument!r} doesn't compile: {error}") from None
+    return compile_pattern(argument)
 
 
 def _matches(argument: JsonValue, value: object, _root: Root) -> bool:

@@ -93,8 +93,10 @@ The log checks every accepted answer against the schema itself, the same way in 
 |---|---|
 | Types, required and optional fields, `Literal`s and enums, unions, nested and recursive models | any model |
 | Bounds (`ge`, `gt`, `le`, `lt`) and `multiple_of` / `.multipleOf()`, exact in decimal | numbers |
-| Lengths and patterns | strings and lists |
+| Lengths, and patterns in a portable regex subset (ASCII `\d \w \s`, no named groups, lookbehind or `\p{...}`) | strings and lists |
 | `date-time` (RFC 3339, with a time zone), `date`, `time` (with a time zone), `email`, `uri`, `uuid` | `datetime`, `date`, `time`, `UUID`, `EmailStr`, `AnyUrl`; `z.iso.datetime({ offset: true })`, `z.iso.date()`, `z.email()`, `z.url()`, `z.uuid()` |
+
+Pydantic's `EmailStr` needs its optional email validator: `pip install email-validator` (threads doesn't install it). A plain `str` with `Field(json_schema_extra={"format": "email"})` gets the same check from the log without it.
 
 Anything else, such as a tuple (`prefixItems`), a dict with constrained keys or another `format`, is refused when the agent is set up, with a `ConfigError` (`invalid_config`) that names the keyword. The exact rules are in the [log schema reference](https://github.com/useagenthq/threads/blob/main/spec/schema/README.md#output-schemas-rule-20).
 

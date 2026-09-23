@@ -126,7 +126,7 @@ def agent(
 </Field>
 
 <Field name="outputRetries / output_retries" type={"number"} default={"2"}>
-  Failed candidates per turn (a rejected final_output or a plain-text end) before turn_completed&#123;output_invalid&#125;. A non-negative integer; anything else is ConfigError invalid_config.
+  Failed candidates per turn (a rejected final_output or a plain-text end) before turn_completed&#123;output_invalid&#125;. An integer from 0 to 2^53-1; anything else is ConfigError invalid_config.
 </Field>
 
 <Field name="subagents" type={"readonly (Agent<unknown, unknown>)[]"}>

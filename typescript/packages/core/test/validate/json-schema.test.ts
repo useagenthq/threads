@@ -90,3 +90,43 @@ test.each([
 ])("unchecked names what the reader can't check", (schema, named) => {
   expect(unchecked(schema)).toContain(named);
 });
+
+const vector = (name: string): unknown =>
+  JSON.parse(readFileSync(join(VECTOR, "..", name), "utf8"));
+
+test("pattern is the portable subset on the shared vector", () => {
+  const { cases } = z
+    .object({
+      cases: z.array(
+        z.object({
+          pattern: z.string(),
+          text: z.string(),
+          result: z.enum(["match", "no_match", "unsupported"]),
+        }),
+      ),
+    })
+    .parse(vector("pattern.json"));
+  for (const c of cases) {
+    const schema = { pattern: c.pattern };
+    if (c.result === "unsupported") {
+      expect(unchecked(schema), c.pattern).toBeDefined();
+      continue;
+    }
+    expect(unchecked(schema), c.pattern).toBeUndefined();
+    expect(holds(schema, c.text), c.pattern).toBe(c.result === "match");
+  }
+});
+
+test("const and enum use JSON equality on the shared vector", () => {
+  const { cases } = z
+    .object({
+      cases: z.array(
+        z.object({ a: z.json(), b: z.json(), equal: z.boolean() }),
+      ),
+    })
+    .parse(vector("json-equal.json"));
+  for (const c of cases) {
+    expect(holds({ const: c.a }, c.b)).toBe(c.equal);
+    expect(holds({ enum: ["other", c.a] }, c.b)).toBe(c.equal);
+  }
+});

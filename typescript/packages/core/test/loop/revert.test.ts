@@ -92,21 +92,38 @@ async function killedAfterInput(
   return { h, u, left: events(killed) };
 }
 
+/**
+ * Resumes the branch with no new input. `requested` holds, for each after_model_switch, how many
+ * model_requests the log held when it ran.
+ */
 async function reopen(
   h: Harness,
   hook: LoopExtension,
   answer: string,
-): Promise<readonly KnownEvent[]> {
+): Promise<{
+  readonly log: readonly KnownEvent[];
+  readonly requested: readonly number[];
+}> {
   const writer = unwrap(h.store.acquire(ROOT, "reopened"));
   const primary = scriptedModel({ responses: [say(answer)] });
   const small = scriptedSmall([say(answer)]);
+  const requested: number[] = [];
+  const watch: LoopExtension = {
+    name: "watch",
+    timeoutMs: 50,
+    hooks: {
+      after_model_switch: async () => {
+        requested.push(prefixes(events(writer)).length);
+      },
+    },
+  };
   const config = h.config({
     models: (ref) => (ref.name === "scripted-small" ? small : primary),
-    extensions: [hook],
+    extensions: [hook, watch],
   });
   const end = await resume(writer, h.artifacts, config);
   expect(end.kind).toBe("idle");
-  return events(writer);
+  return { log: events(writer), requested };
 }
 
 const keyed = (log: readonly KnownEvent[], u: Input) =>
@@ -126,9 +143,9 @@ const after = (log: readonly KnownEvent[], u: Input) =>
 
 describe("a revert across a crash", () => {
   test("killed before the revert batch: reopening reverts exactly once", async () => {
-    const { h, u } = await killedAfterInput(() => []);
+    const { h, u, left } = await killedAfterInput(() => []);
     const hook = allowing();
-    const log = await reopen(h, hook.ext, "from the primary");
+    const { log, requested } = await reopen(h, hook.ext, "from the primary");
     const reverts = log.flatMap((e) =>
       e.type === "settings_changed" && e.data.reason === "revert"
         ? [e.data.cause_event_id]
@@ -139,6 +156,8 @@ describe("a revert across a crash", () => {
     expect(hook.counted.asked).toBe(1);
     // The reopened turn declares the primary's line 0, as turn 1 first did.
     expect(prefixes(after(log, u))[0]).toBe(prefixes(log)[0]);
+    // The revert is its own step: after_model_switch sees it before the request goes out.
+    expect(requested).toEqual([prefixes(left).length]);
   });
 
   test("killed after a recorded deny: reopening never asks again and stays on the fallback", async () => {
@@ -158,7 +177,8 @@ describe("a revert across a crash", () => {
       },
     ]);
     const hook = allowing();
-    const log = await reopen(h, hook.ext, "still the fallback");
+    const { log, requested } = await reopen(h, hook.ext, "still the fallback");
+    expect(requested).toEqual([]);
     expect(hook.counted.asked).toBe(0);
     expect(keyed(log, u)).toEqual(["deny"]);
     expect(after(log, u).filter((e) => e.type === "settings_changed")).toEqual(

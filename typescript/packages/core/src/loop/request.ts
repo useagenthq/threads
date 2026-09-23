@@ -51,9 +51,10 @@ const abandons = (step: readonly KnownEvent[]): readonly Abandon[] =>
 
 export async function requestTurn(s: Session): Promise<Halt | undefined> {
   // Every path to a turn's model call runs through here once its input is durable, fresh or
-  // recovered: a turn-scoped fallback owed a revert gets it before anything renders.
+  // recovered: a turn-scoped fallback owed a revert gets it before anything renders. The revert
+  // is its own step, so after_model_switch observes it before the request is sent.
   const reverted = await revert(s);
-  if (reverted !== undefined) return reverted;
+  if (reverted !== "none") return reverted;
   const step = stepEvents(s.events, s.fold);
   const crashes = abandons(step).filter((a) => CRASH.has(a.data.reason));
   if (crashes.length > retryPolicy(s.fold.policy).crash_resends)

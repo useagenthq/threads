@@ -36,8 +36,10 @@ function revertDue(
   return { input, settings: before?.data.settings ?? pinned(events) };
 }
 
+/** A before_model_switch decision on `input`, recorded after it (an earlier one can't be). */
 function decided(e: KnownEvent, input: Input): boolean {
   return (
+    e.seq > input.seq &&
     e.type === "hook_decision" &&
     e.data.hook === "before_model_switch" &&
     e.data.input_event_id === input.event_id
@@ -54,13 +56,14 @@ function pinned(events: readonly KnownEvent[]): Settings {
 }
 
 /**
- * Reverts a turn-scoped fallback before the turn's first request, when one is owed. The hook's
- * decisions and the revert (or only the deny) are one batch: a crash leaves either nothing, so
- * the hook is asked again, or the whole outcome.
+ * Reverts a turn-scoped fallback before the turn's first request, when one is owed: "none" when
+ * nothing was owed, else what appending the outcome returned. The hook's decisions and the revert
+ * (or only the deny) are one batch: a crash leaves either nothing, so the hook is asked again, or
+ * the whole outcome.
  */
-export async function revert(s: Session): Promise<Halt | undefined> {
+export async function revert(s: Session): Promise<Halt | undefined | "none"> {
   const due = revertDue(s.events, s.fold.policy);
-  if (due === undefined) return undefined;
+  if (due === undefined) return "none";
   const cause = due.input.event_id;
   const gate = await switchGate(s, due.settings, { input_event_id: cause });
   if (!gate.allowed) return s.append(...gate.decisions);

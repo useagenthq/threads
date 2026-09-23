@@ -1,4 +1,5 @@
 import { FORMATS, multipleOf } from "./formats";
+import { compilePattern } from "./pattern";
 
 // The JSON Schema evaluator semantic rule 20 checks an output value with: the keyword set that
 // spec/schema/README.md ("Output schemas") defines, the same as the Python reader
@@ -52,13 +53,16 @@ export function unchecked(schema: unknown): string | undefined {
 function holdsIn(schema: unknown, value: unknown, root: Json): boolean {
   if (typeof schema === "boolean") return schema;
   if (!isObject(schema)) throw new TypeError(`not a schema: ${String(schema)}`);
-  if ("if" in schema) {
+  if (Object.hasOwn(schema, "if")) {
     const branch = holdsIn(schema["if"], value, root)
       ? schema["then"]
       : schema["else"];
     if (branch !== undefined && !holdsIn(branch, value, root)) return false;
   }
-  if ("additionalProperties" in schema && !additional(schema, value, root))
+  if (
+    Object.hasOwn(schema, "additionalProperties") &&
+    !additional(schema, value, root)
+  )
     return false;
   return Object.entries(schema).every(([keyword, argument]) =>
     skipped(keyword) ? true : checkOf(keyword)(argument, value, root),
@@ -142,7 +146,7 @@ function jsonEqual(a: unknown, b: unknown): boolean {
     const keys = Object.keys(a);
     return (
       keys.length === Object.keys(b).length &&
-      keys.every((k) => k in b && jsonEqual(a[k], b[k]))
+      keys.every((k) => Object.hasOwn(b, k) && jsonEqual(a[k], b[k]))
     );
   }
   return a === b;
@@ -160,7 +164,7 @@ function ref(argument: unknown, value: unknown, root: Json): boolean {
   const name = refName(argument);
   if (name === undefined) return holdsIn(root, value, root);
   const defs = map(root["$defs"] ?? {});
-  if (!(name in defs))
+  if (!Object.hasOwn(defs, name))
     throw new TypeError(`$ref to a missing definition '${name}'`);
   return holdsIn(defs[name], value, root);
 }
@@ -168,11 +172,7 @@ function ref(argument: unknown, value: unknown, root: Json): boolean {
 function compile(argument: unknown): RegExp {
   if (typeof argument !== "string")
     throw new TypeError("a pattern is a string");
-  try {
-    return new RegExp(argument);
-  } catch {
-    throw new TypeError(`pattern '${argument}' doesn't compile`);
-  }
+  return compilePattern(argument);
 }
 
 function format(argument: unknown, value: unknown): boolean {
@@ -240,7 +240,7 @@ function additional(schema: Json, value: unknown, root: Json): boolean {
   if (!isObject(value)) return true;
   const declared = map(schema["properties"] ?? {});
   return Object.keys(value)
-    .filter((key) => !(key in declared))
+    .filter((key) => !Object.hasOwn(declared, key))
     .every((key) => holdsIn(schema["additionalProperties"], value[key], root));
 }
 
@@ -261,14 +261,16 @@ const CHECKS: ReadonlyMap<string, Check> = new Map<string, Check>([
   [
     "required",
     (arg, value) =>
-      !isObject(value) || schemas(arg).every((k) => String(k) in value),
+      !isObject(value) ||
+      schemas(arg).every((k) => Object.hasOwn(value, String(k))),
   ],
   [
     "properties",
     (arg, value, root) =>
       !isObject(value) ||
       Object.entries(map(arg)).every(
-        ([key, sub]) => !(key in value) || holdsIn(sub, value[key], root),
+        ([key, sub]) =>
+          !Object.hasOwn(value, key) || holdsIn(sub, value[key], root),
       ),
   ],
   ["type", type],

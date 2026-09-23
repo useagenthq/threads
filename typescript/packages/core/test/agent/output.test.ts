@@ -37,7 +37,7 @@ function only<T extends KnownEvent["type"]>(
 }
 
 describe("outputRetries", () => {
-  test.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+  test.each([-1, 1.5, 2 ** 53, Number.NaN, Number.POSITIVE_INFINITY])(
     "%p is refused as invalid_config naming the option",
     async (outputRetries) => {
       const bot = agent({
