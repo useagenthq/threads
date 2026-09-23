@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads._strict_model import holds
+from threads._json_schema import holds
 from threads.log import (
     BudgetExceededEvent,
     HandoffEvent,
@@ -152,33 +152,10 @@ def _conforms(schema: Mapping[str, JsonValue], value: JsonValue | MISSING) -> bo
     if value is MISSING:
         return False
     try:
-        return holds(_inlined(dict(schema)), value)
+        return holds(dict(schema), value)
     except TypeError:
         # A keyword this reader can't check: fail closed rather than accept unchecked output.
         return False
-
-
-def _inlined(schema: dict[str, JsonValue]) -> JsonValue:
-    """The schema with each `#/$defs/<name>` reference replaced by its definition, as a
-    Pydantic model writes a nested model. A recursive one can't be inlined: TypeError."""
-    defs = schema.get("$defs", {})
-    if not isinstance(defs, dict):
-        raise TypeError("$defs is not a map of schemas")
-
-    def walk(node: JsonValue, seen: frozenset[str]) -> JsonValue:
-        if isinstance(node, list):
-            return [walk(n, seen) for n in node]
-        if not isinstance(node, dict):
-            return node
-        ref = node.get("$ref")
-        if isinstance(ref, str):
-            name = ref.removeprefix("#/$defs/")
-            if name in seen or name not in defs:
-                raise TypeError(f"can't inline {ref}")
-            return walk(defs[name], seen | {name})
-        return {key: walk(sub, seen) for key, sub in node.items() if key != "$defs"}
-
-    return walk(schema, frozenset())
 
 
 HANDLERS: Mapping[type, Handler] = dict(

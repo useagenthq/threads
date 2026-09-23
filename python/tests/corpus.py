@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import JsonValue, TypeAdapter
 
-from threads._strict_model import holds
+from threads._json_schema import holds
 from threads.log import JsonObject, ToolSpec
 from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound, NotFoundNonfinal
 from threads.loop.tools import Dispatched, Invocation, Output, Termination

@@ -4,9 +4,11 @@ and a structured subagent reports the canonical JSON of its output."""
 
 import asyncio
 from collections.abc import Sequence
+from datetime import datetime
+from typing import Literal
 
 import pytest
-from pydantic import BaseModel, JsonValue
+from pydantic import BaseModel, Field, JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads import Completed, ConfigError, EventItem, Failed, Thread, agent, scripted_model, sqlite
@@ -209,3 +211,40 @@ def test_a_nested_output_model_is_checked_and_typed() -> None:
         assert result.output == Invoice(lines=[Line(sku="A-1", qty=2)])
 
     asyncio.run(main())
+
+
+class Part(BaseModel):
+    code: str = Field(min_length=2, max_length=4, pattern=r"^[A-Z]+$")
+    size: Literal["s", "m"]
+    parts: list["Part"] = Field(default_factory=list["Part"], max_length=2)
+
+
+class Estimate(BaseModel):
+    hours: int = Field(ge=1, le=40)
+    root: Part
+
+
+def test_constraints_enums_and_recursive_models_are_checked_never_crash_the_run() -> None:
+    async def main() -> None:
+        part: JsonValue = {"code": "AB", "size": "s", "parts": [{"code": "CD", "size": "m"}]}
+        bad: JsonValue = {"hours": 41, "root": part}
+        good: JsonValue = {"hours": 8, "root": part}
+        script: JsonValue = {"responses": [final(bad), final(good, "c2")]}
+        bot = agent(model=scripted_model(script), output=Estimate)
+        result = await bot.run("Estimate it.", store=sqlite(":memory:"))
+        assert isinstance(result, Completed)
+        assert result.output.root.parts[0].code == "CD"
+
+    asyncio.run(main())
+
+
+class Meeting(BaseModel):
+    at: datetime
+
+
+def test_an_output_model_the_log_cant_check_is_refused_at_setup() -> None:
+    with pytest.raises(ConfigError) as raised:
+        agent(model=scripted_model({"responses": []}), output=Meeting)
+    assert raised.value.code == "invalid_config"
+    assert "Meeting" in str(raised.value)
+    assert "'format'" in str(raised.value)

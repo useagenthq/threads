@@ -149,3 +149,51 @@ describe("a structured subagent", () => {
     );
   });
 });
+
+type PartShape = {
+  readonly code: string;
+  readonly size: "s" | "m";
+  readonly parts?: readonly PartShape[] | undefined;
+};
+const Part: z.ZodType<PartShape> = z.object({
+  code: z
+    .string()
+    .min(2)
+    .max(4)
+    .regex(/^[A-Z]+$/),
+  size: z.enum(["s", "m"]),
+  get parts() {
+    return z.array(Part).max(2).optional();
+  },
+});
+const Estimate = z.object({
+  hours: z.number().int().min(1).max(40),
+  root: Part,
+});
+
+describe("constraints, enums and recursive schemas", () => {
+  test("are checked at every depth and never stop the run", async () => {
+    const part = { code: "AB", size: "s", parts: [{ code: "CD", size: "m" }] };
+    const deepBad = { ...part, parts: [{ code: "e", size: "m" }] };
+    const bot = agent({
+      model: scriptedModel({
+        responses: [
+          final({ hours: 41, root: part }),
+          final({ hours: 8, root: deepBad }, "c2"),
+          final({ hours: 8, root: part }, "c3"),
+        ],
+      }),
+      output: Estimate,
+      outputRetries: 3,
+    });
+    const result = await bot.run("Estimate it.", { store: sqlite(":memory:") });
+    expect(result).toMatchObject({
+      status: "completed",
+      output: { hours: 8, root: part },
+    });
+    const outcomes = only(await logOf(result.thread), "output_validated").map(
+      (v) => v.data.outcome,
+    );
+    expect(outcomes).toEqual(["rejected", "rejected", "accepted"]);
+  });
+});

@@ -12,6 +12,7 @@ from typing import Final, Literal, Required, TypedDict, Unpack, overload
 
 from pydantic import BaseModel
 
+from threads._json_schema import unchecked
 from threads.agents import narrowing
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress
@@ -21,6 +22,7 @@ from threads.agents.definition import Definition
 from threads.agents.results import Completed, RunResult, StreamEvent
 from threads.agents.run import Emit, Input, RunOptions, execute
 from threads.agents.skills import Skill, checked
+from threads.agents.tool import json_schema
 from threads.hooks.extension import Extension
 from threads.log import Budget, Context, Permissions, Principal, Retry
 from threads.loop.model import Model
@@ -221,9 +223,18 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, o
 
 
 def _output(output: object) -> type[BaseModel] | None:
-    if output is None or (isinstance(output, type) and issubclass(output, BaseModel)):
-        return output
-    raise ConfigError("invalid_config", f"output must be a Pydantic model class, got {output!r}")
+    """A Pydantic model class whose JSON Schema the log can check in full (semantic rule 20):
+    anything else is refused here, never by a run that has an answer to record."""
+    if output is None:
+        return None
+    if not (isinstance(output, type) and issubclass(output, BaseModel)):
+        why = f"output must be a Pydantic model class, got {output!r}"
+        raise ConfigError("invalid_config", why)
+    why = unchecked(json_schema(output))
+    if why is not None:
+        hint = "use a bound, a length, a pattern or an enum instead"
+        raise ConfigError("invalid_config", f"output {output.__name__}: {why}; {hint}")
+    return output
 
 
 def _retries(options: AgentOptions) -> int:

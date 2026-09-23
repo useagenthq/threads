@@ -79,7 +79,7 @@ The scripted model's first answer uses `"urgent"`, which isn't allowed, so it is
 ## Options
 
 <Field name="output" type="z.ZodType / type[BaseModel]">
-  The schema of the final answer. The agent's type becomes `Agent<Deps, z.infer<typeof schema>>` in TypeScript and `Agent[D, Triage]` in Python. In Python anything but a Pydantic model class is a `ConfigError`.
+  The schema of the final answer. The agent's type becomes `Agent<Deps, z.infer<typeof schema>>` in TypeScript and `Agent[D, Triage]` in Python. In Python anything but a Pydantic model class is a `ConfigError`, and so is a model whose JSON Schema the log can't check: bounds (`ge`, `gt`, `le`, `lt`), lengths, patterns, `Literal`s, enums, optional fields and nested or recursive models are fine; a `format` (such as `datetime`) or `multiple_of` is refused at setup, with the keyword named.
 </Field>
 <Field name="outputRetries / output_retries" type="number / int" default="2">
   When this many answers have failed in a turn (rejected by the schema, or plain text with no `final_output` call, which is answered with a request to call it), the run ends `failed` with code `output_invalid`. A non-negative integer; anything else is a `ConfigError` (`invalid_config`).
