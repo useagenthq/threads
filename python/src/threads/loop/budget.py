@@ -7,8 +7,7 @@ appended only after that commits. When a reservation doesn't fit, `budget_exceed
 and no request is made, so no response can overshoot. A settled attempt replaces its bound with
 its disposition (item 7): known usage, or the bound when usage is unknown.
 
-Turns and wall time are checked from this thread's own log before each turn request (`limits`):
-they bound this thread and its run, not the tree.
+Turns and wall time are checked from the thread's own log instead (loop/limits.py).
 """
 
 from collections.abc import Sequence
@@ -26,7 +25,6 @@ from threads.log import (
     SettingsChangedEvent,
     ThreadId,
     ThreadStartedEvent,
-    TurnCompletedEvent,
     Usage,
     UserInputEvent,
 )
@@ -89,25 +87,45 @@ def _epoch(fold: Fold) -> tuple[Model | None, JsonValue]:
     return model, params.get("max_tokens")
 
 
-def _reserve(fold: Fold) -> dict[LimitName, int]:
-    """The next attempt's bound per limit."""
-    model, max_tokens = _epoch(fold)
-    window = 0
+def bounds(model: Model | None, max_tokens: JsonValue) -> dict[LimitName, int | None]:
+    """An attempt's bound per limit; None where the model has none: no
+    max_tokens, no input bound, or no price (spec/schema/README.md, Budget enforcement)."""
+    window = None
     if model is not None and model.input_billing_bound == "context_window":
         window = model.context_window
+    priced = model is not None and model.price is not MISSING
     return {
-        "max_cost_nanos": (bound(model, max_tokens, MISSING) or 0) if model else 0,
+        "max_cost_nanos": bound(model, max_tokens, MISSING) if priced else None,
         "max_input_tokens": window,
-        "max_output_tokens": max_tokens if isinstance(max_tokens, int) else 0,
+        "max_output_tokens": max_tokens if isinstance(max_tokens, int) else None,
         "max_model_requests": 1,
     }
+
+
+def unbounded(budget: Budget, model: Model, max_tokens: JsonValue) -> LimitName | None:
+    """The first limit of the budget this model has no per-attempt bound for."""
+    have = bounds(model, max_tokens)
+    return next(
+        (n for n in _LIMITS if isinstance(getattr(budget, n), int) and have[n] is None), None
+    )
+
+
+def _reserve(fold: Fold) -> dict[LimitName, int | None]:
+    """The next attempt's bound per limit."""
+    return bounds(*_epoch(fold))
+
+
+def _known(amounts: dict[LimitName, int | None]) -> dict[LimitName, int]:
+    """An unbounded limit covers nothing this attempt could charge: no covering budget let it
+    through (reserve refuses it), so it records 0."""
+    return {n: v or 0 for n, v in amounts.items()}
 
 
 def _settled(fold: Fold, request: ModelRequestEvent) -> dict[LimitName, int] | None:
     """A resolved attempt's disposition; None while it awaits its response."""
     if request.event_id in fold.open_requests:
         return None
-    reserve = _reserve(fold)
+    reserve = _known(_reserve(fold))
     usage = _usage(fold.events, request)
     cost = next(((k if u is None else u) for s, k, u in dispositions(fold) if s == request.seq), 0)
     billed = usage is not None or cost > 0
@@ -163,61 +181,12 @@ async def _sync(rt: Runtime, ancestors: Sequence[Covering]) -> None:
         if key not in known:
             before = [e for e in rt.events if e.seq < seq]
             covers = _covers([*own(thread_id, before), *ancestors])
-            amounts = _settled(rt.fold, request) or _reserve(rt.fold)
+            amounts = _settled(rt.fold, request) or _known(_reserve(rt.fold))
             await rt.store.budgets.record(key, covers, amounts)
 
 
 def _covers(covering: Sequence[Covering]) -> list[Cover]:
     return [c for c in map(_cover, covering) if c is not None]
-
-
-def _over(
-    budget: Budget, events: Sequence[Event], since: int, now: int
-) -> tuple[str, int, int] | None:
-    """The first of max_turns / max_wall_ms the next request would pass, observed from the
-    window's events (started at `since`)."""
-    turns = sum(isinstance(e, TurnCompletedEvent) for e in events) + 1
-    for limit, observed in (("max_turns", turns), ("max_wall_ms", now - since)):
-        cap = getattr(budget, limit)
-        if isinstance(cap, int) and observed > cap:
-            return limit, cap, observed
-    return None
-
-
-async def limits(rt: Runtime) -> Failed | None:
-    """None when the thread's and its run's turn and wall-time limits allow the next turn
-    request; else the turn ends budget_exhausted."""
-    events, now = rt.events, rt.clock()
-    pinned = policy(rt.fold)
-    at = next(
-        (i for i in range(len(events) - 1, -1, -1) if isinstance(events[i], UserInputEvent)), None
-    )
-    windows: list[tuple[str, Budget, Sequence[Event], int]] = []
-    if pinned is not None and pinned.budget is not MISSING and events:
-        windows.append(("thread", pinned.budget, events, events[0].time))
-    run = None if at is None else events[at]
-    if isinstance(run, UserInputEvent) and run.data.budget is not MISSING:
-        windows.append(("run", run.data.budget, events[at:], run.time))
-    for scope, budget, window, since in windows:
-        over = _over(budget, window, since, now)
-        if over is not None:
-            return await _exceeded(rt, scope, over)
-    return None
-
-
-async def _exceeded(rt: Runtime, scope: str, over: tuple[str, int, int]) -> Failed | None:
-    limit, cap, observed = over
-    data: dict[str, JsonValue] = {
-        "scope": scope,
-        "limit": limit,
-        "limit_value": cap,
-        "observed": observed,
-        "observed_is_upper_bound": False,
-    }
-    done = await rt.append(
-        draft("budget_exceeded", data), draft("turn_completed", {"reason": "budget_exhausted"})
-    )
-    return lost(done.error) if isinstance(done, Err) else None
 
 
 async def reserve(rt: Runtime) -> Failed | None:

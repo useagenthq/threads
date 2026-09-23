@@ -9,6 +9,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import TypedDict
 
+from threads.agents import narrowing
 from threads.agents.bindings import AppTool, AppTools, Fence, ToolServer, capped
 from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
 from threads.agents.catalog import gateways
@@ -105,6 +106,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
     launch: Launch | None = None,
     intake: Intake | None = None,
 ) -> RunResult[str]:
+    narrowing.run_budget(definition, options.get("budget"))
     thread = options.get("thread")
     store = options.get("store") or (thread.store if thread is not None else sqlite(".threads"))
     sq = await open_store(store)

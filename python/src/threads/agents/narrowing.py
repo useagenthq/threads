@@ -6,6 +6,8 @@ the one exception: it runs under its own pinned policy, capped by the principal 
 
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
+from threads.log import Budget
+from threads.loop.budget import unbounded
 
 
 def check[D](parent: Definition[D]) -> None:
@@ -26,3 +28,24 @@ def _narrows[D](parent: Definition[D], child: Definition[None]) -> None:
         raise ConfigError("invalid_config", f"subagent {child.name} needs its parent's sandbox")
     if child.egress == "unenforced" and parent.egress != "unenforced":
         raise ConfigError("invalid_config", f"subagent {child.name} widens egress")
+
+
+def enforceable[D](definition: Definition[D], covering: tuple[Budget, ...] = ()) -> None:
+    """budget_unenforceable (spec/schema/README.md, Budget enforcement): every limit covering an
+    agent's threads (its own budget, and every budget over the agents that start it) needs a
+    per-attempt bound from its model, unless that agent stops on unknown usage."""
+    over = covering if definition.budget is None else (*covering, definition.budget)
+    info = definition.model.info
+    for budget in over if definition.on_unknown_usage != "stop" else ():
+        limit = unbounded(budget, info.limits, info.params.get("max_tokens"))
+        if limit is not None:
+            why = f"agent {definition.name}: its model has no per-attempt bound for {limit}"
+            raise ConfigError("budget_unenforceable", why)
+    for child in (*definition.subagents, *definition.handoffs):
+        enforceable(child, over)
+
+
+def run_budget[D](definition: Definition[D], budget: Budget | None) -> None:
+    """A run budget covers the whole tree the run starts: checked as setup at run start."""
+    if budget is not None:
+        enforceable(definition, (budget,))

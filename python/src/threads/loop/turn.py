@@ -1,6 +1,6 @@
 """The two ways a step ends the loop's current decision: a turn request, or the turn's end."""
 
-from threads.loop import attempt, budget, gates, ladder, todos
+from threads.loop import attempt, gates, ladder, limits, todos
 from threads.loop.drafts import draft
 from threads.loop.runtime import Failed, Halt, Runtime, lost
 from threads.result import Err
@@ -9,7 +9,7 @@ from threads.result import Err
 async def request(rt: Runtime, attempt_no: int) -> Halt | None:
     """A turn request, once its input and model gates passed and its budget
     reservation fits."""
-    refused = await budget.limits(rt)
+    refused = await limits.check(rt)
     if refused is not None or not rt.fold.in_turn:
         return refused
     gated = await gates.before_request(rt) or await todos.remind(rt) or await ladder.fit(rt)

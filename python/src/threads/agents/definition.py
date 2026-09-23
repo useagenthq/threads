@@ -1,6 +1,7 @@
 """An agent's definition and what it pins at thread start: `thread_started`."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import JsonValue
 
@@ -52,6 +53,9 @@ class Definition[D]:
     narrows. final_output is exempt."""
     catalog: Catalog = NO_CATALOG
     """The capabilities configured: web, git, computer use and lsp."""
+    on_unknown_usage: Literal["upper_bound", "stop"] | None = None
+    """Pinned as policy.on_unknown_usage when set; "stop" lets a limit with no per-attempt bound
+    through setup, refused at run time instead."""
     approvers: tuple[Principal, ...] | None = None
     """Who may answer this agent's approval challenges. None: the local
     operator for a run, nobody for a channel thread. Host policy, never pinned."""
@@ -63,6 +67,8 @@ class Definition[D]:
             pinned["permissions"] = to_json(self.permissions)
         if self.budget is not None:
             pinned["budget"] = to_json(self.budget)
+        if self.on_unknown_usage is not None:
+            pinned["on_unknown_usage"] = self.on_unknown_usage
         if self.retry is not None:
             pinned["retry"] = to_json(self.retry)
         if self.context is not None:

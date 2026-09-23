@@ -38,18 +38,21 @@ class BudgetLedger:
         self._worker = worker
 
     async def reserve(
-        self, attempt_key: str, covers: Sequence[Cover], amounts: Mapping[LimitName, int]
+        self, attempt_key: str, covers: Sequence[Cover], amounts: Mapping[LimitName, int | None]
     ) -> Refused | None:
-        """Inserts `reserved` rows for every covering (budget, limit) only if all fit."""
+        """Inserts `reserved` rows for every covering (budget, limit) only if all fit. An
+        amount of None (no per-attempt bound) never fits: it is refused at what is settled."""
 
         def run(conn: sqlite3.Connection) -> Refused | None:
             with transaction(conn):
                 for cover in covers:
                     for limit, value in cover.limits.items():
                         spent = _sum(conn, cover.budget_id, limit)
-                        observed = spent + amounts.get(limit, 0)
-                        if observed > value:
-                            return Refused(cover.budget_id, limit, value, observed)
+                        amount = amounts.get(limit, 0)
+                        if amount is None:
+                            return Refused(cover.budget_id, limit, value, spent)
+                        if spent + amount > value:
+                            return Refused(cover.budget_id, limit, value, spent + amount)
                 _insert(conn, attempt_key, covers, amounts, "reserved")
             return None
 
@@ -114,14 +117,14 @@ def _insert(
     conn: sqlite3.Connection,
     attempt_key: str,
     covers: Sequence[Cover],
-    amounts: Mapping[LimitName, int],
+    amounts: Mapping[LimitName, int | None],
     state: Literal["reserved", "settled"],
 ) -> None:
     conn.executemany(
         "INSERT OR IGNORE INTO budget_ledger (budget_id, limit_name, attempt_key, amount, state)"
         " VALUES (?, ?, ?, ?, ?)",
         [
-            (cover.budget_id, limit, attempt_key, amounts.get(limit, 0), state)
+            (cover.budget_id, limit, attempt_key, amounts.get(limit, 0) or 0, state)
             for cover in covers
             for limit in cover.limits
         ],

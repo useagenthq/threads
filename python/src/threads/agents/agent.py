@@ -7,7 +7,7 @@ store, the principal and the deps.
 import asyncio
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import replace
-from typing import Required, TypedDict, Unpack, overload
+from typing import Literal, Required, TypedDict, Unpack, overload
 
 from threads.agents import narrowing
 from threads.agents.bindings import AppTool, ToolServer
@@ -31,6 +31,9 @@ class AgentOptions(TypedDict, total=False):
     name: str
     permissions: Permissions
     budget: Budget
+    on_unknown_usage: Literal["upper_bound", "stop"]
+    """"stop": a limit the model has no per-attempt bound for is refused at run time instead of
+    at setup (budget_unenforceable); default "upper_bound"."""
     retry: Retry
     context: Context
     """The context ladder's settings; absent: the ADR defaults."""
@@ -204,10 +207,13 @@ def _definition[T](
     )
     if "approvers" in options:
         definition = replace(definition, approvers=tuple(options["approvers"]))
+    if "on_unknown_usage" in options:
+        definition = replace(definition, on_unknown_usage=options["on_unknown_usage"])
     pinned = frozenset(s.name for s in definition.specs())
     children = tuple(replace(c, allowed=pinned) for c in definition.subagents)
     definition = replace(definition, subagents=children)
     narrowing.check(definition)
+    narrowing.enforceable(definition)
     for kind, names in (
         ("tool", [s.name for s in definition.specs()]),
         ("MCP server", [s.name for s in servers]),
