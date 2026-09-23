@@ -160,8 +160,7 @@ async function* send(
   signal: AbortSignal | undefined,
 ): AsyncGenerator<ModelChunk, void, undefined> {
   if (state.bypassed) {
-    // ponytail: provider_error until Model.send's rejection enum carries transport_fence_unsupported.
-    yield { kind: "rejected", reason: "provider_error" };
+    yield { kind: "rejected", reason: "transport_fence_unsupported" };
     return;
   }
   const render = parseRender(request.body);

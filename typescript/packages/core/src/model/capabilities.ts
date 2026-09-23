@@ -5,7 +5,10 @@ import type { RenderRequest } from "./render-lines";
 // with a typed code, so no attempt is recorded and nothing reaches the provider.
 
 export type Unsupported = {
-  readonly code: "content_unsupported" | "continuation_unsupported";
+  readonly code:
+    | "content_unsupported"
+    | "continuation_unsupported"
+    | "transport_fence_unsupported";
   readonly message: string;
 };
 

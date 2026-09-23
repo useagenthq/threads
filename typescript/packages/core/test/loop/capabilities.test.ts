@@ -123,29 +123,35 @@ function refusing(h: ReturnType<typeof harness>, reason: SendError) {
 }
 
 describe("the send's terminal error (Model.send returns.errors)", () => {
-  test("an adapter's send-time refusal is not_sent and ends the turn with its code, once", async () => {
-    const h = harness([], [], []);
-    const m = refusing(h, "continuation_unsupported");
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
-    const end = await resume(
-      writer,
-      h.artifacts,
-      h.config({ models: () => m.model }),
-      { input: userInput("hi") },
-    );
-    expect(end).toEqual({ kind: "idle" });
-    expect(m.sends()).toBe(1);
-    expect(events(writer).slice(-2)).toMatchObject([
-      {
-        type: "model_attempt_abandoned",
-        data: { provider_outcome: "not_sent", reason: "provider_error" },
-      },
-      {
-        type: "turn_completed",
-        data: { reason: "error", code: "continuation_unsupported" },
-      },
-    ]);
-  });
+  test.each([
+    "continuation_unsupported",
+    "transport_fence_unsupported",
+  ] as const)(
+    "an adapter's send-time refusal %s is not_sent and ends the turn with its code, once",
+    async (code) => {
+      const h = harness([], [], []);
+      const m = refusing(h, code);
+      const writer = unwrap(h.store.acquire(ROOT, "owner"));
+      const end = await resume(
+        writer,
+        h.artifacts,
+        h.config({ models: () => m.model }),
+        { input: userInput("hi") },
+      );
+      expect(end).toEqual({ kind: "idle" });
+      expect(m.sends()).toBe(1);
+      expect(events(writer).slice(-2)).toMatchObject([
+        {
+          type: "model_attempt_abandoned",
+          data: { provider_outcome: "not_sent", reason: "provider_error" },
+        },
+        {
+          type: "turn_completed",
+          data: { reason: "error", code },
+        },
+      ]);
+    },
+  );
 
   test("stale_epoch appends nothing more and halts: the writer lost its lease", async () => {
     const h = harness([], [], []);

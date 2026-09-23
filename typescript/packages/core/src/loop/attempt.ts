@@ -163,7 +163,8 @@ function rejected(s: Session, requestId: string, r: Rejection): Attempted {
     case "stale_epoch":
       return halt("branch_busy", "the fence refused the send: lease lost");
     case "content_unsupported":
-    case "continuation_unsupported": {
+    case "continuation_unsupported":
+    case "transport_fence_unsupported": {
       const stopped = s.append(
         draft.abandoned({
           request_event_id: requestId,
@@ -172,7 +173,10 @@ function rejected(s: Session, requestId: string, r: Rejection): Attempted {
         }),
       );
       if (stopped !== undefined) return { kind: "halt", halt: stopped };
-      const message = "the adapter refused a rendered part before sending";
+      const message =
+        reason === "transport_fence_unsupported"
+          ? "the adapter refused to send: its transport bypasses the fence"
+          : "the adapter refused a rendered part before sending";
       return { kind: "unsupported", refused: { code: reason, message } };
     }
     default: {

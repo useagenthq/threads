@@ -144,7 +144,7 @@ describe("fencing", () => {
     const second = await send();
     expect(second.thrown).toBeUndefined();
     expect(second.chunks).toEqual([
-      { kind: "rejected", reason: "provider_error" },
+      { kind: "rejected", reason: "transport_fence_unsupported" },
     ]);
   });
 });

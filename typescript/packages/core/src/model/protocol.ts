@@ -73,7 +73,8 @@ export type SendError =
   | ProviderRejection
   | "stale_epoch"
   | "content_unsupported"
-  | "continuation_unsupported";
+  | "continuation_unsupported"
+  | "transport_fence_unsupported";
 
 /** One streamed item of an attempt. A rejection before any content is a chunk, never a throw. */
 export type ModelChunk =

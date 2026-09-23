@@ -22,6 +22,7 @@ const RUN_ERROR_CODES = [
   "model_error",
   "content_unsupported",
   "continuation_unsupported",
+  "transport_fence_unsupported",
   "artifact_missing",
   "artifact_corrupt",
   "unmatched_external_op",
