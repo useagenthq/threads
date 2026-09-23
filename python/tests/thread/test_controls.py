@@ -194,3 +194,17 @@ def test_a_control_through_a_writer_that_lost_its_lease_is_branch_busy() -> None
         assert refused.error.code == "branch_busy"
 
     asyncio.run(main())
+
+
+def test_a_remembered_rule_must_be_one_the_challenge_suggested() -> None:
+    async def main() -> None:
+        thread, _ = await _parked([])
+        pending = await thread.pending_approvals()
+        assert isinstance(pending, Ok)
+        challenge = pending.value[0].challenge_id
+        other = await thread.approve(challenge, LOCAL_OPERATOR, remember_rule="bash(rm:*)")
+        assert isinstance(other, Err)
+        assert other.error.code == "invalid_request"
+        assert isinstance(await thread.approve(challenge, LOCAL_OPERATOR), Ok)
+
+    asyncio.run(main())

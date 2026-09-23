@@ -119,7 +119,7 @@ async def decide(  # noqa: PLR0913 - one answer and its bindings
         if rule is not None:
             offered = next((p for p in pending(fold) if p.challenge_id == challenge_id), None)
             if offered is None or remember_rule not in offered.suggested_rules:
-                return Err(ParseError("approval_mismatch", "not one of the suggested rules"))
+                return Err(ParseError("invalid_request", "not one of the suggested rules"))
         address = ParkAddress(kind="approval", id=challenge_id)
         cause = record.event_id or ""
         return Ok((record, *(() if rule is None else (rule,)), *resumed(fold, address, cause)))
