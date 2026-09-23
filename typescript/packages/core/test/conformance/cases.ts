@@ -35,6 +35,12 @@ const CaseFile = z.strictObject({
   sandbox_script: z.literal("sandbox.json").optional(),
   stub_script: z.literal("stubs.json").optional(),
   input: z.record(z.string(), z.unknown()).optional(),
+  expect: z
+    .strictObject({
+      must: z.array(z.record(z.string(), z.unknown())).min(1),
+      expect: z.array(z.record(z.string(), z.unknown())).optional(),
+    })
+    .optional(),
 });
 
 // Keys this runner compares are typed; keys owned by later runners are only admitted.
@@ -93,6 +99,16 @@ const ExpectedFile = z.strictObject({
   decisions: z.unknown().optional(),
 });
 
+const Matcher = z.strictObject({
+  type: z.string(),
+  seq: z.int().optional(),
+  actor_kind: z.string().optional(),
+  epoch: z.int().optional(),
+  branch_id: z.string().optional(),
+  critical: z.boolean().optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
+});
+
 /** An EventMatcher of case.schema.json: data is a deep subset. */
 export type Matcher = {
   readonly type: string;
@@ -116,6 +132,8 @@ export type Case = {
   readonly dir: string;
   /** case.json input, parsed by the kind's runner. */
   readonly input: unknown;
+  /** case.json expect.must (stub, saved cases): each matches at least one appended event. */
+  readonly must: readonly Matcher[];
   readonly fork:
     | {
         readonly child_created: boolean;
@@ -196,8 +214,9 @@ function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
-export function loadCase(name: string): Case {
-  const dir = join(CASES_DIR, name);
+/** One case directory: the corpus's by name, or a saved case's by its path under `root`. */
+export function loadCase(name: string, root: string = CASES_DIR): Case {
+  const dir = join(root, name);
   const meta = CaseFile.parse(readJson(join(dir, "case.json")));
   const expected = ExpectedFile.parse(readJson(ownFile(dir, "expected.json")));
   const logPath = ownFile(dir, "log.jsonl");
@@ -206,6 +225,7 @@ export function loadCase(name: string): Case {
   return {
     dir,
     input: meta.input,
+    must: (meta.expect?.must ?? []).map((m) => Matcher.parse(m)),
     fork: expected.fork,
     resources: expected.resources,
     appended: expected.appended,

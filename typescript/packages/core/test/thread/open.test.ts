@@ -1,7 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { storeOf } from "../../src/agent/sqlite";
 import { type EventId, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
@@ -133,42 +130,5 @@ describe("fork", () => {
     if (point === undefined) throw new Error("one fork point");
     expect(code(await thread.fork(point))).toBe("sandbox_required");
     expect(unwrap(f.store.ledger.rows())).toEqual([]);
-  });
-});
-
-describe("saveCase", () => {
-  test("writes the export, its artifacts and case.json, declaring its dependencies", async () => {
-    const { thread } = await setup();
-    const dir = mkdtempSync(join(tmpdir(), "threads-cases-"));
-    const saved = unwrap(
-      await thread.saveCase("notes", {
-        expect: { must: [{ type: "turn_completed" }] },
-        externalEffects: "stub",
-        dir,
-      }),
-    );
-    expect(saved).toEqual({ path: join(dir, "notes"), portable: true });
-    expect(existsSync(join(saved.path, "log.jsonl"))).toBe(true);
-    const manifest: unknown = JSON.parse(
-      readFileSync(join(saved.path, "case.json"), "utf8"),
-    );
-    expect(manifest).toMatchObject({
-      external_effects: "stub",
-      snapshot: { seq: 4, provider: "fake" },
-      dependencies: {
-        sandbox_provider: "fake",
-        capture_classes: ["filesystem"],
-      },
-    });
-  });
-
-  test("a case without an assertion is refused", async () => {
-    const { thread } = await setup();
-    const refused = await thread.saveCase("empty", {
-      expect: { must: [] },
-      externalEffects: "stub",
-      dir: mkdtempSync(join(tmpdir(), "threads-cases-")),
-    });
-    expect(code(refused)).toBe("invalid_request");
   });
 });

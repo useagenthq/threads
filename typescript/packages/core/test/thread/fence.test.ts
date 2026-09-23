@@ -219,3 +219,75 @@ describe("gc works under a cleanup claim", () => {
     );
   });
 });
+
+// the exact adversarial schedules of the #153 repros, kept as regression tests.
+describe("repro schedules", () => {
+  test("stale creator: takeover and recovery run inside the old creator's restore, before the provider", async () => {
+    const f = parent();
+    const base = fakeSandbox(SCRIPT);
+    let recovery: Awaited<ReturnType<typeof recoverFork>> | undefined;
+    const sandbox: Sandbox = {
+      ...base,
+      restore: async (snapshotId, expected, operationKey, context) => {
+        f.clock.now += 31_001;
+        recovery = await recoverFork(f.store, base, CHILD, "new-owner");
+        return base.restore(snapshotId, expected, operationKey, context);
+      },
+    };
+    const point = unwrap(f.store.read(ROOT)).events.at(-1)?.event.event_id;
+    if (point === undefined)
+      throw new Error("the parent ends with its snapshot");
+    const forked = await forkBranch(f.store, sandbox, {
+      ...request,
+      point,
+      holderId: "old-owner",
+    });
+
+    expect(code(forked)).toBe("stale_epoch");
+    expect(recovery?.ok ? recovery.value : recovery?.error.code).toEqual([
+      "released",
+    ]);
+    expect(unwrap(f.store.branchState(CHILD))).toBe("fork_failed");
+    expect(
+      unwrap(f.store.ledger.rows(CHILD)).map((r) => [
+        r.state,
+        r.release_outcome,
+      ]),
+    ).toEqual([["released", "not_created"]]);
+    expect(base.creates()).toBe(0);
+    expect((await base.attach("sbx_child_01", CTX)).ok).toBe(false);
+    expect(unwrap(await collect(f.store.ledger, base))).toEqual([]);
+  });
+
+  test("wrong provider: a final not_found from another adapter settles nothing", async () => {
+    const f = parent();
+    const creator = unwrap(
+      f.store.beginFork({
+        parent: ROOT,
+        atSeq: 4,
+        branch: CHILD,
+        holderId: "creator",
+      }),
+    );
+    const actual = fakeSandbox(SCRIPT);
+    const row = unwrap(f.store.ledger.begin(creator, "sandbox", "fake"));
+    await actual.restore("snap_01", manifestHash([]), row.operation_key, CTX);
+    f.clock.now += 31_001;
+    const otherBase = fakeSandbox();
+    const wrong: Sandbox = {
+      ...otherBase,
+      info: { ...otherBase.info, provider: "wrong" },
+    };
+
+    const recovered = await recoverFork(f.store, wrong, CHILD, "recovery");
+    expect(code(recovered)).toBe("invalid_request");
+    expect(
+      unwrap(f.store.ledger.rows(CHILD)).map((r) => [
+        r.provider,
+        r.state,
+        r.release_outcome,
+      ]),
+    ).toEqual([["fake", "pending", null]]);
+    expect((await actual.attach("sbx_child_01", CTX)).ok).toBe(true);
+  });
+});

@@ -44,6 +44,7 @@ export async function runAppending(c: Case, bytes: Uint8Array): Promise<void> {
   }
   // Acquiring may already append (log_repaired).
   const before = log.fold.seq;
+
   const outcome = await run(c, acquired.value, artifacts, clock);
   const appended = knownEvents(acquired.value.chain).filter(
     (e) => e.seq > before,
@@ -54,6 +55,8 @@ export async function runAppending(c: Case, bytes: Uint8Array): Promise<void> {
       c.error.code,
     );
   expectAppended(appended, c.appended ?? []);
+  for (const m of c.must)
+    expect(appended.some((e) => matchesOne(m, e))).toBe(true);
   const exported = unwrap(store.exportBranch(leaf.branch_id));
   expect(verifyExport(exported).ok).toBe(true);
   close(imported.db, db);
@@ -101,8 +104,24 @@ async function run(
       ? {}
       : { output: z.fromJSONSchema(output.schema) }),
   };
+  // stub input.text: the user_input the case sends once its log is imported.
+  const text = z
+    .strictObject({ text: z.string() })
+    .optional()
+    .parse(c.input)?.text;
   const end = await resume(writer, artifacts, config, {
     loop: c.scripts.model !== undefined,
+    ...(text === undefined
+      ? {}
+      : {
+          input: {
+            type: "user_input",
+            type_version: 1,
+            critical: true,
+            actor: { kind: "user", principal: ALICE },
+            data: { source: "api", text },
+          },
+        }),
   });
   expect({
     remaining: model.remaining(),
@@ -173,4 +192,18 @@ function subset(actual: unknown, want: unknown): unknown {
       subset(Reflect.get(actual, key), value),
     ]),
   );
+}
+
+/** A must matcher against one event: the same deep-subset rule as `appended`. */
+function matchesOne(m: Matcher, e: KnownEvent): boolean {
+  const shown = {
+    type: e.type,
+    ...(m.seq === undefined ? {} : { seq: e.seq }),
+    ...(m.actor_kind === undefined ? {} : { actor_kind: e.actor.kind }),
+    ...(m.epoch === undefined ? {} : { epoch: e.epoch }),
+    ...(m.branch_id === undefined ? {} : { branch_id: e.branch_id }),
+    ...(m.critical === undefined ? {} : { critical: e.critical }),
+    ...(m.data === undefined ? {} : { data: subset(e.data, m.data) }),
+  };
+  return JSON.stringify(plainJson(shown)) === JSON.stringify(plainJson(m));
 }
