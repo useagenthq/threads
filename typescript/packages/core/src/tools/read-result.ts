@@ -1,23 +1,16 @@
-import { z } from "zod";
 import { type Builtin, builtin, done } from "./builtin";
+import { ReadToolResultInput } from "./catalog";
 
 // read_tool_result: host-side and read_only. It reads a recorded result
 // back by call_id: the verified `ref` bytes of a spilled one, else the preview, so a cleared or
 // truncated result stays readable from any tool source, also after a fork.
 
-const MAX_LENGTH = 65_536;
 const utf8 = new TextEncoder();
 const text = new TextDecoder();
 
 export const readToolResult: Builtin = builtin({
   name: "read_tool_result",
-  description:
-    "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
-  input: z.strictObject({
-    call_id: z.string().min(1),
-    offset: z.int().min(0),
-    length: z.int().min(1).max(MAX_LENGTH),
-  }),
+  input: ReadToolResultInput,
   effect: "read_only",
   run: async ({ call_id, offset, length }, _ctx, env) => {
     const recorded = env

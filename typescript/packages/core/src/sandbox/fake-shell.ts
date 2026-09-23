@@ -65,13 +65,36 @@ export function builtin(
     f === undefined
   )
     return grep(tree, c, e);
+  if (name === "ls" && a === "-1Ap" && b === "--" && c !== undefined)
+    return list(tree, c);
   return undefined;
 }
 
-/** The scripted tool a command names: `sh -c "<cmd> ..."` names its first word. */
+/** `ls -1Ap DIR`: the direct entries, directories with a trailing slash. */
+function list(tree: Tree, dir: string): Ran {
+  const prefix = dir.endsWith("/") ? dir : `${dir}/`;
+  const names = new Set(
+    [...tree.keys()]
+      .filter((p) => p.startsWith(prefix))
+      .map((p) => {
+        const [head = "", ...rest] = p.slice(prefix.length).split("/");
+        return rest.length > 0 ? `${head}/` : head;
+      }),
+  );
+  return {
+    code: 0,
+    stdout: [...names]
+      .toSorted()
+      .map((n) => `${n}\n`)
+      .join(""),
+    stderr: "",
+  };
+}
+
+/** The scripted tool a command names: `bash -c "<cmd> ..."` names its first word. */
 export function toolName(command: readonly string[]): string {
   const [name = "", flag, script = ""] = command;
-  if (name === "sh" && flag === "-c")
+  if ((name === "sh" || name === "bash") && flag === "-c")
     return script.trim().split(/\s+/)[0] ?? "";
   return name;
 }

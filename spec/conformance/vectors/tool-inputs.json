@@ -1,0 +1,340 @@
+{
+  "description": "Built-in tool inputs: each case is parsed with the tool's catalog schema (Zod in TypeScript, the generated Pydantic model in Python) and must be accepted exactly when valid. catalog_sha256 is the SHA-256 of spec/schema/tools.v1.catalog.json, the canonical catalog both runtimes pin.",
+  "catalog_sha256": "218d9f90a29811d412b1f63dffc6d3acc75015d8d166d40a701c9c902f23837e",
+  "cases": [
+    {
+      "tool": "bash",
+      "input": {
+        "command": "ls"
+      },
+      "valid": true
+    },
+    {
+      "tool": "bash",
+      "input": {
+        "command": "ls",
+        "timeout_ms": 1
+      },
+      "valid": true
+    },
+    {
+      "tool": "bash",
+      "input": {
+        "command": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "bash",
+      "input": {
+        "command": "ls",
+        "timeout_ms": 0
+      },
+      "valid": false
+    },
+    {
+      "tool": "bash",
+      "input": {
+        "command": "ls",
+        "timeout_ms": null
+      },
+      "valid": false
+    },
+    {
+      "tool": "bash",
+      "input": {
+        "command": "ls",
+        "timeout_ms": 1.5
+      },
+      "valid": false
+    },
+    {
+      "tool": "bash",
+      "input": {
+        "command": "ls",
+        "timeout_ms": "10"
+      },
+      "valid": false
+    },
+    {
+      "tool": "bash",
+      "input": {
+        "command": "ls",
+        "shell": "zsh"
+      },
+      "valid": false
+    },
+    {
+      "tool": "read",
+      "input": {
+        "path": "a.txt"
+      },
+      "valid": true
+    },
+    {
+      "tool": "read",
+      "input": {
+        "path": "a.txt",
+        "offset": 1,
+        "limit": 1
+      },
+      "valid": true
+    },
+    {
+      "tool": "read",
+      "input": {
+        "path": "a.txt",
+        "offset": 0
+      },
+      "valid": false
+    },
+    {
+      "tool": "read",
+      "input": {
+        "path": "a.txt",
+        "limit": 0
+      },
+      "valid": false
+    },
+    {
+      "tool": "read",
+      "input": {
+        "path": "a.txt",
+        "offset": "1"
+      },
+      "valid": false
+    },
+    {
+      "tool": "read",
+      "input": {
+        "path": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "read",
+      "input": {},
+      "valid": false
+    },
+    {
+      "tool": "write",
+      "input": {
+        "path": "a.txt",
+        "content": ""
+      },
+      "valid": true
+    },
+    {
+      "tool": "write",
+      "input": {
+        "path": "a.txt",
+        "content": "x",
+        "expected_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "valid": true
+    },
+    {
+      "tool": "write",
+      "input": {
+        "path": "a.txt",
+        "content": "x",
+        "expected_sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "valid": false
+    },
+    {
+      "tool": "write",
+      "input": {
+        "path": "a.txt",
+        "content": "x",
+        "expected_sha256": "000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "valid": false
+    },
+    {
+      "tool": "write",
+      "input": {
+        "path": "a.txt",
+        "content": "x",
+        "expected_sha256": null
+      },
+      "valid": false
+    },
+    {
+      "tool": "write",
+      "input": {
+        "path": "a.txt"
+      },
+      "valid": false
+    },
+    {
+      "tool": "edit",
+      "input": {
+        "path": "a.txt",
+        "old_string": "a",
+        "new_string": ""
+      },
+      "valid": true
+    },
+    {
+      "tool": "edit",
+      "input": {
+        "path": "a",
+        "old_string": "a",
+        "new_string": "b",
+        "replace_all": true
+      },
+      "valid": true
+    },
+    {
+      "tool": "edit",
+      "input": {
+        "path": "a.txt",
+        "old_string": "",
+        "new_string": "b"
+      },
+      "valid": false
+    },
+    {
+      "tool": "edit",
+      "input": {
+        "path": "a",
+        "old_string": "a",
+        "new_string": "b",
+        "replace_all": "true"
+      },
+      "valid": false
+    },
+    {
+      "tool": "ls",
+      "input": {},
+      "valid": true
+    },
+    {
+      "tool": "ls",
+      "input": {
+        "path": "src"
+      },
+      "valid": true
+    },
+    {
+      "tool": "ls",
+      "input": {
+        "path": null
+      },
+      "valid": false
+    },
+    {
+      "tool": "ls",
+      "input": {
+        "path": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "glob",
+      "input": {
+        "pattern": "**/*.ts"
+      },
+      "valid": true
+    },
+    {
+      "tool": "glob",
+      "input": {
+        "pattern": "*.ts",
+        "path": "src"
+      },
+      "valid": true
+    },
+    {
+      "tool": "glob",
+      "input": {
+        "pattern": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "glob",
+      "input": {
+        "pattern": "*.ts",
+        "path": null
+      },
+      "valid": false
+    },
+    {
+      "tool": "grep",
+      "input": {
+        "pattern": "TODO"
+      },
+      "valid": true
+    },
+    {
+      "tool": "grep",
+      "input": {
+        "pattern": "TODO",
+        "path": "src",
+        "glob": "*.ts"
+      },
+      "valid": true
+    },
+    {
+      "tool": "grep",
+      "input": {
+        "pattern": "TODO",
+        "glob": null
+      },
+      "valid": false
+    },
+    {
+      "tool": "grep",
+      "input": {
+        "pattern": "TODO",
+        "glob": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "grep",
+      "input": {
+        "pattern": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "read_tool_result",
+      "input": {
+        "call_id": "c1",
+        "offset": 0,
+        "length": 65536
+      },
+      "valid": true
+    },
+    {
+      "tool": "read_tool_result",
+      "input": {
+        "call_id": "c1",
+        "offset": 0,
+        "length": 65537
+      },
+      "valid": false
+    },
+    {
+      "tool": "read_tool_result",
+      "input": {
+        "call_id": "c1",
+        "offset": -1,
+        "length": 1
+      },
+      "valid": false
+    },
+    {
+      "tool": "read_tool_result",
+      "input": {
+        "call_id": "",
+        "offset": 0,
+        "length": 1
+      },
+      "valid": false
+    }
+  ]
+}

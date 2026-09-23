@@ -1,0 +1,192 @@
+{
+  "$defs": {
+    "BashInput": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "Run with bash -c.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "timeout_ms": {
+          "description": "Default 120000.",
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "EditInput": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_sha256": {
+          "description": "The file's current lowercase hex sha256; a mismatch changes nothing.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "new_string": {
+          "type": "string"
+        },
+        "old_string": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "description": "Relative to /workspace, or absolute.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "replace_all": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "old_string",
+        "new_string"
+      ],
+      "type": "object"
+    },
+    "GlobInput": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "default": ".",
+          "description": "Directory, relative to /workspace; . is the workspace root.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "pattern": {
+          "description": "A gitignore-style glob relative to path; ** spans directories.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern"
+      ],
+      "type": "object"
+    },
+    "GrepInput": {
+      "additionalProperties": false,
+      "properties": {
+        "glob": {
+          "description": "Only files whose path relative to path matches this glob.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "default": ".",
+          "description": "Directory, relative to /workspace; . is the workspace root.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "pattern": {
+          "description": "An extended regular expression.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern"
+      ],
+      "type": "object"
+    },
+    "LsInput": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "default": ".",
+          "description": "Directory, relative to /workspace; . is the workspace root.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ReadInput": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 2000,
+          "description": "Lines to read.",
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 1,
+          "description": "First line, 1-based.",
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Relative to /workspace, or absolute.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "ReadToolResultInput": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "length": {
+          "maximum": 65536,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "call_id",
+        "offset",
+        "length"
+      ],
+      "type": "object"
+    },
+    "WriteInput": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "expected_sha256": {
+          "description": "The file's current lowercase hex sha256; a mismatch changes nothing.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "path": {
+          "description": "Relative to /workspace, or absolute.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:threads:schema:tools:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Generated from typescript/packages/core/src/tools/catalog.ts by bun run schema:export. Do not edit.",
+  "title": "Built-in tool inputs"
+}

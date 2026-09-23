@@ -71,6 +71,7 @@ describe("built-in sandbox tools", () => {
       "edit:sandbox_local",
       "glob:read_only",
       "grep:read_only",
+      "ls:read_only",
       "read:read_only",
       "read_tool_result:read_only",
       "write:sandbox_local",
@@ -95,7 +96,7 @@ describe("built-in sandbox tools", () => {
     ).resolves.toEqual({ ok: true, value: undefined });
   });
 
-  test("write, read, edit, glob and grep run in the sandbox; bash execs sh -c with an empty env", async () => {
+  test("write, read, edit, glob and grep run in the sandbox; bash execs bash -c with an empty env", async () => {
     const sandbox = fakeSandbox({ tools: { echo: { output: "hi\n" } } });
     const model = scriptedModel({
       responses: [
@@ -139,7 +140,7 @@ describe("built-in sandbox tools", () => {
       ["c2", false, "wrote 13 bytes to src/app.ts"],
       ["c3", false, "1\tconst x = 2;\n2\t"],
       ["c4", false, "/workspace/src/app.ts"],
-      ["c5", false, "/workspace/src/app.ts:1:const x = 2;\n"],
+      ["c5", false, "/workspace/src/app.ts:1:const x = 2;"],
     ]);
     expect(JSON.parse(String(shown[5]?.[2]))).toMatchObject({
       exit_code: 0,
@@ -148,7 +149,7 @@ describe("built-in sandbox tools", () => {
     expect(shown[6]?.[1]).toBe(true);
     expect(String(shown[6]?.[2])).toContain("expected_sha256 mismatch");
     expect(sandbox.execs().at(-1)).toEqual({
-      command: ["sh", "-c", "echo hi"],
+      command: ["bash", "-c", "echo hi"],
       env: {},
     });
     expect(new Set(sandbox.files().map(text))).toEqual(

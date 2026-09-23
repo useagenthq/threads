@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { sha256Hex } from "../hash";
 import type { ToolRun } from "../loop/types";
 import { err, ok, type Result } from "../result";
@@ -11,6 +10,7 @@ import {
   failed,
   sessionOf,
 } from "./builtin";
+import { EditInput, ReadInput, WriteInput } from "./catalog";
 
 // read, write and edit: one POSIX implementation over the session's download and
 // upload. Paths are the model's, resolved by the provider under /workspace; permission rules
@@ -18,13 +18,6 @@ import {
 
 const utf8 = new TextEncoder();
 const strict = new TextDecoder("utf-8", { fatal: true });
-
-const Path = z.string().min(1).describe("Relative to /workspace, or absolute.");
-const Expected = z
-  .string()
-  .regex(/^[0-9a-f]{64}$/)
-  .describe("The file's current sha256; a mismatch changes nothing.")
-  .optional();
 
 async function text(
   env: BuiltinEnv,
@@ -51,19 +44,14 @@ const numbered = (body: string, from: number, limit: number): string =>
 
 export const read: Builtin = builtin({
   name: "read",
-  description: "Read a text file in the sandbox, with line numbers.",
-  input: z.strictObject({
-    path: Path,
-    offset: z.int().min(1).optional().describe("First line, 1-based."),
-    limit: z.int().min(1).optional().describe("Lines to read."),
-  }),
+  input: ReadInput,
   effect: "read_only",
   run: async ({ path, offset, limit }, _ctx, env) => {
     const session = await sessionOf(env);
     if (!session.ok) return session.error;
     const file = await text(env, session.value, path);
     if (!file.ok) return file.error;
-    return done(numbered(file.value.text, offset ?? 1, limit ?? Infinity));
+    return done(numbered(file.value.text, offset, limit));
   },
 });
 
@@ -97,12 +85,7 @@ async function put(
 
 export const write: Builtin = builtin({
   name: "write",
-  description: "Create or overwrite a file in the sandbox.",
-  input: z.strictObject({
-    path: Path,
-    content: z.string(),
-    expected_sha256: Expected,
-  }),
+  input: WriteInput,
   effect: "sandbox_local",
   run: async ({ path, content, expected_sha256 }, _ctx, env) => {
     const session = await sessionOf(env);
@@ -119,15 +102,7 @@ export const write: Builtin = builtin({
 
 export const edit: Builtin = builtin({
   name: "edit",
-  description:
-    "Replace old_string with new_string in a sandbox file. old_string must be unique unless replace_all.",
-  input: z.strictObject({
-    path: Path,
-    old_string: z.string().min(1),
-    new_string: z.string(),
-    replace_all: z.boolean().optional(),
-    expected_sha256: Expected,
-  }),
+  input: EditInput,
   effect: "sandbox_local",
   run: async (input, _ctx, env) => {
     const session = await sessionOf(env);

@@ -10,7 +10,7 @@ import type { Writer } from "../store/writer";
 import type { Builtin, BuiltinEnv } from "./builtin";
 import { edit, read, write } from "./files";
 import { readToolResult } from "./read-result";
-import { glob, grep } from "./search";
+import { glob, grep, ls } from "./search";
 import { lazySession } from "./session";
 import { bash } from "./shell";
 
@@ -46,6 +46,7 @@ export function builtins(
     edit,
     glob,
     grep,
+    ls,
     read,
     readToolResult,
     write,

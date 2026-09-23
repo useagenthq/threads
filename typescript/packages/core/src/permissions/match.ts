@@ -55,7 +55,8 @@ export function workspacePath(
   workspace: string,
   input: Readonly<Record<string, unknown>>,
 ): string | undefined {
-  const { path } = input;
+  // Absent is the tools' default: the workspace root (ls, glob, grep).
+  const path = input["path"] ?? ".";
   if (typeof path !== "string") return undefined;
   const relative = posix.relative(workspace, posix.resolve(workspace, path));
   return relative.startsWith("..") || posix.isAbsolute(relative)

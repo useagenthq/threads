@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { z } from "zod";
 import { canonicalize } from "../src/log";
 import { specSchema } from "./spec-schema";
+import { toolCatalog, toolSchema } from "./tool-catalog";
 
 // bun scripts/export-schema.ts           write spec/schema/events.v1.schema.json
 // bun scripts/export-schema.ts --check   fail if the committed file differs; list every difference
@@ -62,11 +63,35 @@ function check(schema: Json, file: string): number {
   return 1;
 }
 
+const TOOLS = join(
+  import.meta.dir,
+  "../../../../spec/schema/tools.v1.schema.json",
+);
+const CATALOG = join(
+  import.meta.dir,
+  "../../../../spec/schema/tools.v1.catalog.json",
+);
+
+/** The catalog is compared byte for byte: it is the exact text both runtimes pin. */
+function checkBytes(expected: string, file: string): number {
+  if (readFileSync(file, "utf8") === expected) return 0;
+  console.error(
+    `${file}: differs from the Zod catalog; run bun run schema:export`,
+  );
+  return 1;
+}
+
 const [flag, file = SPEC] = process.argv.slice(2);
 const schema = specSchema();
 if (flag === "--check") {
-  process.exitCode = check(schema, file);
+  process.exitCode =
+    check(schema, file) +
+    (file === SPEC
+      ? check(toolSchema(), TOOLS) + checkBytes(toolCatalog(), CATALOG)
+      : 0);
 } else {
   writeFileSync(SPEC, format(schema));
-  console.log(`wrote ${SPEC}`);
+  writeFileSync(TOOLS, format(toolSchema()));
+  writeFileSync(CATALOG, toolCatalog());
+  console.log(`wrote ${SPEC}, ${TOOLS} and ${CATALOG}`);
 }

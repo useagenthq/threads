@@ -75,6 +75,11 @@
           "kind": "case",
           "ref": "tool-invalid-args-rejected",
           "status": "planned"
+        },
+        {
+          "kind": "test",
+          "ref": "tool-input-schemas",
+          "status": "implemented"
         }
       ]
     },

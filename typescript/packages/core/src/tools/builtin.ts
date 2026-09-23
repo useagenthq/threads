@@ -12,6 +12,7 @@ import type {
   Stale,
 } from "../sandbox/protocol";
 import type { ArtifactStore } from "../store/artifacts";
+import { entry } from "./catalog";
 
 // A built-in tool: a pinned spec, and a body bound to one run's sandbox session,
 // artifacts and log. Arguments are parsed with the same Zod schema the spec exports.
@@ -32,8 +33,8 @@ export type Builtin = {
 };
 
 type Def<S extends z.ZodType> = {
+  /** A catalog name; its description and input schema come from the catalog. */
   readonly name: string;
-  readonly description: string;
   readonly input: S;
   readonly effect: z.infer<typeof EffectClass>;
   readonly run: (
@@ -45,9 +46,12 @@ type Def<S extends z.ZodType> = {
 };
 
 export function builtin<S extends z.ZodType>(def: Def<S>): Builtin {
+  const listed = entry(def.name);
+  if (listed.input !== def.input)
+    throw new Error(`built-in ${def.name} must use its catalog input schema`);
   const spec = ToolSpec.parse({
     name: def.name,
-    description: def.description,
+    description: listed.description,
     input_schema: jsonSchema(def.name, def.input),
     effect_class: def.effect,
   });
