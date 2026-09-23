@@ -123,6 +123,11 @@ def test_max_retries_failed_candidates_fail_the_run_output_invalid() -> None:
         result = await bot.run("Is the bug fixed?", store=sqlite(":memory:"))
         assert isinstance(result, Failed)
         assert result.error.code == "output_invalid"
+        # The same actionable text as TypeScript's.
+        assert result.error.message == (
+            "the model's answer failed the output schema on every retry; "
+            "raise output retries or loosen the schema"
+        )
 
     asyncio.run(main())
 

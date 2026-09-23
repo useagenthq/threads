@@ -113,6 +113,32 @@ function ended<Output>(
   }
 }
 
+// What went wrong and what to do next; the same text as Python's `FAILED_MESSAGES`.
+const MESSAGES = {
+  error:
+    "the model request failed; the thread's timeline has the provider's error",
+  interrupted:
+    "the model's reply was cut off before it finished; run the thread again to continue",
+  model_unavailable:
+    "no model could be reached, including any fallbacks; check the provider's status and your API key",
+  context_exhausted:
+    "the conversation no longer fits the model's context window, even after compaction; start a new thread or use a model with a larger window",
+  max_output:
+    "the model hit its output token cap; raise the model's max output tokens or ask for a shorter answer",
+  max_turns:
+    "the run reached the agent's turn limit; raise max turns or split the task",
+  output_invalid:
+    "the model's answer failed the output schema on every retry; raise output retries or loosen the schema",
+  input_denied:
+    "a hook or policy refused the input, so the model was not called",
+  stop_hook_limit:
+    "a stop hook kept the run going past its limit; check when the hook asks to continue",
+} as const;
+
+function isFailedReason(reason: Reason): reason is keyof typeof MESSAGES {
+  return Object.hasOwn(MESSAGES, reason);
+}
+
 function failed<Output>(
   code: RunErrorCode,
   reason: Reason,
@@ -120,7 +146,10 @@ function failed<Output>(
 ): RunResult<Output> {
   return {
     status: "failed",
-    error: { code, message: `the turn ended ${reason}` },
+    error: {
+      code,
+      message: isFailedReason(reason) ? MESSAGES[reason] : MESSAGES.error,
+    },
     thread,
   };
 }

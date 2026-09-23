@@ -26,7 +26,7 @@ from threads.log import (
 from threads.log.jcs import canonicalize
 from threads.loop import runtime
 from threads.loop.history import turn_events
-from threads.loop.runtime import FAILED_CODES, Halt
+from threads.loop.runtime import FAILED_CODES, FAILED_MESSAGES, Halt
 from threads.result import Ok
 
 
@@ -50,7 +50,7 @@ def ended(events: Sequence[Event], reason: str, thread: Thread) -> RunResult[str
         return BudgetExhausted(exceeded.data, thread)
     code = FAILED_CODES.get(reason)
     if code is not None:
-        return Failed(RunError(code, f"the turn ended {reason}"), thread)
+        return Failed(RunError(code, FAILED_MESSAGES[reason]), thread)
     return Completed(output_text(events), thread)
 
 

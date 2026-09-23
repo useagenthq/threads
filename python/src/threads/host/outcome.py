@@ -29,6 +29,7 @@ from threads.log import (
     TurnCompletedEvent,
     UserInputEvent,
 )
+from threads.loop.runtime import FAILED_MESSAGES
 from threads.reduce.handlers import to_json
 from threads.thread.handle import Thread
 
@@ -88,7 +89,7 @@ def _ended(events: Sequence[Event], end: TurnCompletedEvent, thread: Thread) -> 
             return {"status": "handed_off", **ids, "to_thread_id": moved.data.to_thread_id}
         case "error" | "interrupted":
             code = end.data.code if isinstance(end.data.code, str) else "model_error"
-            message = f"the turn ended {end.data.reason}"
+            message = FAILED_MESSAGES[end.data.reason]
             return {"status": "failed", **ids, "error": {"code": code, "message": message}}
         case reason:
             return outcome(ended(events, reason, thread))
