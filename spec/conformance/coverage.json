@@ -1337,7 +1337,7 @@
         {
           "kind": "test",
           "ref": "sandbox-credential-canary",
-          "status": "planned"
+          "status": "implemented"
         }
       ]
     },

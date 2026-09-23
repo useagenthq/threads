@@ -84,7 +84,9 @@ describe("built-in sandbox tools", () => {
       info: { ...fakeSandbox().info, egress: "unenforced" as const },
     };
     const model = scriptedModel({ responses: [] });
-    await expect(agent({ model, sandbox: loose }).check()).resolves.toMatchObject({
+    await expect(
+      agent({ model, sandbox: loose }).check(),
+    ).resolves.toMatchObject({
       ok: false,
       error: { code: "egress_policy_unsupported" },
     });
