@@ -1,4 +1,5 @@
 import type { Principal } from "../log";
+import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
 import { pin } from "./pin";
 import type { RunResult, ThreadRef } from "./result";
@@ -27,6 +28,8 @@ export type HostRunner = {
   ) => Promise<RunResult<unknown>>;
   /** agent({approvers}): who may answer approval challenges; undefined when not configured. */
   readonly approvers: readonly Principal[] | undefined;
+  /** The provider fork() restores snapshots with. */
+  readonly sandbox: Sandbox | undefined;
 };
 
 export function hosted<Deps, Output>(
@@ -37,5 +40,6 @@ export function hosted<Deps, Output>(
     started: () => pin(def).started,
     execute: (plan, inputs, hooks = {}) => execute(def, plan, inputs, hooks),
     approvers,
+    sandbox: def.sandbox,
   };
 }

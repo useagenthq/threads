@@ -23,6 +23,7 @@ export {
   type Json,
   JsonObject,
   JsonValue,
+  type KnownEvent,
   OutputPart,
   type ResultPart,
   type Usage,
