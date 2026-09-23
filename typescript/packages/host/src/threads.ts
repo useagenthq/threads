@@ -152,6 +152,7 @@ const DECIDE_CODES = [
   "approval_mismatch",
   "approval_expired",
   "approval_duplicate",
+  "branch_busy",
 ];
 
 export async function decide(call: Call): Promise<Response> {
@@ -197,7 +198,13 @@ export async function answer(call: Call): Promise<Response> {
   const done = await o.thread.answer(callId.data, body.answer, call.principal);
   if (!done.ok)
     return routeFailure(
-      ["forbidden", "not_found", "invalid_request", "no_open_question"],
+      [
+        "forbidden",
+        "not_found",
+        "invalid_request",
+        "no_open_question",
+        "branch_busy",
+      ],
       done.error,
     );
   await resume(call, o.thread);
@@ -217,7 +224,13 @@ export async function resolveParked(call: Call): Promise<Response> {
   );
   if (!done.ok)
     return routeFailure(
-      ["forbidden", "not_found", "invalid_request", "not_parked"],
+      [
+        "forbidden",
+        "not_found",
+        "invalid_request",
+        "not_parked",
+        "branch_busy",
+      ],
       done.error,
     );
   await resume(call, o.thread);
@@ -228,7 +241,8 @@ export async function cancel(call: Call): Promise<Response> {
   const o = await opened(call);
   if (o instanceof Response) return o;
   const done = await o.thread.cancel(call.principal);
-  if (!done.ok) return routeFailure(["forbidden", "not_found"], done.error);
+  if (!done.ok)
+    return routeFailure(["forbidden", "not_found", "branch_busy"], done.error);
   await resume(call, o.thread);
   return json(200, done.value);
 }
@@ -238,6 +252,7 @@ const SETTING_CODES = [
   "not_found",
   "invalid_request",
   "invalid_transition",
+  "branch_busy",
 ];
 
 export async function setModel(call: Call): Promise<Response> {

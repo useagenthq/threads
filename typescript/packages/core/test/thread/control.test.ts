@@ -16,7 +16,7 @@ import {
   storeConnection,
   tenantStore,
 } from "../../src/agent/sqlite";
-import type { KnownEvent } from "../../src/log";
+import { type KnownEvent, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { unwrap } from "../store/helpers";
 
@@ -214,6 +214,68 @@ describe("cancel, mode, model, questions and parked effects", () => {
     expect(
       await thread.resolveParked("nope:c1", "assume_done", alice),
     ).toMatchObject({ ok: false, error: { code: "not_parked" } });
+  });
+
+  test("a lease another holder has is branch_busy, typed, and appends nothing", async () => {
+    const { store, thread } = await parked([]);
+    const { log } = await openStore(store);
+    const other = unwrap(log.acquire(thread.branch, "another-process"));
+    try {
+      const before = (await events(store, thread)).length;
+      const [pending] = await thread.pendingApprovals();
+      if (pending === undefined) throw new Error("one open challenge");
+      for (const done of [
+        await thread.cancel(alice),
+        await thread.approve(pending.challenge_id, alice),
+        await thread.setMode("accept_edits", alice),
+        await thread.resolveParked("k", "assume_done", alice),
+      ])
+        expect(done).toMatchObject({
+          ok: false,
+          error: { code: "branch_busy" },
+        });
+      expect((await events(store, thread)).length).toBe(before);
+    } finally {
+      other.release();
+    }
+  });
+
+  test("a control during this process's own run appends through the run's writer", async () => {
+    const store = sqlite(":memory:");
+    const { promise: gate, resolve: open } = Promise.withResolvers<void>();
+    const slow = tool({
+      name: "slow",
+      description: "Waits.",
+      input: z.object({}),
+      runs: "host",
+      effect: "read_only",
+      execute: async () => {
+        await gate;
+        return "ok";
+      },
+    });
+    const bot = agent({
+      model: scriptedModel({ responses: [use("slow", {}, "c1"), say("x")] }),
+      tools: [slow],
+    });
+    const running = bot.run("go", { store });
+    let thread: Thread | undefined;
+    for (let i = 0; i < 100 && thread === undefined; i++) {
+      await Bun.sleep(5);
+      const { db } = await storeConnection(store);
+      const [row] = z
+        .array(z.object({ thread_id: ThreadId }))
+        .parse(db.all("SELECT thread_id FROM branches", []));
+      if (row !== undefined) {
+        const opened = await openThread(store, row.thread_id);
+        if (opened.ok) thread = opened.value;
+      }
+    }
+    if (thread === undefined) throw new Error("the run started a thread");
+    const cancelled = await thread.cancel(alice);
+    open();
+    expect(cancelled.ok).toBe(true);
+    expect((await running).status).toBe("cancelled");
   });
 
   test("branches lists the main branch as runnable", async () => {

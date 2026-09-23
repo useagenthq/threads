@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { openStore, tenantStore } from "@threads/core/host";
 import {
   alice,
   bob,
@@ -240,6 +241,54 @@ describe("approvals over the API", () => {
     }
     expect(types).toContain("turn_completed");
     expect(sent).toEqual(["bob"]);
+  });
+
+  test("a control route on a lease another process holds answers 409 branch_busy", async () => {
+    h = harness({
+      agents: {
+        support: mailer({
+          responses: [use("send_email", { to: "bob" }, "c1"), say("Sent.")],
+        }),
+      },
+    });
+    const { call } = h;
+    const accepted = await (
+      await call("POST", "/v1/runs", { as: alice, body, headers: key })
+    ).json();
+    await sseMessages(
+      await call(
+        "GET",
+        `/v1/threads/${accepted.thread_id}/runs/${accepted.run_id}/events`,
+        { as: alice },
+      ),
+    );
+    const list = await (
+      await call("GET", `/v1/threads/${accepted.thread_id}/approvals`, {
+        as: alice,
+      })
+    ).json();
+    const { log } = await openStore(tenantStore(h.store, alice.tenant));
+    const held = log.acquire(accepted.branch_id, "another-process");
+    if (!held.ok) throw new Error(held.error.message);
+    try {
+      const at = `/v1/threads/${accepted.thread_id}`;
+      for (const [path, sent] of [
+        [`${at}/approvals/${list[0].challenge_id}`, { decision: "grant" }],
+        [`${at}/cancel`, undefined],
+        [`${at}/mode`, { mode: "accept_edits" }],
+        [`${at}/parked/k/resolve`, { resolution: "assume_done" }],
+        [`${at}/questions/c9/answer`, { answer: "yes" }],
+      ] as const) {
+        const response = await call("POST", path, {
+          as: alice,
+          ...(sent === undefined ? {} : { body: sent }),
+        });
+        expect(response.status).toBe(409);
+        expect((await response.json()).error.code).toBe("branch_busy");
+      }
+    } finally {
+      held.value.release();
+    }
   });
 
   test("with approvers configured, anyone else is forbidden", async () => {

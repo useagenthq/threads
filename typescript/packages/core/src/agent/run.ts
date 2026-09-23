@@ -12,6 +12,7 @@ import {
   type EventDraft,
   LEASE_TTL_MS,
   type LogStore,
+  running,
   type Writer,
 } from "../store";
 import { uuidv7 } from "../store/encode";
@@ -262,8 +263,10 @@ function keepLease(writer: Writer): () => void {
   const timer = setInterval(() => {
     if (!writer.renew(LEASE_TTL_MS).ok) clearInterval(timer);
   }, LEASE_TTL_MS / 3);
+  const done = running(writer);
   return () => {
     clearInterval(timer);
+    done();
     writer.release();
   };
 }

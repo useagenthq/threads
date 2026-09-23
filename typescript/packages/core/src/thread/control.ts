@@ -11,11 +11,17 @@ import type {
 } from "../log";
 import { knownEvents } from "../reduce";
 import { err, ok, type Result } from "../result";
-import type { EventDraft, LogStore, Writer } from "../store";
+import {
+  type EventDraft,
+  type LogStore,
+  liveWriter,
+  type Writer,
+} from "../store";
 import type { ChainEvent, LogError } from "../verify";
 
 // The Thread control methods (spec/api.json Thread, ): each appends the actor's
-// event under a short lease of its own, so it runs between runs, never beside one. The host
+// event through the run's own writer when this process runs the branch, else under a short lease
+// of its own; a lease another process holds is branch_busy, never waited on. The host
 // authorizes the principal first (approver policy, ); here a principal of
 // another tenant is refused, and the log's own rules decide the rest.
 
@@ -30,7 +36,8 @@ export type ControlError = {
     | "approval_duplicate"
     | "no_open_question"
     | "not_parked"
-    | "invalid_transition";
+    | "invalid_transition"
+    | "branch_busy";
   readonly message: string;
 };
 
@@ -52,7 +59,6 @@ export type Plan = {
 };
 
 const HOLDER = `control-${crypto.randomUUID()}`;
-const POLL_MS = 20;
 
 const fail = (code: ControlError["code"], message: string): Controlled =>
   err({ code, message });
@@ -68,8 +74,8 @@ export function resumed(address: ParkAddress, cause: EventId): EventDraft {
 }
 
 /**
- * Takes the lease (waiting while a run holds it), appends the plan's events in one transaction,
- * and hands the lease back.
+ * Appends the plan's events in one transaction, through the live run's writer or under a lease
+ * taken and handed back here.
  */
 export async function control(
   log: LogStore,
@@ -82,24 +88,40 @@ export async function control(
 ): Promise<Controlled> {
   if (principal.tenant !== log.tenant)
     return fail("forbidden", "the principal is not of this thread's tenant");
-  const writer = await lease(log, branchId);
-  if (!writer.ok) return fail("not_found", writer.error.message);
+  const live = liveWriter(branchId);
+  if (live !== undefined) return appendPlan(live, plan);
+  const writer = log.acquire(branchId, HOLDER);
+  if (!writer.ok)
+    return fail(
+      writer.error.code === "branch_busy" ? "branch_busy" : "not_found",
+      writer.error.message,
+    );
   try {
-    const planned = plan(knownEvents(writer.value.chain), writer.value);
-    if (!planned.ok) return planned;
-    const { record, after } = planned.value;
-    const done = writer.value.fenced(() => {
-      const first = writer.value.append([record]);
-      if (!first.ok || after === undefined) return first;
-      const id = eventIdOf(first.value[0]);
-      const rest = writer.value.append(after(id));
-      return rest.ok ? first : rest;
-    });
-    if (!done.ok) return fail(codeOf(done.error), done.error.message);
-    return ok({ event_id: eventIdOf(done.value[0]) });
+    return appendPlan(writer.value, plan);
   } finally {
     writer.value.release();
   }
+}
+
+function appendPlan(
+  writer: Writer,
+  plan: (
+    events: readonly KnownEvent[],
+    writer: Writer,
+  ) => Result<Plan, ControlError>,
+): Controlled {
+  const planned = plan(knownEvents(writer.chain), writer);
+  if (!planned.ok) return planned;
+  const { record, after } = planned.value;
+  const done = writer.fenced(() => {
+    const first = writer.append([record]);
+    if (!first.ok || after === undefined) return first;
+    const id = eventIdOf(first.value[0]);
+    const rest = writer.append(after(id));
+    return rest.ok ? first : rest;
+  });
+  if (!done.ok) return fail(codeOf(done.error), done.error.message);
+  return ok({ event_id: eventIdOf(done.value[0]) });
 }
 
 function eventIdOf(line: ChainEvent | undefined): EventId {
@@ -113,23 +135,10 @@ function codeOf(error: LogError): ControlError["code"] {
     case "approval_expired":
     case "approval_duplicate":
     case "invalid_transition":
+    case "branch_busy":
       return error.code;
     default:
       return "invalid_request";
-  }
-}
-
-// ponytail: polls a busy lease; a host cancels its own in-process run before calling this.
-async function lease(
-  log: LogStore,
-  branchId: BranchId,
-): Promise<Result<Writer, LogError>> {
-  for (;;) {
-    const writer = log.acquire(branchId, HOLDER);
-    if (writer.ok || writer.error.code !== "branch_busy") return writer;
-    const { promise, resolve } = Promise.withResolvers<void>();
-    setTimeout(resolve, POLL_MS);
-    await promise;
   }
 }
 
