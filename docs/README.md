@@ -63,7 +63,7 @@ bun run gen           # from docs/
 bun run check:gen     # exits 1 if anything is out of date
 ```
 
-The contract also lists members that aren't built yet. `gen_api_ref.py` keeps them out with its `NOT_BUILT` table (and `NOT_BUILT_ROUTES` for HTTP routes) and marks one-language members with `ONLY_IN`. Update the tables when a member lands.
+The contract also lists members that aren't built yet. `gen_api_ref.py` keeps them out with the `NOT_BUILT` table in `scripts/api_ref/tables.py` (and `NOT_BUILT_ROUTES` for HTTP routes) and marks one-language members with `ONLY_IN`. Update the tables when a member lands.
 
 ## Writing guides
 

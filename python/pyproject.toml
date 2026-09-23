@@ -94,6 +94,8 @@ reportUnknownLambdaType = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
 venvPath = "."
 venv = ".venv"
+# docs/scripts/gen_api_ref.py imports its sibling api_ref package.
+executionEnvironments = [{ root = "../docs/scripts" }]
 
 [tool.ruff]
 target-version = "py312"
