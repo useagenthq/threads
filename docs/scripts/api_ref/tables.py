@@ -28,9 +28,6 @@ NOT_BUILT: frozenset[Member] = frozenset(
         ("Thread", "replay"),
         ("Thread", "compact"),
         ("Thread", "setOutputStyle"),
-        ("Thread", "usage"),
-        ("Thread", "cost"),
-        ("Thread", "cacheBreaks"),
         # Exists, but no tool asks the user a question yet (ask_user is not built).
         ("Thread", "answer"),
     }

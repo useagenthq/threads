@@ -1462,14 +1462,14 @@
           "ts": "usage",
           "py": "usage",
           "async": true,
-          "doc": "Usage over this branch's resolved chain (a fork includes its parent's prefix).",
+          "doc": "Token totals over this branch (a fork counts its parent's prefix). A response whose counts the provider didn't report is counted in unknown_responses, never as zero.",
           "params": [],
           "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/UsageTotals"}, "errors": ["log_corrupt", "unsupported_format", "unsupported_critical_event"]}
         },
         "cost": {
           "ts": "cost",
           "py": "cost",
-          "doc": "What the thread spent, in nano-units of its pinned currency, with a conservative upper bound; null when it pins no currency or no models. tree: true merges every descendant subagent at any depth, each read from its own main branch, depth first in spawn order. The total is in the root's currency, else the first priced descendant's; with no priced thread it is null. A thread in that currency adds its nanos and ANDs complete and bounded. A thread in another currency, or unpriced but with a model request, adds nothing and makes complete and bounded false. A thread with no model request, or a child never started, changes nothing. A descendant whose log can't be read fails the call with its read error; one whose thread_started doesn't name the agent_spawned that started it, or a thread met twice (a cycle), fails it with log_corrupt. Messages name the path of child thread ids.",
+          "doc": "What this thread spent, in nano-units of its pinned currency (USD for agent()), with a conservative upper bound; null when it pins no prices. With tree: true it adds every subagent at any depth, each read from its own log, in the root's currency (else the first priced descendant's; null when none is priced). complete and bounded turn false when some spend can't be added: a thread in another currency, or an unpriced thread that made a model request. A child that never started (spawned, no thread, no agent_finished) adds nothing. The call fails with the read error of a descendant it can't read; with log_corrupt when a finished child's log is missing, a child doesn't name the agent_spawned that started it, or the tree has a cycle; and with cost_overflow when an amount passes 2^53-1 nanos (never a rounded amount). Error messages name the path of child thread ids.",
           "async": true,
           "params": [
             {
@@ -1478,15 +1478,15 @@
               "type": {"prim": "boolean"},
               "required": false,
               "default": false,
-              "doc": "Add descendants from their logs."
+              "doc": "Also count every descendant subagent, each from its own log."
             }
           ],
-          "returns": {"result": {"union": [{"$ref": "urn:threads:schema:host-api:v1#/$defs/Cost"}, {"prim": "null"}]}, "errors": ["log_corrupt", "unsupported_format", "unsupported_critical_event"]}
+          "returns": {"result": {"union": [{"$ref": "urn:threads:schema:host-api:v1#/$defs/Cost"}, {"prim": "null"}]}, "errors": ["log_corrupt", "unsupported_format", "unsupported_critical_event", "cost_overflow"]}
         },
         "cacheBreaks": {
           "ts": "cacheBreaks",
           "py": "cache_breaks",
-          "doc": "The cache_breaks projection under the effective policy.context: the default cache_ttl_ms when none is pinned, so always a list.",
+          "doc": "Turns whose prompt-cache reads dropped sharply, each with its likely cause. Judged by the pinned policy.context.cache_ttl_ms, else the default (300000 ms), so always a list.",
           "async": true,
           "params": [],
           "returns": {"result": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/CacheBreak"}}, "errors": ["log_corrupt", "unsupported_format", "unsupported_critical_event"]}

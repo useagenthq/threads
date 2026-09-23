@@ -3,9 +3,25 @@ import { EventId } from "./ids";
 import { Int } from "./primitives";
 import type { EnumOf, Strict } from "./zod-types";
 
-// The cost shapes Thread.cost() and Thread.cacheBreaks() return (host-api Cost, CacheBreak).
-// Authored here, next to the policy that prices them, so both languages take them from the
-// exported schema.
+// What Thread.usage(), cost() and cacheBreaks() return (host-api UsageTotals, Cost, CacheBreak),
+// authored here so both languages take them from the exported schema.
+
+export const UsageTotals: Strict<{
+  input_tokens: typeof Int;
+  output_tokens: typeof Int;
+  unknown_responses: typeof Int;
+}> = z
+  .strictObject({
+    input_tokens: Int,
+    output_tokens: Int,
+    unknown_responses: Int,
+  })
+  .meta({
+    id: "UsageTotals",
+    description:
+      "Sums of KNOWN input_tokens and output_tokens over model responses; unknown_responses counts responses where either is null. Unknown is never summed as zero.",
+  });
+export type UsageTotals = z.infer<typeof UsageTotals>;
 
 /** An ISO 4217 code: what policy.currency pins and what a Cost is counted in. */
 export const Currency: z.ZodString = z.string().regex(/^[A-Z]{3}$/);

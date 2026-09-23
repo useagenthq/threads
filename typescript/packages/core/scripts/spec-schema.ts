@@ -8,6 +8,7 @@ import {
   LogLine,
   TextOrContent,
   TextOrRef,
+  UsageTotals,
 } from "../src/log";
 
 // Builds spec/schema/events.v1.schema.json from the Zod log schema. Anything Zod
@@ -23,6 +24,7 @@ const EXTRA_DEFS = [
   TextOrRef,
   TextOrContent,
   ContentPart,
+  UsageTotals,
   Cost,
   CacheBreak,
 ];

@@ -384,6 +384,84 @@ async def set_mode(
 
 **Returns an error value** with one of these codes: `forbidden`, `invalid_transition`, `branch_busy`.
 
+### usage
+
+Token totals over this branch (a fork counts its parent's prefix). A response whose counts the provider didn't report is counted in unknown_responses, never as zero.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+usage(): Promise<Result<UsageTotals>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def usage() -> Ok[UsageTotals] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+**Returns an error value** with one of these codes: `log_corrupt`, `unsupported_format`, `unsupported_critical_event`.
+
+### cost
+
+What this thread spent, in nano-units of its pinned currency (USD for agent()), with a conservative upper bound; null when it pins no prices. With tree: true it adds every subagent at any depth, each read from its own log, in the root's currency (else the first priced descendant's; null when none is priced). complete and bounded turn false when some spend can't be added: a thread in another currency, or an unpriced thread that made a model request. A child that never started (spawned, no thread, no agent_finished) adds nothing. The call fails with the read error of a descendant it can't read; with log_corrupt when a finished child's log is missing, a child doesn't name the agent_spawned that started it, or the tree has a cycle; and with cost_overflow when an amount passes 2^53-1 nanos (never a rounded amount). Error messages name the path of child thread ids.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+cost(options?: {
+  tree?: boolean;
+}): Promise<Result<Cost | null>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def cost(
+    *,
+    tree: bool = False,
+) -> Ok[Cost | None] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="tree" type={"boolean"} default={"false"}>
+  Also count every descendant subagent, each from its own log.
+</Field>
+
+**Returns an error value** with one of these codes: `log_corrupt`, `unsupported_format`, `unsupported_critical_event`, `cost_overflow`.
+
+### cacheBreaks / cache_breaks
+
+Turns whose prompt-cache reads dropped sharply, each with its likely cause. Judged by the pinned policy.context.cache_ttl_ms, else the default (300000 ms), so always a list.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+cacheBreaks(): Promise<Result<readonly CacheBreak[]>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def cache_breaks() -> Ok[Sequence[CacheBreak]] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+**Returns an error value** with one of these codes: `log_corrupt`, `unsupported_format`, `unsupported_critical_event`.
+
 ### todos
 
 TypeScript returns the list itself; Python returns Ok or Err.

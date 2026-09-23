@@ -1717,6 +1717,27 @@
       ],
       "type": "object"
     },
+    "UsageTotals": {
+      "additionalProperties": false,
+      "description": "Sums of KNOWN input_tokens and output_tokens over model responses; unknown_responses counts responses where either is null. Unknown is never summed as zero.",
+      "properties": {
+        "input_tokens": {
+          "$ref": "#/$defs/Int"
+        },
+        "output_tokens": {
+          "$ref": "#/$defs/Int"
+        },
+        "unknown_responses": {
+          "$ref": "#/$defs/Int"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "unknown_responses"
+      ],
+      "type": "object"
+    },
     "Uuid": {
       "description": "Lowercase UUID string. Writers MUST generate UUIDv7; readers accept any lowercase UUID, so the version is not an admission rule.",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",

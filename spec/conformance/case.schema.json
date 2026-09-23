@@ -634,25 +634,7 @@
           }
         },
         "usage": {
-          "description": "Sums of KNOWN input_tokens and output_tokens over model responses; unknown_responses counts responses where either is null. Unknown is never summed as zero.",
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "input_tokens",
-            "output_tokens",
-            "unknown_responses"
-          ],
-          "properties": {
-            "input_tokens": {
-              "type": "integer"
-            },
-            "output_tokens": {
-              "type": "integer"
-            },
-            "unknown_responses": {
-              "type": "integer"
-            }
-          }
+          "$ref": "urn:threads:schema:events:v1#/$defs/UsageTotals"
         },
         "transcript": {
           "type": "array",

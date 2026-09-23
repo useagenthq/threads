@@ -1188,7 +1188,8 @@
           "branch_exists",
           "sandbox_required",
           "cleanup_claim_lost",
-          "transport_fence_unsupported"
+          "transport_fence_unsupported",
+          "cost_overflow"
         ]
       },
       "events_Actor": {

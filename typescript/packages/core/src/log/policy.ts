@@ -5,8 +5,8 @@ import {
   PermissionMode,
   PermissionRule,
 } from "./common";
-import { Currency } from "./cost";
 import { Int, JsonObject, Name, NonEmpty, PosInt, Sha256 } from "./primitives";
+import { Currency } from "./usage";
 import type { Arr, EnumOf, Opt, Strict } from "./zod-types";
 
 // The resolved, secret-free runtime policy pinned by thread_started (ADRs 0019-0023).
