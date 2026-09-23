@@ -3,6 +3,7 @@ import { type EventOf, effectKey } from "../fold/state";
 import { draft, RECOVERY } from "./drafts";
 import type { Session } from "./session";
 import { resolvedResult, settleUnknown } from "./settle";
+import { recordOutput } from "./spill";
 import type { Halt } from "./types";
 
 // the recovery classifier, run once a new lease is taken and before anything
@@ -157,13 +158,15 @@ function materialize(s: Session, callId: string): Halt | undefined {
   const bytes = s.artifacts.get(commit.data.result_ref.sha256);
   if (!bytes.ok)
     return { code: "artifact_missing", message: bytes.error.message };
+  const shown = recordOutput(s, callId, new TextDecoder().decode(bytes.value));
   return s.append(
     draft.toolResult(
       {
         call_id: callId,
         is_error: false,
         origin: "materialized_from_commit",
-        preview: new TextDecoder().decode(bytes.value),
+        preview: shown.preview,
+        ...(shown.ref === undefined ? {} : { ref: shown.ref }),
       },
       RECOVERY,
     ),

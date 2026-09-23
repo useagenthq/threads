@@ -10,6 +10,7 @@ import { observe } from "./hooks";
 import { FINAL_OUTPUT, validateCandidate } from "./output";
 import type { Session } from "./session";
 import { settleUnknown } from "./settle";
+import { type Recorded, recordOutput } from "./spill";
 import { toolSpec } from "./turn";
 import type { Halt, ToolRun } from "./types";
 
@@ -131,6 +132,7 @@ async function dispatch(
     // A read_only call changes nothing, so an uncertain run is just a failed one.
     return s.append(
       result(
+        s,
         callId,
         run.kind === "done"
           ? run
@@ -212,7 +214,8 @@ function settle(
   }
   switch (run.kind) {
     case "done": {
-      const ref = s.store(run.output, "text/plain");
+      const shown = recordOutput(s, callId, run.output);
+      const ref = shown.ref ?? s.store(shown.text, "text/plain");
       // The result artifact is durable first; the commit and its result land together.
       return s.append(
         draft.effectCommit({
@@ -222,7 +225,7 @@ function settle(
             ? {}
             : { provider_receipt: run.receipt }),
         }),
-        result(callId, run),
+        resultOf(callId, run.isError, shown),
       );
     }
     case "unknown":
@@ -257,15 +260,25 @@ function settle(
 }
 
 function result(
+  s: Session,
   callId: string,
   run: Extract<ToolRun, { kind: "done" }>,
+): EventDraft {
+  return resultOf(callId, run.isError, recordOutput(s, callId, run.output));
+}
+
+function resultOf(
+  callId: string,
+  isError: boolean,
+  shown: Recorded,
 ): EventDraft {
   return draft.toolResult(
     {
       call_id: callId,
-      is_error: run.isError,
+      is_error: isError,
       origin: "executed",
-      preview: run.output,
+      preview: shown.preview,
+      ...(shown.ref === undefined ? {} : { ref: shown.ref }),
     },
     TOOL,
   );

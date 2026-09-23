@@ -1,8 +1,10 @@
 import { assertNever } from "../assert-never";
 import { type EventOf, effectKey } from "../fold/state";
+import type { ArtifactRef } from "../log";
 import type { EventDraft } from "../store";
 import { draft } from "./drafts";
 import type { Session } from "./session";
+import { recordOutput } from "./spill";
 import { toolSpec } from "./turn";
 import type { Halt, ToolImpl } from "./types";
 
@@ -166,6 +168,7 @@ export function terminalResult(
   outcome: Terminal,
   preview: string,
   actor: Actor,
+  ref?: ArtifactRef,
 ): EventDraft {
   return draft.toolResult(
     {
@@ -173,6 +176,7 @@ export function terminalResult(
       is_error: outcome === "interrupted",
       origin: outcome === "interrupted" ? "interrupted" : "executed",
       preview,
+      ...(ref === undefined ? {} : { ref }),
     },
     actor,
   );
@@ -201,9 +205,14 @@ export function resolvedResult(
   const bytes = ref === undefined ? undefined : s.artifacts.get(ref.sha256);
   if (bytes !== undefined && !bytes.ok)
     return { code: "artifact_missing", message: bytes.error.message };
-  const preview =
-    bytes === undefined ? "" : new TextDecoder().decode(bytes.value);
-  return s.append(terminalResult(callId, outcome, preview, actor));
+  const shown = recordOutput(
+    s,
+    callId,
+    bytes === undefined ? "" : new TextDecoder().decode(bytes.value),
+  );
+  return s.append(
+    terminalResult(callId, outcome, shown.preview, actor, shown.ref),
+  );
 }
 
 function park(s: Session, callId: string, actor: Actor): Halt | undefined {

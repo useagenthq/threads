@@ -120,4 +120,6 @@ export type LoopConfig = {
    * read_only operation. Absent when there is no sandbox: no file is restored.
    */
   readonly readFile?: (path: string) => Promise<Uint8Array | undefined>;
+  /** Scrubs host secrets from tool output before it is recorded (C5). */
+  readonly redact?: (text: string) => string;
 };
