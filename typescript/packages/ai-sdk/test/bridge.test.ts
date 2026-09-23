@@ -7,7 +7,7 @@ import {
   renderCase,
   sse,
 } from "@threads/adapter-testkit";
-import { memoryContext, parseRender } from "@threads/core/adapter";
+import { type Json, memoryContext, parseRender } from "@threads/core/adapter";
 import { aiSdk, threadsFetch } from "../src";
 import { toPrompt } from "../src/prompt";
 import { type Entry, fakeModel, unknownUsage, usage } from "./fake";
@@ -24,19 +24,9 @@ function bridge(script: readonly Entry[], live = () => true) {
     system: "Be brief.",
     tools: [],
   };
-  const send = (...lines: unknown[]) =>
-    drain(
-      m.send(
-        {
-          request_id: "b:e1",
-          body: renderBody([
-            head,
-            ...lines.map((l) => JSON.parse(JSON.stringify(l))),
-          ]),
-        },
-        context,
-      ),
-    );
+  const body = (lines: Json[]) => renderBody([head, ...lines]);
+  const send = (...lines: Json[]) =>
+    drain(m.send({ request_id: "b:e1", body: body(lines) }, context));
   const context = memoryContext(live);
   return { m, calls, send, context, head };
 }
@@ -354,7 +344,9 @@ describe("refused before dispatch", () => {
         },
       ],
     });
-    expect(chunks).toEqual([{ kind: "rejected", reason: "provider_error" }]);
+    expect(chunks).toEqual([
+      { kind: "rejected", reason: "content_unsupported" },
+    ]);
     expect(calls).toHaveLength(0);
   });
 
@@ -369,7 +361,9 @@ describe("refused before dispatch", () => {
 describe("fencing", () => {
   test("a stale writer never reaches doStream", async () => {
     const { send, calls } = bridge([[finish("stop")]], () => false);
-    expect(String((await send(hi)).thrown)).toContain("lease lost");
+    expect((await send(hi)).chunks).toEqual([
+      { kind: "rejected", reason: "stale_epoch" },
+    ]);
     expect(calls).toHaveLength(0);
   });
 
@@ -390,8 +384,9 @@ describe("fencing", () => {
       ],
       () => !lost,
     );
-    const { thrown } = await send(hi);
+    const { chunks, thrown } = await send(hi);
     expect(transport.calls).toHaveLength(0);
-    expect(String(thrown)).toContain("lease lost");
+    expect(thrown).toBeUndefined();
+    expect(chunks).toEqual([{ kind: "rejected", reason: "stale_epoch" }]);
   });
 });

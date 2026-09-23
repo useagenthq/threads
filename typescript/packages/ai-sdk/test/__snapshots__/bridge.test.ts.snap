@@ -311,7 +311,8 @@ exports[`golden: Render v1 conformance cases → AI SDK prompt render-deferred-t
 
 exports[`golden: Render v1 conformance cases → AI SDK prompt render-thinking-block-replay 1`] = `
 {
-  "message": "continuation_unsupported: a scripted thinking part can't be sent to acme_chat",
+  "code": "continuation_unsupported",
+  "message": "a scripted thinking part can't be sent to acme_chat",
   "ok": false,
 }
 `;

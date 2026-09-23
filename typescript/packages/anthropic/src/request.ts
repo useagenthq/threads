@@ -27,7 +27,11 @@ export type Mapped =
       /** Document artifact sha256 by Anthropic document_index, for citations. */
       readonly documents: readonly string[];
     }
-  | { readonly ok: false; readonly message: string };
+  | {
+      readonly ok: false;
+      readonly code: Unsendable["code"];
+      readonly message: string;
+    };
 
 type Block = { readonly [key: string]: Json };
 type Message = { role: "user" | "assistant"; content: Block[] };
@@ -41,6 +45,7 @@ export async function toAnthropic(
   if (request.head.adapter.name !== "anthropic")
     return {
       ok: false,
+      code: "provider_error",
       message: `line 0 names adapter ${request.head.adapter.name}, not anthropic`,
     };
   const documents: string[] = [];
@@ -53,7 +58,7 @@ export async function toAnthropic(
     }
   } catch (error) {
     if (error instanceof Unsendable)
-      return { ok: false, message: error.message };
+      return { ok: false, code: error.code, message: error.message };
     throw error;
   }
   const { head } = request;
@@ -159,7 +164,8 @@ async function blocks(
         break;
       case "audio_ref":
         throw new Unsendable(
-          "content_unsupported: anthropic takes no audio input",
+          "content_unsupported",
+          "anthropic takes no audio input",
         );
       case "citation":
         break;
@@ -217,7 +223,8 @@ async function assistant(
       case "hosted_tool":
         if (part.provider !== "anthropic")
           throw new Unsendable(
-            `continuation_unsupported: a ${part.provider} ${part.format} part can't be sent to anthropic`,
+            "continuation_unsupported",
+            `a ${part.provider} ${part.format} part can't be sent to anthropic`,
           );
         out.push(
           JsonObject.parse(JSON.parse(utf8.decode(await ctx.bytes(part.ref)))),
@@ -227,7 +234,8 @@ async function assistant(
         break;
       case "image_ref":
         throw new Unsendable(
-          "continuation_unsupported: anthropic takes no assistant images",
+          "continuation_unsupported",
+          "anthropic takes no assistant images",
         );
       default:
         assertNever(part);

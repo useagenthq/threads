@@ -20,7 +20,6 @@ import {
   fencedFetch,
   parseRender,
   rejectionFor,
-  StaleEpochError,
   staleEpoch,
 } from "@threads/core/adapter";
 import { z } from "zod";
@@ -136,11 +135,14 @@ async function* send(
   const mapped = await toPrompt(render, context, options.accepts ?? ["text"]);
   if (!mapped.ok) {
     // Refused before dispatch: nothing was sent.
-    yield { kind: "rejected", reason: "provider_error" };
+    yield { kind: "rejected", reason: mapped.code };
     return;
   }
   const live = await context.fence();
-  if (!live.ok) throw new StaleEpochError(live.error.message);
+  if (!live.ok) {
+    yield { kind: "rejected", reason: "stale_epoch" };
+    return;
+  }
   let yielded = false;
   try {
     const { stream } = await current.run(context, () =>
@@ -162,7 +164,12 @@ async function* send(
     }
   } catch (error) {
     const rejected = yielded ? undefined : rejection(error);
-    if (rejected === undefined) throw staleEpoch(error) ?? error;
+    if (staleEpoch(error) !== undefined) {
+      // The fence refused at the real send point: nothing left (in-band, never a throw).
+      yield { kind: "rejected", reason: "stale_epoch" };
+      return;
+    }
+    if (rejected === undefined) throw error;
     yield rejected;
   }
 }

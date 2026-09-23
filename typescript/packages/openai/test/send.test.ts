@@ -284,8 +284,9 @@ describe("fencing at the transport boundary", () => {
       ),
     );
     lost = true; // the lease is lost while the SDK is still preparing the request
-    const { thrown } = await pending;
+    const { chunks, thrown } = await pending;
     expect(calls).toHaveLength(0);
-    expect(String(thrown)).toContain("lease lost");
+    expect(thrown).toBeUndefined();
+    expect(chunks).toEqual([{ kind: "rejected", reason: "stale_epoch" }]);
   });
 });

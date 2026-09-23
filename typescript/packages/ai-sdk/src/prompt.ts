@@ -38,7 +38,11 @@ export type Mapped =
       readonly prompt: LanguageModelV4Prompt;
       readonly tools: LanguageModelV4FunctionTool[];
     }
-  | { readonly ok: false; readonly message: string };
+  | {
+      readonly ok: false;
+      readonly code: Unsendable["code"];
+      readonly message: string;
+    };
 
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 
@@ -58,6 +62,7 @@ export async function toPrompt(
   if (request.head.adapter.name !== "ai_sdk")
     return {
       ok: false,
+      code: "provider_error",
       message: `line 0 names adapter ${request.head.adapter.name}, not ai_sdk`,
     };
   const ctx: Ctx = {
@@ -77,7 +82,7 @@ export async function toPrompt(
     }
   } catch (error) {
     if (error instanceof Unsendable)
-      return { ok: false, message: error.message };
+      return { ok: false, code: error.code, message: error.message };
     throw error;
   }
   const tools = loadedTools(request).map(
@@ -171,7 +176,8 @@ async function user(
     }
     if (!ctx.accepts.has(part.type))
       throw new Unsendable(
-        `content_unsupported: this model does not declare ${part.type} input`,
+        "content_unsupported",
+        `this model does not declare ${part.type} input`,
       );
     out.push({
       type: "file",
@@ -221,7 +227,8 @@ async function assistant(
         break;
       case "image_ref":
         throw new Unsendable(
-          "continuation_unsupported: the ai-sdk bridge sends no assistant images back",
+          "continuation_unsupported",
+          "the ai-sdk bridge sends no assistant images back",
         );
       default:
         assertNever(part);
@@ -237,7 +244,8 @@ async function opaque(
 ): Promise<ReplayPart | PartMetadata> {
   if (part.provider !== ctx.provider)
     throw new Unsendable(
-      `continuation_unsupported: a ${part.provider} ${part.format} part can't be sent to ${ctx.provider}`,
+      "continuation_unsupported",
+      `a ${part.provider} ${part.format} part can't be sent to ${ctx.provider}`,
     );
   const stored = JSON.parse(utf8.decode(await ctx.bytes(part.ref)));
   return part.format === METADATA_FORMAT

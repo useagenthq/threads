@@ -106,7 +106,7 @@ async function* send(
   const mapped = await toOpenAI(render, context);
   if (!mapped.ok) {
     // Refused before dispatch: nothing was sent.
-    yield { kind: "rejected", reason: "provider_error" };
+    yield { kind: "rejected", reason: mapped.code };
     return;
   }
   const client = new OpenAI({
@@ -129,7 +129,12 @@ async function* send(
     }
   } catch (error) {
     const rejected = yielded ? undefined : rejection(error);
-    if (rejected === undefined) throw staleEpoch(error) ?? error;
+    if (staleEpoch(error) !== undefined) {
+      // The fence refused at the real send point: nothing left (in-band, never a throw).
+      yield { kind: "rejected", reason: "stale_epoch" };
+      return;
+    }
+    if (rejected === undefined) throw error;
     yield rejected;
   }
 }

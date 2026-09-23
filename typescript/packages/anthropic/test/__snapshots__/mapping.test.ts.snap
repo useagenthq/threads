@@ -374,14 +374,16 @@ TOKEN=[redacted]
 
 exports[`golden: Render v1 conformance cases → Messages API request render-thinking-block-replay 1`] = `
 {
-  "message": "continuation_unsupported: a scripted thinking part can't be sent to anthropic",
+  "code": "continuation_unsupported",
+  "message": "a scripted thinking part can't be sent to anthropic",
   "ok": false,
 }
 `;
 
 exports[`golden: Render v1 conformance cases → Messages API request render-hosted-search-citations 1`] = `
 {
-  "message": "continuation_unsupported: a scripted server_tool part can't be sent to anthropic",
+  "code": "continuation_unsupported",
+  "message": "a scripted server_tool part can't be sent to anthropic",
   "ok": false,
 }
 `;

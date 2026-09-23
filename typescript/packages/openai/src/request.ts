@@ -22,7 +22,11 @@ import {
 
 export type Mapped =
   | { readonly ok: true; readonly body: { readonly [key: string]: Json } }
-  | { readonly ok: false; readonly message: string };
+  | {
+      readonly ok: false;
+      readonly code: Unsendable["code"];
+      readonly message: string;
+    };
 
 type Item = { readonly [key: string]: Json };
 
@@ -37,6 +41,7 @@ export async function toOpenAI(
   if (head.adapter.name !== "openai")
     return {
       ok: false,
+      code: "provider_error",
       message: `line 0 names adapter ${head.adapter.name}, not openai`,
     };
   const bytes: Bytes = readOrRefuse(context);
@@ -45,7 +50,7 @@ export async function toOpenAI(
     for (const line of request.lines) input.push(...(await items(line, bytes)));
   } catch (error) {
     if (error instanceof Unsendable)
-      return { ok: false, message: error.message };
+      return { ok: false, code: error.code, message: error.message };
     throw error;
   }
   const hosted = head.adapter.settings["hosted_tools"];
@@ -140,7 +145,8 @@ async function contents(
         break;
       case "audio_ref":
         throw new Unsendable(
-          "content_unsupported: the openai adapter takes no audio input",
+          "content_unsupported",
+          "the openai adapter takes no audio input",
         );
       case "citation":
         break;
@@ -196,7 +202,8 @@ async function assistant(
       case "hosted_tool":
         if (part.provider !== "openai")
           throw new Unsendable(
-            `continuation_unsupported: a ${part.provider} ${part.format} part can't be sent to openai`,
+            "continuation_unsupported",
+            `a ${part.provider} ${part.format} part can't be sent to openai`,
           );
         out.push(
           JsonObject.parse(JSON.parse(utf8.decode(await bytes(part.ref)))),
@@ -206,7 +213,8 @@ async function assistant(
         break;
       case "image_ref":
         throw new Unsendable(
-          "continuation_unsupported: the openai adapter sends no assistant images back",
+          "continuation_unsupported",
+          "the openai adapter sends no assistant images back",
         );
       default:
         assertNever(part);

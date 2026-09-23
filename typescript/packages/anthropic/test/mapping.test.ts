@@ -132,7 +132,7 @@ describe("replay", () => {
     ]);
     const out = await drain(m.send({ request_id: "b:e", body }, context));
     expect(out.chunks).toEqual([
-      { kind: "rejected", reason: "provider_error" },
+      { kind: "rejected", reason: "continuation_unsupported" },
     ]);
     expect(calls).toHaveLength(0);
   });
@@ -156,7 +156,8 @@ describe("replay", () => {
     const mapped = await toAnthropic(parseRender(body), context);
     expect(mapped).toEqual({
       ok: false,
-      message: "content_unsupported: anthropic takes no audio input",
+      code: "content_unsupported",
+      message: "anthropic takes no audio input",
     });
   });
 });
