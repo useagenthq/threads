@@ -1,0 +1,9 @@
+{
+  "name": "cache-break-exact-integers",
+  "family": "context_compaction",
+  "kind": "reduce",
+  "description": "Cache reads fall from 2^53-1 to 8556839292003941: 20 x now is 9 less than 19 x previous, so it is a break. The comparison is exact integer arithmetic; doubles round both products to the same value and would miss it.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

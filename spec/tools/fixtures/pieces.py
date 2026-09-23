@@ -143,12 +143,13 @@ def started(
     instructions: str = "You are a helpful agent.",
     policy: Obj | None = None,
     adapter: Obj = ADAPTER,
+    params: Obj = PARAMS,
 ) -> Obj:
     cfg: Obj = {
         "agent_name": "demo",
         "instructions": instructions,
         "model": MODEL,
-        "model_params": PARAMS,
+        "model_params": params,
         "adapter": adapter,
         "tools": tools,
     }

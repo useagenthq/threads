@@ -1,0 +1,9 @@
+{
+  "name": "cost-max-tokens-not-integer",
+  "family": "cancellation_resume",
+  "kind": "reduce",
+  "description": "The pinned model_params.max_tokens is true, not an integer, so the attempt has no output bound. Its request has no response, so cost can't bound it: bounded false. A boolean is never read as 1.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

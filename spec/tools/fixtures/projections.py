@@ -32,12 +32,16 @@ INPUT_SIDE = ("input", "cache_read", "cache_write")
 def reservation(model: Obj, params: Obj, input_bound: int | None = None) -> int | None:
     """The per-attempt upper bound, or None when no bound is declared."""
     price = obj(model["price"])
+    max_tokens = params.get("max_tokens")
+    # Only a JSON integer bounds the output; a boolean is not one (Python's bool is an int).
+    if not isinstance(max_tokens, int) or isinstance(max_tokens, bool):
+        return None
     if input_bound is None:
         if model["input_billing_bound"] != "context_window":
             return None
         input_bound = num(model["context_window"])
     top = max(num(price.get(k, 0)) for k in INPUT_SIDE)
-    return input_bound * top + num(params["max_tokens"]) * num(price["output"])
+    return input_bound * top + max_tokens * num(price["output"])
 
 
 def _attempts(log: Log) -> list[tuple[Obj, Obj, Obj | None, Obj | None]]:
