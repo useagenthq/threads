@@ -102,4 +102,24 @@ CREATE TABLE IF NOT EXISTS observer_cursors (
   PRIMARY KEY (observer, branch_id)
 ) STRICT;
 
+-- Tree-wide budget reservations. Before every model_request in any thread of an
+-- agent tree, its bound is reserved against every budget covering that thread (its own thread and
+-- run budgets and each ancestor's), in one transaction that sums each budget's rows and inserts
+-- one row per (budget, limit) only if all fit. The request is appended only after it commits.
+-- attempt_key is '<branch_id>:<seq>' of that model_request. A response settles its rows to the
+-- attempt's disposition; an attempt not proven unbilled keeps its bound. A
+-- reserved row whose attempt never reached the log is released by its branch's next writer.
+-- budget_id: 'thread:<thread_id>' (policy.budget) or 'run:<thread_id>:<user_input event_id>'.
+-- A projection with a durable cache: the rows can be rebuilt from the tree's logs.
+CREATE TABLE IF NOT EXISTS budget_ledger (
+  budget_id TEXT NOT NULL,
+  limit_name TEXT NOT NULL CHECK (
+    limit_name IN ('max_cost_nanos', 'max_input_tokens', 'max_output_tokens', 'max_model_requests')
+  ),
+  attempt_key TEXT NOT NULL,
+  amount INTEGER NOT NULL CHECK (amount >= 0),
+  state TEXT NOT NULL CHECK (state IN ('reserved', 'settled')),
+  PRIMARY KEY (budget_id, limit_name, attempt_key)
+) STRICT;
+
 PRAGMA user_version = 1;
