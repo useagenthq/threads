@@ -56,7 +56,12 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
   const reverted = await revert(s);
   if (reverted !== "none") return reverted;
   const step = stepEvents(s.events, s.fold);
-  const crashes = abandons(step).filter((a) => CRASH.has(a.data.reason));
+  // A compaction side request's crashes are its own (manual.ts), never the turn's budget.
+  const crashes = abandons(step).filter(
+    (a) =>
+      CRASH.has(a.data.reason) &&
+      s.fold.requests.get(a.data.request_event_id)?.compaction !== true,
+  );
   if (crashes.length > retryPolicy(s.fold.policy).crash_resends)
     return endTurn(s, "model_unavailable");
   await waitScheduled(s, step);

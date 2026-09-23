@@ -89,15 +89,20 @@ describe("resuming a requested compaction", () => {
     });
   }
 
-  test("3 crash abandonments exceed crash_resends: model_error with no request, twice the same", async () => {
-    const h = asked([]);
+  test("3 crash abandonments exceed crash_resends: model_error with no side request, twice the same", async () => {
+    const h = asked([reply("A.")]);
     crashes(h, 3);
     const first = await resumeOnce(h);
-    expect(first.filter((e) => e.type === "model_request")).toHaveLength(0);
+    expect(sides(first)).toHaveLength(0);
     expect(outcome(first)).toMatchObject({
       type: "compaction_failed",
       actor: { kind: "recovery" },
       data: { reason: "model_error" },
+    });
+    // The side request's crashes don't spend the turn's own crash budget: the turn answers.
+    expect(first.at(-1)).toMatchObject({
+      type: "turn_completed",
+      data: { reason: "end_turn" },
     });
     const second = await resumeOnce(h);
     expect(second.filter((e) => e.type === "model_request")).toHaveLength(0);
