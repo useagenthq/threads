@@ -2344,7 +2344,12 @@
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_model_response/properties/data/properties/stop_reason"},
           "required": true
         },
-        "usage": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Usage"}, "required": true}
+        "usage": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Usage"}, "required": true},
+        "provider_request_id": {
+          "type": {"union": [{"$ref": "urn:threads:schema:events:v1#/$defs/NonEmpty"}, {"prim": "null"}]},
+          "required": true,
+          "doc": "The provider's id for this request, or null when it gives none. A found model lookup must carry it, since model_response_recovered records it."
+        }
       }
     },
     "ModelChunk": {
