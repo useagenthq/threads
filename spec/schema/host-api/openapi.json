@@ -179,6 +179,7 @@
     "/v1/threads/{thread_id}/approvals/{challenge_id}": {
       "post": {
         "operationId": "decideApproval",
+        "description": "The authenticated principal must have approval authority under the ROOT run's approver set (spec/schema/README.md, Approval authority): the configured approvers, else the root run's originating principal. A descendant's challenge reached through the descendant thread's route is decided under the same root set. Otherwise 403 forbidden and nothing is appended.",
         "x-api": ["Thread.approve", "Thread.deny"],
         "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "approval_mismatch", "approval_expired", "approval_duplicate", "branch_busy"],
         "parameters": [
@@ -206,6 +207,7 @@
     "/v1/threads/{thread_id}/parked/{effect_key}/resolve": {
       "post": {
         "operationId": "resolveParked",
+        "description": "Accepts duplicate risk, so it needs approval authority under the ROOT run's approver set, as decideApproval does; otherwise 403 forbidden and nothing is appended. The accepting principal is recorded as effect_resolved's actor.principal.",
         "x-api": ["Thread.resolveParked"],
         "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "not_parked", "branch_busy"],
         "parameters": [

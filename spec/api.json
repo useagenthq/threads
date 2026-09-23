@@ -111,7 +111,7 @@
       "id": "approvers",
       "open": "allows roles or principals per tool or effect class.",
       "choice": "agent({approvers: Principal[]}) covering every ask; per-tool approvers deferred.",
-      "why": "Smallest form that meets the defaults (local operator for run(), nobody for channels)."
+      "why": "Smallest form that meets the default (the root run's originating principal; see approver-default)."
     },
     {
       "id": "api-casing",
@@ -154,6 +154,18 @@
       "open": "lists store among provider interfaces; allows only SQLite in v0.1.",
       "choice": "Store is opaque in v0.1: sqlite() is the only implementation and no methods are public.",
       "why": "Don't freeze an interface nobody implements yet."
+    },
+    {
+      "id": "approver-default",
+      "open": "defaults run() to the local operator and channels to nobody; the implementations disagreed (TS let any tenant principal approve, Python refused every channel approval).",
+      "choice": "With no approvers configured, the root run's originating principal (the root thread's latest user_input principal) may approve its own calls, over the API and a channel alike. Authority is always the ROOT run's set, also through a descendant's route; resolveParked and every duplicate-risk decision need it and record the accepting principal (spec/schema/README.md, Approval authority).",
+      "why": "Channel approvals work out of the box without letting other tenant principals approve; hosts wanting stricter control configure approvers."
+    },
+    {
+      "id": "budget-unbounded-limit",
+      "open": "reserves each attempt's bound, but says nothing of a token limit when max_tokens (or an input bound) is unknown; TS skipped the limit, Python reserved 0.",
+      "choice": "Setup refuses such a limit with budget_unenforceable unless on_unknown_usage is stop; at run time an attempt with no bound for a covering limit is refused as exceeding (spec/schema/README.md, Budget enforcement).",
+      "why": "A budget must never overspend; refusing at setup surfaces the misconfiguration before any spend."
     }
   ],
   "functions": {
@@ -275,8 +287,8 @@
           "kind": "option",
           "type": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}},
           "required": false,
-          "default_doc": "[local operator] for run(); nobody for channel-started threads",
-          "doc": "Who may answer approval challenges for this agent."
+          "default_doc": "the root run's originating principal (the root thread's latest user_input principal), for run() and channel threads alike (spec/schema/README.md, Approval authority)",
+          "doc": "Who may answer approval challenges and resolve parked effects for runs this agent roots, its subagents and handoff targets included."
         },
         {
           "name": "budget",
@@ -3225,7 +3237,7 @@
             "kind": {"type": {"literal": "message"}, "required": true},
             "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
             "address": {"type": {"prim": "string"}, "required": true, "doc": "Conversation key; the host maps it to a thread."},
-            "item_key": {"type": {"prim": "string"}, "required": true},
+            "item_key": {"type": {"prim": "string"}, "required": true, "doc": "Inbox dedup key, derived only from signed content (spec/schema/README.md, Channel replies)."},
             "content": {"type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Input"}, "required": true}
           },
           "casing": "wire"
@@ -3235,7 +3247,7 @@
             "kind": {"type": {"literal": "decision"}, "required": true},
             "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
             "address": {"type": {"prim": "string"}, "required": true, "doc": "Conversation key; the host maps it to a thread."},
-            "item_key": {"type": {"prim": "string"}, "required": true},
+            "item_key": {"type": {"prim": "string"}, "required": true, "doc": "Inbox dedup key, derived only from signed content (spec/schema/README.md, Channel replies)."},
             "challenge_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Uuid"}, "required": true},
             "decision": {"type": {"enum": ["grant", "deny"]}, "required": true}
           },
@@ -3246,7 +3258,7 @@
             "kind": {"type": {"literal": "control"}, "required": true},
             "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
             "address": {"type": {"prim": "string"}, "required": true, "doc": "Conversation key; the host maps it to a thread."},
-            "item_key": {"type": {"prim": "string"}, "required": true},
+            "item_key": {"type": {"prim": "string"}, "required": true, "doc": "Inbox dedup key, derived only from signed content (spec/schema/README.md, Channel replies)."},
             "command": {"type": {"enum": ["cancel", "stop_when_idle"]}, "required": true}
           },
           "casing": "wire"
