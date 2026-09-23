@@ -228,15 +228,9 @@ class ChannelIntake:
 
 async def _branch(store: Store, thread_id: ThreadId) -> Ok[BranchId] | Err[ParseError]:
     """The conversation thread's main branch, created on its first message."""
-    sq = await open_store(store)
-    root = await sq.root(thread_id)
-    if isinstance(root, Ok):
-        return root
     now = now_ms()
-    branch = BranchId(uuid7(now))
-    created = await sq.create(thread_id, branch, now)
-    # Another consumer may have created it first: its root is the one.
-    return Ok(branch) if isinstance(created, Ok) else await sq.root(thread_id)
+    # Atomic: two hosts consuming the first item at once must not each create a root.
+    return Ok(await (await open_store(store)).root_or_create(thread_id, BranchId(uuid7(now)), now))
 
 
 async def _parked(store: Store, branch: BranchId) -> bool:

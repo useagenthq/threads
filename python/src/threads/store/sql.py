@@ -6,6 +6,7 @@ so a row is never trusted just because it is in the database.
 """
 
 import sqlite3
+import time
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -41,13 +42,31 @@ class Branch:
 
 def connect(path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(path, isolation_level=None)
+    _wal(conn)
     # Durable ack: a commit returns only after a full sync. fullfsync
     # matters on darwin, where plain fsync doesn't flush the drive cache; elsewhere it's a no-op.
-    for pragma in ("journal_mode=WAL", "synchronous=FULL", "fullfsync=ON"):
+    for pragma in ("synchronous=FULL", "fullfsync=ON"):
         conn.execute(f"PRAGMA {pragma}")
     conn.execute("PRAGMA checkpoint_fullfsync=ON")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+WAL_TRIES = 500
+
+
+def _wal(conn: sqlite3.Connection) -> None:
+    """Switching a new file to WAL can meet another process doing the same, and SQLite answers
+    that busy without calling its busy handler: retried, so two hosts can open one fresh store."""
+    for tried in range(1, WAL_TRIES + 1):
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.OperationalError as error:
+            if "locked" not in str(error) or tried == WAL_TRIES:
+                raise
+            time.sleep(0.01)
+        else:
+            return
 
 
 def install(conn: sqlite3.Connection) -> ParseError | None:

@@ -2,12 +2,14 @@
 
 import asyncio
 import sqlite3
+import threading
 from contextlib import closing
 from pathlib import Path
 
 from threads.log import BranchId, ThreadId
 from threads.result import Err, Ok
 from threads.store import LOCAL_TENANT, SqliteStore
+from threads.store.sql import connect
 
 STORE_SQL = Path(__file__).resolve().parents[3] / "spec" / "schema" / "store.sql"
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
@@ -49,3 +51,26 @@ def test_a_newer_schema_is_refused(tmp_path: Path) -> None:
     with closing(sqlite3.connect(path)) as conn:
         conn.execute("PRAGMA user_version = 2")
     assert open_store(path) == Err("unsupported_format")
+
+
+def test_opening_a_fresh_store_waits_out_another_process_switching_it_to_wal(
+    tmp_path: Path,
+) -> None:
+    """Two hosts opening one new store race on the WAL switch, which SQLite refuses busy
+    without calling its busy handler (found by the F10.5 drill): opening waits it out."""
+    failed: list[Exception] = []
+
+    def opening(path: Path) -> None:
+        try:
+            connect(str(path)).close()
+        except sqlite3.OperationalError as error:
+            failed.append(error)
+
+    for round_ in range(20):
+        path = tmp_path / f"threads-{round_}.db"
+        openers = [threading.Thread(target=opening, args=(path,)) for _ in range(6)]
+        for opener in openers:
+            opener.start()
+        for opener in openers:
+            opener.join()
+    assert failed == []

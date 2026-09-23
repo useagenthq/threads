@@ -111,3 +111,19 @@ async def _a_redelivered_batch_inserts_nothing_and_maps_one_thread() -> None:
     conversation = await sq.tables.conversation(thread)
     assert conversation == inbox.Conversation("slack", "T1", "C1")
     assert await sq.scoped("other").tables.inbox_rows() == ()
+
+
+def test_a_thread_gets_one_root_when_two_consumers_create_it_at_once() -> None:
+    """Two hosts consuming a conversation's first item each create its root under a fresh id;
+    only the first create stands, so every reader resolves the same main branch (F9.6 drill)."""
+
+    async def main() -> None:
+        opened = await SqliteStore.open(tenant_id="acme")
+        assert isinstance(opened, Ok)
+        sq = opened.value
+        other = BranchId("0192b000-0000-7000-8000-0000000000bb")
+        assert await sq.root_or_create(THREAD, BRANCH, T0) == BRANCH
+        assert await sq.root_or_create(THREAD, other, T0) == BRANCH
+        assert await sq.root(THREAD) == Ok(BRANCH)
+
+    asyncio.run(main())

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from threads.log import BranchId, ParseError
 from threads.store import approvals
 from threads.store.companion import Companion
-from threads.store.sql import Branch, branch, insert_branch, insert_events, transaction
+from threads.store.sql import Branch, branch, insert_branch, insert_events, root, transaction
 from threads.store.verify import StoredEvent
 
 TTL_MS = 30_000
@@ -167,6 +167,17 @@ def create(conn: sqlite3.Connection, row: Branch, lease: Lease | None) -> ParseE
         if lease is not None:
             _put(conn, row.branch_id, lease)
     return None
+
+
+def root_or_create(conn: sqlite3.Connection, row: Branch) -> BranchId:
+    """The thread's root, else `row` inserted as it, in one transaction: processes racing to
+    start a thread all get the root that stood first."""
+    with transaction(conn):
+        found = root(conn, row.thread_id, row.tenant_id)
+        if found is not None:
+            return found
+        insert_branch(conn, row)
+    return row.branch_id
 
 
 def finish_fork(

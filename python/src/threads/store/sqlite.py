@@ -128,6 +128,14 @@ class SqliteStore:
         )
         return _result(await self._worker.call(lambda c: lease.create(c, row, None)))
 
+    async def root_or_create(self, thread_id: ThreadId, branch_id: BranchId, now: int) -> BranchId:
+        """The thread's root branch, created as `branch_id` if it has none yet (atomic)."""
+        header = header_line(thread_id, branch_id, now)
+        row = sql.Branch(
+            branch_id, thread_id, self._tenant, None, None, header, "ready", 0, sha256_hex(header)
+        )
+        return await self._worker.call(lambda c: lease.root_or_create(c, row))
+
     async def import_log(self, log: VerifiedLog) -> Ok[None] | Err[ParseError]:
         """Stores a verified export's lines byte for byte: parents referenced, never copied.
         Every model request must first replay from the log and the artifacts already in the

@@ -29,23 +29,31 @@ _SPAWNED: list[subprocess.Popen[str]] = []
 
 def spawn(role: str, where: Path, **env: str) -> subprocess.Popen[str]:
     # The worker is this repo's own test script, run by this interpreter.
-    worker = subprocess.Popen(  # noqa: S603
-        [sys.executable, str(WORKER), role, str(where)],
-        env={**os.environ, **env},
-        stdout=subprocess.PIPE,
-        text=True,
-    )
+    # Each worker's stderr goes to its own file, so a failed drill shows what every process did.
+    with (where / f"worker-{len(_SPAWNED)}.log").open("w") as errors:
+        worker = subprocess.Popen(  # noqa: S603
+            [sys.executable, str(WORKER), role, str(where)],
+            env={**os.environ, **env},
+            stdout=subprocess.PIPE,
+            stderr=errors,
+            text=True,
+            start_new_session=True,
+        )
     _SPAWNED.append(worker)
     return worker
 
 
 def reap() -> None:
-    """After every drill, passed or failed: no worker outlives it."""
+    """After every drill, passed or failed: no worker, nor anything it started, outlives it."""
     while _SPAWNED:
         worker = _SPAWNED.pop()
-        if worker.poll() is None:
-            worker.kill()
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(worker.pid, signal.SIGKILL)
         worker.communicate()
+    alive = subprocess.run(  # noqa: S603
+        ["/usr/bin/pgrep", "-f", str(WORKER)], capture_output=True, text=True, check=False
+    ).stdout.split()
+    assert not alive, f"workers still running: {alive}"
 
 
 def wait_at(worker: subprocess.Popen[str], point: str) -> None:
