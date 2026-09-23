@@ -3,6 +3,8 @@ import { type EventOf, responseText } from "../fold/state";
 import { sha256Hex } from "../hash";
 import type { OutputPart, Usage } from "../log";
 import { assertModelAllowed, type Model, type ModelChunk } from "../model";
+import { unsupported } from "../model/capabilities";
+import { parseRender } from "../model/render-lines";
 import { compactionInstruction, refReader, render } from "../render";
 import { draft } from "./drafts";
 import type { Session } from "./session";
@@ -54,6 +56,8 @@ export async function attempt(
       rendered.error.message,
     );
   const { bytes, prefix } = rendered.value;
+  const refused = unsupported(parseRender(bytes), model.info);
+  if (refused !== undefined) return { kind: "halt", halt: refused };
   const stopped = s.append(
     draft.modelRequest({
       attempt: number,
