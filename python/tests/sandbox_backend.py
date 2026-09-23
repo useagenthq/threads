@@ -225,6 +225,8 @@ class FakeBackend:
         tool = self.script.get("tools", {}).get(name)
         if tool is not None:
             return _done(1 if tool.get("is_error") else 0, tool["output"].encode())
+        if list(args) == ["-c", "cat >&2"]:
+            return _done(0, b"", stdin)
         if name == "sh":
             # `sh -c 'setsid sleep 1000 &'`: a descendant no provider record names, still running.
             box.orphans.append(_running())

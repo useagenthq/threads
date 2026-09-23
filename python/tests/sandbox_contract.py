@@ -62,6 +62,18 @@ async def exec_streams_output_and_exit_codes(h: Harness) -> None:
     assert await ran(fed) == (0, b"from stdin", b"")
 
 
+MARKERS = b"A\x01\x01\x01B\x02\x02\x02C\x03\x03\x03" + bytes(range(256)) + b"\x02\x02\x02"
+"""Every byte value, and the in-band stream markers some providers demux on."""
+
+
+async def every_byte_reaches_its_own_stream(h: Harness) -> None:
+    s = await session(h)
+    out = await s.exec(["cat"], OPEN, process_key="o", stdin=MARKERS)
+    assert await ran(out) == (0, MARKERS, b"")
+    err = await s.exec(["sh", "-c", "cat >&2"], OPEN, process_key="e", stdin=MARKERS)
+    assert await ran(err) == (0, b"", MARKERS)
+
+
 async def env_is_exact_and_credentials_never_enter(h: Harness) -> None:
     """AGENTS invariant 4: exactly the given env, and the adapter's own
     credentials in no environment and no argv the sandbox ever saw."""
@@ -250,6 +262,7 @@ async def the_snapshot_manifest_describes_the_captured_image(h: Harness) -> None
 
 CHECKS: tuple[Check, ...] = (
     exec_streams_output_and_exit_codes,
+    every_byte_reaches_its_own_stream,
     env_is_exact_and_credentials_never_enter,
     files_keep_the_path_contract,
     terminate_never_confirms_what_the_guest_could_forge,
