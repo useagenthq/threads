@@ -138,10 +138,27 @@ export function occurrences(
   let prev = localEpoch(format, t - MINUTE);
   for (; t <= to; t += MINUTE) {
     const local = localEpoch(format, t);
+    if (repeated(format, t, local)) seen.add(local);
     if (due(cron, prev, local, seen)) out.push(t);
     prev = local;
   }
   return out;
+}
+
+// ponytail: looks back 3 h for the clock turning back; zones whose offset drops by more than
+// that in one step would need a longer look-back.
+const LOOK_BACK = 3 * 60 * MINUTE;
+
+/** Whether wall time `local` already happened at an earlier instant (a fall-back repeat), even
+ *  when that earlier instant is before the scan started. */
+function repeated(
+  format: Intl.DateTimeFormat,
+  t: number,
+  local: number,
+): boolean {
+  const drop =
+    localEpoch(format, t - LOOK_BACK) - (t - LOOK_BACK) - (local - t);
+  return drop > 0 && localEpoch(format, t - drop) === local;
 }
 
 /** This instant fires: its wall minute matches for the first time, or a skipped one did. */
