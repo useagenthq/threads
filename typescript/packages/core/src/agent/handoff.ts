@@ -1,9 +1,17 @@
 import type { EventOf } from "../fold/state";
-import type { KnownEvent } from "../log";
-import type { EventDraft } from "../store";
-import { type TargetFactory, targetFactory } from "./registry";
+import type { LoopConfig } from "../loop";
+import { inheritedFrom } from "../loop/ledger";
+import { knownEvents } from "../reduce";
+import type { EventDraft, Writer } from "../store";
+import { type ChildEnv, type TargetFactory, targetFactory } from "./registry";
 import type { RunResult, ThreadRef } from "./result";
-import { ceilingsOf, execute, type Plan, type Resolved } from "./run";
+import {
+  ceilingsOf,
+  execute,
+  inheritedOf,
+  type Plan,
+  type Resolved,
+} from "./run";
 
 // A handoff's target: a new thread of the listed agent with its own pinned
 // line 0 and policy, under the originating principal. The forwarded history arrives as
@@ -45,6 +53,8 @@ export function target<Deps, Output>(
         },
         ...(env.signal === undefined ? {} : { signal: env.signal }),
         ceilings: env.ceilings ?? [],
+        ...(env.chain === undefined ? {} : { chain: env.chain }),
+        ...(env.covering === undefined ? {} : { covering: env.covering }),
       },
       [request],
     );
@@ -56,9 +66,18 @@ export function target<Deps, Output>(
 export async function handedOff<Deps, Output>(
   def: Resolved<Deps, Output>,
   plan: Plan<Deps>,
-  events: readonly KnownEvent[],
+  writer: Writer,
   thread: ThreadRef,
+  authorize: LoopConfig["authorize"],
 ): Promise<RunResult<Output>> {
+  const events = knownEvents(writer.chain);
+  const view = { threadId: thread.id, fold: writer.chain.fold, events };
+  // Handoff scope: the target runs inside this run's ceilings and budgets, and a subagent's
+  // target inside the subagent's own decision chain.
+  const chain: ChildEnv["chain"] =
+    plan.child === undefined
+      ? plan.chain
+      : (call) => authorize(call, writer.chain.fold);
   const handoff = events.findLast(
     (e): e is EventOf<"handoff"> => e.type === "handoff",
   );
@@ -71,6 +90,8 @@ export async function handedOff<Deps, Output>(
     store: plan.store,
     principal: plan.principal,
     ceilings: ceilingsOf(plan),
+    covering: inheritedFrom(view, inheritedOf(plan)),
+    ...(chain === undefined ? {} : { chain }),
     ...(plan.signal === undefined ? {} : { signal: plan.signal }),
   })({
     threadId: handoff.data.to_thread_id,

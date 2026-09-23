@@ -1,5 +1,5 @@
 import type { ArtifactRef, EventId, Policy, Principal, ThreadId } from "../log";
-import type { Subagent } from "../loop";
+import type { ChildRun, Covering, Subagent } from "../loop";
 import type { HostRunner } from "./hosted";
 import type { ThreadRef } from "./result";
 import type { Store } from "./sqlite";
@@ -15,6 +15,10 @@ export type ChildEnv = {
   readonly signal?: AbortSignal;
   /** A handoff target's ceilings: those of the run that handed off. */
   readonly ceilings?: readonly NonNullable<Policy["permissions"]>[];
+  /** A subagent's handoff target: the handing-off child's decision chain (Handoff scope). */
+  readonly chain?: ChildRun["ceiling"];
+  /** A handoff target: every budget covering the handing-off thread, as an ancestor's. */
+  readonly covering?: readonly Covering[];
 };
 
 export type ChildFactory = (env: ChildEnv) => Subagent;

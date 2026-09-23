@@ -1,31 +1,31 @@
 import type { z } from "zod";
 import { ObserverPump } from "../hooks/observers";
-import {
-  BranchId,
-  type InputPart,
-  type KnownEvent,
-  type PermissionsPolicy,
-  type Principal,
+import type {
+  InputPart,
+  KnownEvent,
+  PermissionsPolicy,
+  Principal,
   ThreadId,
 } from "../log";
-import { type ChildRun, type LoopEnd, resume } from "../loop";
+import {
+  type ChildRun,
+  type Covering,
+  type LoopConfig,
+  type LoopEnd,
+  resume,
+} from "../loop";
 import { DEFAULT_PERMISSIONS } from "../permissions";
 import { knownEvents } from "../reduce";
-import {
-  type EventDraft,
-  LEASE_TTL_MS,
-  type LogStore,
-  running,
-  type Writer,
-} from "../store";
-import { uuidv7 } from "../store/encode";
+import { type EventDraft, LEASE_TTL_MS, running, type Writer } from "../store";
 import { bindBuiltins } from "../tools";
 import type { LogError } from "../verify";
 import type { Agent } from "./agent";
 import { loopConfig } from "./config";
+import { checkEnforceable } from "./enforceable";
 import { ConfigError } from "./errors";
 import { type Extension, observerOf } from "./extension";
 import { handedOff } from "./handoff";
+import { open } from "./open-thread";
 import type { ChildPin, PinOptions } from "./pin";
 import { pin } from "./pin";
 import { bindProviders } from "./providers";
@@ -90,6 +90,7 @@ export async function run<Deps, Output>(
   options: RunOptions<Deps>,
   hooks: Hooks = {},
 ): Promise<RunResult<Output>> {
+  checkEnforceable(options.budget, [def.model, ...def.fallback]);
   const principal = options.principal ?? OPERATOR;
   const draft: EventDraft = {
     type: "user_input",
@@ -119,6 +120,10 @@ export type Plan<Deps> = RunOptions<Deps> & {
   readonly target?: Target;
   /** A handoff target's ceilings: the handing-off run's, never the source agent's policy. */
   readonly ceilings?: readonly Permissions[];
+  /** A handoff target of a subagent: the handing-off child's decision, every ancestor's included. */
+  readonly chain?: ChildRun["ceiling"];
+  /** A handoff target: every budget covering the handing-off thread, as an ancestor's. */
+  readonly covering?: readonly Covering[];
 };
 
 /** Every ceiling this run is also decided under. */
@@ -209,19 +214,18 @@ export async function execute<Deps, Output>(
       builtin: [...builtin.tools, ...providers.tools],
       events: () => knownEvents(writer.chain),
       ceilings: ceilingsOf(plan),
+      ...(plan.chain === undefined ? {} : { chain: plan.chain }),
       ledger: log.budgets,
+      inherited: inheritedOf(plan),
       ...(builtin.readFile === undefined ? {} : { readFile: builtin.readFile }),
       ...(child === undefined ? {} : { child }),
     });
-    const pending = pendingInputs(writer, link, inputs);
-    // Recovery first; an in-doubt turn finishes before the next input opens the next one.
-    let end: LoopEnd = await resume(writer, artifacts, config, {
-      ...(pending[0] === undefined ? {} : { input: pending[0] }),
-    });
-    for (const input of pending.slice(1)) {
-      if (end.kind !== "idle") break;
-      end = await resume(writer, artifacts, config, { input });
-    }
+    const end = await drive(
+      writer,
+      artifacts,
+      config,
+      pendingInputs(writer, link, inputs),
+    );
     if (end.kind === "idle" && child === undefined)
       await snapshotTurn(
         def.sandbox,
@@ -231,7 +235,7 @@ export async function execute<Deps, Output>(
         await providers.revision(),
       );
     if (end.kind === "idle" && writer.chain.fold.handedOff)
-      return handedOff(def, plan, knownEvents(writer.chain), thread);
+      return handedOff(def, plan, writer, thread, config.authorize);
     return runResult(
       end,
       knownEvents(writer.chain),
@@ -242,6 +246,28 @@ export async function execute<Deps, Output>(
   } finally {
     stop();
   }
+}
+
+/** Recovery first; an in-doubt turn finishes before the next input opens the next one. */
+async function drive(
+  writer: Writer,
+  artifacts: Awaited<ReturnType<typeof openStore>>["artifacts"],
+  config: LoopConfig,
+  pending: readonly EventDraft[],
+): Promise<LoopEnd> {
+  let end: LoopEnd = await resume(writer, artifacts, config, {
+    ...(pending[0] === undefined ? {} : { input: pending[0] }),
+  });
+  for (const input of pending.slice(1)) {
+    if (end.kind !== "idle") break;
+    end = await resume(writer, artifacts, config, { input });
+  }
+  return end;
+}
+
+/** Budgets covering this thread as an ancestor's: a child's parent's, a target's source's. */
+export function inheritedOf(plan: Plan<unknown>): readonly Covering[] {
+  return plan.child?.covering ?? plan.covering ?? [];
 }
 
 /** How a thread started by another links to it: a subagent, or a handoff target. */
@@ -293,60 +319,6 @@ function handleOf(
   thread: RunOptions<unknown>["thread"],
 ): ThreadRef | undefined {
   return typeof thread === "object" ? thread : undefined;
-}
-
-type Opened = {
-  readonly threadId: ThreadId;
-  readonly branchId: BranchId;
-  readonly writer: ReturnType<LogStore["acquire"]>;
-};
-
-/**
- * A new thread (its header and thread_started), or the lease on an existing one's branch. With
- * `create`, a thread id that isn't in the store yet is created under that id (a child).
- */
-function open(
-  log: LogStore,
-  thread: RunOptions<unknown>["thread"],
-  first: readonly EventDraft[],
-  holder: string,
-  create: boolean,
-): Opened {
-  if (thread === undefined)
-    return created(log, ThreadId.parse(uuidv7(Date.now())), first, holder);
-  const threadId = typeof thread === "string" ? thread : thread.id;
-  const branch =
-    typeof thread === "string"
-      ? log.mainBranch(thread)
-      : { ok: true as const, value: thread.branch };
-  if (!branch.ok && create) return created(log, threadId, first, holder);
-  if (!branch.ok)
-    throw new ConfigError(
-      "invalid_config",
-      `thread ${threadId} is not in this store`,
-    );
-  return {
-    threadId,
-    branchId: branch.value,
-    writer: log.acquire(branch.value, holder),
-  };
-}
-
-function created(
-  log: LogStore,
-  threadId: ThreadId,
-  first: readonly EventDraft[],
-  holder: string,
-): Opened {
-  const branchId = BranchId.parse(uuidv7(Date.now()));
-  const made = log.createBranch(threadId, branchId);
-  if (!made.ok) return { threadId, branchId, writer: made };
-  const writer = log.acquire(branchId, holder);
-  if (writer.ok) {
-    const appended = writer.value.append(first);
-    if (!appended.ok) return { threadId, branchId, writer: appended };
-  }
-  return { threadId, branchId, writer };
 }
 
 /** A pin never changes in place: continuing a thread needs the config it started with. */

@@ -46,7 +46,8 @@ export async function unparkChildren(s: Session): Promise<Halt | undefined> {
     );
     if (spawned === undefined) continue;
     const end = await runChild(s, spawned);
-    if (end.status === "parked") continue;
+    // Still parked, or not runnable right now: this thread stays parked on it.
+    if ("code" in end || end.status === "parked") continue;
     const stopped = s.append({
       type: "resumed",
       type_version: 1,

@@ -103,7 +103,7 @@ export function launch(s: Session, spawned: Spawned): void {
 async function rounds(s: Session, spawned: Spawned): Promise<ChildEnd | Halt> {
   for (;;) {
     const end = await runChild(s, spawned);
-    if (end.status === "parked") return end;
+    if ("code" in end || end.status === "parked") return end;
     const next = await stopGate(s, spawned, finished(s, spawned, end));
     if (next !== "continue") return next === "stop" ? end : next;
   }
@@ -126,7 +126,7 @@ export async function runChild(
   s: Session,
   spawned: Spawned,
   cancel?: Principal,
-): Promise<ChildEnd> {
+): Promise<ChildEnd | Halt> {
   const sub = s.config.agents?.subagent(spawned.data.agent_name);
   if (sub === undefined)
     return {

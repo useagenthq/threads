@@ -20,6 +20,7 @@ import type { EventDraft } from "../store";
 import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
+import { checkEnforceable } from "./enforceable";
 import { ConfigError } from "./errors";
 import { type Extension, hookNames } from "./extension";
 import { jsonSchema, type Tool } from "./tool";
@@ -112,6 +113,7 @@ export function pin(
   const twice = names.find((n, i) => names.indexOf(n) !== i);
   if (twice !== undefined)
     throw new ConfigError("duplicate_name", `two tools are named ${twice}`);
+  checkEnforceable(o.budget, [o.model, ...o.fallback]);
   const { model, params, adapter } = o.model.info;
   const cfg = {
     agent_name: o.name,

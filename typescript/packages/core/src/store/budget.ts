@@ -81,6 +81,39 @@ export class BudgetLedger {
     return rows.ok ? rows.value.map((r) => r.attempt_key) : [];
   }
 
+  /** Attempt keys under `prefix` with any row, reserved or settled. */
+  keys(prefix: string): ReadonlySet<string> {
+    const rows = parseRows(
+      Key,
+      this.#db.all(
+        `SELECT DISTINCT attempt_key FROM budget_ledger
+         WHERE substr(attempt_key, 1, length(?)) = ?`,
+        [prefix, prefix],
+      ),
+    );
+    return new Set(rows.ok ? rows.value.map((r) => r.attempt_key) : []);
+  }
+
+  /**
+   * Re-enters an attempt the log has and the ledger lacks (a lost or imported ledger), unchecked:
+   * it was dispatched already, so it counts whether or not it fits.
+   */
+  restore(attemptKey: string, claims: readonly Claim[]): void {
+    this.#db.transaction(() => {
+      for (const c of claims)
+        this.#db.run(
+          `INSERT INTO budget_ledger (budget_id, limit_name, attempt_key, amount, state)
+           VALUES (?, ?, ?, ?, 'reserved') ON CONFLICT DO NOTHING`,
+          [c.budgetId, c.limit, attemptKey, c.amount],
+        );
+    });
+  }
+
+  /** What `budgetId` has reserved and settled against `limit`. */
+  spent(budgetId: string, limit: LimitName): number {
+    return this.#spent({ budgetId, limit, max: 0, amount: 0 }, "");
+  }
+
   /** Drops a reservation whose attempt never reached the log. */
   release(attemptKey: string): void {
     this.#db.run("DELETE FROM budget_ledger WHERE attempt_key = ?", [

@@ -23,8 +23,10 @@ export async function settleBackground(s: Session): Promise<Halt | undefined> {
 async function settle(
   s: Session,
   callId: string,
-  end: ChildEnd,
+  end: ChildEnd | Halt,
 ): Promise<Halt | undefined> {
+  // A child that couldn't run halts this run; it is launched again on the next one.
+  if ("code" in end) return end;
   const spawned = spawnedFor(s, callId);
   if (spawned === undefined) throw new Error("a background child was spawned");
   if (end.status === "parked") return parkOn(s, spawned, end.reason);

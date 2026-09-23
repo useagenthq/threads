@@ -21,7 +21,7 @@ export class Session {
   /** Background children running in this process, by spawn call id. */
   readonly background: Map<string, Promise<void>> = new Map();
   /** Ended background children the loop records at its next step boundary. */
-  readonly finished: Map<string, ChildEnd> = new Map();
+  readonly finished: Map<string, ChildEnd | Halt> = new Map();
   #cache: { readonly chain: Chain; readonly events: readonly KnownEvent[] };
 
   constructor(writer: Writer, artifacts: ArtifactStore, config: LoopConfig) {

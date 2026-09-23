@@ -1,5 +1,5 @@
-import type { EventOf } from "../fold/state";
-import type { KnownEvent } from "../log";
+import type { EventOf, Fold } from "../fold/state";
+import type { KnownEvent, ThreadId } from "../log";
 import { reservation, settlement, tokenBounds } from "../reduce/cost";
 import type { Claim, LimitName } from "../store";
 import type { Session } from "./session";
@@ -20,8 +20,15 @@ const LIMITS: readonly LimitName[] = [
   "max_model_requests",
 ];
 
-/** This thread's own budgets now: its thread budget and the open run's. */
-export function ownCovering(s: Session): readonly Covering[] {
+/** What a thread's own budgets are read from: its log, as of some point. */
+type View = {
+  readonly threadId: ThreadId;
+  readonly fold: Pick<Fold, "policy">;
+  readonly events: readonly KnownEvent[];
+};
+
+/** A thread's own budgets as of its `events`: its thread budget and the open run's. */
+export function ownCovering(s: View): readonly Covering[] {
   const thread = s.fold.policy?.budget;
   const input = turnEvents(s.events)[0];
   const run = input?.type === "user_input" ? input.data.budget : undefined;
@@ -52,33 +59,45 @@ export function covering(s: Session): readonly Covering[] {
   return [...ownCovering(s), ...(s.config.budgets?.inherited ?? [])];
 }
 
-/** What a child of this thread inherits: every budget covering this thread, as an ancestor's. */
-export function inheritedBy(s: Session): readonly Covering[] {
-  return covering(s).map((c) =>
+/**
+ * What a thread started by this one inherits (a child, or a handoff target: Handoff scope):
+ * every budget covering this thread, as an ancestor's.
+ */
+export function inheritedFrom(
+  s: View,
+  inherited: readonly Covering[],
+): readonly Covering[] {
+  return [...ownCovering(s), ...inherited].map((c) =>
     c.scope === "ancestor" ? c : { ...c, scope: "ancestor", owner: s.threadId },
   );
 }
 
+/** What a child of this thread inherits. */
+export function inheritedBy(s: Session): readonly Covering[] {
+  return inheritedFrom(s, s.config.budgets?.inherited ?? []);
+}
+
 /**
  * Reserves the next attempt's bound (it is appended at the next seq) against every covering
- * budget, or returns the budget_exceeded the refusal records. Earlier attempts settle first.
+ * budget, or returns the budget_exceeded the refusal records. The ledger is first brought up to
+ * date from the log, and earlier attempts settle first.
  */
 export function reserve(s: Session): Refusal | undefined {
   const budgets = s.config.budgets;
   if (budgets === undefined) return undefined;
+  rebuild(s);
   settleOpen(s);
-  const amounts = nextAmounts(s);
   const all = covering(s);
-  const claims = all.flatMap((c) =>
-    LIMITS.flatMap((limit): Claim[] => {
-      const max = c.budget[limit];
-      const amount = amounts.get(limit);
-      return max === undefined || amount === undefined
-        ? []
-        : [{ budgetId: c.budgetId, limit, max, amount }];
-    }),
-  );
-  const refused = budgets.ledger.reserve(key(s, s.fold.seq + 1), claims);
+  const claims = claimsOf(all, nextAmounts(s, s.events));
+  // A limit this attempt has no bound for is refused, never skipped (Budget enforcement).
+  const unbounded = claims.find((c) => c.amount === undefined);
+  const refused =
+    unbounded === undefined
+      ? budgets.ledger.reserve(key(s, s.fold.seq + 1), claims.filter(bounded))
+      : {
+          claim: { ...unbounded, amount: 0 },
+          observed: budgets.ledger.spent(unbounded.budgetId, unbounded.limit),
+        };
   if (refused === undefined) return undefined;
   const by = all.find((c) => c.budgetId === refused.claim.budgetId);
   const common = {
@@ -92,22 +111,66 @@ export function reserve(s: Session): Refusal | undefined {
     : { scope: by?.scope === "run" ? "run" : "thread", ...common };
 }
 
+/** A claim whose amount is undefined when the attempt has no bound for its limit. */
+type Open = Omit<Claim, "amount"> & { readonly amount: number | undefined };
+
+const bounded = (c: Open): c is Claim => c.amount !== undefined;
+
+function claimsOf(
+  all: readonly Covering[],
+  amounts: ReadonlyMap<LimitName, number>,
+): readonly Open[] {
+  return all.flatMap((c) =>
+    LIMITS.flatMap((limit): Open[] => {
+      const max = c.budget[limit];
+      return max === undefined
+        ? []
+        : [{ budgetId: c.budgetId, limit, max, amount: amounts.get(limit) }];
+    }),
+  );
+}
+
+/**
+ * Re-enters, at its bound, every model_request of this branch the ledger lacks, so a lost,
+ * wiped or imported ledger never resets a budget (invariant 1); settleOpen then settles them.
+ * ponytail: this branch's attempts only; a finished descendant's are re-entered when it runs again.
+ */
+function rebuild(s: Session): void {
+  const budgets = s.config.budgets;
+  if (budgets === undefined) return;
+  const known = budgets.ledger.keys(`${s.branchId}:`);
+  s.events.forEach((e, i) => {
+    if (e.type !== "model_request" || e.branch_id !== s.branchId) return;
+    const attempt = key(s, e.seq);
+    if (known.has(attempt)) return;
+    const before = s.events.slice(0, i);
+    const view = { threadId: s.threadId, fold: s.fold, events: before };
+    const all = [...ownCovering(view), ...budgets.inherited];
+    budgets.ledger.restore(
+      attempt,
+      claimsOf(all, nextAmounts(s, before)).filter(bounded),
+    );
+  });
+}
+
 const key = (s: Session, seq: number): string => `${s.branchId}:${seq}`;
 
-/** The next attempt's bound per limit; a limit with no declared bound isn't reserved. */
-function nextAmounts(s: Session): ReadonlyMap<LimitName, number> {
-  const settings = s.fold.model;
-  const epoch = s.events.findLast(
+/** The bound per limit of an attempt after `events`; a limit with no declared bound is absent. */
+function nextAmounts(
+  s: Session,
+  events: readonly KnownEvent[],
+): ReadonlyMap<LimitName, number> {
+  const epoch = events.findLast(
     (e) => e.type === "settings_changed" || e.type === "thread_started",
   );
-  const params =
+  const [ref, params] =
     epoch?.type === "settings_changed"
-      ? epoch.data.settings.model_params
+      ? [epoch.data.settings.model, epoch.data.settings.model_params]
       : epoch?.type === "thread_started"
-        ? epoch.data.model_params
-        : {};
+        ? [epoch.data.model, epoch.data.model_params]
+        : [undefined, {}];
   const model = s.fold.policy?.models?.find(
-    (m) => m.provider === settings?.provider && m.name === settings.name,
+    (m) => m.provider === ref?.provider && m.name === ref.name,
   );
   const bounds = tokenBounds(model, params, undefined);
   const cost =

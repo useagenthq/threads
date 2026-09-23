@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import {
   agent,
+  extension,
   openThread,
   scriptedModel,
   sqlite,
@@ -198,5 +199,67 @@ describe("tree-wide cancellation (F7.6)", () => {
     expect(later).not.toContain("model_request");
     expect(later).toContain("cancelled");
     expect(workerModel.remaining()).toBe(2);
+  });
+
+  test("a subagent_stop continue after the barrier never runs the cancelled child again", async () => {
+    const store = sqlite(":memory:");
+    const { promise: gate, resolve: open } = Promise.withResolvers<void>();
+    const slow = tool({
+      name: "slow",
+      description: "Waits.",
+      input: z.object({}),
+      runs: "host",
+      effect: "read_only",
+      execute: async () => {
+        await gate;
+        return "ok";
+      },
+    });
+    const workerModel = scriptedModel({
+      responses: [use("slow", {}, "w1"), say("after 1"), say("after 2")],
+    });
+    const worker = agent({ name: "worker", model: workerModel, tools: [slow] });
+    const lead = agent({
+      name: "lead",
+      model: scriptedModel({ responses: [spawn, say("never")] }),
+      tools: [slow],
+      subagents: [worker],
+      extensions: [
+        extension({
+          name: "keepgoing",
+          hooks: {
+            subagentStop: async () => ({
+              decision: "continue",
+              reason: "Keep going.",
+            }),
+          },
+        }),
+      ],
+    });
+    const running = lead.run("Go.", { store });
+    const parentId = await parentOnceChildRuns(store);
+    unwrap(await unwrap(await openThread(store, parentId)).cancel(operator));
+    open();
+    expect((await running).status).toBe("cancelled");
+    const parent = await events(store, parentId);
+    const child = await events(store, childOf(parent));
+    const later = child
+      .slice(child.findIndex((e) => e.type === "cancel_requested"))
+      .map((e) => e.type);
+    expect(later).not.toContain("model_request");
+    expect(later).not.toContain("user_input");
+    expect(workerModel.remaining()).toBe(2);
+    const finished = parent.find((e) => e.type === "agent_finished");
+    expect(finished?.type === "agent_finished" && finished.data.status).toBe(
+      "cancelled",
+    );
+    // The hook's continue is recorded as the stop it amounts to, so no replay re-sends it.
+    expect(
+      parent.flatMap((e) =>
+        e.type === "hook_decision" && e.data.hook === "subagent_stop"
+          ? [e.data.decision]
+          : [],
+      ),
+    ).toEqual(["stop"]);
   });
 });

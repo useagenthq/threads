@@ -216,3 +216,73 @@ describe("the principal and host ceiling", () => {
     });
   });
 });
+
+describe("a subagent's handoff (spec/schema/README.md, Handoff scope)", () => {
+  const use = (name: string, input: Record<string, unknown>, id: string) => ({
+    content: [{ type: "tool_use", call_id: id, name, input }],
+    stop_reason: "tool_use",
+    usage,
+  });
+
+  function tree(refunded: string[], rootDeny?: readonly string[]) {
+    const refund = tool({
+      name: "refund",
+      description: "Refund a charge.",
+      input: z.object({ id: z.string() }),
+      runs: "host",
+      execute: async ({ id }) => {
+        refunded.push(id);
+        return "refunded";
+      },
+    });
+    const billing = agent({
+      name: "billing",
+      model: scriptedModel({
+        responses: [use("refund", { id: "ch_1" }, "r1"), say("Done.")],
+      }),
+      tools: [refund],
+      permissions: { mode: "bypass", allow_bypass: true, allow: ["refund"] },
+    });
+    const mid = agent({
+      name: "mid",
+      model: scriptedModel({ responses: [handoff("billing", "h1")] }),
+      handoffs: [billing],
+    });
+    const unused = agent({
+      name: "unused",
+      model: scriptedModel({ responses: [] }),
+    });
+    return agent({
+      name: "front",
+      model: scriptedModel({
+        responses: [
+          use("spawn_agent", { agent: "mid", prompt: "Refund me." }, "s1"),
+          say("ok"),
+        ],
+      }),
+      subagents: [mid],
+      // handoff is among front's tools, so it survives the child's tool filter.
+      handoffs: [unused],
+      ...(rootDeny === undefined
+        ? {}
+        : { permissions: { deny: [...rootDeny] } }),
+    });
+  }
+
+  test("the run's ceiling caps the target of a subagent's handoff", async () => {
+    const refunded: string[] = [];
+    await tree(refunded).run("Refund me.", {
+      store: sqlite(":memory:"),
+      ceiling: { deny: ["refund"] },
+    });
+    expect(refunded).toEqual([]);
+  });
+
+  test("an ancestor's policy caps the target of a subagent's handoff", async () => {
+    const refunded: string[] = [];
+    await tree(refunded, ["refund"]).run("Refund me.", {
+      store: sqlite(":memory:"),
+    });
+    expect(refunded).toEqual([]);
+  });
+});

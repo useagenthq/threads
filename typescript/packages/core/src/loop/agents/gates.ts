@@ -2,6 +2,7 @@ import type { EventOf } from "../../fold/state";
 import type { Outcome } from "../../hooks/invoke";
 import { decision, defining, recorded, run } from "../hooks";
 import type { Session } from "../session";
+import { turnEvents } from "../turn";
 import type { Halt } from "../types";
 
 // subagent_start and subagent_stop: each decision is recorded against the
@@ -61,7 +62,9 @@ export function continues(s: Session, spawned: Spawned): readonly string[] {
 
 /**
  * subagent_stop once a child ends: "stop" lets the result stand, "continue" sends the child
- * its reason as a new input. A failed hook stops; past the cap the result stands.
+ * its reason as a new input. A failed hook stops; past the cap the result stands. A cancelled
+ * child, or one whose parent is behind a cancel barrier, is final: a continue is recorded as the
+ * stop it amounts to (spec/schema/README.md, "A tree cancel is final").
  */
 export async function stopGate(
   s: Session,
@@ -69,6 +72,7 @@ export async function stopGate(
   finished: EventOf<"agent_finished">["data"],
 ): Promise<"stop" | "continue" | Halt> {
   const key = { call_id: spawned.data.call_id };
+  const limit = final(s, finished) ? "cancelled" : undefined;
   const count = continues(s, spawned).length;
   const since = s.events.findLastIndex(
     (e) =>
@@ -82,7 +86,7 @@ export async function stopGate(
     if (recorded(window, ext.name, "subagent_stop", key) !== undefined)
       continue;
     const out = await run(ext, "subagent_stop", [finished], key.call_id);
-    const [decided, reason] = stopped(out, count);
+    const [decided, reason] = stopped(out, count, limit);
     const halted = s.append(
       decision(ext.name, "subagent_stop", decided, key, reason),
     );
@@ -96,10 +100,24 @@ export async function stopGate(
 function stopped(
   out: Outcome<"subagent_stop">,
   count: number,
+  cancelled: "cancelled" | undefined,
 ): readonly [Decided, string | undefined] {
   if (out.kind === "failed") return ["failed", out.reason];
   if (out.value.decision !== "continue") return ["stop", undefined];
+  if (cancelled !== undefined) return ["stop", cancelled];
   return count < MAX_CONTINUATIONS
     ? ["continue", out.value.reason]
     : ["stop", "continuation limit"];
+}
+
+/** No new work after a cancel: the child ended cancelled, or this thread is barred. */
+function final(
+  s: Session,
+  finished: EventOf<"agent_finished">["data"],
+): boolean {
+  return (
+    finished.status === "cancelled" ||
+    (s.fold.turnOpen &&
+      turnEvents(s.events).some((e) => e.type === "cancel_requested"))
+  );
 }

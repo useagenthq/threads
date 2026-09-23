@@ -217,8 +217,11 @@ export type ChildRun = {
 
 export type Subagent = {
   readonly budget?: NonNullable<Policy["budget"]>;
-  /** Runs the child thread (created on first use) until it ends; resumes it after a crash. */
-  readonly run: (child: ChildRun) => Promise<ChildEnd>;
+  /**
+   * Runs the child thread (created on first use) until it ends; resumes it after a crash. A
+   * child that can't run now (its lease is held elsewhere) is a halt: nothing is recorded.
+   */
+  readonly run: (child: ChildRun) => Promise<ChildEnd | Halt>;
 };
 
 /** Team state lives in the lead's log; members change it only through the lead's writer. */

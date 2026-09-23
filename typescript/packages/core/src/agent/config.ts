@@ -3,6 +3,7 @@ import {
   type Agents,
   type Authorization,
   type ChildRun,
+  type Covering,
   FINAL_OUTPUT,
   type LoopConfig,
   type ToolImpl,
@@ -38,6 +39,10 @@ export type RunEnv<Deps> = {
   readonly events: () => readonly KnownEvent[];
   /** The principal and host ceilings every decision is also made under. */
   readonly ceilings: readonly Permissions[];
+  /** A subagent's handoff target: the handing-off chain's decision, which it only narrows. */
+  readonly chain?: ChildRun["ceiling"];
+  /** Budgets covering this thread as an ancestor's: a child's parent's, a target's source's. */
+  readonly inherited: readonly Covering[];
 };
 
 type Permissions = NonNullable<Policy["permissions"]>;
@@ -85,7 +90,7 @@ export function loopConfig<Deps, Output>(
           ),
         env.ceilings,
       ),
-      env.child,
+      env.child?.ceiling ?? env.chain,
     ),
     clock: {
       now: Date.now,
@@ -99,7 +104,7 @@ export function loopConfig<Deps, Output>(
     skewMarginMs: 1000,
     redact: redactSecrets,
     agents: agents(def, env),
-    budgets: { ledger: env.ledger, inherited: env.child?.covering ?? [] },
+    budgets: { ledger: env.ledger, inherited: env.inherited },
     ...(readFile === undefined ? {} : { readFile }),
     ...(def.output === undefined ? {} : { output: def.output }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -161,14 +166,14 @@ function capped(
 /** A child's decision is its own policy's, capped by its parent's: the stricter wins. */
 function narrowed(
   own: LoopConfig["authorize"],
-  child: ChildRun | undefined,
+  parent: ChildRun["ceiling"] | undefined,
 ): LoopConfig["authorize"] {
-  if (child === undefined) return own;
+  if (parent === undefined) return own;
   return (call, fold): Authorization => {
     const mine = own(call, fold);
-    // The child's own structured result touches only its log; the parent has no such tool.
+    // The thread's own structured result touches only its log; the parent has no such tool.
     if (call.data.name === FINAL_OUTPUT) return mine;
-    const ceiling = child.ceiling(call);
+    const ceiling = parent(call);
     return RANK[ceiling.decision] > RANK[mine.decision] ? ceiling : mine;
   };
 }

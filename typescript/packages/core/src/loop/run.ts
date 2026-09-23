@@ -62,6 +62,18 @@ export async function runLoop(s: Session): Promise<LoopEnd> {
  * once no effect is begun or unknown (those park instead, through recovery). A running child is
  * cancelled and its end recorded first; one that parks parks this thread (F7.6).
  */
+/** A running child under its parent's cancel: its end recorded, or what stops this run. */
+async function cancelChild(
+  s: Session,
+  spawned: EventOf<"agent_spawned">,
+  principal: EventOf<"cancel_requested">["actor"]["principal"],
+): Promise<Halt | undefined | "recorded"> {
+  const end = await runChild(s, spawned, principal);
+  if ("code" in end) return end;
+  if (end.status === "parked") return parkOn(s, spawned, end.reason);
+  return record(s, spawned, end, false) ?? "recorded";
+}
+
 async function cancel(
   s: Session,
   request: EventOf<"cancel_requested">,
@@ -72,10 +84,8 @@ async function cancel(
       spawned !== undefined &&
       s.fold.children.get(spawned.data.child_thread_id) === "running"
     ) {
-      const end = await runChild(s, spawned, request.actor.principal);
-      if (end.status === "parked") return parkOn(s, spawned, end.reason);
-      const stopped = record(s, spawned, end, false);
-      if (stopped !== undefined) return stopped;
+      const done = await cancelChild(s, spawned, request.actor.principal);
+      if (done !== "recorded") return done;
       continue;
     }
     const stopped = s.append(

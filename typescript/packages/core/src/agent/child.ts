@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { assertNever } from "../assert-never";
 import { canonicalize } from "../log";
-import type { ChildDone, ChildEnd, Subagent } from "../loop";
+import type { ChildDone, ChildEnd, Halt, Subagent } from "../loop";
 import { reduce } from "../reduce";
 import type { EventDraft } from "../store";
 import { cancelTree } from "../thread/cancel";
@@ -86,7 +86,10 @@ async function usage(
   };
 }
 
-function ended(result: RunResult<string>, usage: ChildDone["usage"]): ChildEnd {
+function ended(
+  result: RunResult<string>,
+  usage: ChildDone["usage"],
+): ChildEnd | Halt {
   switch (result.status) {
     case "completed":
       return { status: "completed", output: result.output, usage };
@@ -99,7 +102,10 @@ function ended(result: RunResult<string>, usage: ChildDone["usage"]): ChildEnd {
     case "cancelled":
       return { status: "cancelled", output: "cancelled", usage };
     case "failed":
-      return { status: "failed", output: result.error.message, usage };
+      // A held lease is another executor's turn, not the child's end.
+      return result.error.code === "branch_busy"
+        ? { code: "branch_busy", message: result.error.message }
+        : { status: "failed", output: result.error.message, usage };
     case "parked":
       return { status: "parked", reason: result.reason };
     case "handed_off":
