@@ -79,6 +79,7 @@ select = ["E", "F", "W", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF", "ANN", "P
 "tests/**" = ["S101"]
 # Docstrings are schema descriptions copied verbatim; the formatter doesn't wrap them.
 "src/threads/_generated/events_v1.py" = ["E501"]
+"src/threads/_generated/host_api_v1.py" = ["E501"]
 # Its queries are composed from constant scope and revision fragments; every value is bound.
 "src/threads/memory/local_knowledge.py" = ["S608"]
 
