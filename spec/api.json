@@ -2477,15 +2477,6 @@
             {"name": "context", "kind": "positional", "type": {"$ref": "#/types/ModelContext"}, "required": true, "doc": "The fencing context: await context.fence() before the lookup call, and put() any reasoning or hosted tool bytes of a found response before its parts name them."}
           ],
           "returns": {"result": {"$ref": "#/types/LookupResult", "args": [{"$ref": "#/types/ModelResponse"}]}, "errors": ["stale_epoch"]}
-        },
-        "countTokens": {
-          "ts": "countTokens",
-          "py": "count_tokens",
-          "doc": "Pre-dispatch input_bound_tokens.",
-          "async": true,
-          "optional": true,
-          "params": [{"name": "request", "kind": "positional", "type": {"$ref": "#/types/ModelRequest"}, "required": true, "doc": "The request to count, as send would receive it. Neither language's loop calls count_tokens today, and the Python model protocol has no such method yet."}],
-          "returns": {"result": {"prim": "integer"}, "errors": ["unavailable", "timeout"]}
         }
       },
       "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off. Every send and lookup awaits context.fence() at its real network send, after any SDK or bridge queueing (AGENTS invariant 2: a send can carry provider-hosted tools, so a stale send is never treated as harmless). An adapter or bridge route whose real transport it cannot wrap is refused when the model is constructed: ConfigError transport_fence_unsupported; it is never shipped with a weaker fence. A bridge that takes a caller's model factory (the TypeScript AI SDK bridge) qualifies only providers whose implementation sends through the fenced fetch it hands over on every path; that qualification comes from the provider implementation and its conformance tests, under the trusted-host-code boundary. The bridge also counts fenced fetches per send as misuse detection and containment, not proof of qualification: a send whose stream arrives with zero requests through that fetch ends as a broken stream (unknown outcome: it may have left unfenced, and its output is not kept), and that model refuses every later send before anything leaves with the rejected reason transport_fence_unsupported, recorded as not_sent (not billed, never retried)."

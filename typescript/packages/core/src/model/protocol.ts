@@ -138,12 +138,4 @@ export type Model = {
       { readonly code: "stale_epoch"; readonly message: string }
     >
   >;
-  readonly countTokens?: (
-    request: ModelRequest,
-  ) => Promise<
-    Result<
-      number,
-      { readonly code: "unavailable" | "timeout"; readonly message: string }
-    >
-  >;
 };

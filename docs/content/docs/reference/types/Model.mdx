@@ -89,32 +89,3 @@ async def lookup(
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`.
-
-### countTokens / count_tokens
-
-Pre-dispatch input_bound_tokens.
-
-<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
-<Tab value="TypeScript">
-
-```ts
-countTokens(request: ModelRequest): Promise<Result<number>>
-```
-
-</Tab>
-<Tab value="Python">
-
-```python
-async def count_tokens(
-    request: ModelRequest,
-) -> Ok[int] | Err[Failure]
-```
-
-</Tab>
-</Tabs>
-
-<Field name="request" type={"ModelRequest"} required>
-  The request to count, as send would receive it. Neither language's loop calls count_tokens today, and the Python model protocol has no such method yet. See [ModelRequest](/docs/reference/types/ModelRequest).
-</Field>
-
-**Returns an error value** with one of these codes: `unavailable`, `timeout`.
