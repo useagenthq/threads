@@ -3,15 +3,30 @@
 An artifact is durable before any row or event references it, and its hash is verified on
 every read. A missing or changed artifact is a typed error, never a substitute. Methods are
 synchronous: the store calls them on its worker thread.
+
+Large outputs are written through a sink, a chunk at a time, so they are never held whole in
+memory: the hash is computed as the bytes arrive.
 """
 
+import hashlib
 import os
 import tempfile
 from pathlib import Path
+from typing import Protocol
 
 from threads.log import ParseError
 from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
+
+
+class ArtifactSink(Protocol):
+    def write(self, chunk: bytes) -> None: ...
+
+    def commit(self) -> str:
+        """Makes the bytes a durable artifact and returns their sha256."""
+        ...
+
+    def discard(self) -> None: ...
 
 
 class MemoryArtifacts:
@@ -29,6 +44,24 @@ class MemoryArtifacts:
         data = self._blobs.get(sha256)
         return _missing(sha256) if data is None else Ok(data)
 
+    def sink(self) -> ArtifactSink:
+        return _MemorySink(self)
+
+
+class _MemorySink:
+    def __init__(self, store: MemoryArtifacts) -> None:
+        self._store = store
+        self._data = bytearray()
+
+    def write(self, chunk: bytes) -> None:
+        self._data += chunk
+
+    def commit(self) -> str:
+        return self._store.put(bytes(self._data))
+
+    def discard(self) -> None:
+        self._data.clear()
+
 
 class FileArtifacts:
     """Artifacts on disk, shared by every thread of one home. Directories 0700, files 0600."""
@@ -37,38 +70,65 @@ class FileArtifacts:
         self._root = root
 
     def put(self, data: bytes) -> str:
-        sha = sha256_hex(data)
-        path = self._path(sha)
-        # mkdir(parents=True) would give the parents the umask's mode, not 0700.
-        for directory in (self._root, self._root / "sha256", path.parent):
-            directory.mkdir(mode=0o700, exist_ok=True)
-        fd, temp = tempfile.mkstemp(dir=path.parent)  # created 0600
-        try:
-            with os.fdopen(fd, "wb") as out:
-                out.write(data)
-                out.flush()
-                os.fsync(out.fileno())
-            try:
-                os.link(temp, path)
-            except FileExistsError:
-                if isinstance(self.get(sha), Err):
-                    raise
-        finally:
-            os.unlink(temp)
-        _fsync_dir(path.parent)
-        return sha
+        sink = self.sink()
+        sink.write(data)
+        return sink.commit()
 
     def get(self, sha256: str) -> Ok[bytes] | Err[ParseError]:
         try:
-            data = self._path(sha256).read_bytes()
+            data = self.path(sha256).read_bytes()
         except FileNotFoundError:
             return _missing(sha256)
         if sha256_hex(data) != sha256:
             return Err(ParseError("artifact_corrupt", f"artifact {sha256} fails its hash"))
         return Ok(data)
 
-    def _path(self, sha256: str) -> Path:
+    def sink(self) -> ArtifactSink:
+        # mkdir(parents=True) would give the parents the umask's mode, not 0700.
+        self._root.mkdir(mode=0o700, exist_ok=True)
+        return _FileSink(self, self._root)
+
+    def path(self, sha256: str) -> Path:
         return self._root / "sha256" / sha256[:2] / sha256
+
+
+class _FileSink:
+    """A temp file beside the tree, fsynced and hard-linked into place on commit (EEXIST:
+    verify the hash, done), then the directory is fsynced."""
+
+    def __init__(self, store: FileArtifacts, root: Path) -> None:
+        self._store = store
+        fd, name = tempfile.mkstemp(dir=root)  # created 0600
+        self._file = os.fdopen(fd, "wb")
+        self._temp = Path(name)
+        self._hash = hashlib.sha256()
+
+    def write(self, chunk: bytes) -> None:
+        self._file.write(chunk)
+        self._hash.update(chunk)
+
+    def commit(self) -> str:
+        sha = self._hash.hexdigest()
+        path = self._store.path(sha)
+        try:
+            self._file.flush()
+            os.fsync(self._file.fileno())
+            self._file.close()
+            for directory in (path.parents[1], path.parent):
+                directory.mkdir(mode=0o700, exist_ok=True)
+            try:
+                os.link(self._temp, path)
+            except FileExistsError:
+                if isinstance(self._store.get(sha), Err):
+                    raise
+        finally:
+            self.discard()
+        _fsync_dir(path.parent)
+        return sha
+
+    def discard(self) -> None:
+        self._file.close()
+        self._temp.unlink(missing_ok=True)
 
 
 type ArtifactStore = MemoryArtifacts | FileArtifacts

@@ -1,0 +1,163 @@
+"""`fake_sandbox` (spec/api.json `fakeSandbox`): an in-memory provider for tests, driven by a
+conformance SandboxScript. Snapshots copy the file tree; a scripted snapshot restores into its
+`restore_sandbox_id`, and may lose the restore's answer after creating the sandbox."""
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import Literal, NotRequired, TypedDict
+
+from pydantic import ConfigDict, JsonValue, TypeAdapter, with_config
+
+from threads.log import SnapshotData
+from threads.loop.model import Found, LookupResult, NotFound
+from threads.result import Err, Ok
+from threads.sandbox.fake_session import FakeSession, ToolScript, manifest_hash
+from threads.sandbox.protocol import (
+    LookupSupport,
+    SandboxError,
+    SandboxId,
+    SandboxInfo,
+    SandboxSession,
+)
+
+
+@with_config(ConfigDict(extra="forbid", strict=True))
+class SnapshotScript(TypedDict):
+    restore_sandbox_id: str
+    restore_response: NotRequired[Literal["ok", "lost"]]
+    create_lookup: NotRequired[Literal["found", "unsupported"]]
+
+
+@with_config(ConfigDict(extra="forbid", strict=True))
+class SandboxScript(TypedDict):
+    tools: NotRequired[dict[str, ToolScript]]
+    snapshots: NotRequired[dict[str, SnapshotScript]]
+
+
+_SCRIPT: TypeAdapter[SandboxScript] = TypeAdapter(SandboxScript)
+
+
+@dataclass(frozen=True, slots=True)
+class _Snapshot:
+    files: Mapping[str, bytes]
+    script: SnapshotScript | None = None
+
+
+@dataclass
+class FakeSandbox:
+    """spec/api.json `Sandbox`, in memory. `creates` counts provider create and restore calls;
+    `fail_releases` makes that many releases fail first (a test hook for release_failed)."""
+
+    script: SandboxScript
+    creates: int = 0
+    fail_releases: int = 0
+    _live: dict[str, FakeSession] = field(default_factory=dict[str, FakeSession])
+    _snapshots: dict[str, _Snapshot] = field(default_factory=dict[str, _Snapshot])
+    _by_key: dict[str, SandboxSession | SnapshotData] = field(
+        default_factory=dict[str, SandboxSession | SnapshotData]
+    )
+    _next: int = 0
+
+    def __post_init__(self) -> None:
+        for name, snap in self.script.get("snapshots", {}).items():
+            self._snapshots[name] = _Snapshot({}, snap)
+
+    @property
+    def info(self) -> SandboxInfo:
+        scripted = self.script.get("snapshots", {}).values()
+        lookup = (
+            "none" if any(s.get("create_lookup") == "unsupported" for s in scripted) else "final"
+        )
+        return SandboxInfo(
+            provider="fake",
+            egress="enforced",
+            capture_classes=("filesystem",),
+            browser="none",
+            desktop="none",
+            lookup=LookupSupport(create=lookup, snapshot="final"),
+            termination="confirmed",
+        )
+
+    async def create(self, operation_key: str) -> Ok[SandboxSession] | Err[SandboxError]:
+        self.creates += 1
+        return Ok(self._open(SandboxId(self._name("sbx")), {}, operation_key))
+
+    async def restore(
+        self, snapshot_id: str, operation_key: str
+    ) -> Ok[SandboxSession] | Err[SandboxError]:
+        snap = self._snapshots.get(snapshot_id)
+        if snap is None:
+            return Err(SandboxError("snapshot_missing", f"no snapshot {snapshot_id}"))
+        self.creates += 1
+        script = snap.script or SnapshotScript(restore_sandbox_id=self._name("sbx"))
+        session = self._open(SandboxId(script["restore_sandbox_id"]), snap.files, operation_key)
+        if script.get("restore_response") == "lost":
+            return Err(SandboxError("unavailable", "the restore's answer was lost"))
+        return Ok(session)
+
+    async def lookup(self, operation_key: str) -> LookupResult[SandboxSession]:
+        found = self._by_key.get(operation_key)
+        return NotFound() if isinstance(found, SnapshotData | None) else Found(found)
+
+    async def lookup_snapshot(self, operation_key: str) -> LookupResult[SnapshotData]:
+        found = self._by_key.get(operation_key)
+        return Found(found) if isinstance(found, SnapshotData) else NotFound()
+
+    async def attach(self, ref: str) -> Ok[SandboxSession] | Err[SandboxError]:
+        session = self._live.get(ref)
+        return (
+            Err(SandboxError("not_found", f"no sandbox {ref}")) if session is None else Ok(session)
+        )
+
+    async def release(
+        self, ref: str
+    ) -> Ok[Literal["released", "already_gone"]] | Err[SandboxError]:
+        failed = self._failed_release()
+        if failed is not None:
+            return failed
+        return Ok("released" if self._snapshots.pop(ref, None) is not None else "already_gone")
+
+    def _open(self, ident: SandboxId, files: Mapping[str, bytes], key: str) -> FakeSession:
+        tools = self.script.get("tools", {})
+        session = FakeSession(ident, files, tools, self._capture, self._close)
+        self._live[ident] = session
+        self._by_key[key] = session
+        return session
+
+    def _capture(self, session: FakeSession, key: str) -> SnapshotData:
+        name = self._name("snap")
+        self._snapshots[name] = _Snapshot(dict(session.files))
+        data: dict[str, JsonValue] = {
+            "snapshot_id": name,
+            "provider": "fake",
+            "sandbox_id": session.id,
+            "capture_class": "filesystem",
+            "expires_at": None,
+            "manifest_hash": manifest_hash(session.files),
+            "quiesced": {"frozen": [], "stopped": [], "excluded": []},
+        }
+        snapshot = SnapshotData.model_validate(data)
+        self._by_key[key] = snapshot
+        return snapshot
+
+    def _close(self, session: FakeSession) -> Ok[None] | Err[SandboxError]:
+        failed = self._failed_release()
+        if failed is not None:
+            return failed
+        self._live.pop(session.id, None)
+        return Ok(None)
+
+    def _failed_release(self) -> Err[SandboxError] | None:
+        if self.fail_releases == 0:
+            return None
+        self.fail_releases -= 1
+        return Err(SandboxError("release_failed", "the provider failed to release"))
+
+    def _name(self, prefix: str) -> str:
+        self._next += 1
+        return f"{prefix}_{self._next}"
+
+
+def fake_sandbox(script: Mapping[str, JsonValue] | None = None) -> FakeSandbox:
+    """spec/api.json `fakeSandbox`. Raises on a malformed script: it is test-kit config."""
+    return FakeSandbox(_SCRIPT.validate_python(script or {}))

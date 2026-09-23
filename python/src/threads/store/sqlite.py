@@ -22,6 +22,7 @@ from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifact
 from threads.store.forking import Forking, forking, start_child
 from threads.store.lines import Draft, header_line
 from threads.store.resources import Ledger
+from threads.store.spill import Spill
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
@@ -104,6 +105,10 @@ class SqliteStore:
     async def put_artifact(self, data: bytes) -> str:
         """Stores bytes content-addressed and returns their sha256 once they are durable."""
         return await self._worker.call(lambda _: self._artifacts.put(data))
+
+    async def spill(self) -> Spill:
+        """A new artifact written a chunk at a time, never held whole in memory."""
+        return Spill(self._worker, await self._worker.call(lambda _: self._artifacts.sink()))
 
     async def get_artifact(self, sha256: str) -> Ok[bytes] | Err[ParseError]:
         """An artifact's bytes, verified against its hash."""
