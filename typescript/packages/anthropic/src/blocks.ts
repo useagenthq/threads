@@ -1,5 +1,10 @@
 import type { Json, ModelContext } from "@threads/core/adapter";
-import { assertNever, JsonObject, OutputPart } from "@threads/core/adapter";
+import {
+  assertNever,
+  JsonObject,
+  OutputPart,
+  putJson,
+} from "@threads/core/adapter";
 import { z } from "zod";
 
 // One finished Messages API content block → the ordered parts it records. Blocks are
@@ -42,8 +47,6 @@ const Block = z.discriminatedUnion("type", [
 const Hosted = z.object({ type: z.string(), name: z.string().optional() });
 const LOCAL = new Set(["text", "thinking", "redacted_thinking", "tool_use"]);
 
-const encoder = new TextEncoder();
-
 export type BlockContext = {
   readonly model: string;
   readonly context: ModelContext;
@@ -71,7 +74,7 @@ export async function blockParts(
           provider: "anthropic",
           model: ctx.model,
           format: b.type,
-          ref: await store(raw, ctx.context),
+          ref: await putJson(ctx.context, raw),
           ...(b.type === "thinking" && b.thinking !== ""
             ? { summary: b.thinking }
             : {}),
@@ -103,7 +106,7 @@ async function hosted(
     model: ctx.model,
     format: type,
     name: name ?? type,
-    ref: await store(raw, ctx.context),
+    ref: await putJson(ctx.context, raw),
   });
 }
 
@@ -128,11 +131,4 @@ function citation(
     ...title(c.document_title),
     cited_text: c.cited_text,
   });
-}
-
-function store(
-  raw: { readonly [key: string]: Json },
-  context: ModelContext,
-): ReturnType<ModelContext["put"]> {
-  return context.put(encoder.encode(JSON.stringify(raw)), "application/json");
 }

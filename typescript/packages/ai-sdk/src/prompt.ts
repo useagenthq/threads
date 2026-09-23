@@ -15,7 +15,12 @@ import type {
   RenderRequest,
   ResultPart,
 } from "@threads/core/adapter";
-import { assertNever, loadedTools } from "@threads/core/adapter";
+import {
+  assertNever,
+  loadedTools,
+  readOrRefuse,
+  Unsendable,
+} from "@threads/core/adapter";
 import { ReplayPart } from "./replay";
 
 // Render v1 → an AI SDK language model prompt and tool list, deterministically (item
@@ -34,9 +39,6 @@ export type Mapped =
       readonly tools: LanguageModelV4FunctionTool[];
     }
   | { readonly ok: false; readonly message: string };
-
-/** Thrown inside the mapper and caught at its edge: a part this adapter can't send. */
-class Unsendable extends Error {}
 
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 
@@ -62,11 +64,7 @@ export async function toPrompt(
     provider: request.head.model.provider,
     accepts: new Set(accepts),
     names: new Map(),
-    bytes: async (ref) => {
-      const read = await context.read(ref);
-      if (!read.ok) throw new Unsendable(read.error.message);
-      return read.value;
-    },
+    bytes: readOrRefuse(context),
   };
   const prompt: LanguageModelV4Message[] =
     request.head.system === ""

@@ -22,7 +22,12 @@ export type {
   ModelRequest,
   ModelResponse,
 } from "./model";
-export { memoryContext } from "./model/context";
+export {
+  memoryContext,
+  putJson,
+  readOrRefuse,
+  Unsendable,
+} from "./model/context";
 /** Test kit: lets a model whose transport is mocked past the global model-request guard. */
 export { markTestKit } from "./model/guard";
 export {

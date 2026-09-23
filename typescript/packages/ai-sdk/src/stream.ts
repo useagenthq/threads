@@ -4,7 +4,12 @@ import type {
   LanguageModelV4Usage,
 } from "@ai-sdk/provider";
 import type { ModelChunk, ModelContext, Usage } from "@threads/core/adapter";
-import { JsonObject, JsonValue, OutputPart } from "@threads/core/adapter";
+import {
+  JsonObject,
+  JsonValue,
+  OutputPart,
+  putJson,
+} from "@threads/core/adapter";
 import { ProviderOptions, type ReplayPart } from "./replay";
 
 // AI SDK stream parts → ModelChunks. Text streams as deltas and lands as one part at text-end;
@@ -28,7 +33,6 @@ export class StreamError extends Error {
   }
 }
 
-const encoder = new TextEncoder();
 const STOPS: Record<LanguageModelV4FinishReason["unified"], Stop> = {
   stop: "end_turn",
   length: "max_tokens",
@@ -122,7 +126,7 @@ async function reasoning(
       provider: ctx.provider,
       model: ctx.model,
       format: "ai_sdk_reasoning",
-      ref: await store(replay, ctx.context),
+      ref: await putJson(ctx.context, replay),
       ...(value === "" ? {} : { summary: value }),
     }),
   };
@@ -183,7 +187,7 @@ async function recorded(
     format:
       part.type === "tool-call" ? "ai_sdk_tool_call" : "ai_sdk_tool_result",
     name: nameOf(part.toolName),
-    ref: await store(replay, ctx.context),
+    ref: await putJson(ctx.context, replay),
   });
 }
 
@@ -198,16 +202,6 @@ function options(metadata: unknown): Pick<ReplayPart, "providerOptions"> {
   return metadata === undefined
     ? {}
     : { providerOptions: ProviderOptions.parse(metadata) };
-}
-
-function store(
-  replay: ReplayPart,
-  context: ModelContext,
-): ReturnType<ModelContext["put"]> {
-  return context.put(
-    encoder.encode(JSON.stringify(replay)),
-    "application/json",
-  );
 }
 
 /** Unknown is null, never 0. noCache is input without cache reads or writes. */

@@ -8,7 +8,13 @@ import type {
   RenderRequest,
   ResultPart,
 } from "@threads/core/adapter";
-import { assertNever, JsonObject, loadedTools } from "@threads/core/adapter";
+import {
+  assertNever,
+  JsonObject,
+  loadedTools,
+  readOrRefuse,
+  Unsendable,
+} from "@threads/core/adapter";
 
 // Render v1 → a Messages API request body, deterministically: the same request and artifacts
 // always give the same body. Every value comes from the render: model, params
@@ -26,9 +32,6 @@ export type Mapped =
 type Block = { readonly [key: string]: Json };
 type Message = { role: "user" | "assistant"; content: Block[] };
 
-/** Thrown inside the mapper and caught at its edge: a part this adapter can't send. */
-class Unsendable extends Error {}
-
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 
 export async function toAnthropic(
@@ -41,11 +44,7 @@ export async function toAnthropic(
       message: `line 0 names adapter ${request.head.adapter.name}, not anthropic`,
     };
   const documents: string[] = [];
-  const bytes = async (ref: ArtifactRef): Promise<Uint8Array> => {
-    const read = await context.read(ref);
-    if (!read.ok) throw new Unsendable(read.error.message);
-    return read.value;
-  };
+  const bytes = readOrRefuse(context);
   const messages: Message[] = [];
   try {
     for (const line of request.lines) {

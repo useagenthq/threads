@@ -1,5 +1,10 @@
 import type { Json, ModelContext } from "@threads/core/adapter";
-import { assertNever, JsonObject, OutputPart } from "@threads/core/adapter";
+import {
+  assertNever,
+  JsonObject,
+  OutputPart,
+  putJson,
+} from "@threads/core/adapter";
 import { z } from "zod";
 
 // One finished Responses API output item → the ordered parts it records. Items are
@@ -42,8 +47,6 @@ const Item = z.discriminatedUnion("type", [
 const Tagged = z.object({ type: z.string() });
 const LOCAL = new Set(["message", "function_call", "reasoning"]);
 
-const encoder = new TextEncoder();
-
 export type ItemContext = {
   readonly model: string;
   readonly context: ModelContext;
@@ -67,7 +70,7 @@ export async function itemParts(
           model: ctx.model,
           format: type,
           name: type,
-          ref: await store(raw, ctx.context),
+          ref: await putJson(ctx.context, raw),
         }),
       ],
       refused: false,
@@ -100,7 +103,7 @@ export async function itemParts(
             provider: "openai",
             model: ctx.model,
             format: "openai_reasoning",
-            ref: await store(raw, ctx.context),
+            ref: await putJson(ctx.context, raw),
             ...(summary === "" ? {} : { summary }),
           }),
         ],
@@ -138,11 +141,4 @@ function citation(a: z.infer<typeof Annotation>): OutputPart {
       ? {}
       : { title: a.filename }),
   });
-}
-
-function store(
-  raw: { readonly [key: string]: Json },
-  context: ModelContext,
-): ReturnType<ModelContext["put"]> {
-  return context.put(encoder.encode(JSON.stringify(raw)), "application/json");
 }

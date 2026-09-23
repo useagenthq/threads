@@ -1,4 +1,4 @@
-import { BranchId } from "../log";
+import { type ArtifactRef, BranchId, type Json } from "../log";
 import { refReader } from "../render/verify";
 import { err, ok } from "../result";
 import { type ArtifactStore, memoryArtifacts } from "../store/artifacts";
@@ -18,6 +18,32 @@ export function contextReader(
       message,
     });
   };
+}
+
+/** Thrown inside an adapter's request mapper and caught at its edge: a part it can't send. */
+export class Unsendable extends Error {
+  override readonly name = "Unsendable";
+}
+
+/** context.read for a request mapper: an unreadable artifact makes the request unsendable. */
+export function readOrRefuse(
+  context: ModelContext,
+): (ref: ArtifactRef) => Promise<Uint8Array> {
+  return async (ref) => {
+    const read = await context.read(ref);
+    if (!read.ok) throw new Unsendable(read.error.message);
+    return read.value;
+  };
+}
+
+const encoder = new TextEncoder();
+
+/** Stores provider JSON (a reasoning or hosted tool block) for a part to name. */
+export function putJson(
+  context: ModelContext,
+  value: Json,
+): Promise<ArtifactRef> {
+  return context.put(encoder.encode(JSON.stringify(value)), "application/json");
 }
 
 /**

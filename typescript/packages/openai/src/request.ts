@@ -8,7 +8,13 @@ import type {
   RenderRequest,
   ResultPart,
 } from "@threads/core/adapter";
-import { assertNever, JsonObject, loadedTools } from "@threads/core/adapter";
+import {
+  assertNever,
+  JsonObject,
+  loadedTools,
+  readOrRefuse,
+  Unsendable,
+} from "@threads/core/adapter";
 
 // Render v1 → a Responses API request body, deterministically. Every value
 // comes from the render: model, params and hosted tools from line 0. Stateless: store is false
@@ -19,9 +25,6 @@ export type Mapped =
   | { readonly ok: false; readonly message: string };
 
 type Item = { readonly [key: string]: Json };
-
-/** Thrown inside the mapper and caught at its edge: a part this adapter can't send. */
-class Unsendable extends Error {}
 
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 type Bytes = (ref: ArtifactRef) => Promise<Uint8Array>;
@@ -36,11 +39,7 @@ export async function toOpenAI(
       ok: false,
       message: `line 0 names adapter ${head.adapter.name}, not openai`,
     };
-  const bytes: Bytes = async (ref) => {
-    const read = await context.read(ref);
-    if (!read.ok) throw new Unsendable(read.error.message);
-    return read.value;
-  };
+  const bytes: Bytes = readOrRefuse(context);
   const input: Item[] = [];
   try {
     for (const line of request.lines) input.push(...(await items(line, bytes)));
