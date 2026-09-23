@@ -55,6 +55,7 @@ class Expected(_Strict):
     threads: int | None = None
     inputs: list[str] | None = None
     one_hold: list[str] | None = None
+    open: int | None = None
 
 
 class Start(_Strict):
@@ -78,6 +79,7 @@ class Race(_Strict):
 
 class Hold(_Strict):
     hold: Literal["run", "outbound"]
+    on: Literal["current", "previous"] = "current"
 
 
 class Release(_Strict):
@@ -133,6 +135,7 @@ class Running:
 class Held:
     writer: Writer
     kind: Literal["run", "outbound"]
+    thread: tuple[ThreadId, BranchId]
 
 
 class Replay:
@@ -151,7 +154,7 @@ class Replay:
             case Race():
                 return await self.tick(step.race, step.at)
             case Hold():
-                return await self.hold(step.hold)
+                return await self.hold(step.hold, step.on)
             case Release():
                 return await self.release(step.release)
             case Delete():
@@ -182,9 +185,11 @@ class Replay:
         for s in ticking:
             await s.runner.settled()
 
-    async def hold(self, kind: Literal["run", "outbound"]) -> None:
+    async def hold(
+        self, kind: Literal["run", "outbound"], on: Literal["current", "previous"]
+    ) -> None:
         sq = await open_store(self.store)
-        found = await self.thread("local")
+        found = await self.thread("local", on)
         assert found is not None, "no schedule thread to hold"
         taken = await sq.acquire(found[1], "outside", now_ms)
         assert isinstance(taken, Ok)
@@ -192,7 +197,7 @@ class Replay:
             actor: dict[str, JsonValue] = {"kind": "user", "principal": OPERATOR}
             busy = Draft("user_input", {"source": "api", "text": "Busy."}, actor)
             assert isinstance(await taken.value.append([busy]), Ok)
-        self.held = Held(taken.value, kind)
+        self.held = Held(taken.value, kind, found)
 
     async def release(self, how: Literal["done", "crash"]) -> None:
         held = self.held
@@ -201,10 +206,9 @@ class Replay:
         self.held = None
         if how == "crash" or held.kind == "outbound":
             return
-        found, last = await self.thread("local"), self.last
-        assert found is not None, "no schedule thread"
+        last = self.last
         assert last is not None, "no scheduler to finish the run"
-        await last.runner.resume(self.store, *found)
+        await last.runner.resume(self.store, *held.thread)
         await last.runner.settled()
 
     async def delete(self) -> None:
@@ -255,6 +259,7 @@ class Replay:
             rows=[(_iso(at), state, reason) for at, state, reason in rows],
             threads=None if want.threads is None else count,
             inputs=None if want.inputs is None else inputs,
+            open=None if want.open is None else await self.open(tenant),
             one_hold=None
             if want.one_hold is None
             else want.one_hold
@@ -271,12 +276,31 @@ class Replay:
         assert isinstance(read, Ok)
         return list(read.value.fold.events)
 
-    async def thread(self, tenant: str) -> tuple[ThreadId, BranchId] | None:
+    async def open(self, tenant: str) -> int:
+        """How many of the tenant's threads have a turn open."""
+        sq: SqliteStore = (await open_store(self.store)).scoped(tenant)
+        threads: list[tuple[object]] = await sq.run(
+            lambda c: c.execute(
+                "SELECT thread_id FROM threads WHERE tenant_id = ?", (tenant,)
+            ).fetchall()
+        )
+        count = 0
+        for (thread,) in threads:
+            root = await sq.root(ThreadId(text_of(thread)))
+            read = await sq.read(root.value, now_ms()) if isinstance(root, Ok) else None
+            count += isinstance(read, Ok) and read.value.fold.in_turn
+        return count
+
+    async def thread(
+        self, tenant: str, which: Literal["current", "previous"] = "current"
+    ) -> tuple[ThreadId, BranchId] | None:
+        """The schedule's current thread, or the latest one it moved off."""
         sq: SqliteStore = (await open_store(self.store)).scoped(tenant)
         rows: list[tuple[object]] = await sq.run(
             lambda c: c.execute(
-                "SELECT thread_id FROM schedule_threads WHERE tenant_id = ? AND schedule_id = ?",
-                (tenant, vector.schedule.id),
+                "SELECT thread_id FROM schedule_threads WHERE tenant_id = ? AND schedule_id = ?"
+                " AND current = ? ORDER BY created_at DESC LIMIT 1",
+                (tenant, vector.schedule.id, 1 if which == "current" else 0),
             ).fetchall()
         )
         if not rows:

@@ -129,11 +129,11 @@ class ScheduleRows:
         return await self._worker.call(latest)
 
     async def threads(self) -> tuple[ThreadId, ...]:
-        """The threads of the tenant's schedules."""
+        """Every thread the tenant's schedules have had: what recovery walks."""
         tenant = self._tenant
         rows: list[tuple[object]] = await self._worker.call(
             lambda c: c.execute(
-                "SELECT thread_id FROM schedule_threads WHERE tenant_id = ?", (tenant,)
+                "SELECT DISTINCT thread_id FROM schedule_threads WHERE tenant_id = ?", (tenant,)
             ).fetchall()
         )
         return tuple(_thread_id(t) for (t,) in rows)
@@ -228,10 +228,15 @@ def _reserve_due(
         found = _thread_of(conn, tenant_id, schedule_id)
         thread = found
         if found is None or not _keeps(conn, tenant_id, found, first[0].data.config_hash, now):
+            # The old thread stays listed, so recovery still finds it.
             conn.execute(
-                "INSERT INTO schedule_threads (tenant_id, schedule_id, thread_id, created_at)"
-                " VALUES (?, ?, ?, ?) ON CONFLICT (tenant_id, schedule_id)"
-                " DO UPDATE SET thread_id = excluded.thread_id, created_at = excluded.created_at",
+                "UPDATE schedule_threads SET current = 0"
+                " WHERE tenant_id = ? AND schedule_id = ? AND current = 1",
+                (tenant_id, schedule_id),
+            )
+            conn.execute(
+                "INSERT INTO schedule_threads (tenant_id, schedule_id, thread_id, current,"
+                " created_at) VALUES (?, ?, ?, 1, ?)",
                 (tenant_id, schedule_id, new.thread_id, now),
             )
             insert_branch(conn, new)
@@ -260,7 +265,8 @@ def _reserve_due(
 
 def _thread_of(conn: sqlite3.Connection, tenant_id: str, schedule_id: str) -> ThreadId | None:
     found: tuple[object] | None = conn.execute(
-        "SELECT thread_id FROM schedule_threads WHERE tenant_id = ? AND schedule_id = ?",
+        "SELECT thread_id FROM schedule_threads"
+        " WHERE tenant_id = ? AND schedule_id = ? AND current = 1",
         (tenant_id, schedule_id),
     ).fetchone()
     return None if found is None else _thread_id(found[0])

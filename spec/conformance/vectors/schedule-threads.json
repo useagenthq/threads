@@ -1,5 +1,5 @@
 {
-  "description": "One thread per schedule. Each case replays its steps on one store, with a schedule and a scripted agent 'bot' that answers every run. Steps: start (a new scheduler, named by the value, ready at 'at'; optional tenant, default local; optional schedules, default [schedule]; optional agents served, default ['bot'], each named by its key; optional instructions for those agents, default none); tick (one pass of that scheduler at 'at', then its runs settle); race (the named schedulers tick at 'at' at once, then settle); hold (an outside holder takes the local schedule thread's writer: 'run' also appends a user_input and leaves the turn open, 'outbound' only holds the lease); release ('done': the holder lets go and a held run finishes its turn; 'crash': the lease is let go and the turn is left open); delete (the local schedule thread is deleted); expect (per tenant: log is the schedule thread's schedule_fired and schedule_skipped events in order as 'fired <occurrence_id>' or 'skipped <reason> <occurrence_id>', empty when the schedule has no thread; rows are the tenant's schedule_occurrences as [occurrence_at as RFC 3339 UTC with milliseconds, state, reason] in occurrence order; threads, when given, is the tenant's thread count; inputs, when given, are the texts of the schedule thread's user_inputs whose source is schedule; one_hold, when given, are log entries whose events share one epoch, so one writer hold appended them all).",
+  "description": "One thread per schedule. Each case replays its steps on one store, with a schedule and a scripted agent 'bot' that answers every run. Steps: start (a new scheduler, named by the value, ready at 'at'; optional tenant, default local; optional schedules, default [schedule]; optional agents served, default ['bot'], each named by its key; optional instructions for those agents, default none); tick (one pass of that scheduler at 'at', then its runs settle); race (the named schedulers tick at 'at' at once, then settle); hold (an outside holder takes the writer of the local schedule's current thread, or with on: previous of the thread it had before: 'run' also appends a user_input, as a run started through the run API would, and leaves the turn open; 'outbound' only holds the lease); release ('done': the holder lets go and a held run finishes its turn; 'crash': the lease is let go and the turn is left open); delete (the local schedule thread is deleted); expect (per tenant: log is the schedule thread's schedule_fired and schedule_skipped events in order as 'fired <occurrence_id>' or 'skipped <reason> <occurrence_id>', empty when the schedule has no thread; rows are the tenant's schedule_occurrences as [occurrence_at as RFC 3339 UTC with milliseconds, state, reason] in occurrence order; threads, when given, is the tenant's thread count; inputs, when given, are the texts of the schedule thread's user_inputs whose source is schedule; open, when given, is how many of the tenant's threads have a turn open; one_hold, when given, are log entries whose events share one epoch, so one writer hold appended them all).",
   "schedule": {
     "id": "daily",
     "agent": "bot",
@@ -1060,6 +1060,97 @@
               "inputs": [
                 "Report."
               ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-previous-thread-recovered",
+      "note": "A thread the schedule moved off stays in schedule recovery: an input sent to it through the run API whose run crashed is resumed by the next pass.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-01T10:00:00Z",
+          "agents": [
+            "bot",
+            "helper"
+          ],
+          "schedules": [
+            {
+              "id": "daily",
+              "agent": "helper",
+              "cron": "0 9 * * *",
+              "input": "Report."
+            }
+          ]
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "hold": "run",
+          "on": "previous"
+        },
+        {
+          "release": "crash"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 2,
+              "open": 1
+            }
+          }
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:00:02Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 2,
+              "open": 0
             }
           }
         }

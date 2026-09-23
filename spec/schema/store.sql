@@ -250,17 +250,24 @@ CREATE TABLE IF NOT EXISTS schedule_occurrences (
 CREATE INDEX IF NOT EXISTS schedule_occurrences_pending
   ON schedule_occurrences (tenant_id, occurrence_at) WHERE state = 'pending';
 
--- A schedule's thread: one while its agent's pinned config is unchanged. A scheduler finds it,
--- or writes this row, the thread's branch and its thread_started, in the same transaction as the
--- reservations it makes on it, so a concurrent deletion lands wholly before or after. Deleted with
--- its thread; the next due occurrence, or one whose agent pins another config, starts a new one.
+-- Every thread a schedule has had; current = 1 marks the one new occurrences go to (one per
+-- schedule, by the partial unique index). A schedule keeps its thread while its agent's pinned
+-- config is unchanged; a config change moves it to a new one once the old one is quiet. Older
+-- threads stay listed, so recovery resumes a run left open on any of them (an input sent there
+-- through the run API, say). A scheduler finds the current row, or writes a new one with the
+-- thread's branch and thread_started, in the same transaction as the reservations it makes on
+-- it, so a concurrent deletion lands wholly before or after. Deleted with its thread.
 CREATE TABLE IF NOT EXISTS schedule_threads (
   tenant_id TEXT NOT NULL,
   schedule_id TEXT NOT NULL,
   thread_id TEXT NOT NULL,
+  current INTEGER NOT NULL CHECK (current IN (0, 1)),
   created_at INTEGER NOT NULL,
-  PRIMARY KEY (tenant_id, schedule_id)
+  PRIMARY KEY (tenant_id, schedule_id, thread_id)
 ) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS schedule_threads_current
+  ON schedule_threads (tenant_id, schedule_id) WHERE current = 1;
 
 -- ask_user questions: a rebuildable projection of the log. A row is inserted 'open' in the
 -- transaction that appends parked{awaiting_input} and changes only when the settling tool_result

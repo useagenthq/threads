@@ -31,6 +31,7 @@ const Expected = z.strictObject({
   threads: z.int().optional(),
   inputs: z.array(z.string()).optional(),
   one_hold: z.array(z.string()).optional(),
+  open: z.int().optional(),
 });
 const Step = z.union([
   z.strictObject({
@@ -43,7 +44,10 @@ const Step = z.union([
   }),
   z.strictObject({ tick: z.string(), at: z.string() }),
   z.strictObject({ race: z.array(z.string()), at: z.string() }),
-  z.strictObject({ hold: z.enum(["run", "outbound"]) }),
+  z.strictObject({
+    hold: z.enum(["run", "outbound"]),
+    on: z.literal("previous").optional(),
+  }),
   z.strictObject({ release: z.enum(["done", "crash"]) }),
   z.strictObject({ delete: z.literal(true) }),
   z.strictObject({ expect: z.record(z.string(), Expected) }),
@@ -88,14 +92,19 @@ class Replay {
   readonly schedulers = new Map<string, Scheduler>();
   last: Scheduler | undefined;
   held:
-    | { readonly writer: Writer; readonly kind: "run" | "outbound" }
+    | {
+        readonly writer: Writer;
+        readonly kind: "run" | "outbound";
+        readonly thread: ThreadId;
+        readonly branch: BranchId;
+      }
     | undefined;
 
   async step(step: Step): Promise<void> {
     if ("start" in step) return this.start(step);
     if ("tick" in step) return this.tick([step.tick], step.at);
     if ("race" in step) return this.tick(step.race, step.at);
-    if ("hold" in step) return this.hold(step.hold);
+    if ("hold" in step) return this.hold(step.hold, step.on ?? "current");
     if ("release" in step) return this.release(step.release);
     if ("delete" in step) return this.delete();
     for (const [tenant, want] of Object.entries(step.expect))
@@ -139,10 +148,15 @@ class Replay {
     await Promise.all(ticking.map((s) => s.ctx.idle()));
   }
 
-  async hold(kind: "run" | "outbound"): Promise<void> {
+  async hold(
+    kind: "run" | "outbound",
+    on: "current" | "previous",
+  ): Promise<void> {
     const { log } = await openStore(tenantStore(this.store, "local"));
-    const branch = await this.branch("local");
-    if (branch === undefined) throw new Error("no schedule thread to hold");
+    const thread = await this.thread("local", on);
+    const branch = await this.branch("local", on);
+    if (thread === undefined || branch === undefined)
+      throw new Error("no schedule thread to hold");
     const writer = log.acquire(branch, "outside");
     if (!writer.ok) throw new Error(writer.error.message);
     if (kind === "run") {
@@ -157,7 +171,7 @@ class Replay {
       ]);
       if (!busy.ok) throw new Error(busy.error.message);
     }
-    this.held = { writer: writer.value, kind };
+    this.held = { writer: writer.value, kind, thread, branch };
   }
 
   async release(how: "done" | "crash"): Promise<void> {
@@ -165,13 +179,10 @@ class Replay {
     if (held === undefined) throw new Error("nothing is held");
     held.writer.release();
     this.held = undefined;
-    const branch = await this.branch("local");
-    const thread = await this.thread("local");
     const last = this.last;
     if (how === "crash" || held.kind === "outbound") return;
-    if (branch === undefined || thread === undefined || last === undefined)
-      throw new Error("no run to finish");
-    await last.ctx.recover("local", { id: thread, branch });
+    if (last === undefined) throw new Error("no run to finish");
+    await last.ctx.recover("local", { id: held.thread, branch: held.branch });
     await last.ctx.idle();
   }
 
@@ -259,6 +270,7 @@ class Replay {
               return i.success ? [i.data.data.text] : [];
             }),
           }),
+      ...(want.open === undefined ? {} : { open: await this.open(tenant) }),
       ...(want.one_hold === undefined
         ? {}
         : {
@@ -273,21 +285,44 @@ class Replay {
     return found;
   }
 
-  async thread(tenant: string): Promise<ThreadId | undefined> {
+  /** How many of the tenant's threads have a turn open. */
+  async open(tenant: string): Promise<number> {
     const { db } = await storeConnection(this.store);
-    const [row] = z
+    const { log } = await openStore(tenantStore(this.store, tenant));
+    const threads = z
       .array(z.strictObject({ thread_id: ThreadId }))
       .parse(
-        db.all(
-          "SELECT thread_id FROM schedule_threads WHERE tenant_id = ? AND schedule_id = ?",
-          [tenant, vector.schedule.id],
-        ),
+        db.all("SELECT thread_id FROM threads WHERE tenant_id = ?", [tenant]),
       );
+    return threads.filter(({ thread_id }) => {
+      const main = log.mainBranch(thread_id);
+      const read = main.ok ? log.read(main.value) : undefined;
+      return read?.ok === true && read.value.fold.turnOpen;
+    }).length;
+  }
+
+  /** The schedule's current thread, or the latest one it moved off. */
+  async thread(
+    tenant: string,
+    which: "current" | "previous" = "current",
+  ): Promise<ThreadId | undefined> {
+    const { db } = await storeConnection(this.store);
+    const [row] = z.array(z.strictObject({ thread_id: ThreadId })).parse(
+      db.all(
+        `SELECT thread_id FROM schedule_threads
+            WHERE tenant_id = ? AND schedule_id = ? AND current = ?
+            ORDER BY created_at DESC LIMIT 1`,
+        [tenant, vector.schedule.id, which === "current" ? 1 : 0],
+      ),
+    );
     return row?.thread_id;
   }
 
-  async branch(tenant: string): Promise<BranchId | undefined> {
-    const thread = await this.thread(tenant);
+  async branch(
+    tenant: string,
+    which: "current" | "previous" = "current",
+  ): Promise<BranchId | undefined> {
+    const thread = await this.thread(tenant, which);
     if (thread === undefined) return undefined;
     const { log } = await openStore(tenantStore(this.store, tenant));
     const main = log.mainBranch(thread);

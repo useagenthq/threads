@@ -188,16 +188,17 @@ export function lastOccurrence(
   return last?.at ?? undefined;
 }
 
-/** The threads of the tenant's schedules. */
+/** Every thread the tenant's schedules have had: what recovery walks. */
 export function scheduleThreads(
   db: SqliteDriver,
   tenant: string,
 ): readonly ThreadId[] {
   return rows(
     z.strictObject({ thread_id: ThreadId }),
-    db.all("SELECT thread_id FROM schedule_threads WHERE tenant_id = ?", [
-      tenant,
-    ]),
+    db.all(
+      "SELECT DISTINCT thread_id FROM schedule_threads WHERE tenant_id = ?",
+      [tenant],
+    ),
   ).map((r) => r.thread_id);
 }
 
@@ -265,7 +266,8 @@ function threadOf(
   const [found] = rows(
     z.strictObject({ thread_id: ThreadId }),
     db.all(
-      "SELECT thread_id FROM schedule_threads WHERE tenant_id = ? AND schedule_id = ?",
+      `SELECT thread_id FROM schedule_threads
+        WHERE tenant_id = ? AND schedule_id = ? AND current = 1`,
       [tenant, scheduleId],
     ),
   );
@@ -281,10 +283,15 @@ function newThread(
 ): ThreadId {
   const threadId = ThreadId.parse(uuidv7(log.now()));
   const branchId = BranchId.parse(uuidv7(log.now()));
+  // The old thread stays listed, so recovery still finds it.
   db.run(
-    `INSERT INTO schedule_threads (tenant_id, schedule_id, thread_id, created_at)
-      VALUES (?, ?, ?, ?) ON CONFLICT (tenant_id, schedule_id)
-      DO UPDATE SET thread_id = excluded.thread_id, created_at = excluded.created_at`,
+    `UPDATE schedule_threads SET current = 0
+      WHERE tenant_id = ? AND schedule_id = ? AND current = 1`,
+    [log.tenant, scheduleId],
+  );
+  db.run(
+    `INSERT INTO schedule_threads (tenant_id, schedule_id, thread_id, current, created_at)
+      VALUES (?, ?, ?, 1, ?)`,
     [log.tenant, scheduleId, threadId, log.now()],
   );
   must(log.createBranch(threadId, branchId));
