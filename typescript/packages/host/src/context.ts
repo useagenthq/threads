@@ -124,7 +124,10 @@ export class HostContext {
           [],
         );
         const json = asJson(result);
-        if (runId !== undefined) this.results.set(runId, json);
+        // A run that lost the branch is no answer: the run holding it answers from the log.
+        const lost =
+          json.status === "failed" && json.error.code === "branch_busy";
+        if (runId !== undefined && !lost) this.results.set(runId, json);
         await this.#reply(tenant, thread);
         return json;
       } catch (error) {

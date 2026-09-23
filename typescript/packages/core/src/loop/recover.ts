@@ -5,6 +5,7 @@ import { settleRequested } from "./manual";
 import type { Session } from "./session";
 import { resolvedResult, settleUnknown } from "./settle";
 import { recordOutput } from "./spill";
+import { cancelRequested } from "./turn";
 import type { Halt } from "./types";
 
 // the recovery classifier, run once a new lease is taken and before anything
@@ -13,8 +14,9 @@ import type { Halt } from "./types";
 
 export async function recover(s: Session): Promise<Halt | undefined> {
   // An open turn with nothing in doubt and nothing pending ends interrupted, unless no
-  // model_request follows its last user_input or steer: that input is unsent, so the loop sends it.
-  // A requested compaction's side request is cut before the input, so it never sent it.
+  // model_request follows its last user_input or steer (that input is unsent, so the loop sends
+  // it) or a cancel is durable in it (the loop carries the cancel out). A requested compaction's
+  // side request is cut before the input, so it never sent it.
   const { fold } = s;
   const last = s.events.findLastIndex(
     (e) => e.type === "user_input" || e.type === "steer",
@@ -29,7 +31,8 @@ export async function recover(s: Session): Promise<Halt | undefined> {
     answered &&
     fold.awaiting.size === 0 &&
     fold.pending.size === 0 &&
-    fold.parked.length === 0
+    fold.parked.length === 0 &&
+    !cancelOpen(s)
   )
     return s.append({
       type: "turn_completed",
@@ -47,6 +50,18 @@ export async function recover(s: Session): Promise<Halt | undefined> {
     if (stopped !== undefined) return stopped;
   }
   return settleRequested(s);
+}
+
+/** A cancel_requested in the open turn that no cancelled has answered yet. */
+function cancelOpen(s: Session): boolean {
+  const cancel = cancelRequested(s.events);
+  return (
+    cancel !== undefined &&
+    !s.events.some(
+      (e) =>
+        e.type === "cancelled" && e.data.request_event_id === cancel.event_id,
+    )
+  );
 }
 
 /** ask the adapter first; only a final answer settles the attempt. */

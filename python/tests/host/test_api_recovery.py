@@ -291,3 +291,35 @@ def test_two_hosts_starting_together_resume_it_once() -> None:
 
 async def _called(models: list[Counted]) -> bool:
     return any(m.calls for m in models)
+
+
+def test_a_stalled_host_that_lost_the_run_never_answers_for_it() -> None:
+    """Its own run is fenced when it wakes, but the run goes on elsewhere: a subscriber on the
+    stalled host waits for the log instead of reporting that host's failure."""
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        late = stalled(text("late"))
+        first = support(store, late)
+        run = await start(first, ALICE)
+        await until(has(store, ALICE, run, ModelRequestEvent))
+        seen = (await fold(store, ALICE, run)).seq
+        await expire_leases(store)
+        model = stalled(text("done"))
+        async with support(store, model) as second:
+            await until(lambda: _called([model]))
+            late.held.set()
+            await until(lambda: _ended(first, run))
+            waiting = asyncio.ensure_future(status(first, ALICE, run, seen))
+            await asyncio.sleep(0.1)
+            model.held.set()
+            assert await waiting == "completed"
+            await recovered(second)
+        await first.stop()
+
+    asyncio.run(main())
+
+
+async def _ended(served: Host, run: RunAccepted) -> bool:
+    runner = served._runner  # pyright: ignore[reportPrivateUsage] - the stalled host's run
+    return not runner.running(run.branch_id)

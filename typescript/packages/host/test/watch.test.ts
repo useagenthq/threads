@@ -9,7 +9,7 @@ describe("the watch on channel threads", () => {
     const watch = new Watch();
     watch.add("t", T);
     for (const { settled } of watch.entries()) settled();
-    expect(watch.has(T)).toBe(false);
+    expect(watch.has("t", T)).toBe(false);
   });
 
   test("an older pass's verdict never drops a thread watched again since", () => {
@@ -19,6 +19,6 @@ describe("the watch on channel threads", () => {
     // An item consumed while the pass looked: the thread must be looked at again.
     watch.add("t", T);
     for (const { settled } of pass) settled();
-    expect(watch.has(T)).toBe(true);
+    expect(watch.has("t", T)).toBe(true);
   });
 });

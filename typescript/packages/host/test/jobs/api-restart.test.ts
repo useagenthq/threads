@@ -51,8 +51,8 @@ function events(where: string): readonly KnownEvent[] {
 const count = (all: readonly KnownEvent[], type: string): number =>
   all.filter((e) => e.type === type).length;
 
-/** A started run whose host was killed at `point`, its lease expired. */
-async function crashed(
+/** A started run whose host was killed at `point`, its lease still live. */
+async function killed(
   point: string,
   env: Record<string, string> = {},
 ): Promise<string> {
@@ -60,6 +60,15 @@ async function crashed(
   const first = api(dir, { ...env, DRILL_START: "1", DRILL_STOP_AT: point });
   await waitAt(first, point);
   await kill(first);
+  return dir;
+}
+
+/** The same, once its lease has run out. */
+async function crashed(
+  point: string,
+  env: Record<string, string> = {},
+): Promise<string> {
+  const dir = await killed(point, env);
   expireLeases(dir);
   return dir;
 }
@@ -81,6 +90,21 @@ describe("api-run-kill-restart", () => {
     const settled = after.map((e) => e.event_id);
     expect(await finish(api(dir, {}))).toBe(0);
     expect(events(dir).map((e) => e.event_id)).toEqual(settled);
+    expect(logged(dir)).toBe("");
+  }, 60_000);
+
+  test("restarted at once: the dead host's lease refuses it, then runs out, and the turn completes", async () => {
+    const dir = await killed("model_request");
+    const next = api(dir, {});
+    // Its first passes find the branch leased by the dead host.
+    await Bun.sleep(2_000);
+    expect(count(events(dir), "turn_completed")).toBe(0);
+    expireLeases(dir);
+    expect(await finish(next)).toBe(0);
+    const after = events(dir);
+    expect(count(after, "model_response")).toBe(1);
+    expect(after.at(-1)?.type).toBe("turn_completed");
+    oneWriterAtATime(after);
     expect(logged(dir)).toBe("");
   }, 60_000);
 

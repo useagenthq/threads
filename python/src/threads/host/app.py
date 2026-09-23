@@ -35,6 +35,12 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.types import ASGIApp
 
+type OpenRun = tuple[str, ThreadId, BranchId]
+"""(tenant, thread, branch) of an API run a crash may have left open."""
+
+REOPEN_S = 1.0
+"""How often a host looks again at an API run it could not resume yet."""
+
 type Authenticate = Callable[["Request"], Awaitable[Principal | None]]
 """Maps an HTTP API request to its principal, or None for 401."""
 
@@ -112,6 +118,7 @@ class Host:
             self._ticking = asyncio.get_running_loop().create_task(self._tick())
 
     async def _tick(self) -> None:
+        still_open: set[OpenRun] = set()
         try:
             sq = await open_store(self._runner.store(LOCAL_TENANT))
             waiting = await sq.tables.unconsumed_threads()
@@ -125,13 +132,27 @@ class Host:
                     if run is not None:
                         _RECOVERY[self][1].append(run)
             # ponytail: API runs are found at start only; a live peer's crash waits for a restart.
-            for tenant, thread, branch in await sq.tables.unfinished_runs():
-                run = await self._runner.reopen(self._runner.store(tenant), thread, branch)
+            for row in await sq.tables.unfinished_runs():
+                run = await self._reopen(row)
                 if run is not None:
                     _RECOVERY[self][1].append(run)
+                    still_open.add(row)
         finally:
             _RECOVERY[self][0].set()
-        await self._scheduler.run()
+        await asyncio.gather(self._scheduler.run(), self._reopening(still_open))
+
+    async def _reopen(self, row: OpenRun) -> RunTask | None:
+        tenant, thread, branch = row
+        return await self._runner.reopen(self._runner.store(tenant), thread, branch)
+
+    async def _reopening(self, still_open: set[OpenRun]) -> None:
+        """Looks at each API run left open again every second until it closes or parks: a
+        crashed host's lease refuses a resume until it runs out."""
+        while still_open:
+            await asyncio.sleep(REOPEN_S)
+            for row in tuple(still_open):
+                if await self._reopen(row) is None:
+                    still_open.discard(row)
 
     async def stop(self) -> None:
         """Aborts first: every run and follow-on resume is cancelled and none starts, so no

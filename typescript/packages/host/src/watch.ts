@@ -17,13 +17,13 @@ export class Watch {
   /** Watches the thread (at `branch`) again, even when it is watched already. */
   add(tenant: string, id: ThreadId, branch?: BranchId): void {
     this.#threads.set(
-      branch ?? id,
+      keyOf(tenant, id, branch),
       branch === undefined ? { tenant, id } : { tenant, id, branch },
     );
   }
 
-  has(key: ThreadId | BranchId): boolean {
-    return this.#threads.has(key);
+  has(tenant: string, id: ThreadId, branch?: BranchId): boolean {
+    return this.#threads.has(keyOf(tenant, id, branch));
   }
 
   /**
@@ -41,4 +41,11 @@ export class Watch {
       },
     }));
   }
+}
+
+/** Thread ids and branch ids are unique in their own tables only: the key says which it is. */
+function keyOf(tenant: string, id: ThreadId, branch?: BranchId): string {
+  return JSON.stringify(
+    branch === undefined ? [tenant, "thread", id] : [tenant, "branch", branch],
+  );
 }

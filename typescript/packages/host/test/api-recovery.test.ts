@@ -259,4 +259,40 @@ describe("a crashed API run resumes on the next host", () => {
     const epochs = all.map((e) => e.epoch);
     expect(epochs).toEqual(epochs.toSorted((x, y) => x - y));
   }, 15_000);
+
+  test("a stalled host that lost the run never answers for it", async () => {
+    const store = sqlite(":memory:");
+    const { promise: woken, resolve: wake } = Promise.withResolvers<void>();
+    gates.push(wake);
+    const stalled = counted([say("late")], woken);
+    const first = serve(store, { support: support(stalled) });
+    const run = await start(first, alice);
+    await until(() => has(store, run, "model_request"));
+    const seen = (await read(store, run)).fold.seq;
+    await expireLeases(store);
+    const answers = counted([say("done")], gate());
+    const second = serve(store, { support: support(answers) });
+    await second.ready();
+    await until(async () => answers.calls() === 1, 5_000);
+
+    // The stalled host wakes, is fenced, and its run ends while the second host's goes on.
+    wake();
+    const stream = await first.subscribe(run.thread, run.run, {
+      principal: alice,
+      afterSeq: seen,
+    });
+    if (!stream.ok) throw new Error(stream.error.message);
+    const last = (async () => {
+      let end: unknown;
+      for await (const m of stream.value) end = m;
+      return end;
+    })();
+    await Bun.sleep(200);
+    for (const open of gates.splice(0)) open();
+    expect(await last).toMatchObject({
+      kind: "result",
+      run_id: run.run,
+      result: { status: "completed" },
+    });
+  }, 15_000);
 });

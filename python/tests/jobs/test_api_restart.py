@@ -5,6 +5,7 @@ once."""
 
 import asyncio
 import subprocess
+import time
 from pathlib import Path
 from typing import Final
 
@@ -55,11 +56,16 @@ def count(fold: Fold, kind: type[Event]) -> int:
     return sum(isinstance(e, kind) for e in fold.events)
 
 
-def crashed(where: Path, point: str, **env: str) -> None:
-    """A started run whose host was killed at `point`, its lease expired."""
+def killed(where: Path, point: str, **env: str) -> None:
+    """A started run whose host was killed at `point`, its lease still live."""
     first = api(where, DRILL_START="1", DRILL_STOP_AT=point, **env)
     wait_at(first, point)
     kill(first)
+
+
+def crashed(where: Path, point: str, **env: str) -> None:
+    """The same, once its lease has run out."""
+    killed(where, point, **env)
     expire_leases(where)
 
 
@@ -79,6 +85,22 @@ def test_killed_at_the_model_request_a_host_given_no_input_completes_it(tmp_path
     settled = [e.event_id for e in fold.events]
     finish(api(tmp_path))
     assert [e.event_id for e in log(tmp_path).events] == settled
+
+
+def test_restarted_at_once_the_turn_completes_when_the_dead_lease_runs_out(
+    tmp_path: Path,
+) -> None:
+    killed(tmp_path, "model_request")
+    restarted = api(tmp_path)
+    # Its first pass finds the branch leased by the dead host.
+    time.sleep(2)
+    assert count(log(tmp_path), TurnCompletedEvent) == 0
+    expire_leases(tmp_path)
+    finish(restarted)
+    fold = log(tmp_path)
+    assert count(fold, ModelResponseEvent) == 1
+    assert isinstance(fold.events[-1], TurnCompletedEvent)
+    one_writer_at_a_time(fold)
 
 
 def test_killed_inside_an_effect_the_restart_parks_it_and_never_runs_it_again(

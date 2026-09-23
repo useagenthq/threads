@@ -1,0 +1,10 @@
+{
+  "name": "recover-open-turn-cancel-requested-cancels",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Crash after a model_response and a cancel_requested, before turn_completed. The cancel is durable, so recovery doesn't close the turn as interrupted: the run carries the cancel out and the turn ends cancelled. Nothing is sent to the model.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

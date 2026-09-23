@@ -157,7 +157,10 @@ export function host(options: HostOptions): Host {
       const { db } = await storeConnection(ctx.store);
       for (const r of channelThreads(db)) watch.add(r.tenant_id, r.thread_id);
       // ponytail: API runs are found at start only; a live peer's crash waits for a restart.
-      for (const r of unfinishedRuns(db))
+      const runs = unfinishedRuns(db);
+      // A row that fails its schema fails the tick, which logs it and seeds again next time.
+      if (!runs.ok) throw new Error(runs.error.message);
+      for (const r of runs.value)
         watch.add(r.tenant_id, r.thread_id, r.branch_id);
       seeded = true;
     }

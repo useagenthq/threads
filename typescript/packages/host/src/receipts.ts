@@ -97,8 +97,10 @@ const RunBranchRow: z.ZodType<RunBranch> = z.strictObject({
  * turn_completed: where a crash may have left a run's turn open. The fold decides; this only
  * skips branches that are certainly closed, so a restart doesn't read every API thread's log.
  */
-export function unfinishedRuns(db: SqliteDriver): readonly RunBranch[] {
-  const rows = parseRows(
+export function unfinishedRuns(
+  db: SqliteDriver,
+): Result<readonly RunBranch[], LogError> {
+  return parseRows(
     RunBranchRow,
     db.all(
       `SELECT DISTINCT r.tenant_id, r.thread_id, r.branch_id FROM run_receipts r
@@ -108,5 +110,4 @@ export function unfinishedRuns(db: SqliteDriver): readonly RunBranch[] {
       [],
     ),
   );
-  return rows.ok ? rows.value : [];
 }

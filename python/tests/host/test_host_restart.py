@@ -187,7 +187,7 @@ def test_stop_drains_every_follow_on_of_a_branch_and_none_runs_after_restart() -
             run = asyncio.ensure_future(ended())
             await run
             runner._again.add(branch)  # pyright: ignore[reportPrivateUsage] - a queued control
-            runner._ended(thread, run, resumed=True)  # pyright: ignore[reportPrivateUsage, reportArgumentType] - a run that ended
+            runner._ended(thread, run)  # pyright: ignore[reportPrivateUsage, reportArgumentType] - a run that ended
         await asyncio.sleep(0)
         await runner.stop()
         runner.open()
