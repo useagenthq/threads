@@ -102,6 +102,9 @@ class Host:
         self._runner.resolve_secrets()
         await open_store(self._store)
         if self._ticking is None:
+            # Each start has its own pass; cleared, not replaced, so a wait begun before this
+            # start still sees it.
+            _RECOVERY[self][0].clear()
             self._ticking = asyncio.get_running_loop().create_task(self._tick())
 
     async def _tick(self) -> None:
@@ -206,10 +209,10 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
 
 
 async def recovered(served: Host) -> None:
-    """After the start-up recovery pass `ready()` began has finished and the runs it started
+    """After the recovery pass the latest `ready()` began has finished and the runs it started
     to redeliver replies have ended, so a test asserts what recovery did or didn't do without
-    sleeping. Python recovers once per start, not on a timer as TS does, so there is no later
-    pass to wait for. Internal: not exported."""
+    sleeping. Python recovers once per start (each start, including a restart of the same host),
+    not on a timer as TS does, so there is no later pass to wait for. Internal: not exported."""
     done, runner = _RECOVERY[served]
     await done.wait()
     await runner.settled()

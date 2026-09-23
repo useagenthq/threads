@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agent, fakeSandbox, scriptedModel } from "../../src";
@@ -103,6 +109,20 @@ describe("lsp through the in-sandbox driver", () => {
       await lsp.run({ operation: "symbols", path: "app.fake" }),
     ).toMatchObject({
       output: "Box (kind 5) line 1\n  open (kind 6) line 4",
+    });
+  }, 30_000);
+
+  test("a server given by absolute path runs from outside the searched dirs", async () => {
+    // Like /opt/... or /workspace/node_modules/.bin/...: an absolute command is run as given.
+    writeFileSync(join(root, "server.py"), SERVER);
+    mkdirSync(join(root, "opt/bin"), { recursive: true });
+    symlinkSync(Bun.which("python3") ?? "python3", join(root, "opt/bin/py"));
+    const lsp = tool([join(root, "opt/bin/py"), join(root, "server.py")]);
+    expect(
+      await lsp.run({ operation: "symbols", path: "app.fake" }),
+    ).toMatchObject({
+      output: "Box (kind 5) line 1\n  open (kind 6) line 4",
+      isError: false,
     });
   }, 30_000);
 

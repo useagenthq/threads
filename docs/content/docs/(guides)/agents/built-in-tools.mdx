@@ -49,7 +49,7 @@ coder = agent(
 | `web_fetch` | `web: { fetch: true }` | Runs on the host. Private and internal addresses are blocked |
 | `web_search` | `web: { search: exa(key) }` | Backends: `exa`, `brave`, `tavily`. Each takes a `secret()` |
 | `git_clone`, `git_fetch`, `git_push`, `open_pull_request` | `git: { credential }` plus a `sandbox` | The token stays on the host; the sandbox never sees it |
-| `lsp` | `lsp: { languages }` plus a `sandbox` | `typescript`, `python`, `go`, `rust`. The sandbox image needs `python3` on its `PATH` and each language server in `/usr/local/sbin`, `/usr/local/bin`, `/usr/sbin`, `/usr/bin`, `/sbin` or `/bin`. Only those six directories are searched for a server, since it runs with no `PATH` |
+| `lsp` | `lsp: { languages }` plus a `sandbox` | `typescript`, `python`, `go`, `rust`. The sandbox image needs `python3` on its `PATH` and each language server in `/usr/local/sbin`, `/usr/local/bin`, `/usr/sbin`, `/usr/bin`, `/sbin` or `/bin`. Only those six directories are searched for a server, since it runs with no `PATH`. For a server installed elsewhere (`/workspace/node_modules/.bin`, `/opt/...`), link it into `/usr/local/bin` in the image |
 | `computer`, `computer_screenshot` | `computer: true` plus a sandbox with a desktop | None of the bundled sandbox providers has a desktop yet |
 | `save_memory`, `search_memory`, `forget_memory` | `memory` | See [Memory](/docs/memory/memory) |
 | `search_knowledge` | `knowledge` | See [Knowledge base](/docs/memory/knowledge) |

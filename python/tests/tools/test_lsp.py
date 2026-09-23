@@ -3,6 +3,7 @@ server run as a real local process: every operation, 1-based positions, and a se
 missing or undeclared answers unavailable, never an empty success."""
 
 import asyncio
+import shutil
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -74,6 +75,22 @@ def test_each_operation_answers_from_the_server(
     assert isinstance(got, Output)
     assert not got.is_error, got.text
     assert got.text.replace(str(tmp_path.resolve()), "/workspace").replace("/private", "") == text
+
+
+def test_a_server_given_by_absolute_path_runs_from_outside_the_searched_dirs(
+    tmp_path: Path,
+) -> None:
+    # Like /opt/... or /workspace/node_modules/.bin/...: an absolute command is run as given.
+    opt = tmp_path / "opt" / "bin"
+    opt.mkdir(parents=True)
+    (opt / "server-python").symlink_to(shutil.which("python3") or "python3")
+    got = ask(
+        tmp_path,
+        {"operation": "symbols", "path": "app.py"},
+        {"python": (str(opt / "server-python"), FAKE)},
+    )
+    assert isinstance(got, Output)
+    assert not got.is_error, got.text
 
 
 def test_a_missing_or_undeclared_server_is_unavailable(tmp_path: Path) -> None:

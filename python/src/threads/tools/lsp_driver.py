@@ -28,7 +28,8 @@ READY_S: Final = 30.0
 SEARCH: Final = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 """Where a bare server command is looked up. The driver runs with the tool env, which has no
 PATH, so the default search (/bin:/usr/bin) would miss servers in /usr/local/bin, where pip and
-npm put them. Fixed system dirs, never a host PATH."""
+npm put them. Fixed system dirs, never a host PATH. An absolute command (/opt/...,
+/workspace/node_modules/.bin/...) runs as given."""
 QUIET_S: Final = 1.0
 REQUESTS: Final = {
     "definition": "textDocument/definition",
