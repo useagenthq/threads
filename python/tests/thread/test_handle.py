@@ -9,6 +9,7 @@ from pathlib import Path
 
 from kit import USER
 from pydantic import JsonValue
+from sandbox_kit import OPEN
 
 from threads.agents.store import HOLDER, Store, now_ms, open_store, sqlite
 from threads.log import BranchId, ForkEvent, SnapshotEvent, ThreadId
@@ -52,9 +53,9 @@ async def world() -> World:
     assert isinstance(writer, Ok)
     assert isinstance(await writer.value.append([draft("thread_started", STARTED)]), Ok)
     sandbox = fake_sandbox()
-    made = await sandbox.create("parent-sandbox")
+    made = await sandbox.create("parent-sandbox", OPEN)
     assert isinstance(made, Ok)
-    assert await made.value.upload("/workspace/a.txt", b"v1") == Ok(None)
+    assert await made.value.upload("/workspace/a.txt", b"v1", OPEN) == Ok(None)
     return World(store, sq, writer.value, sandbox, made.value, thread)
 
 
@@ -103,11 +104,11 @@ def test_fork_restores_an_isolated_sandbox_and_the_child_runs() -> None:
         fork = read.value.fold.events[-1]
         assert isinstance(fork, ForkEvent)
         assert fork.data.knowledge_policy == "pinned"
-        restored = await w.sandbox.attach(str(fork.data.sandbox_id))
+        restored = await w.sandbox.attach(str(fork.data.sandbox_id), OPEN)
         assert isinstance(restored, Ok)
-        assert await restored.value.download("/workspace/a.txt") == Ok(b"v1")
-        assert await restored.value.upload("/workspace/a.txt", b"v2") == Ok(None)
-        assert await w.session.download("/workspace/a.txt") == Ok(b"v1")
+        assert await restored.value.download("/workspace/a.txt", OPEN) == Ok(b"v1")
+        assert await restored.value.upload("/workspace/a.txt", b"v2", OPEN) == Ok(None)
+        assert await w.session.download("/workspace/a.txt", OPEN) == Ok(b"v1")
         assert [(r.kind, r.state) for r in await w.sq.ledger.rows()] == [
             ("snapshot", "live"),
             ("sandbox", "live"),

@@ -9,17 +9,19 @@ from typing import Literal, NotRequired, TypedDict
 from pydantic import ConfigDict, JsonValue, TypeAdapter, with_config
 
 from threads.log import SnapshotData
-from threads.loop.model import Found, LookupResult, NotFound
+from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound
 from threads.result import Err, Ok
 from threads.sandbox.fake_session import (
     FakeSession,
     ManifestEntry,
     ToolScript,
+    fenced,
     manifest_of,
 )
 from threads.sandbox.fake_session import manifest_hash as tree_hash
 from threads.sandbox.protocol import (
     LookupSupport,
+    SandboxContext,
     SandboxError,
     SandboxId,
     SandboxInfo,
@@ -63,6 +65,9 @@ class FakeSandbox:
     script: SandboxScript
     creates: int = 0
     fail_releases: int = 0
+    releases: int = 0
+    """Release and close calls that passed their fence and reached the provider."""
+    provider: str = "fake"
     _live: dict[str, FakeSession] = field(default_factory=dict[str, FakeSession])
     _snapshots: dict[str, _Snapshot] = field(default_factory=dict[str, _Snapshot])
     _by_key: dict[str, SandboxSession | SnapshotData] = field(
@@ -81,7 +86,7 @@ class FakeSandbox:
             "none" if any(s.get("create_lookup") == "unsupported" for s in scripted) else "final"
         )
         return SandboxInfo(
-            provider="fake",
+            provider=self.provider,
             egress="enforced",
             capture_classes=("filesystem",),
             browser="none",
@@ -90,16 +95,24 @@ class FakeSandbox:
             termination="confirmed",
         )
 
-    async def create(self, operation_key: str) -> Ok[SandboxSession] | Err[SandboxError]:
+    async def create(
+        self, operation_key: str, context: SandboxContext
+    ) -> Ok[SandboxSession] | Err[SandboxError]:
+        stale = await fenced(context)
+        if stale is not None:
+            return stale
         self.creates += 1
         return Ok(self._open(SandboxId(self._name("sbx")), {}, operation_key))
 
     async def restore(
-        self, snapshot_id: str, manifest_hash: str, operation_key: str
+        self, snapshot_id: str, manifest_hash: str, operation_key: str, context: SandboxContext
     ) -> Ok[SandboxSession] | Err[SandboxError]:
         snap = self._snapshots.get(snapshot_id)
         if snap is None:
             return Err(SandboxError("snapshot_missing", f"no snapshot {snapshot_id}"))
+        stale = await fenced(context)
+        if stale is not None:
+            return stale
         self.creates += 1
         script = snap.script or SnapshotScript(restore_sandbox_id=self._name("sbx"), manifest=[])
         session = self._open(SandboxId(script["restore_sandbox_id"]), snap.files, operation_key)
@@ -116,23 +129,40 @@ class FakeSandbox:
             case "ok" | None:
                 return Ok(session)
 
-    async def lookup(self, operation_key: str) -> LookupResult[SandboxSession]:
+    async def lookup(
+        self, operation_key: str, context: SandboxContext
+    ) -> LookupResult[SandboxSession]:
+        if await fenced(context) is not None:
+            return LookupUnknown("stale_epoch: the owner lost its lease")
         found = self._by_key.get(operation_key)
         return NotFound() if isinstance(found, SnapshotData | None) else Found(found)
 
-    async def lookup_snapshot(self, operation_key: str) -> LookupResult[SnapshotData]:
+    async def lookup_snapshot(
+        self, operation_key: str, context: SandboxContext
+    ) -> LookupResult[SnapshotData]:
+        if await fenced(context) is not None:
+            return LookupUnknown("stale_epoch: the owner lost its lease")
         found = self._by_key.get(operation_key)
         return Found(found) if isinstance(found, SnapshotData) else NotFound()
 
-    async def attach(self, ref: str) -> Ok[SandboxSession] | Err[SandboxError]:
+    async def attach(
+        self, ref: str, context: SandboxContext
+    ) -> Ok[SandboxSession] | Err[SandboxError]:
+        stale = await fenced(context)
+        if stale is not None:
+            return stale
         session = self._live.get(ref)
         return (
             Err(SandboxError("not_found", f"no sandbox {ref}")) if session is None else Ok(session)
         )
 
     async def release(
-        self, ref: str
+        self, ref: str, context: SandboxContext
     ) -> Ok[Literal["released", "already_gone"]] | Err[SandboxError]:
+        stale = await fenced(context)
+        if stale is not None:
+            return stale
+        self.releases += 1
         failed = self._failed_release()
         if failed is not None:
             return failed
@@ -151,7 +181,7 @@ class FakeSandbox:
         self._snapshots[name] = _Snapshot(dict(session.files), manifest)
         data: dict[str, JsonValue] = {
             "snapshot_id": name,
-            "provider": "fake",
+            "provider": self.provider,
             "sandbox_id": session.id,
             "capture_class": "filesystem",
             "expires_at": None,
@@ -163,6 +193,7 @@ class FakeSandbox:
         return snapshot
 
     def _close(self, session: FakeSession) -> Ok[None] | Err[SandboxError]:
+        self.releases += 1
         failed = self._failed_release()
         if failed is not None:
             return failed

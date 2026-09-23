@@ -9,7 +9,13 @@ from dataclasses import dataclass, field
 
 from threads.log import ArtifactRef, Spill
 from threads.result import Err, Ok
-from threads.sandbox.protocol import NO_ENV, ExecResult, SandboxError, SandboxSession
+from threads.sandbox.protocol import (
+    NO_ENV,
+    ExecResult,
+    SandboxContext,
+    SandboxError,
+    SandboxSession,
+)
 from threads.store.spill import Spill as Sink
 
 _MARKER = "\n[output truncated: {n} bytes in all; the full output is in full_output]\n"
@@ -64,13 +70,14 @@ class _Preview:
 
 
 async def run_exec(
-    session: SandboxSession, command: Command, spill: Sink, limits: Spill
+    session: SandboxSession, command: Command, context: SandboxContext, spill: Sink, limits: Spill
 ) -> Ok[ExecResult] | Err[SandboxError]:
     """Runs `command` and consumes both streams at once into `spill`, in arrival order (as a
     terminal shows them). A timeout terminates the process group and is an error: the command
     may already have changed state."""
     started = await session.exec(
         command.argv,
+        context,
         process_key=command.process_key,
         cwd=command.cwd,
         env=command.env,
@@ -91,7 +98,7 @@ async def run_exec(
             code = await started.value.exit_code
     except TimeoutError:
         await spill.discard()
-        await session.terminate(command.process_key)
+        await session.terminate(command.process_key, context)
         return Err(SandboxError("timeout", f"exec timed out after {command.timeout_ms} ms"))
     truncated = out.truncated or err.truncated
     full = None

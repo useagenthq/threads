@@ -10,10 +10,11 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final, Literal, NewType, Protocol
 
-from threads.log import ArtifactRef, SnapshotData
+from threads.log import ArtifactRef, ParseError, SnapshotData
 from threads.loop.model import LookupCapability, LookupResult
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
+from threads.store.context import SandboxAuthority
 
 SandboxId = NewType("SandboxId", str)
 
@@ -32,10 +33,22 @@ type SandboxErrorCode = Literal[
     "snapshot_missing",
     "snapshot_restore_failed",
     "snapshot_manifest_mismatch",
+    "stale_epoch",
 ]
 """The codes spec/api.json lists for the sandbox methods."""
 
 NO_ENV: Final[Mapping[str, str]] = MappingProxyType({})
+
+
+class SandboxContext(Protocol):
+    """What the runtime hands an adapter for every provider operation: who
+    dispatches it (an owner's lease, or gc's claim on the row), and `fence`, which the adapter
+    awaits at its real dispatch point; a failure means call nothing and answer stale_epoch."""
+
+    @property
+    def authority(self) -> SandboxAuthority: ...
+
+    async def fence(self) -> Ok[None] | Err[ParseError]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +108,7 @@ class SandboxSession(Protocol):
     async def exec(  # noqa: PLR0913 - the options spec/api.json names
         self,
         command: Sequence[str],
+        context: SandboxContext,
         *,
         process_key: str,
         cwd: str = "/workspace",
@@ -107,17 +121,25 @@ class SandboxSession(Protocol):
         kills the whole group."""
         ...
 
-    async def terminate(self, process_key: str) -> Ok[Termination] | Err[SandboxError]: ...
+    async def terminate(
+        self, process_key: str, context: SandboxContext
+    ) -> Ok[Termination] | Err[SandboxError]: ...
 
-    async def upload(self, path: str, data: bytes) -> Ok[None] | Err[SandboxError]: ...
+    async def upload(
+        self, path: str, data: bytes, context: SandboxContext
+    ) -> Ok[None] | Err[SandboxError]: ...
 
-    async def download(self, path: str) -> Ok[bytes] | Err[SandboxError]: ...
+    async def download(
+        self, path: str, context: SandboxContext
+    ) -> Ok[bytes] | Err[SandboxError]: ...
 
-    async def snapshot(self, operation_key: str) -> Ok[SnapshotData] | Err[SandboxError]:
+    async def snapshot(
+        self, operation_key: str, context: SandboxContext
+    ) -> Ok[SnapshotData] | Err[SandboxError]:
         """Freezes or stops tracked processes, captures, thaws. Returns once durable."""
         ...
 
-    async def close(self) -> Ok[None] | Err[SandboxError]:
+    async def close(self, context: SandboxContext) -> Ok[None] | Err[SandboxError]:
         """Releases the sandbox."""
         ...
 
@@ -126,29 +148,37 @@ class Sandbox(Protocol):
     @property
     def info(self) -> SandboxInfo: ...
 
-    async def create(self, operation_key: str) -> Ok[SandboxSession] | Err[SandboxError]: ...
+    async def create(
+        self, operation_key: str, context: SandboxContext
+    ) -> Ok[SandboxSession] | Err[SandboxError]: ...
 
     async def restore(
-        self, snapshot_id: str, manifest_hash: str, operation_key: str
+        self, snapshot_id: str, manifest_hash: str, operation_key: str, context: SandboxContext
     ) -> Ok[SandboxSession] | Err[SandboxError]:
         """Restores into a new isolated sandbox and verifies it: a restored tree whose
         canonical manifest hash isn't `manifest_hash` is snapshot_manifest_mismatch, and the
         adapter releases the sandbox it created first."""
         ...
 
-    async def lookup(self, operation_key: str) -> LookupResult[SandboxSession]:
+    async def lookup(
+        self, operation_key: str, context: SandboxContext
+    ) -> LookupResult[SandboxSession]:
         """Finds a sandbox whose create or restore answer was lost. Answers only when
         `info.lookup.create` is not none."""
         ...
 
-    async def lookup_snapshot(self, operation_key: str) -> LookupResult[SnapshotData]: ...
+    async def lookup_snapshot(
+        self, operation_key: str, context: SandboxContext
+    ) -> LookupResult[SnapshotData]: ...
 
-    async def attach(self, ref: str) -> Ok[SandboxSession] | Err[SandboxError]:
+    async def attach(
+        self, ref: str, context: SandboxContext
+    ) -> Ok[SandboxSession] | Err[SandboxError]:
         """Reattaches to a live row's sandbox by its recorded ref."""
         ...
 
     async def release(
-        self, ref: str
+        self, ref: str, context: SandboxContext
     ) -> Ok[Literal["released", "already_gone"]] | Err[SandboxError]:
         """Releases a snapshot by its durable ref."""
         ...

@@ -7,8 +7,12 @@ Every row belongs to one tenant, and no statement reaches another tenant's rows.
 Each path may move a row only from the states it names, along `MOVES`:
 - the owner, fenced by its lease: `pending`, `resolve` (a pending row), `release` (a live one);
 - the provider's answer to a release: `settle_release` (a releasing row);
-- cleanup, which holds no branch lease: `gc_resolve` (a pending row whose owner holds no live
-  lease: its creator crashed mid-call) and `gc_retry` (a release_failed row).
+- cleanup (gc), which holds no branch lease and outlives deleted branches: it first `claim`s a
+  collectable row (releasing, release_failed, or live past its provider expiry) by
+  compare-and-set, then `gc_retry` (release_failed) or `gc_release` (expired live) move it only
+  while it still carries that claim. A later claim supersedes an earlier one, so of two gc
+  runs only the latest dispatches (spec/api.json `SandboxAuthority`).
+A pending row a crash left behind is resolved by its owner once it takes the lease again.
 """
 
 import sqlite3
@@ -68,11 +72,17 @@ class Resource:
     released_at: int | None
     release_outcome: str | None
     """The move that released it: released, or not_found (never created, or already gone)."""
+    cleanup_claim: str | None = None
+    """The latest gc claim on the row, if any."""
 
 
 _COLUMNS = (
     "resource_id, owner_branch_id, provider, kind, ref, state, operation_key, acquired_at,"
-    " expires_at, released_at, release_outcome"
+    " expires_at, released_at, release_outcome, cleanup_claim"
+)
+_COLLECTABLE = (
+    "(state IN ('releasing', 'release_failed')"
+    " OR (state = 'live' AND expires_at IS NOT NULL AND expires_at <= ?))"
 )
 
 
@@ -124,17 +134,45 @@ class Ledger:
         is not this tenant's or not releasing."""
         return await self._moved(row, _Step("releasing", outcome, now))
 
-    async def gc_resolve(
-        self, row: Resource, answer: Answer, now: int, ref: str | None = None
-    ) -> Resource | None:
-        """Resolves a pending row by its operation key after its creator crashed. None unless
-        the row is this tenant's, still pending, and its owner holds no live lease: a live
-        owner resolves its own rows."""
-        return await self._moved(row, _Step("pending", answer, now, ref))
+    async def claim(self, row: Resource, now: int) -> Resource | None:
+        """gc claims a collectable row with a fresh token, superseding any earlier claim; None
+        when the row is not this tenant's or not collectable."""
+        tenant, token = self._tenant, uuid7(now)
+
+        def put(conn: sqlite3.Connection) -> Resource | None:
+            with transaction(conn):
+                conn.execute(
+                    "UPDATE resources SET cleanup_claim = ? WHERE tenant_id = ?"  # noqa: S608 - fixed text
+                    f" AND resource_id = ? AND {_COLLECTABLE}",
+                    (token, tenant, row.resource_id, now),
+                )
+                claimed = _select(conn, tenant, row.resource_id)
+            return claimed if claimed is not None and claimed.cleanup_claim == token else None
+
+        return await self._worker.call(put)
+
+    async def holds(self, resource_id: str, claim: str, now: int) -> bool:
+        """The cleanup fence: the row still carries `claim` and is still collectable."""
+        tenant = self._tenant
+
+        def check(conn: sqlite3.Connection) -> bool:
+            found: tuple[object] | None = conn.execute(
+                "SELECT 1 FROM resources WHERE tenant_id = ? AND resource_id = ?"  # noqa: S608 - fixed text
+                f" AND cleanup_claim = ? AND {_COLLECTABLE}",
+                (tenant, resource_id, claim, now),
+            ).fetchone()
+            return found is not None
+
+        return await self._worker.call(check)
 
     async def gc_retry(self, row: Resource, now: int) -> Resource | None:
-        """Moves a release_failed row back to releasing for another try."""
-        return await self._moved(row, _Step("release_failed", "retry", now))
+        """Moves a release_failed row back to releasing, only under its current claim."""
+        return await self._claimed(row, _Step("release_failed", "retry", now))
+
+    async def gc_release(self, row: Resource, now: int) -> Resource | None:
+        """Moves a live row past its provider expiry to releasing, only under its current
+        claim: its owner may be gone, and the provider already let it die."""
+        return await self._claimed(row, _Step("live", "release", now))
 
     async def rows(self, *states: State) -> tuple[Resource, ...]:
         """This tenant's rows in the given states (all when none), oldest first."""
@@ -147,20 +185,6 @@ class Ledger:
             ).fetchall()
             parsed = (_row(values) for values in found)
             return tuple(r for r in parsed if not states or r.state in states)
-
-        return await self._worker.call(select)
-
-    async def orphaned(self, now: int) -> tuple[Resource, ...]:
-        """This tenant's pending rows whose owner holds no live lease."""
-        tenant = self._tenant
-
-        def select(conn: sqlite3.Connection) -> tuple[Resource, ...]:
-            found: list[tuple[object, ...]] = conn.execute(
-                f"SELECT {_COLUMNS} FROM resources r WHERE tenant_id = ? AND state = 'pending'"  # noqa: S608 - fixed columns
-                f" AND {_NO_LIVE_OWNER} ORDER BY rowid",
-                (tenant, now),
-            ).fetchall()
-            return tuple(_row(values) for values in found)
 
         return await self._worker.call(select)
 
@@ -187,16 +211,24 @@ class Ledger:
 
         def apply(conn: sqlite3.Connection) -> Resource | None:
             with transaction(conn):
-                if step.source == "pending" and not _orphan(conn, tenant, row, step.now):
-                    return None
                 return _move(conn, tenant, row.resource_id, step)
 
         return await self._worker.call(apply)
 
+    async def _claimed(self, row: Resource, step: "_Step") -> Resource | None:
+        tenant, claim = self._tenant, row.cleanup_claim
 
-_NO_LIVE_OWNER = (
-    "NOT EXISTS (SELECT 1 FROM leases l WHERE l.branch_id = r.owner_branch_id AND l.expires_at > ?)"
-)
+        def apply(conn: sqlite3.Connection) -> Resource | None:
+            with transaction(conn):
+                current = _select(conn, tenant, row.resource_id)
+                if claim is None or current is None or current.cleanup_claim != claim:
+                    return None
+                expired = current.expires_at is not None and current.expires_at <= step.now
+                if current.state == "live" and not expired:
+                    return None
+                return _move(conn, tenant, row.resource_id, step)
+
+        return await self._worker.call(apply)
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,14 +240,6 @@ class _Step:
     now: int
     ref: str | None = None
     """Recorded by `found`."""
-
-
-def _orphan(conn: sqlite3.Connection, tenant_id: str, row: Resource, now: int) -> bool:
-    found: tuple[object] | None = conn.execute(
-        f"SELECT 1 FROM resources r WHERE tenant_id = ? AND resource_id = ? AND {_NO_LIVE_OWNER}",  # noqa: S608 - fixed text
-        (tenant_id, row.resource_id, now),
-    ).fetchone()
-    return found is not None
 
 
 def _fence(
@@ -230,7 +254,7 @@ def _fence(
 
 def _insert(conn: sqlite3.Connection, tenant_id: str, row: Resource) -> None:
     conn.execute(
-        f"INSERT INTO resources (tenant_id, {_COLUMNS}) VALUES ({', '.join('?' * 12)})",  # noqa: S608 - fixed columns
+        f"INSERT INTO resources (tenant_id, {_COLUMNS}) VALUES ({', '.join('?' * 13)})",  # noqa: S608 - fixed columns
         (
             tenant_id,
             row.resource_id,
@@ -244,6 +268,7 @@ def _insert(conn: sqlite3.Connection, tenant_id: str, row: Resource) -> None:
             row.expires_at,
             row.released_at,
             row.release_outcome,
+            row.cleanup_claim,
         ),
     )
 
@@ -297,7 +322,9 @@ _STATES: Final[Mapping[str, State]] = {
 
 
 def _row(values: tuple[object, ...]) -> Resource:
-    rid, owner, provider, kind, ref, state, key, acquired, expires, released, outcome = values
+    rid, owner, provider, kind, ref, state, key, acquired, expires, released, outcome, claim = (
+        values
+    )
     return Resource(
         text_of(rid),
         BranchId(text_of(owner)),
@@ -310,4 +337,5 @@ def _row(values: tuple[object, ...]) -> Resource:
         None if expires is None else int_of(expires),
         None if released is None else int_of(released),
         None if outcome is None else text_of(outcome),
+        None if claim is None else text_of(claim),
     )

@@ -13,7 +13,13 @@ from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
-from threads.sandbox.protocol import NO_ENV, ExecOutput, SandboxError, SandboxId
+from threads.sandbox.protocol import (
+    NO_ENV,
+    ExecOutput,
+    SandboxContext,
+    SandboxError,
+    SandboxId,
+)
 
 CHUNK = 64 * 1024
 """Exec output is streamed in chunks of this size, never as one buffer."""
@@ -34,6 +40,14 @@ class ManifestEntry(TypedDict):
     mode: int
     size: int
     sha256: str
+
+
+async def fenced(context: SandboxContext) -> Err[SandboxError] | None:
+    """The fake's provider dispatch point: a stale owner calls nothing."""
+    passed = await context.fence()
+    return (
+        Err(SandboxError("stale_epoch", passed.error.message)) if isinstance(passed, Err) else None
+    )
 
 
 def manifest_of(files: Mapping[str, bytes]) -> list[ManifestEntry]:
@@ -81,6 +95,7 @@ class FakeSession:
     async def exec(  # noqa: PLR0913 - the options spec/api.json names
         self,
         command: Sequence[str],
+        context: SandboxContext,
         *,
         process_key: str,
         cwd: str = "/workspace",
@@ -90,7 +105,7 @@ class FakeSession:
     ) -> Ok[ExecOutput] | Err[SandboxError]:
         if not command:
             raise ValueError("exec needs a command")
-        bad = _invalid(cwd)
+        bad = _invalid(cwd) or await fenced(context)
         if bad is not None:
             return bad
         tool = self._tools.get(command[0])
@@ -102,7 +117,12 @@ class FakeSession:
         text = tool.get("executed_keys", {}).get(process_key, tool["output"])
         return Ok(_output(1 if tool.get("is_error") else 0, text.encode("utf-8"), b""))
 
-    async def terminate(self, process_key: str) -> Ok[Termination] | Err[SandboxError]:
+    async def terminate(
+        self, process_key: str, context: SandboxContext
+    ) -> Ok[Termination] | Err[SandboxError]:
+        stale = await fenced(context)
+        if stale is not None:
+            return stale
         name = self._processes.get(process_key)
         if name is None:
             return Ok("already_exited")
@@ -112,25 +132,31 @@ class FakeSession:
             case "terminated" | "running" | None:
                 return Ok("terminated")
 
-    async def upload(self, path: str, data: bytes) -> Ok[None] | Err[SandboxError]:
-        bad = _invalid(path) or self._directory(path)
+    async def upload(
+        self, path: str, data: bytes, context: SandboxContext
+    ) -> Ok[None] | Err[SandboxError]:
+        bad = _invalid(path) or self._directory(path) or await fenced(context)
         if bad is not None:
             return bad
         self.files[path] = data
         return Ok(None)
 
-    async def download(self, path: str) -> Ok[bytes] | Err[SandboxError]:
-        bad = _invalid(path) or self._directory(path)
+    async def download(self, path: str, context: SandboxContext) -> Ok[bytes] | Err[SandboxError]:
+        bad = _invalid(path) or self._directory(path) or await fenced(context)
         if bad is not None:
             return bad
         data = self.files.get(path)
         return Err(SandboxError("not_found", f"no file {path}")) if data is None else Ok(data)
 
-    async def snapshot(self, operation_key: str) -> Ok[SnapshotData] | Err[SandboxError]:
-        return Ok(self._capture(self, operation_key))
+    async def snapshot(
+        self, operation_key: str, context: SandboxContext
+    ) -> Ok[SnapshotData] | Err[SandboxError]:
+        stale = await fenced(context)
+        return stale or Ok(self._capture(self, operation_key))
 
-    async def close(self) -> Ok[None] | Err[SandboxError]:
-        return self._close(self)
+    async def close(self, context: SandboxContext) -> Ok[None] | Err[SandboxError]:
+        stale = await fenced(context)
+        return stale or self._close(self)
 
     def _directory(self, path: str) -> Err[SandboxError] | None:
         prefix = path.rstrip("/") + "/"

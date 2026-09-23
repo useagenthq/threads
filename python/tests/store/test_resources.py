@@ -1,6 +1,7 @@
 """The resource ledger: fenced creation and release, and its state machine."""
 
 import asyncio
+from dataclasses import replace
 from typing import get_args
 
 from hypothesis import given, settings
@@ -59,16 +60,33 @@ def test_a_stale_owner_can_neither_create_nor_release() -> None:
     asyncio.run(main())
 
 
-def test_only_rows_of_a_dead_owner_are_orphaned() -> None:
+def test_gc_claims_only_collectable_rows_and_the_latest_claim_wins() -> None:
     async def main() -> None:
         store, first = await owned_store([T0])
+        ledger = store.ledger
         try:
-            row = await store.ledger.pending(first.owner, "fake", "sandbox", T0)
+            row = await ledger.pending(first.owner, "fake", "sandbox", T0)
             assert isinstance(row, Ok)
-            assert await store.ledger.orphaned(T0) == ()
-            # gc can't resolve a row its live owner is still creating.
-            assert await store.ledger.gc_resolve(row.value, "not_found", T0) is None
-            assert await store.ledger.orphaned(T0 + TTL_MS) == (row.value,)
+            # A row its owner is still creating, or holds live, is not gc's to claim.
+            assert await ledger.claim(row.value, T0) is None
+            live = await ledger.resolve(first.owner, row.value, "found", T0, "sbx_1")
+            assert isinstance(live, Ok)
+            assert await ledger.claim(live.value, T0) is None
+            releasing = await ledger.release(first.owner, live.value, T0)
+            assert isinstance(releasing, Ok)
+            failed = await ledger.settle_release(releasing.value, "release_error", T0)
+            assert failed is not None
+            a, b = await ledger.claim(failed, T0), await ledger.claim(failed, T0)
+            assert a is not None
+            assert b is not None
+            assert a.cleanup_claim is not None
+            assert b.cleanup_claim is not None
+            assert not await ledger.holds(a.resource_id, a.cleanup_claim, T0)
+            assert await ledger.holds(b.resource_id, b.cleanup_claim, T0)
+            assert await ledger.gc_retry(a, T0) is None
+            retried = await ledger.gc_retry(b, T0)
+            assert retried is not None
+            assert retried.state == "releasing"
         finally:
             await store.close()
 
@@ -124,7 +142,8 @@ async def take(store: SqliteStore, owner: Writer, row: Resource, step: Step) -> 
         case "settle", "released" | "not_found" | "release_error" | "unresolved":
             return await ledger.settle_release(row, move, at)
         case _:
-            return await ledger.gc_retry(row, at)
+            claimed = await ledger.claim(row, at)
+            return None if claimed is None else await ledger.gc_retry(claimed, at)
 
 
 @settings(max_examples=60, deadline=None)
@@ -152,7 +171,8 @@ def test_each_path_moves_a_row_only_from_its_own_state(steps: list[Step]) -> Non
                 if row.state == "released":
                     assert row.released_at is not None
                     assert row.release_outcome in ("not_found", "released")
-            assert await store.ledger.rows() == (row,)
+            (stored,) = await store.ledger.rows()
+            assert replace(stored, cleanup_claim=None) == replace(row, cleanup_claim=None)
         finally:
             await store.close()
 

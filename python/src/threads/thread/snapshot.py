@@ -21,10 +21,11 @@ async def take_snapshot(
     busy = fold.in_turn or fold.pending or fold.open_requests or fold.parked
     if busy or not settled:
         return Err(SandboxError("not_quiescent", "the branch is not at a quiescent boundary"))
+    context = store.context(writer.owner, clock)
     how: Tracked[SnapshotData] = Tracked(
         "snapshot",
-        session.snapshot,
-        sandbox.lookup_snapshot,
+        lambda key: session.snapshot(key, context),
+        lambda key: sandbox.lookup_snapshot(key, context),
         sandbox.info.lookup.snapshot,
         lambda data: data.snapshot_id,
     )

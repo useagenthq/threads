@@ -16,7 +16,8 @@ from threads.loop.model import (
     NotFoundNonfinal,
 )
 from threads.result import Err, Ok
-from threads.sandbox.protocol import Sandbox, SandboxError, SandboxSession
+from threads.sandbox.protocol import Sandbox, SandboxContext, SandboxError, SandboxSession
+from threads.store import SqliteStore
 from threads.store.lease import Owner
 from threads.store.resources import Answer, Kind, Ledger, ReleaseOutcome, Resource
 from threads.store.worker import Clock
@@ -91,73 +92,107 @@ async def resolve_key[T](
             assert_never(result)
 
 
+@dataclass(frozen=True, slots=True)
+class Fenced:
+    """An owner's ledger rows and provider calls, both fenced by its lease."""
+
+    ledger: Ledger
+    owner: Owner
+    context: SandboxContext
+    clock: Clock
+
+
 async def release_session(
-    ledger: Ledger, owner: Owner, row: Resource, session: SandboxSession, clock: Clock
+    by: Fenced, row: Resource, session: SandboxSession
 ) -> Ok[Resource] | Err[ParseError]:
     """The owner releases a sandbox it holds: releasing (fenced), then close."""
-    releasing = await ledger.release(owner, row, clock())
+    releasing = await by.ledger.release(by.owner, row, by.clock())
     if isinstance(releasing, Err):
         return releasing
-    closed = await session.close()
-    return Ok(await _settled(ledger, releasing.value, _closed(closed), clock))
+    closed = _closed(await session.close(by.context))
+    return Ok(await _settled(by.ledger, releasing.value, closed, by.clock))
 
 
-async def abandon(
-    ledger: Ledger, owner: Owner, sandbox: Sandbox, row: Resource, clock: Clock
-) -> Resource:
+async def abandon(by: Fenced, sandbox: Sandbox, row: Resource) -> Resource:
     """The owner gives up a row it created: a pending one is resolved by its key, a live one
-    is released. An unresolvable key stays unknown; a failed release is retried by gc."""
+    is released. An unresolvable key stays unknown; a failed release is retried by gc. Only
+    the adapter of the row's own provider may touch it."""
+    if row.provider != sandbox.info.provider:
+        return row
     if row.state == "pending":
-        answer, ref = await _find(sandbox, row)
-        resolved = await ledger.resolve(owner, row, answer, clock(), ref)
+        answer, ref = await _find(sandbox, row, by.context)
+        resolved = await by.ledger.resolve(by.owner, row, answer, by.clock(), ref)
         row = resolved.value if isinstance(resolved, Ok) else row
     if row.state != "live" or row.ref is None:
         return row
-    releasing = await ledger.release(owner, row, clock())
+    releasing = await by.ledger.release(by.owner, row, by.clock())
     if isinstance(releasing, Err):
         return row
-    outcome = await _release_ref(sandbox, row.kind, row.ref)
-    return await _settled(ledger, releasing.value, outcome, clock)
+    outcome = await _release_ref(sandbox, row.kind, row.ref, by.context)
+    return await _settled(by.ledger, releasing.value, outcome, by.clock)
 
 
-async def gc(ledger: Ledger, sandbox: Sandbox, clock: Clock) -> tuple[Resource, ...]:
-    """Cleanup of one provider's rows, holding no branch lease: resolves pending rows whose
-    creator crashed, retries failed releases, and finishes releases in progress. Returns the
-    tenant's rows afterwards."""
-    provider = sandbox.info.provider
-    for row in await ledger.orphaned(clock()):
-        if row.provider == provider:
-            answer, ref = await _find(sandbox, row)
-            await ledger.gc_resolve(row, answer, clock(), ref)
-    for row in await ledger.rows("release_failed"):
-        if row.provider == provider:
-            await ledger.gc_retry(row, clock())
-    for row in await ledger.rows("releasing"):
-        if row.provider == provider and row.ref is not None:
-            await _settled(ledger, row, await _release_ref(sandbox, row.kind, row.ref), clock)
+async def gc(store: SqliteStore, sandbox: Sandbox, clock: Clock) -> tuple[Resource, ...]:
+    """Cleanup of the adapter's own provider's collectable rows, holding no branch lease and
+    needing no owner branch: each row is claimed first, and a release is dispatched only while
+    the row still carries that claim, so two gc runs never both dispatch. A failed release
+    stays release_failed for the next run. Returns the tenant's rows afterwards."""
+    ledger = store.ledger
+    for row in await ledger.rows("releasing", "release_failed", "live"):
+        claimed = (
+            None if row.provider != sandbox.info.provider else await ledger.claim(row, clock())
+        )
+        if claimed is None:
+            continue
+        match claimed.state:
+            case "release_failed":
+                moved = await ledger.gc_retry(claimed, clock())
+            case "live":
+                moved = await ledger.gc_release(claimed, clock())
+            case _:
+                moved = claimed
+        if moved is not None and moved.ref is not None:
+            context = store.cleanup_context(moved, clock)
+            outcome = await _release_ref(sandbox, moved.kind, moved.ref, context)
+            await _settled(ledger, moved, outcome, clock)
     return await ledger.rows()
 
 
-async def _find(sandbox: Sandbox, row: Resource) -> tuple[Answer, str | None]:
+async def _find(
+    sandbox: Sandbox, row: Resource, context: SandboxContext
+) -> tuple[Answer, str | None]:
     """A pending row's answer by its operation key, and the ref when found."""
-    info = sandbox.info.lookup
+    info, key = sandbox.info.lookup, row.operation_key
     if row.kind == "snapshot":
-        answer, snap = await resolve_key(info.snapshot, sandbox.lookup_snapshot, row.operation_key)
+        answer, snap = await resolve_key(
+            info.snapshot, lambda k: sandbox.lookup_snapshot(k, context), key
+        )
         return answer, None if snap is None else snap.snapshot_id
-    answer, session = await resolve_key(info.create, sandbox.lookup, row.operation_key)
+    answer, session = await resolve_key(info.create, lambda k: sandbox.lookup(k, context), key)
     return answer, None if session is None else session.id
 
 
-async def _release_ref(sandbox: Sandbox, kind: Kind, ref: str) -> ReleaseOutcome:
+async def _release_ref(
+    sandbox: Sandbox, kind: Kind, ref: str, context: SandboxContext
+) -> ReleaseOutcome | None:
+    """What releasing `ref` established; None when the fence refused and nothing was asked."""
     if kind == "snapshot":
-        released = await sandbox.release(ref)
-        if isinstance(released, Err):
-            return "release_error"
-        return "released" if released.value == "released" else "not_found"
-    attached = await sandbox.attach(ref)
+        released = await sandbox.release(ref, context)
+        if isinstance(released, Ok):
+            return "released" if released.value == "released" else "not_found"
+        return None if released.error.code == "stale_epoch" else "release_error"
+    return await _release_sandbox(sandbox, ref, context)
+
+
+async def _release_sandbox(
+    sandbox: Sandbox, ref: str, context: SandboxContext
+) -> ReleaseOutcome | None:
+    attached = await sandbox.attach(ref, context)
     if isinstance(attached, Ok):
-        return _closed(await attached.value.close())
+        return _closed(await attached.value.close(context))
     match attached.error.code:
+        case "stale_epoch":
+            return None
         case "not_found" if sandbox.info.lookup.create == "final":
             return "not_found"
         case "not_found" | "resource_unknown":
@@ -166,13 +201,15 @@ async def _release_ref(sandbox: Sandbox, kind: Kind, ref: str) -> ReleaseOutcome
             return "release_error"
 
 
-def _closed(closed: Ok[None] | Err[SandboxError]) -> ReleaseOutcome:
+def _closed(closed: Ok[None] | Err[SandboxError]) -> ReleaseOutcome | None:
     # An error is never dropped: release_failed, retried by the next gc.
-    return "released" if isinstance(closed, Ok) else "release_error"
+    if isinstance(closed, Ok):
+        return "released"
+    return None if closed.error.code == "stale_epoch" else "release_error"
 
 
 async def _settled(
-    ledger: Ledger, row: Resource, outcome: ReleaseOutcome, clock: Clock
+    ledger: Ledger, row: Resource, outcome: ReleaseOutcome | None, clock: Clock
 ) -> Resource:
-    settled = await ledger.settle_release(row, outcome, clock())
+    settled = None if outcome is None else await ledger.settle_release(row, outcome, clock())
     return row if settled is None else settled

@@ -19,9 +19,10 @@ from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
+from threads.store.context import CleanupContext, OwnerContext
 from threads.store.forking import Forking, forking, start_child
 from threads.store.lines import Draft, head_line, header_line
-from threads.store.resources import Ledger
+from threads.store.resources import Ledger, Resource
 from threads.store.spill import Spill
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
@@ -72,6 +73,14 @@ class SqliteStore:
     def ledger(self) -> Ledger:
         """The resource ledger of this store's tenant."""
         return Ledger(self._worker, self._tenant)
+
+    def context(self, owner: lease.Owner, clock: Clock) -> OwnerContext:
+        """The fence for provider operations `owner` dispatches."""
+        return OwnerContext(self._worker, owner, clock)
+
+    def cleanup_context(self, row: Resource, clock: Clock) -> CleanupContext:
+        """The fence for gc's operations on a row it claimed (`Ledger.claim`)."""
+        return CleanupContext(self.ledger, row, clock)
 
     async def close(self) -> None:
         await self._worker.close()

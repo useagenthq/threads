@@ -21,7 +21,7 @@ from threads.log import (
 )
 from threads.reduce import Fold
 from threads.result import Err, Ok
-from threads.sandbox.ledger import Tracked, abandon, acquire, release_session
+from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, release_session
 from threads.sandbox.protocol import Sandbox, SandboxError
 from threads.store import SqliteStore, Writer
 from threads.store.worker import Clock
@@ -54,10 +54,11 @@ async def fork_branch(
     if isinstance(begun, Err):
         return begun
     forking = begun.value
+    context = store.context(forking.owner, clock)
     restore = Tracked(
         "sandbox",
-        lambda key: sandbox.restore(snap.data.snapshot_id, snap.data.manifest_hash, key),
-        sandbox.lookup,
+        lambda key: sandbox.restore(snap.data.snapshot_id, snap.data.manifest_hash, key, context),
+        lambda key: sandbox.lookup(key, context),
         sandbox.info.lookup.create,
         lambda session: session.id,
     )
@@ -74,7 +75,7 @@ async def fork_branch(
     finished = await store.finish_fork(forking, data, clock)
     if isinstance(finished, Ok) and finished.value is not None:
         return Ok(finished.value)
-    await release_session(store.ledger, forking.owner, row, session, clock)
+    await release_session(Fenced(store.ledger, forking.owner, context, clock), row, session)
     await store.fail_fork(forking.row.branch_id)
     return finished if isinstance(finished, Err) else Err(_not_runnable(snap.seq))
 
@@ -87,9 +88,10 @@ async def recover_forks(
     `fork_failed`. Returns the children it failed."""
     failed: list[BranchId] = []
     for owner in await store.interrupted_forks(holder_id, clock):
+        by = Fenced(store.ledger, owner, store.context(owner, clock), clock)
         for row in await store.ledger.rows():
-            if row.owner_branch_id == owner.branch_id and row.provider == sandbox.info.provider:
-                await abandon(store.ledger, owner, sandbox, row, clock)
+            if row.owner_branch_id == owner.branch_id:
+                await abandon(by, sandbox, row)
         await store.fail_fork(owner.branch_id)
         failed.append(owner.branch_id)
     return tuple(failed)

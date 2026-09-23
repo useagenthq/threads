@@ -4,6 +4,8 @@ written a chunk at a time."""
 import asyncio
 from pathlib import Path
 
+from sandbox_kit import OPEN
+
 from threads.log import Spill
 from threads.result import Err, Ok
 from threads.sandbox import Command, ExecResult, SandboxError, fake_sandbox, run_exec
@@ -15,9 +17,10 @@ LIMITS = Spill(threshold_bytes=100, head_bytes=10, tail_bytes=5, request_budget_
 
 async def run(output: str, store: SqliteStore) -> Ok[ExecResult] | Err[SandboxError]:
     sandbox = fake_sandbox({"tools": {"cat": {"output": output}}})
-    made = await sandbox.create("k")
+    made = await sandbox.create("k", OPEN)
     assert isinstance(made, Ok)
-    return await run_exec(made.value, Command(["cat"], "key-1"), await store.spill(), LIMITS)
+    spill = await store.spill()
+    return await run_exec(made.value, Command(["cat"], "key-1"), OPEN, spill, LIMITS)
 
 
 def test_small_output_is_whole_and_not_spilled() -> None:
