@@ -310,11 +310,14 @@
           "properties": { "promise": { "$ref": "#/$defs/TypeExpr" } }
         },
         {
-          "description": "TS AsyncIterable<T>, Python AsyncIterator[T].",
+          "description": "TS AsyncIterable<T>, Python AsyncIterator[T]. errors, when present, is the closed code set of the stream's one in-band terminal error item.",
           "type": "object",
           "additionalProperties": false,
           "required": ["stream"],
-          "properties": { "stream": { "$ref": "#/$defs/TypeExpr" } }
+          "properties": {
+            "stream": { "$ref": "#/$defs/TypeExpr" },
+            "errors": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/FieldName" } }
+          }
         },
         {
           "description": "An expected-failure value: {ok: true, value: T} | {ok: false, error: {code, message}} in TS, Ok[T] | Err[Failure] in Python. errors is the closed code set.",

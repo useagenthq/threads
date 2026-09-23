@@ -253,7 +253,7 @@ def check_case_expectation(api: Json, case_schema: Json) -> list[str]:
 
 def _failure_lists(node: Json, at: str) -> Iterator[tuple[list[str], str]]:
     if isinstance(node, dict):
-        if "result" in node and "errors" in node:
+        if ("result" in node or "stream" in node) and "errors" in node:
             yield _strs(node["errors"]), at
         for k, x in node.items():
             yield from _failure_lists(x, f"{at}/{k}")
@@ -267,6 +267,8 @@ def check_codes(api: Json, docs: dict[str, Json], openapi: Json) -> list[str]:
     known = {
         *_strs(_pointer(docs[EVENTS_ID], "/$defs/ErrorCode/enum")),
         *_strs(_pointer(docs[API_ID], "/$defs/ApiErrorCode/enum")),
+        # A model send's terminal error may be a provider rejection class (the wire reasons).
+        *_strs(_pointer(docs[EVENTS_ID], ABANDON_REASONS)),
     }
     lists = [*_failure_lists(api, "api.json")]
     lists.append(
@@ -281,11 +283,13 @@ def check_codes(api: Json, docs: dict[str, Json], openapi: Json) -> list[str]:
     ]
 
 
+ABANDON_REASONS = "/$defs/ev_model_attempt_abandoned/properties/data/properties/reason/enum"
 FENCED = {"SandboxContext": ("stale_epoch", "cleanup_claim_lost"), "ModelContext": ("stale_epoch",)}
 
 
 def check_fence_codes(api: Json) -> list[str]:
-    """An operation that takes a dispatch context declares its fence refusal as a result code."""
+    """An operation that takes a dispatch context declares its fence refusal among its result
+    codes, or, for a stream, among its terminal error codes."""
     errs: list[str] = []
     for where, _, f in _callables(api):
         for p in _list(f.get("params")):
@@ -293,11 +297,11 @@ def check_fence_codes(api: Json) -> list[str]:
             codes = FENCED.get(ref.removeprefix("#/types/")) if isinstance(ref, str) else None
             if codes is None:
                 continue
-            returns = _obj(f.get("returns"))
-            if "stream" in returns:
-                continue  # a stream reports refusal in-band; see the method's doc
-            listed = set(_strs(returns.get("errors")))
-            errs += [f"{where}: returns.errors lacks fence code {c}" for c in codes if c not in listed]
+            # A stream declares its in-band terminal error set the same way as a result does.
+            listed = set(_strs(_obj(f.get("returns")).get("errors")))
+            errs += [
+                f"{where}: returns.errors lacks fence code {c}" for c in codes if c not in listed
+            ]
     return errs
 
 

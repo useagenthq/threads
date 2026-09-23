@@ -2275,7 +2275,7 @@
         "send": {
           "ts": "send",
           "py": "send",
-          "doc": "Stream one attempt. A rejection before content is a rejected chunk, never a thrown error. The adapter awaits context.fence() at its real network send point, after any SDK queueing, and sends nothing when it fails.",
+          "doc": "Stream one attempt. Every failure before content is the one terminal rejected chunk, never a thrown error, and its reason is one of returns.errors: a provider rejection class; stale_epoch when context.fence() refused at the real network send point, after any SDK queueing, so nothing left; content_unsupported or continuation_unsupported when the adapter can't encode a rendered part, so nothing left and nothing is re-sent. A throw after dispatch is a broken stream (unknown outcome).",
           "async": false,
           "params": [
             {"name": "request", "kind": "positional", "type": {"$ref": "#/types/ModelRequest"}, "required": true},
@@ -2288,7 +2288,19 @@
               "lang": "ts"
             }
           ],
-          "returns": {"stream": {"$ref": "#/types/ModelChunk"}}
+          "returns": {
+            "stream": {"$ref": "#/types/ModelChunk"},
+            "errors": [
+              "rate_limited",
+              "overloaded",
+              "server_error",
+              "prompt_too_long",
+              "provider_error",
+              "stale_epoch",
+              "content_unsupported",
+              "continuation_unsupported"
+            ]
+          }
         },
         "lookup": {
           "ts": "lookup",
@@ -2439,9 +2451,19 @@
             "kind": {"type": {"literal": "rejected"}, "required": true},
             "reason": {
               "type": {
-                "$ref": "urn:threads:schema:events:v1#/$defs/ev_model_attempt_abandoned/properties/data/properties/reason"
+                "enum": [
+                  "rate_limited",
+                  "overloaded",
+                  "server_error",
+                  "prompt_too_long",
+                  "provider_error",
+                  "stale_epoch",
+                  "content_unsupported",
+                  "continuation_unsupported"
+                ]
               },
-              "required": true
+              "required": true,
+              "doc": "The terminal error of a send: exactly Model.send returns.errors. Provider classes are recorded as model_attempt_abandoned{provider_outcome: failed}; stale_epoch appends nothing (the writer lost its lease); content_unsupported and continuation_unsupported are recorded as not_sent and end the turn with that code."
             },
             "http_status": {"type": {"prim": "integer"}, "required": false},
             "retry_after_ms": {"type": {"prim": "integer"}, "required": false},
