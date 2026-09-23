@@ -262,6 +262,10 @@ A handoff target runs inside the originating tree's limits, whoever hands off.
 - **Multi-choice.** An answer given as a list is recorded as its items joined with `\n` in `tool_result.preview`. A newline can't be confused with a comma that is inside a choice.
 - **Suggested rules.** `PendingApproval.suggested_rules` for a `bash` call whose `command` is non-blank are `bash(<command>)`, then `bash(<w1> <w2>:*)`, where `w1 w2` are the first two words of the command as split by POSIX shell rules (Python `shlex.split`; one word gives `bash(<w1>:*)`). A command that doesn't split (an unclosed quote) gives only the exact rule. Any other call gives the tool name alone. A grant's `remember_rule` must equal one of the challenge's `suggested_rules`, otherwise the answer is `invalid_request`. Both languages suggest and accept the same rules.
 
+## Secret redaction (C5, invariant 4)
+
+Every credential value the host resolves, from a Secret or an explicit option, is replaced by `[secret <label>]` in tool-result text before it is recorded. Values are replaced longest first; for equal values the smallest label wins. A revealed Secret's label is its name; an adapter credential's is `<factory>.<option>` (`anthropic.apiKey` in TS, `anthropic.api_key` in Python). Length and order are by Unicode code point, in both languages.
+
 ## Server-originated text (invariant 6)
 
 Text a tool server or provider chose reaches the model only inside the untrusted wrapper (`<reference source=... untrusted="true">`, escaped as in Render v1), never as bare tool-result text. This covers an MCP result, an MCP JSON-RPC error (`error <code>: <message>`), a memory or knowledge provider's ids and versions, and a web page. An MCP JSON-RPC error is final (the server answered), except `-32001` (request timeout) and `-32000` (connection closed), which leave the outcome unknown. An HTTP transport status (408 included) is never read as a JSON-RPC code.
