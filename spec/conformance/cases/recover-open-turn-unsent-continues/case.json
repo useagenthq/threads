@@ -1,0 +1,10 @@
+{
+  "name": "recover-open-turn-unsent-continues",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Crash right after user_input, before any model_request. None of the turn's input has been sent, so recovery appends nothing and leaves the turn open; the run then continues it normally and the turn ends end_turn.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

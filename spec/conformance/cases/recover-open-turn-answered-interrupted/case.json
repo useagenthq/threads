@@ -1,0 +1,10 @@
+{
+  "name": "recover-open-turn-answered-interrupted",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Crash after a model_response and before turn_completed. Nothing is pending and the turn's input was already sent, so recovery closes the turn as interrupted instead of guessing how it would have ended. Nothing is sent to the model.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}
