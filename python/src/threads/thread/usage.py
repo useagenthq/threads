@@ -42,10 +42,10 @@ async def _visit(
         return own
     events = log.fold.events
     parts.append(TreePart(own.value, any(isinstance(e, ModelRequestEvent) for e in events)))
-    finished = {e.data.child_thread_id for e in events if isinstance(e, AgentFinishedEvent)}
+    finished = {e.data.child_thread_id: e for e in events if isinstance(e, AgentFinishedEvent)}
     for spawn in (e for e in events if isinstance(e, AgentSpawnedEvent)):
         child = spawn.data.child_thread_id
-        read = await _child_log(store, spawn, finished=child in finished)
+        read = await _child_log(store, spawn, finished.get(child))
         below = (
             await _visit(store, child, read.value, parts, seen)
             if isinstance(read, Ok) and read.value is not None
@@ -57,15 +57,27 @@ async def _visit(
     return Ok(None)
 
 
+def _never_created(finish: AgentFinishedEvent) -> bool:
+    """spec/schema/README.md, Subagent cancellation: a child with no thread is recorded
+    cancelled, with unknown usage, and never created. A started child cancelled with unknown
+    usage writes the same record, so its lost log can't be told apart and counts nothing."""
+    usage = finish.data.usage
+    return finish.data.status == "cancelled" and (usage.input_tokens, usage.output_tokens) == (
+        None,
+        None,
+    )
+
+
 async def _child_log(
-    store: Store, spawn: AgentSpawnedEvent, *, finished: bool
+    store: Store, spawn: AgentSpawnedEvent, finish: AgentFinishedEvent | None
 ) -> Ok[VerifiedLog | None] | Err[ParseError]:
-    """The spawned child's log; None when it has no thread and its parent never recorded it
-    finishing, so it never started. A finished child's missing log is log_corrupt: counting
-    nothing for it would be a partial sum."""
+    """The spawned child's log; None when it has no thread and its parent's record allows that:
+    no agent_finished, or the one a cancelled parent writes for a child it never created. Any
+    other finished child's missing log is log_corrupt: counting nothing for it would be a
+    partial sum."""
     root = await (await open_store(store)).root(spawn.data.child_thread_id)
-    if isinstance(root, Err) and finished:
-        why = "its log is missing, though its parent recorded agent_finished for it"
+    if isinstance(root, Err) and finish is not None and not _never_created(finish):
+        why = f"its log is missing, though its parent recorded it {finish.data.status}"
         return Err(ParseError("log_corrupt", why))
     if isinstance(root, Err):
         return Ok(None)

@@ -1,0 +1,38 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 3,
+      "hash": "1064e9da331d67f6777e154d84d2cb2cf3bb4a6a3e7af6d1baa1db0a64632e88"
+    }
+  },
+  "projections": {
+    "cost": {
+      "currency": "USD",
+      "known_nanos": 0,
+      "upper_bound_nanos": 0,
+      "complete": false,
+      "bounded": false
+    }
+  }
+}

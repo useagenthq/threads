@@ -14,6 +14,7 @@ import type { Sandbox } from "../sandbox";
 import type { Capabilities, Egress } from "../tools";
 import type { GitOptions } from "../tools/git/host";
 import { subagent } from "./child";
+import { checkTree } from "./enforceable";
 import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
 import { target } from "./handoff";
@@ -179,6 +180,7 @@ function build<Deps, Output>(
     check: async () => {
       try {
         pin({ ...def, mcp: await def.setup() });
+        checkTree(def);
         return { ok: true, value: undefined };
       } catch (error) {
         if (!(error instanceof ConfigError)) throw error;
@@ -192,6 +194,7 @@ function build<Deps, Output>(
   register(handle, {
     child: subagent(def),
     target: target(def),
+    enforce: (covering) => checkTree(def, covering),
     host: hosted(def, options.approvers),
   });
   return handle;

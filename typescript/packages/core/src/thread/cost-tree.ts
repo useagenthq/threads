@@ -1,5 +1,5 @@
 import type { EventOf } from "../fold/state";
-import type { Cost, ThreadId } from "../log";
+import type { Cost, KnownEvent, ThreadId } from "../log";
 import {
   type CostOverflow,
   cost,
@@ -49,6 +49,28 @@ export function treeCost(
 }
 
 type Spawned = EventOf<"agent_spawned">;
+type Finished = EventOf<"agent_finished">;
+
+/** The parent's agent_finished for `child`, when it recorded one. */
+function finishOf(
+  events: readonly KnownEvent[],
+  child: ThreadId,
+): Finished | undefined {
+  for (const e of events)
+    if (e.type === "agent_finished" && e.data.child_thread_id === child)
+      return e;
+  return undefined;
+}
+
+/**
+ * spec/schema/README.md, Subagent cancellation: a child with no thread is recorded cancelled,
+ * with unknown usage, and never created. A started child cancelled with unknown usage writes the
+ * same record, so its lost log can't be told apart and counts nothing.
+ */
+const neverCreated = ({ data }: Finished): boolean =>
+  data.status === "cancelled" &&
+  data.usage.input_tokens === null &&
+  data.usage.output_tokens === null;
 
 /**
  * Every thread of the tree rooted at `root`, depth first in spawn order. Each child is read from
@@ -77,10 +99,7 @@ function treeParts(
     });
     for (const spawn of events.filter((e) => e.type === "agent_spawned")) {
       const child = spawn.data.child_thread_id;
-      const finished = events.some(
-        (e) => e.type === "agent_finished" && e.data.child_thread_id === child,
-      );
-      const read = childLog(log, spawn, finished);
+      const read = childLog(log, spawn, finishOf(events, child));
       const below =
         read.ok && read.value !== undefined ? visit(child, read.value) : read;
       if (!below.ok) return err(inChild(child, below.error));
@@ -92,25 +111,27 @@ function treeParts(
 }
 
 /**
- * The spawned child's log; undefined when it has no thread and its parent never recorded it
- * finishing, so it never started. A finished child's missing log is log_corrupt: counting
- * nothing for it would be a partial sum.
+ * The spawned child's log; undefined when it has no thread and its parent's record allows that:
+ * no agent_finished, or the one a cancelled parent writes for a child it never created. Any
+ * other finished child's missing log is log_corrupt: counting nothing for it would be a
+ * partial sum.
  */
 function childLog(
   log: LogStore,
   spawn: Spawned,
-  finished: boolean,
+  finish: Finished | undefined,
 ): Result<VerifiedLog | undefined, ReadError> {
   const branch = log.mainBranch(spawn.data.child_thread_id);
-  if (!branch.ok && branch.error.code === "branch_not_found" && !finished)
+  const unstarted = finish === undefined || neverCreated(finish);
+  if (!branch.ok && branch.error.code === "branch_not_found" && unstarted)
     return ok(undefined);
   if (!branch.ok)
     return err(
       readError(
         "log_corrupt",
-        finished
-          ? "its log is missing, though its parent recorded agent_finished for it"
-          : branch.error.message,
+        finish === undefined
+          ? branch.error.message
+          : `its log is missing, though its parent recorded it ${finish.data.status}`,
       ),
     );
   const read = readLog(log, branch.value);

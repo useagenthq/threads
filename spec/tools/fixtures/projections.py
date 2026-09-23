@@ -33,8 +33,9 @@ def reservation(model: Obj, params: Obj, input_bound: int | None = None) -> int 
     """The per-attempt upper bound, or None when no bound is declared."""
     price = obj(model["price"])
     max_tokens = params.get("max_tokens")
-    # Only a JSON integer bounds the output; a boolean is not one (Python's bool is an int).
-    if not isinstance(max_tokens, int) or isinstance(max_tokens, bool):
+    # Only a positive JSON integer bounds the output; a boolean is not one (Python's bool is an
+    # int), and zero or less would reserve less than any response can use.
+    if not isinstance(max_tokens, int) or isinstance(max_tokens, bool) or max_tokens < 1:
         return None
     if input_bound is None:
         if model["input_billing_bound"] != "context_window":

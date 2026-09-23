@@ -57,6 +57,21 @@ describe("budget coverage", () => {
     );
   });
 
+  test.each([0, -1])(
+    "setup refuses a token limit when max_tokens is %p, which bounds nothing",
+    async (maxTokens) => {
+      const m = scriptedModel({ responses: [say("done")] });
+      const a = agent({
+        budget: { max_output_tokens: 1 },
+        model: { ...m, info: { ...m.info, params: { max_tokens: maxTokens } } },
+      });
+      expect(await a.check()).toMatchObject({
+        ok: false,
+        error: { code: "budget_unenforceable" },
+      });
+    },
+  );
+
   test("a run budget the model can't bound is refused at run start", async () => {
     const a = agent({ model: unbounded([say("done")]) });
     expect(
@@ -114,10 +129,39 @@ describe("budget coverage", () => {
     });
   });
 
+  test("setup refuses a parent's limit a subagent's model can't bound", async () => {
+    const worker = agent({ name: "worker", model: unbounded([]) });
+    const lead = agent({
+      model: scriptedModel({ responses: [] }),
+      subagents: [worker],
+      budget: { max_output_tokens: 5000 },
+    });
+    expect(await lead.check()).toMatchObject({
+      ok: false,
+      error: { code: "budget_unenforceable" },
+    });
+  });
+
+  test("a run budget the tree can't bound is refused at run start", async () => {
+    const worker = agent({ name: "worker", model: unbounded([]) });
+    const lead = agent({
+      model: scriptedModel({ responses: [] }),
+      subagents: [worker],
+    });
+    expect(await lead.check()).toEqual({ ok: true, value: undefined });
+    expect(
+      lead.run("go", {
+        store: sqlite(":memory:"),
+        budget: { max_output_tokens: 5 },
+      }),
+    ).rejects.toMatchObject({ code: "budget_unenforceable" });
+  });
+
   test("an inherited limit with no bound refuses the attempt instead of skipping it", async () => {
     const store = sqlite(":memory:");
     const worker = agent({
       name: "worker",
+      onUnknownUsage: "stop",
       model: unbounded([say("child done")]),
     });
     const lead = agent({

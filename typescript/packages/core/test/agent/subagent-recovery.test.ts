@@ -9,6 +9,7 @@ import {
 } from "../../src";
 import {
   childFactory,
+  enforcement,
   register,
   targetFactory,
 } from "../../src/agent/registry";
@@ -120,10 +121,12 @@ describe("recovery after a crash mid-subagent", () => {
     const reviewer = agent({ name: "reviewer", model });
     const real = childFactory(reviewer);
     const target = targetFactory(reviewer);
-    if (real === undefined || target === undefined)
+    const enforce = enforcement(reviewer);
+    if (real === undefined || target === undefined || enforce === undefined)
       throw new Error("agent() registers every handle");
     register(reviewer, {
       target,
+      enforce,
       child: (env) => {
         const sub = real(env);
         return {
@@ -147,7 +150,7 @@ describe("recovery after a crash mid-subagent", () => {
     await first.catch(() => undefined);
     expect(first).rejects.toThrow("process killed");
 
-    register(reviewer, { child: real, target });
+    register(reviewer, { child: real, target, enforce });
     const again = await lead.run("Thanks.", { store, thread });
     expect(again.status).toBe("completed");
     const { parent, child } = await logs(store, again.thread);

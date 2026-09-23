@@ -4,7 +4,7 @@ import { storeConnection } from "../../src/agent/sqlite";
 import { Cost, type ThreadId } from "../../src/log";
 import type { Thread } from "../../src/thread";
 import { code, unwrap } from "../store/helpers";
-import { editStarted, obj, rewriteLog } from "./rewrite-log";
+import { editStarted, type Line, obj, rewriteLog } from "./rewrite-log";
 import {
   childIds,
   corrupt,
@@ -166,6 +166,54 @@ describe("the tree merge", () => {
     });
     // Only the lead's first response (the spawn) was recorded.
     expect(unwrap(await tree(thread))).toEqual(usd(ONE, true));
+  });
+});
+
+describe("a cancelled child that was never created", () => {
+  // spec/schema/README.md, Subagent cancellation: a child with no thread is recorded cancelled,
+  // with unknown usage, and never created.
+  async function cancelledBeforeCreated(usage: Line) {
+    const store = sqlite(":memory:");
+    const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
+    const thread = await run(store, priced([spawn("kid"), say("Done.")]), [
+      kid,
+    ]);
+    const [kidId] = await childIds(thread);
+    if (kidId === undefined) throw new Error("no child");
+    const unstarted = "0192a000-0000-7000-8000-0000000000ed";
+    await rewriteLog(store, thread.id, (lines) =>
+      lines.map((l) => {
+        const line = obj(
+          JSON.parse(JSON.stringify(l).replaceAll(kidId, unstarted)),
+        );
+        return line["type"] === "agent_finished"
+          ? {
+              ...line,
+              data: { ...obj(line["data"]), status: "cancelled", usage },
+            }
+          : line;
+      }),
+    );
+    return tree(thread);
+  }
+
+  test("changes nothing", async () => {
+    const total = await cancelledBeforeCreated({
+      input_tokens: null,
+      output_tokens: null,
+    });
+    expect(unwrap(total)).toEqual(usd(2 * ONE, true));
+  });
+
+  test("with known usage its missing log is log_corrupt", async () => {
+    const total = await cancelledBeforeCreated({
+      input_tokens: 10,
+      output_tokens: 2,
+    });
+    expect(code(total)).toBe("log_corrupt");
+    expect(total.ok ? "" : total.error.message).toContain(
+      "its log is missing, though its parent recorded it cancelled",
+    );
   });
 });
 

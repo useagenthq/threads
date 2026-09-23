@@ -168,6 +168,15 @@ def test_setup_refuses_a_limit_the_model_has_no_per_attempt_bound_for(limit: Bud
     assert refused.value.code == "budget_unenforceable"
 
 
+@pytest.mark.parametrize("max_tokens", [0, -1])
+def test_setup_refuses_a_token_limit_when_max_tokens_is_not_positive(max_tokens: int) -> None:
+    model = scripted_model({"responses": []})
+    model._info = dataclasses.replace(model.info, params={"max_tokens": max_tokens})  # pyright: ignore[reportPrivateUsage] - a test adapter
+    with pytest.raises(ConfigError) as refused:
+        agent(model=model, budget=Budget(max_output_tokens=1))
+    assert refused.value.code == "budget_unenforceable"
+
+
 def test_a_run_budget_the_tree_can_t_bound_is_refused_at_run_start() -> None:
     worker = agent(name="worker", model=_unbounded([]))
     lead = agent(model=scripted_model({"responses": []}), subagents=[worker])

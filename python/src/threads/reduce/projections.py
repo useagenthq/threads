@@ -66,11 +66,20 @@ def _bound(attempt: _Attempt) -> int | None:
     return bound(attempt.model, attempt.max_tokens, attempt.request.data.input_bound_tokens)
 
 
+def output_bound(max_tokens: JsonValue) -> int | None:
+    """The epoch's max_tokens when it bounds an attempt's output: a positive JSON integer. A
+    boolean is not one (Python's bool is an int), and zero or less would reserve less than any
+    response can use (spec/schema/README.md, Budget enforcement)."""
+    if isinstance(max_tokens, int) and not isinstance(max_tokens, bool) and max_tokens >= 1:
+        return max_tokens
+    return None
+
+
 def bound(model: Model | None, max_tokens: JsonValue, input_tokens: int | MISSING) -> int | None:
     """An attempt's reservation: its input bound at the highest input-side
     price plus max_tokens at the output price. None when the model declares no bound."""
-    # Only a JSON integer bounds the output; a boolean is not one (Python's bool is an int).
-    if model is None or not isinstance(max_tokens, int) or isinstance(max_tokens, bool):
+    output = output_bound(max_tokens)
+    if model is None or output is None:
         return None
     if input_tokens is MISSING:
         if model.input_billing_bound != "context_window":
@@ -78,7 +87,7 @@ def bound(model: Model | None, max_tokens: JsonValue, input_tokens: int | MISSIN
         input_tokens = model.context_window
     prices = _prices(model)
     top = max(prices.get(k, 0) for k in ("input", "cache_read", "cache_write"))
-    return input_tokens * top + max_tokens * prices.get("output", 0)
+    return input_tokens * top + output * prices.get("output", 0)
 
 
 def _response_cost(usage: Usage, model: Model | None, bound: int | None) -> tuple[int, int | None]:

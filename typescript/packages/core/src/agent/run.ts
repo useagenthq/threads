@@ -21,7 +21,7 @@ import { bindBuiltins } from "../tools";
 import type { LogError } from "../verify";
 import type { Agent } from "./agent";
 import { loopConfig } from "./config";
-import { checkEnforceable } from "./enforceable";
+import { checkTree } from "./enforceable";
 import { ConfigError } from "./errors";
 import { type Extension, observerOf } from "./extension";
 import { handedOff } from "./handoff";
@@ -91,11 +91,7 @@ export async function run<Deps, Output>(
   options: RunOptions<Deps>,
   hooks: Hooks = {},
 ): Promise<RunResult<Output>> {
-  checkEnforceable(
-    options.budget,
-    [def.model, ...def.fallback],
-    def.onUnknownUsage,
-  );
+  checkTree(def, options.budget === undefined ? [] : [options.budget]);
   const principal = options.principal ?? OPERATOR;
   const draft: EventDraft = {
     type: "user_input",
