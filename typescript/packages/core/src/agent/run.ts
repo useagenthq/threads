@@ -5,13 +5,14 @@ import {
   type Principal,
   ThreadId,
 } from "../log";
-import { type LoopConfig, type LoopEnd, resume } from "../loop";
+import { type LoopConfig, type LoopEnd, resume, type ToolImpl } from "../loop";
 import { toolSpec } from "../loop/turn";
 import type { Model } from "../model";
 import { category, decide } from "../permissions";
 import { knownEvents } from "../reduce";
 import { LEASE_TTL_MS, type LogStore, type Writer } from "../store";
 import { uuidv7 } from "../store/encode";
+import { bindBuiltins } from "../tools";
 import type { LogError } from "../verify";
 import { ConfigError } from "./errors";
 import type { PinOptions } from "./pin";
@@ -22,6 +23,7 @@ import {
   runResult,
   type ThreadRef,
 } from "./result";
+import { redactSecrets } from "./secret";
 import { openStore, type Store, sqlite } from "./sqlite";
 import type { Tool } from "./tool";
 
@@ -80,7 +82,12 @@ export async function run<Deps, Output>(
   try {
     checkPin(writer, pinned.started);
     const principal = options.principal ?? OPERATOR;
-    const config = loopConfig(def, options, principal, thread, hooks);
+    const builtin = bindBuiltins(def.sandbox, def.egress, {
+      ledger: log.ledger,
+      writer,
+      artifacts,
+    });
+    const config = loopConfig(def, options, principal, thread, hooks, builtin);
     const result = (end: LoopEnd): RunResult<Output> =>
       runResult(
         end,
@@ -205,6 +212,7 @@ function loopConfig<Deps, Output>(
   principal: Principal,
   thread: ThreadRef,
   hooks: Hooks,
+  builtin: readonly ToolImpl[],
 ): LoopConfig {
   const env = {
     deps: options.deps,
@@ -220,7 +228,10 @@ function loopConfig<Deps, Output>(
           m.info.model.provider === ref.provider &&
           m.info.model.name === ref.name,
       ),
-    tools: new Map(def.bindable.map((t) => [t.name, t.bind(env)])),
+    tools: new Map([
+      ...builtin.map((t) => [t.spec.name, t] as const),
+      ...def.bindable.map((t) => [t.name, t.bind(env)] as const),
+    ]),
     authorize: (call, fold) => {
       const permissions = fold.policy?.permissions;
       if (permissions === undefined)
@@ -248,6 +259,7 @@ function loopConfig<Deps, Output>(
     },
     principal,
     skewMarginMs: 1000,
+    redact: redactSecrets,
     ...(def.output === undefined ? {} : { output: def.output }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(hooks.onEvent === undefined ? {} : { onEvent: hooks.onEvent }),

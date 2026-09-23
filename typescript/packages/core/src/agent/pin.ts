@@ -13,7 +13,9 @@ import { FINAL_OUTPUT, RETRY_DEFAULTS } from "../loop";
 import { CONTEXT_DEFAULTS } from "../loop/policy";
 import type { Model } from "../model";
 import { DEFAULT_PERMISSIONS } from "../permissions";
+import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
+import { builtins, type Egress } from "../tools";
 import { ConfigError } from "./errors";
 import { jsonSchema, type Tool } from "./tool";
 
@@ -32,6 +34,8 @@ export type PinOptions = {
   readonly budget: z.infer<typeof Budget> | undefined;
   readonly retry: Partial<z.infer<typeof RetryPolicy>>;
   readonly context: Partial<z.infer<typeof ContextPolicy>>;
+  readonly sandbox: Sandbox | undefined;
+  readonly egress: Egress | undefined;
 };
 
 /** The pinned tool specs and the thread_started draft. Throws ConfigError on a bad setup. */
@@ -39,7 +43,11 @@ export function pin(o: PinOptions): {
   readonly specs: readonly ToolSpec[];
   readonly started: EventDraft;
 } {
-  const specs = [...o.tools.map((t) => t.spec()), ...finalOutput(o.output)];
+  const specs = [
+    ...builtins(o.sandbox, o.egress).map((b) => b.spec),
+    ...o.tools.map((t) => t.spec()),
+    ...finalOutput(o.output),
+  ];
   const names = specs.map((s) => s.name);
   const twice = names.find((n, i) => names.indexOf(n) !== i);
   if (twice !== undefined)

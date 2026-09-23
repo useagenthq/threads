@@ -97,19 +97,21 @@ describe("tool arguments parse with the tool's own schema", () => {
     const started = (await logOf(threadOf(result))).find(
       (e) => e.type === "thread_started",
     );
-    expect(started?.type === "thread_started" && started.data.tools[0]).toEqual(
-      {
-        name: "echo",
-        description: "Repeat the text.",
-        effect_class: "read_only",
-        input_schema: {
-          type: "object",
-          properties: { text: { type: "string" } },
-          required: ["text"],
-          additionalProperties: false,
-        },
+    // read_tool_result is always pinned first; echo follows it.
+    expect(
+      started?.type === "thread_started" &&
+        started.data.tools.find((t) => t.name === "echo"),
+    ).toEqual({
+      name: "echo",
+      description: "Repeat the text.",
+      effect_class: "read_only",
+      input_schema: {
+        type: "object",
+        properties: { text: { type: "string" } },
+        required: ["text"],
+        additionalProperties: false,
       },
-    );
+    });
   });
 });
 

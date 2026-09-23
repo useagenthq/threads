@@ -8,6 +8,8 @@ import type {
   RetryPolicy,
 } from "../log";
 import type { Model } from "../model";
+import type { Sandbox } from "../sandbox";
+import type { Egress } from "../tools";
 import { ConfigError } from "./errors";
 import { pin } from "./pin";
 import type { RunResult } from "./result";
@@ -33,6 +35,10 @@ export type AgentOptions<Deps, Output> = {
   readonly budget?: z.infer<typeof Budget>;
   readonly retry?: Partial<z.infer<typeof RetryPolicy>>;
   readonly context?: Partial<z.infer<typeof ContextPolicy>>;
+  /** Absent: no sandbox tools (bash, files). */
+  readonly sandbox?: Sandbox;
+  /** Sandbox egress: absent is deny-all; "unenforced" opts in to a provider that can't enforce it. */
+  readonly egress?: Egress;
 };
 
 /** One item of stream(): a committed event, or a transient text delta (never logged). */
@@ -104,6 +110,8 @@ function build<Deps, Output>(
     budget: options.budget,
     retry: options.retry ?? {},
     context: options.context ?? {},
+    sandbox: options.sandbox,
+    egress: options.egress,
     decode,
   };
   return {
