@@ -96,8 +96,8 @@ def test_a_construction_the_scan_cannot_read_is_red(tmp_path: pathlib.Path) -> N
     py = PY_SOURCE + "raise ConfigError(CODE, 'computed')\n"
     doc = decisions(gapped())
     assert check_decisions(api(config_errors=INVALID), doc, sources(tmp_path, py=py)) == [
-        "decisions packages.web: web.py constructs a ConfigError the scan can't count; "
-        "construct it by name (no alias or subclass) with the code as a string literal"
+        "decisions packages.web: web.py constructs a ConfigError the scan can't count; only "
+        "construct (code as a string literal), import or catch it by name"
     ]
 
 
@@ -152,8 +152,31 @@ THROW = 'throw new E("missing_secret", "m");'
         (TS_IMPORT_AS + THROW, "ts"),
         ("const E = ConfigError;\n" + THROW, "ts"),
         ("class Refusal extends ConfigError {}", "ts"),
+        ("(Alias,) = (ConfigError,)\n" + RAISE.replace("Error", "Alias", 1), "py"),
+        ("import threads.agents.config as c\nE = c.ConfigError\n" + RAISE, "py"),
+        ("class Refusal(ValueError, ConfigError):\n    pass", "py"),
+        ("try:\n    f()\nexcept ValueError: E = ConfigError\n" + RAISE, "py"),
+        ('refusals = {"e": ConfigError}\n', "py"),
+        ("const [E] = [ConfigError];\n" + THROW, "ts"),
+        ("const make = { E: ConfigError };\n", "ts"),
+        ("const E = ok ? Other : ConfigError;\n" + THROW, "ts"),
     ],
-    ids=["py-import-as", "py-assign", "py-subclass", "ts-import-as", "ts-assign", "ts-extends"],
+    ids=[
+        "py-import-as",
+        "py-assign",
+        "py-subclass",
+        "ts-import-as",
+        "ts-assign",
+        "ts-extends",
+        "py-tuple",
+        "py-qualified",
+        "py-second-base",
+        "py-after-except",
+        "py-dict",
+        "ts-array",
+        "ts-object",
+        "ts-ternary",
+    ],
 )
 def test_an_alias_or_subclass_of_config_error_is_unreadable(source: str, lang: str) -> None:
     assert raised_codes(source, lang)["<unreadable>"] >= 1
@@ -167,7 +190,9 @@ def test_catching_and_plain_imports_are_not_aliases() -> None:
     assert raised_codes(py, "py") == {}
     ts = (
         'import { ConfigError } from "./errors";\n'
+        "// a ConfigError in a comment\n"
         "if (e instanceof ConfigError) {}\n"
-        "const f = (e: ConfigError) => e;\n"
     )
     assert raised_codes(ts, "ts") == {}
+    caught = "if isinstance(error, ConfigError):\n    pass  # ConfigError\n"
+    assert raised_codes(caught, "py") == {}

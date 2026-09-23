@@ -8,8 +8,8 @@ core helper that raises one (HELPERS), must be in the expanded `config_errors` o
 package's factories in that language. A code the owning lane will declare later is a temporary
 gap that names that lane and pins its sites (file → count), so a new site of the same code is
 red, and the gap is red once any factory declares the code. A construction whose code isn't a
-string literal, and any alias or subclass of ConfigError, is always red, so refusals are
-constructed by name and none escapes the count. Stdlib only.
+string literal, and any other use of ConfigError than constructing, importing or catching it
+by name (an alias, a subclass, a tuple), is always red, so none escapes the count. Stdlib only.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from collections import Counter
 from typing import TYPE_CHECKING
 
 from api_factories import expanded_errors, langs
+from config_error_uses import unclassified_uses
 
 if TYPE_CHECKING:
     import pathlib
@@ -29,14 +30,6 @@ if TYPE_CHECKING:
 CONSTRUCTED = re.compile(r"ConfigError\(\s*(?:code\s*=\s*)?[\"'](\w+)[\"']")
 ANY_CONSTRUCTION = re.compile(r"\bConfigError\(")
 UNREADABLE = "<unreadable>"
-# The scan counts refusals by name, so a scanned source must construct ConfigError by that name:
-# an alias (`import ConfigError as E`, `E = ConfigError`) or a subclass would hide a site.
-# `except ConfigError as error` catches, so it is not an alias.
-ALIASED = re.compile(
-    r"(?<!except )(?<!except\()\bConfigError\s+as\s+\w+"
-    r"|(?<![=!<>])=\s*ConfigError\b(?!\s*\()"
-    r"|\bextends\s+ConfigError\b|\(\s*ConfigError\s*\)\s*:"
-)
 # Core helpers an adapter calls that raise a ConfigError code on its behalf.
 HELPERS: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
     "ts": (
@@ -61,10 +54,11 @@ def _list(v: Json | None) -> list[Json]:
 
 def raised_codes(source: str, lang: str) -> Counter[str]:
     """How many sites in one source can raise each ConfigError code. A construction whose code
-    isn't a string literal counts as UNREADABLE, which the scan always reports."""
+    isn't a string literal, and any mention of ConfigError other than a construction, a plain
+    import or a catch (config_error_uses.py), counts as UNREADABLE, which the scan reports."""
     found: Counter[str] = Counter(m.group(1) for m in CONSTRUCTED.finditer(source))
     unreadable = len(ANY_CONSTRUCTION.findall(source)) - found.total()
-    unreadable += len(ALIASED.findall(source))
+    unreadable += unclassified_uses(source, lang)
     if unreadable:
         found[UNREADABLE] = unreadable
     for pattern, code in HELPERS[lang]:
@@ -155,8 +149,8 @@ def scan_problems(
             if code == UNREADABLE:
                 errs.append(
                     f"decisions packages.{name}: {', '.join(sorted(found))} constructs a "
-                    "ConfigError the scan can't count; construct it by name (no alias or "
-                    "subclass) with the code as a string literal"
+                    "ConfigError the scan can't count; only construct (code as a string "
+                    "literal), import or catch it by name"
                 )
                 continue
             if code in gaps:

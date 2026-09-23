@@ -104,3 +104,12 @@ def test_malformed_decisions_are_refused() -> None:
         "decisions decisions[0]: expected ['decision', 'factory', 'lang', 'option', 'owner'], "
         "lang ts|py|both",
     ]
+
+
+def test_a_review_only_default_needs_a_reason(tmp_path: pathlib.Path) -> None:
+    for why in (None, "", "  "):
+        doc = decisions(fetcher={"owner": "15A", "review_only": {"transport": why}})
+        assert check_decisions(api(params=[TRANSPORT]), doc, sources(tmp_path)) == [
+            "decisions factories.fetcher.review_only.transport: give the reason no test can "
+            "prove it"
+        ]

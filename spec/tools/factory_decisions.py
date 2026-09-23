@@ -53,6 +53,11 @@ def _shape(doc: Json) -> list[str]:
         entry = _obj(f)
         if not isinstance(entry.get("owner"), str) or not set(entry) <= FACTORY_KEYS:
             errs.append(f"decisions factories.{name}: expected {{owner, pending?, review_only?}}")
+        errs += [
+            f"decisions factories.{name}.review_only.{p}: give the reason no test can prove it"
+            for p, why in _obj(entry.get("review_only")).items()
+            if not isinstance(why, str) or not why.strip()
+        ]
     for i, d in enumerate(_list(root.get("decisions"))):
         entry = _obj(d)
         if entry.keys() != DECISION_KEYS or entry.get("lang") not in ("ts", "py", "both"):
