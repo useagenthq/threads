@@ -9,6 +9,7 @@ import type {
   PermissionRule,
   Principal,
 } from "../log";
+import { principalKey } from "../log";
 import { knownEvents } from "../reduce";
 import { err, ok, type Result } from "../result";
 import {
@@ -18,6 +19,7 @@ import {
   type Writer,
 } from "../store";
 import type { ChainEvent, LogError } from "../verify";
+import { suggestedRules } from "./pending";
 
 // The Thread control methods (spec/api.json Thread, ): each appends the actor's
 // event through the run's own writer when this process runs the branch, else under a short lease
@@ -200,8 +202,8 @@ export function decide(
     const open = openChallenge(events, writer, challengeId, now);
     if (!open.ok) return open;
     const asked = open.value;
-    // No rule is suggested yet, so none can be remembered.
-    if (answer.grant && answer.rememberRule !== undefined)
+    const rule = answer.grant ? answer.rememberRule : undefined;
+    if (rule !== undefined && !suggested(events, asked.data.call_id, rule))
       return err({
         code: "invalid_request",
         message: "remember_rule must be one of the challenge's suggested_rules",
@@ -229,9 +231,35 @@ export function decide(
             ...(answer.reason === undefined ? {} : { reason: answer.reason }),
           },
         };
-    const after = resumeIf(writer, { kind: "approval", id: challengeId });
-    return ok(after === undefined ? { record } : { record, after });
+    const resume = resumeIf(writer, { kind: "approval", id: challengeId });
+    if (rule === undefined)
+      return ok(resume === undefined ? { record } : { record, after: resume });
+    const added: EventDraft = {
+      type: "permission_rule_added",
+      type_version: 1,
+      critical: true,
+      actor: { kind: "approver", principal },
+      data: { rule, decision: "allow", challenge_id: challengeId },
+    };
+    return ok({
+      record,
+      after: (id) => [added, ...(resume === undefined ? [] : resume(id))],
+    });
   };
+}
+
+function suggested(
+  events: readonly KnownEvent[],
+  callId: string,
+  rule: string,
+): boolean {
+  const call = events.find(
+    (e) => e.type === "tool_call" && e.data.call_id === callId,
+  );
+  return (
+    call?.type === "tool_call" &&
+    suggestedRules(call.data.name, call.data.input).includes(rule)
+  );
 }
 
 /** A resumed for `address` when the branch is parked on it. */
@@ -245,7 +273,24 @@ function resumeIf(
   return parked ? (id) => [resumed(address, id)] : undefined;
 }
 
-/** answer: the ask_user call's result, from the answering principal. */
+/** Whether `principal` gave the user_input that opened the turn with the question's call. */
+function asker(
+  events: readonly KnownEvent[],
+  callId: string,
+  principal: Principal,
+): boolean {
+  const at = events.findIndex(
+    (e) => e.type === "tool_call" && e.data.call_id === callId,
+  );
+  const opener = events
+    .slice(0, Math.max(at, 0))
+    .findLast((e) => e.type === "user_input")?.actor.principal;
+  return (
+    opener !== undefined && principalKey(opener) === principalKey(principal)
+  );
+}
+
+/** answer: the ask_user call's result, from the asking principal. */
 export function answer(
   callId: string,
   text: string | readonly string[],
@@ -254,13 +299,18 @@ export function answer(
   events: readonly KnownEvent[],
   writer: Writer,
 ) => Result<Plan, ControlError> {
-  return (_events, writer) => {
+  return (events, writer) => {
     const address: ParkAddress = { kind: "input", id: callId };
     const after = resumeIf(writer, address);
     if (after === undefined)
       return err({
         code: "no_open_question",
         message: `no question ${callId}`,
+      });
+    if (!asker(events, callId, principal))
+      return err({
+        code: "forbidden",
+        message: "only the user whose input opened this turn may answer",
       });
     return ok({
       record: {

@@ -52,11 +52,61 @@ export function pendingApprovals(
         input: call.data.input,
         args_hash: e.data.args_hash,
         expires_at: e.data.expires_at,
-        // ponytail: no rule suggestions until lands in the permission engine.
-        suggested_rules: [],
+        suggested_rules: suggestedRules(call.data.name, call.data.input),
       },
     ];
   });
+}
+
+/**
+ * What an approver may keep for the thread (spec/schema/README.md, "Questions and remembered
+ * rules"): a shell command exactly, then its two-word prefix form (`bash(git push:*)`); any other
+ * tool as a whole.
+ */
+export function suggestedRules(
+  tool: string,
+  input: z.infer<typeof JsonObject>,
+): readonly string[] {
+  const command = input["command"];
+  if (tool !== "bash" || typeof command !== "string" || command.trim() === "")
+    return [tool];
+  const words = shellWords(command);
+  // ponytail: two-word prefix (git push, npm run); a smarter prefix needs the shell grammar.
+  return words === undefined
+    ? [`bash(${command})`]
+    : [`bash(${command})`, `bash(${words.slice(0, 2).join(" ")}:*)`];
+}
+
+/** POSIX shell words as Python's shlex.split makes them; undefined when a quote is unclosed. */
+function shellWords(text: string): readonly string[] | undefined {
+  const words: string[] = [];
+  let word: string | undefined;
+  let quote: "'" | '"' | undefined;
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text.charAt(i);
+    if (quote === "'") {
+      if (c === "'") quote = undefined;
+      else word += c;
+    } else if (c === "\\") {
+      i += 1;
+      if (i === text.length) return undefined;
+      const next = text.charAt(i);
+      // Inside double quotes a backslash escapes only `"` and itself.
+      word = `${word ?? ""}${quote === '"' && next !== '"' && next !== "\\" ? c : ""}${next}`;
+    } else if (quote === '"') {
+      if (c === '"') quote = undefined;
+      else word += c;
+    } else if (c === "'" || c === '"') {
+      quote = c;
+      word ??= "";
+    } else if (/\s/.test(c)) {
+      if (word !== undefined) words.push(word);
+      word = undefined;
+    } else word = `${word ?? ""}${c}`;
+  }
+  if (quote !== undefined) return undefined;
+  if (word !== undefined) words.push(word);
+  return words;
 }
 
 // ponytail: every branch reports mode live; a stub fork records no mode yet.

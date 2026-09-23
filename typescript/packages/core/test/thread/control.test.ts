@@ -145,12 +145,32 @@ describe("approvals", () => {
     expect(missing).toMatchObject({ ok: false, error: { code: "not_found" } });
     const [pending] = await thread.pendingApprovals();
     if (pending === undefined) throw new Error("one open challenge");
+    expect(pending.suggested_rules).toEqual(["send_email"]);
     const remembered = await thread.approve(pending.challenge_id, alice, {
-      rememberRule: "send_email",
+      rememberRule: "bash(rm -rf /)",
     });
     expect(remembered).toMatchObject({
       ok: false,
       error: { code: "invalid_request" },
+    });
+  });
+
+  test("a suggested remember_rule is kept as permission_rule_added", async () => {
+    const { store, thread } = await parked([]);
+    const [pending] = await thread.pendingApprovals();
+    if (pending === undefined) throw new Error("one open challenge");
+    unwrap(
+      await thread.approve(pending.challenge_id, alice, {
+        rememberRule: "send_email",
+      }),
+    );
+    const added = (await events(store, thread)).find(
+      (e) => e.type === "permission_rule_added",
+    );
+    expect(added?.type === "permission_rule_added" && added.data).toEqual({
+      rule: "send_email",
+      decision: "allow",
+      challenge_id: pending.challenge_id,
     });
   });
 });
