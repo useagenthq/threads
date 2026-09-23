@@ -1,5 +1,5 @@
 # pyright: strict
-"""Stub-mode and channel-intake cases."""
+"""Stub-mode, channel-intake and schedule cases."""
 
 from __future__ import annotations
 
@@ -8,13 +8,14 @@ from typing import TYPE_CHECKING
 from .common import NOW, aref, sha, tokens
 from .jcs import JsonValue, Obj, canonical
 from .log import Log, reduce
-from .pieces import SEARCH, case, started, user, write_case
+from .pieces import SEARCH, case, reject, started, user, write_case
 
 if TYPE_CHECKING:
     import pathlib
 
 
 def build(root: pathlib.Path) -> None:
+    _occurrences(root)
     # stub mode: (tool, args_hash, occurrence) with ordered consumption
     log = Log()
     started(log, [SEARCH])
@@ -177,4 +178,56 @@ def build(root: pathlib.Path) -> None:
                 {"channel": "whatsapp", "item_key": "wamid.B"},
             ],
         },
+    )
+
+
+SCHEDULER: Obj = {"issuer": "schedule", "tenant": "local", "subject": "daily"}
+
+
+def _occurrence(log: Log, type_: str, **reason: JsonValue) -> None:
+    data: Obj = {
+        "schedule_id": "daily",
+        "occurrence_id": "daily@2026-09-23T09:00:00.000Z",
+        "scheduled_for": 1790154000000,
+        "timezone": "UTC",
+        **reason,
+    }
+    critical = type_ == "schedule_fired"
+    log.add(type_, data, actor="scheduler", principal=SCHEDULER, critical=critical)
+
+
+def _occurrences(root: pathlib.Path) -> None:
+    """Semantic rule 9: an occurrence is logged once along the chain, fired or skipped."""
+    log = Log()
+    started(log, [])
+    _occurrence(log, "schedule_fired")
+    log.add(
+        "user_input",
+        {"source": "schedule", "text": "Report.", "delivery_event_id": log.events[-1]["event_id"]},
+        actor="scheduler",
+        principal=SCHEDULER,
+    )
+    log.add("turn_completed", {"reason": "end_turn"})
+    _occurrence(log, "schedule_skipped", reason="overlap")
+    reject(
+        root,
+        (
+            "schedule-occurrence-fired-then-skipped-rejected",
+            "scheduling",
+            "A schedule_skipped for an occurrence already fired on the branch: invalid_transition.",
+        ),
+        log,
+    )
+    log = Log()
+    started(log, [])
+    _occurrence(log, "schedule_skipped", reason="missed")
+    _occurrence(log, "schedule_skipped", reason="removed")
+    reject(
+        root,
+        (
+            "schedule-occurrence-skipped-twice-rejected",
+            "scheduling",
+            "Two schedule_skipped events for one occurrence: invalid_transition.",
+        ),
+        log,
     )

@@ -1,0 +1,1156 @@
+{
+  "description": "One thread per schedule. Each case replays its steps on one store, with a schedule and a scripted agent 'bot' that answers every run. Steps: start (a new scheduler, named by the value, ready at 'at'; optional tenant, default local; optional schedules, default [schedule]; optional agents served, default ['bot']); tick (one pass of that scheduler at 'at', then its runs settle); race (the named schedulers tick at 'at' at once, then settle); hold (an outside holder takes the local schedule thread's writer: 'run' also appends a user_input and leaves the turn open, 'outbound' only holds the lease); release ('done': the holder lets go and a held run finishes its turn; 'crash': the lease is let go and the turn is left open); delete (the local schedule thread is deleted); expect (per tenant: log is the schedule thread's schedule_fired and schedule_skipped events in order as 'fired <occurrence_id>' or 'skipped <reason> <occurrence_id>', empty when the schedule has no thread; rows are the tenant's schedule_occurrences as [occurrence_at as RFC 3339 UTC with milliseconds, state, reason] in occurrence order; threads, when given, is the tenant's thread count; inputs, when given, are the texts of the schedule thread's user_inputs whose source is schedule).",
+  "schedule": {
+    "id": "daily",
+    "agent": "bot",
+    "cron": "0 9 * * *",
+    "input": "Report."
+  },
+  "cases": [
+    {
+      "name": "schedule-fires-once",
+      "note": "Ready triggers nothing; the due occurrence fires once, with schedule_fired then its input.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T08:59:30Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [],
+              "rows": [],
+              "threads": 0
+            }
+          }
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:02Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1,
+              "inputs": [
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-three-missed-after-downtime",
+      "note": "Occurrences that fell due while no host ran are logged as missed and run nothing.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-04T10:00:00Z"
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-04T10:00:00Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped missed daily@2026-05-02T09:00:00.000Z",
+                "skipped missed daily@2026-05-03T09:00:00.000Z",
+                "skipped missed daily@2026-05-04T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "missed"
+                ],
+                [
+                  "2026-05-03T09:00:00.000Z",
+                  "skipped",
+                  "missed"
+                ],
+                [
+                  "2026-05-04T09:00:00.000Z",
+                  "skipped",
+                  "missed"
+                ]
+              ],
+              "threads": 1,
+              "inputs": [
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-overlap-while-running",
+      "note": "Due while the previous run holds the thread: the open turn proves the overlap, and the skip is logged once the writer is free.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "run"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "pending",
+                  "overlap"
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "release": "done"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:02Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped overlap daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "overlap"
+                ]
+              ],
+              "threads": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-overlap-logged-after-restart",
+      "note": "An overlap reserved while the writer was held is logged by the next host after a restart, and the cut-short run is resumed.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "run"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "release": "crash"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-02T09:05:00Z"
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:05:00Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped overlap daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "overlap"
+                ]
+              ],
+              "threads": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-two-schedulers-race-first-occurrence",
+      "note": "Two schedulers race a new schedule's first occurrence: one schedule_threads row, one thread, one thread_started, one fired occurrence.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "race": [
+            "a",
+            "b"
+          ],
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1,
+              "inputs": [
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-two-schedulers-idle-thread",
+      "note": "Two schedulers on an idle thread: one decides the occurrence under the writer, the other finds it decided. Exactly one run.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "race": [
+            "a",
+            "b"
+          ],
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "fired daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1,
+              "inputs": [
+                "Report.",
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-outbound-holds-writer",
+      "note": "An outbound delivery holds the writer when an occurrence falls due: it stays pending, then fires on the next tick. No false overlap.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "outbound"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "pending",
+                  null
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "release": "done"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:02Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "fired daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1,
+              "inputs": [
+                "Report.",
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-missed-with-idle-fold",
+      "note": "A due-but-missed occurrence on an idle thread is logged as missed, not fired.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-02T09:30:00Z"
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:30:00Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped missed daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "missed"
+                ]
+              ],
+              "inputs": [
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-new-occurrence-after-backlog",
+      "note": "A newly due occurrence is decided after the backlog: the old overlap is logged first, then the new one fires.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "run"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "release": "done"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-03T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped overlap daily@2026-05-02T09:00:00.000Z",
+                "fired daily@2026-05-03T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "overlap"
+                ],
+                [
+                  "2026-05-03T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-old-claim-before-new-occurrence",
+      "note": "Two unlogged overlaps reach the log in occurrence order once the writer is free.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "run"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-03T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "pending",
+                  "overlap"
+                ],
+                [
+                  "2026-05-03T09:00:00.000Z",
+                  "pending",
+                  "overlap"
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "release": "done"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-03T09:00:02Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped overlap daily@2026-05-02T09:00:00.000Z",
+                "skipped overlap daily@2026-05-03T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "overlap"
+                ],
+                [
+                  "2026-05-03T09:00:00.000Z",
+                  "skipped",
+                  "overlap"
+                ]
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-writer-freed-new-occurrence-fires",
+      "note": "The writer frees up between a failed flush and a new occurrence; with no turn open the new occurrence fires, logged after the old skip.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "outbound"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-02T09:30:00Z"
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:30:00Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "pending",
+                  "missed"
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "release": "done"
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-03T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped missed daily@2026-05-02T09:00:00.000Z",
+                "fired daily@2026-05-03T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "missed"
+                ],
+                [
+                  "2026-05-03T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-writer-freed-turn-open-overlap",
+      "note": "The writer frees up with a turn still open: the new occurrence is an overlap, logged after the old skip.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "run"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-02T09:30:00Z"
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:30:00Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "pending",
+                  "missed"
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "release": "crash"
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-03T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped missed daily@2026-05-02T09:00:00.000Z",
+                "skipped overlap daily@2026-05-03T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "missed"
+                ],
+                [
+                  "2026-05-03T09:00:00.000Z",
+                  "skipped",
+                  "overlap"
+                ]
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-removed-after-unlogged-claim",
+      "note": "A schedule removed after its overlap was reserved: the skip still lands in its thread.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "run"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "release": "done"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-02T09:30:00Z",
+          "schedules": []
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:30:00Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped overlap daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "overlap"
+                ]
+              ],
+              "threads": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-config-changed",
+      "note": "A schedule whose input changes keeps its thread and history.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-01T10:00:00Z",
+          "schedules": [
+            {
+              "id": "daily",
+              "agent": "bot",
+              "cron": "0 9 * * *",
+              "input": "Report, with totals."
+            }
+          ]
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "fired daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1,
+              "inputs": [
+                "Report.",
+                "Report, with totals."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-restart-at-boundary",
+      "note": "A host restarted right after an occurrence fired never fires it again.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-01T09:00:30Z"
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-01T09:00:40Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1,
+              "inputs": [
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-two-tenants-same-id",
+      "note": "Two tenants with the same schedule id both fire, each in its own thread; no read crosses tenants.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-01T08:59:00Z",
+          "tenant": "acme"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1
+            },
+            "acme": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-removed-reservation-fires-frozen",
+      "note": "A pending reservation whose schedule was removed fires after a restart with the agent and input frozen when it was reserved.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "outbound"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "release": "done"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-02T09:30:00Z",
+          "schedules": []
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:30:00Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "fired daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1,
+              "inputs": [
+                "Report.",
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-removed-agent-logged-removed",
+      "note": "A pending reservation whose agent is no longer served is logged as removed.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "outbound"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "release": "done"
+        },
+        {
+          "start": "b",
+          "at": "2026-05-02T09:30:00Z",
+          "schedules": [],
+          "agents": []
+        },
+        {
+          "tick": "b",
+          "at": "2026-05-02T09:30:00Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-01T09:00:00.000Z",
+                "skipped removed daily@2026-05-02T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "skipped",
+                  "removed"
+                ]
+              ],
+              "threads": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule-deleted-thread-retires-pending",
+      "note": "Deleting a schedule thread retires its pending reservation (no event, never an outcome); the next occurrence starts a new thread without re-firing old ones.",
+      "steps": [
+        {
+          "start": "a",
+          "at": "2026-05-01T08:59:00Z"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-01T09:00:01Z"
+        },
+        {
+          "hold": "outbound"
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-02T09:00:01Z"
+        },
+        {
+          "release": "done"
+        },
+        {
+          "delete": true
+        },
+        {
+          "tick": "a",
+          "at": "2026-05-03T09:00:01Z"
+        },
+        {
+          "expect": {
+            "local": {
+              "log": [
+                "fired daily@2026-05-03T09:00:00.000Z"
+              ],
+              "rows": [
+                [
+                  "2026-05-01T09:00:00.000Z",
+                  "fired",
+                  null
+                ],
+                [
+                  "2026-05-02T09:00:00.000Z",
+                  "retired",
+                  null
+                ],
+                [
+                  "2026-05-03T09:00:00.000Z",
+                  "fired",
+                  null
+                ]
+              ],
+              "threads": 1,
+              "inputs": [
+                "Report."
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

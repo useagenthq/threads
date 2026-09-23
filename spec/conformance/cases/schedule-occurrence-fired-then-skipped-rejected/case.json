@@ -1,0 +1,9 @@
+{
+  "name": "schedule-occurrence-fired-then-skipped-rejected",
+  "family": "scheduling",
+  "kind": "reduce",
+  "description": "A schedule_skipped for an occurrence already fired on the branch: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}
