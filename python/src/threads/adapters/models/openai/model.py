@@ -94,8 +94,9 @@ def _too_long(error: sdk.APIStatusError) -> bool:
 
 
 def openai(name: str, **options: Unpack[ModelOptions]) -> OpenAIModel:
-    """spec/api.json `openai`. `max_output_tokens` is pinned as the request's cap; other
-    `params` are Responses API fields. `api_key` falls back to OPENAI_API_KEY."""
+    """An OpenAI model (the `openai()` of spec/api.json conventions.adapters).
+    `max_output_tokens` is pinned as the request's cap; other `params` are Responses API
+    fields. `api_key` falls back to OPENAI_API_KEY."""
     declared = info(
         ModelRef(provider=PROVIDER, name=name),
         AdapterRef(name=ADAPTER, version=VERSION, settings={}),

@@ -100,8 +100,9 @@ class AnthropicOptions(ModelOptions, total=False):
 
 
 def anthropic(name: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel:
-    """spec/api.json `anthropic`. `max_tokens` defaults to `max_output_tokens`; other `params`
-    are Messages API fields. `api_key` falls back to ANTHROPIC_API_KEY."""
+    """An Anthropic model (the `anthropic()` of spec/api.json conventions.adapters).
+    `max_tokens` defaults to `max_output_tokens`; other `params` are Messages API fields.
+    `api_key` falls back to ANTHROPIC_API_KEY."""
     settings: dict[str, JsonValue] = {"citations": True} if options.get("citations") else {}
     declared = info(
         ModelRef(provider=PROVIDER, name=name),

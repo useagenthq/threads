@@ -97,7 +97,7 @@ def _is_stream(value: object) -> TypeGuard[AsyncIterable[object]]:
 
 
 def litellm(name: str, **options: Unpack[ModelOptions]) -> LiteLLMModel:
-    """spec/api.json `litellm`. `name` is the LiteLLM route (`provider/model`); `params` are
+    """A model behind LiteLLM. `name` is the LiteLLM route (`provider/model`); `params` are
     completion fields; `max_tokens` defaults to `max_output_tokens`. Credentials come from
     `api_key` or the provider's environment variable, as LiteLLM reads them."""
     declared = info(
