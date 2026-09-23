@@ -110,7 +110,7 @@ def agent_tools(*, spawn: bool, team: bool, handoffs: bool) -> frozenset[str]:
     return chosen | TEAM if team else chosen
 
 
-def specs(
+def specs(  # noqa: PLR0913 - one flag per configured capability
     *,
     sandbox: bool,
     egress_denied: bool,

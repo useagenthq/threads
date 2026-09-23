@@ -11,6 +11,7 @@ from typing import TypedDict
 
 from threads.agents.bindings import AppTool, AppTools, Fence, capped
 from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
+from threads.agents.catalog import gateways
 from threads.agents.context import RunContext
 from threads.agents.definition import Definition
 from threads.agents.framework import Agents
@@ -53,10 +54,11 @@ from threads.loop.runtime import Halt, Idle, RunErrorCode, Runtime
 from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, memory_scope, provider_tools
 from threads.result import Err, Ok
+from threads.sandbox.protocol import Sandbox
 from threads.store import SqliteStore, StoredEvent, Writer
 from threads.store.lines import uuid7
 from threads.thread.control import LOCAL_OPERATOR
-from threads.tools import ReadResults
+from threads.tools import ReadResults, SandboxTools
 
 RENEW_EVERY_S = 10.0
 """Lease renewal interval, a third of the TTL."""
@@ -125,7 +127,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         stream = _Stream(emit, pump)
         box = definition.sandbox
         shared = None if launch is None else launch.shared
-        builtins = shared or (None if box is None else sandbox_tools(sq, box, writer, now_ms))
+        builtins = shared or (None if box is None else _sandbox_tools(sq, box, writer, definition))
         results = ReadResults(sq, lambda: writer.fold.events)
         scope = memory_scope(definition.name, principal)
         providers = Providers(definition.memory, definition.knowledge)
@@ -133,7 +135,9 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         provided = await provider_tools(sq, providers, scope, lent)
         hook_ctx = RunContext(None, handle.id, handle.branch, principal)
         ext = AppTools(extension_tools(definition.extensions), hook_ctx)
-        tools = Routed(builtins, results, AppTools(definition.tools, ctx), provided, ext)
+        routes = gateways(definition.catalog, builtins, sq, fenced(writer))
+        app = AppTools(definition.tools, ctx)
+        tools = Routed(builtins, results, app, provided, ext, gateways=routes)
         frame = Scope(
             definition,
             principal,
@@ -234,6 +238,12 @@ async def _open(
     # A branch the host created for a new thread has no pin yet: this run starts it.
     events = acquired.value.fold.events
     return Ok((acquired.value, not any(isinstance(e, ThreadStartedEvent) for e in events)))
+
+
+def _sandbox_tools[D](
+    sq: SqliteStore, box: Sandbox, writer: Writer, definition: Definition[D]
+) -> SandboxTools:
+    return sandbox_tools(sq, box, writer, now_ms, definition.catalog.servers())
 
 
 def fenced(writer: Writer) -> Fence:

@@ -8,7 +8,8 @@ nothing. Commands run with an empty environment: no host credential enters the s
 """
 
 import posixpath
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from types import MappingProxyType
 from typing import Final
 
 from pydantic import BaseModel, JsonValue, ValidationError
@@ -17,15 +18,18 @@ from pydantic_core import to_json
 
 from threads._generated.tools_v1 import (
     BashInput,
+    ComputerInput,
+    ComputerScreenshotInput,
     EditInput,
     GlobInput,
     GrepInput,
     LsInput,
+    LspInput,
     NotebookEditInput,
     ReadInput,
     WriteInput,
 )
-from threads.log import JsonObject, ParseError, Spill, ToolSpec
+from threads.log import ArtifactRef, JsonObject, ParseError, Spill, ToolSpec
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.loop.model import LookupResult, LookupUnknown
@@ -36,13 +40,15 @@ from threads.result import Err, Ok
 from threads.sandbox.exec import Command, run_exec
 from threads.sandbox.protocol import ExecResult, SandboxContext, SandboxError, SandboxSession
 from threads.store import SqliteStore
-from threads.tools import files, notebook
+from threads.tools import desktop, files, lsp, notebook
 from threads.tools.specs import MODELS, PROVIDED
 
 DEFAULT_TIMEOUT_MS: Final = 120_000
 LISTING_BYTES: Final = 1 << 20
 """Listing output the host reads per stream. ponytail: a listing past 1 MiB is cut to its head
 and tail; page with a narrower path."""
+
+NO_SERVERS: Final[Mapping[str, Sequence[str]]] = MappingProxyType({})
 
 type Open = Callable[[], Awaitable[Ok[SandboxSession] | Err[SandboxError | ParseError]]]
 
@@ -52,8 +58,15 @@ class SandboxTools:
     session is opened on first use, so a run that never calls a built-in creates nothing."""
 
     def __init__(
-        self, open: Open, context: SandboxContext, store: SqliteStore, limits: Callable[[], Spill]
+        self,
+        open: Open,
+        context: SandboxContext,
+        store: SqliteStore,
+        limits: Callable[[], Spill],
+        servers: Mapping[str, Sequence[str]] = NO_SERVERS,
     ) -> None:
+        """`servers`: the lsp tool's declared languages and their server commands."""
+        self._servers = servers
         self._open = open
         self._session: SandboxSession | None = None
         self._context = context
@@ -85,6 +98,10 @@ class SandboxTools:
         """The branch's session, opened on first use; None when it can't be opened."""
         return await self._ensure()
 
+    async def put(self, data: bytes, media_type: str) -> ArtifactRef:
+        sha = await self._store.put_artifact(data)
+        return ArtifactRef(sha256=sha, bytes=len(data), media_type=media_type)
+
     async def command(
         self, argv: Sequence[str], key: str, timeout_ms: int = DEFAULT_TIMEOUT_MS
     ) -> Ok[ExecResult] | Err[Dispatched]:
@@ -103,8 +120,17 @@ class SandboxTools:
         return got.value if isinstance(got, Ok) else None
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
+        """The schema, then the rules it can't state (which fields go together)."""
         parsed = parse(spec.name, input)
-        return parsed.error if isinstance(parsed, Err) else None
+        match parsed:
+            case Err(error=error):
+                return error
+            case Ok(value=ComputerInput() as args):
+                return desktop.invalid_action(args)
+            case Ok(value=ComputerScreenshotInput() as args):
+                return desktop.invalid_screenshot(args)
+            case Ok():
+                return None
 
     async def dispatch(self, call: Invocation) -> Dispatched:
         parsed = parse(call.spec.name, call.input)
@@ -136,6 +162,12 @@ class SandboxTools:
         match input:
             case NotebookEditInput() as args:
                 return await self._notebook(args, call)
+            case LspInput() as args:
+                return await lsp.run(self, args, call.effect_key, self._servers)
+            case ComputerScreenshotInput() as args:
+                return await desktop.screenshot(self, args, call.effect_key)
+            case ComputerInput() as args:
+                return await desktop.act(self, args, call.effect_key)
             case other:
                 raise AssertionError(f"no sandbox built-in takes {type(other).__name__}")
 

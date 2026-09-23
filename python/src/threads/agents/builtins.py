@@ -2,8 +2,9 @@
 opened through the resource ledger, and one tool runner that routes each call to the built-ins
 or the app tools by name."""
 
-from collections.abc import Sequence
-from typing import Literal
+from collections.abc import Mapping, Sequence
+from types import MappingProxyType
+from typing import Final, Literal
 
 from threads.agents.bindings import AppTools
 from threads.log import JsonObject, ParseError, ToolSpec
@@ -17,8 +18,10 @@ from threads.store import SqliteStore, Writer
 from threads.store.worker import Clock
 from threads.thread.snapshot import take_snapshot
 from threads.tools import FRAMEWORK, HOST, SANDBOXED, ReadResults, SandboxTools
-from threads.tools.runner import parse
+from threads.tools.runner import NO_SERVERS, parse
 from threads.tools.specs import PROVIDED
+
+NO_GATEWAYS: Final[Mapping[str, ToolRunner]] = MappingProxyType({})
 
 type Egress = Sequence[str] | Literal["unenforced"]
 
@@ -49,13 +52,19 @@ async def open_session(
 
 
 def sandbox_tools(
-    store: SqliteStore, sandbox: Sandbox, writer: Writer, clock: Clock
+    store: SqliteStore,
+    sandbox: Sandbox,
+    writer: Writer,
+    clock: Clock,
+    servers: Mapping[str, Sequence[str]] = NO_SERVERS,
 ) -> SandboxTools:
+    """`servers`: the lsp tool's declared languages and their server commands."""
     return SandboxTools(
         lambda: open_session(store, sandbox, writer, clock),
         store.context(writer.owner, clock),
         store,
         lambda: context(writer.fold).spill,
+        servers,
     )
 
 
@@ -79,18 +88,21 @@ async def snapshot_turn_end(  # noqa: PLR0913 - the corpus revision rides with t
 
 
 class Routed:
-    """Sandbox built-ins go to the sandbox, read_tool_result to the host reader, memory and
-    knowledge tools to their providers, extension tools to theirs, every other name to the app
-    tools."""
+    """Sandbox built-ins go to the sandbox, read_tool_result to the host reader, the web and git
+    gateway tools to their runners, memory and knowledge tools to their providers, extension
+    tools to theirs, every other name to the app tools."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - one runner per tool source
         self,
         sandbox: ToolRunner | None,
         results: ReadResults,
         app: ToolRunner,
         provided: ToolRunner | None = None,
         ext: AppTools[None] | None = None,
+        *,
+        gateways: Mapping[str, ToolRunner] = NO_GATEWAYS,
     ) -> None:
+        self._gateways = gateways
         self._sandbox = sandbox
         self._results = results
         self._app = app
@@ -98,6 +110,8 @@ class Routed:
         self._ext = ext
 
     def _for(self, name: str) -> ToolRunner:
+        if name in self._gateways:
+            return self._gateways[name]
         if name in HOST:
             return self._results
         if name in PROVIDED and self._provided is not None:

@@ -12,6 +12,7 @@ from typing import Required, TypedDict, Unpack, overload
 from threads.agents import narrowing
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress
+from threads.agents.catalog import GitOptions, LspOptions, WebOptions, catalog
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
 from threads.agents.results import RunResult, StreamEvent
@@ -49,6 +50,14 @@ class AgentOptions(TypedDict, total=False):
     """Agents spawn_agent may start, by name; the team tools come with them."""
     handoffs: "Sequence[Agent[None]]"
     """Agents this one may hand the conversation to, pinned as policy.handoffs."""
+    web: WebOptions
+    """Host-side web_fetch and web_search."""
+    git: GitOptions
+    """The git gateway tools, with the forge credential kept on the host."""
+    computer: bool
+    """computer_screenshot and computer; needs a sandbox with a desktop."""
+    lsp: LspOptions
+    """lsp for these languages, served by the sandbox image."""
     approvers: Sequence[Principal]
     """Who may answer approval challenges; default the local operator for run(), nobody for
     channel-started threads."""
@@ -184,6 +193,13 @@ def _definition[T](
         servers,
         tuple(replace(a.definition, member=True) for a in options.get("subagents", ())),
         tuple(a.definition for a in options.get("handoffs", ())),
+        catalog=catalog(
+            sandbox,
+            web=options.get("web"),
+            git=options.get("git"),
+            computer=options.get("computer", False),
+            lsp=options.get("lsp"),
+        ),
     )
     if "approvers" in options:
         definition = replace(definition, approvers=tuple(options["approvers"]))

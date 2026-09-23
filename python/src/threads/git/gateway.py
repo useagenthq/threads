@@ -214,7 +214,13 @@ class GitGateway:
             return Output(f"{found.value.text()} (already open for {args.head})")
         body = "" if args.body is MISSING else args.body
         made = await api.open(
-            args.repo, args.head, args.base, args.title, body, self._token, self._fence
+            args.repo,
+            head=args.head,
+            base=args.base,
+            title=args.title,
+            body=body,
+            token=self._token,
+            fence=self._fence,
         )
         return _failed(made.error) if isinstance(made, Err) else Output(made.value.text())
 

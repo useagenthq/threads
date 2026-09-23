@@ -90,7 +90,7 @@ class GitHub:
         return Ok(PullRequest(pulls[0].number, pulls[0].html_url) if pulls else None)
 
     async def open(  # noqa: PLR0913 - the pull request's fields
-        self, repo: str, head: str, base: str, title: str, body: str, token: str, fence: Fence
+        self, repo: str, *, head: str, base: str, title: str, body: str, token: str, fence: Fence
     ) -> Ok[PullRequest] | Err[WebError | Refused]:
         data = json.dumps({"head": head, "base": base, "title": title, "body": body}).encode()
         got = await self._call(f"/repos/{repo}/pulls", token, fence, data)

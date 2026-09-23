@@ -76,6 +76,7 @@ def test_builtins_are_pinned_first_and_bash_runs_in_the_sandbox(tmp_path: Path) 
             "glob",
             "grep",
             "ls",
+            "notebook_edit",
             "read",
             "read_tool_result",
             "todo_write",

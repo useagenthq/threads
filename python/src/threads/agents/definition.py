@@ -6,6 +6,7 @@ from pydantic import JsonValue
 
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
+from threads.agents.catalog import NO_CATALOG, Catalog
 from threads.hooks.extension import Extension, extension_tools
 from threads.log import Budget, Context, Permissions, Principal, Retry, ToolSpec
 from threads.log.digest import sha256_hex
@@ -49,6 +50,8 @@ class Definition[D]:
     allowed: frozenset[str] | None = None
     """A subagent's tools are its own filtered to these, its parent's pinned names: a child only
     narrows. final_output is exempt."""
+    catalog: Catalog = NO_CATALOG
+    """The capabilities configured: web, git, computer use and lsp."""
     approvers: tuple[Principal, ...] | None = None
     """Who may answer this agent's approval challenges. None: the local
     operator for a run, nobody for a channel thread. Host policy, never pinned."""
@@ -83,6 +86,7 @@ class Definition[D]:
                 team=bool(self.subagents) or self.member,
                 handoffs=bool(self.handoffs),
             ),
+            gated=self.catalog.gated(),
         )
         ext = extension_tools(self.extensions)
         mine = (*builtins, *(t.spec() for t in self.tools), *(t.spec() for t in ext))
