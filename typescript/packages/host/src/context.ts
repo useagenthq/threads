@@ -14,6 +14,7 @@ import {
   tenantStore,
 } from "@threads/core/host";
 import type { z } from "zod";
+import { reply } from "./outbound";
 
 // What every part of one host shares: its agents (by key and by pinned name), channels, and the
 // in-process executions, one lane per branch so this process never races itself for a lease.
@@ -35,8 +36,8 @@ export class HostContext {
   readonly agents: ReadonlyMap<string, HostedAgent>;
   readonly channels: ReadonlyMap<string, ChannelAdapter>;
   readonly ceiling: HostCeiling | undefined;
-  /** The last in-process execution per branch; a new one waits for it. */
-  readonly #lanes = new Map<string, Promise<RunResult<Json> | undefined>>();
+  /** The last in-process job per branch (a run, then its replies); a new one waits for it. */
+  readonly #lanes = new Map<string, Promise<unknown>>();
   /** A run's in-process result, by run_id, for a halt the log can't show. */
   readonly results: Map<string, RunResult<Json>> = new Map();
   readonly #aborts = new Set<AbortController>();
@@ -106,6 +107,7 @@ export class HostContext {
         );
         const json = asJson(result);
         if (runId !== undefined) this.results.set(runId, json);
+        await this.#reply(tenant, thread);
         return json;
       } catch (error) {
         console.error(`threads host: run on ${thread.branch} failed`, error);
@@ -116,6 +118,32 @@ export class HostContext {
     })();
     this.#lanes.set(thread.branch, next);
     return next;
+  }
+
+  /** The thread's missing replies, issued after any job this process has on its branch. */
+  replies(
+    tenant: string,
+    thread: { readonly id: ThreadId; readonly branch: BranchId },
+  ): Promise<"done" | "busy"> {
+    const prior = this.#lanes.get(thread.branch) ?? Promise.resolve(undefined);
+    const next = (async (): Promise<"done" | "busy"> => {
+      await prior;
+      return this.#stopped ? "busy" : this.#reply(tenant, thread);
+    })();
+    this.#lanes.set(thread.branch, next);
+    return next;
+  }
+
+  async #reply(
+    tenant: string,
+    thread: { readonly id: ThreadId; readonly branch: BranchId },
+  ): Promise<"done" | "busy"> {
+    try {
+      return await reply(this, tenant, thread.id);
+    } catch (error) {
+      console.error(`threads host: replies on ${thread.branch} failed`, error);
+      return "busy";
+    }
   }
 
   /** Waits for every in-process execution; later resumes start nothing. */

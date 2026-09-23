@@ -107,6 +107,17 @@ export function consumed(db: SqliteDriver, inboxId: number, seq: number): void {
   );
 }
 
+/** Every channel thread, for the replies a restart may owe (spec/schema/README.md). */
+export function channelThreads(
+  db: SqliteDriver,
+): readonly { readonly tenant_id: string; readonly thread_id: ThreadId }[] {
+  const rows = parseRows(
+    z.strictObject({ tenant_id: z.string(), thread_id: ThreadId }),
+    db.all("SELECT tenant_id, thread_id FROM channel_threads", []),
+  );
+  return rows.ok ? rows.value : [];
+}
+
 /** The conversation a thread was created for, if it is a channel thread. */
 export function conversationOf(
   db: SqliteDriver,

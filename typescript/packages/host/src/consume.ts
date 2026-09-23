@@ -15,7 +15,6 @@ import {
   type InboxItem,
   pendingItems,
 } from "./inbox";
-import { afterRun } from "./outbound";
 
 // The run side of channel intake: items leave the inbox under the
 // branch lease, a message as channel_delivery then user_input{source: channel}, a decision as
@@ -118,12 +117,11 @@ async function message(
   } finally {
     writer.value.release();
   }
-  const result = await ctx.resume(t.hosted, tenant, next.item.principal, {
+  // The run's replies follow it in the same lane (outbound.ts).
+  await ctx.resume(t.hosted, tenant, next.item.principal, {
     id: t.threadId,
     branch: branchId,
   });
-  if (result !== undefined)
-    await afterRun(ctx, t.adapter, t.conversation, result, next.received_at);
   return "done";
 }
 
@@ -186,12 +184,10 @@ async function control(
   const { item } = next;
   const done = await applied(ctx, t, thread.value, item);
   if (!done) return;
-  const result = await ctx.resume(t.hosted, tenant, item.principal, {
+  await ctx.resume(t.hosted, tenant, item.principal, {
     id: thread.value.id,
     branch: thread.value.branch,
   });
-  if (result !== undefined)
-    await afterRun(ctx, t.adapter, t.conversation, result, next.received_at);
 }
 
 type Thread = Extract<

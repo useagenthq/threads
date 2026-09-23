@@ -12,6 +12,7 @@ import { consume } from "./consume";
 import { type HostCeiling, HostContext } from "./context";
 import { failure } from "./errors";
 import { type Authenticate, api } from "./http";
+import { channelThreads } from "./inbox";
 import { challenge, receive } from "./intake";
 import { type RunAccepted, type StartRunCode, startRun } from "./runs";
 import { bindSchedules, type Schedule, tick } from "./schedules";
@@ -83,6 +84,8 @@ export function host(options: HostOptions): Host {
   const consuming = new Map<string, Promise<void>>();
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking: Promise<void> | undefined;
+  /** Channel threads whose owed replies (a crash before they were issued) aren't settled yet. */
+  let unreplied: Map<string, { tenant: string; id: ThreadId }> | undefined;
 
   /** One consumer per thread in this process; a kick while one runs is picked up by it. */
   const kick = (tenant: string, threadId: string): void => {
@@ -121,6 +124,26 @@ export function host(options: HostOptions): Host {
         typeof row.thread_id === "string"
       )
         kick(row.tenant_id, row.thread_id);
+  };
+
+  /** From the first tick after ready(), never inside it: ready() sends nothing. */
+  const recoverReplies = async (): Promise<void> => {
+    const { db } = await storeConnection(ctx.store);
+    unreplied ??= new Map(
+      channelThreads(db).map((r) => [
+        r.thread_id,
+        { tenant: r.tenant_id, id: r.thread_id },
+      ]),
+    );
+    for (const [key, t] of unreplied) {
+      const { log } = await ctx.open(t.tenant);
+      const main = log.mainBranch(t.id);
+      const done =
+        !main.ok ||
+        (await ctx.replies(t.tenant, { id: t.id, branch: main.value })) ===
+          "done";
+      if (done) unreplied.delete(key);
+    }
   };
 
   const stop = async (): Promise<void> => {
@@ -164,6 +187,7 @@ export function host(options: HostOptions): Host {
         ticking = (async (): Promise<void> => {
           try {
             await tick(ctx, bound, startedAt, Date.now());
+            await recoverReplies();
             await sweep();
           } catch (error) {
             console.error("threads host: tick failed", error);
