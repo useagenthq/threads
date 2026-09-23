@@ -1,0 +1,39 @@
+---
+title: "localKnowledge / local_knowledge"
+description: "Built-in knowledge: SQLite FTS5 over admitted versions stored as artifacts."
+icon: "SquareFunction"
+---
+
+
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function localKnowledge(options: {
+  paths: readonly string[];
+}): KnowledgeProvider
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def local_knowledge(
+    *,
+    paths: Sequence[str],
+) -> KnowledgeProvider
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="paths" type={"readonly string[]"} required />
+
+## Returns
+
+[`KnowledgeProvider`](/docs/reference/types/KnowledgeProvider)

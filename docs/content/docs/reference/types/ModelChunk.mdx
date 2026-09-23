@@ -1,0 +1,41 @@
+---
+title: "ModelChunk"
+description: "The ModelChunk type."
+icon: "Braces"
+---
+
+A union discriminated by `kind`.
+
+### delta
+
+<Field name="kind" type={"\"delta\""} required />
+
+<Field name="text" type={"string"} required />
+
+### part
+
+<Field name="kind" type={"\"part\""} required />
+
+<Field name="part" type={"OutputPart"} required />
+
+### done
+
+<Field name="kind" type={"\"done\""} required />
+
+<Field name="stop_reason" type={"ModelResponseEvent.data.stop_reason"} required />
+
+<Field name="usage" type={"Usage"} required />
+
+### rejected
+
+<Field name="kind" type={"\"rejected\""} required />
+
+<Field name="reason" type={"\"rate_limited\" | \"overloaded\" | \"server_error\" | \"prompt_too_long\" | \"provider_error\" | \"stale_epoch\" | \"content_unsupported\" | \"continuation_unsupported\" | \"transport_fence_unsupported\""} required>
+  The terminal error of a send: exactly Model.send returns.errors. Provider classes are recorded as model_attempt_abandoned&#123;provider_outcome: failed&#125;; stale_epoch appends nothing (the writer lost its lease); content_unsupported, continuation_unsupported and transport_fence_unsupported are recorded as not_sent and end the turn with that code, never retried.
+</Field>
+
+<Field name="http_status" type={"number"} />
+
+<Field name="retry_after_ms" type={"number"} />
+
+<Field name="billing" type={"ModelAttemptAbandonedEvent.data.billing"} />

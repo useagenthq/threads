@@ -1,0 +1,64 @@
+---
+title: "API reference"
+description: "Every public function and type, in TypeScript and Python."
+icon: "BookOpen"
+---
+
+This reference is generated from `spec/api.json`, the contract both implementations follow. Members
+that exist in the contract but are not built yet are left out; members built in one language only
+say so.
+
+## Naming
+
+- Functions and methods are `lowerCamelCase` in TypeScript and `snake_case` in Python: `openThread` and `open_thread`.
+- Types have the same `PascalCase` name in both.
+- Required inputs are positional. Everything else is one trailing options object in TypeScript and keyword-only arguments in Python, with the same names and defaults.
+- Expected failures are values, not exceptions: TypeScript returns `{ ok: true, value }` or `{ ok: false, error: { code, message } }`, Python returns `Ok[T]` or `Err[Failure]`. Only `ConfigError`, for a definition that can't run, is thrown.
+
+## Packages
+
+| Package | TypeScript | Python |
+|---|---|---|
+| core | `@threads/core` | `threads` |
+| host | `@threads/host` | `threads.host` |
+| mcp | `@threads/mcp` | `threads.mcp` |
+
+Model, sandbox, channel and memory providers live in their own packages (`@threads/anthropic`, `threads.anthropic`, ...).
+See [Models](/docs/agents/models), [Sandboxes](/docs/sandboxes/overview), [Host server](/docs/host/overview) and [Memory](/docs/memory/memory).
+
+## Functions
+
+| TypeScript | Python | What it does |
+|---|---|---|
+| [`agent`](/docs/reference/functions/agent) | `agent` | Describe an agent. |
+| [`tool`](/docs/reference/functions/tool) | `tool` | Define an app tool. |
+| [`extension`](/docs/reference/functions/extension) | `extension` | The one extension primitive: tools, trusted instructions and hooks. |
+| [`mcp`](/docs/reference/functions/mcp) | `mcp` | An MCP server in one line. |
+| [`secret`](/docs/reference/functions/secret) | `secret` | A reference to a host secret, resolved only in the host. |
+| [`openThread`](/docs/reference/functions/openThread) | `open_thread` | A handle for inspection and control, independent of any in-memory run. |
+| [`sqlite`](/docs/reference/functions/sqlite) | `sqlite` | The one log and artifact store. |
+| [`localMemory`](/docs/reference/functions/localMemory) | `local_memory` | Built-in memory: SQLite FTS5 in the run's store. |
+| [`localKnowledge`](/docs/reference/functions/localKnowledge) | `local_knowledge` | Built-in knowledge: SQLite FTS5 over admitted versions stored as artifacts. |
+| [`scriptedModel`](/docs/reference/functions/scriptedModel) | `scripted_model` | Test kit. |
+| [`fakeSandbox`](/docs/reference/functions/fakeSandbox) | `fake_sandbox` | Test kit. |
+| [`host`](/docs/reference/functions/host) | `host` | Bind agents to a store, channels and schedules. |
+
+## Types
+
+**Agents and runs:** [`Agent`](/docs/reference/types/Agent), [`RunResult`](/docs/reference/types/RunResult), [`RunStream`](/docs/reference/types/RunStream), [`RunContext`](/docs/reference/types/RunContext), [`Tool`](/docs/reference/types/Tool), [`McpServer`](/docs/reference/types/McpServer), [`Extension`](/docs/reference/types/Extension), [`Hooks`](/docs/reference/types/Hooks), [`Skill`](/docs/reference/types/Skill), [`Secret`](/docs/reference/types/Secret), [`Store`](/docs/reference/types/Store), [`ConfigError`](/docs/reference/types/ConfigError), [`ConfigErrorCode`](/docs/reference/types/ConfigErrorCode)
+
+**Threads and evals:** [`Thread`](/docs/reference/types/Thread), [`CaseExpectation`](/docs/reference/types/CaseExpectation), [`SavedCase`](/docs/reference/types/SavedCase)
+
+**Host:** [`Host`](/docs/reference/types/Host), [`Schedule`](/docs/reference/types/Schedule)
+
+**Model adapters:** [`Model`](/docs/reference/types/Model), [`ModelContext`](/docs/reference/types/ModelContext), [`ModelInfo`](/docs/reference/types/ModelInfo), [`ModelRequest`](/docs/reference/types/ModelRequest), [`ModelResponse`](/docs/reference/types/ModelResponse), [`ModelChunk`](/docs/reference/types/ModelChunk), [`LookupResult`](/docs/reference/types/LookupResult), [`LookupCapability`](/docs/reference/types/LookupCapability)
+
+**Sandbox adapters:** [`Sandbox`](/docs/reference/types/Sandbox), [`SandboxAuthority`](/docs/reference/types/SandboxAuthority), [`SandboxContext`](/docs/reference/types/SandboxContext), [`SandboxInfo`](/docs/reference/types/SandboxInfo), [`SandboxSession`](/docs/reference/types/SandboxSession), [`ExecOutput`](/docs/reference/types/ExecOutput), [`ExecResult`](/docs/reference/types/ExecResult)
+
+**Memory and knowledge adapters:** [`MemoryProvider`](/docs/reference/types/MemoryProvider), [`KnowledgeProvider`](/docs/reference/types/KnowledgeProvider), [`Scope`](/docs/reference/types/Scope), [`Binding`](/docs/reference/types/Binding), [`MemoryRecord`](/docs/reference/types/MemoryRecord), [`RecordRef`](/docs/reference/types/RecordRef), [`MemoryHit`](/docs/reference/types/MemoryHit), [`KnowledgeSource`](/docs/reference/types/KnowledgeSource), [`DocVersion`](/docs/reference/types/DocVersion), [`KnowledgeHit`](/docs/reference/types/KnowledgeHit), [`Doc`](/docs/reference/types/Doc), [`SearchBackend`](/docs/reference/types/SearchBackend), [`SearchHit`](/docs/reference/types/SearchHit)
+
+**Channel adapters:** [`ChannelAdapter`](/docs/reference/types/ChannelAdapter), [`ChannelCapabilities`](/docs/reference/types/ChannelCapabilities), [`RawRequest`](/docs/reference/types/RawRequest), [`RawResponse`](/docs/reference/types/RawResponse), [`VerifiedDelivery`](/docs/reference/types/VerifiedDelivery), [`Inbound`](/docs/reference/types/Inbound), [`DeliveryOutcome`](/docs/reference/types/DeliveryOutcome)
+
+## HTTP API
+
+The host's HTTP API is documented from its OpenAPI file in the [HTTP API reference](/docs/http-api).

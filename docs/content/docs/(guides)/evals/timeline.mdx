@@ -1,0 +1,127 @@
+---
+title: "Timeline"
+description: "See every step an agent took: what it was asked, what the model saw and said, and every tool call and result."
+icon: RotateCcwClock
+---
+
+import { BookOpen, GitFork } from "lucide-react";
+
+A thread's log is a complete record of the run. `timeline()` reads it back in order, so you can debug a bad answer from production without adding logging first.
+
+## Read a thread
+
+Open the thread with `openThread` / `open_thread`, then call `timeline()`. You only need the store and the thread id, not the agent.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const opened = await openThread(store, first.thread.id, { sandbox });
+if (!opened.ok) throw new Error(opened.error.message);
+const thread = opened.value;
+
+const timeline = await thread.timeline();
+if (!timeline.ok) throw new Error(timeline.error.message);
+for (const { event, fork_point } of timeline.value.entries) {
+  console.log(event.seq, event.type, fork_point ? "(fork point)" : "");
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+opened = await open_thread(store, first.thread.id, sandbox=sandbox)
+if isinstance(opened, Err):
+    raise SystemExit(opened.error.message)
+thread = opened.value
+
+timeline = await thread.timeline()
+if isinstance(timeline, Err):
+    raise SystemExit(timeline.error.message)
+for entry in timeline.value.entries:
+    print(entry.event.seq, entry.event.type, "(fork point)" if entry.fork_point else "")
+```
+
+</Tab>
+</Tabs>
+
+`first` is the result of an earlier `agent.run`. In Python, `result.thread` is already a full thread handle, so you can call `result.thread.timeline()` directly. In TypeScript, `result.thread` holds the id, branch and store; open it to get the handle.
+
+Both return a value instead of throwing: check `ok` in TypeScript, or `isinstance(x, Err)` in Python (`from threads.result import Err`). A missing thread comes back as `not_found`.
+
+<Callout>
+The `sandbox` option is only needed if you want to [fork](/docs/evals/fork) or [save a case](/docs/evals/saved-cases) from this handle.
+</Callout>
+
+## What an entry looks like
+
+Each entry is one recorded event plus a `fork_point` flag. An agent that wrote a file and then read it back produces a timeline like this:
+
+```text
+1 thread_started
+2 user_input
+3 model_request
+4 model_response
+5 tool_call
+6 permission_decision
+7 effect_begin
+8 effect_commit
+9 tool_result
+10 model_request
+11 model_response
+12 turn_completed
+13 snapshot (fork point)
+14 user_input
+...
+```
+
+Useful fields on `event`:
+
+| Field | What it holds |
+|---|---|
+| `seq` | Position in the log, starting at 1 |
+| `type` | What happened: `user_input`, `model_response`, `tool_call`, `tool_result`, `approval_requested`, `parked`, `turn_completed`, ... |
+| `time` | When it was recorded (ms since epoch) |
+| `actor` | Who caused it: the user, the model, the runtime, recovery |
+| `data` | The event's payload, such as the tool name and input, or the result preview |
+
+`thread_started` records the pinned setup: model, tools, instructions and permissions. `model_request` points to the exact request bytes the model received.
+
+## Branches
+
+A thread starts with one branch. Every [fork](/docs/evals/fork) adds another. `branches()` lists them:
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const branches = await thread.branches();
+console.log(branches);
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+branches = await thread.branches()
+print(branches)
+```
+
+</Tab>
+</Tabs>
+
+Each entry has `branch_id`, `runnable`, and for a fork its `parent_branch_id` and `fork_at_seq`. Open a specific branch with `openThread(store, id, { branchId })` / `open_thread(store, id, branch_id=...)`.
+
+## From the command line
+
+`threads timeline <thread_id>` prints the same timeline without writing code. See [CLI](/docs/production/cli).
+
+<Cards>
+  <Card title="Fork a thread" icon={<GitFork />} href="/docs/evals/fork">
+    Branch from a snapshot and try something different.
+  </Card>
+  <Card title="Thread reference" icon={<BookOpen />} href="/docs/reference/types/Thread">
+    Every method on the thread handle.
+  </Card>
+</Cards>

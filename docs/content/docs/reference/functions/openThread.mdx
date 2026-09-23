@@ -1,0 +1,55 @@
+---
+title: "openThread / open_thread"
+description: "A handle for inspection and control, independent of any in-memory run."
+icon: "SquareFunction"
+---
+
+
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function openThread(store: Store, threadId: ThreadId, options?: {
+  branchId?: BranchId;
+  sandbox?: Sandbox;
+}): Promise<Result<Thread>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def open_thread(
+    store: Store,
+    thread_id: ThreadId,
+    *,
+    branch_id: BranchId | None = None,
+    sandbox: Sandbox | None = None,
+) -> Ok[Thread] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="store" type={"Store"} required>
+  See [Store](/docs/reference/types/Store).
+</Field>
+
+<Field name="threadId / thread_id" type={"ThreadId"} required />
+
+<Field name="branchId / branch_id" type={"BranchId"} />
+
+<Field name="sandbox" type={"Sandbox"}>
+  The sandbox provider that restores snapshots for fork(). Inspection (timeline, branches, forkPoints, saveCase) doesn't need it; fork() on a handle without one fails with sandbox_required. See [Sandbox](/docs/reference/types/Sandbox).
+</Field>
+
+## Returns
+
+[`Thread`](/docs/reference/types/Thread)
+
+**Returns an error value** with one of these codes: `not_found`, `log_corrupt`, `unsupported_format`, `unsupported_critical_event`.

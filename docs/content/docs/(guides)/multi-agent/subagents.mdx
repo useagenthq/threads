@@ -1,0 +1,156 @@
+---
+title: Subagents
+description: Let an agent delegate a task to another agent that runs in its own thread and reports back.
+icon: Network
+---
+
+import { ArrowRightLeft, Users } from "lucide-react";
+
+A subagent is an ordinary agent that another agent can start with a task. It works in its own thread, with its own log, and its final answer comes back to the parent as a tool result. Use subagents to keep a focused worker's context clean, to run work in parallel, or to give a narrow job a cheaper model.
+
+## Add a subagent
+
+List the agents a parent may start in `subagents`. The parent's model gets a `spawn_agent` tool and sees the names in its system prompt.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const researcher = agent({
+  name: "researcher",
+  instructions: "Research the question and answer in two sentences.",
+  model: scriptedModel({ responses: [use("search_docs", { query: "refunds" }, "r1"), say("Refunds take 5 days.")] }),
+  tools: [searchDocs],
+  budget: { max_model_requests: 10 },
+});
+
+const lead = agent({
+  name: "lead",
+  instructions: "Delegate research to the researcher, then answer.",
+  model: scriptedModel({
+    responses: [
+      use("spawn_agent", { agent: "researcher", prompt: "How long do refunds take?" }, "s1"),
+      say("Refunds take about 5 days."),
+    ],
+  }),
+  tools: [searchDocs], // a subagent only gets tools its parent also has
+  subagents: [researcher],
+});
+
+const store = sqlite(":memory:");
+const result = await lead.run("How long do refunds take?", { store });
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+researcher = agent(
+    name="researcher",
+    instructions="Research the question and answer in two sentences.",
+    model=scripted_model({"responses": [use("search_docs", {"query": "refunds"}, "r1"), say("Refunds take 5 days.")]}),
+    tools=[search_docs],
+    budget=Budget(max_model_requests=10),
+)
+
+lead = agent(
+    name="lead",
+    instructions="Delegate research to the researcher, then answer.",
+    model=scripted_model({
+        "responses": [
+            use("spawn_agent", {"agent": "researcher", "prompt": "How long do refunds take?"}, "s1"),
+            say("Refunds take about 5 days."),
+        ]
+    }),
+    tools=[search_docs],  # a subagent only gets tools its parent also has
+    subagents=[researcher],
+)
+
+result = await lead.run("How long do refunds take?", store=store, deps=None)
+```
+
+</Tab>
+</Tabs>
+
+The examples use the [scripted model](/docs/evals/testing) so they run offline; `use` and `say` are small helpers that build a scripted tool call and a scripted reply. With a real model, the model decides when to call `spawn_agent`.
+
+## What the model calls
+
+`spawn_agent` takes:
+
+<Field name="agent" type="string" required>
+  One of the names in `subagents`. Any other name fails without running anything.
+</Field>
+<Field name="prompt" type="string" required>
+  The task. The subagent sees only this, not the parent's conversation.
+</Field>
+<Field name="background" type="boolean" default="false">
+  `false` waits for the subagent and returns its final answer as the call's result. `true` returns at once, so the parent keeps working while the subagent runs; the answer arrives later in the parent's conversation. The parent's run doesn't return until its background subagents have finished or stopped to wait.
+</Field>
+
+A subagent with [structured output](/docs/agents/structured-output) (TypeScript only) hands the parent its value as JSON text.
+
+## What a subagent may do
+
+A subagent can only narrow what its parent may do, never widen it.
+
+- **Tools.** It gets its own tools filtered to the names its parent also has. Give the parent every tool its subagents need.
+- **Permissions.** Each call is decided under the subagent's own permissions and again under its parent's. The stricter answer wins. See [Permissions & approvals](/docs/control/permissions).
+- **Budgets.** A parent's budget covers every subagent it starts, and their subagents. A subagent can also have its own, tighter `budget`; when it runs out, the subagent stops and the parent carries on. See [Budgets](/docs/control/budgets).
+- **One at a time per name.** While a subagent is still running, starting another with the same name is refused. Start it again once it has finished.
+
+<Callout>
+  **Sandboxes differ by language today.** In TypeScript a subagent runs without a sandbox, so it has no shell or file tools. In Python a subagent configured with the same sandbox provider as its parent shares the parent's sandbox; a subagent whose parent has no sandbox can't have one.
+</Callout>
+
+## See what ran
+
+Every subagent has its own thread, so you can inspect, fork or test it like any other. `children()` lists the subagents a thread started and how each ended.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const opened = await openThread(store, result.thread.id);
+if (!opened.ok) throw new Error(opened.error.message);
+for (const child of await opened.value.children()) {
+  console.log(child.child_thread_id, child.status); // ... completed
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+children = await result.thread.children()
+if isinstance(children, Err):
+    raise RuntimeError(children.error.message)
+for child in children.value:
+    print(child.child_thread_id, child.status)  # ... completed
+```
+
+</Tab>
+</Tabs>
+
+A child's status is `running`, `completed`, `failed`, `cancelled` or `budget_exhausted`.
+
+## Crashes, approvals and cancellation
+
+- **Crash-safe.** The subagent's thread is recorded before it starts. If the process dies, the next run of the parent resumes the same subagent instead of starting a second one.
+- **Approvals bubble up.** If a subagent stops to wait for an approval, the parent's run stops too and returns `parked`, with a pending entry of kind `child` whose id is the subagent's thread id. Open that thread, approve there, then continue the parent. See [Human-in-the-loop](/docs/control/human-in-the-loop).
+- **Cancel the tree.** `cancel` on a thread also stops every unfinished subagent under it.
+
+## Hooks
+
+Two hooks cover subagents. `subagentStart` (`subagent_start` in Python) can allow or deny a spawn. `subagentStop` (`subagent_stop`) sees the finished result and can send the subagent back to work with a reason. See [Hooks](/docs/control/hooks).
+
+## Related
+
+<Cards>
+  <Card title="Teams" icon={<Users />} href="/docs/multi-agent/teams">
+    Subagents that share a task list and send each other messages.
+  </Card>
+  <Card title="Handoffs" icon={<ArrowRightLeft />} href="/docs/multi-agent/handoffs">
+    Pass the whole conversation to another agent instead.
+  </Card>
+</Cards>

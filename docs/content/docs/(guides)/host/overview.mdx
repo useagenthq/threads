@@ -1,0 +1,174 @@
+---
+title: Host server
+description: Serve your agents over HTTP, chat channels and schedules from one small server.
+icon: Server
+---
+
+import { GitPullRequest, Hash, MessageCircle } from "lucide-react";
+
+An agent runs fine as a plain library call. When you want it reachable from Slack, WhatsApp, GitHub, a cron schedule or your own frontend, wrap it in a **host**. One `host()` call gives you:
+
+- webhooks for each channel at `/channels/<name>/events`
+- cron schedules
+- a typed HTTP API with streaming (`/v1/...`)
+- crash recovery: messages are stored before they are acknowledged, and a restart picks up where it stopped
+
+## Define a host
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { secret, sqlite } from "@threads/core";
+import { host } from "@threads/host";
+import { slack } from "@threads/slack";
+
+export default host({
+  store: sqlite(".threads"),
+  agents: { support },
+  channels: {
+    slack: slack({
+      agent: "support",
+      signingSecret: secret("SLACK_SIGNING_SECRET"),
+      botToken: secret("SLACK_BOT_TOKEN"),
+    }),
+  },
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads import secret, sqlite
+from threads.host import host
+from threads.slack import slack
+
+app = host(
+    store=sqlite(".threads"),
+    agents={"support": support},
+    channels={
+        "slack": slack(
+            agent="support",
+            signing_secret=secret("SLACK_SIGNING_SECRET"),
+            bot_token=secret("SLACK_BOT_TOKEN"),
+        ),
+    },
+)
+```
+
+</Tab>
+</Tabs>
+
+`support` is any agent made with `agent()`. Its key in `agents` is the name that channels, schedules and the HTTP API use to reach it.
+
+## Options
+
+<Field name="store" type="Store" required>
+  Where every thread's log lives. `sqlite(".threads")` is a directory on disk. Use `sqlite(":memory:")` in tests.
+</Field>
+
+<Field name="agents" type="Record<string, Agent>" required>
+  The agents this host serves, by name.
+</Field>
+
+<Field name="channels" type="Record<string, ChannelAdapter>">
+  Chat channels by name. Each one gets a webhook at `/channels/<name>/events`. See [Slack](/docs/host/slack), [WhatsApp](/docs/host/whatsapp) and [GitHub](/docs/host/github).
+</Field>
+
+<Field name="schedules" type="Schedule[]">
+  Cron schedules that start runs. See [Schedules](/docs/host/schedules).
+</Field>
+
+<Field name="authenticate" type="(request) => Principal | null">
+  Maps an HTTP API request to a caller. Without it, every `/v1` route answers `401`. Channel webhooks don't use it; they are verified with each provider's signing secret. See [HTTP API](/docs/host/http-api).
+</Field>
+
+<Field name="ceiling" type="Permissions">
+  A permissions ceiling every run on this host is also decided under, on top of each agent's own rules. See [Permissions & approvals](/docs/control/permissions).
+</Field>
+
+<Callout>
+  In TypeScript `ceiling` takes a partial policy, for example `{ deny: ["bash"] }`. In Python it is a complete `Permissions` value from `threads.log`.
+</Callout>
+
+## Secrets
+
+`secret("NAME")` is a reference to an environment variable, not its value. The host reads the value only when it needs it (to verify a webhook or send a reply), so tokens never end up in the log, a prompt or a sandbox. `ready()` fails with `missing_secret` if a channel's secret is not set, so you find out at startup, not on the first message.
+
+## Run it
+
+The quickest way is the CLI, which loads your host module and serves it:
+
+```bash
+threads dev
+```
+
+It prints each channel's webhook URL to paste into the provider's settings:
+
+```text
+threads: dev listening on http://localhost:8787
+  slack: http://localhost:8787/channels/slack/events
+```
+
+See [CLI](/docs/production/cli) for the module each language looks for, and [Deploying the host](/docs/production/deploying) for production.
+
+## Mount it in your own server
+
+A host is also an ordinary request handler, so you can mount it next to your existing routes.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+  <Tab value="TypeScript">
+    `host().fetch` takes a web `Request` and returns a `Response`, so it works in Bun, Next.js, Hono or anything fetch-based.
+
+    ```ts
+    const server = Bun.serve({ port: 8787, fetch: app.fetch });
+
+    // Next.js App Router: app/api/[...threads]/route.ts
+    export const GET = (request: Request): Promise<Response> => app.fetch(request);
+    export const POST = (request: Request): Promise<Response> => app.fetch(request);
+    ```
+
+    Call `await app.ready()` once at startup and `await app.stop()` on shutdown. A host also supports `await using`, which calls `stop()` for you.
+  </Tab>
+  <Tab value="Python">
+    `app.asgi` is an ASGI app (Starlette). Install the `host` extra and serve it with any ASGI server:
+
+    ```bash
+    uvicorn main:asgi
+    ```
+
+    ```python
+    asgi = app.asgi
+    ```
+
+    Served this way, `ready()` and `stop()` run in the app's lifespan. If you drive the host yourself, use it as an async context manager:
+
+    ```python
+    async with host(store=sqlite(".threads"), agents={"support": support}) as running:
+        print(running.channels)
+    ```
+  </Tab>
+</Tabs>
+
+## Lifecycle
+
+| Call | What it does |
+|---|---|
+| `host({...})` | Builds the host. Starts nothing. |
+| `ready()` | Checks every channel and schedule points at a host agent and every secret resolves. Starts the scheduler and resumes work a restart left behind. Sends nothing by itself. |
+| `stop()` | Finishes in-flight work and releases the threads this process owns. |
+
+## How channel conversations map to threads
+
+Each conversation gets its own thread: a Slack channel or Slack thread, a WhatsApp sender, a GitHub issue or pull request. A new message continues that thread. If the agent is still busy, the message waits in a durable inbox and is picked up when the current run ends.
+
+The agent's reply is sent back to the same conversation. Replies are recorded before they are sent, so a crash never sends a reply twice; if the host can't tell whether a reply went out, it checks with the provider or holds it for a person instead of guessing.
+
+When a tool needs approval, the channel shows an approval card (buttons in Slack and WhatsApp, an `/approve` reply on GitHub). See [Human-in-the-loop](/docs/control/human-in-the-loop).
+
+<Cards>
+  <Card title="Slack" icon={<Hash />} href="/docs/host/slack" />
+  <Card title="WhatsApp" icon={<MessageCircle />} href="/docs/host/whatsapp" />
+  <Card title="GitHub" icon={<GitPullRequest />} href="/docs/host/github" />
+</Cards>

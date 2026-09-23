@@ -1,0 +1,24 @@
+---
+title: "LookupCapability"
+description: "Declared per lookup operation and verified by the provider conformance suite."
+icon: "Braces"
+---
+
+none: no lookup for this operation. nonfinal: lookup can find it but never proves absence. final: lookup may answer not_found as final.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+type LookupCapability = "none" | "nonfinal" | "final";
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+type LookupCapability = Literal["none", "nonfinal", "final"]
+```
+
+</Tab>
+</Tabs>

@@ -1,0 +1,23 @@
+{
+  "title": "HTTP API",
+  "description": "Host routes",
+  "icon": "Globe",
+  "root": true,
+  "pages": [
+    "index",
+    "start-run",
+    "subscribe-run",
+    "get-timeline",
+    "list-branches",
+    "list-fork-points",
+    "fork",
+    "list-approvals",
+    "decide-approval",
+    "resolve-parked",
+    "cancel",
+    "set-model",
+    "set-mode",
+    "channel-challenge",
+    "channel-webhook"
+  ]
+}

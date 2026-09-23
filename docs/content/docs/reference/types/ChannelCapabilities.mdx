@@ -1,0 +1,23 @@
+---
+title: "ChannelCapabilities"
+description: "The ChannelCapabilities type."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="lookup" type={"LookupCapability"} required>
+  Delivery lookup by effect key.
+</Field>
+
+<Field name="buttons" type={"boolean"} required />
+
+<Field name="edits" type={"boolean"} required />
+
+<Field name="files" type={"boolean"} required />
+
+<Field name="direct_messages" type={"boolean"} required />
+
+<Field name="dedup_window_ms" type={"PosInt"} />
+
+<Field name="delivery" type={"\"reliable\" | \"best_effort\""} />

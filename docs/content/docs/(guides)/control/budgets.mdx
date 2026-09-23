@@ -1,0 +1,150 @@
+---
+title: Budgets
+description: Cap tokens, requests, turns, time and money for a thread and everything it starts.
+icon: Wallet
+---
+
+import { Cpu, Network } from "lucide-react";
+
+A budget stops an agent before it spends more than you allow. It is checked before every model request, and it covers the thread and every subagent and handoff target under it, so one runaway worker can't blow through the limit.
+
+## Set a budget
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const looper = agent({
+  model: scriptedModel({ responses: [use("lookup", { q: "a" }, "c1"), use("lookup", { q: "b" }, "c2")] }),
+  tools: [lookup],
+  budget: { max_model_requests: 2 },
+});
+
+const result = await looper.run("Find it.", { store: sqlite(":memory:") });
+if (result.status === "budget_exhausted") {
+  const { limit, limit_value, observed, scope } = result.budget;
+  console.log(scope, limit, limit_value, observed); // thread max_model_requests 2 3
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+looper = agent(
+    model=scripted_model({"responses": [use("lookup", {"q": "a"}, "c1"), use("lookup", {"q": "b"}, "c2")]}),
+    tools=[lookup],
+    budget=Budget(max_model_requests=2),
+)
+
+result = await looper.run("Find it.", store=sqlite(":memory:"), deps=None)
+if isinstance(result, BudgetExhausted):
+    b = result.budget
+    print(b.scope, b.limit, b.limit_value, b.observed)  # thread max_model_requests 2 3
+```
+
+</Tab>
+</Tabs>
+
+In Python, `Budget` and `Price` come from `threads.log`. Set at least one limit:
+
+| Limit | What it counts |
+|---|---|
+| `max_model_requests` | Model requests |
+| `max_turns` | Turns (one per input the agent answers) |
+| `max_input_tokens` | Input tokens sent |
+| `max_output_tokens` | Output tokens received |
+| `max_cost_nanos` | Spend, in billionths of your currency unit (USD 2 = `2_000_000_000`) |
+| `max_wall_ms` | Elapsed time |
+
+## When a budget runs out
+
+The request that would cross the limit is never sent. The turn ends and `run` returns `budget_exhausted` with the details:
+
+- `limit`, `limit_value` and `observed`: which limit, its value, and what the next request would have reached.
+- `scope`: `thread` (the agent's own budget), `run` (a per-run budget) or `ancestor` (a budget of a parent thread, named by `owner_thread_id`).
+- `observed_is_upper_bound`: `true` when some usage was unknown and counted at its worst case.
+
+## Where budgets apply
+
+- **Agent budget** (`budget` on `agent`): covers the thread for its whole life.
+- **Run budget** (`budget` on `run`): covers that run and everything it starts.
+- **Subagent budget** (`budget` on the subagent's `agent`): a tighter limit for that worker alone. When it runs out, the subagent ends with `budget_exhausted` and the parent carries on with that result.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+// Per run: covers this run and everything it starts.
+const again = await looper.run("Try once more.", {
+  store: sqlite(":memory:"),
+  budget: { max_turns: 1, max_wall_ms: 60_000 },
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+per_run = await agent(model=scripted_model({"responses": [say("done")]})).run("Again.", store=sqlite(":memory:"), budget=Budget(max_turns=1, max_wall_ms=60_000))
+```
+
+</Tab>
+</Tabs>
+
+A parent's budget counts its subagents' usage too. If the tree as a whole crosses the parent's limit, the subagent is stopped with scope `ancestor`, and the parent's own next request is refused as well.
+
+## Cost limits need a price
+
+threads reserves each request's worst case before sending it, so it needs to know what a request can cost. Give the model factory its `price` (per token, in billionths of the currency unit: USD 3 per million tokens is `3000`):
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+// A cost limit needs the model's price (nano-units per token: USD 3 per million tokens = 3000).
+const priced = anthropic({
+  model: "claude-sonnet-5",
+  maxTokens: 8192,
+  contextWindow: 200_000,
+  maxOutputTokens: 8192,
+  price: { input: 3000, output: 15000 },
+});
+const capped = agent({ model: priced, budget: { max_cost_nanos: 2_000_000_000 } }); // USD 2
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+# A cost limit needs the model's price (nano-units per token: USD 3 per million tokens = 3000).
+priced = anthropic(
+    "claude-sonnet-5",
+    context_window=200_000,
+    max_output_tokens=8192,
+    price=Price(input=3000, output=15000),
+)
+capped = agent(model=priced, budget=Budget(max_cost_nanos=2_000_000_000))  # USD 2
+```
+
+</Tab>
+</Tabs>
+
+`Price` also takes optional `cache_read` and `cache_write` rates.
+
+A limit the model can't bound is refused at setup with the error code `budget_unenforceable`, rather than silently not enforced. Set `max_cost_nanos` without a price and you get this error. In TypeScript it surfaces from `check()` or the first `run`; in Python, `agent()` raises `ConfigError`.
+
+<Callout>
+  **Python only:** `on_unknown_usage="stop"` on `agent()` moves this refusal from setup to run time, so the agent can be created. TypeScript has no such option yet.
+</Callout>
+
+## Related
+
+<Cards>
+  <Card title="Subagents" icon={<Network />} href="/docs/multi-agent/subagents">
+    How budgets cover the agents a parent starts.
+  </Card>
+  <Card title="Models" icon={<Cpu />} href="/docs/agents/models">
+    Model factory options, including `price`.
+  </Card>
+</Cards>

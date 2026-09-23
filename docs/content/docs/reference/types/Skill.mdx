@@ -1,0 +1,15 @@
+---
+title: "Skill"
+description: "Loaded from the host config store, pinned by hash."
+icon: "Braces"
+---
+
+Files in the sandbox are never skills, and no agent path writes config: the self-config guard denies every non-read-only call with an argument word holding a .threads path segment.
+
+## Fields
+
+<Field name="name" type={"Name"} required />
+
+<Field name="description" type={"string"} required />
+
+<Field name="body" type={"string"} required />

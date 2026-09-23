@@ -1,0 +1,57 @@
+---
+title: "RunResult"
+description: "The HTTP form is host-api RunOutcome (ids instead of handles)."
+icon: "Braces"
+---
+
+In TypeScript, thread is a ThreadRef (id, branch, store): pass it to openThread for the full Thread handle. In Python it is the Thread handle.
+
+A union discriminated by `status`.
+
+### completed
+
+<Field name="status" type={"\"completed\""} required />
+
+<Field name="output" type={"Output"} required />
+
+<Field name="thread" type={"Thread"} required />
+
+### parked
+
+<Field name="status" type={"\"parked\""} required />
+
+<Field name="reason" type={"ParkedEvent.data.reason"} required />
+
+<Field name="pending" type={"readonly ParkAddress[]"} required />
+
+<Field name="thread" type={"Thread"} required />
+
+### cancelled
+
+<Field name="status" type={"\"cancelled\""} required />
+
+<Field name="thread" type={"Thread"} required />
+
+### failed
+
+<Field name="status" type={"\"failed\""} required />
+
+<Field name="error" type={"{ code: RunErrorCode; message: string }"} required />
+
+<Field name="thread" type={"Thread"} required />
+
+### budget_exhausted
+
+<Field name="status" type={"\"budget_exhausted\""} required />
+
+<Field name="budget" type={"BudgetExceededEvent.data"} required />
+
+<Field name="thread" type={"Thread"} required />
+
+### handed_off
+
+<Field name="status" type={"\"handed_off\""} required />
+
+<Field name="thread" type={"Thread"} required />
+
+<Field name="toThread / to_thread" type={"Thread"} required />

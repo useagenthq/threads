@@ -1,0 +1,44 @@
+---
+title: "SearchBackend"
+description: "A web_search backend adapter (Exa, Brave, Tavily)."
+icon: "Plug"
+---
+
+<Callout>A protocol: adapters implement it.</Callout>
+
+## Methods
+
+### search
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+search(query: string, options?: {
+  allowedDomains?: readonly string[];
+  blockedDomains?: readonly string[];
+}): Promise<Result<readonly SearchHit[]>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def search(
+    query: str,
+    *,
+    allowed_domains: Sequence[str] | None = None,
+    blocked_domains: Sequence[str] | None = None,
+) -> Ok[Sequence[SearchHit]] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="query" type={"string"} required />
+
+<Field name="allowedDomains / allowed_domains" type={"readonly string[]"} />
+
+<Field name="blockedDomains / blocked_domains" type={"readonly string[]"} />
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`.

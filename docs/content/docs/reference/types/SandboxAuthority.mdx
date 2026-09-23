@@ -1,0 +1,31 @@
+---
+title: "SandboxAuthority"
+description: "Who may dispatch a provider operation."
+icon: "Braces"
+---
+
+owner: the owning branch's current lease holder at epoch (fence checks the writer lease). cleanup: gc, which holds no branch lease and keeps working after the owning branch is deleted; fence checks that the resources row (tenant-scoped) still carries this claim and is still collectable: releasing, release_failed, or live past its provider expiry. A later claim supersedes an earlier one, so of two concurrent gc runs only the latest claim holder dispatches.
+
+A union discriminated by `kind`.
+
+### owner
+
+<Field name="kind" type={"\"owner\""} required />
+
+<Field name="branch_id" type={"BranchId"} required>
+  The branch that owns the resource (its resource-ledger owner).
+</Field>
+
+<Field name="epoch" type={"number"} required>
+  The owner's lease epoch this operation is dispatched under.
+</Field>
+
+### cleanup
+
+<Field name="kind" type={"\"cleanup\""} required />
+
+<Field name="resource_id" type={"string"} required />
+
+<Field name="claim" type={"string"} required>
+  The cleanup claim token gc wrote on the resources row (cleanup_claim) by compare-and-set.
+</Field>

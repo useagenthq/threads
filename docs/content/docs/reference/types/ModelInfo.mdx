@@ -1,0 +1,27 @@
+---
+title: "ModelInfo"
+description: "The ModelInfo type."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="model" type={"ModelRef"} required />
+
+<Field name="adapter" type={"AdapterRef"} required />
+
+<Field name="params" type={"JsonObject"} required />
+
+<Field name="limits" type={"Policy.models.items"} required>
+  Window, output cap, billing bound and price.
+</Field>
+
+<Field name="accepts" type={"readonly (\"text\" | \"image_ref\" | \"document_ref\" | \"audio_ref\")[]"} required>
+  Input parts it accepts; others fail pre-dispatch with content_unsupported.
+</Field>
+
+<Field name="hosted_tools" type={"readonly string[]"} />
+
+<Field name="lookup" type={"LookupCapability"} required>
+  Response lookup by client request id.
+</Field>

@@ -1,0 +1,115 @@
+---
+title: Teams
+description: A lead agent and its subagents coordinate through a shared task list and messages.
+icon: Users
+---
+
+import { History, Network } from "lucide-react";
+
+Any agent with `subagents` leads a team. The lead and every subagent it starts share one task list and one mailbox, so work can be split up, claimed, and reported on without the lead relaying every detail. There is nothing extra to configure: the team tools come with `subagents`.
+
+## The team tools
+
+| Tool | Who has it | What it does |
+|---|---|---|
+| `team_task_create` | lead and members | Adds a task (`subject`, optional `description`, optional `blocked_by` task ids). Returns the new task id. |
+| `team_task_claim` | lead and members | Claims an open task whose blockers are all completed. Only one member can win a claim. |
+| `team_task_update` | lead and members | Marks a task you claimed `completed` or `failed`, or `released` to put it back in the pool. |
+| `send_message` | lead and members | Sends `text` to a member by agent name, or to `*` for everyone. |
+| `spawn_agent` | lead | Starts a member. See [Subagents](/docs/multi-agent/subagents). |
+
+A member is identified by its agent name. A message arrives as reference material just before the recipient's next model call, prefixed with the sender's name, and is delivered once.
+
+## Example
+
+The lead creates a task and starts a writer. The writer claims the task, finishes it and tells the lead.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const writer = agent({
+  name: "writer",
+  instructions: "Claim an open task, do it, then mark it completed.",
+  model: scriptedModel({
+    responses: [
+      use("team_task_claim", { task_id: "lead/t1" }, "w1"),
+      use("team_task_update", { task_id: "lead/t1", status: "completed" }, "w2"),
+      use("send_message", { to: "lead", text: "Draft is ready." }, "w3"),
+      say("Done."),
+    ],
+  }),
+});
+
+const lead = agent({
+  name: "lead",
+  instructions: "Plan the work as team tasks, then start your team.",
+  model: scriptedModel({
+    responses: [
+      use("team_task_create", { subject: "Write the release notes" }, "t1"),
+      use("spawn_agent", { agent: "writer", prompt: "Pick up the open task." }, "s1"),
+      say("The release notes are drafted."),
+    ],
+  }),
+  subagents: [writer],
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+writer = agent(
+    name="writer",
+    instructions="Claim an open task, do it, then mark it completed.",
+    model=scripted_model({
+        "responses": [
+            use("team_task_claim", {"task_id": "lead/t1"}, "w1"),
+            use("team_task_update", {"task_id": "lead/t1", "status": "completed"}, "w2"),
+            use("send_message", {"to": "lead", "text": "Draft is ready."}, "w3"),
+            say("Done."),
+        ]
+    }),
+)
+
+team_lead = agent(
+    name="lead",
+    instructions="Plan the work as team tasks, then start your team.",
+    model=scripted_model({
+        "responses": [
+            use("team_task_create", {"subject": "Write the release notes"}, "t1"),
+            use("spawn_agent", {"agent": "writer", "prompt": "Pick up the open task."}, "s1"),
+            say("The release notes are drafted."),
+        ]
+    }),
+    subagents=[writer],
+)
+```
+
+</Tab>
+</Tabs>
+
+The scripted model plays the calls a real model would make. With a real model, the task id (`lead/t1` here) comes back as the result of `team_task_create`.
+
+## How it behaves
+
+- **The lead's thread holds the team.** Tasks, claims and messages are recorded in the lead's log, so you can see who did what in the lead's [timeline](/docs/evals/timeline).
+- **Claims are atomic.** Two members racing for one task: one wins, the other gets an error it can act on.
+- **Blockers are respected.** A task with `blocked_by` can't be claimed until every blocker is completed.
+- **Safe to retry.** If a member's process restarts and repeats a call, it gets the same answer. Nothing is claimed or sent twice.
+- **Run members in parallel** by starting them with `background: true`. The lead's run returns once all of them have finished.
+
+<Callout>
+  There is no API to read the task list directly today. It lives in the lead's log as `team_task_*` and `team_message` events.
+</Callout>
+
+## Related
+
+<Cards>
+  <Card title="Subagents" icon={<Network />} href="/docs/multi-agent/subagents">
+    How members start, what they may do, and how they report back.
+  </Card>
+  <Card title="Timeline" icon={<History />} href="/docs/evals/timeline">
+    Read everything the team recorded, step by step.
+  </Card>
+</Cards>

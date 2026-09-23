@@ -1,0 +1,73 @@
+---
+title: "extension"
+description: "The one extension primitive: tools, trusted instructions and hooks."
+icon: "SquareFunction"
+---
+
+Trusted host code, not a security boundary.
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function extension(options: {
+  name: Name;
+  tools?: readonly (Tool | McpServer)[];
+  instructions?: string;
+  hooks?: Hooks<Deps>;
+  on?: Record<string, (event: Event) => Promise<void>>;
+  setup?: () => Promise<void>;
+  hookTimeoutMs?: PosInt;
+}): Extension<Deps>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def extension(
+    *,
+    name: Name,
+    tools: Sequence[Tool | McpServer] = (),
+    instructions: str = "",
+    hooks: Hooks[Deps] = {},
+    on: Mapping[str, Callable[[Event], Awaitable[None]]] = {},
+    setup: Callable[[], Awaitable[None]] | None = None,
+    hook_timeout_ms: PosInt = 5000,
+) -> Extension[Deps]
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="name" type={"Name"} required>
+  Unique; tools are namespaced &lt;ext>__&lt;tool>.
+</Field>
+
+<Field name="tools" type={"readonly (Tool | McpServer)[]"} />
+
+<Field name="instructions" type={"string"} default={""}>
+  Static; goes into the system prompt after the base instructions.
+</Field>
+
+<Field name="hooks" type={"Hooks<Deps>"}>
+  See [Hooks](/docs/reference/types/Hooks).
+</Field>
+
+<Field name="on" type={"Record<string, (event: Event) => Promise<void>>"}>
+  Observers keyed by event type, or "*". Committed events, delivered after append; can't block or change execution.
+</Field>
+
+<Field name="setup" type={"() => Promise<void>"}>
+  Runs once at check() or first run. Throwing is a ConfigError.
+</Field>
+
+<Field name="hookTimeoutMs / hook_timeout_ms" type={"PosInt"} default={"5000"} />
+
+## Returns
+
+[`Extension<Deps>`](/docs/reference/types/Extension)

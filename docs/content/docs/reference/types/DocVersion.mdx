@@ -1,0 +1,17 @@
+---
+title: "DocVersion"
+description: "The DocVersion type."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="doc_id" type={"string"} required />
+
+<Field name="version" type={"string"} required />
+
+<Field name="content_sha256" type={"Sha256"} required />
+
+<Field name="revision" type={"number"} required>
+  The store's monotonic revision after this ingest.
+</Field>

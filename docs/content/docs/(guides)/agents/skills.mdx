@@ -1,0 +1,74 @@
+---
+title: Skills
+description: Give an agent detailed playbooks it loads only when it needs them, so the prompt stays small.
+icon: Sparkles
+---
+
+A skill is a named set of instructions. The agent's system prompt lists every skill's name and one-line description; the full body is loaded only when the model calls `load_skill`. You can give an agent dozens of playbooks without paying for them on every request.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const releaseNotes: Skill = {
+  name: "release_notes",
+  description: "How we write and publish release notes.",
+  body: await readFile("./skills/release-notes.md", "utf8"),
+};
+
+const writer = agent({
+  instructions: "You help the team ship releases.",
+  model,
+  skills: [releaseNotes],
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+release_notes = Skill(
+    name="release_notes",
+    description="How we write and publish release notes.",
+    body=Path("skills/release-notes.md").read_text(),
+)
+
+writer = agent(
+    instructions="You help the team ship releases.",
+    model=model,
+    skills=[release_notes],
+)
+```
+
+</Tab>
+</Tabs>
+
+| Field | Rules |
+|---|---|
+| `name` | Lowercase letters, digits and underscores, starting with a letter. Unique within the agent |
+| `description` | One non-empty line. The model uses it to decide when to load the skill |
+| `body` | Any text, usually Markdown |
+
+## How loading works
+
+<Steps>
+  <Step>
+    ### Listed
+
+    The system prompt says "Skills you can load with load_skill:" followed by each name and description.
+  </Step>
+  <Step>
+    ### Loaded
+
+    The model calls `load_skill` with a name. The body is added to the conversation as trusted instructions.
+  </Step>
+  <Step>
+    ### Kept
+
+    A loaded skill survives compaction: when a long thread is summarized, loaded skills are restored.
+  </Step>
+</Steps>
+
+## Skills come only from your code
+
+Only the skills you pass to `agent()` exist. A skill-shaped file inside the sandbox or a cloned repo is just data and never loads as a skill, and the agent can't write its own skills or config. Each skill is pinned by hash when a thread starts, and a loaded body is recorded in the log with its hash, so you can always see which version the agent followed.

@@ -1,0 +1,215 @@
+---
+title: "ChannelAdapter"
+description: "What a channel adapter (slack(), whatsapp(), github()) returns."
+icon: "Plug"
+---
+
+verify, parse, ack and render are pure.
+
+<Callout>A protocol: adapters implement it.</Callout>
+
+## Properties
+
+<Field name="agent" type={"string"} required>
+  The host agent key this channel routes to.
+</Field>
+
+<Field name="capabilities" type={"ChannelCapabilities"} required />
+
+<Field name="limits" type={"Record<string, number>"} required>
+  Provider limits (message bytes, rate).
+</Field>
+
+<Field name="secrets" type={"Record<string, Secret>"} required>
+  The credentials perform needs, by name. The host resolves them at ready() (missing_secret) and passes their values as perform's credentials; they never reach a sandbox, the log or a prompt.
+</Field>
+
+## Methods
+
+### verify
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+verify(raw: RawRequest): Result<VerifiedDelivery>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def verify(
+    raw: RawRequest,
+) -> Ok[VerifiedDelivery] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="raw" type={"RawRequest"} required>
+  See [RawRequest](/docs/reference/types/RawRequest).
+</Field>
+
+**Returns an error value** with one of these codes: `unverified`.
+
+### parse
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+parse(raw: RawRequest): Result<readonly Inbound[]>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def parse(
+    raw: RawRequest,
+) -> Ok[Sequence[Inbound]] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="raw" type={"RawRequest"} required>
+  See [RawRequest](/docs/reference/types/RawRequest).
+</Field>
+
+**Returns an error value** with one of these codes: `invalid`.
+
+### ack
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+ack(raw: RawRequest): RawResponse
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def ack(
+    raw: RawRequest,
+) -> RawResponse
+```
+
+</Tab>
+</Tabs>
+
+<Field name="raw" type={"RawRequest"} required>
+  See [RawRequest](/docs/reference/types/RawRequest).
+</Field>
+
+### challenge
+
+A provider's GET subscription check on the webhook URL (WhatsApp hub.mode/hub.verify_token/hub.challenge). Pure: compares the token with the adapter's secret in constant time. unverified answers 401 and nothing is stored.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+challenge(query: Record<string, string>): Result<RawResponse>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def challenge(
+    query: Mapping[str, str],
+) -> Ok[RawResponse] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="query" type={"Record<string, string>"} required />
+
+**Returns an error value** with one of these codes: `unverified`.
+
+### render
+
+Outbound ops (adapter-defined JSON).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+render(event: Event): readonly JsonObject[]
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def render(
+    event: Event,
+) -> Sequence[JsonObject]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="event" type={"Event"} required />
+
+### perform
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+perform(op: JsonObject, effectKey: string, credentials: Record<string, string>): Promise<DeliveryOutcome>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def perform(
+    op: JsonObject,
+    effect_key: str,
+    credentials: Mapping[str, str],
+) -> DeliveryOutcome
+```
+
+</Tab>
+</Tabs>
+
+<Field name="op" type={"JsonObject"} required />
+
+<Field name="effectKey / effect_key" type={"string"} required />
+
+<Field name="credentials" type={"Record<string, string>"} required />
+
+### lookup
+
+found carries the platform_ref. op is the op perform was given for this key (from its recorded tool_call), since a platform lookup is scoped to its conversation.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+lookup(effectKey: string, op: JsonObject): Promise<LookupResult<string>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def lookup(
+    effect_key: str,
+    op: JsonObject,
+) -> LookupResult[str]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="effectKey / effect_key" type={"string"} required />
+
+<Field name="op" type={"JsonObject"} required />

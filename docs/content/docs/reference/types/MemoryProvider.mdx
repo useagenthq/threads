@@ -1,0 +1,121 @@
+---
+title: "MemoryProvider"
+description: "The MemoryProvider type."
+icon: "Plug"
+---
+
+<Callout>A protocol: adapters implement it.</Callout>
+
+## Properties
+
+<Field name="writeEffect / write_effect" type={"EffectClass"}>
+  The effect class of save_memory and forget_memory with this provider. Absent: unguarded. idempotent requires dedup_window_ms: the provider dedups on the key within it.
+</Field>
+
+<Field name="dedupWindowMs / dedup_window_ms" type={"PosInt"} />
+
+## Methods
+
+### remember
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+remember(scope: Scope, record: MemoryRecord, key: string): Promise<Result<RecordRef>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def remember(
+    scope: Scope,
+    record: MemoryRecord,
+    key: str,
+) -> Ok[RecordRef] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="scope" type={"Scope"} required>
+  See [Scope](/docs/reference/types/Scope).
+</Field>
+
+<Field name="record" type={"MemoryRecord"} required>
+  See [MemoryRecord](/docs/reference/types/MemoryRecord).
+</Field>
+
+<Field name="key" type={"string"} required />
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
+
+### recall
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+recall(scope: Scope, query: string, options?: {
+  k?: PosInt;
+}): Promise<Result<readonly MemoryHit[]>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def recall(
+    scope: Scope,
+    query: str,
+    *,
+    k: PosInt = 5,
+) -> Ok[Sequence[MemoryHit]] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="scope" type={"Scope"} required>
+  See [Scope](/docs/reference/types/Scope).
+</Field>
+
+<Field name="query" type={"string"} required />
+
+<Field name="k" type={"PosInt"} default={"5"} />
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.
+
+### forget
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+forget(scope: Scope, id: string, key: string): Promise<Result<void>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def forget(
+    scope: Scope,
+    id: str,
+    key: str,
+) -> Ok[None] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="scope" type={"Scope"} required>
+  See [Scope](/docs/reference/types/Scope).
+</Field>
+
+<Field name="id" type={"string"} required />
+
+<Field name="key" type={"string"} required />
+
+**Returns an error value** with one of these codes: `unavailable`, `timeout`, `invalid`, `scope_violation`.

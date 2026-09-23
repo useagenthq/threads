@@ -1,0 +1,97 @@
+---
+title: "ModelContext"
+description: "What the loop hands an adapter for one send or lookup: the fencing pair it re-checks at its real send point, and artifact access, since the rendered request carries refs, not bytes."
+icon: "Plug"
+---
+
+Bound to the writer that created it: fence, read and put always act for that branch_id and epoch, and nothing on it selects another.
+
+<Callout>A protocol: adapters implement it.</Callout>
+
+## Properties
+
+<Field name="branchId / branch_id" type={"BranchId"} required />
+
+<Field name="epoch" type={"number"} required>
+  The lease epoch this attempt is dispatched under.
+</Field>
+
+## Methods
+
+### fence
+
+Re-checks that the dispatching writer still holds the branch lease at epoch. A failure means send nothing.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+fence(): Promise<Result<void>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def fence() -> Ok[None] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+**Returns an error value** with one of these codes: `stale_epoch`.
+
+### read
+
+The verified bytes (sha256 and length checked) of an artifact the rendered request references.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+read(ref: ArtifactRef): Promise<Result<Uint8Array>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def read(
+    ref: ArtifactRef,
+) -> Ok[bytes] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="ref" type={"ArtifactRef"} required />
+
+**Returns an error value** with one of these codes: `artifact_missing`, `artifact_corrupt`.
+
+### put
+
+Stores exact provider bytes (reasoning, hosted tool blocks) and returns their ref once durable, so a part may name it.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+put(data: Uint8Array, mediaType: string): Promise<ArtifactRef>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def put(
+    data: bytes,
+    media_type: str,
+) -> ArtifactRef
+```
+
+</Tab>
+</Tabs>
+
+<Field name="data" type={"Uint8Array"} required />
+
+<Field name="mediaType / media_type" type={"string"} required />
