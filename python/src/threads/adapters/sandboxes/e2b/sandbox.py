@@ -4,12 +4,12 @@ What it declares, and why:
 - create: tagged with its operation key in sandbox metadata, found again by a metadata query.
   A create that passed its fence may still be in flight when the query runs, so a miss is
   never final (lookup.create nonfinal).
-- snapshots: E2B's snapshot pauses the whole VM and captures memory and disk (full_vm); it
-  lives until deleted (expires_at null). Refused while envd runs a process threads started.
-  Its record carries no manifest hash, so a lost snapshot answer can't be rebuilt from a
-  lookup (lookup.snapshot none: the row parks for an operator).
-- restore creates a sandbox from the snapshot and verifies the /workspace manifest; on a
-  mismatch it kills the child first.
+- no snapshots (capture_classes empty; restore answers snapshot_missing before any call).
+  E2B's snapshot pauses the VM, but the manifest a snapshot returns must describe the
+  captured image, and nothing can be run inside that pause or against the
+  immutable image: a manifest taken before or after it can differ from what was captured
+  (a write A->B before, B->A after), and a restored memory image resumes the writer before
+  any check could run. Offering snapshots needs such a provider boundary, proven live.
 - termination unconfirmed: envd kills the process it started, not what that process detached.
 - egress enforced only with the internet off (the default); on, it is unenforced.
 - the sandbox dies on its own `lifetime_ms` after create (E2B's timeout): the declared expiry.
@@ -21,7 +21,6 @@ from typing import Literal
 from e2b.api import AsyncApiClient
 from e2b.connection_config import ConnectionConfig
 
-from threads.adapters.sandboxes import posix
 from threads.adapters.sandboxes.e2b.control import Control
 from threads.adapters.sandboxes.e2b.envd import Envd, Transports
 from threads.adapters.sandboxes.e2b.session import E2BSession, Owner, call
@@ -31,7 +30,6 @@ from threads.agents.config import ConfigError
 from threads.log import SnapshotData
 from threads.loop.model import Found, LookupResult, LookupUnknown, NotFoundNonfinal
 from threads.result import Err, Ok
-from threads.sandbox.manifest import manifest_hash as hash_of
 from threads.sandbox.protocol import (
     LookupSupport,
     SandboxContext,
@@ -39,7 +37,6 @@ from threads.sandbox.protocol import (
     SandboxId,
     SandboxInfo,
     SandboxSession,
-    is_refusal,
 )
 
 HOUR_MS = 3_600_000
@@ -67,7 +64,7 @@ class E2BSandbox:
         self._info = SandboxInfo(
             provider=name,
             egress="unenforced" if internet else "enforced",
-            capture_classes=("full_vm",),
+            capture_classes=(),
             browser="none",
             desktop="none",
             lookup=LookupSupport(create="nonfinal", snapshot="none"),
@@ -91,13 +88,7 @@ class E2BSandbox:
     async def restore(
         self, snapshot_id: str, manifest_hash: str, operation_key: str, context: SandboxContext
     ) -> Ok[SandboxSession] | Err[SandboxError]:
-        made = await self._create(snapshot_id, operation_key, context)
-        if isinstance(made, Err):
-            timed_out = made.error.code == "timeout"
-            return Err(SandboxError("unavailable", made.error.message) if timed_out else made.error)
-        if made.value is None:
-            return Err(SandboxError("snapshot_missing", f"E2B has no snapshot {snapshot_id}"))
-        return await verified(made.value, manifest_hash, context)
+        return Err(SandboxError("snapshot_missing", "e2b: this adapter takes no snapshots"))
 
     async def lookup(
         self, operation_key: str, context: SandboxContext
@@ -134,12 +125,7 @@ class E2BSandbox:
     async def release(
         self, ref: str, context: SandboxContext
     ) -> Ok[Literal["released", "already_gone"]] | Err[SandboxError]:
-        deleted = await call(context, lambda: self._owner.control.delete_snapshot(ref))
-        if isinstance(deleted, Err):
-            if is_refusal(deleted.error):
-                return deleted
-            return Err(SandboxError("release_failed", deleted.error.message))
-        return Ok("released" if deleted.value else "already_gone")
+        return Err(SandboxError("unavailable", f"e2b: this adapter takes no snapshots ({ref})"))
 
     async def _create(
         self, template: str, key: str, context: SandboxContext
@@ -161,26 +147,6 @@ class E2BSandbox:
         url = self._config.get_sandbox_url(described.sandbox_id, domain)
         envd = Envd(described, url, self._transports)
         return E2BSession(SandboxId(described.sandbox_id), envd, self._owner)
-
-
-async def verified(
-    child: E2BSession, manifest_hash: str, context: SandboxContext
-) -> Ok[SandboxSession] | Err[SandboxError]:
-    """The restored child, once its /workspace manifest hashes to `manifest_hash`. On a
-    mismatch the child is killed first; if that kill fails, the answer is unavailable so the
-    ledger finds the child by its key instead of calling it released."""
-    tree = await posix.manifest(child, context)
-    if isinstance(tree, Ok) and hash_of(tree.value) == manifest_hash:
-        return Ok(child)
-    if isinstance(tree, Err) and is_refusal(tree.error):
-        return tree
-    closed = await child.close(context)
-    if isinstance(closed, Err):
-        refused = is_refusal(closed.error)
-        return closed if refused else Err(SandboxError("unavailable", closed.error.message))
-    if isinstance(tree, Err):
-        return Err(SandboxError("snapshot_restore_failed", tree.error.message))
-    return Err(SandboxError("snapshot_manifest_mismatch", f"{child.id}: the restored tree differs"))
 
 
 def e2b(  # noqa: PLR0913 - the provider's settings

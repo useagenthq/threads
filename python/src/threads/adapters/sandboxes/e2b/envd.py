@@ -97,11 +97,6 @@ class Envd:
             raise
         return True
 
-    async def tags(self) -> list[str]:
-        """The tags of the processes envd started that are still running."""
-        listed = await self._rpc.list(process_pb.ListRequest(), headers=self._headers)
-        return [p.tag for p in listed.processes if p.has_field("tag")]
-
     async def upload(self, path: str, data: bytes) -> None:
         res = await self._files.post(
             ENVD_API_FILES_ROUTE,

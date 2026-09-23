@@ -83,9 +83,6 @@ def control(backend: FakeBackend) -> Handler:
                 return _v2(backend, request)
             case ["sandboxes", ident, *rest]:
                 return _sandbox_routes(backend, request, ident, rest)
-            case ["templates", ident] if request.method == "DELETE":
-                gone = backend.delete_snapshot(urllib.parse.unquote(ident))
-                return httpx.Response(204) if gone else _missing()
             case ["files"]:
                 return files(backend, request)
             case _:
@@ -117,10 +114,6 @@ def _sandbox_routes(
     box = backend.get(ident)
     if box is None:
         return _missing()
-    if rest == ["snapshots"]:
-        name = json.loads(request.content)["name"]
-        snap = backend.snapshot(box, name, frozen=True)
-        return _json(201, {"snapshotID": snap.id, "names": [name]})
     return _json(200, _sandbox(box, TEMPLATE))
 
 
@@ -177,16 +170,6 @@ class Processes(process_connect.Process):
             yield _response(Oneof(field="data", value=Event.DataEvent(output=err)))
         end = Event.EndEvent(exit_code=await proc.exit, exited=True)
         yield _response(Oneof(field="end", value=end))
-
-    async def list(
-        self,
-        request: process_pb.ListRequest,
-        ctx: RequestContext[process_pb.ListRequest, process_pb.ListResponse],
-    ) -> process_pb.ListResponse:
-        box = self._box(ctx.request_headers)
-        running = [t for t, p in box.processes.items() if p.running and not t.startswith("proc_")]
-        infos = [process_pb.ProcessInfo(pid=1, tag=t) for t in running]
-        return process_pb.ListResponse(processes=infos)
 
     async def send_signal(
         self,

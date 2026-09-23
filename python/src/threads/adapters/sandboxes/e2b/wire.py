@@ -22,10 +22,4 @@ class Listed(Wire):
     metadata: dict[str, JsonValue] | None = None
 
 
-class Snapshot(Wire):
-    snapshot_id: Annotated[str, Field(alias="snapshotID", min_length=1)]
-    names: list[str]
-
-
 LISTED: TypeAdapter[list[Listed]] = TypeAdapter(list[Listed])
-SNAPSHOTS: TypeAdapter[list[Snapshot]] = TypeAdapter(list[Snapshot])

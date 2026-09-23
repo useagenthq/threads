@@ -9,7 +9,7 @@ import httpx
 import pytest
 from corpus import CASES, cases
 from e2b_fake import API_KEY, adapter, control, make
-from fork_kit import assert_expected, run_case, script_of
+from fork_kit import assert_expected, assert_restore_refused, reaches_restore, run_case, script_of
 from sandbox_backend import FakeBackend
 from sandbox_contract import CHECKS, Check, run_check
 from sandbox_kit import OPEN, KitContext
@@ -41,7 +41,10 @@ def test_fork_case(name: str) -> None:
         backend = FakeBackend.scripted(script_of(case))
         async with make(backend, "fake") as sandbox:
             got = await run_case(case, sandbox, lambda: backend.creates)
-        assert_expected(name, got)
+        if reaches_restore(name):
+            assert_restore_refused(got)  # E2B declares no snapshots
+        else:
+            assert_expected(name, got)
 
     asyncio.run(main())
 

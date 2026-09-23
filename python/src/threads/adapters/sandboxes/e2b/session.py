@@ -1,5 +1,5 @@
 """One E2B sandbox (spec/api.json `SandboxSession`): exec, files and terminate through envd,
-snapshot and close through the control plane, every call fenced at its transport."""
+close through the control plane, every call fenced at its transport."""
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import httpx
 from connectrpc.code import Code
 from connectrpc.errors import ConnectError
-from pydantic import JsonValue, ValidationError
+from pydantic import ValidationError
 
 from threads.adapters.sandboxes import fence, posix
 from threads.adapters.sandboxes.e2b.control import ApiError, Control, MalformedError
@@ -16,7 +16,6 @@ from threads.adapters.sandboxes.streams import StreamLostError
 from threads.log import SnapshotData
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
-from threads.sandbox.manifest import manifest_hash
 from threads.sandbox.protocol import (
     NO_ENV,
     ExecOutput,
@@ -26,9 +25,6 @@ from threads.sandbox.protocol import (
     invalid_path,
     is_refusal,
 )
-
-SNAPSHOT_PREFIX = "threads-"
-
 
 _UNAVAILABLE = (
     ApiError,
@@ -123,34 +119,8 @@ class E2BSession:
     async def snapshot(
         self, operation_key: str, context: SandboxContext
     ) -> Ok[SnapshotData] | Err[SandboxError]:
-        """Refused while envd still runs a process threads started; otherwise the manifest,
-        then E2B's snapshot, which pauses the whole VM for the capture. A process a command
-        detached is not visible here: if it writes after the manifest, the restore's
-        verification refuses the snapshot rather than trust it."""
-        running = await call(context, self._envd.tags)
-        if isinstance(running, Err):
-            return running
-        if running.value:
-            return Err(SandboxError("not_quiescent", f"still running: {running.value}"))
-        tree = await posix.manifest(self, context)
-        if isinstance(tree, Err):
-            return tree
-        name = SNAPSHOT_PREFIX + operation_key
-        taken = await call(context, lambda: self._owner.control.snapshot(self._id, name))
-        if isinstance(taken, Err):
-            return taken
-        if taken.value is None:
-            return Err(SandboxError("unavailable", f"sandbox {self._id} is gone"))
-        data: dict[str, JsonValue] = {
-            "snapshot_id": taken.value.snapshot_id,
-            "provider": self._owner.provider,
-            "sandbox_id": self._id,
-            "capture_class": "full_vm",
-            "expires_at": None,
-            "manifest_hash": manifest_hash(tree.value),
-            "quiesced": {"frozen": [], "stopped": [], "excluded": []},
-        }
-        return Ok(SnapshotData.model_validate(data))
+        """Declared absent (sandbox.py, ): nothing reaches E2B."""
+        return Err(SandboxError("unavailable", "e2b: this adapter takes no snapshots"))
 
     async def close(self, context: SandboxContext) -> Ok[None] | Err[SandboxError]:
         """Kills the sandbox; one already gone is released too."""

@@ -1,6 +1,5 @@
-"""Live gate for the E2B adapter: real sandboxes, a real snapshot and restore (F11.1, brief
-step 1). Skipped unless THREADS_LIVE=1 and E2B_API_KEY are set; never part of the offline
-suite.
+"""Live gate for the E2B adapter: a real sandbox (exec, env, stdin, files). Skipped unless
+THREADS_LIVE=1 and E2B_API_KEY are set; never part of the offline suite.
 
     THREADS_LIVE=1 E2B_API_KEY=... uv run pytest -m live tests/adapters/sandboxes/test_live_e2b.py
 """
@@ -52,62 +51,5 @@ def test_exec_env_and_files() -> None:
             assert missing.error.code == "not_found"
         finally:
             assert await s.close(OPEN) == Ok(None)
-
-    _live(body)
-
-
-def test_a_snapshot_restores_verified_and_isolated() -> None:
-    async def body(sandbox: E2BSandbox) -> None:
-        parent = await _session(sandbox)
-        children: list[SandboxSession] = []
-        try:
-            assert await parent.upload("/workspace/a.txt", b"v1", OPEN) == Ok(None)
-            snap = await parent.snapshot(str(uuid.uuid4()), OPEN)
-            assert isinstance(snap, Ok), snap
-            ident, manifest = snap.value.snapshot_id, snap.value.manifest_hash
-            bad = await sandbox.restore(ident, "0" * 64, str(uuid.uuid4()), OPEN)
-            assert isinstance(bad, Err)
-            assert bad.error.code == "snapshot_manifest_mismatch"
-            child = await sandbox.restore(ident, manifest, str(uuid.uuid4()), OPEN)
-            assert isinstance(child, Ok), child
-            children.append(child.value)
-            assert await child.value.download("/workspace/a.txt", OPEN) == Ok(b"v1")
-            assert await child.value.upload("/workspace/a.txt", b"v2", OPEN) == Ok(None)
-            assert await parent.download("/workspace/a.txt", OPEN) == Ok(b"v1")
-            assert await sandbox.release(ident, OPEN) == Ok("released")
-        finally:
-            for s in (parent, *children):
-                assert await s.close(OPEN) == Ok(None)
-
-    _live(body)
-
-
-def test_a_detached_writer_never_yields_an_unverified_restore() -> None:
-    """E2B's pause is not assumed to settle what a command detached. A writer
-    that outlives its command either makes the restore fail verification or left the tree
-    as the manifest says; a restore never claims a tree it doesn't have."""
-
-    async def body(sandbox: E2BSandbox) -> None:
-        parent = await _session(sandbox)
-        children: list[SandboxSession] = []
-        try:
-            loop = "while :; do date +%s%N >> /workspace/tick; done > /dev/null 2>&1 &"
-            spawned = await parent.exec(["sh", "-c", loop], OPEN, process_key="bg")
-            assert isinstance(spawned, Ok), spawned
-            await collect(spawned.value)
-            snap = await parent.snapshot(str(uuid.uuid4()), OPEN)
-            assert isinstance(snap, Ok), snap
-            child = await sandbox.restore(
-                snap.value.snapshot_id, snap.value.manifest_hash, str(uuid.uuid4()), OPEN
-            )
-            if isinstance(child, Ok):
-                children.append(child.value)
-            else:
-                assert child.error.code == "snapshot_manifest_mismatch"
-            assert await parent.terminate("bg", OPEN) == Ok("unknown")
-            await sandbox.release(snap.value.snapshot_id, OPEN)
-        finally:
-            for s in (parent, *children):
-                assert await s.close(OPEN) == Ok(None)
 
     _live(body)

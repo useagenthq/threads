@@ -156,3 +156,22 @@ def assert_expected(name: str, got: Outcome) -> None:
         rows = resources["rows"]
         assert isinstance(rows, list)
         assert list(got.rows) == [(obj(r)["kind"], obj(r)["state"]) for r in rows]
+
+
+def reaches_restore(name: str) -> bool:
+    """Whether the case's fork reaches Sandbox.restore (it declares resources or a child)."""
+    expected = load(CASES / name, "expected.json")
+    return "resources" in expected or obj(expected["fork"])["child_created"] is True
+
+
+def assert_restore_refused(got: Outcome) -> None:
+    """For an adapter that declares no snapshots: the fork fails typed, snapshot_missing,
+    creates nothing, leaves no child and releases every row."""
+    assert got.error is not None
+    assert (got.error.code, got.child_created, got.parent_unchanged, got.creates) == (
+        "snapshot_missing",
+        False,
+        True,
+        0,
+    )
+    assert all(state == "released" for _, state in got.rows)

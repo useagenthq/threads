@@ -4,8 +4,8 @@ crash and takeover rules, the fork conformance cases, and what only Modal needs.
 import asyncio
 
 import pytest
-from corpus import CASES, cases, load, obj
-from fork_kit import assert_expected, run_case, script_of
+from corpus import CASES, cases
+from fork_kit import assert_expected, assert_restore_refused, reaches_restore, run_case, script_of
 from modal_fake import TOKEN_ID, TOKEN_SECRET, FakeModal, harness
 from sandbox_backend import FakeBackend
 from sandbox_contract import CHECKS, Check, run_check
@@ -28,12 +28,6 @@ def test_ledger(body: Body) -> None:
     asyncio.run(run_ledger(body, harness))
 
 
-def _restores(name: str) -> bool:
-    """Whether the case's fork reaches Sandbox.restore (it declares resources or a child)."""
-    expected = load(CASES / name, "expected.json")
-    return "resources" in expected or obj(expected["fork"])["child_created"] is True
-
-
 @pytest.mark.parametrize("name", cases("fork"))
 def test_fork_case(name: str) -> None:
     """Modal declares no snapshot capability, so a fork that reaches restore fails
@@ -44,17 +38,11 @@ def test_fork_case(name: str) -> None:
         backend = FakeBackend.scripted(script_of(CASES / name))
         async with harness(backend, "fake") as sandbox:
             got = await run_case(CASES / name, sandbox, lambda: backend.creates)
-        if not _restores(name):
+        if not reaches_restore(name):
             assert_expected(name, got)
             return
-        assert got.error is not None
-        assert (got.error.code, got.child_created, got.parent_unchanged) == (
-            "snapshot_missing",
-            False,
-            True,
-        )
-        assert (got.creates, backend.requests) == (0, 0)
-        assert all(state == "released" for _, state in got.rows)
+        assert_restore_refused(got)
+        assert backend.requests == 0
 
     asyncio.run(main())
 

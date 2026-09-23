@@ -8,16 +8,14 @@ from collections.abc import Awaitable
 from dataclasses import dataclass
 from http import HTTPStatus
 
-from e2b.api import AsyncApiClient, encode_path_param
+from e2b.api import AsyncApiClient
 from e2b.api.client.api.sandboxes import (
     delete_sandboxes_sandbox_id,
     get_sandboxes_sandbox_id,
     get_v2_sandboxes,
-    post_sandboxes_sandbox_id_snapshots,
     post_v2_sandboxes,
 )
-from e2b.api.client.api.templates import delete_templates_template_id
-from e2b.api.client.models import NewSandboxV2, SandboxSnapshotRequest, SandboxState
+from e2b.api.client.models import NewSandboxV2, SandboxState
 from e2b.api.client.types import Response
 
 from threads.adapters.sandboxes.e2b import wire
@@ -83,29 +81,6 @@ class Control:
         """False: it was already gone."""
         res = await _sent(
             delete_sandboxes_sandbox_id.asyncio_detailed(sandbox_id, client=self.client)
-        )
-        if res.status_code == HTTPStatus.NOT_FOUND:
-            return False
-        _expect(res, HTTPStatus.NO_CONTENT)
-        return True
-
-    async def snapshot(self, sandbox_id: str, name: str) -> wire.Snapshot | None:
-        """E2B pauses the sandbox, captures it, and resumes it. None: no such sandbox."""
-        res = await _sent(
-            post_sandboxes_sandbox_id_snapshots.asyncio_detailed(
-                sandbox_id, client=self.client, body=SandboxSnapshotRequest(name=name)
-            )
-        )
-        if res.status_code == HTTPStatus.NOT_FOUND:
-            return None
-        return wire.Snapshot.model_validate_json(_expect(res, HTTPStatus.CREATED))
-
-    async def delete_snapshot(self, snapshot_id: str) -> bool:
-        """False: it was already gone."""
-        res = await _sent(
-            delete_templates_template_id.asyncio_detailed(
-                encode_path_param(snapshot_id), client=self.client
-            )
         )
         if res.status_code == HTTPStatus.NOT_FOUND:
             return False
