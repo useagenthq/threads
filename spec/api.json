@@ -2538,24 +2538,48 @@
       "doc": "What a sandbox adapter (e2b(), daytona(), modal(), fakeSandbox()) returns. Every create and restore carries an operation key written to the resource ledger first. Recovery and gc resolve a ledger row only with the adapter whose info.provider is the row's provider; any other adapter is refused before lookup or release, and the row stays unresolved for the right one.",
       "source": ""
     },
+    "SandboxAuthority": {
+      "kind": "union",
+      "discriminator": "kind",
+      "casing": "wire",
+      "variants": [
+        {
+          "object": {
+            "kind": {"type": {"literal": "owner"}, "required": true},
+            "branch_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true, "doc": "The branch that owns the resource (its resource-ledger owner)."},
+            "epoch": {"type": {"prim": "integer"}, "required": true, "doc": "The owner's lease epoch this operation is dispatched under."}
+          },
+          "casing": "wire"
+        },
+        {
+          "object": {
+            "kind": {"type": {"literal": "cleanup"}, "required": true},
+            "resource_id": {"type": {"prim": "string"}, "required": true},
+            "claim": {"type": {"prim": "string"}, "required": true, "doc": "The cleanup claim token gc wrote on the resources row (cleanup_claim) by compare-and-set."}
+          },
+          "casing": "wire"
+        }
+      ],
+      "doc": "Who may dispatch a provider operation. owner: the owning branch's current lease holder at epoch (fence checks the writer lease). cleanup: gc, which holds no branch lease and keeps working after the owning branch is deleted; fence checks that the resources row (tenant-scoped) still carries this claim and is still collectable: releasing, release_failed, or live past its provider expiry. A later claim supersedes an earlier one, so of two concurrent gc runs only the latest claim holder dispatches.",
+      "source": ""
+    },
     "SandboxContext": {
       "kind": "interface",
       "role": "protocol",
       "properties": {
-        "branch_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true, "doc": "The branch that owns the resource (its resource-ledger owner)."},
-        "epoch": {"type": {"prim": "integer"}, "required": true, "doc": "The lease epoch this operation is dispatched under."}
+        "authority": {"type": {"$ref": "#/types/SandboxAuthority"}, "required": true}
       },
       "methods": {
         "fence": {
           "ts": "fence",
           "py": "fence",
-          "doc": "Re-checks that the dispatching owner still holds the branch lease at epoch. The adapter calls it at its real provider dispatch boundary, after any queueing; a failure means call nothing.",
+          "doc": "Re-checks the authority: the owner still holds the branch lease at epoch, or the cleanup claim is still current on a collectable row. The adapter calls it at its real provider dispatch boundary, after any queueing; a failure means call nothing.",
           "async": true,
           "params": [],
           "returns": {"result": {"prim": "void"}, "errors": ["stale_epoch"]}
         }
       },
-      "doc": "What the runtime hands a sandbox adapter for every provider operation: the fencing pair it re-checks at its real dispatch point, as ModelContext without read and put. Bound to the writer that created it; nothing on it selects another branch or epoch. Cleanup (gc) holds no lease: its context is bound to the row's owner branch and passes only while no one holds that branch's lease.",
+      "doc": "What the runtime hands a sandbox adapter for every provider operation: the authority it re-checks at its real dispatch point. The same adapter hook serves both authorities. Bound to the writer or claim that created it; nothing on it selects another.",
       "source": ""
     },
     "SandboxInfo": {

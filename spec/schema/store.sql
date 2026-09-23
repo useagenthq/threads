@@ -71,7 +71,9 @@ CREATE TABLE IF NOT EXISTS leases (
 -- The cleanup ledger. It is not a projection and outlives the log rows of its owner, so
 -- owner_branch_id has no foreign key. operation_key is written with the pending row before
 -- the provider call; ref is known once the row is live. expires_at is the provider's own
--- expiry, when the adapter declares one.
+-- expiry, when the adapter declares one. cleanup_claim is gc's claim token, set by
+-- compare-and-set on a collectable row (releasing, release_failed, or live past expires_at);
+-- a gc run dispatches a release only while the row still carries its own claim.
 CREATE TABLE IF NOT EXISTS resources (
   resource_id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
@@ -86,7 +88,8 @@ CREATE TABLE IF NOT EXISTS resources (
   acquired_at INTEGER NOT NULL,
   expires_at INTEGER,
   released_at INTEGER,
-  release_outcome TEXT
+  release_outcome TEXT,
+  cleanup_claim TEXT
 ) STRICT;
 
 PRAGMA user_version = 1;
