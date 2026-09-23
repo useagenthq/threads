@@ -104,6 +104,9 @@ class Runtime:
     """Receives each committed batch: the stream's subscription to the log."""
     hooks: HookRunner = field(default_factory=HookRunner)
     """The run's extension hooks; none by default."""
+    read_file: Callable[[str], Awaitable[bytes | None]] | None = None
+    """L3 restore's sandbox read, a framework read_only operation; None
+    when there is no sandbox or the file can't be read."""
 
     @property
     def fold(self) -> Fold:

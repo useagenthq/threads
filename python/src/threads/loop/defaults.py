@@ -15,6 +15,7 @@ from threads.log import (
     Spill,
     Threshold,
     Threshold1,
+    Threshold2,
 )
 from threads.reduce.fold import Fold, policy
 
@@ -34,20 +35,20 @@ RETRY: Final = Retry(
 CONTEXT: Final = Context(
     reserve_tokens=20_000,
     cache_ttl_ms=300_000,
-    clear_results=ClearResults(trigger=Threshold1(tokens=1), keep_recent=5, exclude_tools=[]),
+    clear_results=ClearResults(trigger=Threshold2(permille=700), keep_recent=5, exclude_tools=[]),
     spill=Spill(
         threshold_bytes=32_768, head_bytes=2048, tail_bytes=1024, request_budget_bytes=204_800
     ),
     compact=Compact(
-        trigger=Threshold1(tokens=1), keep_tail=Threshold1(tokens=20_000), max_failures=3
+        trigger=Threshold2(permille=850), keep_tail=Threshold1(tokens=20_000), max_failures=3
     ),
     restore=Restore(max_files=5, file_tokens=5000, skill_tokens=5000, skills_total_tokens=25_000),
     max_output_continuations=3,
     defer_tools="auto",
-    defer_threshold=Threshold1(tokens=1),
+    defer_threshold=Threshold2(permille=100),
     server_edits="disabled",
 )
-""". Thresholds only the unbuilt proactive layers read are placeholders."""
+"""."""
 
 WINDOW: Final = 200_000
 """The context window assumed when the policy lists no models."""
@@ -74,13 +75,18 @@ def fallbacks(fold: Fold) -> tuple[ModelSettings, ...]:
     return () if pinned is None or pinned.fallback is MISSING else tuple(pinned.fallback)
 
 
-def tokens(threshold: Threshold, fold: Fold) -> int:
-    """A threshold in tokens: permille of the effective window W."""
-    if isinstance(threshold, Threshold1):
-        return threshold.tokens
+def effective_window(fold: Fold) -> int:
+    """W: the context window less `reserve_tokens`. ponytail: the primary
+    model's window; a fallback's own window when settings_changed names one."""
     pinned = policy(fold)
     window = WINDOW
     if pinned is not None and pinned.models is not MISSING:
         window = pinned.models[0].context_window
-    effective = window - context(fold).reserve_tokens
-    return threshold.permille * effective // 1000
+    return window - context(fold).reserve_tokens
+
+
+def tokens(threshold: Threshold, fold: Fold) -> int:
+    """A threshold in tokens: permille of the effective window W."""
+    if isinstance(threshold, Threshold1):
+        return threshold.tokens
+    return threshold.permille * effective_window(fold) // 1000

@@ -75,6 +75,14 @@ class SandboxTools:
             self._session = opened.value if isinstance(opened, Ok) else None
         return self._session
 
+    async def read_file(self, path: str) -> bytes | None:
+        """A framework read_only read (L3 restore): the file's bytes, or None."""
+        session = await self._ensure()
+        if session is None:
+            return None
+        got = await session.download(files.absolute(path), self._context)
+        return got.value if isinstance(got, Ok) else None
+
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
         parsed = parse(spec.name, input)
         return parsed.error if isinstance(parsed, Err) else None

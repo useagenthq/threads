@@ -15,7 +15,7 @@ from threads.agents.definition import Definition
 from threads.agents.results import RunResult, StreamEvent
 from threads.agents.run import Input, RunOptions, execute
 from threads.hooks.extension import Extension
-from threads.log import Budget, Permissions, Retry
+from threads.log import Budget, Context, Permissions, Retry
 from threads.loop.model import Model
 from threads.sandbox.protocol import Sandbox
 
@@ -27,6 +27,8 @@ class AgentOptions(TypedDict, total=False):
     permissions: Permissions
     budget: Budget
     retry: Retry
+    context: Context
+    """The context ladder's settings; absent: the ADR defaults."""
     sandbox: Sandbox
     """Absent: no sandbox tools. Present: bash, read, write, edit, ls, glob and grep."""
     egress: Egress
@@ -138,6 +140,7 @@ def _definition[T](options: AgentOptions, tools: tuple[AppTool[T], ...]) -> Defi
         options.get("permissions"),
         options.get("budget"),
         options.get("retry"),
+        options.get("context"),
         sandbox,
         egress,
         tuple(options.get("extensions", ())),

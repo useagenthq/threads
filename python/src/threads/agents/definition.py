@@ -7,7 +7,7 @@ from pydantic import JsonValue
 from threads.agents.bindings import AppTool
 from threads.agents.builtins import Egress, egress_denied
 from threads.hooks.extension import Extension
-from threads.log import Budget, Permissions, Retry, ToolSpec
+from threads.log import Budget, Context, Permissions, Retry, ToolSpec
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.loop.model import Model
@@ -26,6 +26,7 @@ class Definition[D]:
     permissions: Permissions | None = None
     budget: Budget | None = None
     retry: Retry | None = None
+    context: Context | None = None
     sandbox: Sandbox | None = None
     egress: Egress = ()
     extensions: tuple[Extension, ...] = ()
@@ -39,6 +40,8 @@ class Definition[D]:
             pinned["budget"] = to_json(self.budget)
         if self.retry is not None:
             pinned["retry"] = to_json(self.retry)
+        if self.context is not None:
+            pinned["context"] = to_json(self.context)
         return pinned
 
     def specs(self) -> tuple[ToolSpec, ...]:

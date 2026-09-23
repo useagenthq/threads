@@ -120,6 +120,7 @@ async def execute[D](
             now_ms,
             stream.wait_until,
             observe=stream.observe,
+            read_file=None if builtins is None else builtins.read_file,
             hooks=bind(
                 definition.extensions, RunContext(None, handle.id, handle.branch, principal)
             ),
