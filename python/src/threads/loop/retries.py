@@ -4,15 +4,17 @@ threads owns every attempt: each retry is a new `model_request`, and each wait i
 critical `retry_scheduled` that recovery honours after a crash.
 """
 
+from threads.hooks.runner import SWITCH, decision_draft
 from threads.log import (
     ModelAttemptAbandonedEvent,
     ModelSettings,
     RetryScheduledEvent,
     SettingsChangedEvent,
 )
-from threads.loop import compact
+from threads.loop import compact, gates
 from threads.loop.defaults import fallbacks, retry
 from threads.loop.drafts import draft
+from threads.loop.gates import said, verdict
 from threads.loop.history import Step, step_events
 from threads.loop.runtime import Halt, Runtime, lost
 from threads.loop.turn import complete, request
@@ -66,9 +68,19 @@ def _next_fallback(rt: Runtime) -> ModelSettings | None:
 async def _fall_back(
     rt: Runtime, abandoned: ModelAttemptAbandonedEvent, entry: ModelSettings
 ) -> Halt | None:
+    """before_model_switch gates the change (a deny or a failure: no fallback, the turn ends
+    model_unavailable); after_model_switch observes it."""
+    ran = await rt.hooks.run("before_model_switch", SWITCH, entry)
+    drafts = [decision_draft("before_model_switch", r, verdict(r), said(r, "reason")) for r in ran]
+    if any(verdict(r) != "allow" for r in ran):
+        drafts.append(draft("turn_completed", {"reason": "model_unavailable"}))
+        done = await rt.append(*drafts)
+        return lost(done.error) if isinstance(done, Err) else None
     data = {"reason": "fallback", "settings": to_json(entry), "cause_event_id": abandoned.event_id}
-    done = await rt.append(draft("settings_changed", data))
-    return lost(done.error) if isinstance(done, Err) else None
+    done = await rt.append(*drafts, draft("settings_changed", data))
+    if isinstance(done, Err):
+        return lost(done.error)
+    return await gates.observe(rt, "after_model_switch", entry)
 
 
 async def _schedule(
@@ -94,4 +106,7 @@ async def _schedule(
         "basis": basis,
     }
     done = await rt.append(draft("retry_scheduled", data))
-    return lost(done.error) if isinstance(done, Err) else None
+    if isinstance(done, Err):
+        return lost(done.error)
+    # notification observers: a retry wait began.
+    return await gates.observe(rt, "notification", done.value[-1])
