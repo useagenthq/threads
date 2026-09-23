@@ -104,7 +104,6 @@ def openai(name: str, **options: Unpack[ModelOptions]) -> OpenAIModel:
         AdapterRef(name=ADAPTER, version=VERSION, settings={}),
         options,
         {"max_output_tokens": options["max_output_tokens"]},
-        ("text", "image_ref", "document_ref"),
     )
     return OpenAIModel(declared, client(options.get("api_key"), options.get("base_url")))
 

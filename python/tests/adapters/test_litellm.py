@@ -19,7 +19,8 @@ from threads.log import CallId, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
 
 ROUTE = "openai/gpt-test"
-INFO = litellm(ROUTE, context_window=128_000, max_output_tokens=4096).info
+INFO = litellm(ROUTE, context_window=128_000, max_output_tokens=4096, api_key="k").info
+PRE_CALL = litellm("bedrock/some-model", context_window=128_000, max_output_tokens=4096).info
 
 
 @dataclass
@@ -163,7 +164,7 @@ def test_a_provider_rejection_is_a_rejected_chunk_after_one_attempt(
 def test_a_lost_lease_calls_nothing() -> None:
     recorder = Recorder()
     lost = FakeContext(owner=False)
-    assert run(LiteLLMModel(INFO, recorder), one_turn(), lost) == [Rejected("stale_epoch")]
+    assert run(LiteLLMModel(PRE_CALL, recorder), one_turn(), lost) == [Rejected("stale_epoch")]
     assert recorder.calls == []
 
 

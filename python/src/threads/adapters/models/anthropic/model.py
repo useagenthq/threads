@@ -111,7 +111,6 @@ def anthropic(name: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel:
         AdapterRef(name=ADAPTER, version=VERSION, settings=settings),
         options,
         {"max_tokens": options["max_output_tokens"]},
-        ("text", "image_ref", "document_ref"),
     )
     return AnthropicModel(declared, client(options.get("api_key"), options.get("base_url")))
 

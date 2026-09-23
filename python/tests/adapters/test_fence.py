@@ -1,38 +1,58 @@
 """The fence at the real send point, over a real connection to a loopback server: a writer that
-lost its lease while the SDK prepared or queued the request writes no byte of it."""
+lost its lease while the SDK (or LiteLLM) prepared or queued the request writes no byte of it."""
 
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
 
 import httpx2
 import pytest
 from fakes import FakeContext, collect, line
-from pydantic import JsonValue
 
 from threads.adapters.models import transport
 from threads.adapters.models.anthropic.model import AnthropicModel, client
 from threads.anthropic import anthropic
-from threads.loop.model import Done, ModelChunk, Rejected
+from threads.litellm import litellm
+from threads.loop.model import Done, Model, ModelChunk, Rejected
+from threads.reduce.handlers import to_json
 
-_SSE = (
+if TYPE_CHECKING:
+    from pydantic import JsonValue
+
+_ANTHROPIC = (
     b'event: message_start\ndata: {"type":"message_start","message":{"usage":'
     b'{"input_tokens":1,"output_tokens":1}}}\n\n'
     b'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},'
     b'"usage":{"output_tokens":1}}\n\n'
     b'event: message_stop\ndata: {"type":"message_stop"}\n\n'
 )
-_BODY: JsonValue = {
-    "adapter": {"name": "anthropic", "settings": {}, "version": "1"},
-    "model": {"name": "claude-test", "provider": "anthropic"},
-    "params": {"max_tokens": 8},
-    "system": "",
-    "tools": [],
+_CHAT = (
+    b'data: {"id":"c","object":"chat.completion.chunk","created":1,"model":"m","choices":'
+    b'[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n'
+    b"data: [DONE]\n\n"
+)
+
+
+def _claude(url: str) -> Model:
+    info = anthropic("claude-test", context_window=1000, max_output_tokens=8).info
+    return AnthropicModel(info, client("key", url))
+
+
+def _bridged(url: str) -> Model:
+    return litellm(
+        "openai/gpt-test", context_window=1000, max_output_tokens=8, api_key="k", base_url=url
+    )
+
+
+ADAPTERS: dict[str, tuple[Callable[[str], Model], bytes, str]] = {
+    "anthropic": (_claude, _ANTHROPIC, ""),
+    "litellm-openai-route": (_bridged, _CHAT, "/v1"),
 }
 
 
 @asynccontextmanager
-async def server(received: list[bytes]) -> AsyncGenerator[int]:
+async def server(received: list[bytes], reply: bytes) -> AsyncGenerator[int]:
     """Records every byte a connection sends and answers one SSE response per request."""
 
     async def serve(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -40,7 +60,7 @@ async def server(received: list[bytes]) -> AsyncGenerator[int]:
         received.append(data)
         if data:
             head = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n"
-            writer.write(head + f"content-length: {len(_SSE)}\r\n\r\n".encode() + _SSE)
+            writer.write(head + f"content-length: {len(reply)}\r\n\r\n".encode() + reply)
             await writer.drain()
         writer.close()
 
@@ -52,35 +72,53 @@ async def server(received: list[bytes]) -> AsyncGenerator[int]:
         await listening.wait_closed()
 
 
-def _send(context: FakeContext) -> tuple[list[ModelChunk], list[bytes]]:
+def _send(adapter: str, context: FakeContext) -> tuple[list[ModelChunk], list[bytes]]:
+    make, reply, suffix = ADAPTERS[adapter]
+
     async def main() -> tuple[list[ModelChunk], list[bytes]]:
         received: list[bytes] = []
-        async with server(received) as port:
-            info = anthropic("claude-test", context_window=1000, max_output_tokens=8).info
-            model = AnthropicModel(info, client("key", f"http://127.0.0.1:{port}"))
-            body = line(_BODY) + line({"role": "user", "content": [{"type": "text", "text": "hi"}]})
-            chunks = await collect(model.send, body, context)
+        async with server(received, reply) as port:
+            model = make(f"http://127.0.0.1:{port}{suffix}")
+            info = model.info
+            head: JsonValue = {
+                "adapter": to_json(info.adapter),
+                "model": to_json(info.model),
+                "params": dict(info.params),
+                "system": "",
+                "tools": [],
+            }
+            user: JsonValue = {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+            chunks = await collect(model.send, line(head) + line(user), context)
             await asyncio.sleep(0.05)
             return chunks, received
 
     return asyncio.run(main())
 
 
-def test_the_owner_sends_after_one_fence_at_the_send_point() -> None:
+@pytest.mark.parametrize("adapter", sorted(ADAPTERS))
+def test_the_owner_sends_after_one_fence_at_the_send_point(adapter: str) -> None:
     context = FakeContext()
-    chunks, received = _send(context)
+    chunks, received = _send(adapter, context)
     assert isinstance(chunks[-1], Done)
     assert context.fences == 1
     assert received
-    assert received[0].startswith(b"POST /v1/messages")
+    assert received[0].startswith(b"POST /v1/")
 
 
-def test_a_lease_lost_while_the_sdk_prepared_the_request_sends_no_byte() -> None:
+@pytest.mark.parametrize("adapter", sorted(ADAPTERS))
+def test_a_lease_lost_while_the_request_was_prepared_sends_no_byte(adapter: str) -> None:
     context = FakeContext(owner=False)
-    chunks, received = _send(context)
+    chunks, received = _send(adapter, context)
     assert chunks == [Rejected("stale_epoch")]
     assert context.fences == 1
     assert b"".join(received) == b""
+
+
+def test_each_adapter_declares_where_it_fences() -> None:
+    assert _claude("http://x").info.fence_point == "transport"
+    assert _bridged("http://x").info.fence_point == "transport"
+    other = litellm("bedrock/some-model", context_window=1000, max_output_tokens=8)
+    assert other.info.fence_point == "pre_call"
 
 
 def test_a_request_outside_an_attempt_is_refused() -> None:

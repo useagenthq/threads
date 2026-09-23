@@ -138,7 +138,7 @@ def test_a_litellm_finish_reason_it_cannot_name_ends_the_turn_with_error() -> No
 
         return chunks()
 
-    info = litellm("openai/gpt-test", context_window=1000, max_output_tokens=8).info
+    info = litellm("openai/gpt-test", context_window=1000, max_output_tokens=8, api_key="k").info
     halt, rt = drive_turn(LiteLLMModel(info, complete))
     assert stops(rt) == ["other"]
     assert halt == Idle("error")

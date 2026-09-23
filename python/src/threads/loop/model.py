@@ -48,6 +48,9 @@ class ModelInfo:
     """Response lookup by client request id."""
     accepts: tuple[Literal["text", "image_ref", "document_ref", "audio_ref"], ...] = ("text",)
     hosted_tools: tuple[str, ...] = ()
+    fence_point: Literal["transport", "pre_call"] = "transport"
+    """Where `send` awaits the fence: at the real network send, or just before a bridge that
+    queues internally (a stale send there is cost-only: its response can never be appended)."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,7 +5,7 @@ guess would silently break budgets and the context ladder.
 """
 
 from collections.abc import Mapping
-from typing import Literal, NotRequired, Required, TypedDict
+from typing import Final, Literal, NotRequired, Required, TypedDict
 
 from pydantic import JsonValue
 
@@ -13,7 +13,8 @@ from threads.log import AdapterRef, ModelRef, Price
 from threads.log import Model as ModelLimits
 from threads.loop.model import ModelInfo
 
-type Accepts = tuple[Literal["text", "image_ref", "document_ref", "audio_ref"], ...]
+ACCEPTS: Final = ("text", "image_ref", "document_ref")
+"""Every adapter here encodes images and documents; none takes recorded audio."""
 
 
 class ModelOptions(TypedDict, total=False):
@@ -32,7 +33,7 @@ def info(
     adapter: AdapterRef,
     options: ModelOptions,
     defaults: Mapping[str, JsonValue],
-    accepts: Accepts,
+    fence_point: Literal["transport", "pre_call"] = "transport",
 ) -> ModelInfo:
     """No adapter here offers response lookup by client request id, so lookup is `none`."""
     limits = ModelLimits(
@@ -46,4 +47,4 @@ def info(
     if price is not None:
         limits = limits.model_copy(update={"price": price})
     params = {**defaults, **options.get("params", {})}
-    return ModelInfo(ref, adapter, params, limits, "none", accepts)
+    return ModelInfo(ref, adapter, params, limits, "none", ACCEPTS, fence_point=fence_point)
