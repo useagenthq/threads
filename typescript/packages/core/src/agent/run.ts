@@ -24,6 +24,7 @@ import {
   type ThreadRef,
 } from "./result";
 import { redactSecrets } from "./secret";
+import { snapshotTurn } from "./snapshot";
 import { openStore, type Store, sqlite } from "./sqlite";
 import type { Tool } from "./tool";
 
@@ -87,7 +88,14 @@ export async function run<Deps, Output>(
       writer,
       artifacts,
     });
-    const config = loopConfig(def, options, principal, thread, hooks, builtin);
+    const config = loopConfig(
+      def,
+      options,
+      principal,
+      thread,
+      hooks,
+      builtin.tools,
+    );
     const result = (end: LoopEnd): RunResult<Output> =>
       runResult(
         end,
@@ -112,6 +120,8 @@ export async function run<Deps, Output>(
         },
       },
     });
+    if (end.kind === "idle")
+      await snapshotTurn(def.sandbox, builtin.session, log.ledger, writer);
     return result(end);
   } finally {
     stop();

@@ -151,8 +151,11 @@ describe("built-in sandbox tools", () => {
       command: ["sh", "-c", "echo hi"],
       env: {},
     });
-    expect(sandbox.files().map(text)).toEqual(["const x = 2;\n"]);
-    expect(sandbox.creates()).toBe(1);
+    expect(new Set(sandbox.files().map(text))).toEqual(
+      new Set(["const x = 2;\n"]),
+    );
+    // The sandbox, and the scratch restore that verified the end-of-turn snapshot.
+    expect(sandbox.creates()).toBe(2);
   });
 
   test("a second run on the thread reattaches to its live sandbox", async () => {
@@ -172,7 +175,8 @@ describe("built-in sandbox tools", () => {
     const first = await bot.run("write", { store: sqlite(":memory:") });
     const second = await bot.run("read", { thread: first.thread });
     expect(results(await logOf(second)).at(-1)?.preview).toBe("1\tkept");
-    expect(sandbox.creates()).toBe(1);
+    // One sandbox plus its snapshot's verification scratch; the second run made none.
+    expect(sandbox.creates()).toBe(2);
   });
 });
 

@@ -16,6 +16,9 @@ import { bash } from "./shell";
 
 export type { Builtin } from "./builtin";
 
+/** The run's sandbox session, shared by the tools and the end-of-turn snapshot. */
+export type SessionGetter = BuiltinEnv["session"];
+
 // The built-in catalog an agent gets: read_tool_result always, the sandbox
 // tools when a sandbox is configured. Sorted by name, pinned before app tools.
 
@@ -59,16 +62,17 @@ export function bindBuiltins(
     readonly writer: Writer;
     readonly artifacts: ArtifactStore;
   },
-): readonly ToolImpl[] {
+): { readonly tools: readonly ToolImpl[]; readonly session: SessionGetter } {
   const { ledger, writer, artifacts } = run;
+  const session: SessionGetter =
+    sandbox === undefined
+      ? async () => err({ code: "unavailable", message: "no sandbox" })
+      : lazySession(ledger, writer, sandbox);
   const env: BuiltinEnv = {
-    session:
-      sandbox === undefined
-        ? async () => err({ code: "unavailable", message: "no sandbox" })
-        : lazySession(ledger, writer, sandbox),
+    session,
     context: ownerContext(writer),
     artifacts,
     events: () => knownEvents(writer.chain),
   };
-  return builtins(sandbox, egress).map((b) => b.bind(env));
+  return { tools: builtins(sandbox, egress).map((b) => b.bind(env)), session };
 }
