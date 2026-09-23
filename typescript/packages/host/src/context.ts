@@ -43,6 +43,10 @@ export class HostContext {
   readonly #pending = new Map<string, number>();
   /** A run's in-process result, by run_id, for a halt the log can't show. */
   readonly results: Map<string, RunResult<Json>> = new Map();
+  /** Each branch's last run that threw here, with its error: why recovery gives up on it. */
+  readonly #thrown = new Map<BranchId, unknown>();
+  /** Branches recovery ran that failed another way than losing the lease: not run again. */
+  readonly #notRetried = new Set<BranchId>();
   readonly #stop = new AbortController();
   /** Aborted once the host stops: every run and every send not yet settled gives up on it. */
   readonly stopping: AbortSignal = this.#stop.signal;
@@ -109,6 +113,7 @@ export class HostContext {
     return this.#queued(thread.branch, async () => {
       if (this.stopping.aborted) return undefined;
       const store = this.storeFor(tenant);
+      this.#thrown.delete(thread.branch);
       try {
         // A reply begun before a crash is reconciled through the channel's lookup first: the
         // agent's recovery has no channel_send tool and would park it.
@@ -132,6 +137,7 @@ export class HostContext {
         return json;
       } catch (error) {
         console.error(`threads host: run on ${thread.branch} failed`, error);
+        this.#thrown.set(thread.branch, error);
         return undefined;
       }
     });
@@ -177,6 +183,8 @@ export class HostContext {
     thread: { readonly id: ThreadId; readonly branch: BranchId },
   ): Promise<"done" | "busy"> {
     if (this.#pending.has(thread.branch)) return "busy";
+    // Said once when it failed; the watch drops it now.
+    if (this.#notRetried.delete(thread.branch)) return "done";
     const { log } = await this.open(tenant);
     const read = log.read(thread.branch);
     if (!read.ok) return "done";
@@ -189,8 +197,33 @@ export class HostContext {
       .principal;
     if (hosted === undefined || who === undefined) return "done";
     // The run issues its replies as it ends; a later tick confirms the turn closed.
-    void this.resume(hosted, tenant, who, thread);
+    void this.#rerun(hosted, tenant, who, thread);
     return "busy";
+  }
+
+  /**
+   * A recovery run. Only a lost lease is worth another try on a later tick: any other failure
+   * is logged with its reason and not retried, and the turn stays open in the log for a control,
+   * a new input or the next start.
+   */
+  async #rerun(
+    hosted: HostedAgent,
+    tenant: string,
+    who: Principal,
+    thread: { readonly id: ThreadId; readonly branch: BranchId },
+  ): Promise<void> {
+    const result = await this.resume(hosted, tenant, who, thread);
+    const why =
+      result === undefined
+        ? this.#thrown.get(thread.branch)
+        : result.status === "failed" && result.error.code !== "branch_busy"
+          ? `${result.error.code}: ${result.error.message}`
+          : undefined;
+    if (why === undefined) return;
+    this.#notRetried.add(thread.branch);
+    console.error(
+      `threads host: run on ${thread.branch} not retried (${why instanceof Error ? why.message : String(why)})`,
+    );
   }
 
   async #reply(

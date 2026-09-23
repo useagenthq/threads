@@ -96,18 +96,25 @@ const RunBranchRow: z.ZodType<RunBranch> = z.strictObject({
  * Every tenant's branches that API runs went to, except those whose last event is a
  * turn_completed: where a crash may have left a run's turn open. The fold decides; this only
  * skips branches that are certainly closed, so a restart doesn't read every API thread's log.
+ * Storage is a boundary: a row that fails its schema is skipped and said, never the reason the
+ * valid ones aren't recovered.
  */
-export function unfinishedRuns(
-  db: SqliteDriver,
-): Result<readonly RunBranch[], LogError> {
-  return parseRows(
-    RunBranchRow,
-    db.all(
-      `SELECT DISTINCT r.tenant_id, r.thread_id, r.branch_id FROM run_receipts r
-        JOIN branches b ON b.branch_id = r.branch_id AND b.tenant_id = r.tenant_id
-        JOIN events e ON e.branch_id = b.branch_id AND e.seq = b.head_seq
-        WHERE e.type <> 'turn_completed'`,
-      [],
-    ),
+export function unfinishedRuns(db: SqliteDriver): readonly RunBranch[] {
+  const rows = db.all(
+    `SELECT DISTINCT r.tenant_id, r.thread_id, r.branch_id FROM run_receipts r
+      JOIN branches b ON b.branch_id = r.branch_id AND b.tenant_id = r.tenant_id
+      JOIN events e ON e.branch_id = b.branch_id AND e.seq = b.head_seq
+      WHERE e.type <> 'turn_completed'`,
+    [],
   );
+  return rows.flatMap((row) => {
+    const parsed = RunBranchRow.safeParse(row);
+    if (parsed.success) return [parsed.data];
+    console.error(
+      "threads store: run_receipts row skipped",
+      row,
+      parsed.error.message,
+    );
+    return [];
+  });
 }

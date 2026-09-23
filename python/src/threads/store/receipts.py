@@ -4,14 +4,21 @@ The key is unique per tenant and operation. The receipt is inserted in the trans
 appends the run's user_input, so a lost response replays it and a crash leaves neither.
 """
 
+import logging
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from pydantic import StrictStr, TypeAdapter, ValidationError
+
+from threads._generated.events_v1 import Uuid
 from threads.log import BranchId, EventId, ParseError, ThreadId, UserInputEvent
 from threads.store.companion import Companion
 from threads.store.sql import text_of
 from threads.store.verify import StoredEvent
+
+_log = logging.getLogger(__name__)
+_ROW: TypeAdapter[tuple[StrictStr, Uuid, Uuid]] = TypeAdapter(tuple[StrictStr, Uuid, Uuid])
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +64,17 @@ def unfinished(conn: sqlite3.Connection) -> tuple[tuple[str, ThreadId, BranchId]
         " JOIN events e ON e.branch_id = b.branch_id AND e.seq = b.head_seq"
         " WHERE e.type <> 'turn_completed'"
     ).fetchall()
-    return tuple((text_of(t), ThreadId(text_of(th)), BranchId(text_of(b))) for t, th, b in rows)
+    found: list[tuple[str, ThreadId, BranchId]] = []
+    for row in rows:
+        # Storage is a boundary: a row that fails its schema is skipped and said, never the
+        # reason the valid ones aren't recovered.
+        try:
+            tenant, thread, branch = _ROW.validate_python(row)
+        except ValidationError as error:
+            _log.warning("threads store: run_receipts row skipped (%r): %s", row, error)
+            continue
+        found.append((tenant, ThreadId(thread), BranchId(branch)))
+    return tuple(found)
 
 
 def insert(key: Key, now: int) -> Companion:

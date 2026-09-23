@@ -157,11 +157,7 @@ export function host(options: HostOptions): Host {
       const { db } = await storeConnection(ctx.store);
       for (const r of channelThreads(db)) watch.add(r.tenant_id, r.thread_id);
       // ponytail: API runs are found at start only; a live peer's crash waits for a restart.
-      const runs = unfinishedRuns(db);
-      // Said once, and the rest of the tick goes on: channel recovery and intake don't wait on it.
-      if (!runs.ok)
-        console.error("threads host: API runs not recovered", runs.error);
-      for (const r of runs.ok ? runs.value : [])
+      for (const r of unfinishedRuns(db))
         watch.add(r.tenant_id, r.thread_id, r.branch_id);
       seeded = true;
     }

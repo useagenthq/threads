@@ -178,13 +178,17 @@ class Host:
         it settles. Then it drains intake in flight. There is no deadline: a tool that ignores
         cancellation is waited on, since returning while it can act would break the fence.
         Deadlines belong at the tool or provider boundary."""
-        if self._ticking is not None:
-            self._ticking.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._ticking
-            self._ticking = None
-        await self._runner.stop()
-        await self._intake.drain()
+        ticking, self._ticking = self._ticking, None
+        try:
+            if ticking is not None:
+                ticking.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await ticking
+        finally:
+            # A tick that failed (a store error in its first pass) is raised only after the
+            # runs are ended and intake is drained.
+            await self._runner.stop()
+            await self._intake.drain()
 
     async def __aenter__(self) -> Self:
         await self.ready()
@@ -284,7 +288,12 @@ def _gave_up(row: OpenRun, run: RunTask) -> bool:
     result = None if error is not None else run.result()
     if isinstance(result, Failed) and result.error.code == "branch_busy":
         return False
-    failed = error is not None or isinstance(result, Failed)
-    if failed:
-        _log.warning("threads host: resuming API run on %s failed: %s", row[2], error or result)
-    return failed
+    if error is not None:
+        why = f"{type(error).__name__}: {error}"
+    elif isinstance(result, Failed):
+        why = f"{result.error.code}: {result.error.message}"
+    else:
+        return False
+    # The turn stays open in the log, for a control, a new input or the next start.
+    _log.warning("threads host: API run on %s not retried (%s)", row[2], why)
+    return True
