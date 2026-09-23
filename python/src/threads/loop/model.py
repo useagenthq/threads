@@ -12,8 +12,9 @@ from typing import Literal, Protocol
 
 from pydantic import JsonValue
 
-from threads.log import AdapterRef, ModelRef, OutputPart, Usage
+from threads.log import AdapterRef, ArtifactRef, BranchId, ModelRef, OutputPart, ParseError, Usage
 from threads.log import Model as ModelLimits
+from threads.result import Err, Ok
 
 type StopReason = Literal[
     "end_turn",
@@ -120,12 +121,39 @@ class LookupUnknown:
 type LookupResult[T] = Found[T] | NotFound | NotFoundNonfinal | LookupUnknown
 
 
+class ModelContext(Protocol):
+    """spec/api.json `ModelContext`: what the loop hands an adapter for one attempt."""
+
+    @property
+    def branch_id(self) -> BranchId: ...
+
+    @property
+    def epoch(self) -> int:
+        """The lease epoch this attempt is dispatched under."""
+        ...
+
+    async def fence(self) -> Ok[None] | Err[ParseError]:
+        """Re-checks the lease. The adapter awaits it at its real network send point, after any
+        SDK queueing, and sends nothing when it fails."""
+        ...
+
+    async def read(self, ref: ArtifactRef) -> Ok[bytes] | Err[ParseError]:
+        """The verified bytes of an artifact a Render v1 line references."""
+        ...
+
+    async def put(self, data: bytes, media_type: str) -> ArtifactRef:
+        """Stores exact provider bytes; returns their ref once durable."""
+        ...
+
+
 class Model(Protocol):
     """spec/api.json `Model`. `lookup` is present when `info.lookup` is not none."""
 
     @property
     def info(self) -> ModelInfo: ...
 
-    def send(self, request: ModelRequest) -> AsyncIterator[ModelChunk]: ...
+    def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]: ...
 
-    async def lookup(self, request_id: str) -> LookupResult[ModelResponse]: ...
+    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
+        """Awaits `context.fence()` at its real network send point, like `send`."""
+        ...

@@ -37,7 +37,7 @@ type Part = (
 )
 
 
-def read_verified(read: ReadArtifact, ref: AnyRef, seq: int) -> Ok[bytes] | Err[ParseError]:
+def read_verified(read: ReadArtifact, ref: AnyRef, seq: int | None) -> Ok[bytes] | Err[ParseError]:
     """The artifact's bytes, checked against the ref's sha256 and length whatever the store
     already checked: artifacts come back across a trust boundary."""
     match read(ref.sha256):

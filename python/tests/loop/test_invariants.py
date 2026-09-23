@@ -4,7 +4,7 @@ settings epoch declares the same line 0 (invariant 5)."""
 
 import asyncio
 import sqlite3
-from collections.abc import Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
@@ -15,10 +15,16 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from kit import T0, Tools, open_store, spec, start, text, use
 
-from threads.log import EffectBeginEvent, ModelRequestEvent
+from threads.log import EffectBeginEvent, ModelRequestEvent, TextPart, Usage
 from threads.loop.drive import drive
-from threads.loop.model import ModelRequest
-from threads.loop.runtime import Failed, Idle, Runtime
+from threads.loop.model import (
+    LookupUnknown,
+    ModelChunk,
+    ModelContext,
+    ModelRequest,
+    ModelResponse,
+)
+from threads.loop.runtime import Failed, Idle, Runtime, WriterContext
 from threads.loop.scripted import ScriptedModel, scripted_model
 from threads.loop.tools import Dispatched, Invocation, Output
 from threads.render.verify import verify_requests
@@ -27,6 +33,9 @@ from threads.store import MemoryArtifacts, SqliteStore, StoredEvent
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
+
+
+USAGE = Usage(input_tokens=5, output_tokens=1)
 
 
 def take_over(path: Path) -> None:
@@ -61,6 +70,58 @@ def test_a_stale_owner_never_sends_a_durable_model_request(tmp_path: Path) -> No
     assert isinstance(halt, Failed)
     assert halt.code == "branch_busy"
     assert model.sent == []
+
+
+class _QueuedModel(ScriptedModel):
+    """A model whose real send happens after a queue: the lease moves while it waits."""
+
+    path: Path
+
+    async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
+        take_over(self.path)
+        async for chunk in super().send(request, context):
+            yield chunk
+
+
+def test_a_lease_lost_while_the_send_is_queued_sends_nothing(tmp_path: Path) -> None:
+    """The loop's own fence passes; the adapter's fence at its real send point does not."""
+    path = tmp_path / "threads.db"
+
+    async def main() -> tuple[object, ScriptedModel]:
+        clock = Clock(T0)
+        never = ModelResponse((TextPart(type="text", text="never"),), "end_turn", USAGE, None)
+        model = _QueuedModel([never], {})
+        model.path = path
+        store = await open_store(path)
+        try:
+            rt = await start(store, [], model, Tools({}, clock), clock)
+            return await drive(rt), model
+        finally:
+            await store.close()
+
+    halt, model = asyncio.run(main())
+    assert isinstance(halt, Failed)
+    assert halt.code == "branch_busy"
+    assert model.sent == []
+
+
+def test_a_lease_lost_while_a_lookup_is_queued_sends_nothing(tmp_path: Path) -> None:
+    path = tmp_path / "threads.db"
+
+    async def main() -> tuple[object, ScriptedModel]:
+        clock = Clock(T0)
+        model = scripted_model({"responses": [], "lookup": {"e1": {"result": "not_found"}}})
+        store = await open_store(path)
+        try:
+            rt = await start(store, [], model, Tools({}, clock), clock)
+            take_over(path)
+            return await model.lookup(f"{rt.writer.branch_id}:e1", WriterContext(rt)), model
+        finally:
+            await store.close()
+
+    answer, model = asyncio.run(main())
+    assert isinstance(answer, LookupUnknown)
+    assert model.looked_up == []
 
 
 def test_a_stale_owner_never_dispatches_a_begun_effect(tmp_path: Path) -> None:

@@ -17,7 +17,7 @@ from threads.loop import guard
 from threads.loop.calls import call_drafts
 from threads.loop.drafts import draft
 from threads.loop.model import Done, ModelRequest, ModelResponse, PartChunk, Rejected
-from threads.loop.runtime import Failed, Runtime, fence, lost
+from threads.loop.runtime import Failed, Runtime, WriterContext, fence, lost
 from threads.reduce.handlers import to_json
 from threads.result import Err
 from threads.store import Draft
@@ -52,7 +52,8 @@ async def request(rt: Runtime, attempt: int, purpose: Purpose = "turn") -> Faile
     stale = await fence(rt)
     if stale is not None:
         return stale
-    outcome = await _collect(rt, ModelRequest(f"{rt.writer.branch_id}:{event.event_id}", body))
+    req = ModelRequest(f"{rt.writer.branch_id}:{event.event_id}", body)
+    outcome = await _collect(rt, req)
     recorded = await rt.append(*outcome_drafts(rt, event.event_id, outcome))
     return lost(recorded.error) if isinstance(recorded, Err) else event.event_id
 
@@ -64,7 +65,7 @@ type Outcome = ModelResponse | Rejected | None
 async def _collect(rt: Runtime, req: ModelRequest) -> Outcome:
     parts: list[OutputPart] = []
     try:
-        async for chunk in rt.model.send(req):
+        async for chunk in rt.model.send(req, WriterContext(rt)):
             match chunk:
                 case PartChunk(part=part):
                     parts.append(part)

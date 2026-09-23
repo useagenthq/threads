@@ -11,6 +11,7 @@ from threads import (
     Completed,
     ConfigError,
     EventItem,
+    ModelContext,
     ModelInfo,
     ModelRequest,
     Parked,
@@ -159,11 +160,11 @@ class RealModel:
     def info(self) -> ModelInfo:
         return SCRIPTED_INFO
 
-    async def send(self, request: ModelRequest) -> AsyncIterator[ModelChunk]:
+    async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         raise AssertionError(f"reached a provider with {request.request_id}")
         yield  # pragma: no cover
 
-    async def lookup(self, request_id: str) -> NotFound:
+    async def lookup(self, request_id: str, context: ModelContext) -> NotFound:
         return NotFound()
 
 

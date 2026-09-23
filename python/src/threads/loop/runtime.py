@@ -10,11 +10,20 @@ from typing import Literal
 
 from pydantic import JsonValue
 
-from threads.log import Event, ParkAddress, ParseError, ToolCallData, ToolSpec
+from threads.log import (
+    ArtifactRef,
+    BranchId,
+    Event,
+    ParkAddress,
+    ParseError,
+    ToolCallData,
+    ToolSpec,
+)
 from threads.loop.model import Model
 from threads.loop.tools import ToolRunner
 from threads.permissions import Decision
 from threads.reduce import Fold
+from threads.render.artifacts import read_verified
 from threads.result import Err, Ok
 from threads.store import Clock, Draft, SqliteStore, StoredEvent, Writer
 
@@ -93,6 +102,33 @@ class Runtime:
         if isinstance(done, Ok):
             self.observe(done.value)
         return done
+
+
+@dataclass(frozen=True, slots=True)
+class WriterContext:
+    """spec/api.json `ModelContext`, bound to the writer that made it: its fence, reads and puts
+    never speak for another branch or epoch."""
+
+    rt: Runtime
+
+    @property
+    def branch_id(self) -> BranchId:
+        return self.rt.writer.branch_id
+
+    @property
+    def epoch(self) -> int:
+        return self.rt.writer.epoch
+
+    async def fence(self) -> Ok[None] | Err[ParseError]:
+        return await self.rt.writer.fence()
+
+    async def read(self, ref: ArtifactRef) -> Ok[bytes] | Err[ParseError]:
+        got = await self.rt.store.get_artifact(ref.sha256)
+        return read_verified(lambda _sha: got, ref, None)
+
+    async def put(self, data: bytes, media_type: str) -> ArtifactRef:
+        sha = await self.rt.store.put_artifact(data)
+        return ArtifactRef(sha256=sha, bytes=len(data), media_type=media_type)
 
 
 async def fence(rt: Runtime) -> Failed | None:

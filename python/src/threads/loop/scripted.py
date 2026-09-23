@@ -18,6 +18,7 @@ from threads.loop.model import (
     LookupResult,
     LookupUnknown,
     ModelChunk,
+    ModelContext,
     ModelInfo,
     ModelRequest,
     ModelResponse,
@@ -28,6 +29,7 @@ from threads.loop.model import (
     RejectReason,
     StopReason,
 )
+from threads.result import Err
 
 _PARTS: TypeAdapter[list[OutputPart]] = TypeAdapter(list[OutputPart])
 _STOP: TypeAdapter[StopReason] = TypeAdapter(StopReason)
@@ -65,6 +67,7 @@ class ScriptedModel:
         self._lookups = lookups
         self._info = SCRIPTED_INFO if not lookups else _with_lookup()
         self.sent: list[ModelRequest] = []
+        self.looked_up: list[str] = []
         self.before_send: Callable[[ModelRequest], None] = lambda _request: None
         """A test hook run as each request reaches the model, before anything is played."""
 
@@ -77,9 +80,11 @@ class ScriptedModel:
         """Entries not yet played. A finished test expects 0."""
         return len(self._entries)
 
-    async def send(self, request: ModelRequest) -> AsyncIterator[ModelChunk]:
+    async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         if not self._entries:
             raise ScriptExhaustedError(f"no scripted response left for {request.request_id}")
+        if isinstance(await context.fence(), Err):
+            return
         self.before_send(request)
         self.sent.append(request)
         entry = self._entries.pop(0)
@@ -92,7 +97,10 @@ class ScriptedModel:
             yield PartChunk(part)
         yield Done(entry.stop_reason, entry.usage)
 
-    async def lookup(self, request_id: str) -> LookupResult[ModelResponse]:
+    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
+        if isinstance(await context.fence(), Err):
+            return LookupUnknown("the lease moved before the lookup was sent")
+        self.looked_up.append(request_id)
         # The script keys answers by the model_request event_id, the id's last component.
         answer = self._lookups.get(request_id.rsplit(":", 1)[-1])
         if not isinstance(answer, dict):
