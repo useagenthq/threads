@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { agent, ConfigError, scriptedModel, sqlite } from "../../src";
+import {
+  type Agent,
+  agent,
+  ConfigError,
+  scriptedModel,
+  sqlite,
+} from "../../src";
 import { openStore, storeConnection } from "../../src/agent/sqlite";
 import type { BranchId, KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
@@ -140,6 +146,29 @@ describe("budget coverage", () => {
       ok: false,
       error: { code: "budget_unenforceable" },
     });
+  });
+
+  test("setup refuses a limit a handoff target's model can't bound", async () => {
+    const target = agent({ name: "target", model: unbounded([]) });
+    const source = agent({
+      model: scriptedModel({ responses: [] }),
+      handoffs: [target],
+      budget: { max_output_tokens: 5000 },
+    });
+    expect(await source.check()).toMatchObject({
+      ok: false,
+      error: { code: "budget_unenforceable" },
+    });
+  });
+
+  test("an agent added to its own subagent list afterwards isn't walked forever", async () => {
+    const team: Agent<never, unknown>[] = [];
+    const lead = agent({
+      model: scriptedModel({ responses: [] }),
+      subagents: team,
+    });
+    team.push(lead);
+    expect(await lead.check()).toEqual({ ok: true, value: undefined });
   });
 
   test("a run budget the tree can't bound is refused at run start", async () => {

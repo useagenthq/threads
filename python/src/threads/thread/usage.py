@@ -45,7 +45,10 @@ async def _visit(
     finished = {e.data.child_thread_id: e for e in events if isinstance(e, AgentFinishedEvent)}
     for spawn in (e for e in events if isinstance(e, AgentSpawnedEvent)):
         child = spawn.data.child_thread_id
-        read = await _child_log(store, spawn, finished.get(child))
+        finish = finished.get(child)
+        read = await _child_log(store, spawn, finish)
+        if isinstance(read, Ok) and read.value is None and finish is not None:
+            parts.append(TreePart(None, ran=True))
         below = (
             await _visit(store, child, read.value, parts, seen)
             if isinstance(read, Ok) and read.value is not None
@@ -60,7 +63,9 @@ async def _visit(
 def _never_created(finish: AgentFinishedEvent) -> bool:
     """spec/schema/README.md, Subagent cancellation: a child with no thread is recorded
     cancelled, with unknown usage, and never created. A started child cancelled with unknown
-    usage writes the same record, so its lost log can't be told apart and counts nothing."""
+    usage writes the same record, so a missing log under it may be lost spend: it counts as an
+    unpriced thread that ran, making the total incomplete and unbounded rather than falsely
+    complete."""
     usage = finish.data.usage
     return finish.data.status == "cancelled" and (usage.input_tokens, usage.output_tokens) == (
         None,

@@ -165,6 +165,43 @@ def test_a_spawned_child_that_never_started_changes_nothing() -> None:
     check(body)
 
 
+@pytest.mark.parametrize(
+    ("usage", "expected"),
+    [
+        # Counts nothing, and the total is incomplete: a started child cancelled with unknown
+        # usage writes the same record, so it can't prove the child never ran.
+        ({"input_tokens": None, "output_tokens": None}, Ok(usd(2 * ONE, exact=False))),
+        ({"input_tokens": 10, "output_tokens": 2}, "log_corrupt"),
+    ],
+)
+def test_a_cancelled_child_that_was_never_created(usage: JsonValue, expected: object) -> None:
+    async def body(store: Store) -> None:
+        kid = agent(name="kid", model=priced(say("Kid.")))
+        thread = await run(store, priced(spawn("kid"), say("Done.")), [kid])
+        kid_id = (await child_ids(thread))[0]
+        unstarted = uuid7(now_ms())
+
+        def cancelled(lines: list[Line]) -> list[Line]:
+            out = [obj(json.loads(json.dumps(line).replace(kid_id, unstarted))) for line in lines]
+            return [
+                {**line, "data": {**obj(line["data"]), "status": "cancelled", "usage": usage}}
+                if line["type"] == "agent_finished"
+                else line
+                for line in out
+            ]
+
+        await rewrite_log(store, thread.id, cancelled)
+        total = await thread.cost(tree=True)
+        if isinstance(expected, str):
+            assert isinstance(total, Err)
+            assert total.error.code == expected
+            assert "its parent recorded it cancelled" in total.error.message
+        else:
+            assert total == expected
+
+    check(body)
+
+
 def test_a_finished_child_whose_log_is_missing_is_log_corrupt_never_a_partial_sum() -> None:
     async def body(store: Store) -> None:
         kid = agent(name="kid", model=priced(say("Kid.")))

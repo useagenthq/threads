@@ -65,7 +65,8 @@ function finishOf(
 /**
  * spec/schema/README.md, Subagent cancellation: a child with no thread is recorded cancelled,
  * with unknown usage, and never created. A started child cancelled with unknown usage writes the
- * same record, so its lost log can't be told apart and counts nothing.
+ * same record, so a missing log under it may be lost spend: it counts as an unpriced thread that
+ * ran, making the total incomplete and unbounded rather than falsely complete.
  */
 const neverCreated = ({ data }: Finished): boolean =>
   data.status === "cancelled" &&
@@ -99,7 +100,7 @@ function treeParts(
     });
     for (const spawn of events.filter((e) => e.type === "agent_spawned")) {
       const child = spawn.data.child_thread_id;
-      const read = childLog(log, spawn, finishOf(events, child));
+      const read = readChild(log, spawn, events, parts);
       const below =
         read.ok && read.value !== undefined ? visit(child, read.value) : read;
       if (!below.ok) return err(inChild(child, below.error));
@@ -108,6 +109,23 @@ function treeParts(
   };
   const walked = visit(root, chain);
   return walked.ok ? ok(parts) : walked;
+}
+
+/**
+ * childLog for a spawn of `events`. A child with no log under the never-created record adds an
+ * unpriced part that ran to `parts` (neverCreated says why).
+ */
+function readChild(
+  log: LogStore,
+  spawn: Spawned,
+  events: readonly KnownEvent[],
+  parts: TreePart[],
+): Result<VerifiedLog | undefined, ReadError> {
+  const finish = finishOf(events, spawn.data.child_thread_id);
+  const read = childLog(log, spawn, finish);
+  if (read.ok && read.value === undefined && finish !== undefined)
+    parts.push({ cost: undefined, ran: true });
+  return read;
 }
 
 /**

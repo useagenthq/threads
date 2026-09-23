@@ -197,12 +197,14 @@ describe("a cancelled child that was never created", () => {
     return tree(thread);
   }
 
-  test("changes nothing", async () => {
+  test("counts nothing, and the total is incomplete: the record can't prove it never ran", async () => {
+    // A started child cancelled with unknown usage writes the same record; if its log were
+    // lost, a complete total would hide its spend.
     const total = await cancelledBeforeCreated({
       input_tokens: null,
       output_tokens: null,
     });
-    expect(unwrap(total)).toEqual(usd(2 * ONE, true));
+    expect(unwrap(total)).toEqual(usd(2 * ONE, false));
   });
 
   test("with known usage its missing log is log_corrupt", async () => {

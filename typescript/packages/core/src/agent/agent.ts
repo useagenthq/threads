@@ -218,8 +218,9 @@ function agentsOf<Deps, Output>(
   Resolved<Deps, Output>,
   "subagents" | "handoffs" | "agents" | "targets"
 > {
-  const agents = options.subagents ?? [];
-  const targets = options.handoffs ?? [];
+  // Copies: a list the caller changes later can't change the pinned agents, or form a cycle.
+  const agents = [...(options.subagents ?? [])];
+  const targets = [...(options.handoffs ?? [])];
   return {
     subagents: agents.map((a) => a.name),
     handoffs: targets.map((a) => a.name),
