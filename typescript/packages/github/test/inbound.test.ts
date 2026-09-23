@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { Inbound, secret } from "@threads/core/adapter";
 import { github } from "../src";
 import { adapter, alice, CHALLENGE, commentPayload, request } from "./kit";
@@ -57,16 +58,27 @@ describe("parse", () => {
     return result.value.map((item) => Inbound.parse(item));
   };
 
-  test("a new comment is a message keyed by the delivery", () => {
-    expect(parsed(request(commentPayload("please look")))).toEqual([
+  test("a new comment is a message keyed by its signed body", () => {
+    const raw = request(commentPayload("please look"));
+    const key = createHash("sha256").update(raw.body).digest("hex");
+    expect(parsed(raw)).toEqual([
       {
         kind: "message",
         principal,
         address: "acme/app#7",
-        item_key: "d-1#0",
+        item_key: `${key}#0`,
         content: "please look",
       },
     ]);
+  });
+
+  test("a replayed body with a fresh X-GitHub-Delivery is the same item", () => {
+    const payload = commentPayload("please run the deploy");
+    const first = parsed(request(payload));
+    const replayed = parsed(
+      request(payload, "issue_comment", { "x-github-delivery": "d-replay" }),
+    );
+    expect(replayed).toEqual(first);
   });
 
   test("an opened issue is a message with its title and body", () => {
@@ -125,7 +137,7 @@ describe("parse", () => {
         kind: "decision",
         principal,
         address: "acme/app#7",
-        item_key: "d-1#0",
+        item_key: expect.stringMatching(/^[0-9a-f]{64}#0$/),
         challenge_id: CHALLENGE,
         decision: "grant",
       },

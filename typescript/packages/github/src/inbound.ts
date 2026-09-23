@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type {
   ChannelAdapter,
   Inbound,
@@ -9,7 +9,8 @@ import { z } from "zod";
 
 // Webhook intake. GitHub signs the raw body
 // with X-Hub-Signature-256 and sends no timestamp, so replay protection is the host inbox's
-// dedup on X-GitHub-Delivery. The installation id is the identity authority: it names the
+// dedup on an item key derived from the signed body (X-GitHub-Delivery is unsigned; spec/schema/
+// README.md, "Channel replies"). The installation id is the identity authority: it names the
 // issuer and, by default, the tenant. The repository is in the address, not the installation id,
 // because the inbox key is already unique per delivery and repo-level approver policy is the host's.
 
@@ -148,7 +149,7 @@ function skipped(item: Item, appSlug: string | undefined): boolean {
   return own || item.text.trim() === "" || item.text.includes(MARKER_PREFIX);
 }
 
-function inbound(item: Item, tenant: string, deliveryId: string): Inbound {
+function inbound(item: Item, tenant: string, bodyKey: string): Inbound {
   const { sender, installation, repository } = item.common;
   const base = {
     principal: {
@@ -157,7 +158,7 @@ function inbound(item: Item, tenant: string, deliveryId: string): Inbound {
       subject: String(sender.id),
     },
     address: `${repository.full_name}#${item.number}`,
-    item_key: `${deliveryId}#0`,
+    item_key: `${bodyKey}#0`,
   };
   // GitHub has no buttons: the text fallback is bound to a challenge id.
   const decision = DECISION.exec(item.text.trim());
@@ -188,7 +189,8 @@ export function parser(appSlug: string | undefined, tenantOf: TenantOf): Parse {
       return invalid(
         `github: installation ${installationId} is not configured`,
       );
-    const deliveryId = raw.headers["x-github-delivery"] ?? "";
-    return { ok: true, value: [inbound(item, tenant, deliveryId)] };
+    // Only the body is signed: a replay with a fresh X-GitHub-Delivery is the same item.
+    const bodyKey = createHash("sha256").update(raw.body).digest("hex");
+    return { ok: true, value: [inbound(item, tenant, bodyKey)] };
   };
 }
