@@ -22,7 +22,15 @@ from threads.agents.store import Store, open_store, scoped
 from threads.host.channel import ChannelAdapter
 from threads.host.deliver import deliver, undelivered
 from threads.host.send import Conversation, SendServer
-from threads.log import BranchId, Budget, Principal, ThreadId, ThreadStartedEvent, UserInputEvent
+from threads.log import (
+    BranchId,
+    Budget,
+    Permissions,
+    Principal,
+    ThreadId,
+    ThreadStartedEvent,
+    UserInputEvent,
+)
 from threads.result import Ok
 from threads.secrets import resolve
 from threads.thread.control import LOCAL_OPERATOR
@@ -57,8 +65,10 @@ class Runner:
         root: Store,
         agents: Mapping[str, Agent[None]],
         channels: Mapping[str, ChannelAdapter],
+        ceiling: Permissions | None = None,
     ) -> None:
         self._root = root
+        self._ceiling = ceiling
         self._agents = agents
         self._channels = channels
         self._stores: dict[str, Store] = {}
@@ -139,6 +149,8 @@ class Runner:
         """Starts the run as a task of this host; the branch's subscribers wake on each append."""
         options: RunOptions[None] = {"thread": thread, "store": thread.store}
         options["principal"] = principal
+        if self._ceiling is not None:
+            options["ceiling"] = self._ceiling
         if budget is not None:
             options["budget"] = budget
         how = bound.intake(intake, thread.store)

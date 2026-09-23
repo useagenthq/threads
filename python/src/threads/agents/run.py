@@ -44,6 +44,7 @@ from threads.log import (
     Budget,
     InputPart,
     ParseError,
+    Permissions,
     Principal,
     ThreadId,
     ThreadStartedEvent,
@@ -73,6 +74,9 @@ class RunOptions[D](TypedDict, total=False):
     deps: D
     budget: Budget
     principal: Principal
+    ceiling: Permissions
+    """The principal and host ceiling: this run, its subagents and every handoff target it
+    starts are also decided under it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,7 +148,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
             store,
             sq,
             _child_runner(store),
-            () if launch is None else launch.ceilings,
+            _ceilings(options, launch),
             builtins,
             None if launch is None else launch.team,
         )
@@ -269,6 +273,14 @@ async def with_servers[D](
         found.extend(await stack.enter_async_context(server.connect(fenced(writer))))
     extra = sorted(found, key=lambda t: t.name)
     return replace(definition, tools=(*definition.tools, *extra))
+
+
+def _ceilings[D](options: RunOptions[D], launch: Launch | None) -> tuple[Permissions, ...]:
+    """A launched thread's ceilings come with its launch; a run's own is its option."""
+    if launch is not None:
+        return launch.ceilings
+    ceiling = options.get("ceiling")
+    return () if ceiling is None else (ceiling,)
 
 
 def _refusal(error: ParseError) -> RunErrorCode:

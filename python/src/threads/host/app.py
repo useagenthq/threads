@@ -23,7 +23,7 @@ from threads.host.intake import ChannelIntake
 from threads.host.runs import Runner
 from threads.host.schedules import Schedule, Scheduler
 from threads.host.stream import Message
-from threads.log import BranchId, EventId, ParseError, Principal, ThreadId
+from threads.log import BranchId, EventId, ParseError, Permissions, Principal, ThreadId
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import LOCAL_TENANT
@@ -40,19 +40,21 @@ type Authenticate = Callable[["Request"], Awaitable[Principal | None]]
 class Host:
     """spec/api.json `Host`."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - spec/api.json host's options
         self,
         store: Store,
         agents: Mapping[str, Agent[None]],
         channels: Mapping[str, ChannelAdapter],
         schedules: Sequence[Schedule],
         authenticate: Authenticate | None,
+        *,
+        ceiling: Permissions | None = None,
     ) -> None:
         self._store = store
         self._agents = agents
         self._channels = channels
         self.authenticate: Authenticate | None = authenticate
-        self._runner: Runner = Runner(store, agents, channels)
+        self._runner: Runner = Runner(store, agents, channels, ceiling)
         self._intake: ChannelIntake = ChannelIntake(self._runner, channels)
         self._runner.on_end = self._intake.consume
         self._scheduler = Scheduler(self._runner, schedules)
@@ -177,14 +179,16 @@ class Host:
         return await self._intake.receive(channel, raw)
 
 
-def host(
+def host(  # noqa: PLR0913 - spec/api.json host's options
     *,
     store: Store,
     agents: Mapping[str, Agent[None]],
     channels: Mapping[str, ChannelAdapter] | None = None,
     schedules: Sequence[Schedule] = (),
     authenticate: Authenticate | None = None,
+    ceiling: Permissions | None = None,
 ) -> Host:
     """spec/api.json `host`. Starts nothing until `ready()`. Without `authenticate` every /v1
-    route answers 401; channel webhooks still work."""
-    return Host(store, agents, channels or {}, schedules, authenticate)
+    route answers 401; channel webhooks still work. `ceiling` caps every run this host starts
+    or resumes (Agent.run `ceiling`)."""
+    return Host(store, agents, channels or {}, schedules, authenticate, ceiling=ceiling)
