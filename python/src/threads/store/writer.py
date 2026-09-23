@@ -44,6 +44,11 @@ class Writer:
         return self._lease.epoch
 
     @property
+    def owner(self) -> lease.Owner:
+        """What fences this writer's resource-ledger rows."""
+        return lease.Owner(self._branch, self._lease)
+
+    @property
     def fold(self) -> Fold:
         """The committed branch folded through its last append. Read it; never mutate it."""
         return self._fold

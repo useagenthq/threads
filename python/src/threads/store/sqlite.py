@@ -21,6 +21,7 @@ from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
 from threads.store.forking import Forking, forking, start_child
 from threads.store.lines import Draft, header_line
+from threads.store.resources import Ledger
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
@@ -65,6 +66,11 @@ class SqliteStore:
                 MemoryArtifacts() if memory else FileArtifacts(Path(path).parent / "artifacts")
             )
         return Ok(cls(worker, tenant_id, artifacts))
+
+    @property
+    def ledger(self) -> Ledger:
+        """The resource ledger of this store's tenant."""
+        return Ledger(self._worker, self._tenant)
 
     async def close(self) -> None:
         await self._worker.close()

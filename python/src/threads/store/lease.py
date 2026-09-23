@@ -23,6 +23,15 @@ class Lease:
     expires_at: int
 
 
+@dataclass(frozen=True, slots=True)
+class Owner:
+    """A branch and the lease that fences what is done on its behalf: appends, and the
+    resource-ledger rows it creates or releases."""
+
+    branch_id: BranchId
+    lease: Lease
+
+
 def _lease(conn: sqlite3.Connection, branch_id: BranchId) -> Lease | None:
     row: tuple[object, object, object] | None = conn.execute(
         "SELECT holder_id, epoch, expires_at FROM leases WHERE branch_id = ?", (branch_id,)

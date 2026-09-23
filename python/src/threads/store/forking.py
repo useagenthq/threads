@@ -10,19 +10,10 @@ from threads.log import BranchId, Header, ParseError
 from threads.log.digest import sha256_hex
 from threads.reduce import Fold, apply, enter_segment
 from threads.result import Err, Ok
-from threads.store.lease import TTL_MS, Lease
+from threads.store.lease import TTL_MS, Lease, Owner
 from threads.store.lines import Draft, Position, event_line, header_line
 from threads.store.sql import Branch
 from threads.store.verify import StoredEvent, VerifiedLog
-
-
-@dataclass(frozen=True, slots=True)
-class Owner:
-    """A branch and the lease that fences what is done on its behalf: appends, and the
-    resource-ledger rows it creates or releases."""
-
-    branch_id: BranchId
-    lease: Lease
 
 
 @dataclass(frozen=True, slots=True)

@@ -54,7 +54,7 @@ def install(conn: sqlite3.Connection) -> ParseError | None:
     """Creates the tables of spec/schema/store.sql. A database a newer schema wrote is
     refused, never downgraded."""
     (found,) = conn.execute("PRAGMA user_version").fetchone()
-    if _int(found) > STORE_VERSION:
+    if int_of(found) > STORE_VERSION:
         message = f"store schema {found} is newer than {STORE_VERSION}"
         return ParseError("unsupported_format", message)
     conn.executescript(STORE_SQL)
@@ -83,16 +83,16 @@ def branch(conn: sqlite3.Connection, branch_id: BranchId) -> Branch | None:
     thread, tenant, parent, at_seq, header, state, head_seq, head_hash, verified, dropped = row
     return Branch(
         branch_id,
-        ThreadId(_text(thread)),
-        _text(tenant),
-        None if parent is None else BranchId(_text(parent)),
-        None if at_seq is None else _int(at_seq),
-        _blob(header),
-        _text(state),
-        _int(head_seq),
-        _text(head_hash),
-        _int(verified) == 1,
-        None if dropped is None else _text(dropped),
+        ThreadId(text_of(thread)),
+        text_of(tenant),
+        None if parent is None else BranchId(text_of(parent)),
+        None if at_seq is None else int_of(at_seq),
+        blob_of(header),
+        text_of(state),
+        int_of(head_seq),
+        text_of(head_hash),
+        int_of(verified) == 1,
+        None if dropped is None else text_of(dropped),
     )
 
 
@@ -130,7 +130,7 @@ def segments(conn: sqlite3.Connection, found: Branch, through: int) -> bytes:
         "SELECT line FROM events WHERE branch_id = ? AND seq <= ? ORDER BY seq",
         (found.branch_id, through),
     ).fetchall()
-    own = b"".join(_blob(line) + b"\n" for (line,) in rows)
+    own = b"".join(blob_of(line) + b"\n" for (line,) in rows)
     return ancestors + found.header_line + b"\n" + own
 
 
@@ -252,7 +252,7 @@ def _owner(conn: sqlite3.Connection, thread_id: ThreadId) -> str | None:
     row: tuple[object] | None = conn.execute(
         "SELECT tenant_id FROM threads WHERE thread_id = ?", (thread_id,)
     ).fetchone()
-    return None if row is None else _text(row[0])
+    return None if row is None else text_of(row[0])
 
 
 def _row(segment: Segment, tenant_id: str, parent: BranchId | None) -> Branch:
@@ -276,19 +276,19 @@ def _lines(segment: Segment) -> bytes:
     return segment.header_line + b"\n" + b"".join(line + b"\n" for _, line in segment.events)
 
 
-def _text(value: object) -> str:
+def text_of(value: object) -> str:
     if not isinstance(value, str):
         raise TypeError(f"expected TEXT, got {value!r}")
     return value
 
 
-def _int(value: object) -> int:
+def int_of(value: object) -> int:
     if not isinstance(value, int):
         raise TypeError(f"expected INTEGER, got {value!r}")
     return value
 
 
-def _blob(value: object) -> bytes:
+def blob_of(value: object) -> bytes:
     if not isinstance(value, bytes):
         raise TypeError(f"expected BLOB, got {value!r}")
     return value
