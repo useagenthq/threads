@@ -35,6 +35,8 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
 
 A snapshot's `manifest_hash` is the RFC 8785 hash of its manifest: a JSON array of `{path, mode, size, sha256}`, one entry per captured file. `path` is relative to `/workspace` (no leading `/`). Entries are ordered by `path` in **UTF-16 code-unit order**, the same order JCS uses for object keys; code-point order differs above the BMP (U+1F600 sorts before U+E000). JCS canonicalizes keys, not array order, so every manifest builder must sort this way. Shared vector: `spec/conformance/vectors/manifest-order.json`.
 
+**Sandbox image.** A remote sandbox image provides `/bin/sh`, `find`, `stat -c` (`%a`, `%s`), `sha256sum`, `od`, `cut`, `tr`, `sed`, `mkdir`, `env` (GNU coreutils or BusyBox). `lsp` also needs `python3` on the image `PATH`. A command's argv[0] is resolved on the provider `PATH`; the command then runs with exactly the tool env.
+
 ## Wire rules
 
 1. **snake_case on the wire,** in both languages. Language APIs may re-case accessors (`forkPoints` ↔ `fork_points`), but stored and hashed bytes never change.

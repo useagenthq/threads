@@ -4,6 +4,7 @@ the built-in tools' POSIX commands for real, and records the environment of ever
 import asyncio
 import contextlib
 import os
+import shutil
 import signal
 from collections.abc import AsyncIterator, Mapping, Sequence
 from pathlib import Path
@@ -61,6 +62,10 @@ class LocalSession:
         # Sandbox paths in argv are the temp tree's, and the tree's paths in output read back
         # as /workspace, so commands see and report sandbox paths.
         argv = [str(self._host(a)) if a.startswith("/workspace") else a for a in command]
+        # Like the provider wrapper: argv[0] resolves on the host (provider) PATH, then the
+        # command runs with the tool env exactly, which has no PATH.
+        if argv and "/" not in argv[0]:
+            argv[0] = shutil.which(argv[0]) or argv[0]
         proc = await asyncio.create_subprocess_exec(
             *argv,
             cwd=self._host(cwd),

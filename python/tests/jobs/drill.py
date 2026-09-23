@@ -45,15 +45,29 @@ def spawn(role: str, where: Path, **env: str) -> subprocess.Popen[str]:
 
 def reap() -> None:
     """After every drill, passed or failed: no worker, nor anything it started, outlives it."""
+    groups: list[int] = []
     while _SPAWNED:
         worker = _SPAWNED.pop()
         with contextlib.suppress(ProcessLookupError):
             os.killpg(worker.pid, signal.SIGKILL)
         worker.communicate()
-    alive = subprocess.run(  # noqa: S603
-        ["/usr/bin/pgrep", "-f", str(WORKER)], capture_output=True, text=True, check=False
-    ).stdout.split()
-    assert not alive, f"workers still running: {alive}"
+        groups.append(worker.pid)
+    alive = live_groups(groups)
+    assert not alive, f"worker process groups still running: {alive}"
+
+
+def live_groups(groups: list[int]) -> list[int]:
+    """The process groups that still have a member. Each worker leads its own group
+    (`start_new_session`), so its pid is the group id. Signal 0 checks without pgrep, which
+    slim Linux images lack."""
+    alive: list[int] = []
+    for group in groups:
+        try:
+            os.killpg(group, 0)
+        except ProcessLookupError:
+            continue
+        alive.append(group)
+    return alive
 
 
 def wait_at(worker: subprocess.Popen[str], point: str) -> None:

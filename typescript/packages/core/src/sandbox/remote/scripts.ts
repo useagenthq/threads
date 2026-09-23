@@ -53,17 +53,22 @@ export type ExecSpec = {
 
 /**
  * The command with exactly `env` (nothing inherited), in `cwd`. Stdin is the staged file,
- * opened and then unlinked, or /dev/null.
+ * opened and then unlinked, or /dev/null. argv[0] is resolved on the provider's PATH first:
+ * `env -i` clears PATH, and execvp would then search only /bin:/usr/bin, missing python3 in
+ * /usr/local/bin on python:* images. The image requirements are in spec/schema/README.md
+ * ("Sandbox image").
  */
 export function execScript(spec: ExecSpec): string {
   const input = spec.stdin ? stdinPath(spec.processKey) : "/dev/null";
   const env = Object.entries(spec.env).map(([k, v]) => quote(`${k}=${v}`));
-  const words = ["exec env -i", ...env, ...spec.command.map(quote)];
+  const [cmd = "", ...rest] = spec.command;
+  const words = ["exec env -i", ...env, '"$__t_c"', ...rest.map(quote)];
   return [
     ": threads-exec",
     `cd ${quote(spec.cwd)} || exit 126`,
     `exec 0<${quote(input)} || exit 126`,
     ...(spec.stdin ? [`rm -f ${quote(input)}`] : []),
+    `__t_c=$(command -v ${quote(cmd)}) || { echo threads: command not found: ${quote(cmd)} >&2; exit 127; }`,
     words.join(" "),
   ].join("\n");
 }
