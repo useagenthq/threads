@@ -113,11 +113,19 @@ async def cancel(
     finishes what is in flight and starts nothing new."""
     if principal.tenant != store.tenant:
         return forbidden("another tenant's thread")
-    data: dict[str, JsonValue] = {"reason": "requested by the thread's principal"}
-    if kind == "cancel_requested":
-        data["scope"] = "turn"
-    draft = Draft(kind, data, actor("user", principal))
-    return await append(store, branch, lambda _: Ok((draft,)), companion)
+    if kind == "stop_when_idle":
+        data: dict[str, JsonValue] = {"reason": "requested by the thread's principal"}
+        soft = Draft(kind, data, actor("user", principal))
+        return await append(store, branch, lambda _: Ok((soft,)), companion)
+    barrier = _first(kind, {"scope": "thread"}, actor("user", principal))
+
+    def build(fold: Fold) -> Ok[Sequence[Draft]]:
+        # A question or an approval can't be answered after the barrier: release those parks
+        # so the loop closes their calls. An effect in doubt stays parked.
+        waiting = [a for a in fold.parked if a.kind in ("approval", "input")]
+        return Ok((barrier, *(d for a in waiting for d in resumed(fold, a, _id(barrier)))))
+
+    return await append(store, branch, build, companion)
 
 
 async def set_mode(

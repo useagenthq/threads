@@ -42,6 +42,7 @@ class Conversation:
     adapter: ChannelAdapter
     address: str
     credentials: Mapping[str, str]
+    installation: str
 
 
 @dataclass(frozen=True, slots=True)

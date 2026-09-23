@@ -23,8 +23,10 @@ from threads.host import (
 )
 from threads.log import (
     ApprovalGrantedEvent,
+    ApprovalRequestedEvent,
     Event,
     JsonObject,
+    ModelResponseEvent,
     ParseError,
     Principal,
     UserInputEvent,
@@ -67,7 +69,13 @@ class ItemsChannel:
         return RawResponse(200, {}, b"")
 
     def render(self, event: Event) -> Sequence[JsonObject]:
-        return ({"text": "reply"},) if event.type == "model_response" else ()
+        match event:
+            case ApprovalRequestedEvent(data=data):
+                return ({"text": "Approve?", "challenge_id": data.challenge_id},)
+            case ModelResponseEvent():
+                return ({"text": "reply"},)
+            case _:
+                return ()
 
     async def perform(
         self, op: JsonObject, effect_key: str, credentials: Mapping[str, str]
@@ -152,6 +160,7 @@ def test_only_an_approvers_button_answers_and_a_second_press_appends_nothing() -
                 await served.receive("fake", webhook("d1", message("m1", "send it"))), Ok
             )
             challenge_id = await until(challenge)
+            await until(lambda: _replies(channel, 1))
             await served.receive("fake", webhook("d2", message("m2", "yes")))
             await served.receive("fake", webhook("d3", press("b1", challenge_id, REQUESTER)))
             await until(lambda: settled(1))
@@ -159,12 +168,16 @@ def test_only_an_approvers_button_answers_and_a_second_press_appends_nothing() -
             await served.receive("fake", webhook("d4", press("b2", challenge_id, APPROVER)))
             await served.receive("fake", webhook("d5", press("b3", challenge_id, APPROVER)))
             await until(lambda: settled(0))
-            await until(lambda: _replies(channel, 2))
+            await until(lambda: _replies(channel, 3))
         return [dict(op) for op in channel.sent]
 
     sent = asyncio.run(main())
     assert runs == ["x"]
-    assert sent == [{"text": "reply", "address": "C1"}] * 2
+    card, *replies = sent
+    # The card went to the conversation the run came from, carrying only its challenge id.
+    assert (card["text"], card["address"], card["installation_id"]) == ("Approve?", "C1", TEAM)
+    assert isinstance(card["challenge_id"], str)
+    assert [(r["text"], r["address"]) for r in replies] == [("reply", "C1")] * 2
     asyncio.run(_one_grant_by_the_approver(store))
 
 

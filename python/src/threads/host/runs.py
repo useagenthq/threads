@@ -46,7 +46,7 @@ class Bound:
             return intake
         base = intake or Intake("channel", asyncio.get_running_loop().create_future())
         server = SendServer(self.channel, store)
-        return replace(base, servers=(server,), after=deliver(self.channel.adapter))
+        return replace(base, servers=(server,), after=deliver(self.channel))
 
 
 class Runner:
@@ -105,7 +105,9 @@ class Runner:
             if conversation.channel not in self._credentials:
                 self.resolve_secrets()
             credentials = self._credentials[conversation.channel]
-            to = Conversation(adapter, conversation.address, credentials)
+            to = Conversation(
+                adapter, conversation.address, credentials, conversation.installation_id
+            )
             return self.bound_to(adapter.agent, channel=to)
         root = await sq.root(thread_id)
         read = None if not isinstance(root, Ok) else await sq.read(root.value, 0)
@@ -180,7 +182,7 @@ class Runner:
         if bound is None or bound.channel is None or not isinstance(root, Ok):
             return
         read = await sq.read(root.value, 0)
-        if isinstance(read, Ok) and undelivered(read.value.fold, bound.channel.adapter):
+        if isinstance(read, Ok) and undelivered(read.value.fold, bound.channel):
             await self.resume(store, thread_id, root.value)
 
     def _emit(self, branch: BranchId) -> Emit:

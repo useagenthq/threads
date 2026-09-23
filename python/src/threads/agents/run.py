@@ -180,14 +180,11 @@ async def _turn[D](
     rt: Runtime, definition: Definition[D], recorded: Recorded, *, fresh: bool
 ) -> Halt:
     """Pins or recovers the thread, records the input unless the branch can't take one, and
-    drives the loop to its halt. A host intake's after work runs once recovery is done (what a
-    crash left undone goes out before the new input) and again at an idle or parked halt.
+    drives the loop to its halt; a host intake's after work runs at an idle or parked halt.
     Without an input the run only continues what the log holds (a host resuming a thread)."""
     launch, intake = recorded.launch, recorded.intake
     after = None if intake is None else intake.after
     halt = await prepare(rt, definition, fresh=fresh, launch=launch)
-    if halt is None and after is not None:
-        halt = await after(rt)
     takes = recorded.input is not None and not rt.fold.handed_off and wants_input(rt, launch)
     if halt is None and takes:
         halt = await record_input(rt, recorded)

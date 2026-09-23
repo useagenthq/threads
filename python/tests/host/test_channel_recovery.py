@@ -136,7 +136,7 @@ def test_a_restarted_host_sends_the_reply_a_crash_left_unsent_once() -> None:
 
     asyncio.run(first())
     channel = asyncio.run(restarted())
-    assert channel.sent == [{"text": "Hi there.", "address": "C1"}]
+    assert [(op["text"], op["address"]) for op in channel.sent] == [("Hi there.", "C1")]
     assert len(asyncio.run(sends(store))) == 1
 
 

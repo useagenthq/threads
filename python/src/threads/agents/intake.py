@@ -19,9 +19,8 @@ if TYPE_CHECKING:
     import asyncio
 
 type After = Callable[[Runtime], Awaitable[Halt | None]]
-"""Host work derived from the log, under the run's lease (a channel's outbound replies): run
-after recovery, before a new input, and again when the run idles or parks. None when it is
-done; otherwise the halt it stopped at."""
+"""Host work derived from the log, under the run's lease (a channel's outbound replies), once the
+run idles or parks. None when it is done; otherwise the halt it stopped at."""
 
 
 @dataclass(frozen=True, slots=True)
