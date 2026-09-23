@@ -5,9 +5,13 @@ pin. The decisions are authored from the catalog rules, never read from an imple
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .common import CASES, sha
-from .jcs import JsonValue, Obj
 from .pieces import dump
+
+if TYPE_CHECKING:
+    from .jcs import JsonValue, Obj
 
 VECTOR = CASES.parent / "vectors" / "tool-inputs.json"
 CATALOG = CASES.parents[1] / "schema" / "tools.v1.catalog.json"
