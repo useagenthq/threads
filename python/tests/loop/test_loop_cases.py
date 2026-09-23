@@ -145,11 +145,10 @@ def _events(rows: tuple[tuple[StoredEvent, bytes], ...]) -> list[StoredEvent]:
 
 
 async def _resume(rt: Runtime, meta: dict[str, JsonValue]) -> Halt | None:
-    """Recovery runs first on every acquire. The loop resumes only where recovery had in-doubt
-    work to hand back (recover), or to continue the log (stub)."""
-    required = rt.writer.requires_recovery
+    """Recovery runs first on every acquire; the loop then continues wherever the case scripts
+    a model (the TS runner does the same), so an unsent open turn is carried to its end."""
     halt = await recover(rt)
-    if isinstance(halt, Failed) or not (required or meta["kind"] == "stub"):
+    if isinstance(halt, Failed) or "model_script" not in meta:
         return halt
     return await drive(rt)
 

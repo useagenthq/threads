@@ -12,7 +12,7 @@ Recovery is idempotent: a second pass over its own output finds nothing to decid
 
 from typing import TYPE_CHECKING
 
-from threads.log import EventId, LogRepairedEvent, ModelRequestEvent
+from threads.log import EventId, ModelRequestEvent, SteerEvent, UserInputEvent
 from threads.loop import calls, effects
 from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
@@ -27,9 +27,10 @@ if TYPE_CHECKING:
 
 async def recover(rt: Runtime) -> Halt | None:
     """Decides every in-doubt item; returns the first halt (a park or a failure), if any. A torn
-    import's `log_repaired` comes before this, when the store hands the branch over."""
-    if _torn_mid_turn(rt):
-        # What followed the served prefix is lost: the turn can't be resumed, only closed.
+    import's `log_repaired` comes before this, when the store hands the branch over. An open turn
+    with nothing pending is closed or left to continue (spec/schema/README.md wire rule 11)."""
+    if _open_turn_to_close(rt):
+        # The turn's input was sent but nothing is pending: how it would have ended is lost.
         done = await rt.append(draft("turn_completed", {"reason": "interrupted"}, "recovery"))
         return lost(done.error) if isinstance(done, Err) else None
     requests = [e for e in rt.events if isinstance(e, ModelRequestEvent)]
@@ -45,12 +46,15 @@ async def recover(rt: Runtime) -> Halt | None:
     return None
 
 
-def _torn_mid_turn(rt: Runtime) -> bool:
-    """The branch was just repaired after a torn import, and its served prefix ends inside a
-    turn with nothing pending."""
+def _open_turn_to_close(rt: Runtime) -> bool:
+    """An open turn with nothing pending closes as interrupted, unless none of its input was sent
+    yet (no model_request after its last user_input or steer): the run then continues it."""
     fold = rt.fold
-    repaired = bool(fold.events) and isinstance(fold.events[-1], LogRepairedEvent)
-    return repaired and fold.in_turn and not fold.pending and not fold.open_requests
+    if not fold.in_turn or fold.pending or fold.open_requests or fold.parked:
+        return False
+    inputs = [i for i, e in enumerate(rt.events) if isinstance(e, UserInputEvent | SteerEvent)]
+    start = inputs[-1] if inputs else 0
+    return any(isinstance(e, ModelRequestEvent) for e in rt.events[start:])
 
 
 async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
