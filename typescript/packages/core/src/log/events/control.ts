@@ -136,9 +136,32 @@ export const StopWhenIdle: EventDef<
   actor: ActorWithPrincipal,
 });
 
-export const TurnCompletedData: Strict<{
-  reason: EnumOf<typeof TURN_END_REASONS>;
-}> = z.strictObject({ reason: z.enum(TURN_END_REASONS) });
+const TURN_ERROR_CODES = [
+  "content_unsupported",
+  "continuation_unsupported",
+] as const;
+const TURN_COMPLETED_DATA_RULE = {
+  if: { required: ["code"] },
+  then: { properties: { reason: { const: "error" } } },
+} as const;
+export const TurnCompletedData: Ruled<
+  Strict<{
+    reason: EnumOf<typeof TURN_END_REASONS>;
+    code: Opt<EnumOf<typeof TURN_ERROR_CODES>>;
+  }>,
+  typeof TURN_COMPLETED_DATA_RULE
+> = withRule(
+  z.strictObject({
+    reason: z.enum(TURN_END_REASONS),
+    code: z
+      .enum(TURN_ERROR_CODES)
+      .describe(
+        "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request.",
+      )
+      .optional(),
+  }),
+  TURN_COMPLETED_DATA_RULE,
+);
 export const TurnCompleted: EventDef<
   "turn_completed",
   typeof TurnCompletedData,

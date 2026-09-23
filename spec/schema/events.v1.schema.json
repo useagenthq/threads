@@ -4762,7 +4762,19 @@
         },
         "data": {
           "additionalProperties": false,
+          "if": {
+            "required": [
+              "code"
+            ]
+          },
           "properties": {
+            "code": {
+              "description": "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request.",
+              "enum": [
+                "content_unsupported",
+                "continuation_unsupported"
+              ]
+            },
             "reason": {
               "enum": [
                 "end_turn",
@@ -4784,6 +4796,13 @@
           "required": [
             "reason"
           ],
+          "then": {
+            "properties": {
+              "reason": {
+                "const": "error"
+              }
+            }
+          },
           "type": "object"
         },
         "type": {

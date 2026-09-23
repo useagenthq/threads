@@ -1,0 +1,10 @@
+{
+  "name": "continuation-unsupported-before-dispatch",
+  "family": "tools_streaming",
+  "kind": "recover",
+  "description": "The history holds another provider's signed thinking block and no settings_changed{reasoning_carryover: omit_prior} drops it. The loop refuses before any model_request: the turn ends error with continuation_unsupported, never a silent drop and never a provider round trip.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

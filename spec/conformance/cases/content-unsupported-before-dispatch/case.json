@@ -1,0 +1,10 @@
+{
+  "name": "content-unsupported-before-dispatch",
+  "family": "tools_streaming",
+  "kind": "recover",
+  "description": "An image to a model that declares text input only. The loop checks the rendered request against the model's declared capabilities before any model_request: none is appended, nothing is sent, and the turn ends error with content_unsupported.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

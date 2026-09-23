@@ -1,5 +1,6 @@
 # pyright: strict
-"""Content parts: media, reasoning, hosted tools, unknown usage."""
+"""Content parts: media, reasoning, hosted tools, unknown usage, capability
+pre-checks."""
 
 from __future__ import annotations
 
@@ -122,6 +123,7 @@ def build(root: pathlib.Path) -> None:
     _thinking(root)
     _hosted(root)
     _unknown_usage(root)
+    _prechecks(root)
 
 
 def _thinking(root: pathlib.Path) -> None:
@@ -157,6 +159,68 @@ def _thinking(root: pathlib.Path) -> None:
             "A response with a signed thinking block and a tool_use. The block's exact provider "
             "JSON (with signature) is an artifact; the next request carries the reasoning part "
             "unchanged, by ref, and never as text. Replay re-renders byte for byte.",
+        ),
+        log,
+    )
+
+
+def _precheck(root: pathlib.Path, meta: tuple[str, str, str], log: Log) -> None:
+    """The next request needs something the scripted model (text only, provider scripted)
+    doesn't declare: no model_request, the turn ends error with the typed code."""
+    name, code, description = meta
+    write_case(
+        root,
+        case(name, "tools_streaming", "recover", description, NOW, model_script="model.json"),
+        log,
+        {
+            "outcome": "ok",
+            "state": reduce(log, NOW),
+            "appended": [{"type": "turn_completed", "data": {"reason": "error", "code": code}}],
+        },
+        extra={"model.json": {"responses": []}},
+    )
+
+
+def _prechecks(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [READ_FILE])
+    _user_parts(log, [{"type": "text", "text": "What does this page show?"}, _image(log)])
+    _precheck(
+        root,
+        (
+            "content-unsupported-before-dispatch",
+            "content_unsupported",
+            "An image to a model that declares text input only. The loop checks the rendered "
+            "request against the model's declared capabilities before any model_request: none "
+            "is appended, nothing is sent, and the turn ends error with content_unsupported.",
+        ),
+        log,
+    )
+
+    log = Log()
+    started(log, [READ_FILE])
+    user(log, "Hi.")
+    r = log.model_request()
+    block = canonical({"signature": "sig_0123", "thinking": "Greet.", "type": "thinking"})
+    thinking: Obj = {
+        "type": "reasoning",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "format": "thinking",
+        "ref": log.art(block, "application/json"),
+    }
+    log.model_response(r, [thinking, {"type": "text", "text": "Hello."}], "end_turn", tokens(20, 5))
+    log.add("turn_completed", {"reason": "end_turn"})
+    user(log, "Again.")
+    _precheck(
+        root,
+        (
+            "continuation-unsupported-before-dispatch",
+            "continuation_unsupported",
+            "The history holds another provider's signed thinking block and no "
+            "settings_changed{reasoning_carryover: omit_prior} drops it. The loop refuses before "
+            "any model_request: the turn ends error with continuation_unsupported, never a "
+            "silent drop and never a provider round trip.",
         ),
         log,
     )
