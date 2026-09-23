@@ -1,12 +1,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Fetch } from "../../model/transport";
-import { err, type Result } from "../../result";
+import { err, ok, type Result } from "../../result";
 import type { SandboxContext, Stale } from "../protocol";
 
 // The sandbox fence at a provider SDK's real transport (spec/api.json SandboxContext, // item 3). Every provider operation runs inside `within(context, ...)`, and the SDK's transport
-// re-checks that context as each request leaves, after any SDK queueing or retry.
+// re-checks that context as each request leaves, after any SDK queueing or retry. A refusal is
+// also recorded on the operation, because an SDK may rethrow it as its own error without cause.
 
-const current = new AsyncLocalStorage<SandboxContext>();
+type Scope = { readonly context: SandboxContext; refused?: Stale };
+const current = new AsyncLocalStorage<Scope>();
 
 /** Thrown by a fenced transport before any byte leaves: the caller lost its authority. */
 export class FenceRefused extends Error {
@@ -16,12 +18,21 @@ export class FenceRefused extends Error {
   }
 }
 
-/** Runs one provider operation under `context`; its transport requests fence against it. */
-export function within<T>(
+/**
+ * Runs one provider operation under `context`, whose transport requests fence against it. A
+ * throw is the refusal that stopped it (however the SDK wrapped it), or the provider's error.
+ */
+export async function within<T>(
   context: SandboxContext,
   operation: () => Promise<T>,
-): Promise<T> {
-  return current.run(context, operation);
+): Promise<Result<T, { readonly stale?: Stale; readonly error: unknown }>> {
+  const scope: Scope = { context };
+  try {
+    return ok(await current.run(scope, operation));
+  } catch (error) {
+    const stale = scope.refused ?? causedBy(error);
+    return err(stale === undefined ? { error } : { stale, error });
+  }
 }
 
 /**
@@ -29,14 +40,16 @@ export function within<T>(
  * Outside an operation nothing may leave, so a stray SDK request is refused, never sent.
  */
 export async function fenceHere(): Promise<void> {
-  const context = current.getStore();
-  if (context === undefined)
+  const scope = current.getStore();
+  if (scope === undefined)
     throw new FenceRefused({
       code: "stale_epoch",
       message: "no threads sandbox operation is in progress",
     });
-  const live = await context.fence();
-  if (!live.ok) throw new FenceRefused(live.error);
+  const live = await scope.context.fence();
+  if (live.ok) return;
+  scope.refused = live.error;
+  throw new FenceRefused(live.error);
 }
 
 /** Wraps the fetch a provider SDK sends through with the fence. */
@@ -47,11 +60,15 @@ export function sandboxFetch(inner: Fetch): Fetch {
   };
 }
 
-/** The refusal behind an SDK's wrapped transport error, if that is what stopped it. */
-export function refusal(error: unknown): Stale | undefined {
+function causedBy(error: unknown): Stale | undefined {
   for (let e = error; e instanceof Error; e = e.cause)
     if (e instanceof FenceRefused) return e.stale;
   return undefined;
+}
+
+/** Whether the operation in progress was refused: nothing more of it may be dispatched. */
+export function refusedHere(): boolean {
+  return current.getStore()?.refused !== undefined;
 }
 
 /**
@@ -63,11 +80,9 @@ export async function guarded<T, E>(
   operation: () => Promise<Result<T, E>>,
   failed: (error: unknown) => E,
 ): Promise<Result<T, E | Stale>> {
-  try {
-    return await within(context, operation);
-  } catch (error) {
-    return err(refusal(error) ?? failed(error));
-  }
+  const done = await within(context, operation);
+  if (done.ok) return done.value;
+  return err(done.error.stale ?? failed(done.error.error));
 }
 
 /** A thrown value's message, for a typed failure. */

@@ -13,7 +13,7 @@ export {
   FenceRefused,
   fenceHere,
   messageOf,
-  refusal,
+  refusedHere,
   sandboxFetch,
   within,
 } from "./fence";

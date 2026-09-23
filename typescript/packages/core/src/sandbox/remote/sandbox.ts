@@ -8,7 +8,7 @@ import type {
   SandboxSession,
 } from "../protocol";
 import type { ProviderExpiry, ProviderSandbox, SandboxDriver } from "./driver";
-import { guarded, messageOf, refusal, within } from "./fence";
+import { guarded, messageOf, refusedHere, within } from "./fence";
 import { INIT_SCRIPT } from "./scripts";
 import { remoteSession, runScript, treeHash } from "./session";
 
@@ -86,7 +86,7 @@ export function remoteSandbox(
         message: `the restored tree of ${id} can't be read`,
       } as const);
     } catch (error) {
-      if (refusal(error) !== undefined) throw error;
+      if (refusedHere()) throw error;
       return err({
         code: "snapshot_restore_failed",
         message: messageOf(error),
@@ -124,19 +124,17 @@ export function remoteSandbox(
     create,
     restore,
     lookup: async (operationKey, context) => {
-      try {
-        const found = await within(context, () => driver.find(operationKey));
-        return ok(
-          found.status === "found"
-            ? { status: "found", value: session(found.value) }
-            : found,
-        );
-      } catch (error) {
-        const stale = refusal(error);
-        return stale === undefined
-          ? ok({ status: "unknown", reason: messageOf(error) })
-          : err(stale);
-      }
+      const found = await within(context, () => driver.find(operationKey));
+      if (!found.ok)
+        return found.error.stale === undefined
+          ? ok({ status: "unknown", reason: messageOf(found.error.error) })
+          : err(found.error.stale);
+      const answer = found.value;
+      return ok(
+        answer.status === "found"
+          ? { status: "found", value: session(answer.value) }
+          : answer,
+      );
     },
     attach: (ref, context) =>
       guarded<

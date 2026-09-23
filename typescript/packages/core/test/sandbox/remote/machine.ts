@@ -100,7 +100,7 @@ export class Machine {
       .filter(([p]) => p.startsWith(`${WORKSPACE}/`))
       .map(
         ([p, f]) =>
-          `${f.mode.toString(8)}\t${f.size}\t${f.sha256}\t${p.slice(WORKSPACE.length + 1)}\0`,
+          `${f.mode.toString(8)}\t${f.size}\t${f.sha256}\t${utf8.encode(p.slice(WORKSPACE.length + 1)).toHex()}\n`,
       )
       .join("");
   }

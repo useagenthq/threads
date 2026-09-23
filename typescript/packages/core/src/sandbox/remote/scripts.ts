@@ -68,11 +68,15 @@ export function execScript(spec: ExecSpec): string {
   ].join("\n");
 }
 
-/** Prints the /workspace file tree as NUL-terminated `mode\tsize\tsha256\tpath` records. */
+/**
+ * Prints the /workspace file tree as `mode\tsize\tsha256\thex(path)` lines. The path's raw bytes
+ * go out as hex, so the output is ASCII and no transport that decodes text (E2B's does) can
+ * turn two different paths into one.
+ */
 export const MANIFEST_SCRIPT: string = [
   ": threads-manifest",
   `cd ${WORKSPACE} || exit 1`,
-  `find . -type f -exec sh -c 'for f do printf "%s\\t%s\\t%s\\t%s\\0" "$(stat -c %a "$f")" "$(stat -c %s "$f")" "$(sha256sum < "$f" | cut -c1-64)" "\${f#./}"; done' sh {} +`,
+  `find . -type f -exec sh -c 'for f do printf "%s\\t%s\\t%s\\t%s\\n" "$(stat -c %a "$f")" "$(stat -c %s "$f")" "$(sha256sum < "$f" | cut -c1-64)" "$(printf %s "\${f#./}" | od -An -tx1 -v | tr -d " \\n")"; done' sh {} +`,
 ].join("\n");
 
 /** Checks a path before a write: a directory or an unwritable file is a typed failure. */
@@ -102,12 +106,17 @@ export function checkReadScript(path: string): string {
 // Fatal: a raw-byte path has no lossless JSON string, and a lossy decode would give two
 // different paths the same manifest.
 const utf8 = new TextDecoder("utf-8", { fatal: true });
-const Octal = z.string().regex(/^[0-7]{1,6}$/);
-const Decimal = z.string().regex(/^[0-9]{1,15}$/);
+const Line = z.tuple([
+  z.string().regex(/^[0-7]{1,6}$/),
+  z.string().regex(/^[0-9]{1,15}$/),
+  z.string(),
+  z.string().regex(/^(?:[0-9a-f]{2})+$/),
+]);
 
-function decoded(output: Uint8Array): string | undefined {
+/** A path's hex bytes as UTF-8 text; undefined when they aren't UTF-8. */
+function pathOf(hex: string): string | undefined {
   try {
-    return utf8.decode(output);
+    return utf8.decode(Uint8Array.fromHex(hex));
   } catch {
     return undefined;
   }
@@ -121,17 +130,17 @@ function decoded(output: Uint8Array): string | undefined {
 export function parseManifest(
   output: Uint8Array,
 ): readonly ManifestEntry[] | undefined {
-  const text = decoded(output);
-  if (text === undefined) return undefined;
   const entries: ManifestEntry[] = [];
-  for (const record of text.split("\0")) {
-    if (record === "") continue;
-    const [mode, size, sha256, ...path] = record.split("\t");
+  for (const line of new TextDecoder().decode(output).split("\n")) {
+    if (line === "") continue;
+    const fields = Line.safeParse(line.split("\t"));
+    if (!fields.success) return undefined;
+    const [mode, size, sha256, hex] = fields.data;
     const parsed = ManifestSchema.safeParse({
-      mode: Number.parseInt(Octal.safeParse(mode).data ?? "x", 8),
-      size: Number(Decimal.safeParse(size).data ?? "x"),
+      mode: Number.parseInt(mode, 8),
+      size: Number(size),
       sha256,
-      path: path.join("\t"),
+      path: pathOf(hex),
     });
     if (!parsed.success) return undefined;
     entries.push(parsed.data);

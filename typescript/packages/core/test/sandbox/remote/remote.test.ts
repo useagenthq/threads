@@ -5,7 +5,6 @@ import {
   FenceRefused,
   fenceHere,
   type Quiescence,
-  refusal,
   remoteSandbox,
   within,
 } from "../../../src/sandbox/remote";
@@ -51,24 +50,27 @@ describe("the fence at the transport", () => {
     expect(fenceHere()).rejects.toThrow(FenceRefused);
   });
 
-  test("inside one, the context decides; a wrapped refusal is still found", async () => {
-    await within(CTX, fenceHere);
+  test("inside one, the context decides; a refusal the SDK rethrew as its own is still found", async () => {
+    expect(await within(CTX, fenceHere)).toEqual(ok(undefined));
     const stale = {
       ...CTX,
       fence: async () => err({ code: "stale_epoch", message: "lost" } as const),
     };
-    let thrown: unknown;
-    try {
-      await within(stale, fenceHere);
-    } catch (error) {
-      thrown = error;
-    }
-    expect(refusal(new Error("sdk", { cause: thrown }))).toEqual({
+    const wrapped = await within(stale, async () => {
+      try {
+        await fenceHere();
+      } catch {
+        throw new Error("the SDK's own error, no cause");
+      }
+    });
+    expect(wrapped.ok ? undefined : wrapped.error.stale).toEqual({
       code: "stale_epoch",
       message: "lost",
     });
-    expect(refusal(new Error("other"))).toBeUndefined();
-    expect(await within(CTX, async () => ok(1))).toEqual(ok(1));
+    const other = await within(CTX, async () => {
+      throw new Error("provider");
+    });
+    expect(other.ok ? undefined : other.error.stale).toBeUndefined();
   });
 });
 
@@ -104,16 +106,19 @@ describe("the kit's scripts", () => {
   test("a manifest is parsed strictly: malformed output is refused", () => {
     const utf8 = new TextEncoder();
     const sha = "a".repeat(64);
-    const good = [`644\t3\t${sha}\tb`, `755\t1\t${sha}\ta`, ""].join("\0");
+    const hex = (path: string) => utf8.encode(path).toHex();
+    const good = `644\t3\t${sha}\t${hex("b\tc\nd")}\n755\t1\t${sha}\t${hex("a")}\n`;
     expect(parseManifest(utf8.encode(good))).toEqual([
       { path: "a", mode: 0o755, size: 1, sha256: sha },
-      { path: "b", mode: 0o644, size: 3, sha256: sha },
+      { path: "b\tc\nd", mode: 0o644, size: 3, sha256: sha },
     ]);
     const bad = [
-      `9\t3\t${sha}\tb\0`,
-      `644\tx\t${sha}\tb\0`,
-      "644\t3\tzz\tb\0",
-      `644\t3\t${sha}\t\0`,
+      `9\t3\t${sha}\t${hex("b")}\n`,
+      `644\tx\t${sha}\t${hex("b")}\n`,
+      `644\t3\tzz\t${hex("b")}\n`,
+      `644\t3\t${sha}\t\n`,
+      `644\t3\t${sha}\tb\n`,
+      `644\t3\t${sha}\t${hex("b")}\textra\n`,
     ];
     for (const output of bad)
       expect(parseManifest(utf8.encode(output))).toBeUndefined();
@@ -121,14 +126,13 @@ describe("the kit's scripts", () => {
 
   test("a path that isn't UTF-8 is refused, never read as U+FFFD", () => {
     const sha = "a".repeat(64);
-    const record = (raw: number) =>
-      new Uint8Array([
-        ...new TextEncoder().encode(`644\t1\t${sha}\tx`),
-        raw,
-        0,
-      ]);
-    expect(parseManifest(record(0xff))).toBeUndefined();
-    expect(parseManifest(record(0xfe))).toBeUndefined();
+    const line = (raw: string) =>
+      new TextEncoder().encode(`644\t1\t${sha}\t78${raw}\n`);
+    expect(parseManifest(line("ff"))).toBeUndefined();
+    expect(parseManifest(line("fe"))).toBeUndefined();
+    expect(parseManifest(line("c3a9"))).toEqual([
+      { path: "xé", mode: 0o644, size: 1, sha256: sha },
+    ]);
   });
 });
 
