@@ -159,7 +159,8 @@ async function send(
     case "rejected":
     case "broken":
       return undefined;
-    // Answered in the batch that refused it: budget_exceeded, or the leak that ended the turn.
+    // Answered in the batch that refused it: budget_exceeded, or the leak (which ended the
+    // turn, or left it to a pending cancel).
     case "budget":
     case "leaked":
       return undefined;

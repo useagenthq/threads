@@ -77,7 +77,9 @@ export async function compact(
           : "model_error",
       );
     case "leaked":
-      return { kind: "ended" };
+      // With a cancel pending the turn is still open: the compaction failed, and the
+      // cancellation step closes the turn.
+      return got.ended ? { kind: "ended" } : failed(s, "model_error");
     case "broken":
     case "unsupported":
       return failed(s, "model_error");

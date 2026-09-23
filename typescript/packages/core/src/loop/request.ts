@@ -99,7 +99,7 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
     case "unsupported":
       return s.append(draft.turnCompleted("error", got.refused.code));
     case "leaked":
-      // The attempt already ended the turn, in the same batch as its abandonment.
+      // Recorded by the attempt: the turn ended with it, or a cancel closes it next.
       return undefined;
     case "budget":
       return endTurn(s, "budget_exhausted");

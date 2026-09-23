@@ -13,6 +13,7 @@ import { StoreError } from "../store/driver";
 import { draft } from "./drafts";
 import { reserve, settleOpen } from "./ledger";
 import type { Session } from "./session";
+import { cancelRequested } from "./turn";
 import type { Halt } from "./types";
 
 // One model attempt: render, store the request bytes,
@@ -30,9 +31,10 @@ export type Attempted =
   | { readonly kind: "unsupported"; readonly refused: Unsupported }
   /**
    * The response held a registered secret in provider material that can't be redacted (C5):
-   * nothing of it is stored, and the turn has ended with secret_in_provider_output.
+   * nothing of it is stored. `ended`: the turn ended with secret_in_provider_output; false
+   * when a cancel was already requested, which closes the turn instead.
    */
-  | { readonly kind: "leaked" }
+  | { readonly kind: "leaked"; readonly ended: boolean }
   /**
    * A covering budget refused the reservation: budget_exceeded is recorded, with a side
    * request's compaction_failed in the same batch.
@@ -237,6 +239,8 @@ function record(
                 cause_event_id: cause,
               }),
             ];
+      // A cancel already in the log is the turn's end: the cancellation step records it.
+      const ended = cancelRequested(s.events) === undefined;
       const stopped = s.append(
         draft.abandoned({
           request_event_id: requestId,
@@ -244,9 +248,13 @@ function record(
           reason: "provider_error",
         }),
         ...answered,
-        draft.turnCompleted("error", "secret_in_provider_output"),
+        ...(ended
+          ? [draft.turnCompleted("error", "secret_in_provider_output")]
+          : []),
       );
-      return stopped === undefined ? c : { kind: "halt", halt: stopped };
+      return stopped === undefined
+        ? { kind: "leaked", ended }
+        : { kind: "halt", halt: stopped };
     }
     default:
       return assertNever(c);

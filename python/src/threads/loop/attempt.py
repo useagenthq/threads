@@ -18,6 +18,7 @@ from threads.loop import budget, guard
 from threads.loop.calls import call_drafts
 from threads.loop.capabilities import mismatch
 from threads.loop.drafts import draft
+from threads.loop.history import open_cancel
 from threads.loop.model import Done, Model, ModelRequest, ModelResponse, PartChunk, Rejected
 from threads.loop.runtime import Failed, Runtime, WriterContext, epoch_model, fence, lost
 from threads.redaction import SecretInProviderOutputError
@@ -113,7 +114,7 @@ async def _dispatch(
     recorded = await rt.append(*outcome_drafts(rt, event.event_id, outcome, cause=cause))
     if isinstance(recorded, Err):
         return lost(recorded.error)
-    return None if cause is None and _refused(outcome) else event.event_id
+    return None if cause is None and _refused(rt, outcome) else event.event_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,8 +157,9 @@ def outcome_drafts(
 ) -> Sequence[Draft]:
     """The events one attempt's outcome appends, in one batch: the response with its tool calls,
     or the abandonment. A send-time refusal ends the turn unless the attempt is a requested
-    compaction's side request (`cause`), which its caller answers. A refused leak ends the turn
-    either way, and answers `cause` in the same batch."""
+    compaction's side request (`cause`), which its caller answers. A refused leak answers
+    `cause` in the same batch and ends the turn, unless a cancel is already requested: then the
+    cancellation step closes the turn."""
     ends_turn = cause is None
     match outcome:
         case ModelResponse():
@@ -187,8 +189,8 @@ def outcome_drafts(
             }
             ended = {"reason": "error", "code": "secret_in_provider_output"}
             answered = [] if cause is None else [_leak_answer(request_id, cause)]
-            abandoned = draft("model_attempt_abandoned", data)
-            return [abandoned, *answered, draft("turn_completed", ended)]
+            closing = [draft("turn_completed", ended)] if _leak_ends_turn(rt) else []
+            return [draft("model_attempt_abandoned", data), *answered, *closing]
         case None:
             data: dict[str, JsonValue] = {
                 "request_event_id": request_id,
@@ -209,9 +211,15 @@ def _leak_answer(request_id: EventId, cause: EventId) -> Draft:
     return draft("compaction_failed", data)
 
 
-def _refused(outcome: Outcome) -> bool:
+def _leak_ends_turn(rt: Runtime) -> bool:
+    """A refused leak ends the turn itself, unless a cancel already did: the cancel is then
+    processed, and the turn ends cancelled."""
+    return open_cancel(rt.events) is None
+
+
+def _refused(rt: Runtime, outcome: Outcome) -> bool:
     """A send-time refusal or a refused leak already ended the turn with its code."""
-    return isinstance(outcome, Leaked) or (
+    return (isinstance(outcome, Leaked) and _leak_ends_turn(rt)) or (
         isinstance(outcome, Rejected)
         and outcome.reason
         in (
