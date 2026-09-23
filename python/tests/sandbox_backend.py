@@ -5,7 +5,7 @@ and a conformance SandboxScript's tools; snapshots named in the script restore t
 `restore_sandbox_id` with the scripted manifest, and may lose the answer or crash the host."""
 
 import asyncio
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from pydantic import JsonValue, TypeAdapter
@@ -82,6 +82,8 @@ class FakeBackend:
     envs: list[dict[str, str]] = field(default_factory=list[dict[str, str]])
     """Every environment handed to a sandbox: at create and at every exec."""
     argvs: list[tuple[str, ...]] = field(default_factory=list[tuple[str, ...]])
+    around_capture: tuple[Callable[[Box], None], Callable[[Box], None]] | None = None
+    """Guest writes just before and just after the next capture."""
     _next: int = 0
 
     def __post_init__(self) -> None:
@@ -150,10 +152,15 @@ class FakeBackend:
         return True
 
     def snapshot(self, box: Box, key: str | None, *, frozen: bool) -> Snap:
-        """`frozen`: the provider paused the whole sandbox for the capture."""
+        """`frozen`: the provider paused the whole sandbox for the capture. The image, and
+        its manifest, are the files at the capture instant."""
+        before, after = self.around_capture or (_nothing, _nothing)
+        self.around_capture = None
+        before(box)
         manifest = box.manifest if box.manifest is not None else _workspace(box.files)
         snap = Snap(self._name("snap"), key, dict(box.files), manifest, frozen=frozen)
         self.snaps[snap.id] = snap
+        after(box)
         return snap
 
     def stop(self, box: Box) -> None:
@@ -246,6 +253,10 @@ def _builtin(name: str, args: Sequence[str], env: Mapping[str, str], stdin: byte
             return _running()
         case _:
             return _done(127, b"", f"threads: command not found: {name}\n".encode())
+
+
+def _nothing(_box: Box) -> None:
+    return None
 
 
 def _workspace(files: Mapping[str, bytes]) -> list[ManifestEntry]:
