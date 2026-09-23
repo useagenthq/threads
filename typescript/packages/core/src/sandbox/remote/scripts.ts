@@ -54,8 +54,8 @@ export type ExecSpec = {
 /**
  * The command with exactly `env` (nothing inherited), in `cwd`. Stdin is the staged file,
  * opened and then unlinked, or /dev/null. argv[0] is resolved on the provider's PATH first:
- * `env -i` clears PATH, and execvp would then search only /bin:/usr/bin, missing python3 in
- * /usr/local/bin on python:* images. The image requirements are in spec/schema/README.md
+ * `env -i` clears PATH, and execvp would then search only its default path, missing e.g.
+ * python3 in /usr/local/bin. The image requirements are in spec/schema/README.md
  * ("Sandbox image").
  */
 export function execScript(spec: ExecSpec): string {

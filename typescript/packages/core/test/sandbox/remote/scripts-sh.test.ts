@@ -40,7 +40,13 @@ describe("exec in a real sh", () => {
   const provider = { PATH: `${bin}:/usr/bin:/bin`, SECRET: "host-only" };
   const run = (command: string[], env: Record<string, string>) =>
     sh(
-      execScript({ command, cwd: tmpdir(), env, processKey: "k", stdin: false }),
+      execScript({
+        command,
+        cwd: tmpdir(),
+        env,
+        processKey: "k",
+        stdin: false,
+      }),
       provider,
     );
 
@@ -70,30 +76,36 @@ const TREE: readonly (readonly [string, string, number])[] = [
 const TREE_HASH =
   "5002ad0ef59bdacdec8326269f3818c29b9f57ec31ff8c1973451a54a5b2a60f";
 
-describe.skipIf(process.platform !== "linux")("the manifest in a real sh", () => {
-  test("lists the tree exactly as the host sees it", () => {
-    const root = mkdtempSync(join(tmpdir(), "threads-manifest-"));
-    const utf8 = new TextEncoder();
-    for (const [path, body, mode] of TREE) {
-      mkdirSync(join(root, path, ".."), { recursive: true });
-      writeFileSync(join(root, path), body);
-      chmodSync(join(root, path), mode);
-    }
-    const script = MANIFEST_SCRIPT.replace(`cd ${WORKSPACE}`, `cd ${quote(root)}`);
-    const out = Bun.spawnSync(["/bin/sh", "-c", script]);
-    expect(out.exitCode).toBe(0);
-    const manifest = parseManifest(out.stdout);
-    expect(manifest).toEqual(
-      TREE.map(([path, body, mode]) => ({
-        path,
-        mode,
-        size: utf8.encode(body).length,
-        sha256: sha256Hex(utf8.encode(body)),
-      })).toSorted((a, b) => (a.path < b.path ? -1 : 1)),
-    );
-    expect(manifestHash(manifest ?? [])).toBe(TREE_HASH);
-  });
-});
+describe.skipIf(process.platform !== "linux")(
+  "the manifest in a real sh",
+  () => {
+    test("lists the tree exactly as the host sees it", () => {
+      const root = mkdtempSync(join(tmpdir(), "threads-manifest-"));
+      const utf8 = new TextEncoder();
+      for (const [path, body, mode] of TREE) {
+        mkdirSync(join(root, path, ".."), { recursive: true });
+        writeFileSync(join(root, path), body);
+        chmodSync(join(root, path), mode);
+      }
+      const script = MANIFEST_SCRIPT.replace(
+        `cd ${WORKSPACE}`,
+        `cd ${quote(root)}`,
+      );
+      const out = Bun.spawnSync(["/bin/sh", "-c", script]);
+      expect(out.exitCode).toBe(0);
+      const manifest = parseManifest(out.stdout);
+      expect(manifest).toEqual(
+        TREE.map(([path, body, mode]) => ({
+          path,
+          mode,
+          size: utf8.encode(body).length,
+          sha256: sha256Hex(utf8.encode(body)),
+        })).toSorted((a, b) => (a.path < b.path ? -1 : 1)),
+      );
+      expect(manifestHash(manifest ?? [])).toBe(TREE_HASH);
+    });
+  },
+);
 
 test("a manifest line with an empty mode (BSD stat) is refused", () => {
   const line = `\t1\t${"a".repeat(64)}\t61\n`;

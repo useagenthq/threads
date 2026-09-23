@@ -22,6 +22,7 @@ from threads.host import (
     VerifiedDelivery,
     host,
 )
+from threads.host.app import ticked
 from threads.host.intake import ChannelIntake
 from threads.host.runs import Runner
 from threads.log import Event, JsonObject, ParseError, Principal, ToolCallEvent
@@ -133,8 +134,8 @@ def test_a_restarted_host_sends_the_reply_a_crash_left_unsent_once() -> None:
         async with host(store=store, agents={"bot": bot}, channels={"fake": channel}):
             await until(lambda: _sent(channel, 1))
             await asyncio.sleep(0.05)
-        async with host(store=store, agents={"bot": bot}, channels={"fake": channel}):
-            await asyncio.sleep(0.1)
+        async with host(store=store, agents={"bot": bot}, channels={"fake": channel}) as again:
+            await ticked(again)
         return channel
 
     asyncio.run(first())

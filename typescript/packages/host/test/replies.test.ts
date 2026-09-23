@@ -3,6 +3,7 @@ import { sqlite } from "@threads/core";
 import { storeConnection } from "@threads/core/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
+import { hostTicked } from "../src/host";
 import {
   authenticate,
   eventsOf,
@@ -94,7 +95,6 @@ describe("a crash between turn_completed and the reply", () => {
     await until(async () =>
       (await threadEvents(store)).some((e) => e.type === "turn_completed"),
     );
-    await Bun.sleep(50);
     await first.stop();
     expect(sends(await threadEvents(store))).toHaveLength(0);
 
@@ -124,7 +124,7 @@ describe("a crash between turn_completed and the reply", () => {
 
     const third = restart();
     await third.h.ready();
-    await Bun.sleep(1_500);
+    await hostTicked(third.h);
     expect(third.slack.performed).toHaveLength(0);
     expect(sends(await threadEvents(store))).toHaveLength(1);
   }, 15_000);

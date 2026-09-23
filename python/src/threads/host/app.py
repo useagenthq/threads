@@ -12,6 +12,7 @@ import contextlib
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from types import TracebackType
 from typing import TYPE_CHECKING, Self
+from weakref import WeakKeyDictionary
 
 from threads._generated.host_api_v1 import RunAccepted, StartRunRequest
 from threads.agents.agent import Agent
@@ -38,6 +39,10 @@ type Authenticate = Callable[["Request"], Awaitable[Principal | None]]
 """Maps an HTTP API request to its principal, or None for 401."""
 
 
+_RECOVERED: "WeakKeyDictionary[Host, asyncio.Event]" = WeakKeyDictionary()
+"""Each host's start-up recovery, done or not: the `ticked` seam's signal."""
+
+
 class Host:
     """spec/api.json `Host`."""
 
@@ -60,6 +65,7 @@ class Host:
         self._runner.on_end = self._intake.consume
         self._scheduler = Scheduler(self._runner, schedules)
         self._ticking: asyncio.Task[None] | None = None
+        _RECOVERED[self] = asyncio.Event()
         self._asgi: ASGIApp | None = None
 
     @property
@@ -98,15 +104,18 @@ class Host:
             self._ticking = asyncio.get_running_loop().create_task(self._tick())
 
     async def _tick(self) -> None:
-        sq = await open_store(self._runner.store(LOCAL_TENANT))
-        waiting = await sq.tables.unconsumed_threads()
-        for tenant, thread in waiting:
-            self._intake.consume(self._runner.store(tenant), thread)
-        # ponytail: reads every conversation's log once per start; track unsent replies in a
-        # table if hosts carry many conversations.
-        for tenant, thread in await sq.tables.channel_threads():
-            if (tenant, thread) not in waiting:
-                await self._runner.redeliver(self._runner.store(tenant), thread)
+        try:
+            sq = await open_store(self._runner.store(LOCAL_TENANT))
+            waiting = await sq.tables.unconsumed_threads()
+            for tenant, thread in waiting:
+                self._intake.consume(self._runner.store(tenant), thread)
+            # ponytail: reads every conversation's log once per start; track unsent replies
+            # in a table if hosts carry many conversations.
+            for tenant, thread in await sq.tables.channel_threads():
+                if (tenant, thread) not in waiting:
+                    await self._runner.redeliver(self._runner.store(tenant), thread)
+        finally:
+            _RECOVERED[self].set()
         await self._scheduler.run()
 
     async def stop(self) -> None:
@@ -193,3 +202,10 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
     route answers 401; channel webhooks still work. `ceiling` caps every run this host starts
     or resumes (Agent.run `ceiling`)."""
     return Host(store, agents, channels or {}, schedules, authenticate, ceiling=ceiling)
+
+
+async def ticked(served: Host) -> None:
+    """After the start-up recovery `ready()` began has finished (the tick then goes on to run
+    the scheduler until stop): lets a test assert what recovery did or didn't do without
+    sleeping. Internal: not exported."""
+    await _RECOVERED[served].wait()
