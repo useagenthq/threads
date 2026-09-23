@@ -6,6 +6,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.store import Store, open_store
 from threads.log import (
+    AgentFinishedEvent,
     AgentSpawnedEvent,
     Cost,
     ModelRequestEvent,
@@ -24,7 +25,7 @@ async def tree_cost(
 ) -> Ok[Cost | None] | Err[ParseError]:
     parts: list[TreePart] = []
     walked = await _visit(store, root, log, parts, set())
-    return walked if isinstance(walked, Err) else Ok(merge_tree(parts))
+    return walked if isinstance(walked, Err) else merge_tree(parts)
 
 
 async def _visit(
@@ -36,11 +37,15 @@ async def _visit(
     if thread in seen:
         return Err(ParseError("log_corrupt", f"thread {thread} appears twice in the tree"))
     seen.add(thread)
+    own = cost(log.fold)
+    if isinstance(own, Err):
+        return own
     events = log.fold.events
-    parts.append(TreePart(cost(log.fold), any(isinstance(e, ModelRequestEvent) for e in events)))
+    parts.append(TreePart(own.value, any(isinstance(e, ModelRequestEvent) for e in events)))
+    finished = {e.data.child_thread_id for e in events if isinstance(e, AgentFinishedEvent)}
     for spawn in (e for e in events if isinstance(e, AgentSpawnedEvent)):
         child = spawn.data.child_thread_id
-        read = await _child_log(store, spawn)
+        read = await _child_log(store, spawn, finished=child in finished)
         below = (
             await _visit(store, child, read.value, parts, seen)
             if isinstance(read, Ok) and read.value is not None
@@ -53,10 +58,15 @@ async def _visit(
 
 
 async def _child_log(
-    store: Store, spawn: AgentSpawnedEvent
+    store: Store, spawn: AgentSpawnedEvent, *, finished: bool
 ) -> Ok[VerifiedLog | None] | Err[ParseError]:
-    """The spawned child's log; None when it has no thread yet, so it never started."""
+    """The spawned child's log; None when it has no thread and its parent never recorded it
+    finishing, so it never started. A finished child's missing log is log_corrupt: counting
+    nothing for it would be a partial sum."""
     root = await (await open_store(store)).root(spawn.data.child_thread_id)
+    if isinstance(root, Err) and finished:
+        why = "its log is missing, though its parent recorded agent_finished for it"
+        return Err(ParseError("log_corrupt", why))
     if isinstance(root, Err):
         return Ok(None)
     read = await read_log(store, root.value)

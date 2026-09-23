@@ -29,11 +29,12 @@ from threads.log import (
     ThreadId,
     Todo,
     TodosUpdatedEvent,
+    UsageTotals,
 )
 from threads.loop import defaults
 from threads.loop.stubs import Stub, parse_stubs
 from threads.reduce.projections import cache_breaks, cost
-from threads.reduce.state import UsageTotals, usage_totals
+from threads.reduce.state import usage_totals
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import VerifiedLog
@@ -219,7 +220,7 @@ class Thread:
         if isinstance(read, Err):
             return read
         if not tree:
-            return Ok(cost(read.value.fold))
+            return cost(read.value.fold)
         return await tree_cost(self.store, self.id, read.value)
 
     async def cache_breaks(self) -> Ok[tuple[CacheBreak, ...]] | Err[ParseError]:

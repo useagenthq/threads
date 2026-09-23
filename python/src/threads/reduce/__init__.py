@@ -9,7 +9,6 @@ from threads.reduce.state import (
     HeadRef,
     ReducedState,
     Status,
-    UsageTotals,
     reduced_state,
 )
 from threads.reduce.transcript import Role, TranscriptEntry
@@ -24,7 +23,6 @@ __all__ = [
     "Role",
     "Status",
     "TranscriptEntry",
-    "UsageTotals",
     "apply",
     "enter_segment",
     "reduced_state",

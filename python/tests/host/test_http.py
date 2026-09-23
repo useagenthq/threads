@@ -4,6 +4,7 @@ stream bound to its run, and single-use approvals that resume the run."""
 
 import asyncio
 import json
+import sqlite3
 from collections.abc import AsyncGenerator, Callable, Coroutine, Sequence
 from contextlib import asynccontextmanager
 from http import HTTPStatus
@@ -12,7 +13,7 @@ import httpx
 from pydantic import BaseModel, JsonValue
 from starlette.requests import Request
 
-from threads import Agent, RunContext, agent, scripted_model, sqlite, tool
+from threads import Agent, RunContext, Store, agent, scripted_model, sqlite, tool
 from threads.agents.store import now_ms, open_store, scoped
 from threads.host import Host, host
 from threads.log import BranchId, Principal, UserInputEvent
@@ -54,9 +55,13 @@ def sender(sent: list[str]) -> Agent[None]:
 
 
 @asynccontextmanager
-async def served(bot: Agent[None], *, auth: bool = True) -> AsyncGenerator[httpx.AsyncClient]:
+async def served(
+    bot: Agent[None], *, auth: bool = True, store: Store | None = None
+) -> AsyncGenerator[httpx.AsyncClient]:
     served_host = host(
-        store=sqlite(":memory:"), agents={"support": bot}, authenticate=bearer if auth else None
+        store=sqlite(":memory:") if store is None else store,
+        agents={"support": bot},
+        authenticate=bearer if auth else None,
     )
     async with served_host:
         transport = httpx.ASGITransport(app=served_host.asgi)
@@ -297,5 +302,36 @@ def test_a_control_on_a_branch_another_process_holds_is_branch_busy() -> None:
                 assert len(read.value.fold.events) == before
                 still = (await client.get(f"{base}/approvals", headers=as_("alice"))).json()
                 assert still == [challenge]
+
+    run(main)
+
+
+def test_a_log_from_a_newer_writer_answers_unsupported_critical_event_not_not_found() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        bot = agent(model=scripted_model({"responses": [text("Hi.")]}))
+        async with served(bot, store=store) as client:
+            receipt = (
+                await start(client, "alice", "k", {"agent": "support", "input": "hi"})
+            ).json()
+            thread, run_id = receipt["thread_id"], receipt["run_id"]
+            sse(
+                await client.get(f"/v1/threads/{thread}/runs/{run_id}/events", headers=as_("alice"))
+            )
+            sql = (
+                "UPDATE events SET line = CAST(replace(CAST(line AS TEXT), ?, ?) AS BLOB)"
+                " WHERE branch_id = ?"
+            )
+            newer = ('"type":"turn_completed"', '"type":"approval_quorum"', receipt["branch_id"])
+
+            def tamper(c: sqlite3.Connection) -> None:
+                c.execute(sql, newer)
+
+            await (await open_store(store)).run(tamper)
+            timeline = await client.get(f"/v1/threads/{thread}/timeline", headers=as_("alice"))
+            assert (timeline.status_code, timeline.json()["error"]["code"]) == (
+                HTTPStatus.CONFLICT,
+                "unsupported_critical_event",
+            )
 
     run(main)

@@ -33,9 +33,14 @@ export type Call = {
 
 type Opened = { readonly thread: Thread; readonly principal: Principal };
 
+/**
+ * The route's thread. A thread that can't be read answers with its read error when the route
+ * declares it (openapi.json x-error-codes), else not_found; log_corrupt is every route's.
+ */
 async function opened(
   call: Call,
   withSandbox = false,
+  readErrors: ReadonlySet<string> = CORRUPT,
 ): Promise<Opened | Response> {
   const threadId = ThreadId.safeParse(call.params["thread_id"]);
   const branch = call.query.get("branch_id");
@@ -51,11 +56,19 @@ async function opened(
     ...(sandbox === undefined ? {} : { sandbox }),
   });
   if (!thread.ok)
-    return thread.error.code === "log_corrupt"
-      ? failure("log_corrupt", thread.error.message)
+    return readErrors.has(thread.error.code)
+      ? failure(thread.error.code, thread.error.message)
       : failure("not_found", `no thread ${threadId.data}`);
   return { thread: thread.value, principal: call.principal };
 }
+
+const CORRUPT: ReadonlySet<string> = new Set(["log_corrupt"]);
+/** Every read error of spec/api.json, for the routes that declare them all. */
+const READ_ERRORS: ReadonlySet<string> = new Set([
+  "log_corrupt",
+  "unsupported_format",
+  "unsupported_critical_event",
+]);
 
 async function sandboxOf(call: Call, threadId: ThreadId) {
   const { log } = await call.ctx.open(call.principal.tenant);
@@ -101,7 +114,7 @@ async function resume(call: Call, thread: Thread): Promise<void> {
 }
 
 export async function timeline(call: Call): Promise<Response> {
-  const o = await opened(call);
+  const o = await opened(call, false, READ_ERRORS);
   if (o instanceof Response) return o;
   const t = await o.thread.timeline();
   return t.ok ? json(200, t.value) : failure(t.error.code, t.error.message);

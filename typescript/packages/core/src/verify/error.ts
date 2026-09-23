@@ -9,7 +9,8 @@ export type StoreApiCode =
   | "branch_exists"
   | "not_found"
   | "invalid_request"
-  | "sandbox_required";
+  | "sandbox_required"
+  | "cost_overflow";
 
 /** A typed log failure. Runners compare `code` and `seq`, never `message`. */
 export type LogError = {

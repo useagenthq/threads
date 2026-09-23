@@ -26,6 +26,7 @@ from threads.log import (
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
     ModelSettings,
+    ParseError,
     SettingsChangedEvent,
     TodosUpdatedEvent,
     ToolsChangedEvent,
@@ -33,6 +34,7 @@ from threads.log import (
 )
 from threads.reduce.fold import Fold, policy
 from threads.reduce.handlers import to_json
+from threads.result import Err, Ok
 
 _DROP_MIN = 2000
 _CAUSES = (SettingsChangedEvent, CompactedEvent, ContextEditedEvent, ToolsChangedEvent)
@@ -160,11 +162,32 @@ def dispositions(fold: Fold) -> list[tuple[int, int, int | None]]:
     return out
 
 
-def cost(fold: Fold) -> Cost | None:
+MAX_NANOS = 2**53 - 1
+"""The wire's integer range (Int): a Cost's nanos never exceed it."""
+
+
+def _representable(
+    currency: str, known: int, upper: int, *, complete: bool, bounded: bool
+) -> Ok[Cost] | Err[ParseError]:
+    """The Cost, or cost_overflow when its nanos exceed the wire's integers; never a saturated
+    amount (it would understate the cost)."""
+    if known > MAX_NANOS or upper > MAX_NANOS:
+        return Err(ParseError("cost_overflow", f"the cost exceeds {MAX_NANOS} nanos"))
+    cost = Cost(
+        currency=currency,
+        known_nanos=known,
+        upper_bound_nanos=upper,
+        complete=complete,
+        bounded=bounded,
+    )
+    return Ok(cost)
+
+
+def cost(fold: Fold) -> Ok[Cost | None] | Err[ParseError]:
     """None without a pinned currency and models: there is nothing to price against."""
     pinned = policy(fold)
     if pinned is None or pinned.models is MISSING or pinned.currency is MISSING:
-        return None
+        return Ok(None)
     known = upper = 0
     complete = bounded = True
     for _, k, u in dispositions(fold):
@@ -172,13 +195,7 @@ def cost(fold: Fold) -> Cost | None:
         complete = complete and u == k
         bounded = bounded and u is not None
         upper += k if u is None else u
-    return Cost(
-        currency=pinned.currency,
-        known_nanos=known,
-        upper_bound_nanos=upper,
-        complete=complete,
-        bounded=bounded,
-    )
+    return _representable(pinned.currency, known, upper, complete=complete, bounded=bounded)
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,17 +208,17 @@ class TreePart:
     """It made at least one model request, so it may have spent money."""
 
 
-def merge_tree(parts: Sequence[TreePart]) -> Cost | None:
+def merge_tree(parts: Sequence[TreePart]) -> Ok[Cost | None] | Err[ParseError]:
     """The tree merge of Thread.cost(tree=True), over the parts in walk order (the root first).
 
     The total is counted in the root's currency, else the first priced part's; with no priced
     part there is no total. A part in that currency adds its nanos and ANDs its flags. A part that
     can't be added (another currency, or unpriced but it ran) adds nothing and makes the total
     neither complete nor bounded, so the total never undercounts silently. A part that never ran
-    changes nothing."""
+    changes nothing. A total past the wire's integers is cost_overflow."""
     currency = next((p.cost.currency for p in parts if p.cost is not None), None)
     if currency is None:
-        return None
+        return Ok(None)
     known = upper = 0
     complete = bounded = True
     for part in parts:
@@ -212,18 +229,14 @@ def merge_tree(parts: Sequence[TreePart]) -> Cost | None:
             bounded = bounded and part.cost.bounded
         elif part.cost is not None or part.ran:
             complete = bounded = False
-    return Cost(
-        currency=currency,
-        known_nanos=known,
-        upper_bound_nanos=upper,
-        complete=complete,
-        bounded=bounded,
-    )
+    return _representable(currency, known, upper, complete=complete, bounded=bounded)
 
 
 def _cost(fold: Fold) -> JsonValue:
     found = cost(fold)
-    return None if found is None else to_json(found)
+    if isinstance(found, Err):
+        return found.error.code
+    return None if found.value is None else to_json(found.value)
 
 
 def _cache_breaks(fold: Fold) -> JsonValue:

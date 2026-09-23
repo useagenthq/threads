@@ -145,28 +145,27 @@ describe("the tree merge", () => {
     expect(unwrap(await tree(thread))).toEqual(usd(2 * ONE, true));
   });
 
-  test("a spawned child with no thread was never started and changes nothing", async () => {
+  test("a spawned child that never started changes nothing", async () => {
     const store = sqlite(":memory:");
-    const kid = agent({
-      name: "kid",
-      model: scriptedModel({ responses: [say("Kid.")] }),
-    });
+    const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
     const thread = await run(store, priced([spawn("kid"), say("Done.")]), [
       kid,
     ]);
     const [kidId] = await childIds(thread);
-    // As if the parent crashed between agent_spawned and the child's first line.
-    const { db } = await storeConnection(store);
-    const elsewhere = "0192a000-0000-7000-8000-0000000000ee";
-    db.run(
-      "INSERT INTO threads (thread_id, tenant_id) SELECT ?, tenant_id FROM threads WHERE thread_id = ?",
-      [elsewhere, kidId ?? ""],
-    );
-    db.run("UPDATE branches SET thread_id = ? WHERE thread_id = ?", [
-      elsewhere,
-      kidId ?? "",
-    ]);
-    expect(unwrap(await tree(thread))).toEqual(usd(2 * ONE, true));
+    if (kidId === undefined) throw new Error("no child");
+    // As if the host crashed right after agent_spawned: the spawn names a child with no thread,
+    // and nothing after it (no agent_finished) was written.
+    const unstarted = "0192a000-0000-7000-8000-0000000000ee";
+    await rewriteLog(store, thread.id, (lines) => {
+      const at = lines.findIndex((l) => l["type"] === "agent_spawned");
+      return lines
+        .slice(0, at + 1)
+        .map((l) =>
+          obj(JSON.parse(JSON.stringify(l).replaceAll(kidId, unstarted))),
+        );
+    });
+    // Only the lead's first response (the spawn) was recorded.
+    expect(unwrap(await tree(thread))).toEqual(usd(ONE, true));
   });
 });
 
@@ -184,6 +183,31 @@ describe("a tree that can't be read fails the call, naming the path", () => {
     expect(code(total)).toBe("log_corrupt");
     expect(total.ok ? "" : total.error.message).toContain(`child ${kidId}:`);
     expect(unwrap(await thread.cost())).toEqual(usd(2 * ONE, true));
+  });
+
+  test("a finished child whose log is missing is log_corrupt, never a partial sum", async () => {
+    const store = sqlite(":memory:");
+    const kid = agent({ name: "kid", model: priced([say("Kid.")]) });
+    const thread = await run(store, priced([spawn("kid"), say("Done.")]), [
+      kid,
+    ]);
+    const [kidId] = await childIds(thread);
+    // The parent's agent_finished proves the child ran; its log is gone from this store.
+    const { db } = await storeConnection(store);
+    const elsewhere = "0192a000-0000-7000-8000-0000000000ef";
+    db.run(
+      "INSERT INTO threads (thread_id, tenant_id) SELECT ?, tenant_id FROM threads WHERE thread_id = ?",
+      [elsewhere, kidId ?? ""],
+    );
+    db.run("UPDATE branches SET thread_id = ? WHERE thread_id = ?", [
+      elsewhere,
+      kidId ?? "",
+    ]);
+    const total = await tree(thread);
+    expect(code(total)).toBe("log_corrupt");
+    expect(total.ok ? "" : total.error.message).toContain(
+      `child ${kidId}: its log is missing`,
+    );
   });
 
   test("a corrupt grandchild under an unpriced child is log_corrupt", async () => {

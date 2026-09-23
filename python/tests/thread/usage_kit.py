@@ -25,10 +25,12 @@ _PARTS: TypeAdapter[list[OutputPart]] = TypeAdapter(list[OutputPart])
 class Priced(ScriptedModel):
     """A scripted model that declares a price; still scripted, so the request guard allows it."""
 
+    price: JsonValue = PRICE
+
     @property
     def info(self) -> ModelInfo:
         base = super().info
-        limits = {**base.limits.model_dump(mode="json"), "price": PRICE}
+        limits = {**base.limits.model_dump(mode="json"), "price": self.price}
         return ModelInfo(
             base.model, base.adapter, base.params, ModelLimits.model_validate(limits), base.lookup
         )
@@ -56,8 +58,10 @@ def usd(known: int, *, exact: bool) -> Cost:
     )
 
 
-def priced(*replies: ModelResponse) -> Priced:
-    return Priced(list(replies), {})
+def priced(*replies: ModelResponse, price: JsonValue = PRICE) -> Priced:
+    model = Priced(list(replies), {})
+    model.price = price
+    return model
 
 
 def unpriced(*replies: ModelResponse) -> ScriptedModel:

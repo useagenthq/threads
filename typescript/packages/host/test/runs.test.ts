@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { storeConnection } from "@threads/core/host";
 import {
   alice,
   bob,
@@ -168,6 +169,34 @@ describe("POST /v1/runs", () => {
       headers: { "idempotency-key": "k-3" },
     });
     expect(nobody.status).toBe(404);
+  });
+
+  test("a log from a newer writer answers unsupported_critical_event, not not_found", async () => {
+    const { call, store } = start({ responses: [say("Hi")] });
+    const accepted = await (
+      await call("POST", "/v1/runs", { as: alice, body, headers: key })
+    ).json();
+    await sseMessages(
+      await call(
+        "GET",
+        `/v1/threads/${accepted.thread_id}/runs/${accepted.run_id}/events`,
+        { as: alice },
+      ),
+    );
+    const { db } = await storeConnection(store);
+    db.run(
+      `UPDATE events SET line = CAST(replace(CAST(line AS TEXT), '"type":"turn_completed"', '"type":"approval_quorum"') AS BLOB) WHERE branch_id = ?`,
+      [accepted.branch_id],
+    );
+    const response = await call(
+      "GET",
+      `/v1/threads/${accepted.thread_id}/timeline`,
+      { as: alice },
+    );
+    expect(response.status).toBe(409);
+    expect((await response.json()).error.code).toBe(
+      "unsupported_critical_event",
+    );
   });
 
   test("a branch_id that is not the thread's is not_found", async () => {

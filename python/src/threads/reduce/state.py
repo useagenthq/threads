@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import JsonValue
 
-from threads.log import BranchId, CallId, EventId, ParkAddress, ThreadId
+from threads.log import BranchId, CallId, EventId, ParkAddress, ThreadId, UsageTotals
 from threads.reduce.fold import EffectStatus, Fold
 from threads.reduce.transcript import TranscriptEntry, transcript
 
@@ -30,14 +30,6 @@ class EffectState:
 class ForkPoint:
     seq: int
     snapshot_event_id: EventId
-
-
-@dataclass(frozen=True, slots=True)
-class UsageTotals:
-    input_tokens: int
-    output_tokens: int
-    unknown_responses: int
-    """Responses where either count is null. Unknown is never summed as zero."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +85,11 @@ def _status(fold: Fold) -> Status:
 
 
 def usage_totals(fold: Fold) -> UsageTotals:
-    return UsageTotals(fold.input_tokens, fold.output_tokens, fold.unknown_responses)
+    return UsageTotals(
+        input_tokens=fold.input_tokens,
+        output_tokens=fold.output_tokens,
+        unknown_responses=fold.unknown_responses,
+    )
 
 
 def reduced_state(fold: Fold, head: HeadRef) -> ReducedState:

@@ -1,5 +1,5 @@
 import type { EffectStatus, Fold, ParkAddress } from "../fold/state";
-import type { KnownEvent } from "../log";
+import type { KnownEvent, UsageTotals } from "../log";
 import type { Chain } from "../verify/chain";
 import { type TranscriptEntry, transcript } from "./transcript";
 
@@ -27,11 +27,7 @@ export type ReducedState = {
     readonly seq: number;
     readonly snapshot_event_id: string;
   }[];
-  readonly usage: {
-    readonly input_tokens: number;
-    readonly output_tokens: number;
-    readonly unknown_responses: number;
-  };
+  readonly usage: UsageTotals;
   readonly transcript: readonly TranscriptEntry[];
   readonly status: BranchStatus;
   readonly head: { readonly seq: number; readonly hash: string };

@@ -11,15 +11,23 @@ from thread.usage_kit import ONE, check, corrupt, priced, run, say, unpriced, us
 
 from threads import ConfigError, Store, agent
 from threads.agents.store import now_ms, open_store
-from threads.log import BranchId, ThreadId
+from threads.log import BranchId, ThreadId, UsageTotals
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.loop.drafts import draft
 from threads.reduce.projections import cost
-from threads.reduce.state import UsageTotals, usage_totals
+from threads.reduce.state import usage_totals
 from threads.result import Err, Ok
 from threads.store.lines import uuid7
 from threads.thread.handle import open_thread
+
+
+def totals(input_tokens: int, output_tokens: int, unknown_responses: int) -> UsageTotals:
+    return UsageTotals(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        unknown_responses=unknown_responses,
+    )
 
 
 def test_usage_is_the_reduced_usage_and_unknown_is_never_zero() -> None:
@@ -28,10 +36,10 @@ def test_usage_is_the_reduced_usage_and_unknown_is_never_zero() -> None:
         read = await (await open_store(store)).read(thread.branch, now_ms())
         assert isinstance(read, Ok)
         assert await thread.usage() == Ok(usage_totals(read.value.fold))
-        assert await thread.usage() == Ok(UsageTotals(10, 2, 0))
+        assert await thread.usage() == Ok(totals(10, 2, 0))
         unknown = say("Hi.", {"input_tokens": None, "output_tokens": 2})
         other = await run(store, priced(unknown))
-        assert await other.usage() == Ok(UsageTotals(0, 2, 1))
+        assert await other.usage() == Ok(totals(0, 2, 1))
 
     check(body)
 
@@ -42,7 +50,7 @@ def test_a_priced_agent_pins_usd_and_costs_the_projection() -> None:
         read = await (await open_store(store)).read(thread.branch, now_ms())
         assert isinstance(read, Ok)
         own = await thread.cost()
-        assert own == Ok(cost(read.value.fold))
+        assert own == cost(read.value.fold)
         assert own == Ok(usd(ONE, exact=True))
 
     check(body)
@@ -76,7 +84,7 @@ def test_a_log_with_only_thread_started() -> None:
         await rewrite_log(store, ran.id, lambda lines: lines[:1])
         opened = await open_thread(store, ran.id)
         assert isinstance(opened, Ok)
-        assert await opened.value.usage() == Ok(UsageTotals(0, 0, 0))
+        assert await opened.value.usage() == Ok(totals(0, 0, 0))
         assert await opened.value.cost() == Ok(None)
         assert await opened.value.cache_breaks() == Ok(())
 

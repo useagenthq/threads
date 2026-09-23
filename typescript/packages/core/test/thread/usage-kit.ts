@@ -40,11 +40,14 @@ export function spawn(name: string): Reply {
 export type Store = ReturnType<typeof sqlite>;
 
 /** A scripted model that declares a price; still test kit, so the request guard allows it. */
-export function priced(responses: readonly unknown[]): Model {
+export function priced(
+  responses: readonly unknown[],
+  price: { readonly input: number; readonly output: number } = PRICE,
+): Model {
   const base = scriptedModel({ responses });
   const model: Model = {
     ...base,
-    info: { ...base.info, limits: { ...base.info.limits, price: PRICE } },
+    info: { ...base.info, limits: { ...base.info.limits, price } },
   };
   markTestKit(model);
   return model;

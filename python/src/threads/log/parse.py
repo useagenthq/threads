@@ -31,6 +31,7 @@ type ApiCode = Literal[
     "unauthenticated",
     "unverified",
     "invalid",
+    "cost_overflow",
 ]
 """branch_not_found: a branch that is absent or another tenant's. branch_exists: a thread
 another tenant owns. sandbox_required: a fork with no sandbox adapter for its snapshot's

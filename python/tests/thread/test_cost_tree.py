@@ -142,14 +142,37 @@ def test_a_started_child_that_made_no_model_request_changes_nothing() -> None:
     check(body)
 
 
-def test_a_spawned_child_with_no_thread_was_never_started() -> None:
+def test_a_spawned_child_that_never_started_changes_nothing() -> None:
     async def body(store: Store) -> None:
-        kid = agent(name="kid", model=unpriced(say("Kid.")))
+        kid = agent(name="kid", model=priced(say("Kid.")))
+        thread = await run(store, priced(spawn("kid"), say("Done.")), [kid])
+        kid_id = (await child_ids(thread))[0]
+        unstarted = uuid7(now_ms())
+
+        # As if the host crashed right after agent_spawned: the spawn names a child with no
+        # thread, and nothing after it (no agent_finished) was written.
+        def spawn_only(lines: list[Line]) -> list[Line]:
+            at = next(i for i, line in enumerate(lines) if line["type"] == "agent_spawned")
+            return [
+                obj(json.loads(json.dumps(line).replace(kid_id, unstarted)))
+                for line in lines[: at + 1]
+            ]
+
+        await rewrite_log(store, thread.id, spawn_only)
+        # Only the lead's first response (the spawn) was recorded.
+        assert await thread.cost(tree=True) == Ok(usd(ONE, exact=True))
+
+    check(body)
+
+
+def test_a_finished_child_whose_log_is_missing_is_log_corrupt_never_a_partial_sum() -> None:
+    async def body(store: Store) -> None:
+        kid = agent(name="kid", model=priced(say("Kid.")))
         thread = await run(store, priced(spawn("kid"), say("Done.")), [kid])
         kid_id = (await child_ids(thread))[0]
         elsewhere = uuid7(now_ms())
 
-        # As if the parent crashed between agent_spawned and the child's first line.
+        # The parent's agent_finished proves the child ran; its log is gone from this store.
         def move(c: sqlite3.Connection) -> None:
             c.execute(
                 "INSERT INTO threads (thread_id, tenant_id)"
@@ -159,7 +182,9 @@ def test_a_spawned_child_with_no_thread_was_never_started() -> None:
             c.execute("UPDATE branches SET thread_id = ? WHERE thread_id = ?", (elsewhere, kid_id))
 
         await (await open_store(store)).run(move)
-        assert await thread.cost(tree=True) == Ok(usd(2 * ONE, exact=True))
+        code, message = await failure(thread)
+        assert code == "log_corrupt"
+        assert f"child {kid_id}: its log is missing" in message
 
     check(body)
 

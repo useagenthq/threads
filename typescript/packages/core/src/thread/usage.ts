@@ -1,12 +1,11 @@
 import type { EventOf } from "../fold/state";
-import type { BranchId, CacheBreak, Cost, ThreadId } from "../log";
+import type { BranchId, CacheBreak, Cost, ThreadId, UsageTotals } from "../log";
 import { contextPolicy } from "../loop/policy";
 import {
   cacheBreaks,
   cost,
   knownEvents,
   mergeTree,
-  type ReducedState,
   reduce,
   type TreePart,
 } from "../reduce";
@@ -23,7 +22,7 @@ export type ThreadUsage = {
    * Token totals over this branch (a fork counts its parent's prefix). A response whose count
    * the provider didn't report is counted in unknown_responses, never as zero.
    */
-  readonly usage: () => Promise<Result<ReducedState["usage"], LogError>>;
+  readonly usage: () => Promise<Result<UsageTotals, LogError>>;
   /**
    * What the thread spent, in nano-units of its pinned currency (USD for agent()), with a
    * conservative upper bound; null when the thread pins no prices. `tree: true` adds every
@@ -51,9 +50,11 @@ export function usageMethods(
     cost: async (options = {}) => {
       const read = readLog(log, branchId);
       if (!read.ok) return read;
-      if (options.tree !== true) return ok(ownCost(read.value) ?? null);
-      const parts = treeParts(log, threadId, read.value);
-      return parts.ok ? ok(mergeTree(parts.value) ?? null) : parts;
+      const total =
+        options.tree === true
+          ? treeCost(log, threadId, read.value)
+          : ownCost(read.value);
+      return total.ok ? ok(total.value ?? null) : total;
     },
     cacheBreaks: async () => {
       const read = readLog(log, branchId);
@@ -65,8 +66,35 @@ export function usageMethods(
   };
 }
 
-function ownCost(chain: VerifiedLog): Cost | undefined {
-  return cost(knownEvents(chain), chain.fold.policy);
+/** The thread's own cost projection, if the wire can carry it. */
+function ownCost(chain: VerifiedLog): Result<Cost | undefined, LogError> {
+  return representable(cost(knownEvents(chain), chain.fold.policy));
+}
+
+/**
+ * A cost whose nanos are wire integers (at most 2^53 - 1), else cost_overflow; never a saturated
+ * or rounded amount. Nanos are sums and products of non-negative integers, and float rounding is
+ * monotonic with 2^53 itself exact, so a true value past the range always computes past it.
+ */
+function representable(
+  total: Cost | undefined,
+): Result<Cost | undefined, LogError> {
+  const fits =
+    total === undefined ||
+    (Number.isSafeInteger(total.known_nanos) &&
+      Number.isSafeInteger(total.upper_bound_nanos));
+  return fits
+    ? ok(total)
+    : err(logError("cost_overflow", "the cost exceeds 2^53 - 1 nanos"));
+}
+
+function treeCost(
+  log: LogStore,
+  root: ThreadId,
+  chain: VerifiedLog,
+): Result<Cost | undefined, LogError> {
+  const parts = treeParts(log, root, chain);
+  return parts.ok ? representable(mergeTree(parts.value)) : parts;
 }
 
 type Spawned = EventOf<"agent_spawned">;
@@ -89,14 +117,19 @@ function treeParts(
         logError("log_corrupt", `thread ${id} appears twice in the tree`),
       );
     seen.add(id);
+    const own = ownCost(at);
+    if (!own.ok) return own;
     const events = knownEvents(at);
     parts.push({
-      cost: ownCost(at),
+      cost: own.value,
       ran: events.some((e) => e.type === "model_request"),
     });
     for (const spawn of events.filter((e) => e.type === "agent_spawned")) {
       const child = spawn.data.child_thread_id;
-      const read = childLog(log, spawn);
+      const finished = events.some(
+        (e) => e.type === "agent_finished" && e.data.child_thread_id === child,
+      );
+      const read = childLog(log, spawn, finished);
       const below =
         read.ok && read.value !== undefined ? visit(child, read.value) : read;
       if (!below.ok) return err(inChild(child, below.error));
@@ -107,14 +140,27 @@ function treeParts(
   return walked.ok ? ok(parts) : walked;
 }
 
-/** The spawned child's log; undefined when it has no thread yet, so it never started. */
+/**
+ * The spawned child's log; undefined when it has no thread and its parent never recorded it
+ * finishing, so it never started. A finished child's missing log is log_corrupt: counting
+ * nothing for it would be a partial sum.
+ */
 function childLog(
   log: LogStore,
   spawn: Spawned,
+  finished: boolean,
 ): Result<VerifiedLog | undefined, LogError> {
   const branch = log.mainBranch(spawn.data.child_thread_id);
-  if (!branch.ok)
-    return branch.error.code === "branch_not_found" ? ok(undefined) : branch;
+  if (!branch.ok && branch.error.code === "branch_not_found")
+    return finished
+      ? err(
+          logError(
+            "log_corrupt",
+            "its log is missing, though its parent recorded agent_finished for it",
+          ),
+        )
+      : ok(undefined);
+  if (!branch.ok) return branch;
   const read = readLog(log, branch.value);
   if (!read.ok) return read;
   const started = knownEvents(read.value).find(

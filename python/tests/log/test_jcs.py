@@ -4,7 +4,7 @@ import struct
 from decimal import localcontext
 
 import pytest
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pydantic import JsonValue
 
@@ -106,6 +106,12 @@ JSON_VALUES: st.SearchStrategy[JsonValue] = st.recursive(
 )
 
 
+# Only timing is relaxed: on a loaded machine (a full suite run) a large generated value can pass
+# hypothesis's 200 ms deadline or its slow-generation health check, failing a property that holds.
+TIMING_FREE = settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
+
+
+@TIMING_FREE
 @given(JSON_VALUES)
 def test_round_trip_and_idempotence(value: JsonValue) -> None:
     text = canonicalize(value)
@@ -116,6 +122,7 @@ def test_round_trip_and_idempotence(value: JsonValue) -> None:
     assert canonicalize(parsed.value) == text
 
 
+@TIMING_FREE
 @given(st.floats(allow_nan=False, allow_infinity=False))
 def test_numbers_round_trip_exactly(value: float) -> None:
     text = canonicalize(value)
