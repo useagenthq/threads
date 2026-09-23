@@ -28,7 +28,7 @@ def build(root: pathlib.Path) -> None:
     _cache_break_exact(root)
     _max_tokens_unbounded(
         root,
-        True,  # noqa: FBT003 - the pinned value under test
+        True,
         "cost-max-tokens-not-integer",
         "The pinned model_params.max_tokens is true, not an integer, so the attempt has no "
         "output bound. Its request has no response, so cost can't bound it: bounded false. "
