@@ -42,13 +42,19 @@ export type { VerifiedSnapshot };
 export type Captured = Result<VerifiedSnapshot, LogError | CaptureFailure>;
 
 /** The snapshot event: the one way a capture becomes a fork point. */
-export function snapshotEvent(snapshot: VerifiedSnapshot): EventDraft {
+export function snapshotEvent(
+  snapshot: VerifiedSnapshot,
+  knowledgeRevision?: number,
+): EventDraft {
   return {
     type: "snapshot",
     type_version: 1,
     critical: true,
     actor: { kind: "host" },
-    data: snapshot.data,
+    data:
+      knowledgeRevision === undefined
+        ? snapshot.data
+        : { ...snapshot.data, knowledge_revision: knowledgeRevision },
   };
 }
 

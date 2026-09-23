@@ -24,12 +24,14 @@ import { type Extension, observerOf } from "./extension";
 import { handedOff } from "./handoff";
 import type { ChildPin, PinOptions } from "./pin";
 import { pin } from "./pin";
+import { bindProviders } from "./providers";
 import {
   type Decode,
   type RunResult,
   runResult,
   type ThreadRef,
 } from "./result";
+import type { Setup } from "./setup";
 import { snapshotTurn } from "./snapshot";
 import { openStore, type Store, sqlite } from "./sqlite";
 import type { Tool } from "./tool";
@@ -47,16 +49,20 @@ export type RunOptions<Deps> = {
   readonly signal?: AbortSignal;
 };
 
-export type Resolved<Deps, Output> = PinOptions & {
+export type Resolved<Deps, Output> = Omit<PinOptions, "mcp"> & {
   readonly bindable: readonly Tool<unknown, unknown, Deps>[];
   readonly hookable: readonly Extension<Deps>[];
-  readonly setup: () => Promise<void>;
+  readonly setup: Setup;
   readonly decode: Decode<Output>;
   /** The agents behind PinOptions.subagents, by name. */
   readonly agents: readonly Agent<never, unknown>[];
   /** The agents behind PinOptions.handoffs, by name. */
   readonly targets: readonly Agent<never, unknown>[];
 };
+
+/** An agent after setup: its MCP servers' tools are known. */
+export type SetUp<Deps, Output> = Resolved<Deps, Output> &
+  Pick<PinOptions, "mcp">;
 
 /** The local operator. */
 const OPERATOR: Principal = {
@@ -126,8 +132,8 @@ export async function execute<Deps, Output>(
   const { store, child, principal, target } = plan;
   const { log, artifacts } = await openStore(store);
   const link = linkOf(plan);
-  const pinned = pin(def, link);
-  await def.setup();
+  const set: SetUp<Deps, Output> = { ...def, mcp: await def.setup() };
+  const pinned = pin(set, link);
   // Each run is its own executor: a second run on a busy branch is branch_busy.
   const holder = `run-${crypto.randomUUID()}`;
   const opened = open(
@@ -156,6 +162,13 @@ export async function execute<Deps, Output>(
         artifacts,
       },
     );
+    const providers = await bindProviders(def, {
+      log,
+      artifacts,
+      principal,
+      threadId: thread.id,
+      events: () => knownEvents(writer.chain),
+    });
     const observers = new ObserverPump(
       log.cursors,
       thread.branch,
@@ -163,7 +176,7 @@ export async function execute<Deps, Output>(
       def.hookable.flatMap((e) => observerOf(e) ?? []),
     );
     observers.poke();
-    const config = loopConfig(def, {
+    const config = loopConfig(set, {
       options: plan,
       principal,
       thread,
@@ -174,7 +187,8 @@ export async function execute<Deps, Output>(
           observers.poke();
         },
       },
-      builtin: builtin.tools,
+      builtin: [...builtin.tools, ...providers.tools],
+      events: () => knownEvents(writer.chain),
       ledger: log.budgets,
       ...(builtin.readFile === undefined ? {} : { readFile: builtin.readFile }),
       ...(child === undefined ? {} : { child }),
@@ -189,7 +203,13 @@ export async function execute<Deps, Output>(
       end = await resume(writer, artifacts, config, { input });
     }
     if (end.kind === "idle" && child === undefined)
-      await snapshotTurn(def.sandbox, builtin.session, log.ledger, writer);
+      await snapshotTurn(
+        def.sandbox,
+        builtin.session,
+        log.ledger,
+        writer,
+        await providers.revision(),
+      );
     if (end.kind === "idle" && writer.chain.fold.handedOff)
       return handedOff(def, plan, knownEvents(writer.chain), thread);
     return runResult(

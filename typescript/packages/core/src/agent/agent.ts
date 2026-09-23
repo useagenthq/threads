@@ -7,6 +7,7 @@ import type {
   PermissionsPolicy,
   RetryPolicy,
 } from "../log";
+import type { KnowledgeProvider, MemoryProvider } from "../memory/protocol";
 import type { Model } from "../model";
 import type { Sandbox } from "../sandbox";
 import type { Egress } from "../tools";
@@ -14,10 +15,11 @@ import { subagent } from "./child";
 import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
 import { target } from "./handoff";
-import { pin } from "./pin";
+import { type MemoryWrite, pin } from "./pin";
 import { register } from "./registry";
 import type { RunResult } from "./result";
 import { type Resolved, type RunOptions, run } from "./run";
+import { isMcp, type McpServer, once } from "./setup";
 import type { Tool } from "./tool";
 
 // agent() (spec/api.json): pure. It does no I/O, reads no env and opens no sockets; its setup
@@ -28,7 +30,8 @@ export type AgentOptions<Deps, Output> = {
   /** Pinned system text (Render v1 line 0). */
   readonly instructions?: string;
   readonly name?: string;
-  readonly tools?: readonly Tool<unknown, unknown, Deps>[];
+  /** App tools and MCP servers (mcp() in @threads/mcp). */
+  readonly tools?: readonly (Tool<unknown, unknown, Deps> | McpServer)[];
   /** Structured final output; absent: the output is the final text. */
   readonly output?: z.ZodType<Output>;
   readonly outputRetries?: number;
@@ -49,6 +52,12 @@ export type AgentOptions<Deps, Output> = {
   readonly subagents?: readonly Agent<never, unknown>[];
   /** Agents this one may hand the conversation to, pinned as policy.handoffs. */
   readonly handoffs?: readonly Agent<never, unknown>[];
+  /** Saved cross-run memory: localMemory() or an adapter. */
+  readonly memory?: MemoryProvider;
+  /** Write authority for save_memory and forget_memory. */
+  readonly memoryWrite?: MemoryWrite;
+  /** Retrieval over host-admitted sources: localKnowledge({paths}) or an adapter. */
+  readonly knowledge?: KnowledgeProvider;
 };
 
 /** One item of stream(): a committed event, or a transient text delta (never logged). */
@@ -107,12 +116,14 @@ function build<Deps, Output>(
   options: AgentOptions<Deps, Output>,
   decode: Resolved<Deps, Output>["decode"],
 ): Agent<Deps, Output> {
+  const tools = (options.tools ?? []).flatMap((t) => (isMcp(t) ? [] : [t]));
+  const servers = (options.tools ?? []).filter(isMcp);
   const def: Resolved<Deps, Output> = {
     name: options.name ?? "agent",
     model: options.model,
     instructions: options.instructions ?? "",
-    tools: options.tools ?? [],
-    bindable: options.tools ?? [],
+    tools,
+    bindable: tools,
     output: options.output,
     outputRetries: options.outputRetries ?? 2,
     fallback: options.fallback ?? [],
@@ -124,7 +135,13 @@ function build<Deps, Output>(
     egress: options.egress,
     extensions: options.extensions ?? [],
     hookable: options.extensions ?? [],
-    setup: once(options.extensions ?? []),
+    memory: options.memory,
+    memoryWrite: options.memoryWrite ?? "ask",
+    knowledge: options.knowledge,
+    setup: once(options.extensions ?? [], servers, [
+      options.memory,
+      options.knowledge,
+    ]),
     decode,
     ...agentsOf(options),
   };
@@ -134,8 +151,7 @@ function build<Deps, Output>(
     stream: (input, runOptions = {}) => stream(def, input, runOptions),
     check: async () => {
       try {
-        pin(def);
-        await def.setup();
+        pin({ ...def, mcp: await def.setup() });
         return { ok: true, value: undefined };
       } catch (error) {
         if (!(error instanceof ConfigError)) throw error;
@@ -164,29 +180,6 @@ function agentsOf<Deps, Output>(
     handoffs: targets.map((a) => a.name),
     agents,
     targets,
-  };
-}
-
-/** Each extension's setup runs once, at check() or the first run; a throw is a ConfigError. */
-function once<Deps>(
-  extensions: readonly Extension<Deps>[],
-): () => Promise<void> {
-  let done: Promise<void> | undefined;
-  const all = async (): Promise<void> => {
-    for (const e of extensions) {
-      try {
-        await e.setup?.();
-      } catch (error) {
-        throw new ConfigError(
-          "invalid_config",
-          `extension ${e.name}: setup failed: ${String(error)}`,
-        );
-      }
-    }
-  };
-  return () => {
-    done ??= all();
-    return done;
   };
 }
 

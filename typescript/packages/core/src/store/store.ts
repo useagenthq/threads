@@ -5,6 +5,7 @@ import { err, ok, type Result } from "../result";
 import { type Chain, tipHash, type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import type { ArtifactStore } from "./artifacts";
+import { HostBindings } from "./bindings";
 import { newBranch } from "./branch";
 import { BudgetLedger } from "./budget";
 import { ObserverCursors } from "./cursors";
@@ -343,6 +344,16 @@ export class LogStore {
   /** Durable observer cursors. */
   get cursors(): ObserverCursors {
     return new ObserverCursors(this.#db);
+  }
+
+  /** Host-issued memory and knowledge bindings and their audit. */
+  get bindings(): HostBindings {
+    return new HostBindings(this.#db, this.#now);
+  }
+
+  /** The connection, for core's built-in providers' private tables (localMemory, localKnowledge). */
+  get driver(): SqliteDriver {
+    return this.#db;
   }
 
   /** Stores the child's row and header, and loads its chain: the parent's through at_seq. */

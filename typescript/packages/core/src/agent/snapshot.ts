@@ -21,11 +21,14 @@ export async function snapshotTurn(
   session: SessionGetter,
   ledger: ResourceLedger,
   writer: Writer,
+  /** The corpus revision this branch searches as of, when it has knowledge. */
+  knowledgeRevision?: number,
 ): Promise<void> {
   if (sandbox === undefined || !ranEffects(knownEvents(writer.chain))) return;
   const live = await session();
   if (!live.ok) return;
   const captured = await captureSnapshot(ledger, writer, sandbox, live.value);
   // ponytail: a refused capture only costs this turn its fork point; it is not reported yet.
-  if (captured.ok) writer.append([snapshotEvent(captured.value)]);
+  if (captured.ok)
+    writer.append([snapshotEvent(captured.value, knowledgeRevision)]);
 }

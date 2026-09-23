@@ -1,4 +1,4 @@
-import type { Principal } from "../log";
+import type { KnownEvent, Principal } from "../log";
 import {
   type Agents,
   type Authorization,
@@ -13,9 +13,10 @@ import { category, decide } from "../permissions";
 import type { BudgetLedger } from "../store";
 import { loopExtension } from "./extension";
 import { extensionTools } from "./pin";
+import { withMemoryWrite } from "./providers";
 import { childFactory } from "./registry";
 import type { ThreadRef } from "./result";
-import type { Hooks, Resolved, RunOptions } from "./run";
+import type { Hooks, Resolved, RunOptions, SetUp } from "./run";
 import { redactSecrets } from "./secret";
 
 // The loop config for one run of an agent: its models, bound tools, hooks, permission fold and
@@ -33,10 +34,12 @@ export type RunEnv<Deps> = {
   readonly readFile?: (path: string) => Promise<Uint8Array | undefined>;
   readonly child?: ChildRun;
   readonly ledger: BudgetLedger;
+  /** The branch's events, for the host's memory write authority. */
+  readonly events: () => readonly KnownEvent[];
 };
 
 export function loopConfig<Deps, Output>(
-  def: Resolved<Deps, Output>,
+  def: SetUp<Deps, Output>,
   env: RunEnv<Deps>,
 ): LoopConfig {
   const { options, principal, thread, hooks, readFile } = env;
@@ -56,7 +59,7 @@ export function loopConfig<Deps, Output>(
       ),
     tools: new Map([
       ...env.builtin.map((t) => [t.spec.name, t] as const),
-      ...[...def.bindable, ...extensionTools(def.hookable)].map(
+      ...[...def.bindable, ...extensionTools(def.hookable, def.mcp)].map(
         (t) => [t.name, t.bind(bindEnv)] as const,
       ),
     ]),
@@ -67,7 +70,16 @@ export function loopConfig<Deps, Output>(
         ...(hc.callId === undefined ? {} : { callId: hc.callId }),
       })),
     ),
-    authorize: narrowed(authorize, env.child),
+    authorize: narrowed(
+      (call, fold) =>
+        withMemoryWrite(
+          authorize(call, fold),
+          def.memoryWrite,
+          call.data.name,
+          env.events(),
+        ),
+      env.child,
+    ),
     clock: {
       now: Date.now,
       sleepUntil: async (time) => {

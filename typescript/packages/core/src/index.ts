@@ -1,4 +1,5 @@
 export * from "./agent";
+export * from "./memory";
 export {
   blockRealModels,
   type LookupCapability,

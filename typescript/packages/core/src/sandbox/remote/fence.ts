@@ -7,7 +7,10 @@ import type { SandboxContext, Stale } from "../protocol";
 // re-checks that context as each request leaves, after any SDK queueing or retry. A refusal is
 // also recorded on the operation, because an SDK may rethrow it as its own error without cause.
 
-type Scope = { readonly context: SandboxContext; refused?: Stale };
+/** What an operation is fenced by: a sandbox context, or any lease-bound fence (a tool's). */
+export type Fence = Pick<SandboxContext, "fence">;
+
+type Scope = { readonly context: Fence; refused?: Stale; sent: boolean };
 const current = new AsyncLocalStorage<Scope>();
 
 /** Thrown by a fenced transport before any byte leaves: the caller lost its authority. */
@@ -23,10 +26,10 @@ export class FenceRefused extends Error {
  * throw is the refusal that stopped it (however the SDK wrapped it), or the provider's error.
  */
 export async function within<T>(
-  context: SandboxContext,
+  context: Fence,
   operation: () => Promise<T>,
 ): Promise<Result<T, { readonly stale?: Stale; readonly error: unknown }>> {
-  const scope: Scope = { context };
+  const scope: Scope = { context, sent: false };
   try {
     return ok(await current.run(scope, operation));
   } catch (error) {
@@ -47,9 +50,45 @@ export async function fenceHere(): Promise<void> {
       message: "no threads sandbox operation is in progress",
     });
   const live = await scope.context.fence();
-  if (live.ok) return;
+  if (live.ok) {
+    scope.sent = true;
+    return;
+  }
   scope.refused = live.error;
   throw new FenceRefused(live.error);
+}
+
+/**
+ * One operation of a provider that answers with values (memory, MCP): its outcome, whether any
+ * request passed the fence (`sent`), and whether one was refused. Only `refused && !sent`
+ * proves nothing left; anything else after a failure is uncertain.
+ */
+export type Dispatched<T> = {
+  readonly outcome: Result<T, unknown>;
+  readonly sent: boolean;
+  readonly refused: boolean;
+};
+
+export async function dispatched<T>(
+  context: Fence,
+  operation: () => Promise<T>,
+): Promise<Dispatched<T>> {
+  const scope: Scope = { context, sent: false };
+  try {
+    const value = await current.run(scope, operation);
+    return {
+      outcome: ok(value),
+      sent: scope.sent,
+      refused: scope.refused !== undefined,
+    };
+  } catch (error) {
+    const refused = scope.refused ?? causedBy(error);
+    return {
+      outcome: err(error),
+      sent: scope.sent,
+      refused: refused !== undefined,
+    };
+  }
 }
 
 /** Wraps the fetch a provider SDK sends through with the fence. */

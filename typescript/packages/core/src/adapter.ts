@@ -1,7 +1,11 @@
 // @threads/core/adapter: what a model adapter package builds on. Core never imports adapters.
 
 export { ConfigError } from "./agent/errors";
+export { jsonSchema } from "./agent/tool";
 export { assertNever } from "./assert-never";
+export { sha256Hex } from "./hash";
+/** What a tool provider package (MCP) builds on: the dispatchable tool and its run context. */
+export type { EffectClass, ToolSpec } from "./log";
 export {
   type ArtifactRef,
   type InputPart,
@@ -12,6 +16,18 @@ export {
   type ResultPart,
   type Usage,
 } from "./log";
+export type { ToolContext, ToolImpl, ToolRun } from "./loop/types";
+/** The memory and knowledge provider kit: protocols, and the suites every provider passes. */
+export {
+  knowledgeProviderSuite,
+  memoryProviderSuite,
+  type Runner,
+} from "./memory/conformance";
+export {
+  KnowledgeHit,
+  MemoryHit,
+  type ProviderError,
+} from "./memory/protocol";
 export type {
   LookupCapability,
   LookupResult,
@@ -47,6 +63,7 @@ export {
   StaleEpochError,
   staleEpoch,
 } from "./model/transport";
+export { reference } from "./render/lines";
 export type {
   Sandbox,
   SandboxContext,

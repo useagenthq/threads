@@ -3,6 +3,7 @@ import type { EventOf } from "../fold/state";
 import { effectKey } from "../fold/state";
 import { sha256Hex } from "../hash";
 import { canonicalize } from "../log";
+import { err, ok } from "../result";
 import type { EventDraft } from "../store";
 import { authorize } from "./authorize";
 import { draft, TOOL } from "./drafts";
@@ -133,15 +134,11 @@ async function dispatch(
     if (fenced !== undefined) return fenced;
     const run = await body(s, call);
     // A read_only call changes nothing, so an uncertain run is just a failed one.
-    return s.append(
-      result(
-        s,
-        callId,
-        run.kind === "done"
-          ? run
-          : { kind: "done", output: `failed: ${run.kind}`, isError: true },
-      ),
-    );
+    const done: Extract<ToolRun, { kind: "done" }> =
+      run.kind === "done"
+        ? run
+        : { kind: "done", output: `failed: ${run.kind}`, isError: true };
+    return s.append(result(s, callId, done), ...injections(done));
   }
   const attempts = s.events.filter(
     (e) => e.type === "effect_begin" && e.data.call_id === callId,
@@ -189,6 +186,12 @@ async function body(s: Session, call: EventOf<"tool_call">): Promise<ToolRun> {
       epoch: s.epoch,
       principal: s.config.principal,
       signal: s.config.signal ?? new AbortController().signal,
+      fence: async () => {
+        const halted = s.fence();
+        return halted === undefined
+          ? ok(undefined)
+          : err({ code: "stale_epoch", message: halted.message });
+      },
     });
   } catch {
     // Anything after dispatch but a result is uncertainty, never a plain error.
@@ -229,6 +232,7 @@ function settle(
             : { provider_receipt: run.receipt }),
         }),
         resultOf(callId, run.isError, shown),
+        ...injections(run),
       );
     }
     case "unknown":
@@ -268,6 +272,11 @@ function result(
   run: Extract<ToolRun, { kind: "done" }>,
 ): EventDraft {
   return resultOf(callId, run.isError, recordOutput(s, callId, run.output));
+}
+
+/** The context a result brings, after it and before the next request (C6). */
+function injections(run: Extract<ToolRun, { kind: "done" }>): EventDraft[] {
+  return (run.inject ?? []).map((d) => draft.injected(d));
 }
 
 function resultOf(

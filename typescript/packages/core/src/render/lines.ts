@@ -52,7 +52,8 @@ export function userLine(text: string): Json {
   return { role: "user", content: [{ type: "text", text }] };
 }
 
-function reference(source: string, id: string, body: string): string {
+/** The one untrusted-reference wrapper (C6): escaped, so its text can never close it. */
+export function reference(source: string, id: string, body: string): string {
   return `<reference source="${esc(source)}" id="${esc(id)}" untrusted="true">\n${esc(body)}\n</reference>`;
 }
 

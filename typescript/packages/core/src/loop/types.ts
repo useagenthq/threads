@@ -4,6 +4,7 @@ import type { LoopExtension } from "../hooks/types";
 import type {
   BranchId,
   EventId,
+  InjectedData,
   KnownEvent,
   Policy,
   Principal,
@@ -12,6 +13,8 @@ import type {
   Usage,
 } from "../log";
 import type { LookupResult, Model } from "../model";
+import type { Result } from "../result";
+import type { Stale } from "../sandbox/protocol";
 import type { BudgetLedger } from "../store/budget";
 
 /**
@@ -52,6 +55,11 @@ export type ToolRun =
       readonly output: string;
       readonly isError: boolean;
       readonly receipt?: string;
+      /**
+       * Model-visible context the result brings, appended with it (recalled memory, retrieved
+       * knowledge: always untrusted reference, ).
+       */
+      readonly inject?: readonly z.infer<typeof InjectedData>[];
     }
   | { readonly kind: "unknown"; readonly reason: "timeout" | "transport_error" }
   /** The adapter proves the request never left. */
@@ -65,6 +73,11 @@ export type ToolContext = {
   readonly epoch: number;
   readonly principal: Principal;
   readonly signal: AbortSignal;
+  /**
+   * Re-checks the lease at the tool's real send point, for a tool whose body
+   * reaches a remote service: run the transport inside `within(ctx, ...)`.
+   */
+  readonly fence: () => Promise<Result<void, Stale>>;
 };
 
 /** A dispatchable tool: its pinned spec, its body, and the recovery contract its class needs. */

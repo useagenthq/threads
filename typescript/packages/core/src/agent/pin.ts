@@ -11,6 +11,8 @@ import {
 } from "../log";
 import { FINAL_OUTPUT, RETRY_DEFAULTS } from "../loop";
 import { CONTEXT_DEFAULTS } from "../loop/policy";
+import type { KnowledgeProvider, MemoryProvider } from "../memory/protocol";
+import { knowledgeSpecs, memorySpecs } from "../memory/tools";
 import type { Model } from "../model";
 import { DEFAULT_PERMISSIONS } from "../permissions";
 import type { Sandbox } from "../sandbox";
@@ -43,6 +45,11 @@ export type PinOptions = {
   readonly subagents: readonly string[];
   /** Agent names handoff may target, pinned as policy.handoffs. */
   readonly handoffs: readonly string[];
+  /** The MCP servers' tools, resolved at setup. */
+  readonly mcp: readonly Tool<unknown, unknown, unknown>[];
+  readonly memory: MemoryProvider | undefined;
+  readonly memoryWrite: MemoryWrite;
+  readonly knowledge: KnowledgeProvider | undefined;
 };
 
 type ThreadStarted = Extract<EventDraft, { type: "thread_started" }>["data"];
@@ -56,6 +63,12 @@ export type ChildPin = {
   readonly tools?: ReadonlySet<string>;
 };
 
+/** spec/api.json agent memory_write. */
+export type MemoryWrite = "deny" | "ask" | "allow_principal" | "allow";
+
+const byName = (a: { readonly name: string }, b: { readonly name: string }) =>
+  a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+
 /** The pinned tool specs and the thread_started draft. Throws ConfigError on a bad setup. */
 export function pin(
   options: PinOptions,
@@ -66,13 +79,17 @@ export function pin(
 } {
   const within = child?.tools;
   const o = within === undefined ? options : { ...options, sandbox: undefined };
+  // Built-ins (the framework and provider tools among them) sorted by name, then app tools,
+  // then extension and MCP tools sorted by namespaced name.
   const all = [
     ...[
       ...builtins(o.sandbox, o.egress).map((b) => b.spec),
       ...agentTools(o, within !== undefined).map(frameworkSpec),
-    ].toSorted((a, b) => (a.name < b.name ? -1 : 1)),
+      ...(o.memory === undefined ? [] : memorySpecs(o.memory)),
+      ...(o.knowledge === undefined ? [] : knowledgeSpecs()),
+    ].toSorted(byName),
     ...o.tools.map((t) => t.spec()),
-    ...extensionTools(o.extensions).map((t) => t.spec()),
+    ...extensionTools(o.extensions, o.mcp).map((t) => t.spec()),
   ];
   // A child never gains a tool its parent lacks.
   const specs = [
@@ -128,6 +145,7 @@ export function pin(
  */
 function hashedOnly(o: PinOptions): Record<string, unknown> {
   return {
+    ...(o.memory === undefined ? {} : { memory_write: o.memoryWrite }),
     ...(o.extensions.length === 0
       ? {}
       : {
@@ -185,13 +203,20 @@ function agentTools(o: PinOptions, member: boolean): readonly string[] {
   ];
 }
 
-/** Extension tools, namespaced <ext>__<tool> and sorted by that name. */
+/**
+ * Extension tools, namespaced <ext>__<tool>, with the MCP servers' mcp__<server>__<tool>,
+ * sorted by that name.
+ */
 export function extensionTools<Deps>(
   extensions: readonly Extension<Deps>[],
+  mcp: readonly Tool<unknown, unknown, unknown>[],
 ): readonly Tool<unknown, unknown, Deps>[] {
-  return extensions
-    .flatMap((e) => (e.tools ?? []).map((t) => namespaced(t, e.name)))
-    .toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return [
+    ...extensions.flatMap((e) =>
+      (e.tools ?? []).map((t) => namespaced(t, e.name)),
+    ),
+    ...mcp,
+  ].toSorted(byName);
 }
 
 function namespaced<Deps>(
