@@ -1,0 +1,198 @@
+{
+  "packages": {
+    "core": {
+      "ts": "@fixture/core",
+      "py": "fixture"
+    },
+    "host": {
+      "ts": "@fixture/host",
+      "py": "fixture.host"
+    }
+  },
+  "functions": {
+    "one": {
+      "ts": "one",
+      "py": "one",
+      "async": false,
+      "returns": {
+        "prim": "void"
+      },
+      "params": [
+        {
+          "name": "a",
+          "kind": "option",
+          "type": {
+            "prim": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "b",
+          "kind": "option",
+          "type": {
+            "prim": "integer"
+          },
+          "required": false
+        }
+      ]
+    },
+    "two": {
+      "ts": "two",
+      "py": "two",
+      "async": false,
+      "returns": {
+        "prim": "void"
+      },
+      "params": [
+        {
+          "name": "a",
+          "kind": "option",
+          "type": {
+            "prim": "string"
+          },
+          "required": false
+        },
+        {
+          "name": "c",
+          "kind": "option",
+          "type": {
+            "prim": "integer"
+          },
+          "required": false
+        }
+      ]
+    },
+    "three": {
+      "ts": "three",
+      "py": "three",
+      "async": false,
+      "returns": {
+        "prim": "void"
+      },
+      "params": [
+        {
+          "name": "a",
+          "kind": "option",
+          "type": {
+            "prim": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "b",
+          "kind": "option",
+          "type": {
+            "prim": "integer"
+          },
+          "required": false
+        },
+        {
+          "name": "c",
+          "kind": "option",
+          "type": {
+            "prim": "integer"
+          },
+          "required": false
+        }
+      ]
+    },
+    "four": {
+      "ts": "four",
+      "py": "four",
+      "async": false,
+      "returns": {
+        "prim": "void"
+      },
+      "params": [
+        {
+          "name": "a",
+          "kind": "option",
+          "type": {
+            "prim": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "d",
+          "kind": "option",
+          "type": {
+            "prim": "integer"
+          },
+          "required": false
+        }
+      ]
+    }
+  },
+  "types": {
+    "Model": {
+      "kind": "interface",
+      "role": "protocol",
+      "properties": {
+        "info": {
+          "type": {
+            "prim": "string"
+          },
+          "required": true
+        }
+      },
+      "methods": {
+        "send": {
+          "ts": "send",
+          "py": "send",
+          "async": false,
+          "params": [],
+          "returns": {
+            "prim": "void"
+          }
+        },
+        "lookup": {
+          "ts": "lookup",
+          "py": "lookup",
+          "async": false,
+          "optional": true,
+          "capability": "LooksUp",
+          "params": [],
+          "returns": {
+            "prim": "void"
+          }
+        },
+        "close": {
+          "ts": "close",
+          "py": "close",
+          "async": false,
+          "params": [],
+          "returns": {
+            "prim": "void"
+          }
+        }
+      }
+    },
+    "Absent": {
+      "kind": "interface",
+      "role": "opaque"
+    },
+    "Skill": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "name": {
+          "type": {
+            "prim": "string"
+          },
+          "required": true
+        },
+        "short_note": {
+          "type": {
+            "prim": "string"
+          },
+          "required": false
+        }
+      }
+    },
+    "Moved": {
+      "kind": "interface",
+      "package": "host",
+      "role": "opaque"
+    }
+  }
+}

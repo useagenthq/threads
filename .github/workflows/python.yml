@@ -14,6 +14,9 @@ jobs:
         working-directory: python
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The API surface gate compares against the base commit, so it needs history.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
         with:
           working-directory: python
@@ -25,7 +28,7 @@ jobs:
       - run: uv run pyright --verifytypes threads --ignoreexternal
       - run: uv run ruff check
       - run: uv run ruff format --check
-      - run: uv run pytest
+      - run: uv run pytest --junitxml=junit.xml
       - name: Spec tooling is strictly typed and fixtures are current
         run: |
           uv run pyright ../spec/tools
@@ -33,6 +36,21 @@ jobs:
           uv run ruff format --check ../spec/tools
           uv run python ../spec/tools/gen_fixtures.py --check
           uv run python ../spec/tools/check_api.py
+      - name: API surface base
+        working-directory: .
+        run: |
+          BASE=$(scripts/surface-base.sh --event "${{ github.event_name }}" \
+            --base-ref "${{ github.base_ref }}" --before "${{ github.event.before }}")
+          if git cat-file -e "$BASE:spec/api-surface-gaps.json" 2>/dev/null; then
+            git show "$BASE:spec/api-surface-gaps.json" > "$RUNNER_TEMP/base-gaps.json"
+            git show "$BASE:spec/api.json" > "$RUNNER_TEMP/base-api.json"
+            echo "SURFACE_MODE=--baseline $RUNNER_TEMP/base-gaps.json --baseline-api $RUNNER_TEMP/base-api.json" >> "$GITHUB_ENV"
+          else
+            echo "SURFACE_MODE=--bootstrap $BASE" >> "$GITHUB_ENV"
+          fi
+      - name: API surface gate
+        working-directory: .
+        run: uv run --project python python spec/tools/check_surface.py --lang py --junit python/junit.xml $SURFACE_MODE
       - name: No file over 400 lines
         working-directory: .
         run: ./scripts/check-file-size.sh python

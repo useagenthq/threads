@@ -292,6 +292,45 @@ async def deny(
 
 **Returns an error value** with one of these codes: `forbidden`, `not_found`, `approval_mismatch`, `approval_expired`, `approval_duplicate`, `branch_busy`.
 
+### answer
+
+Answers an open ask_user question, recorded as that call's result, then resumes the branch. No built-in tool asks questions yet.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+answer(callId: CallId, answer: string | readonly string[], principal: Principal): Promise<Result<Appended>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def answer(
+    call_id: CallId,
+    answer: str | Sequence[str],
+    principal: Principal,
+) -> Ok[Appended] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="callId / call_id" type={"CallId"} required>
+  The call_id of the open ask_user call. A call that isn't waiting for an answer is no_open_question.
+</Field>
+
+<Field name="answer" type={"string | readonly string[]"} required>
+  The answer text, or the chosen options as a list (joined with newlines).
+</Field>
+
+<Field name="principal" type={"Principal"} required>
+  Who answers; it must be the principal whose input started the turn, else forbidden.
+</Field>
+
+**Returns an error value** with one of these codes: `forbidden`, `no_open_question`, `branch_busy`.
+
 ### resolveParked / resolve_parked
 
 A person settles a side effect whose outcome is unknown and that parked the branch, then the branch resumes. Use it when the effect can't be checked automatically.

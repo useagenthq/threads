@@ -1,11 +1,14 @@
-"""Paths and the hand-kept tables that adjust what spec/api.json says for readers.
+"""Paths, what is built, and the hand-kept tables that adjust what spec/api.json says for readers.
 
-spec/api.json is the contract, and it also lists members that are not built yet. Those are
-kept out of the docs by NOT_BUILT, and members built in one language only are marked by
-ONLY_IN. Update both tables when a member lands.
+spec/api.json is the contract, and it also lists members that are not built yet. Which ones is
+read from spec/api-surface-gaps.json, the one registry the API surface gate keeps honest: a
+member missing in both languages is left out of the docs (NOT_BUILT), and one missing in a single
+language is marked as built in the other (ONLY_IN).
 """
 
 from pathlib import Path
+
+from .json_access import array, load, obj, text
 
 ROOT = Path(__file__).resolve().parents[3]
 SPEC = ROOT / "spec"
@@ -15,22 +18,31 @@ OPENAPI = DOCS / "openapi.json"
 
 type Member = tuple[str, str | None]
 
-# (container, member): in spec/api.json, not in either implementation yet.
-NOT_BUILT: frozenset[Member] = frozenset(
-    {
-        ("agent", "browser"),
-        ("agent", "output_styles"),
-        ("agent", "stream_release"),
-        ("tool", "module"),
-        ("tool", "entrypoint"),
-        ("tool", "concurrent"),
-        ("Thread", "replay"),
-        ("Thread", "compact"),
-        ("Thread", "setOutputStyle"),
-        # Exists, but no tool asks the user a question yet (ask_user is not built).
-        ("Thread", "answer"),
+
+def _missing() -> dict[Member, set[str]]:
+    """(container, member) of each missing gap, with the languages it is missing from."""
+    gaps = [obj(entry) for entry in array(load(SPEC / "api-surface-gaps.json"))]
+    # An optional method's missing gap in Python is its capability protocol's (not exported
+    # yet), not the method's, so the docs neither hide it nor mark it one-language.
+    capabilities = {
+        f"{type_name}.{name}"
+        for type_name, t in obj(obj(load(SPEC / "api.json"))["types"]).items()
+        for name, m in obj(obj(t).get("methods", {})).items()
+        if "capability" in obj(m)
     }
-)
+    out: dict[Member, set[str]] = {}
+    for gap in gaps:
+        if text(gap["kind"]) == "missing" and text(gap["name"]) not in capabilities:
+            container, _, name = text(gap["name"]).rpartition(".")
+            out.setdefault((container, name), set()).add(text(gap["lang"]))
+    return out
+
+
+_MISSING = _missing()
+NOT_BUILT: frozenset[Member] = frozenset(m for m, ls in _MISSING.items() if ls == {"ts", "py"})
+ONLY_IN: dict[Member, str] = {
+    m: "py" if langs == {"ts"} else "ts" for m, langs in _MISSING.items() if len(langs) == 1
+}
 
 # HTTP routes left out for the same reason, by operationId.
 NOT_BUILT_ROUTES = frozenset({"answerQuestion"})
@@ -55,13 +67,6 @@ SUMMARIES = {
 
 # The address `threads dev` serves on, so the playground can build example requests.
 DEV_SERVER = "http://localhost:8787"
-
-# (container, member): built in one language only.
-ONLY_IN: dict[Member, str] = {
-    ("agent", "on_unknown_usage"): "py",
-    ("tool", "output"): "ts",
-    ("Agent", "check"): "ts",
-}
 
 # Extra sentences where today's behavior is narrower than the contract.
 NOTES: dict[Member, str] = {

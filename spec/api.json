@@ -2331,7 +2331,7 @@
       "generics": [{"name": "Input"}, {"name": "Output"}, {"name": "Deps", "default": {"prim": "null"}}],
       "doc": "An app tool (tool()). Carries Input, Output and Deps for inference."
     },
-    "McpServer": {"kind": "interface", "role": "opaque", "doc": "An MCP server binding (mcp())."},
+    "McpServer": {"kind": "interface", "package": "mcp", "role": "opaque", "doc": "An MCP server binding (mcp())."},
     "Extension": {
       "kind": "interface",
       "role": "opaque",
@@ -2361,6 +2361,7 @@
     },
     "Schedule": {
       "kind": "object",
+      "package": "host",
       "casing": "api",
       "fields": {
         "id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": true, "doc": "The schedule's name: lowercase letters, digits and underscores, up to 64 characters. Each firing records it, and the run's principal is issuer \"schedule\" with this as subject."},
@@ -2472,6 +2473,7 @@
           "doc": "Recover a response after a crash by client request id. Present when info.lookup is not none. Fenced like send: context.fence() at the real network send point; a found response's reasoning and hosted tool bytes are put() before their parts name them.",
           "async": true,
           "optional": true,
+          "capability": "LooksUp",
           "params": [
             {"name": "request_id", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The client request id of the lost attempt, the same one ModelRequest.request_id carried when it was sent."},
             {"name": "context", "kind": "positional", "type": {"$ref": "#/types/ModelContext"}, "required": true, "doc": "The fencing context: await context.fence() before the lookup call, and put() any reasoning or hosted tool bytes of a found response before its parts name them."}
@@ -2683,6 +2685,7 @@
           "doc": "Find a sandbox whose create or restore response was lost, by that call's operation key. Resolves the pending ledger row (LookupResult doc). Present when info.lookup.create is not none. A final not_found retires a pending row only when no older local dispatch for that operation_key can still reach the provider; every create and restore fences its SandboxContext at the provider boundary, so once the lease has moved a stale creator can't pass that fence.",
           "async": true,
           "optional": true,
+          "capability": "LooksUpSandbox",
           "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The operation key of the create or restore call whose response was lost."}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before asking the provider."}],
           "returns": {"result": {"$ref": "#/types/LookupResult", "args": [{"$ref": "#/types/SandboxSession"}]}, "errors": ["stale_epoch", "cleanup_claim_lost"]}
         },
@@ -2692,6 +2695,7 @@
           "doc": "Find a snapshot whose capture response was lost, by the snapshot call's operation key. Resolves the pending ledger row. Present when info.lookup.snapshot is not none.",
           "async": true,
           "optional": true,
+          "capability": "LooksUpSnapshot",
           "params": [{"name": "operation_key", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The operation key of the snapshot call whose response was lost."}, {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before asking the provider."}],
           "returns": {"result": {
             "$ref": "#/types/LookupResult",
@@ -3199,6 +3203,7 @@
     },
     "ChannelAdapter": {
       "kind": "interface",
+      "package": "host",
       "role": "protocol",
       "properties": {
         "agent": {"type": {"prim": "string"}, "required": true, "doc": "The host agent key this channel routes to."},
@@ -3241,6 +3246,7 @@
           "doc": "A provider's GET subscription check on the webhook URL (WhatsApp hub.mode/hub.verify_token/hub.challenge). Pure: compares the token with the adapter's secret in constant time. unverified answers 401 and nothing is stored.",
           "async": false,
           "optional": true,
+          "capability": "Challenged",
           "params": [{"name": "query", "kind": "positional", "type": {"map": {"prim": "string"}}, "required": true, "doc": "The GET request's query parameters by name, for example hub.mode, hub.verify_token and hub.challenge."}],
           "returns": {"result": {"$ref": "#/types/RawResponse"}, "errors": ["unverified"]}
         },
@@ -3294,6 +3300,7 @@
     },
     "ChannelCapabilities": {
       "kind": "object",
+      "package": "host",
       "casing": "wire",
       "fields": {
         "lookup": {"type": {"$ref": "#/types/LookupCapability"}, "required": true, "doc": "Delivery lookup by effect key."},
@@ -3308,6 +3315,7 @@
     },
     "RawRequest": {
       "kind": "object",
+      "package": "host",
       "casing": "wire",
       "fields": {
         "headers": {"type": {"map": {"prim": "string"}}, "required": true, "doc": "Request headers by name, names lowercased."},
@@ -3317,6 +3325,7 @@
     },
     "RawResponse": {
       "kind": "object",
+      "package": "host",
       "casing": "wire",
       "fields": {
         "status": {"type": {"prim": "integer"}, "required": true, "doc": "The HTTP status code, for example 200."},
@@ -3327,6 +3336,7 @@
     },
     "VerifiedDelivery": {
       "kind": "object",
+      "package": "host",
       "casing": "wire",
       "fields": {
         "tenant": {"type": {"prim": "string"}, "required": true, "doc": "The tenant the webhook belongs to, a non-empty string. The host stores the batch in this tenant and refuses an item whose sender is in another tenant."},
@@ -3337,6 +3347,7 @@
     },
     "Inbound": {
       "kind": "union",
+      "package": "host",
       "discriminator": "kind",
       "casing": "wire",
       "variants": [
@@ -3377,6 +3388,7 @@
     },
     "DeliveryOutcome": {
       "kind": "union",
+      "package": "host",
       "discriminator": "status",
       "casing": "wire",
       "variants": [
@@ -3400,6 +3412,7 @@
     },
     "Host": {
       "kind": "interface",
+      "package": "host",
       "role": "handle",
       "properties": {
         "fetch": {

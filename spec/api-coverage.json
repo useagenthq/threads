@@ -1,0 +1,653 @@
+{
+  "Agent.check": {
+    "ts": [
+      "packages/core/test/agent/extension.test.ts > extension() > setup runs once; a throw is a ConfigError from check()"
+    ]
+  },
+  "Agent.run": {
+    "ts": [
+      "packages/core/test/agent/agent.test.ts > the README example > two lines: agent() and run()"
+    ],
+    "py": [
+      "tests/agents/test_api.py::test_readme_example"
+    ]
+  },
+  "Agent.stream": {
+    "ts": [
+      "packages/core/test/agent/agent.test.ts > stream() > yields committed events and text deltas, then the result"
+    ],
+    "py": [
+      "tests/agents/test_api.py::test_bad_arguments_are_an_error_result_and_the_tool_never_runs"
+    ]
+  },
+  "ChannelAdapter.ack": {
+    "ts": [
+      "packages/github/test/inbound.test.ts > ack answers 200 with an empty body"
+    ],
+    "py": [
+      "tests/host/test_channel_runs.py::test_a_redelivered_webhook_runs_once_and_its_reply_is_one_fenced_effect"
+    ]
+  },
+  "ChannelAdapter.lookup": {
+    "ts": [
+      "packages/github/test/outbound.test.ts > lookup > finds the comment carrying the marker, across pages"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_lookups_find_the_effect_key_in_the_ops_conversation"
+    ]
+  },
+  "ChannelAdapter.parse": {
+    "ts": [
+      "packages/slack/test/inbound.test.ts > url_verification > verifies, parses to nothing, and ack answers the challenge"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_slack_verifies_the_signature_and_keys_its_event"
+    ]
+  },
+  "ChannelAdapter.perform": {
+    "ts": [
+      "packages/github/test/outbound.test.ts > perform > a created comment is sent, with the marker, under the fence"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_github_ignores_bots_and_classifies_send_errors"
+    ]
+  },
+  "ChannelAdapter.render": {
+    "ts": [
+      "packages/slack/test/outbound.test.ts > render > a model response is one message op of its joined text"
+    ],
+    "py": [
+      "tests/adapters/channels/test_approval_cards.py::test_slack_posts_a_card_whose_buttons_carry_only_the_challenge"
+    ]
+  },
+  "ChannelAdapter.verify": {
+    "ts": [
+      "packages/github/test/inbound.test.ts > verify > a good signature yields tenant, installation and the body's hash as delivery"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_slack_verifies_the_signature_and_keys_its_event"
+    ]
+  },
+  "Host.ready": {
+    "ts": [
+      "packages/host/test/channels.test.ts > intake > the item is in the inbox before the ack; ready() starts no run and sends nothing"
+    ],
+    "py": [
+      "tests/host/test_channel_recovery.py::test_the_same_host_started_again_waits_for_its_new_recovery_pass"
+    ]
+  },
+  "Host.startRun": {
+    "ts": [
+      "packages/host/test/runs.test.ts > POST /v1/runs > 202 with run_id = the user_input's event_id; the stream ends with its result"
+    ],
+    "py": [
+      "tests/agents/test_run_ceiling.py::test_a_host_ceiling_caps_the_runs_it_starts"
+    ]
+  },
+  "Host.startRun.idempotency_key": {
+    "ts": [
+      "packages/host/test/runs.test.ts > POST /v1/runs > lost response: the same key and body replay the receipt and start nothing (F12.11)"
+    ],
+    "py": [
+      "tests/host/test_http.py::test_a_run_is_accepted_once_per_key_and_bound_to_its_principal"
+    ]
+  },
+  "Host.startRun.principal": {
+    "ts": [
+      "packages/host/test/runs.test.ts > POST /v1/runs > another principal of the tenant with the same key is refused and learns nothing (F12.12)"
+    ],
+    "py": [
+      "tests/host/test_http.py::test_a_run_is_accepted_once_per_key_and_bound_to_its_principal"
+    ]
+  },
+  "Host.stop": {
+    "ts": [
+      "packages/host/test/send-stop.test.ts > stop() with a send in flight > a send past the fence keeps its lease until it settles",
+      "packages/host/test/send-stop.test.ts > stop() with a send in flight > a send not yet at the fence is refused there once the host stops"
+    ],
+    "py": [
+      "tests/host/test_channel_recovery.py::test_the_same_host_started_again_waits_for_its_new_recovery_pass"
+    ]
+  },
+  "Host.subscribe": {
+    "ts": [
+      "packages/host/test/runs.test.ts > POST /v1/runs > 202 with run_id = the user_input's event_id; the stream ends with its result"
+    ],
+    "py": [
+      "tests/host/test_http.py::test_a_run_is_accepted_once_per_key_and_bound_to_its_principal"
+    ]
+  },
+  "Host.subscribe.principal": {
+    "ts": [
+      "packages/host/test/runs.test.ts > POST /v1/runs > 202 with run_id = the user_input's event_id; the stream ends with its result"
+    ],
+    "py": [
+      "tests/host/test_http.py::test_thread_routes_are_scoped_parsed_and_recorded"
+    ]
+  },
+  "KnowledgeProvider.get": {
+    "ts": [
+      "packages/core/test/memory/local.test.ts > provider suite > localKnowledge: a hit cites an exact version and span of the admitted bytes"
+    ],
+    "py": [
+      "tests/memory/test_providers.py::test_knowledge_get_is_scoped"
+    ]
+  },
+  "KnowledgeProvider.ingest": {
+    "ts": [
+      "packages/core/test/memory/local.test.ts > provider suite > localKnowledge: a hit cites an exact version and span of the admitted bytes"
+    ],
+    "py": [
+      "tests/memory/test_providers.py::test_the_knowledge_index_rebuilds_to_the_same_results"
+    ]
+  },
+  "KnowledgeProvider.remove": {
+    "ts": [
+      "packages/core/test/memory/local.test.ts > provider suite > localKnowledge: a removed source is excluded from new searches"
+    ],
+    "py": [
+      "tests/memory/test_providers.py::test_local_knowledge_passes_the_knowledge_suite"
+    ]
+  },
+  "KnowledgeProvider.revision": {
+    "ts": [
+      "packages/core/test/memory/knowledge.test.ts > forks honor knowledge_policy (F14.2) > pinned (the default) searches as of the snapshot's revision"
+    ]
+  },
+  "KnowledgeProvider.search": {
+    "ts": [
+      "packages/core/test/memory/local.test.ts > provider suite > localKnowledge: an update is a new version; a search as of the old revision sees the old one"
+    ],
+    "py": [
+      "tests/memory/test_providers.py::test_the_knowledge_index_rebuilds_to_the_same_results"
+    ]
+  },
+  "MemoryProvider.forget": {
+    "ts": [
+      "packages/core/test/memory/local.test.ts > provider suite > localMemory: a forgotten record is not recalled"
+    ],
+    "py": [
+      "tests/memory/test_providers.py::test_forgetting_an_unknown_id_is_invalid"
+    ]
+  },
+  "MemoryProvider.recall": {
+    "ts": [
+      "packages/core/test/memory/local.test.ts > provider suite > localMemory: recall finds a remembered record and echoes its binding"
+    ],
+    "py": [
+      "tests/memory/test_memory_runs.py::test_a_saved_memory_is_recalled_in_a_later_run_as_an_untrusted_reference"
+    ]
+  },
+  "MemoryProvider.remember": {
+    "ts": [
+      "packages/core/test/memory/local.test.ts > provider suite > localMemory: recall finds a remembered record and echoes its binding"
+    ],
+    "py": [
+      "tests/memory/test_memory_runs.py::test_a_saved_memory_is_recalled_in_a_later_run_as_an_untrusted_reference"
+    ]
+  },
+  "Model.send": {
+    "ts": [
+      "packages/anthropic/test/send.test.ts > streaming > text, signed thinking and a tool call become ordered parts; usage maps"
+    ],
+    "py": [
+      "tests/adapters/test_anthropic.py::test_the_stream_maps_to_deltas_parts_and_usage"
+    ]
+  },
+  "ModelContext.fence": {
+    "ts": [
+      "packages/core/test/model/adapter-kit.test.ts > Session.modelContext: bound to the writer that made it > after a takeover the old writer's context fails its fence; the new one's passes"
+    ],
+    "py": [
+      "tests/loop/test_model_context.py::test_the_loop_hands_the_adapter_its_fencing_pair_and_verified_artifacts"
+    ]
+  },
+  "ModelContext.put": {
+    "ts": [
+      "packages/anthropic/test/mapping.test.ts > replay > a recorded thinking block goes back byte for byte, by ref"
+    ],
+    "py": [
+      "tests/loop/test_model_context.py::test_the_loop_hands_the_adapter_its_fencing_pair_and_verified_artifacts"
+    ]
+  },
+  "ModelContext.read": {
+    "ts": [
+      "packages/anthropic/test/send.test.ts > streaming > text, signed thinking and a tool call become ordered parts; usage maps"
+    ],
+    "py": [
+      "tests/loop/test_model_context.py::test_the_loop_hands_the_adapter_its_fencing_pair_and_verified_artifacts"
+    ]
+  },
+  "Sandbox.attach": {
+    "ts": [
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > lookup finds a create by its operation key; attach reattaches by ref"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_a_closed_sandbox_can_not_be_reattached"
+    ]
+  },
+  "Sandbox.create": {
+    "ts": [
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > lookup finds a create by its operation key; attach reattaches by ref"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_a_restored_snapshot_is_isolated_and_verified"
+    ]
+  },
+  "Sandbox.release": {
+    "ts": [
+      "packages/core/test/sandbox/fake.test.ts > fakeSandbox files and snapshots > a missing snapshot is snapshot_missing; release is released, then already_gone"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_daytona.py::test_contract[a_snapshot_release_is_idempotent]"
+    ]
+  },
+  "Sandbox.restore": {
+    "ts": [
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > restore: the tree is verified, and the child is isolated"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_a_restored_snapshot_is_isolated_and_verified"
+    ]
+  },
+  "SandboxContext.fence": {
+    "ts": [
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > a refused fence reaches nothing: stale_epoch, or cleanup_claim_lost for gc"
+    ],
+    "py": [
+      "tests/sandbox/test_ledger.py::test_a_stale_owner_never_reaches_the_provider"
+    ]
+  },
+  "SandboxSession.close": {
+    "ts": [
+      "packages/core/test/sandbox/fake.test.ts > fakeSandbox files and snapshots > attach finds a live sandbox; a closed one is not_found"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_a_closed_sandbox_can_not_be_reattached"
+    ]
+  },
+  "SandboxSession.download": {
+    "ts": [
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > upload and download round-trip bytes; paths fail typed"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_files_keep_the_path_contract"
+    ]
+  },
+  "SandboxSession.exec": {
+    "ts": [
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > exec reports the exit code and keeps stdout and stderr apart"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_exec_is_scripted_per_command_with_provider_dedup"
+    ]
+  },
+  "SandboxSession.exec.process_key": {
+    "ts": [
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > terminate kills what the provider tracks but never confirms it"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_exec_is_scripted_per_command_with_provider_dedup"
+    ]
+  },
+  "SandboxSession.snapshot": {
+    "ts": [
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > a snapshot is taken only behind a confirmed whole-sandbox boundary"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_a_restored_snapshot_is_isolated_and_verified"
+    ]
+  },
+  "SandboxSession.terminate": {
+    "ts": [
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > terminate kills what the provider tracks but never confirms it"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_exec_is_scripted_per_command_with_provider_dedup"
+    ]
+  },
+  "SandboxSession.upload": {
+    "ts": [
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > upload and download round-trip bytes; paths fail typed"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_files_keep_the_path_contract"
+    ]
+  },
+  "SearchBackend.search": {
+    "ts": [
+      "packages/core/test/tools/search-backends.test.ts > search backends > exa: one JSON POST with the key header and domain filters; hits mapped"
+    ],
+    "py": [
+      "tests/web/test_web.py::test_search_backends_send_the_key_on_the_host_and_parse_hits"
+    ]
+  },
+  "Thread.answer": {
+    "ts": [
+      "packages/core/test/thread/questions.test.ts > ask_user answers > only the principal whose input opened the turn answers"
+    ],
+    "py": [
+      "tests/thread/test_controls.py::test_controls_record_their_principal_and_refuse_other_tenants"
+    ]
+  },
+  "Thread.approve": {
+    "ts": [
+      "packages/core/test/thread/control.test.ts > approvals > approve consumes the challenge once; the parked call then runs"
+    ],
+    "py": [
+      "tests/thread/test_controls.py::test_an_approval_is_single_use_and_resumes_the_run"
+    ]
+  },
+  "Thread.branches": {
+    "ts": [
+      "packages/core/test/thread/control.test.ts > cancel, mode, model, questions and parked effects > branches lists the main branch as runnable"
+    ],
+    "py": [
+      "tests/thread/test_controls.py::test_controls_record_their_principal_and_refuse_other_tenants"
+    ]
+  },
+  "Thread.cacheBreaks": {
+    "ts": [
+      "packages/core/test/thread/usage.test.ts > Thread.cacheBreaks > is a list under the effective context policy"
+    ],
+    "py": [
+      "tests/thread/test_usage.py::test_cache_breaks_uses_the_default_ttl_when_no_context_is_pinned"
+    ]
+  },
+  "Thread.cancel": {
+    "ts": [
+      "packages/core/test/thread/control.test.ts > cancel, mode, model, questions and parked effects > cancel releases the approval wait and the run ends cancelled"
+    ],
+    "py": [
+      "tests/thread/test_controls.py::test_controls_record_their_principal_and_refuse_other_tenants"
+    ]
+  },
+  "Thread.children": {
+    "ts": [
+      "packages/core/test/agent/subagents.test.ts > spawn_agent in the foreground > the child runs in its own thread, linked to agent_spawned; its result is the call's"
+    ],
+    "py": [
+      "tests/agents/test_subagents.py::test_a_foreground_child_runs_in_its_own_thread_and_feeds_the_call_result"
+    ]
+  },
+  "Thread.cost": {
+    "ts": [
+      "packages/core/test/thread/cost-tree.test.ts > the tree merge > adds the child and grandchild from their own logs"
+    ],
+    "py": [
+      "tests/thread/test_usage.py::test_a_priced_agent_pins_usd_and_costs_the_projection"
+    ]
+  },
+  "Thread.deny": {
+    "ts": [
+      "packages/core/test/thread/control.test.ts > approvals > deny closes the call as denied and never asks again"
+    ],
+    "py": [
+      "tests/thread/test_controls.py::test_an_approval_is_single_use_and_resumes_the_run"
+    ]
+  },
+  "Thread.fork": {
+    "ts": [
+      "packages/core/test/thread/open.test.ts > fork > restores the snapshot into an isolated child sandbox (F11.1)"
+    ],
+    "py": [
+      "tests/thread/test_handle.py::test_fork_restores_an_isolated_sandbox_and_the_child_runs"
+    ]
+  },
+  "Thread.forkPoints": {
+    "ts": [
+      "packages/core/test/thread/open.test.ts > openThread > timeline lists the chain and marks the fork point; forkPoints returns it"
+    ],
+    "py": [
+      "tests/thread/test_handle.py::test_fork_restores_an_isolated_sandbox_and_the_child_runs"
+    ]
+  },
+  "Thread.pendingApprovals": {
+    "ts": [
+      "packages/core/test/thread/control.test.ts > approvals > approve consumes the challenge once; the parked call then runs"
+    ],
+    "py": [
+      "tests/thread/test_controls.py::test_an_approval_is_single_use_and_resumes_the_run"
+    ]
+  },
+  "Thread.resolveParked": {
+    "ts": [
+      "packages/core/test/thread/control.test.ts > cancel, mode, model, questions and parked effects > answer without an open question and resolveParked without a parked effect fail"
+    ],
+    "py": [
+      "tests/thread/test_authority.py::test_resolving_a_parked_effect_needs_authority_and_records_the_principal"
+    ]
+  },
+  "Thread.saveCase": {
+    "ts": [
+      "packages/core/test/thread/save-case.test.ts > saveCase > writes a stub case valid against case.schema.json that the runner replays"
+    ],
+    "py": [
+      "tests/thread/test_handle.py::test_save_case_writes_a_stub_case_the_runner_replays"
+    ]
+  },
+  "Thread.saveCase.expect": {
+    "ts": [
+      "packages/core/test/thread/save-case.test.ts > saveCase > writes a stub case valid against case.schema.json that the runner replays"
+    ],
+    "py": [
+      "tests/thread/test_handle.py::test_save_case_writes_a_stub_case_the_runner_replays"
+    ]
+  },
+  "Thread.saveCase.external_effects": {
+    "ts": [
+      "packages/core/test/thread/save-case.test.ts > saveCase > writes a stub case valid against case.schema.json that the runner replays"
+    ],
+    "py": [
+      "tests/thread/test_handle.py::test_save_case_writes_a_stub_case_the_runner_replays"
+    ]
+  },
+  "Thread.setMode": {
+    "ts": [
+      "packages/core/test/thread/control.test.ts > cancel, mode, model, questions and parked effects > setMode records mode_changed; bypass without allow_bypass is invalid_transition"
+    ],
+    "py": [
+      "tests/thread/test_controls.py::test_controls_record_their_principal_and_refuse_other_tenants"
+    ]
+  },
+  "Thread.setModel": {
+    "ts": [
+      "packages/core/test/thread/control.test.ts > cancel, mode, model, questions and parked effects > setModel takes the recorded adapter; an unrecorded model is invalid_transition"
+    ],
+    "py": [
+      "tests/thread/test_controls.py::test_controls_record_their_principal_and_refuse_other_tenants"
+    ]
+  },
+  "Thread.timeline": {
+    "ts": [
+      "packages/core/test/thread/open.test.ts > openThread > timeline lists the chain and marks the fork point; forkPoints returns it"
+    ],
+    "py": [
+      "tests/thread/test_handle.py::test_fork_restores_an_isolated_sandbox_and_the_child_runs"
+    ]
+  },
+  "Thread.todos": {
+    "ts": [
+      "packages/core/test/agent/todos.test.ts > todo_write > records todos_updated before the result; the thread handle reads the latest list"
+    ],
+    "py": [
+      "tests/loop/test_todos.py::test_todo_write_records_the_list_and_todos_reads_it"
+    ]
+  },
+  "Thread.usage": {
+    "ts": [
+      "packages/core/test/thread/usage.test.ts > Thread.usage > is reduce().usage of the branch"
+    ],
+    "py": [
+      "tests/thread/test_usage.py::test_usage_is_the_reduced_usage_and_unknown_is_never_zero"
+    ]
+  },
+  "agent": {
+    "ts": [
+      "packages/core/test/agent/agent.test.ts > the README example > two lines: agent() and run()"
+    ],
+    "py": [
+      "tests/agents/test_api.py::test_readme_example"
+    ]
+  },
+  "agent.model": {
+    "ts": [
+      "packages/core/test/agent/agent.test.ts > the README example > two lines: agent() and run()"
+    ],
+    "py": [
+      "tests/agents/test_api.py::test_readme_example"
+    ]
+  },
+  "extension": {
+    "ts": [
+      "packages/core/test/agent/extension.test.ts > extension() > instructions and <ext>__<tool> go into line 0; hooks get the run context"
+    ],
+    "py": [
+      "tests/hooks/test_extension_tools.py::test_extension_tools_are_namespaced_sorted_pinned_and_run"
+    ]
+  },
+  "extension.name": {
+    "ts": [
+      "packages/core/test/agent/extension.test.ts > extension() > a bad name or timeout is a ConfigError"
+    ],
+    "py": [
+      "tests/hooks/test_extension_tools.py::test_extension_tools_are_namespaced_sorted_pinned_and_run"
+    ]
+  },
+  "fakeSandbox": {
+    "ts": [
+      "packages/core/test/sandbox/fake.test.ts > fakeSandbox files and snapshots > a restored snapshot has the file; a write in the child is invisible to the parent"
+    ],
+    "py": [
+      "tests/sandbox/test_fake.py::test_exec_is_scripted_per_command_with_provider_dedup"
+    ]
+  },
+  "host": {
+    "ts": [
+      "packages/host/test/runs.test.ts > POST /v1/runs > 202 with run_id = the user_input's event_id; the stream ends with its result"
+    ],
+    "py": [
+      "tests/host/test_channel_recovery.py::test_the_same_host_started_again_waits_for_its_new_recovery_pass"
+    ]
+  },
+  "host.agents": {
+    "ts": [
+      "packages/host/test/runs.test.ts > POST /v1/runs > another tenant's thread is not_found; an unknown agent is not_found"
+    ],
+    "py": [
+      "tests/host/test_channel_recovery.py::test_the_same_host_started_again_waits_for_its_new_recovery_pass"
+    ]
+  },
+  "host.store": {
+    "ts": [
+      "packages/host/test/runs.test.ts > POST /v1/runs > 202 with run_id = the user_input's event_id; the stream ends with its result"
+    ],
+    "py": [
+      "tests/host/test_channel_recovery.py::test_the_same_host_started_again_waits_for_its_new_recovery_pass"
+    ]
+  },
+  "localKnowledge": {
+    "ts": [
+      "packages/core/test/memory/knowledge.test.ts > ingest, search and cite (F14.1, F14.6) > each excerpt is recorded with source, version and span before the request, wrapped untrusted"
+    ],
+    "py": [
+      "tests/memory/test_knowledge_runs.py::test_retrieval_is_recorded_with_version_and_span_and_forks_honor_the_policy"
+    ]
+  },
+  "localKnowledge.paths": {
+    "ts": [
+      "packages/core/test/memory/knowledge.test.ts > ingest, search and cite (F14.1, F14.6) > each excerpt is recorded with source, version and span before the request, wrapped untrusted"
+    ],
+    "py": [
+      "tests/memory/test_knowledge_runs.py::test_retrieval_is_recorded_with_version_and_span_and_forks_honor_the_policy"
+    ]
+  },
+  "localMemory": {
+    "ts": [
+      "packages/core/test/memory/local.test.ts > provider suite > localMemory: recall finds a remembered record and echoes its binding"
+    ],
+    "py": [
+      "tests/memory/test_providers.py::test_local_memory_passes_the_memory_suite"
+    ]
+  },
+  "mcp": {
+    "ts": [
+      "packages/mcp/test/mcp.test.ts > one line of config (F1.8) > tools are namespaced, pinned after app tools in order, and every call is recorded"
+    ],
+    "py": [
+      "tests/adapters/test_mcp.py::test_a_stdio_server_in_one_line_pins_sorted_namespaced_tools_and_records_calls"
+    ]
+  },
+  "mcp.name": {
+    "ts": [
+      "packages/mcp/test/mcp.test.ts > one line of config (F1.8) > tools are namespaced, pinned after app tools in order, and every call is recorded"
+    ],
+    "py": [
+      "tests/adapters/test_mcp.py::test_a_stdio_server_in_one_line_pins_sorted_namespaced_tools_and_records_calls"
+    ]
+  },
+  "openThread": {
+    "ts": [
+      "packages/core/test/thread/open.test.ts > openThread > an unknown thread is not_found"
+    ],
+    "py": [
+      "tests/thread/test_handle.py::test_fork_restores_an_isolated_sandbox_and_the_child_runs"
+    ]
+  },
+  "scriptedModel": {
+    "ts": [
+      "packages/core/test/agent/agent.test.ts > the README example > two lines: agent() and run()"
+    ],
+    "py": [
+      "tests/agents/test_api.py::test_readme_example"
+    ]
+  },
+  "secret": {
+    "ts": [
+      "packages/core/test/agent/secret.test.ts > secret() > the value resolves on the host at use time; a missing one is missing_secret"
+    ],
+    "py": [
+      "tests/test_secrets.py::test_a_secret_serializes_and_prints_as_its_name_only"
+    ]
+  },
+  "sqlite": {
+    "ts": [
+      "packages/core/test/agent/agent.test.ts > the README example > two lines: agent() and run()"
+    ],
+    "py": [
+      "tests/agents/test_api.py::test_readme_example"
+    ]
+  },
+  "tool": {
+    "ts": [
+      "packages/core/test/agent/agent.test.ts > tool arguments parse with the tool's own schema > {text: 'hello'} runs; {text: 1} and extra keys fail before any effect"
+    ],
+    "py": [
+      "tests/agents/test_api.py::test_a_tool_call_parses_through_its_input_model_and_runs"
+    ]
+  },
+  "tool.description": {
+    "ts": [
+      "packages/core/test/agent/agent.test.ts > tool arguments parse with the tool's own schema > the model sees the exported JSON Schema, strict for objects"
+    ],
+    "py": [
+      "tests/agents/test_api.py::test_a_tool_call_parses_through_its_input_model_and_runs"
+    ]
+  },
+  "tool.input": {
+    "ts": [
+      "packages/core/test/agent/agent.test.ts > tool arguments parse with the tool's own schema > {text: 'hello'} runs; {text: 1} and extra keys fail before any effect"
+    ],
+    "py": [
+      "tests/agents/test_api.py::test_a_tool_call_parses_through_its_input_model_and_runs"
+    ]
+  },
+  "tool.name": {
+    "ts": [
+      "packages/core/test/agent/agent.test.ts > tool arguments parse with the tool's own schema > {text: 'hello'} runs; {text: 1} and extra keys fail before any effect"
+    ],
+    "py": [
+      "tests/agents/test_api.py::test_a_tool_call_parses_through_its_input_model_and_runs"
+    ]
+  }
+}

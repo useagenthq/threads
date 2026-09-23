@@ -10,6 +10,7 @@ Stdlib only, Python 3.12+. Checks:
 - every $ref in every spec schema, api.json and openapi.json resolves (urn:threads:... $ids,
   relative file paths, JSON pointers);
 - every function and method name pair is TS lowerCamel of the Python snake_case name;
+- every optional method names its Python capability protocol (capability);
 - every typed failure code is a wire ErrorCode (what the log records) or an ApiErrorCode
   from api.schema.json (what public calls return);
 - every host API operation names existing api.json methods (x-api) and lists at least
@@ -211,7 +212,7 @@ def camel(py: str) -> str:
     return head + "".join(w[:1].upper() + w[1:] for w in rest)
 
 
-def _callables(api: Json) -> Iterator[tuple[str, str, dict[str, Json]]]:
+def callables(api: Json) -> Iterator[tuple[str, str, dict[str, Json]]]:
     for key, f in _obj(_obj(api).get("functions")).items():
         yield key, key, _obj(f)
     for tname, t in _obj(_obj(api).get("types")).items():
@@ -221,10 +222,12 @@ def _callables(api: Json) -> Iterator[tuple[str, str, dict[str, Json]]]:
 
 def check_names(api: Json) -> list[str]:
     errs: list[str] = []
-    for where, key, f in _callables(api):
+    for where, key, f in callables(api):
         ts, py = str(f.get("ts")), str(f.get("py"))
         if key != ts or ts != camel(py):
             errs.append(f"api.json {where}: key {key}, ts {ts}, py {py} (ts must be camel(py))")
+        if f.get("optional") is True and not isinstance(f.get("capability"), str):
+            errs.append(f"api.json {where}: an optional method needs capability (Python protocol)")
         kinds = [str(_obj(p).get("kind")) for p in _list(f.get("params"))]
         if kinds != sorted(kinds, key=lambda k: k != "positional"):
             errs.append(f"api.json {where}: positional params must come before options")
@@ -294,7 +297,7 @@ def check_fence_codes(api: Json) -> list[str]:
     """An operation that takes a dispatch context declares its fence refusal among its result
     codes, or, for a stream, among its terminal error codes."""
     errs: list[str] = []
-    for where, _, f in _callables(api):
+    for where, _, f in callables(api):
         for p in _list(f.get("params")):
             ref = _obj(_obj(p).get("type")).get("$ref")
             codes = FENCED.get(ref.removeprefix("#/types/")) if isinstance(ref, str) else None
@@ -309,7 +312,7 @@ def check_fence_codes(api: Json) -> list[str]:
 
 
 def check_operations(api: Json, openapi: Json) -> list[str]:
-    methods = {where: f for where, _, f in _callables(api)}
+    methods = {where: f for where, _, f in callables(api)}
     errs: list[str] = []
     for path, ops in _obj(_obj(openapi).get("paths")).items():
         for verb, op in _obj(ops).items():

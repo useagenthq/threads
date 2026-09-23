@@ -3,5 +3,7 @@
   "compilerOptions": {
     "types": ["bun"]
   },
-  "include": ["src", "test", "scripts"]
+  "include": ["src", "test", "scripts"],
+  // Compiled by its own tsconfig (the public entries of host and mcp) and by the fixture tests.
+  "exclude": ["test/api-surface/generated", "test/api-surface/fixtures"]
 }

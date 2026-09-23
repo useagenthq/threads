@@ -9,6 +9,9 @@ target="${1:-all}"
 mkdir -p python/src/threads/_generated typescript/packages/core/src/store/generated
 touch python/src/threads/_generated/__init__.py
 python3 spec/tools/gen_store_sql.py
+if [ "$target" != "py" ]; then
+  python3 spec/tools/gen_api_surface.py
+fi
 if [ "$target" != "ts" ]; then
   (cd python && uv run --quiet python tools/regen_models.py)
 fi
