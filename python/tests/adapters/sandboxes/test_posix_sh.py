@@ -36,15 +36,13 @@ def test_argv0_resolves_on_the_provider_path_and_runs_with_exactly_the_tool_env(
     assert _printed_env(tmp_path, {"K": "v w"}) == {"K": "v w"}
 
 
-def test_a_missing_command_exits_127_and_says_so() -> None:
+@pytest.mark.parametrize("name", ["no-such-threads-command", "export"])
+def test_a_missing_command_or_a_builtin_exits_127_and_says_so(name: str) -> None:
     done = subprocess.run(  # noqa: S603
-        wrap(["no-such-threads-command"], {}),
-        env={"PATH": "/usr/bin:/bin"},
-        capture_output=True,
-        check=False,
+        wrap([name], {}), env={"PATH": "/usr/bin:/bin"}, capture_output=True, check=False
     )
     assert done.returncode == NOT_FOUND
-    assert b"threads: command not found: no-such-threads-command" in done.stderr
+    assert f"threads: command not found: {name}".encode() in done.stderr
 
 
 # The tree typescript/packages/core/test/sandbox/remote/scripts-sh.test.ts pins too, so both
@@ -60,7 +58,7 @@ TREE = (
 TREE_HASH = "5002ad0ef59bdacdec8326269f3818c29b9f57ec31ff8c1973451a54a5b2a60f"
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="needs `stat -c` (GNU or BusyBox)")
+@pytest.mark.skipif(sys.platform != "linux", reason="needs GNU `stat -c`")
 def test_the_manifest_lists_the_tree_exactly_as_the_host_sees_it(tmp_path: Path) -> None:
     for path, body, mode in TREE:
         (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)

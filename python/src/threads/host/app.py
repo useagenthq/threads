@@ -39,8 +39,9 @@ type Authenticate = Callable[["Request"], Awaitable[Principal | None]]
 """Maps an HTTP API request to its principal, or None for 401."""
 
 
-_RECOVERED: "WeakKeyDictionary[Host, asyncio.Event]" = WeakKeyDictionary()
-"""Each host's start-up recovery, done or not: the `ticked` seam's signal."""
+_RECOVERY: "WeakKeyDictionary[Host, tuple[asyncio.Event, Runner]]" = WeakKeyDictionary()
+"""Each host's start-up recovery pass (set once it has finished) and the runner whose runs it
+started: what the `recovered` seam waits on. The runner holds no reference to its host."""
 
 
 class Host:
@@ -65,7 +66,7 @@ class Host:
         self._runner.on_end = self._intake.consume
         self._scheduler = Scheduler(self._runner, schedules)
         self._ticking: asyncio.Task[None] | None = None
-        _RECOVERED[self] = asyncio.Event()
+        _RECOVERY[self] = (asyncio.Event(), self._runner)
         self._asgi: ASGIApp | None = None
 
     @property
@@ -115,7 +116,7 @@ class Host:
                 if (tenant, thread) not in waiting:
                     await self._runner.redeliver(self._runner.store(tenant), thread)
         finally:
-            _RECOVERED[self].set()
+            _RECOVERY[self][0].set()
         await self._scheduler.run()
 
     async def stop(self) -> None:
@@ -204,8 +205,11 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
     return Host(store, agents, channels or {}, schedules, authenticate, ceiling=ceiling)
 
 
-async def ticked(served: Host) -> None:
-    """After the start-up recovery `ready()` began has finished (the tick then goes on to run
-    the scheduler until stop): lets a test assert what recovery did or didn't do without
-    sleeping. Internal: not exported."""
-    await _RECOVERED[served].wait()
+async def recovered(served: Host) -> None:
+    """After the start-up recovery pass `ready()` began has finished and the runs it started
+    to redeliver replies have ended, so a test asserts what recovery did or didn't do without
+    sleeping. Python recovers once per start, not on a timer as TS does, so there is no later
+    pass to wait for. Internal: not exported."""
+    done, runner = _RECOVERY[served]
+    await done.wait()
+    await runner.settled()

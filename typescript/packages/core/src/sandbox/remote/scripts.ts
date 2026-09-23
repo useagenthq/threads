@@ -68,7 +68,11 @@ export function execScript(spec: ExecSpec): string {
     `cd ${quote(spec.cwd)} || exit 126`,
     `exec 0<${quote(input)} || exit 126`,
     ...(spec.stdin ? [`rm -f ${quote(input)}`] : []),
-    `__t_c=$(command -v ${quote(cmd)}) || { echo threads: command not found: ${quote(cmd)} >&2; exit 127; }`,
+    // A PATH walk for an executable file, as Python's wrapper does: `command -v` would also
+    // accept a shell builtin, which `env` then can't run.
+    `__t_x=${quote(cmd)}`,
+    `case "$__t_x" in */*) __t_c=$__t_x ;; *) __t_c=; IFS=:; for __t_p in $PATH; do if [ -f "$__t_p/$__t_x" ] && [ -x "$__t_p/$__t_x" ]; then __t_c=$__t_p/$__t_x; break; fi; done; unset IFS ;; esac`,
+    `[ -n "$__t_c" ] || { echo "threads: command not found: $__t_x" >&2; exit 127; }`,
     words.join(" "),
   ].join("\n");
 }

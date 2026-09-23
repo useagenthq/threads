@@ -21,6 +21,31 @@ def text(reply: str) -> JsonValue:
     return {"content": [{"type": "text", "text": reply}], "stop_reason": "end_turn", "usage": USAGE}
 
 
+def test_an_agent_run_delivers_every_committed_event_to_its_observer_in_order() -> None:
+    seen: list[int] = []
+    delivered = asyncio.Event()
+
+    async def watch(event: Event) -> None:
+        seen.append(event.seq)
+        delivered.set()
+
+    async def main() -> None:
+        bot = agent(
+            model=scripted_model({"responses": [text("ok")]}),
+            extensions=[extension(name="audit", on={"*": watch})],
+        )
+        done = await bot.run("hi", store=sqlite(":memory:"), deps=None)
+        timeline = await done.thread.timeline()
+        assert isinstance(timeline, Ok)
+        expected = [e.event.seq for e in timeline.value.entries]
+        # Delivery lags the run: wait on each delivery, never a fixed sleep.
+        while seen != expected:
+            await asyncio.wait_for(delivered.wait(), timeout=5)
+            delivered.clear()
+
+    asyncio.run(main())
+
+
 def test_a_throwing_or_stuck_observer_changes_neither_execution_nor_the_log() -> None:
     async def down(event: Event) -> None:
         raise RuntimeError("exporter down")

@@ -55,6 +55,12 @@ describe("exec in a real sh", () => {
     expect(run(["probe"], { K: "v w" }).stdout).toBe("K=v w\n");
   });
 
+  test("a shell builtin is not a command: only an executable file on PATH runs", () => {
+    const builtin = run(["export"], {});
+    expect(builtin.exit).toBe(127);
+    expect(builtin.stderr).toContain("threads: command not found: export");
+  });
+
   test("a missing command exits 127 and says so", () => {
     const missing = run(["no-such-threads-command"], {});
     expect(missing.exit).toBe(127);

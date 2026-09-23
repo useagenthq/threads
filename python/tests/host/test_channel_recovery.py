@@ -22,7 +22,7 @@ from threads.host import (
     VerifiedDelivery,
     host,
 )
-from threads.host.app import ticked
+from threads.host.app import recovered
 from threads.host.intake import ChannelIntake
 from threads.host.runs import Runner
 from threads.log import Event, JsonObject, ParseError, Principal, ToolCallEvent
@@ -47,9 +47,12 @@ def text(reply: str) -> JsonValue:
 @dataclass
 class Replies:
     """Renders a final response as one op; `crash` makes the first render die, as a host
-    that stops right after the turn ended."""
+    that stops right after the turn ended. `hold` keeps each send waiting until it is set;
+    `sending` is set once a send has started."""
 
     crash: bool = False
+    hold: asyncio.Event | None = None
+    sending: asyncio.Event = field(default_factory=asyncio.Event)
     sent: list[JsonObject] = field(default_factory=list[JsonObject])
     agent: str = "bot"
     capabilities: ChannelCapabilities = field(
@@ -79,6 +82,9 @@ class Replies:
     async def perform(
         self, op: JsonObject, effect_key: str, credentials: Mapping[str, str]
     ) -> DeliveryOutcome:
+        self.sending.set()
+        if self.hold is not None:
+            await self.hold.wait()
         self.sent.append(op)
         return Sent(f"ts{len(self.sent)}")
 
@@ -129,13 +135,21 @@ def test_a_restarted_host_sends_the_reply_a_crash_left_unsent_once() -> None:
         assert crashing.sent == []
 
     async def restarted() -> Replies:
-        channel = Replies()
+        hold = asyncio.Event()
+        channel = Replies(hold=hold)
         bot = agent(model=scripted_model({"responses": []}))
-        async with host(store=store, agents={"bot": bot}, channels={"fake": channel}):
-            await until(lambda: _sent(channel, 1))
-            await asyncio.sleep(0.05)
+        async with host(store=store, agents={"bot": bot}, channels={"fake": channel}) as served:
+            done = asyncio.ensure_future(recovered(served))
+            await channel.sending.wait()
+            # Recovery is mid-send: the seam has not resolved yet.
+            assert not done.done()
+            hold.set()
+            await done
+            # The pass the seam observed includes the redelivery.
+            assert [op["text"] for op in channel.sent] == ["Hi there."]
+        channel.hold = None
         async with host(store=store, agents={"bot": bot}, channels={"fake": channel}) as again:
-            await ticked(again)
+            await recovered(again)
         return channel
 
     asyncio.run(first())

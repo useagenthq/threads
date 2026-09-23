@@ -264,6 +264,11 @@ class Runner:
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(event.wait(), WAKE_S)
 
+    async def settled(self) -> None:
+        """Until no run is in flight here, including one a finished run started."""
+        while tasks := [t for t in self._tasks.values() if not t.done()]:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
     async def stop(self) -> None:
         """Ends every run in flight: each hands its lease back as it unwinds, and whatever it
         left in doubt is recovered by the next run of its branch."""
