@@ -2266,10 +2266,11 @@
         "send": {
           "ts": "send",
           "py": "send",
-          "doc": "Stream one attempt. A rejection before content is a rejected chunk, never a thrown error.",
+          "doc": "Stream one attempt. A rejection before content is a rejected chunk, never a thrown error. The adapter awaits context.fence() at its real network send point, after any SDK queueing, and sends nothing when it fails.",
           "async": false,
           "params": [
             {"name": "request", "kind": "positional", "type": {"$ref": "#/types/ModelRequest"}, "required": true},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/ModelContext"}, "required": true},
             {
               "name": "signal",
               "kind": "option",
@@ -2300,6 +2301,45 @@
         }
       },
       "doc": "What a model adapter package (anthropic(), openai(), ...) returns. One transport attempt per send; SDK retries off.",
+      "source": ""
+    },
+    "ModelContext": {
+      "kind": "interface",
+      "role": "protocol",
+      "properties": {
+        "branch_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"}, "required": true},
+        "epoch": {"type": {"prim": "integer"}, "required": true, "doc": "The lease epoch this attempt is dispatched under."}
+      },
+      "methods": {
+        "fence": {
+          "ts": "fence",
+          "py": "fence",
+          "doc": "Re-checks that the dispatching writer still holds the branch lease at epoch. A failure means send nothing.",
+          "async": true,
+          "params": [],
+          "returns": {"result": {"prim": "void"}, "errors": ["stale_epoch"]}
+        },
+        "read": {
+          "ts": "read",
+          "py": "read",
+          "doc": "The verified bytes (sha256 and length checked) of an artifact a Render v1 line references.",
+          "async": true,
+          "params": [{"name": "ref", "kind": "positional", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"}, "required": true}],
+          "returns": {"result": {"prim": "bytes"}, "errors": ["artifact_missing", "artifact_corrupt"]}
+        },
+        "put": {
+          "ts": "put",
+          "py": "put",
+          "doc": "Stores exact provider bytes (reasoning, hosted tool blocks) and returns their ref once durable, so a part may name it.",
+          "async": true,
+          "params": [
+            {"name": "data", "kind": "positional", "type": {"prim": "bytes"}, "required": true},
+            {"name": "media_type", "kind": "positional", "type": {"prim": "string"}, "required": true}
+          ],
+          "returns": {"$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"}
+        }
+      },
+      "doc": "What the loop hands an adapter for one attempt: the fencing pair it re-checks at its real send point, and artifact access, since Render v1 carries refs, not bytes.",
       "source": ""
     },
     "ModelInfo": {
