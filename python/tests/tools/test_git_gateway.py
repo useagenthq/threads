@@ -336,8 +336,6 @@ def test_a_push_interrupted_by_a_crash_is_settled_by_the_forge_branch(
     ws.mkdir()
     box = LocalSandbox(ws)
     monkeypatch.setenv("GH_TOKEN", CANARY)
-    local = Forge(lambda repo: str(forge / f"{repo}.git"))
-    monkeypatch.setattr("threads.agents.catalog.Forge", lambda: local)
     who = " ".join(ID)
     commit = f"cd app && git checkout -q -b feature && git {who} commit -q --allow-empty -m f"
     first = [
@@ -355,7 +353,7 @@ def test_a_push_interrupted_by_a_crash_is_settled_by_the_forge_branch(
         return agent(
             model=scripted_model({"responses": responses}),
             sandbox=box,
-            git={"credential": secret("GH_TOKEN")},
+            git={"credential": secret("GH_TOKEN"), "forge_url": str(forge)},
             permissions=_BYPASS,
         )
 

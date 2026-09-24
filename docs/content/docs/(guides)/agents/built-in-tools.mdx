@@ -68,7 +68,7 @@ Pages from `web_fetch` and hits from `web_search` reach the model marked as untr
 The git tools run `git` on the host with your token, then move the result into the sandbox as a plain bundle. The clone inside the sandbox has no credential, so code running there can't read or reuse it. `open_pull_request` targets GitHub by default.
 
 <Callout>
-In TypeScript, `git` also takes `forgeUrl` and `apiUrl` for a GitHub Enterprise host. Python's `git` option takes only `credential`.
+For a GitHub Enterprise host, `git` also takes `forgeUrl` and `apiUrl` (`forge_url` and `api_url` in Python).
 </Callout>
 
 ## Approvals

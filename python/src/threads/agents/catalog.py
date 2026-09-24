@@ -3,10 +3,11 @@
 error that names it."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final, Required, TypedDict
 
 from threads.agents.config import ConfigError
+from threads.git.forge import GitHub
 from threads.git.gateway import Forge, GitGateway
 from threads.log import ArtifactRef
 from threads.loop.tools import ToolRunner
@@ -28,9 +29,13 @@ class WebOptions(TypedDict, total=False):
     """web_search through this backend (`threads.search`: exa, brave, tavily)."""
 
 
-class GitOptions(TypedDict):
-    credential: Secret
+class GitOptions(TypedDict, total=False):
+    credential: Required[Secret]
     """The forge token, revealed on the host only."""
+    forge_url: str
+    """Where owner/name lives: <forge_url>/<owner>/<name>.git. Default https://github.com."""
+    api_url: str
+    """The forge REST API open_pull_request uses. Default https://api.github.com."""
 
 
 class LspOptions(TypedDict, total=False):
@@ -45,6 +50,8 @@ class Catalog:
     git: Secret | None = None
     computer: bool = False
     languages: tuple[str, ...] = ()
+    forge: Forge = field(default_factory=Forge)
+    """Where git_* and open_pull_request reach the forge."""
 
     def gated(self) -> frozenset[str]:
         """The gated built-ins this configuration pins."""
@@ -96,6 +103,15 @@ def catalog(
         None if git is None else git["credential"],
         computer,
         languages,
+        Forge() if git is None else _forge(git),
+    )
+
+
+def _forge(git: GitOptions) -> Forge:
+    base = git.get("forge_url", "https://github.com").rstrip("/")
+    return Forge(
+        git_url=lambda repo: f"{base}/{repo}.git",
+        api=GitHub(api=git.get("api_url", "https://api.github.com")),
     )
 
 
@@ -113,6 +129,6 @@ def gateways(
         web = WebTools(fence, put, configured.search)
         out |= dict.fromkeys(("web_fetch", "web_search"), web)
     if configured.git is not None and sandbox is not None:
-        gateway = GitGateway(resolve(configured.git), sandbox, fence, Forge())
+        gateway = GitGateway(resolve(configured.git), sandbox, fence, configured.forge)
         out |= dict.fromkeys(GIT, gateway)
     return out

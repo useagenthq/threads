@@ -166,3 +166,28 @@ def test_a_web_fetch_result_is_text_and_a_citation(monkeypatch: pytest.MonkeyPat
         assert cite.source_id == "https://docs.example.com/start"
 
     asyncio.run(main())
+
+
+def test_git_takes_a_forge_url_and_an_api_url_for_an_enterprise_host(tmp_path: Path) -> None:
+    configured = catalog.catalog(
+        LocalSandbox(tmp_path, LOCAL_INFO),
+        web=None,
+        git={
+            "credential": secret("GH_TOKEN"),
+            "forge_url": "https://git.acme.dev/",
+            "api_url": "https://git.acme.dev/api/v3",
+        },
+        computer=False,
+        lsp=None,
+    )
+    assert configured.forge.git_url("acme/api") == "https://git.acme.dev/acme/api.git"
+    assert configured.forge.api.api == "https://git.acme.dev/api/v3"
+    default = catalog.catalog(
+        LocalSandbox(tmp_path, LOCAL_INFO),
+        web=None,
+        git={"credential": secret("GH_TOKEN")},
+        computer=False,
+        lsp=None,
+    )
+    assert default.forge.git_url("acme/api") == "https://github.com/acme/api.git"
+    assert default.forge.api.api == "https://api.github.com"
