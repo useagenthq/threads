@@ -164,10 +164,12 @@ export async function fork(call: Call): Promise<Response> {
 }
 
 export async function approvals(call: Call): Promise<Response> {
-  const o = await opened(call);
-  return o instanceof Response
-    ? o
-    : json(200, await o.thread.pendingApprovals());
+  const o = await opened(call, false, READ_ERRORS);
+  if (o instanceof Response) return o;
+  const pending = await o.thread.pendingApprovals();
+  return pending.ok
+    ? json(200, pending.value)
+    : failure(pending.error.code, pending.error.message);
 }
 
 const DECIDE_CODES = [

@@ -50,7 +50,7 @@
       },
       "ListApprovalsError": {
         "description": "Typed failure of listApprovals.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "log_corrupt", "unsupported_format", "unsupported_critical_event"] } } } } }] } } }
       },
       "DecideApprovalError": {
         "description": "Typed failure of decideApproval.",
@@ -168,7 +168,7 @@
       "get": {
         "operationId": "listApprovals",
         "x-api": ["Thread.pendingApprovals"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "log_corrupt", "unsupported_format", "unsupported_critical_event"],
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "responses": {
           "200": { "description": "Open challenges.", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "host-api.v1.schema.json#/$defs/PendingApproval" } } } } },

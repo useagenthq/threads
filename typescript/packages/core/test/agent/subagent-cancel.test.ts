@@ -109,7 +109,7 @@ describe("a child that parks parks its parent", () => {
     expect(parent.some((e) => e.type === "agent_finished")).toBe(false);
 
     const handle = unwrap(await openThread(store, child));
-    const [pending] = await handle.pendingApprovals();
+    const [pending] = unwrap(await handle.pendingApprovals());
     if (pending === undefined) throw new Error("the child waits on approval");
     unwrap(await handle.approve(pending.challenge_id, operator));
 

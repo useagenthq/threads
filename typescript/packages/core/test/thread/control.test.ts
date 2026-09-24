@@ -92,7 +92,7 @@ describe("approvals", () => {
   test("approve consumes the challenge once; the parked call then runs", async () => {
     const sent: string[] = [];
     const { store, thread, resume } = await parked(sent);
-    const [pending] = await thread.pendingApprovals();
+    const [pending] = unwrap(await thread.pendingApprovals());
     if (pending === undefined) throw new Error("one open challenge");
     expect(pending).toMatchObject({ tool: "send_email", input: { to: "bob" } });
     const granted = await thread.approve(pending.challenge_id, alice);
@@ -102,7 +102,7 @@ describe("approvals", () => {
       ok: false,
       error: { code: "approval_duplicate" },
     });
-    expect(await thread.pendingApprovals()).toEqual([]);
+    expect(unwrap(await thread.pendingApprovals())).toEqual([]);
     const { db } = await storeConnection(store);
     expect(db.all("SELECT state, decided_by FROM approvals", [])).toEqual([
       { state: "granted", decided_by: "api/local/alice" },
@@ -117,7 +117,7 @@ describe("approvals", () => {
   test("deny closes the call as denied and never asks again", async () => {
     const sent: string[] = [];
     const { store, thread, resume } = await parked(sent);
-    const [pending] = await thread.pendingApprovals();
+    const [pending] = unwrap(await thread.pendingApprovals());
     if (pending === undefined) throw new Error("one open challenge");
     unwrap(await thread.deny(pending.challenge_id, alice, { reason: "no" }));
     expect((await resume()).status).toBe("completed");
@@ -131,7 +131,7 @@ describe("approvals", () => {
   test("a principal of another tenant is forbidden and appends nothing", async () => {
     const { store, thread } = await parked([]);
     const before = (await events(store, thread)).length;
-    const [pending] = await thread.pendingApprovals();
+    const [pending] = unwrap(await thread.pendingApprovals());
     if (pending === undefined) throw new Error("one open challenge");
     const denied = await thread.approve(pending.challenge_id, mallory);
     expect(denied).toMatchObject({ ok: false, error: { code: "forbidden" } });
@@ -150,7 +150,7 @@ describe("approvals", () => {
     const { thread } = await parked([]);
     const missing = await thread.approve(crypto.randomUUID(), alice);
     expect(missing).toMatchObject({ ok: false, error: { code: "not_found" } });
-    const [pending] = await thread.pendingApprovals();
+    const [pending] = unwrap(await thread.pendingApprovals());
     if (pending === undefined) throw new Error("one open challenge");
     expect(pending.suggested_rules).toEqual(["send_email"]);
     const remembered = await thread.approve(pending.challenge_id, alice, {
@@ -164,7 +164,7 @@ describe("approvals", () => {
 
   test("a suggested remember_rule is kept as permission_rule_added", async () => {
     const { store, thread } = await parked([]);
-    const [pending] = await thread.pendingApprovals();
+    const [pending] = unwrap(await thread.pendingApprovals());
     if (pending === undefined) throw new Error("one open challenge");
     unwrap(
       await thread.approve(pending.challenge_id, alice, {
@@ -275,7 +275,7 @@ describe("cancel, mode, model, questions and parked effects", () => {
     const other = unwrap(log.acquire(thread.branch, "another-process"));
     try {
       const before = (await events(store, thread)).length;
-      const [pending] = await thread.pendingApprovals();
+      const [pending] = unwrap(await thread.pendingApprovals());
       if (pending === undefined) throw new Error("one open challenge");
       for (const done of [
         await thread.cancel(alice),

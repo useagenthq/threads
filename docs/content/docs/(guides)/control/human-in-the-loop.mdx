@@ -70,7 +70,9 @@ The handle needs only the store and the thread id, not the agent, so a different
 <Tab value="TypeScript">
 
 ```ts
-for (const pending of await thread.pendingApprovals()) {
+const open = await thread.pendingApprovals();
+if (!open.ok) throw new Error(open.error.message);
+for (const pending of open.value) {
   console.log(pending.tool, pending.input); // send_email { to: "bob@example.com", body: "Hi" }
   const decided = await thread.approve(pending.challenge_id, me);
   if (!decided.ok) throw new Error(decided.error.message);

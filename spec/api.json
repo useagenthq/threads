@@ -2539,8 +2539,11 @@
           "py": "pending_approvals",
           "async": true,
           "params": [],
-          "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/PendingApproval"}},
-          "doc": "Open approval challenges on this branch, each with the tool call it guards, the suggested_rules an approver may keep, and the reason it asks when one was recorded. Python returns Ok or Err."
+          "returns": {
+            "result": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/PendingApproval"}},
+            "errors": ["log_corrupt", "unsupported_format", "unsupported_critical_event"]
+          },
+          "doc": "Open approval challenges on this branch, each with the tool call it guards, the suggested_rules an approver may keep, and the reason it asks when one was recorded. A log that can't be read is an error, never an empty list."
         },
         "approve": {
           "ts": "approve",

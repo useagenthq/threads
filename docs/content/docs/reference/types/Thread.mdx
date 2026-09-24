@@ -212,24 +212,26 @@ async def replay() -> Ok[None] | Err[Failure]
 
 ### pendingApprovals / pending_approvals
 
-Open approval challenges on this branch, each with the tool call it guards, the suggested_rules an approver may keep, and the reason it asks when one was recorded. Python returns Ok or Err.
+Open approval challenges on this branch, each with the tool call it guards, the suggested_rules an approver may keep, and the reason it asks when one was recorded. A log that can't be read is an error, never an empty list.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
 ```ts
-pendingApprovals(): Promise<readonly PendingApproval[]>
+pendingApprovals(): Promise<Result<readonly PendingApproval[]>>
 ```
 
 </Tab>
 <Tab value="Python">
 
 ```python
-async def pending_approvals() -> Sequence[PendingApproval]
+async def pending_approvals() -> Ok[Sequence[PendingApproval]] | Err[Failure]
 ```
 
 </Tab>
 </Tabs>
+
+**Returns an error value** with one of these codes: `log_corrupt`, `unsupported_format`, `unsupported_critical_event`.
 
 ### approve
 

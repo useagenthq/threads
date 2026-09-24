@@ -264,7 +264,10 @@
                           "enum": [
                             "unauthenticated",
                             "forbidden",
-                            "not_found"
+                            "not_found",
+                            "log_corrupt",
+                            "unsupported_format",
+                            "unsupported_critical_event"
                           ]
                         }
                       }
@@ -8408,7 +8411,10 @@
         "x-error-codes": [
           "unauthenticated",
           "forbidden",
-          "not_found"
+          "not_found",
+          "log_corrupt",
+          "unsupported_format",
+          "unsupported_critical_event"
         ],
         "parameters": [
           {

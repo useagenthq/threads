@@ -7,7 +7,7 @@ import type {
   ThreadId,
 } from "../log";
 import { knownEvents } from "../reduce";
-import type { Result } from "../result";
+import { ok, type Result } from "../result";
 import type { LogStore } from "../store";
 import { cancelChildren } from "./cancel";
 import {
@@ -26,7 +26,7 @@ import {
   type PendingApproval,
   pendingApprovals,
 } from "./pending";
-import { readLog } from "./read";
+import { type ReadError, readLog } from "./read";
 import { cancel, setMode, setModel } from "./settings";
 import { compact, setOutputStyle } from "./style";
 
@@ -35,7 +35,9 @@ type Controlled = Promise<Result<Appended, ControlError>>;
 /** The control half of spec/api.json Thread: every method that appends names its principal. */
 export type ThreadControl = {
   readonly branches: () => Promise<readonly BranchInfo[]>;
-  readonly pendingApprovals: () => Promise<readonly PendingApproval[]>;
+  readonly pendingApprovals: () => Promise<
+    Result<readonly PendingApproval[], ReadError>
+  >;
   readonly approve: (
     challengeId: string,
     principal: Principal,
@@ -89,17 +91,19 @@ export function controls(
     },
     pendingApprovals: async () => {
       const current = readLog(log, branchId);
-      if (!current.ok) return [];
+      if (!current.ok) return current;
       const events = knownEvents(current.value);
       const read = (branch: BranchId) => {
         const other = log.read(branch);
         return other.ok ? knownEvents(other.value) : undefined;
       };
-      return pendingApprovals(
-        events,
-        current.value.fold,
-        log.now(),
-        memberView(events, read),
+      return ok(
+        pendingApprovals(
+          events,
+          current.value.fold,
+          log.now(),
+          memberView(events, read),
+        ),
       );
     },
     approve: (id, principal, options = {}) =>
