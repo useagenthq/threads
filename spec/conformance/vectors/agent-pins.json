@@ -1,5 +1,5 @@
 {
-  "description": "Agent pins (spec/schema/README.md, The pinned config). Build `agent`: models are scripted models under `name`, declaring `price` and a `cache_ttl_ms` lifetime when given ('none' otherwise; `model` absent: scripted-1); each given permissions, retry or context section is the default one with those fields replaced; `sandbox` is the fake sandbox; `memory_write` gives local memory; extension hooks and observers are no-ops. A new thread's thread_started data (a team member's pin, with `team_member`) must equal `thread_started`, config_hash included; a team lead's `team` ids are fresh per thread and left out.",
+  "description": "Agent pins (spec/schema/README.md, The pinned config). Build `agent`: models are scripted models under `name`, declaring `price` and a `cache_ttl_ms` lifetime when given ('none' otherwise; `model` absent: scripted-1); each given permissions, retry or context section is the default one with those fields replaced; `sandbox` is the fake sandbox; `memory_write` gives local memory; extension hooks and observers are no-ops; an agent with `models` is a dynamic agent (its keys in order, the first the default), pinned as the member `dynamic` defines when given. A new thread's thread_started data (a team member's pin, with `team_member`) must equal `thread_started`, config_hash included; a team lead's `team` ids are fresh per thread and left out.",
   "cases": [
     {
       "name": "bare-agent",
@@ -796,7 +796,7 @@
             "effect_class": "read_only"
           },
           {
-            "description": "Start a team member from an agent your team lists. Returns its name; when it finishes, its result arrives as a message.",
+            "description": "Start a team member from an agent your team lists. Returns its name; when it finishes, its result arrives as a message. label works on any start. instructions, tools and model are optional and apply only to dynamic agents.",
             "input_schema": {
               "additionalProperties": false,
               "properties": {
@@ -805,10 +805,33 @@
                   "minLength": 1,
                   "type": "string"
                 },
+                "instructions": {
+                  "description": "A dynamic agent only: instructions you write for this member, added after its own. Omitted: its own alone.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "label": {
+                  "description": "A short display name for the member, up to 64 characters. Any start; never shown to a model.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "model": {
+                  "description": "A dynamic agent only: one of its model keys. Omitted: its default.",
+                  "minLength": 1,
+                  "type": "string"
+                },
                 "task": {
                   "description": "The member's first input; it sees nothing else.",
                   "minLength": 1,
                   "type": "string"
+                },
+                "tools": {
+                  "description": "A dynamic agent only: the tools it may use, a subset of those your instructions list for it. Omitted: all of them.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
                 }
               },
               "required": [
@@ -949,7 +972,7 @@
             "server_edits": "disabled"
           }
         },
-        "config_hash": "478d95540a4b11b412e1b427f5f6fbdca8fba6442a9ddfbe7b863b8dbda037c7"
+        "config_hash": "c3c45bb936b4e9634be994d6f73da9ed59daa61e38f7758c792f49b63658f2f4"
       }
     },
     {
@@ -1030,7 +1053,7 @@
             "effect_class": "read_only"
           },
           {
-            "description": "Start a team member from an agent your team lists. Returns its name; when it finishes, its result arrives as a message.",
+            "description": "Start a team member from an agent your team lists. Returns its name; when it finishes, its result arrives as a message. label works on any start. instructions, tools and model are optional and apply only to dynamic agents.",
             "input_schema": {
               "additionalProperties": false,
               "properties": {
@@ -1039,10 +1062,33 @@
                   "minLength": 1,
                   "type": "string"
                 },
+                "instructions": {
+                  "description": "A dynamic agent only: instructions you write for this member, added after its own. Omitted: its own alone.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "label": {
+                  "description": "A short display name for the member, up to 64 characters. Any start; never shown to a model.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "model": {
+                  "description": "A dynamic agent only: one of its model keys. Omitted: its default.",
+                  "minLength": 1,
+                  "type": "string"
+                },
                 "task": {
                   "description": "The member's first input; it sees nothing else.",
                   "minLength": 1,
                   "type": "string"
+                },
+                "tools": {
+                  "description": "A dynamic agent only: the tools it may use, a subset of those your instructions list for it. Omitted: all of them.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
                 }
               },
               "required": [
@@ -1183,7 +1229,7 @@
             "server_edits": "disabled"
           }
         },
-        "config_hash": "66dfb58ec625623170b46859645877a517789209fbf267123cfbab817f73a9a6"
+        "config_hash": "d2c5dd9b5cb1ac1c5edf3bd6cc5465f2366984bfaa6995359d59a7efc73a3a32"
       }
     },
     {
@@ -3180,6 +3226,943 @@
           }
         },
         "config_hash": "4254e1606c922e2858abe4f94575ffc5131fdba6b265d2bf1b20eb0d11468553"
+      }
+    },
+    {
+      "name": "dynamic-template-lead",
+      "agent": {
+        "name": "lead",
+        "instructions": "Lead.",
+        "team": [
+          {
+            "name": "analyst",
+            "instructions": "Analyse.",
+            "sandbox": "fake",
+            "models": [
+              {
+                "key": "fast",
+                "name": "scripted-1"
+              },
+              {
+                "key": "deep",
+                "name": "scripted-big",
+                "price": {
+                  "input": 3000,
+                  "output": 15000
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "team_member": false,
+      "thread_started": {
+        "agent_name": "lead",
+        "instructions": "Lead.\n\nAgents you can start as team members with start: analyst.\nanalyst (you write its instructions; tools: bash, edit, glob, grep, ls, notebook_edit, read, write; models: fast (default), deep)",
+        "model": {
+          "provider": "scripted",
+          "name": "scripted-1"
+        },
+        "model_params": {
+          "max_tokens": 1024
+        },
+        "adapter": {
+          "name": "scripted",
+          "version": "1",
+          "settings": {}
+        },
+        "tools": [
+          {
+            "description": "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "call_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "length": {
+                  "maximum": 65536,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "offset": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "call_id",
+                "offset",
+                "length"
+              ],
+              "type": "object"
+            },
+            "name": "read_tool_result",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Send a message to a team member. It arrives as the member's next input and wakes it if idle.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "text": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "to": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "to",
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "send",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Start a team member from an agent your team lists. Returns its name; when it finishes, its result arrives as a message. label works on any start. instructions, tools and model are optional and apply only to dynamic agents.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "agent": {
+                  "description": "An agent your team lists.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "instructions": {
+                  "description": "A dynamic agent only: instructions you write for this member, added after its own. Omitted: its own alone.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "label": {
+                  "description": "A short display name for the member, up to 64 characters. Any start; never shown to a model.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "model": {
+                  "description": "A dynamic agent only: one of its model keys. Omitted: its default.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "task": {
+                  "description": "The member's first input; it sees nothing else.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "tools": {
+                  "description": "A dynamic agent only: the tools it may use, a subset of those your instructions list for it. Omitted: all of them.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "agent",
+                "task"
+              ],
+              "type": "object"
+            },
+            "name": "start",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Replace your todo list with todos, the complete new list. Use it to plan and track multi-step work.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "todos": {
+                  "description": "The complete new list; ids are unique.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "active_form": {
+                        "description": "Present tense, shown while in_progress.",
+                        "type": "string"
+                      },
+                      "content": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "id": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "content",
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "todos"
+              ],
+              "type": "object"
+            },
+            "name": "todo_write",
+            "effect_class": "read_only"
+          }
+        ],
+        "policy": {
+          "models": [
+            {
+              "provider": "scripted",
+              "name": "scripted-1",
+              "context_window": 200000,
+              "max_output_tokens": 8192,
+              "input_billing_bound": "context_window"
+            }
+          ],
+          "permissions": {
+            "mode": "default",
+            "allow": [],
+            "ask": [],
+            "deny": [],
+            "protected_paths": [
+              ".git/**",
+              ".threads/**",
+              ".claude/**",
+              ".mcp.json",
+              "**/.bashrc",
+              "**/.zshrc",
+              "**/.profile",
+              "**/.gitconfig",
+              "**/.ssh/**"
+            ],
+            "allow_bypass": false,
+            "plan_exit_mode": "default"
+          },
+          "retry": {
+            "max_retries": 8,
+            "base_delay_ms": 1000,
+            "max_delay_ms": 32000,
+            "max_retry_after_ms": 60000,
+            "max_total_wait_ms": 600000,
+            "crash_resends": 2,
+            "fallback_after": 3,
+            "fallback_scope": "turn",
+            "heartbeat_ms": 15000
+          },
+          "context": {
+            "reserve_tokens": 20000,
+            "cache_ttl_ms": 300000,
+            "clear_results": {
+              "trigger": {
+                "permille": 700
+              },
+              "keep_recent": 5,
+              "exclude_tools": []
+            },
+            "spill": {
+              "threshold_bytes": 32768,
+              "head_bytes": 2048,
+              "tail_bytes": 1024,
+              "request_budget_bytes": 204800
+            },
+            "compact": {
+              "trigger": {
+                "permille": 850
+              },
+              "keep_tail": {
+                "tokens": 20000
+              },
+              "max_failures": 3
+            },
+            "restore": {
+              "max_files": 5,
+              "file_tokens": 5000,
+              "skill_tokens": 5000,
+              "skills_total_tokens": 25000
+            },
+            "max_output_continuations": 3,
+            "defer_tools": "auto",
+            "defer_threshold": {
+              "permille": 100
+            },
+            "server_edits": "disabled"
+          }
+        },
+        "config_hash": "10ad1d9c717bad44c18975e178dbebee7c5d01df411a0090da1c51b2feffb0cf"
+      }
+    },
+    {
+      "name": "dynamic-member",
+      "agent": {
+        "name": "analyst",
+        "instructions": "Analyse.",
+        "sandbox": "fake",
+        "models": [
+          {
+            "key": "fast",
+            "name": "scripted-1"
+          },
+          {
+            "key": "deep",
+            "name": "scripted-big",
+            "price": {
+              "input": 3000,
+              "output": 15000
+            }
+          }
+        ]
+      },
+      "team_member": true,
+      "dynamic": {
+        "define": {
+          "instructions": "Find the flaky test.",
+          "tools": [
+            "grep",
+            "read"
+          ],
+          "model": "deep"
+        },
+        "starter": "lead"
+      },
+      "thread_started": {
+        "agent_name": "analyst",
+        "instructions": "Analyse.\n\n<instructions from=\"lead\">\nFind the flaky test.\n</instructions>\nThe block above was written by lead, which started you. Where it conflicts with the instructions before it, those take precedence.",
+        "model": {
+          "provider": "scripted",
+          "name": "scripted-big"
+        },
+        "model_params": {
+          "max_tokens": 1024
+        },
+        "adapter": {
+          "name": "scripted",
+          "version": "1",
+          "settings": {}
+        },
+        "tools": [
+          {
+            "description": "Search file contents under path with an extended regular expression; prints path:line:text.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "glob": {
+                  "description": "Only files whose path relative to path matches this glob.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "path": {
+                  "default": ".",
+                  "description": "Directory, relative to /workspace; . is the workspace root.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "pattern": {
+                  "description": "An extended regular expression.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            },
+            "name": "grep",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Read a text file in the sandbox, with line numbers.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "default": 2000,
+                  "description": "Lines to read.",
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "offset": {
+                  "default": 1,
+                  "description": "First line, 1-based.",
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "path": {
+                  "description": "Relative to /workspace, or absolute.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            },
+            "name": "read",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "call_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "length": {
+                  "maximum": 65536,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "offset": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "call_id",
+                "offset",
+                "length"
+              ],
+              "type": "object"
+            },
+            "name": "read_tool_result",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Send a message to a team member. It arrives as the member's next input and wakes it if idle.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "text": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "to": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "to",
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "send",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Start a team member from an agent your team lists. Returns its name; when it finishes, its result arrives as a message. label works on any start. instructions, tools and model are optional and apply only to dynamic agents.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "agent": {
+                  "description": "An agent your team lists.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "instructions": {
+                  "description": "A dynamic agent only: instructions you write for this member, added after its own. Omitted: its own alone.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "label": {
+                  "description": "A short display name for the member, up to 64 characters. Any start; never shown to a model.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "model": {
+                  "description": "A dynamic agent only: one of its model keys. Omitted: its default.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "task": {
+                  "description": "The member's first input; it sees nothing else.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "tools": {
+                  "description": "A dynamic agent only: the tools it may use, a subset of those your instructions list for it. Omitted: all of them.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "agent",
+                "task"
+              ],
+              "type": "object"
+            },
+            "name": "start",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Replace your todo list with todos, the complete new list. Use it to plan and track multi-step work.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "todos": {
+                  "description": "The complete new list; ids are unique.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "active_form": {
+                        "description": "Present tense, shown while in_progress.",
+                        "type": "string"
+                      },
+                      "content": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "id": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "content",
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "todos"
+              ],
+              "type": "object"
+            },
+            "name": "todo_write",
+            "effect_class": "read_only"
+          }
+        ],
+        "policy": {
+          "models": [
+            {
+              "provider": "scripted",
+              "name": "scripted-big",
+              "context_window": 200000,
+              "max_output_tokens": 8192,
+              "input_billing_bound": "context_window",
+              "price": {
+                "input": 3000,
+                "output": 15000
+              }
+            }
+          ],
+          "currency": "USD",
+          "permissions": {
+            "mode": "default",
+            "allow": [],
+            "ask": [],
+            "deny": [],
+            "protected_paths": [
+              ".git/**",
+              ".threads/**",
+              ".claude/**",
+              ".mcp.json",
+              "**/.bashrc",
+              "**/.zshrc",
+              "**/.profile",
+              "**/.gitconfig",
+              "**/.ssh/**"
+            ],
+            "allow_bypass": false,
+            "plan_exit_mode": "default"
+          },
+          "retry": {
+            "max_retries": 8,
+            "base_delay_ms": 1000,
+            "max_delay_ms": 32000,
+            "max_retry_after_ms": 60000,
+            "max_total_wait_ms": 600000,
+            "crash_resends": 2,
+            "fallback_after": 3,
+            "fallback_scope": "turn",
+            "heartbeat_ms": 15000
+          },
+          "context": {
+            "reserve_tokens": 20000,
+            "cache_ttl_ms": 300000,
+            "clear_results": {
+              "trigger": {
+                "permille": 700
+              },
+              "keep_recent": 5,
+              "exclude_tools": []
+            },
+            "spill": {
+              "threshold_bytes": 32768,
+              "head_bytes": 2048,
+              "tail_bytes": 1024,
+              "request_budget_bytes": 204800
+            },
+            "compact": {
+              "trigger": {
+                "permille": 850
+              },
+              "keep_tail": {
+                "tokens": 20000
+              },
+              "max_failures": 3
+            },
+            "restore": {
+              "max_files": 5,
+              "file_tokens": 5000,
+              "skill_tokens": 5000,
+              "skills_total_tokens": 25000
+            },
+            "max_output_continuations": 3,
+            "defer_tools": "auto",
+            "defer_threshold": {
+              "permille": 100
+            },
+            "server_edits": "disabled"
+          }
+        },
+        "sandbox_provider": "fake",
+        "config_hash": "0e6e083061d40fbb4aba4372f93f71ae2e13df87bc8d45cece408b0dfe6e62cd"
+      }
+    },
+    {
+      "name": "dynamic-member-defaults",
+      "agent": {
+        "name": "analyst",
+        "instructions": "Analyse.",
+        "sandbox": "fake",
+        "models": [
+          {
+            "key": "fast",
+            "name": "scripted-1"
+          },
+          {
+            "key": "deep",
+            "name": "scripted-big",
+            "price": {
+              "input": 3000,
+              "output": 15000
+            }
+          }
+        ]
+      },
+      "team_member": true,
+      "dynamic": {
+        "define": {
+          "tools": [
+            "bash"
+          ],
+          "model": "fast"
+        },
+        "starter": "operator"
+      },
+      "thread_started": {
+        "agent_name": "analyst",
+        "instructions": "Analyse.",
+        "model": {
+          "provider": "scripted",
+          "name": "scripted-1"
+        },
+        "model_params": {
+          "max_tokens": 1024
+        },
+        "adapter": {
+          "name": "scripted",
+          "version": "1",
+          "settings": {}
+        },
+        "tools": [
+          {
+            "description": "Run a shell command in the sandbox. Returns exit_code, stdout and stderr previews, and full_output when truncated.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "command": {
+                  "description": "Run with bash -c.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "timeout_ms": {
+                  "description": "Default 120000.",
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "type": "object"
+            },
+            "name": "bash",
+            "effect_class": "sandbox_local"
+          },
+          {
+            "description": "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "call_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "length": {
+                  "maximum": 65536,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "offset": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "call_id",
+                "offset",
+                "length"
+              ],
+              "type": "object"
+            },
+            "name": "read_tool_result",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Send a message to a team member. It arrives as the member's next input and wakes it if idle.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "text": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "to": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "to",
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "send",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Start a team member from an agent your team lists. Returns its name; when it finishes, its result arrives as a message. label works on any start. instructions, tools and model are optional and apply only to dynamic agents.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "agent": {
+                  "description": "An agent your team lists.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "instructions": {
+                  "description": "A dynamic agent only: instructions you write for this member, added after its own. Omitted: its own alone.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "label": {
+                  "description": "A short display name for the member, up to 64 characters. Any start; never shown to a model.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "model": {
+                  "description": "A dynamic agent only: one of its model keys. Omitted: its default.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "task": {
+                  "description": "The member's first input; it sees nothing else.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "tools": {
+                  "description": "A dynamic agent only: the tools it may use, a subset of those your instructions list for it. Omitted: all of them.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "agent",
+                "task"
+              ],
+              "type": "object"
+            },
+            "name": "start",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Replace your todo list with todos, the complete new list. Use it to plan and track multi-step work.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "todos": {
+                  "description": "The complete new list; ids are unique.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "active_form": {
+                        "description": "Present tense, shown while in_progress.",
+                        "type": "string"
+                      },
+                      "content": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "id": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "content",
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "todos"
+              ],
+              "type": "object"
+            },
+            "name": "todo_write",
+            "effect_class": "read_only"
+          }
+        ],
+        "policy": {
+          "models": [
+            {
+              "provider": "scripted",
+              "name": "scripted-1",
+              "context_window": 200000,
+              "max_output_tokens": 8192,
+              "input_billing_bound": "context_window"
+            }
+          ],
+          "permissions": {
+            "mode": "default",
+            "allow": [],
+            "ask": [],
+            "deny": [],
+            "protected_paths": [
+              ".git/**",
+              ".threads/**",
+              ".claude/**",
+              ".mcp.json",
+              "**/.bashrc",
+              "**/.zshrc",
+              "**/.profile",
+              "**/.gitconfig",
+              "**/.ssh/**"
+            ],
+            "allow_bypass": false,
+            "plan_exit_mode": "default"
+          },
+          "retry": {
+            "max_retries": 8,
+            "base_delay_ms": 1000,
+            "max_delay_ms": 32000,
+            "max_retry_after_ms": 60000,
+            "max_total_wait_ms": 600000,
+            "crash_resends": 2,
+            "fallback_after": 3,
+            "fallback_scope": "turn",
+            "heartbeat_ms": 15000
+          },
+          "context": {
+            "reserve_tokens": 20000,
+            "cache_ttl_ms": 300000,
+            "clear_results": {
+              "trigger": {
+                "permille": 700
+              },
+              "keep_recent": 5,
+              "exclude_tools": []
+            },
+            "spill": {
+              "threshold_bytes": 32768,
+              "head_bytes": 2048,
+              "tail_bytes": 1024,
+              "request_budget_bytes": 204800
+            },
+            "compact": {
+              "trigger": {
+                "permille": 850
+              },
+              "keep_tail": {
+                "tokens": 20000
+              },
+              "max_failures": 3
+            },
+            "restore": {
+              "max_files": 5,
+              "file_tokens": 5000,
+              "skill_tokens": 5000,
+              "skills_total_tokens": 25000
+            },
+            "max_output_continuations": 3,
+            "defer_tools": "auto",
+            "defer_threshold": {
+              "permille": 100
+            },
+            "server_edits": "disabled"
+          }
+        },
+        "sandbox_provider": "fake",
+        "config_hash": "164b1cd62083c79215189d069ed705fb6ccb4ffa5b61a3b38f1a78367f6f9ff6"
       }
     }
   ]

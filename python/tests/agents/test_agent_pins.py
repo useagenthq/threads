@@ -1,6 +1,7 @@
 """The same agent pins the same thread_started and config_hash in both languages
 (spec/schema/README.md, "The pinned config"): the shared vector pins the bytes."""
 
+import asyncio
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, override
@@ -10,22 +11,27 @@ from pydantic import JsonValue, TypeAdapter
 
 from threads import (
     Agent,
+    DynamicAgent,
     RunContext,
     Skill,
     agent,
+    dynamic_agent,
     extension,
     fake_sandbox,
     local_memory,
     scripted_model,
 )
 from threads.agents.bindings import DEFAULT_PERMISSIONS
+from threads.agents.dynamic_agent import member_definition
+from threads.agents.teams import member_pin
 from threads.hooks.extension import Extension
-from threads.log import Budget, Context, Event, ModelRef, Permissions, Retry
+from threads.log import Budget, Context, Event, MemberDefine, ModelRef, Permissions, Retry
 from threads.loop.defaults import CONTEXT, RETRY
 from threads.loop.model import ModelInfo
 from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel
 
 if TYPE_CHECKING:
+    from threads.agents.dynamic import DynamicAgentOptions
     from threads.agents.factory import AgentOptions
     from threads.hooks.types import Hooks
 
@@ -145,6 +151,26 @@ def _parts(d: Obj, options: "AgentOptions") -> None:
         options["handoffs"] = [_build(s) for s in _OBJS.validate_python(d["handoffs"])]
 
 
+def _template(d: Obj) -> DynamicAgent[None, object]:
+    """A dynamic agent: its models by key, in order; the vector's templates set nothing else but
+    a sandbox."""
+    models = {
+        _TEXT.validate_python(m["key"]): _model(m) for m in _OBJS.validate_python(d["models"])
+    }
+    options: DynamicAgentOptions = {
+        "name": _TEXT.validate_python(d["name"]),
+        "instructions": _TEXT.validate_python(d["instructions"]),
+        "models": models,
+    }
+    if "sandbox" in d:
+        options["sandbox"] = fake_sandbox()
+    return dynamic_agent(**options)
+
+
+def _member(d: Obj) -> "Agent[None, object] | DynamicAgent[None, object]":
+    return _template(d) if "models" in d else _build(d)
+
+
 def _build(d: Obj) -> Agent[None, object]:
     model = (
         _model(_OBJ.validate_python(d["model"]))
@@ -159,7 +185,7 @@ def _build(d: Obj) -> Agent[None, object]:
     _settings(d, options)
     _parts(d, options)
     if "team" in d:
-        return agent(**options, team=[_build(s) for s in _OBJS.validate_python(d["team"])])
+        return agent(**options, team=[_member(s) for s in _OBJS.validate_python(d["team"])])
     return agent(**options)
 
 
@@ -167,8 +193,16 @@ def _build(d: Obj) -> Agent[None, object]:
     "case", _OBJS.validate_python(VECTOR["cases"]), ids=lambda c: str(c["name"])
 )
 def test_the_agent_pins_the_vector(case: Obj) -> None:
-    definition = _build(_OBJ.validate_python(case["agent"])).definition
-    if case["team_member"] is True:
-        definition = replace(definition, in_team=True)
-    started, _ = definition.pin()
+    definition = _member(_OBJ.validate_python(case["agent"])).definition
+    if case["team_member"] is not True:
+        started, _ = definition.pin()
+        assert started == case["thread_started"]
+        return
+    if "dynamic" in case:
+        choice = _OBJ.validate_python(case["dynamic"])
+        define = MemberDefine.model_validate(choice["define"])
+        definition = member_definition(definition, define, _TEXT.validate_python(choice["starter"]))
+    # The member's thread_started, and the hash the team worker pins it by.
+    started, _ = replace(definition, in_team=True).pin()
     assert started == case["thread_started"]
+    assert asyncio.run(member_pin(definition)).config_hash == started["config_hash"]

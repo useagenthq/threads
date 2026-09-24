@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from .agent_pin_cases import cases
 from .common import ADAPTER, CASES, PARAMS, arr, num, obj, sha, text
+from .dynamic_rules import KEPT, block
 from .jcs import JsonValue, canonical
 from .pieces import dump
 from .policies import CONTEXT, RETRY, permissions
@@ -99,11 +100,31 @@ def _instructions(agent: Obj) -> str:
     for key, label in (
         ("subagents", "Subagents you can start with spawn_agent"),
         ("handoffs", "Agents you can hand the conversation to"),
-        ("team", "Agents you can start as team members with start"),
     ):
         if key in agent:
             parts.append(f"{label}: {', '.join(_names(agent, key))}.")
+    if "team" in agent:
+        names = ", ".join(_names(agent, "team"))
+        lines = [_listed(obj(a)) for a in arr(agent["team"]) if "models" in obj(a)]
+        parts.append(
+            "\n".join([f"Agents you can start as team members with start: {names}.", *lines])
+        )
     return "\n\n".join(p for p in parts if p)
+
+
+def _choosable(template: Obj) -> list[str]:
+    """A template's tools as a member, in pinned order, less the framework set F."""
+    return [n for n in (text(obj(t)["name"]) for t in _tools(template, True)) if n not in KEPT]
+
+
+def _listed(template: Obj) -> str:
+    """A dynamic agent's line in its lead's team listing."""
+    tools = ", ".join(_choosable(template)) or "none"
+    keys = [text(obj(m)["key"]) for m in arr(template["models"])]
+    models = ", ".join([f"{keys[0]} (default)", *keys[1:]])
+    return (
+        f"{text(template['name'])} (you write its instructions; tools: {tools}; models: {models})"
+    )
 
 
 def _model(m: Obj) -> Obj:
@@ -186,24 +207,47 @@ def _hashed(agent: Obj) -> Obj:
     return out
 
 
-def _pin(agent: Obj, member: bool = False) -> Obj:
-    """thread_started's data, as agent() pins it (as a team member's with `member`)."""
+def _pin(agent: Obj, member: bool, choice: Obj | None) -> Obj:
+    """thread_started's data, as agent() pins it (as a team member's with `member`; as a dynamic
+    member's with its starter's `choice`: the chosen model and tools, the written block last)."""
+    tools = _tools(agent, member)
+    instructions = _instructions(agent)
+    hashed = _hashed(agent)
+    if "models" in agent:
+        define = obj(choice["define"]) if choice is not None else {}
+        models = {text(obj(m)["key"]): obj(m) for m in arr(agent["models"])}
+        key = text(define["model"]) if "model" in define else next(iter(models))
+        agent = {**agent, "model": models[key]}
+    if choice is not None:
+        define = obj(choice["define"])
+        kept = {*KEPT, *(text(t) for t in arr(define["tools"]))}
+        tools = [t for t in tools if text(obj(t)["name"]) in kept]
+        if "instructions" in define:
+            written = block(text(choice["starter"]), text(define["instructions"]))
+            instructions = f"{instructions}\n\n{written}"
+        hashed["dynamic"] = {"template": agent["name"], "define": define}
     first = obj(agent.get("model", {"name": "scripted-1"}))
     data: Obj = {
         "agent_name": agent["name"],
-        "instructions": _instructions(agent),
+        "instructions": instructions,
         **_settings(first),
-        "tools": _tools(agent, member),
+        "tools": tools,
         "policy": _policy(agent),
         **({"sandbox_provider": "fake"} if "sandbox" in agent else {}),
     }
-    return {**data, "config_hash": sha(canonical({**data, **_hashed(agent)}))}
+    return {**data, "config_hash": sha(canonical({**data, **hashed}))}
 
 
 def _vector() -> str:
     rows: list[JsonValue] = [
-        {"name": name, "agent": agent, "team_member": member, "thread_started": _pin(agent, member)}
-        for name, agent, member in cases()
+        {
+            "name": name,
+            "agent": agent,
+            "team_member": member,
+            **({} if choice is None else {"dynamic": choice}),
+            "thread_started": _pin(agent, member, choice),
+        }
+        for name, agent, member, choice in cases()
     ]
     doc: Obj = {
         "description": (
@@ -212,7 +256,9 @@ def _vector() -> str:
             "given ('none' otherwise; `model` absent: scripted-1); each given permissions, retry "
             "or context section is the default one with those fields replaced; `sandbox` is the "
             "fake sandbox; `memory_write` gives local memory; extension hooks and observers are "
-            "no-ops. A new thread's thread_started data (a team member's pin, with `team_member`) "
+            "no-ops; an agent with `models` is a dynamic agent (its keys in order, the first the "
+            "default), pinned as the member `dynamic` defines when given. A new thread's "
+            "thread_started data (a team member's pin, with `team_member`) "
             "must equal `thread_started`, config_hash included; a team lead's `team` ids are "
             "fresh per thread and left out."
         ),

@@ -1,6 +1,7 @@
 # pyright: strict
 """The agent definitions of the agent pin vector (agent_pins.py): one per feature an agent can
-pin without an app schema. The flag pins the agent as a team member."""
+pin without an app schema. The flag pins the agent as a team member, and a dynamic agent's
+member with its starter's choice."""
 
 from __future__ import annotations
 
@@ -10,12 +11,21 @@ if TYPE_CHECKING:
     from .jcs import Obj
 
 
-def cases() -> list[tuple[str, Obj, bool]]:
+def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
     brief = {"instructions": "Be brief."}
     researcher: Obj = {"name": "researcher", "instructions": "Research."}
     p1: Obj = {"input": 3000, "output": 15000}
+    analyst: Obj = {
+        "name": "analyst",
+        "instructions": "Analyse.",
+        "sandbox": "fake",
+        "models": [
+            {"key": "fast", "name": "scripted-1"},
+            {"key": "deep", "name": "scripted-big", "price": p1},
+        ],
+    }
     return [
-        ("bare-agent", {"name": "bare", **brief}, False),
+        ("bare-agent", {"name": "bare", **brief}, False, None),
         (
             "partial-settings",
             {
@@ -26,6 +36,7 @@ def cases() -> list[tuple[str, Obj, bool]]:
                 "context": {"reserve_tokens": 10_000},
             },
             False,
+            None,
         ),
         (
             "subagents",
@@ -37,9 +48,10 @@ def cases() -> list[tuple[str, Obj, bool]]:
                 ],
             },
             False,
+            None,
         ),
-        ("team-lead", {"name": "lead", "instructions": "Lead.", "team": [researcher]}, False),
-        ("team-member", researcher, True),
+        ("team-lead", {"name": "lead", "instructions": "Lead.", "team": [researcher]}, False, None),
+        ("team-member", researcher, True, None),
         (
             "extensions",
             {
@@ -56,8 +68,9 @@ def cases() -> list[tuple[str, Obj, bool]]:
                 ],
             },
             False,
+            None,
         ),
-        ("sandbox", {"name": "coder", **brief, "sandbox": "fake"}, False),
+        ("sandbox", {"name": "coder", **brief, "sandbox": "fake"}, False, None),
         (
             "priced-fallback-and-budget",
             {
@@ -69,6 +82,7 @@ def cases() -> list[tuple[str, Obj, bool]]:
                 "on_unknown_usage": "stop",
             },
             False,
+            None,
         ),
         (
             "agreed-cache-ttl",
@@ -79,6 +93,7 @@ def cases() -> list[tuple[str, Obj, bool]]:
                 "fallback": [{"name": "scripted-small", "cache_ttl_ms": 3_600_000}],
             },
             False,
+            None,
         ),
         (
             "explicit-cache-ttl",
@@ -90,6 +105,7 @@ def cases() -> list[tuple[str, Obj, bool]]:
                 "context": {"cache_ttl_ms": 600_000},
             },
             False,
+            None,
         ),
         (
             "handoffs-and-output-styles",
@@ -100,8 +116,9 @@ def cases() -> list[tuple[str, Obj, bool]]:
                 "output_styles": {"terse": "Be terse.", "warm": "Be warm."},
             },
             False,
+            None,
         ),
-        ("memory", {"name": "remembers", **brief, "memory_write": "allow"}, False),
+        ("memory", {"name": "remembers", **brief, "memory_write": "allow"}, False, None),
         (
             "skills",
             {
@@ -112,5 +129,31 @@ def cases() -> list[tuple[str, Obj, bool]]:
                 ],
             },
             False,
+            None,
+        ),
+        (
+            "dynamic-template-lead",
+            {"name": "lead", "instructions": "Lead.", "team": [analyst]},
+            False,
+            None,
+        ),
+        (
+            "dynamic-member",
+            analyst,
+            True,
+            {
+                "define": {
+                    "instructions": "Find the flaky test.",
+                    "tools": ["grep", "read"],
+                    "model": "deep",
+                },
+                "starter": "lead",
+            },
+        ),
+        (
+            "dynamic-member-defaults",
+            analyst,
+            True,
+            {"define": {"tools": ["bash"], "model": "fast"}, "starter": "operator"},
         ),
     ]

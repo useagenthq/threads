@@ -5,9 +5,12 @@ import { z } from "zod";
 import { type Agent, agent } from "../../src/agent/agent";
 import { type Extension, extension } from "../../src/agent/extension";
 import { hostRunner, memberEntry } from "../../src/agent/registry";
+import { dynamicAgent } from "../../src/agent/team/dynamic";
+import type { DynamicAgent } from "../../src/agent/team/types";
 import {
   Budget,
   ContextPolicy,
+  MemberDefine,
   PermissionsPolicy,
   RetryPolicy,
 } from "../../src/log";
@@ -35,6 +38,8 @@ const ModelDef = z.strictObject({
     .strictObject({ input: z.number().int(), output: z.number().int() })
     .optional(),
   cache_ttl_ms: z.number().int().optional(),
+  /** A dynamic agent's model key. */
+  key: z.string().optional(),
 });
 const ExtensionDef = z.strictObject({
   name: z.string(),
@@ -56,6 +61,8 @@ const Plain = z.strictObject({
   output_styles: z.record(z.string(), z.string()).optional(),
   extensions: z.array(ExtensionDef).optional(),
   sandbox: z.literal("fake").optional(),
+  /** A dynamic agent: its models by key, in order. */
+  models: z.array(ModelDef).optional(),
   memory_write: z.enum(["deny", "ask", "allow_principal", "allow"]).optional(),
   skills: z
     .array(
@@ -86,10 +93,14 @@ const Vector = z.strictObject({
       name: z.string(),
       agent: Def,
       team_member: z.boolean(),
+      dynamic: z
+        .strictObject({ define: MemberDefine, starter: z.string() })
+        .optional(),
       thread_started: z.record(z.string(), z.json()),
     }),
   ),
 });
+type Vector = z.output<typeof Vector>;
 const vector = Vector.parse(
   JSON.parse(
     readFileSync(
@@ -140,6 +151,19 @@ function ext(d: z.output<typeof ExtensionDef>): Extension {
   });
 }
 
+/** A dynamic agent: the vector's templates set nothing but models and a sandbox. */
+function template(d: Def): DynamicAgent<never, unknown> {
+  const models = Object.fromEntries(
+    (d.models ?? []).map((m) => [m.key ?? m.name, model(m)]),
+  );
+  return dynamicAgent({
+    name: d.name,
+    instructions: d.instructions,
+    models,
+    ...(d.sandbox === undefined ? {} : { sandbox: fakeSandbox() }),
+  });
+}
+
 /** The vector's agent. */
 function build(d: Def): Agent<never, unknown> {
   const common = {
@@ -169,22 +193,49 @@ function build(d: Def): Agent<never, unknown> {
   };
   return d.team === undefined
     ? agent(common)
-    : agent({ ...common, team: d.team.map(build) });
+    : agent({
+        ...common,
+        team: d.team.map((m) =>
+          m.models === undefined ? build(m) : template(m),
+        ),
+      });
 }
 
-/** A team member's pin is its config: no hashed-only fields in these cases. */
-async function memberPin(a: object): Promise<unknown> {
-  const pinned = await memberEntry(a)?.pinned();
+/** Pinned by config_hash but not in thread_started (spec/schema/README.md, "The pinned config"). */
+const HASHED_ONLY = [
+  "extensions",
+  "skills",
+  "memory_write",
+  "sandbox",
+  "concurrent_tools",
+  "dynamic",
+];
+
+/** A team member's thread_started: its canonical config less the hashed-only fields. */
+async function memberPin(
+  a: object,
+  choice: Vector["cases"][number]["dynamic"],
+): Promise<unknown> {
+  const pinned = await memberEntry(a)?.pinned(choice);
   if (pinned === undefined) throw new Error("no member pin");
-  return { ...JSON.parse(pinned.config), config_hash: pinned.configHash };
+  const config = z
+    .record(z.string(), z.json())
+    .parse(JSON.parse(pinned.config));
+  const started = Object.entries(config).filter(
+    ([k]) => !HASHED_ONLY.includes(k),
+  );
+  return { ...Object.fromEntries(started), config_hash: pinned.configHash };
 }
 
 describe("agent pins", () => {
   for (const c of vector.cases)
     test(c.name, async () => {
-      const a = build(c.agent);
+      const a =
+        c.agent.models === undefined ? build(c.agent) : template(c.agent);
       if (c.team_member) {
-        expect(z.json().parse(await memberPin(a))).toEqual(c.thread_started);
+        expect(z.json().parse(await memberPin(a, c.dynamic))).toEqual(
+          c.thread_started,
+        );
         return;
       }
       const started = await hostRunner(a)?.started();
