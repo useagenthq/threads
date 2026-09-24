@@ -1,0 +1,15 @@
+{
+  "name": "lead-cancelled-then-new-run",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 37 stops only a member: the user cancels the lead's run (a tree cancel, its turn ended cancelled), then starts a later run with a new user_input. A cancel ends that run's turn only, so the lead takes it and the team stays usable.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "team"
+    ]
+  }
+}

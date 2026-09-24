@@ -42,10 +42,8 @@ def _first(c: Check, e: Obj, d: Obj, t: str) -> None:
     c.branch = text(e["branch_id"])
     if t == "team_opened":
         c.team_log, c.lead_thread = True, text(d["lead_thread_id"])
-    elif t == "thread_started":
-        parent = d.get("parent")
-        c.member = isinstance(parent, dict) and parent["relation"] == "team_member"
-        c.in_team = c.member or "team" in d
+    elif t == "thread_started" and "parent" in d:
+        c.member = obj(d["parent"])["relation"] == "team_member"
 
 
 def _received(c: Check, e: Obj, env: Obj) -> None:
@@ -129,8 +127,9 @@ def _member_ended(c: Check, _e: Obj, _d: Obj) -> None:
 
 
 def _cancel(c: Check, _e: Obj, d: Obj) -> None:
-    """A tree cancel stops a team member (the lead included) for good: its end follows."""
-    c.stopped = c.stopped or (c.in_team and d["scope"] == "tree")
+    """A tree cancel stops a member for good: its end follows. A lead's cancel ends only that
+    run's turn; a later run may still give it input."""
+    c.stopped = c.stopped or (c.member and d["scope"] == "tree")
 
 
 FOLDS: dict[str, Callable[[Check, Obj, Obj], None]] = {

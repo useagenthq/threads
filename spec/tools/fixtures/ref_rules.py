@@ -36,7 +36,7 @@ class Check:
 
     def __init__(self) -> None:
         self.first = True
-        self.team_log = self.member = self.in_team = self.stopped = False
+        self.team_log = self.member = self.stopped = False
         self.branch = ""
         self.lead_thread = ""
         self.turn: Run | None = None
