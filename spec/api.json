@@ -2988,6 +2988,16 @@
       "role": "opaque",
       "doc": "The SQLite log and artifact store (sqlite()). Sealed in v0.1: no public methods."
     },
+    "Principal": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "issuer": {"type": {"prim": "string"}, "required": true, "doc": "The identity authority that verified it, such as \"api\" or \"slack:T024BE7LD\". Non-empty."},
+        "tenant": {"type": {"prim": "string"}, "required": true, "doc": "The isolation scope: a principal may act only on threads of its own tenant. Non-empty."},
+        "subject": {"type": {"prim": "string"}, "required": true, "doc": "Who it is within the issuer, such as a user id. Non-empty."}
+      },
+      "doc": "Who acts: a verified sender, approver or operator. Every Thread method that appends takes one, for example the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}. In TypeScript, Principal is also the schema that parses one."
+    },
     "Secret": {
       "kind": "interface",
       "role": "opaque",

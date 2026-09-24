@@ -32,6 +32,7 @@ from threads.agents.store import Store, sqlite  # noqa: E402
 from threads.agents.tool import Reconcile, Tool, tool  # noqa: E402
 from threads.hooks.extension import Extension, extension  # noqa: E402
 from threads.hooks.types import Hooks  # noqa: E402
+from threads.log import Principal  # noqa: E402
 from threads.loop.model import (  # noqa: E402
     LooksUp,
     LookupResult,
@@ -111,6 +112,7 @@ __all__ = [
     "ModelRequest",
     "ModelResponse",
     "Parked",
+    "Principal",
     "ProviderError",
     "Reconcile",
     "RecordRef",

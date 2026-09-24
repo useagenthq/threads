@@ -178,6 +178,8 @@ if (!resolved.ok) console.log(resolved.error.code, resolved.error.message);
 <Tab value="Python">
 
 ```python
+from threads import Principal
+
 operator = Principal(issuer="api", tenant="local", subject="operator")
 opened = await open_thread(store, result.thread.id)
 if isinstance(opened, Err):

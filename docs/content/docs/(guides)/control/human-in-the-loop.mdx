@@ -100,7 +100,7 @@ after = await assistant.run("Anything else?", store=store, thread=thread, deps=N
 </Tab>
 </Tabs>
 
-Here `me` is the principal deciding, for example `{ issuer: "api", tenant: "local", subject: "operator" }` (`Principal(...)` from `threads.log` in Python). Only a principal of the thread's tenant may decide. Through the host, the agent's [approvers](/docs/control/permissions#who-may-approve) decide who that is.
+Here `me` is the principal deciding, for example `{ issuer: "api", tenant: "local", subject: "operator" }` (`Principal(...)`, imported from `threads`, in Python). Only a principal of the thread's tenant may decide. Through the host, the agent's [approvers](/docs/control/permissions#who-may-approve) decide who that is.
 
 You can also remember a rule or give a reason:
 

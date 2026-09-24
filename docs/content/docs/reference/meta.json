@@ -83,6 +83,8 @@
     "types/RawResponse",
     "types/VerifiedDelivery",
     "types/Inbound",
-    "types/DeliveryOutcome"
+    "types/DeliveryOutcome",
+    "---[Braces]Other types---",
+    "types/Principal"
   ]
 }

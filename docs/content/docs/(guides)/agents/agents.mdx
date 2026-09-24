@@ -165,6 +165,8 @@ support = agent(
 )
 result = await support.run("Where is my invoice?", store=store)
 
+from threads import Principal
+
 operator = Principal(issuer="api", tenant="local", subject="operator")
 await result.thread.set_output_style("concise", operator)
 await result.thread.compact(operator, instructions="Keep the open invoice numbers.")
