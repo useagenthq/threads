@@ -53,6 +53,7 @@ def test_each_real_factory_matches_the_contract(
 
 def test_every_contracted_factory_is_checked() -> None:
     assert [k for k, _, _ in real()] == [
+        "otel",
         "supermemory",
         "zep",
         "anthropic",

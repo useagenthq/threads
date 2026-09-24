@@ -26,10 +26,12 @@ from threads.host.reopen import Reopening
 from threads.host.runs import Runner, RunTask
 from threads.host.schedules import Schedule, Scheduler
 from threads.host.stream import Message
+from threads.host.telemetry import Telemetry
 from threads.log import BranchId, EventId, ParseError, Permissions, Principal, ThreadId
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import LOCAL_TENANT
+from threads.telemetry import Exporter, bind_telemetry
 from threads.thread import tree
 from threads.thread.handle import Thread, open_thread
 
@@ -60,6 +62,7 @@ class Host:
         authenticate: Authenticate | None,
         *,
         ceiling: Permissions | None = None,
+        telemetry: Exporter | None = None,
     ) -> None:
         self._store = store
         self._agents = agents
@@ -75,6 +78,9 @@ class Host:
         are kept between runs."""
         _RECOVERY[self] = (asyncio.Event(), [], self._runner)
         self._asgi: ASGIApp | None = None
+        self._telemetry = None if telemetry is None else Telemetry(telemetry)
+        if telemetry is not None:
+            bind_telemetry(telemetry, store)
 
     @property
     def channels(self) -> tuple[str, ...]:
@@ -140,7 +146,10 @@ class Host:
             _RECOVERY[self][1].extend(await reopening.first((*open_runs, *waking)))
         finally:
             _RECOVERY[self][0].set()
-        await asyncio.gather(self._scheduler.run(), reopening.run())
+        loops = [self._scheduler.run(), reopening.run()]
+        if self._telemetry is not None:
+            loops.append(self._telemetry.run())
+        await asyncio.gather(*loops)
 
     async def stop(self) -> None:
         """Aborts first: every run and follow-on resume is cancelled and none starts, so no
@@ -160,6 +169,8 @@ class Host:
             # runs are ended and intake is drained.
             await self._runner.stop()
             await self._intake.drain()
+            if self._telemetry is not None:
+                await self._telemetry.last()
             if self._held is not None:
                 held, self._held = self._held, None
                 await held.aclose()
@@ -235,11 +246,21 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
     schedules: Sequence[Schedule] = (),
     authenticate: Authenticate | None = None,
     ceiling: Permissions | None = None,
+    telemetry: Exporter | None = None,
 ) -> Host:
     """spec/api.json `host`. Starts nothing until `ready()`. Without `authenticate` every /v1
     route answers 401; channel webhooks still work. `ceiling` caps every run this host starts
-    or resumes (Agent.run `ceiling`)."""
-    return Host(store, agents, channels or {}, schedules, authenticate, ceiling=ceiling)
+    or resumes (Agent.run `ceiling`). `telemetry` (such as `otel()`) syncs every second beside
+    the scheduler and once more on `stop()`, bounded by 5 s; runs never wait on it."""
+    return Host(
+        store,
+        agents,
+        channels or {},
+        schedules,
+        authenticate,
+        ceiling=ceiling,
+        telemetry=telemetry,
+    )
 
 
 async def recovered(served: Host) -> None:

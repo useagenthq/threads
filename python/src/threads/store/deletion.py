@@ -11,6 +11,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import BranchId, ThreadId, ThreadStartedEvent
 from threads.result import Err, Ok
+from threads.store.losses import record_losses
 from threads.store.sql import export, text_of, transaction
 from threads.store.started import Opened, opened_threads, owner_of
 from threads.store.verify import verify_export
@@ -190,7 +191,9 @@ def _unsettled(conn: sqlite3.Connection, branch: BranchId, now: int) -> str | No
 def _delete_one(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, now: int) -> None:
     """One thread's rows: its branches' log, lease, cursor and wake rows, approvals, inbox and
     channel rows, receipts and budget rows go; its live resources move to releasing for gc; a
-    tombstone records it."""
+    tombstone and one loss row per telemetry observer record it."""
+    # Before the events go: what each telemetry exporter may not have sent yet.
+    record_losses(conn, tenant_id, thread_id, now)
     for branch in _branches(conn, thread_id):
         for table in _PER_BRANCH:
             conn.execute(f"DELETE FROM {table} WHERE branch_id = ?", (branch,))  # noqa: S608

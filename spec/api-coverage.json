@@ -79,6 +79,17 @@
       "tests/adapters/channels/test_channels.py::test_slack_verifies_the_signature_and_keys_its_event"
     ]
   },
+  "Exporter.sync": {
+    "ts": [
+      "packages/otel/test/exporter.test.ts > Exporter.sync > a 40-model-call turn: every span arrives exactly once, the turn span after turn_completed",
+      "packages/otel/test/exporter.test.ts > Exporter.sync > a 5xx or a refused connection is collector_unavailable and moves no cursor",
+      "packages/otel/test/exporter.test.ts > Exporter.sync > a 400 is collector_rejected with its status and the start of its body"
+    ],
+    "py": [
+      "tests/otel/test_otel_exporter.py::test_a_40_model_call_turn_sends_every_span_exactly_once",
+      "tests/otel/test_otel_exporter.py::test_refused_and_rejected_collectors"
+    ]
+  },
   "Host.ready": {
     "ts": [
       "packages/host/test/channels.test.ts > intake > the item is in the inbox before the ack; ready() starts no run and sends nothing"
@@ -1071,6 +1082,70 @@
     ],
     "py": [
       "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
+    ]
+  },
+  "otel": {
+    "ts": [
+      "packages/otel/test/exporter.test.ts > Exporter.sync > a 40-model-call turn: every span arrives exactly once, the turn span after turn_completed"
+    ],
+    "py": [
+      "tests/otel/test_otel_exporter.py::test_a_40_model_call_turn_sends_every_span_exactly_once"
+    ]
+  },
+  "otel!invalid_config": {
+    "ts": [
+      "packages/otel/test/exporter.test.ts > Exporter.sync > otel() with no endpoint anywhere is invalid_config naming both variables"
+    ],
+    "py": [
+      "tests/otel/test_otel_exporter.py::test_a_missing_endpoint_is_invalid_config"
+    ]
+  },
+  "otel.content=default": {
+    "ts": [
+      "packages/otel/test/exporter.test.ts > Exporter.sync > content is off by default; with content: true the logged bytes are sent"
+    ],
+    "py": [
+      "tests/otel/test_otel_exporter.py::test_content_is_off_by_default_and_a_secret_never_leaves"
+    ]
+  },
+  "otel.endpoint=default": {
+    "ts": [
+      "packages/otel/test/example.test.ts > examples/telemetry.ts > runs and exports its turn to the collector the variables name"
+    ],
+    "py": [
+      "tests/otel/test_otel_example.py::test_the_example_runs_and_exports_its_turn"
+    ]
+  },
+  "otel.headers=default": {
+    "ts": [
+      "packages/otel/test/exporter.test.ts > Exporter.sync > unset options come from the variables: headers, and service.name threads"
+    ],
+    "py": [
+      "tests/otel/test_otel_vectors.py::test_configuration_vectors[headers are split and percent-decoded]"
+    ]
+  },
+  "otel.name=default": {
+    "ts": [
+      "packages/otel/test/exporter.test.ts > Exporter.sync > the headers option is sent, and two named exporters each send every span"
+    ],
+    "py": [
+      "tests/otel/test_otel_exporter.py::test_a_crash_after_the_ack_resends_the_same_span_ids"
+    ]
+  },
+  "otel.service=default": {
+    "ts": [
+      "packages/otel/test/exporter.test.ts > Exporter.sync > unset options come from the variables: headers, and service.name threads"
+    ],
+    "py": [
+      "tests/otel/test_otel_vectors.py::test_configuration_vectors[OTEL_SERVICE_NAME names the service]"
+    ]
+  },
+  "otel.store=default": {
+    "ts": [
+      "packages/otel/test/host.test.ts > host({telemetry}) > exports the host's store on the tick"
+    ],
+    "py": [
+      "tests/otel/test_otel_host.py::test_a_host_exports_on_its_tick"
     ]
   },
   "scriptedModel": {

@@ -79,6 +79,7 @@ from threads.sandbox import (  # noqa: E402
     fake_sandbox,
 )
 from threads.secrets import Secret, secret  # noqa: E402
+from threads.telemetry import Exporter, SkippedBranch, SyncReport  # noqa: E402
 from threads.thread.case import CaseExpectation, SavedCase  # noqa: E402
 from threads.thread.handle import open_thread  # noqa: E402
 from threads.web.search import SearchBackend, SearchHit  # noqa: E402
@@ -100,6 +101,7 @@ __all__ = [
     "EventItem",
     "ExecOutput",
     "ExecResult",
+    "Exporter",
     "Extension",
     "Failed",
     "Failure",
@@ -143,11 +145,13 @@ __all__ = [
     "SendResult",
     "SetsUp",
     "Skill",
+    "SkippedBranch",
     "StartRefusal",
     "StartResult",
     "StatusItem",
     "Store",
     "StreamEvent",
+    "SyncReport",
     "TeamAgent",
     "TeamRef",
     "TeamRunResult",

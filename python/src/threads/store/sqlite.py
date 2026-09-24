@@ -19,6 +19,7 @@ from threads.render import ReadArtifact, Rendered, render
 from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.store import lease, sql
+from threads.store._feed import Feed
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
 from threads.store.bindings import Bindings, Kind
 from threads.store.branches import BranchStore, corrupt
@@ -95,6 +96,10 @@ class SqliteStore(BranchStore):
             return statement(conn)
 
         return await self._worker.call(lambda c: published(data, lambda: both(c)))
+
+    def feed(self, observer: str, now: Clock) -> Feed:
+        """What a telemetry exporter reads every tenant's branches through (never appends)."""
+        return Feed(self._worker, self._artifacts, now, observer)
 
     @property
     def cursors(self) -> ObserverCursors:
