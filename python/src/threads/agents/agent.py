@@ -21,6 +21,7 @@ from threads.agents.builtins import Egress
 from threads.agents.catalog import GitOptions, LspOptions, WebOptions, catalog
 from threads.agents.config import ConfigError, Failure
 from threads.agents.definition import Definition
+from threads.agents.pinned import outside_any_branch
 from threads.agents.results import Completed, RunResult, StreamEvent
 from threads.agents.run import (
     Emit,
@@ -28,7 +29,6 @@ from threads.agents.run import (
     RunOptions,
     RunOptionsWithDeps,
     execute,
-    outside_any_branch,
     with_servers,
 )
 from threads.agents.setup import set_up

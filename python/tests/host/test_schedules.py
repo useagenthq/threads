@@ -10,7 +10,7 @@ import pytest
 from pydantic import JsonValue
 
 from threads import ConfigError, agent, extension, scripted_model, sqlite
-from threads.agents.run import pinned_start
+from threads.agents.pinned import pinned_start
 from threads.agents.store import Store, now_ms, open_store
 from threads.host import Schedule, host
 from threads.host.cron import parse_cron

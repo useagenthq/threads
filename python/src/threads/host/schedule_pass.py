@@ -4,7 +4,7 @@ import sys
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
-from threads.agents.run import pinned_start
+from threads.agents.pinned import pinned_start
 from threads.agents.store import Store
 from threads.host.runs import Runner
 from threads.store import Draft
