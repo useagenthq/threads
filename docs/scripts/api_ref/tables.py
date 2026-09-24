@@ -37,9 +37,9 @@ def _missing() -> dict[Member, set[str]]:
             container, _, name = text(gap["name"]).rpartition(".")
             out.setdefault((container, name), set()).add(text(gap["lang"]))
     # A member of a type missing in a language is missing there too: its gaps are the type's.
-    for (container, name), langs in out.items():
+    for (container, _), langs in out.items():
         if container:
-            langs |= out.get(("", container), set())
+            langs.update(out.get(("", container), set()))
     return out
 
 
