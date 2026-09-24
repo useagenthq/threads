@@ -21,6 +21,9 @@ import { CodeSample } from "@/components/home/code-sample";
 import { CopyCommand } from "@/components/home/copy-command";
 import { EventLog } from "@/components/home/event-log";
 import { GitHubIcon } from "@/components/home/github-icon";
+import { Providers } from "@/components/home/providers";
+import { QUICKSTART } from "@/components/home/samples";
+import { UseCases } from "@/components/home/use-cases";
 import { LogoMark } from "@/components/logo";
 import { githubUrl, tagline } from "@/lib/shared";
 
@@ -130,6 +133,8 @@ export default function HomePage() {
   return (
     <main className="flex flex-1 flex-col">
       <Hero />
+      <Providers />
+      <BuiltFor />
       <Features />
       <Reasons />
       <CallToAction />
@@ -194,7 +199,7 @@ function Hero() {
 
         <div className="mt-14 grid w-full overflow-hidden rounded-2xl border border-fd-border bg-fd-card text-left shadow-2xl shadow-fd-primary/5 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0 border-fd-border lg:border-r">
-            <CodeSample />
+            <CodeSample sample={QUICKSTART} />
           </div>
           <div className="border-t border-fd-border lg:border-t-0">
             <EventLog />
@@ -224,6 +229,18 @@ function SectionHeading({
       <h2 className="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{title}</h2>
       <p className="mt-4 text-base leading-7 text-fd-muted-foreground">{children}</p>
     </div>
+  );
+}
+
+function BuiltFor() {
+  return (
+    <section className="mx-auto w-full max-w-6xl px-4 pt-20 sm:px-6 lg:pt-28">
+      <SectionHeading eyebrow="Use cases" title="Built for the agent you need">
+        The same agent definition runs as a script, in a sandbox, in Slack or on a schedule. Pick one to see
+        the whole program.
+      </SectionHeading>
+      <UseCases />
+    </section>
   );
 }
 
