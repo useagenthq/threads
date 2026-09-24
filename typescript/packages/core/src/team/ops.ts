@@ -147,7 +147,7 @@ export function send(
 ): void {
   const caller = callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
-  const row = deliverable(ctx, caller, args.to, limits);
+  const row = deliverable(ctx, caller, "send", args.to, limits);
   if ("refused" in row) {
     recorded(ctx, row);
     return;
@@ -168,15 +168,16 @@ export function send(
   recorded(ctx, { id, status: "sent" });
 }
 
-/** After the policy: team open, the member known at its generation, not ended, not the sender,
- * and its mailbox not full. */
-function deliverable(
+/** send and ask, after the policy: team open, the member known at its generation, not ended, not
+ * the sender, and its mailbox not full. */
+export function deliverable(
   ctx: CallContext,
   caller: Caller,
+  op: "send" | "ask",
   to: string,
   limits: TeamLimits,
 ): ReturnType<typeof addressed> {
-  const denied = decide(ctx, "send", to, true);
+  const denied = decide(ctx, op, to, true);
   if (denied !== undefined) return denied;
   if (caller.team.closed_at !== null) return refusal("team_closed");
   const row = addressed(ctx, caller, to);

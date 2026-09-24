@@ -22,9 +22,17 @@ export type { Skill } from "./skills";
 export { type Store, sqlite } from "./sqlite";
 export { type DynamicAgentOptions, dynamicAgent } from "./team/dynamic";
 export type {
+  AskOutcome,
+  AskRefusal,
+  AskResult,
   DynamicAgent,
   InvalidDefinition,
   MemberRef,
+  MemberResult,
+  MonitorResult,
+  ObserveRefusal,
+  ReplyRefusal,
+  ReplyResult,
   SendRefusal,
   SendResult,
   StartRefusal,
@@ -33,6 +41,8 @@ export type {
   TeamRef,
   TeamRunResult,
   TeamRunStream,
+  Waited,
+  WaitResult,
 } from "./team/types";
 export {
   type RunContext,

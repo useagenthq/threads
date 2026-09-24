@@ -18,6 +18,7 @@ import type { Result } from "../result";
 import type { Stale } from "../sandbox/protocol";
 import type { BudgetLedger } from "../store/budget";
 import type { DynamicChoice } from "../team/dynamic";
+import type { MemberRow } from "../team/rows";
 
 /**
  * RunResult failed.error.code: host-api RunErrorCode (spec/schema/host-api), closed. A test
@@ -296,6 +297,17 @@ export type TeamAgentPin = {
   readonly artifacts: readonly Uint8Array[];
 };
 
+/**
+ * What covers an asked member (ask's headroom): its own and its ancestors' budgets, and what one
+ * request of its model reserves. The ask's run budget is the asker's turn's.
+ */
+export type TeamRecipient = Pick<
+  TeamAgentPin,
+  "model" | "params" | "policy"
+> & {
+  readonly covering: readonly Covering[];
+};
+
 /** What the loop of a team's lead or member needs from its team. */
 export type TeamRuntime = {
   /**
@@ -307,6 +319,8 @@ export type TeamRuntime = {
     choice?: DynamicChoice,
   ) => Promise<TeamAgentPin | undefined>;
   readonly limits: { readonly concurrent: number; readonly mailbox: number };
+  /** An asked member's budgets, read from its log (or its pinned config while starting). */
+  readonly recipient: (row: MemberRow) => TeamRecipient | undefined;
   /**
    * A member's turn is under the run budget of its request: the root request the turn's opener
    * belongs to (its receipt's provenance, or its task's). Absent for a lead, whose run is its own.

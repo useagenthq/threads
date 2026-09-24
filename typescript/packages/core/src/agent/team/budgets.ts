@@ -1,16 +1,27 @@
+import { z } from "zod";
 import type { EventOf } from "../../fold/state";
-import { type KnownEvent, ThreadId } from "../../log";
-import type { Covering } from "../../loop";
+import {
+  type BranchId,
+  JsonObject,
+  type KnownEvent,
+  ModelRef,
+  Policy,
+  ThreadId,
+} from "../../log";
+import type { Covering, TeamRecipient } from "../../loop";
 import { knownEvents } from "../../reduce";
-import type { LogStore } from "../../store";
-import { mailEnvelope } from "../../team/rows";
+import type { ArtifactStore, LogStore } from "../../store";
+import { type MemberRow, mailEnvelope, teamRow } from "../../team/rows";
 
 // A member's budgets (spec/schema/README.md, "Teams"; design §2.6): before every model request of
 // a member turn the ledger reserves against the member's own thread budget, every ancestor
 // thread's budget through its structural parents (team_member, subagent, handoff) up to the root,
 // and the run budget of that turn's root request.
 
-type Parent = NonNullable<EventOf<"thread_started">["data"]["parent"]>;
+type Parent = Pick<
+  NonNullable<EventOf<"thread_started">["data"]["parent"]>,
+  "thread_id" | "branch_id"
+>;
 
 /** Every ancestor thread's own budget, from the member's parent up to the root. */
 export function ancestorsOf(
@@ -36,6 +47,85 @@ export function ancestorsOf(
     at = started.data.parent;
   }
   return out;
+}
+
+const Pinned = z.object({
+  model: ModelRef,
+  model_params: JsonObject,
+  policy: Policy.optional(),
+});
+type Pinned = z.infer<typeof Pinned>;
+
+/**
+ * An asked member's budgets (ask's headroom): its own thread budget and every ancestor's, with
+ * what one request of its model reserves, from its thread_started; a member still starting has
+ * no log yet, so from its pinned config, under its lead.
+ */
+export function recipientOf(
+  log: LogStore,
+  artifacts: ArtifactStore,
+): (row: MemberRow) => TeamRecipient | undefined {
+  return (row) => {
+    const got =
+      row.branch_id === null
+        ? configured(log, artifacts, row)
+        : started(log, row.branch_id);
+    if (got === undefined) return undefined;
+    const own = got.pinned.policy?.budget;
+    return {
+      model: got.pinned.model,
+      params: got.pinned.model_params,
+      policy: got.pinned.policy,
+      covering: [
+        ...(own === undefined
+          ? []
+          : [
+              {
+                budgetId: `thread:${row.thread_id}`,
+                budget: own,
+                scope: "thread" as const,
+              },
+            ]),
+        ...ancestorsOf(log, got.parent),
+      ],
+    };
+  };
+}
+
+function started(
+  log: LogStore,
+  branch: BranchId,
+):
+  | { readonly pinned: Pinned; readonly parent: Parent | undefined }
+  | undefined {
+  const read = log.read(branch);
+  const e = read.ok
+    ? knownEvents(read.value).find((x) => x.type === "thread_started")
+    : undefined;
+  if (e?.type !== "thread_started") return undefined;
+  return { pinned: e.data, parent: e.data.parent };
+}
+
+function configured(
+  log: LogStore,
+  artifacts: ArtifactStore,
+  row: MemberRow,
+):
+  | { readonly pinned: Pinned; readonly parent: Parent | undefined }
+  | undefined {
+  const bytes = artifacts.get(row.config_hash);
+  const team = teamRow(log.driver, row.team_id);
+  const lead =
+    team === undefined ? undefined : log.mainBranch(team.lead_thread_id);
+  if (!bytes.ok || team === undefined || lead === undefined || !lead.ok)
+    return undefined;
+  const pinned = Pinned.parse(
+    JSON.parse(new TextDecoder().decode(bytes.value)),
+  );
+  return {
+    pinned,
+    parent: { thread_id: team.lead_thread_id, branch_id: lead.value },
+  };
 }
 
 /**

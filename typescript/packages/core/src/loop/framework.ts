@@ -5,9 +5,16 @@ import {
   TEAM_LOOP_TOOLS,
 } from "../tools/loop-tools";
 import { handOff } from "./agents/handoff";
-import { sendTool, startTool } from "./agents/members";
 import { spawnAgent } from "./agents/spawn";
 import { teamTool } from "./agents/team";
+import {
+  askTool,
+  monitorTool,
+  replyTool,
+  sendTool,
+  startTool,
+  waitTool,
+} from "./agents/team-calls";
 import { validateCandidate } from "./output";
 import { askUser } from "./questions";
 import type { Session } from "./session";
@@ -37,6 +44,10 @@ const HANDLERS: Readonly<Record<LoopTool, Handler>> = {
   team_task_update: teamTool,
   start: startTool,
   send: sendTool,
+  ask: askTool,
+  reply: replyTool,
+  wait: waitTool,
+  monitor: monitorTool,
 };
 
 /**

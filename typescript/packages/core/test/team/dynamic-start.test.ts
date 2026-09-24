@@ -79,10 +79,14 @@ describe("a lead defines a member of a dynamic agent", () => {
     const member = await memberEvents(store, r.team.ref.id, "specialist-1");
     const pinned = member[0];
     expect(toolNames(pinned)).toEqual([
+      "ask",
+      "monitor",
       "read_tool_result",
+      "reply",
       "send",
       "start",
       "todo_write",
+      "wait",
       "invoice_status",
     ]);
     if (pinned?.type !== "thread_started") throw new Error("no pin");

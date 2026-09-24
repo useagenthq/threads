@@ -8,6 +8,7 @@ import {
   type TeamId,
   TeamId as TeamIdSchema,
 } from "../../src/log";
+import type { SqliteDriver } from "../../src/store";
 import { IMPL } from "../../src/store/writer";
 import type { Template } from "../../src/team/dynamic";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
@@ -166,8 +167,8 @@ export const TEAM: TeamId = TeamIdSchema.parse(
  * A store holding the vector's world at its clock, the team index rebuilt from its logs, and every
  * member config the vectors pin stored under its config_hash (as start writes it).
  */
-export function seeded(v: Vector): Fixture {
-  const fx = fixture("acme");
+export function seeded(v: Vector, db?: SqliteDriver): Fixture {
+  const fx = fixture("acme", db);
   fx.clock.now = v.now;
   const logs = Object.values(worldLogs(v)).map((ref) =>
     verified(exported(ref)),

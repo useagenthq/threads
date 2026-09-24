@@ -1,8 +1,10 @@
 import type { EventOf, ParkAddress } from "../fold/state";
 import type { MailEnvelope } from "../log";
+import type { CallContext, Caller } from "./call";
 import { addressOf, received, sent } from "./mail";
 import { monitorsOn, ownRows, refOf, teamRow } from "./rows";
 import type { AppendContext, SettleContext } from "./settle";
+import { parkedOn } from "./view";
 
 // A member's park and its starter (spec/schema/README.md, "Teams"; design §2.7.1): the member's
 // first park while its task monitor is unfired carries one member_parked notice to the starter,
@@ -63,4 +65,40 @@ export function takeParkNotice(
     data: { address, reason: "awaiting_member" },
   });
   return true;
+}
+
+/**
+ * A member's ask or wait parks its call once its turn has nothing else to run (it is the only
+ * pending call), with its first park's member_parked notice. The team log never parks.
+ */
+export function parkCall(
+  ctx: CallContext,
+  caller: Caller,
+  address: ParkAddress,
+): void {
+  const { fold } = ctx.chain;
+  const alone =
+    fold.pending.size === 1 && fold.pending.has(ctx.call.data.call_id);
+  if (!alone || parkedOn(ctx.chain, ctx.batch, address)) return;
+  const first = !ctx.chain.events.some(
+    (l) => l.kind === "event" && l.event.type === "parked",
+  );
+  const eventId = ctx.batch.add({
+    type: "parked",
+    type_version: 1,
+    critical: true,
+    actor: { kind: "host" },
+    data: { address, reason: "awaiting_member" },
+  });
+  if (!first) return;
+  parkNotice(
+    {
+      db: ctx.db,
+      batch: ctx.batch,
+      threadId: ctx.call.thread_id,
+      branchId: ctx.call.branch_id,
+      provenance: caller.provenance,
+    },
+    { eventId, reason: "awaiting_member" },
+  );
 }

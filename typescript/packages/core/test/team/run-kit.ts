@@ -1,6 +1,12 @@
-import type { sqlite, ThreadRef } from "../../src";
+import {
+  type Model,
+  scriptedModel,
+  type sqlite,
+  type ThreadRef,
+} from "../../src";
 import { openStore } from "../../src/agent/sqlite";
 import { BranchId, type KnownEvent, type TeamId } from "../../src/log";
+import { markTestKit } from "../../src/model/guard";
 import { knownEvents } from "../../src/reduce";
 import type { LogStore } from "../../src/store";
 import { memberRows } from "../../src/team/rows";
@@ -26,6 +32,33 @@ export const start = (id: string, agent: string, task: string): unknown =>
   call(id, "start", { agent, task });
 
 type Store = ReturnType<typeof sqlite>;
+
+/**
+ * A scripted model whose every answer is made from its rendered request (Render v1 text), so a
+ * member can reply to an ask whose id only exists at run time.
+ */
+export function answering(next: (request: string) => unknown): Model {
+  const made: Model = {
+    ...scriptedModel({ responses: [] }),
+    send: (...args: Parameters<Model["send"]>) => {
+      const [request] = args;
+      const text = new TextDecoder().decode(request.body);
+      return scriptedModel({ responses: [next(text)] }).send(...args);
+    },
+  };
+  markTestKit(made);
+  return made;
+}
+
+/** The ask ids a rendered request shows, oldest first. */
+export const askIds = (request: string): readonly string[] =>
+  [...request.matchAll(/ask_id=\\"([^\\"]+)\\"/g)].flatMap((m) =>
+    m[1] === undefined ? [] : [m[1]],
+  );
+
+/** The reply to the newest ask a request shows. */
+export const replyTo = (id: string, request: string, text: string): unknown =>
+  call(id, "reply", { ask_id: askIds(request).at(-1) ?? "", text });
 
 export async function logOf(store: Store): Promise<LogStore> {
   return (await openStore(store)).log;

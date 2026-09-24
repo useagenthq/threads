@@ -28,10 +28,17 @@ export const TEAM_TOOLS: readonly string[] = [
 ];
 
 /**
- * The team tools pinned for a lead and its members so far: lane 21E pins ask, reply, wait,
- * monitor and cancel with their handlers.
+ * The team tools pinned for a lead and its members so far: lane 21E.2 pins cancel with its
+ * handler.
  */
-export const TEAM_TOOLS_PINNED: readonly string[] = ["send", "start"];
+export const TEAM_TOOLS_PINNED: readonly string[] = [
+  "ask",
+  "monitor",
+  "reply",
+  "send",
+  "start",
+  "wait",
+];
 
 /** agent({teamLimits}) when omitted. */
 export const TEAM_LIMITS = { concurrent: 4, mailbox: 100 } as const;

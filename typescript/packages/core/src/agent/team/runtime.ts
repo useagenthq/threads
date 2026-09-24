@@ -9,7 +9,7 @@ import { ConfigError } from "../errors";
 import { memberEntry } from "../registry";
 import type { Plan, Resolved } from "../run";
 import type { OpenStore } from "../sqlite";
-import { runCovering } from "./budgets";
+import { recipientOf, runCovering } from "./budgets";
 import { TeamWorker } from "./worker";
 
 // A team thread's side of a run (spec/schema/README.md, "Teams"): the lead's first append names
@@ -61,7 +61,11 @@ export function teamOf<Deps, Output>(
   if (def.team === undefined && plan.member === undefined) return undefined;
   // Members inherit the lead's resolved defer_tools unless they set their own.
   const deferTools = writer.chain.fold.policy?.context?.defer_tools;
-  const base = { pin: pins(def, deferTools), limits: def.teamLimits };
+  const base = {
+    pin: pins(def, deferTools),
+    limits: def.teamLimits,
+    recipient: recipientOf(opened.log, opened.artifacts),
+  };
   if (plan.member !== undefined)
     return {
       runtime: {

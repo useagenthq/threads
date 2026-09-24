@@ -1,137 +1,37 @@
-import { type EventOf, loopParked } from "../../fold/state";
-import { ThreadId } from "../../log";
+import { type Fold, loopParked } from "../../fold/state";
 import { ok } from "../../result";
-import { uuidv7 } from "../../store/encode";
+import type { DecideTx } from "../../store/writer";
 import { isRefusal } from "../../store/writer";
 import { Batch } from "../../team/batch";
-import type { CallContext } from "../../team/call";
+import { readerOf } from "../../team/close";
 import { TEAM_CONSTANTS } from "../../team/constants";
-import { consume } from "../../team/consume";
-import {
-  KEPT_TOOLS,
-  resolveDefinition,
-  type Template,
-} from "../../team/dynamic";
-import { send, start } from "../../team/ops";
-import { SendInput, StartInput } from "../../tools/team-inputs";
-import { roomFor } from "../ledger";
+import { type ConsumeContext, consume } from "../../team/consume";
+import { deadline, dueIds } from "../../team/deadline";
 import type { LoopEnd } from "../run";
 import type { Session } from "../session";
-import {
-  BARRED,
-  type Halt,
-  type TeamAgentPin,
-  type TeamRuntime,
-} from "../types";
+import { BARRED, type Halt, type TeamRuntime } from "../types";
 import { runStatus } from "./stop";
+import { teamOf } from "./team-calls";
 
-// The team tools start and send (spec/schema/README.md, "Teams", Model tools), run by the loop
-// like any framework tool: each is one decided append under the caller's writer, holding the
-// policy decision, the op's events and the call's one result, so a call re-dispatched after a
-// crash either finds that append or makes it now, never twice.
+// A team thread between its turns (spec/schema/README.md, "Teams"): while idle, or parked only on
+// what team mail resolves (a member, an ask, a wait), its pending mail is consumed, its due asks
+// and waits are closed, and each turn a receipt opens (or an answer resumes) is run.
 
-const utf8 = new TextEncoder();
+/** Parks that team mail or a deadline resolves: on a member, an ask or a wait. */
+const TEAM_PARKS: ReadonlySet<string> = new Set(["member", "ask", "wait"]);
 
-function teamOf(s: Session): TeamRuntime {
-  const team = s.config.team;
-  if (team === undefined) throw new Error("a team tool outside a team");
-  return team;
-}
-
-/** One team op decided under the caller's writer. */
-function decided(
-  s: Session,
-  call: EventOf<"tool_call">,
-  op: (ctx: CallContext) => void,
-): Halt | undefined {
-  const team = teamOf(s);
-  const appended = s.appendDecided((tx) => {
-    const batch = new Batch(tx.chain.fold.seq, tx.now, team.mint);
-    op({
-      db: tx.db,
-      chain: tx.chain,
-      batch,
-      call,
-      put: (text) => s.store(text, "text/plain"),
-    });
-    return ok(batch.drafts);
-  });
-  // A cancel landed first: the cancellation step closes the call.
-  if (appended === BARRED) return undefined;
-  if (isRefusal(appended)) throw new Error("a team op records its refusals");
-  return appended;
+/** Whether every park of this thread is one team mail or a deadline resolves. */
+export function onTeam(fold: Fold): boolean {
+  return loopParked(fold).every((p) => TEAM_PARKS.has(p.kind));
 }
 
 /**
- * member.start: the start's chosen fields are resolved against the listed agent (a dynamic
- * agent's template), and the member's config is stored before the append that pins it.
- */
-export async function startTool(
-  s: Session,
-  call: EventOf<"tool_call">,
-): Promise<Halt | undefined> {
-  const team = teamOf(s);
-  const args = StartInput.parse(call.data.input);
-  const listed = await team.pin(args.agent);
-  const resolved = resolveDefinition(templateOf(listed), args);
-  const define = resolved.ok ? resolved.value.define : undefined;
-  const pinned =
-    define === undefined
-      ? listed
-      : await team.pin(args.agent, { define, starter: starterOf(s) });
-  if (pinned !== undefined) {
-    s.artifacts.put(utf8.encode(pinned.config));
-    for (const bytes of pinned.artifacts) s.artifacts.put(bytes);
-  }
-  return decided(s, call, (ctx) =>
-    start(ctx, args, {
-      agents: new Map(
-        pinned === undefined
-          ? []
-          : [[args.agent, { configHash: pinned.configHash }]],
-      ),
-      resolved,
-      limits: team.limits,
-      headroom: () => pinned !== undefined && roomFor(s, pinned),
-      threadId: ThreadId.parse(uuidv7(s.now())),
-    }),
-  );
-}
-
-/**
- * The name the block says wrote it: the calling lead's agent name, which is its member name in
- * the team it leads (so a rebind, which reads the task's sender, finds the same name).
- */
-function starterOf(s: Session): string {
-  const name = s.config.agents?.name;
-  if (name === undefined) throw new Error("a team tool outside an agent");
-  return name;
-}
-
-/** A dynamic agent as a start sees it: its pin's tools but F, and its model keys. */
-function templateOf(pin: TeamAgentPin | undefined): Template | undefined {
-  if (pin?.models === undefined) return undefined;
-  return {
-    tools: pin.tools.filter((t) => !KEPT_TOOLS.has(t)),
-    models: pin.models,
-  };
-}
-
-export function sendTool(
-  s: Session,
-  call: EventOf<"tool_call">,
-): Halt | undefined {
-  const team = teamOf(s);
-  const args = SendInput.parse(call.data.input);
-  return decided(s, call, (ctx) => send(ctx, args, team.limits));
-}
-
-/**
- * A team thread's turns after its input's: while idle, or parked only on its members, its
- * pending mail is consumed and each turn a receipt opens is run. A member run by the team worker
- * stops once nothing opens a turn. The lead of an in-process run waits for its members until its
- * run ends (spec/schema/README.md, "Run completion"), woken by their progress, its own log moving,
- * or the in-process poll; parked on members, it waits only while the worker is running one.
+ * A team thread's turns after its input's: while idle, or parked only on team parks, its pending
+ * mail is consumed and its due deadlines closed, and each turn that opens or resumes is run. A
+ * member run by the team worker stops once nothing opens a turn. The lead of an in-process run
+ * waits for its members until its run ends (spec/schema/README.md, "Run completion"), woken by
+ * their progress, its own log moving, or the in-process poll; parked on members, it waits only
+ * while the worker is running one; parked on an ask or a wait, until it is answered or due.
  */
 export async function teamTurns(
   s: Session,
@@ -140,28 +40,25 @@ export async function teamTurns(
 ): Promise<LoopEnd> {
   const team = teamOf(s);
   let end = first;
-  while (end.kind === "idle" || (end.kind === "parked" && onMembers(s))) {
+  while (end.kind === "idle" || (end.kind === "parked" && onTeam(s.fold))) {
     // Taken before the checks, so progress made after them still wakes the wait.
     const progress = team.progress?.();
     const moved = s.moved();
-    const halted = consumeMail(s);
+    const halted = teamStep(s);
     if (halted !== undefined) return { kind: "halted", halt: halted };
-    if (s.fold.turnOpen) end = await turn();
+    if (s.fold.turnOpen && loopParked(s.fold).length === 0) end = await turn();
     else if (progress === undefined || !waits(s, team)) return idleOrParked(s);
     else await waitFor(progress, moved);
   }
   return end;
 }
 
-/** Whether every park of this thread is on one of its members (a {kind: member} park). */
-function onMembers(s: Session): boolean {
-  return loopParked(s.fold).every((p) => p.kind === "member");
-}
-
-/** The lead waits: parked only on members the worker is running, or its run still open. */
+/** The lead waits: on an ask or a wait (a deadline bounds it), on members the worker is running,
+ * or, idle, while its run is open. */
 function waits(s: Session, team: TeamRuntime): boolean {
-  if (loopParked(s.fold).length > 0)
-    return onMembers(s) && team.busy?.() === true;
+  const parked = loopParked(s.fold);
+  if (parked.some((p) => p.kind === "ask" || p.kind === "wait")) return true;
+  if (parked.length > 0) return team.busy?.() === true;
   return runStatus(s) === "running";
 }
 
@@ -179,20 +76,37 @@ async function waitFor(
   clearTimeout(timer);
 }
 
-/**
- * mail.consume under this writer: its pending mail, taken as the consume rules say. A receipt
- * that opens a turn leaves the loop a turn to run.
- */
-export function consumeMail(s: Session): Halt | undefined {
+/** One step between turns: the pending mail, then every ask or wait whose deadline has passed. */
+function teamStep(s: Session): Halt | undefined {
+  return (
+    consumeMail(s) ??
+    decided(s, (ctx) => {
+      for (const id of dueIds(ctx, ctx.batch.now)) deadline(ctx, id);
+    })
+  );
+}
+
+/** mail.consume under this writer: a receipt that opens a turn leaves the loop a turn to run. */
+function consumeMail(s: Session): Halt | undefined {
+  return decided(s, (ctx) => {
+    consume(ctx);
+  });
+}
+
+function decided(
+  s: Session,
+  step: (ctx: ConsumeContext) => void,
+): Halt | undefined {
   const team = teamOf(s);
-  const appended = s.appendDecided((tx) => {
+  const appended = s.appendDecided((tx: DecideTx) => {
     const batch = new Batch(tx.chain.fold.seq, tx.now, team.mint);
-    consume({
+    step({
       db: tx.db,
       chain: tx.chain,
       batch,
       threadId: s.threadId,
       branchId: s.branchId,
+      read: readerOf(s.artifacts),
       ...(team.principal === undefined ? {} : { principal: team.principal }),
     });
     return ok(batch.drafts);

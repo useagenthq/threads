@@ -3,7 +3,7 @@ import type { JsonObject, KnownEvent, Policy, ThreadId } from "../log";
 import { reservation, settlement, tokenBounds } from "../reduce/cost";
 import type { Claim, LimitName } from "../store";
 import type { Session } from "./session";
-import type { Covering, TeamAgentPin } from "./types";
+import type { Covering, TeamAgentPin, TeamRecipient } from "./types";
 
 // Tree-wide budgets: before every model_request in any thread of a tree, its
 // bound is reserved against every budget covering the thread (its own thread and run budgets and
@@ -74,8 +74,6 @@ export function covering(s: Session): readonly Covering[] {
  * member's own) has room for one request of its model. A limit the model can't bound has none.
  */
 export function roomFor(s: Session, member: TeamAgentPin): boolean {
-  const budgets = s.config.budgets;
-  if (budgets === undefined) return true;
   const own = member.budget;
   const all: readonly Covering[] = [
     ...covering(s),
@@ -83,7 +81,27 @@ export function roomFor(s: Session, member: TeamAgentPin): boolean {
       ? []
       : [{ budgetId: "member", budget: own, scope: "thread" as const }]),
   ];
-  const amounts = boundsFor(member.policy, member.model, member.params);
+  return fits(s, all, boundsFor(member.policy, member.model, member.params));
+}
+
+/**
+ * ask's headroom: the recipient's own and ancestors' budgets, and the run budget of the asking
+ * turn's request (its turn belongs to that request), have room for one request of its model.
+ */
+export function roomIn(s: Session, to: TeamRecipient): boolean {
+  const run = covering(s).filter((c) => c.scope === "run");
+  const all = [...to.covering, ...run];
+  return fits(s, all, boundsFor(to.policy, to.model, to.params));
+}
+
+/** Every limit of `all` has room for `amounts` (a new member's own budget starts empty). */
+function fits(
+  s: Session,
+  all: readonly Covering[],
+  amounts: ReadonlyMap<LimitName, number>,
+): boolean {
+  const budgets = s.config.budgets;
+  if (budgets === undefined) return true;
   return claimsOf(all, amounts).every(
     (c) =>
       c.amount !== undefined &&

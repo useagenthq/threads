@@ -1,8 +1,22 @@
-import type { MailId, MemberRef, TeamId } from "../../log";
+import type { z } from "zod";
+import type {
+  AskId,
+  BudgetExceededData,
+  MailId,
+  MemberErrorCode as MemberErrorCodeSchema,
+  MemberRef,
+  ParkReason as ParkReasonSchema,
+  TeamId,
+  ThreadId,
+} from "../../log";
 import type { InvalidDefinition } from "../../team/dynamic";
 import type { Agent, RunInput, StreamEvent } from "../agent";
 import type { RunResult } from "../result";
 import type { RunOptions } from "../run";
+
+type MemberErrorCode = z.infer<typeof MemberErrorCodeSchema>;
+type ParkReason = z.infer<typeof ParkReasonSchema>;
+type BudgetExceeded = z.infer<typeof BudgetExceededData>;
 
 // The public face of a team lead (spec/api.json TeamAgent, TeamRunResult, Team): agent({team})
 // returns a TeamAgent, whose run() result also carries the team's handle.
@@ -69,6 +83,86 @@ export type SendRefusal =
 export type SendResult =
   | { readonly status: "sent"; readonly id: MailId }
   | { readonly status: "refused"; readonly code: SendRefusal };
+
+/** Why an ask was refused: a send's refusals, or no headroom for one request of its model. */
+export type AskRefusal = SendRefusal | "budget_exceeded";
+
+/** Why a reply was refused. */
+export type ReplyRefusal = "unknown_ask" | "already_replied" | "ask_closed";
+
+/** Why a wait or monitor was refused. */
+export type ObserveRefusal = "forbidden" | "unknown_member" | "stale_member";
+
+/** What a settled member returned; a large output is read back from the artifact store. */
+export type MemberResult = { readonly member: MemberRef } & (
+  | { readonly status: "completed"; readonly output: string }
+  | {
+      readonly status: "failed";
+      readonly error: {
+        readonly code: MemberErrorCode;
+        readonly message: string;
+      };
+    }
+  | { readonly status: "cancelled" }
+  | { readonly status: "budget_exhausted"; readonly budget: BudgetExceeded }
+  | { readonly status: "handed_off"; readonly toThread: ThreadId }
+);
+
+/** How an ask ended. needs_input and uncertain are remote members' (Phase 4). */
+export type AskOutcome =
+  | {
+      readonly status: "answered";
+      readonly askId: AskId;
+      readonly text: string;
+      readonly member: MemberRef;
+    }
+  | { readonly status: "timed_out"; readonly askId: AskId }
+  | {
+      readonly status: "member_ended";
+      readonly askId: AskId;
+      readonly result: MemberResult;
+    }
+  | { readonly status: "cancelled"; readonly askId: AskId }
+  | {
+      readonly status: "needs_input";
+      readonly askId: AskId;
+      readonly prompt: string;
+    }
+  | { readonly status: "uncertain"; readonly askId: AskId };
+
+/** The model's ask tool result. */
+export type AskResult =
+  | AskOutcome
+  | { readonly status: "refused"; readonly code: AskRefusal };
+
+/** The model's reply tool result. */
+export type ReplyResult =
+  | { readonly status: "sent"; readonly id: MailId }
+  | { readonly status: "refused"; readonly code: ReplyRefusal };
+
+/** A finished wait: what settled, what is parked, what is still pending. */
+export type Waited = {
+  readonly status: "waited";
+  readonly finished: readonly MemberResult[];
+  readonly parked: readonly {
+    readonly member: MemberRef;
+    readonly reason: ParkReason;
+  }[];
+  readonly pending: readonly MemberRef[];
+  /** The deadline passed with the mode unmet. */
+  readonly timedOut: boolean;
+};
+
+/** The model's wait tool result. */
+export type WaitResult =
+  | Waited
+  | { readonly status: "refused"; readonly code: ObserveRefusal };
+
+/** The model's monitor tool result. */
+export type MonitorResult =
+  | { readonly status: "monitoring"; readonly member: MemberRef }
+  | { readonly status: "ended"; readonly result: MemberResult }
+  | { readonly status: "refused"; readonly code: ObserveRefusal };
 
 /** agent({teamLimits}): the team's limits. */
 export type TeamLimits = {

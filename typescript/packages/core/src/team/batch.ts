@@ -29,6 +29,11 @@ export class Batch {
     this.#mint = mint;
   }
 
+  /** The append's clock: a deadline is due at or after it. */
+  get now(): number {
+    return this.#now;
+  }
+
   /** The event id the next added draft gets. */
   nextId(): string {
     this.#next ??= this.#mint(this.#head + this.drafts.length + 1, this.#now);

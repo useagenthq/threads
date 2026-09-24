@@ -1,44 +1,33 @@
-import { z } from "zod";
-import {
-  BranchId,
-  type MailEnvelope,
-  type Principal,
-  type TeamId,
-  ThreadId,
-} from "../../log";
+import { BranchId, type MailEnvelope, type TeamId } from "../../log";
 import { knownEvents } from "../../reduce";
-import { ok } from "../../result";
 import { LEASE_TTL_MS, type LogStore } from "../../store";
 import type { ArtifactStore } from "../../store/artifacts";
 import type { SqliteDriver } from "../../store/driver";
 import { uuidv7 } from "../../store/encode";
 import { getLease } from "../../store/tables";
-import { isRefusal } from "../../store/writer";
-import { Batch, type Mint } from "../../team/batch";
+import type { Mint } from "../../team/batch";
 import { claimMail } from "../../team/claim";
 import { TEAM_CONSTANTS } from "../../team/constants";
-import { consumable, consume } from "../../team/consume";
+import { consumable, mayResume } from "../../team/consume";
+import { nextDeadline } from "../../team/deadline";
 import type { DynamicChoice } from "../../team/dynamic";
 import {
   materialize,
   type Rebind,
   recordedChoice,
 } from "../../team/materialize";
-import { turnProvenance } from "../../team/provenance";
-import { type RebindCode, rebindFailed } from "../../team/rebind";
 import {
   type MemberRow,
   memberRows,
   ownRows,
   pendingFor,
-  teamRow,
 } from "../../team/rows";
-import type { VerifiedLog } from "../../verify";
 import type { DeferTools } from "../defer";
-import { ConfigError } from "../errors";
 import { memberEntry } from "../registry";
 import type { Store } from "../sqlite";
 import { ancestorsOf } from "./budgets";
+import { closed, pinnedOrUnavailable, principalOf, teamsUnder } from "./scan";
+import { endUnbound, refuseEnded } from "./units";
 
 // The in-process team worker (spec/schema/README.md, "Teams"; decision 17): while a lead's run
 // is open, it materializes every starting member of the lead's team (and of each nested team),
@@ -60,8 +49,6 @@ export type WorkerEnv = {
   /** The lead's resolved defer_tools, which its members inherit unless they set their own. */
   readonly deferTools?: DeferTools;
 };
-
-const Row = z.object({ lead_thread_id: ThreadId, team_id: z.string() });
 
 export class TeamWorker {
   readonly #env: WorkerEnv;
@@ -150,12 +137,20 @@ export class TeamWorker {
     if (row.state === "starting") return () => this.#materialize(row);
     const branch = row.branch_id;
     if (branch === null) return undefined;
-    // A parked member runs again at a run's start: what it waits on may be answered by now.
-    if (row.state === "parked")
-      return recovering ? () => this.#member(row, branch) : undefined;
     const pending = pendingFor(db, ownRows(db, row.thread_id));
+    // A parked member runs again at a run's start (what it waits on may be answered by now), for
+    // mail that may resume it, and once an ask or a wait it parked on is due.
+    if (row.state === "parked") {
+      const wake =
+        recovering ||
+        this.#claim(db, pending.filter(mayResume)) ||
+        this.#due(db, branch);
+      return wake ? () => this.#member(row, branch) : undefined;
+    }
     if (row.state === "ended")
-      return pending.length > 0 ? () => this.#refuse(branch) : undefined;
+      return pending.length > 0
+        ? async () => refuseEnded(this.#env, branch)
+        : undefined;
     // A turn left open with its lease free is resumed (hostless recovery).
     const stranded =
       row.state === "running" && (recovering || this.#free(db, branch));
@@ -174,6 +169,18 @@ export class TeamWorker {
     const now = this.#env.log.now();
     const ttl = this.#env.claimTtlMs ?? TEAM_CONSTANTS.claimTtlMs;
     return claimMail(db, first.mail_id, this.#token, now, ttl) === "claimed";
+  }
+
+  /**
+   * An ask or a wait the parked member waits on is due: its writer closes it.
+   * ponytail: reads the member's log each pass; keep its next deadline per head if parked members
+   * grow many.
+   */
+  #due(db: SqliteDriver, branch: BranchId): boolean {
+    const read = this.#env.log.read(branch);
+    if (!read.ok) return false;
+    const next = nextDeadline({ db, chain: read.value, branchId: branch });
+    return next !== undefined && next <= this.#env.log.now();
   }
 
   #free(db: SqliteDriver, branch: string): boolean {
@@ -266,7 +273,8 @@ export class TeamWorker {
       choice,
     );
     if (entry === undefined || rebind.status !== "ok")
-      return this.#unbound(
+      return endUnbound(
+        this.#env,
         branch,
         holder,
         rebind.status === "ok" ? "pin_unavailable" : rebind.status,
@@ -292,103 +300,4 @@ export class TeamWorker {
         : { deferTools: this.#env.deferTools }),
     });
   }
-
-  /** A member whose definition can't be rebound here ends failed, under its own writer. */
-  #unbound(branch: string, holder: string, code: RebindCode): void {
-    const writer = this.#env.log.acquire(BranchId.parse(branch), holder);
-    // Held elsewhere: its holder runs it.
-    if (!writer.ok) return;
-    const w = writer.value;
-    const header = w.chain.segments[0]?.header;
-    if (header === undefined) throw new Error("a writer's chain has a header");
-    const ended = w.appendDecided((tx) => {
-      const batch = new Batch(tx.chain.fold.seq, tx.now, this.#env.mint);
-      rebindFailed(
-        {
-          db: tx.db,
-          chain: tx.chain,
-          batch,
-          threadId: header.thread_id,
-          branchId: branch,
-        },
-        code,
-        tx.now,
-      );
-      return ok(batch.drafts);
-    });
-    w.release();
-    if (isRefusal(ended)) throw new Error("a failed rebind never refuses");
-    if (!ended.ok) throw new Error(`member end: ${ended.error.message}`);
-  }
-
-  /** An ended member's writer refuses the mail that still reaches it. */
-  async #refuse(branch: string): Promise<void> {
-    const writer = this.#env.log.acquire(
-      BranchId.parse(branch),
-      `team-${crypto.randomUUID()}`,
-    );
-    if (!writer.ok) return;
-    const w = writer.value;
-    const header = w.chain.segments[0]?.header;
-    if (header === undefined) throw new Error("a writer's chain has a header");
-    w.appendDecided((tx) => {
-      const batch = new Batch(tx.chain.fold.seq, tx.now, this.#env.mint);
-      consume({
-        db: tx.db,
-        chain: tx.chain,
-        batch,
-        threadId: header.thread_id,
-        branchId: branch,
-      });
-      return ok(batch.drafts);
-    });
-    w.release();
-  }
-}
-
-/**
- * The one principal a member run acts under (design §2.6: one turn, one authority): its open
- * turn's, else that of the first mail it would take. Mail of another principal waits for the
- * next run.
- */
-function principalOf(
-  db: SqliteDriver,
-  log: VerifiedLog,
-  row: MemberRow,
-): Principal | undefined {
-  if (log.fold.turnOpen) return turnProvenance(db, log)?.principal;
-  return pendingFor(db, ownRows(db, row.thread_id)).find(consumable)?.provenance
-    .principal;
-}
-
-/** A definition that can't be set up or pinned here is unavailable: a value, not a throw. */
-async function pinnedOrUnavailable<T>(
-  pinned: () => Promise<T>,
-): Promise<T | undefined> {
-  try {
-    return await pinned();
-  } catch (error) {
-    if (error instanceof ConfigError) return undefined;
-    throw error;
-  }
-}
-
-function closed(db: SqliteDriver, team: string): boolean {
-  return (teamRow(db, team)?.closed_at ?? null) !== null;
-}
-
-/** The team and every team led by one of its members, recursively. */
-function teamsUnder(db: SqliteDriver, root: TeamId): readonly string[] {
-  const teams: string[] = [root];
-  for (let i = 0; i < teams.length; i += 1) {
-    const members = memberRows(db, teams[i] ?? "").map((r) => r.thread_id);
-    const led = z
-      .array(Row)
-      .parse(db.all("SELECT lead_thread_id, team_id FROM teams", []))
-      .filter(
-        (t) => members.includes(t.lead_thread_id) && !teams.includes(t.team_id),
-      );
-    teams.push(...led.map((t) => t.team_id));
-  }
-  return teams;
 }

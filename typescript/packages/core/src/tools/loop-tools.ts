@@ -13,18 +13,26 @@ export const LOOP_TOOLS = [
   "team_task_update",
   "todo_write",
   "tool_search",
+  "ask",
+  "monitor",
+  "reply",
   "send",
   "start",
+  "wait",
 ] as const;
 export type LoopTool = (typeof LOOP_TOOLS)[number];
 
 /**
  * The team tools among them: the loop runs them only in a team thread, and elsewhere a user tool
- * may take the name. Lane 21E adds ask, reply, wait, monitor and cancel.
+ * may take the name. Lane 21E.2 adds cancel.
  */
 export const TEAM_LOOP_TOOLS: ReadonlySet<LoopTool> = new Set<LoopTool>([
+  "ask",
+  "monitor",
+  "reply",
   "send",
   "start",
+  "wait",
 ]);
 
 /** The structured-output tool, pinned with an output model. */

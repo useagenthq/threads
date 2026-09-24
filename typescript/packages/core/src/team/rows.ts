@@ -5,6 +5,7 @@ import {
   MemberName,
   type MemberRef,
   PosInt,
+  StoredMemberResult,
   TeamId,
   ThreadId,
 } from "../log";
@@ -175,6 +176,74 @@ export function mailEnvelope(
   return z
     .array(MailRow)
     .parse(db.all("SELECT envelope FROM mail WHERE mail_id = ?", [mailId]))[0];
+}
+
+const SettledRow = z
+  .strictObject({ result: z.instanceof(Uint8Array), updated_seq: PosInt })
+  .transform((r) => ({
+    result: StoredMemberResult.parse(json(r.result)),
+    seq: r.updated_seq,
+  }));
+
+/**
+ * An idle or ended member's committed result and the seq of the member_idle or member_ended
+ * that wrote it (nothing else changes the row until its next turn opens).
+ */
+export function settledOf(
+  db: SqliteDriver,
+  row: MemberRow,
+): { readonly result: StoredMemberResult; readonly seq: number } {
+  const [got] = z
+    .array(SettledRow)
+    .parse(
+      db.all(
+        "SELECT result, updated_seq FROM team_members WHERE team_id = ? AND name = ? AND generation = ?",
+        [row.team_id, row.name, row.generation],
+      ),
+    );
+  if (got === undefined) throw new Error(`no settled row ${row.name}`);
+  return got;
+}
+
+const AskRow: Strict<{
+  asker_branch_id: typeof BranchId;
+  deadline: z.ZodInt;
+  state: z.ZodString;
+}> = z.strictObject({
+  asker_branch_id: BranchId,
+  deadline: z.int(),
+  state: z.string(),
+});
+export type AskRow = z.infer<typeof AskRow>;
+
+/** An ask's row, whatever its state. */
+export function askRow(db: SqliteDriver, askId: string): AskRow | undefined {
+  return z
+    .array(AskRow)
+    .parse(
+      db.all(
+        "SELECT asker_branch_id, deadline, state FROM asks WHERE ask_id = ?",
+        [askId],
+      ),
+    )[0];
+}
+
+/** This branch's open asks whose deadline is at or before `now`, oldest first. */
+export function dueAsks(
+  db: SqliteDriver,
+  branch: string,
+  now: number,
+): readonly string[] {
+  return z
+    .array(z.strictObject({ ask_id: z.string() }))
+    .parse(
+      db.all(
+        `SELECT ask_id FROM asks WHERE asker_branch_id = ? AND state = 'open' AND deadline <= ?
+          ORDER BY deadline, ask_id`,
+        [branch, now],
+      ),
+    )
+    .map((r) => r.ask_id);
 }
 
 /** The live monitors on one member generation, in monitor_id order. */

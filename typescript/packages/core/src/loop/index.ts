@@ -4,7 +4,7 @@ import { isTestKit } from "../model/guard";
 import { endedOtherwise } from "../reduce/run-end";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import { resumeBackground } from "./agents/background";
-import { teamTurns } from "./agents/members";
+import { onTeam, teamTurns } from "./agents/members";
 import { unparkChildren } from "./agents/park";
 import { runStatus, stopChildren } from "./agents/stop";
 import { observe } from "./hooks";
@@ -35,6 +35,7 @@ export type {
   Subagent,
   Team,
   TeamAgentPin,
+  TeamRecipient,
   TeamRuntime,
   ToolContext,
   ToolImpl,
@@ -94,10 +95,10 @@ async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
     return waitForChildren(s, await turns(s, input));
   const turn = async (): Promise<LoopEnd> =>
     waitForChildren(s, await runLoop(s));
-  // A lead parked on its members first waits for them, as a parent runs the children it is
-  // parked on: their settlements resume it, and only then does a new input start a turn.
-  const { parked } = s.fold;
-  if (parked.length > 0 && parked.every((p) => p.kind === "member")) {
+  // A team thread parked on its members, an ask or a wait first waits for them, as a parent runs
+  // the children it is parked on: their answers resume it, and only then does a new input start
+  // a turn.
+  if (s.fold.parked.length > 0 && onTeam(s.fold)) {
     const unparked = await teamTurns(s, { kind: "parked" }, turn);
     if (unparked.kind !== "idle") return unparked;
   }

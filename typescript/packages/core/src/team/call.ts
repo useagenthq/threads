@@ -10,6 +10,7 @@ import type { EventDraft } from "../store/admit";
 import type { SqliteDriver } from "../store/driver";
 import type { Chain } from "../verify";
 import type { Batch } from "./batch";
+import type { ReadText } from "./close";
 import type { InvalidDefinition } from "./dynamic";
 import type { PutText } from "./mail";
 import { turnProvenance } from "./provenance";
@@ -35,6 +36,7 @@ export type CallContext = {
   readonly batch: Batch;
   readonly call: EventOf<"tool_call">;
   readonly put: PutText;
+  readonly read: ReadText;
 };
 
 /** The caller as one team's member: its row there, its ref, its turn's provenance. */
@@ -45,15 +47,22 @@ export type Caller = {
   readonly provenance: Provenance;
 };
 
+/** Why a call was refused: a team refusal, or one of reply's own. */
+export type CallRefusal =
+  | TeamRefusal
+  | "unknown_ask"
+  | "already_replied"
+  | "ask_closed";
+
 /** An op's refusal: the op records it as the call's result. */
 export type Refusal = {
-  readonly refused: TeamRefusal;
+  readonly refused: CallRefusal;
   /** invalid_definition only: which chosen field, and why. */
   readonly detail?: InvalidDefinition;
 };
 
 export const refusal = (
-  code: TeamRefusal,
+  code: CallRefusal,
   detail?: InvalidDefinition,
 ): Refusal => ({ refused: code, ...(detail === undefined ? {} : { detail }) });
 
@@ -94,7 +103,7 @@ export function causalOf(ctx: CallContext): {
  */
 export function decide(
   ctx: CallContext,
-  op: "start" | "send",
+  op: "start" | "send" | "ask" | "monitor" | "cancel",
   target: string,
   allow: boolean,
 ): Refusal | undefined {
@@ -116,6 +125,11 @@ export function decide(
 
 /** The call's one tool_result: its value as RFC 8785 JSON. */
 export function answer(ctx: CallContext, value: unknown): EventDraft {
+  return toolResult(ctx.call.data.call_id, value);
+}
+
+/** A team call's one tool_result, by call id: its value as RFC 8785 JSON. */
+export function toolResult(callId: string, value: unknown): EventDraft {
   const preview = canonicalize(z.json().parse(value));
   if (!preview.ok) throw new Error(preview.error.message);
   return {
@@ -124,7 +138,7 @@ export function answer(ctx: CallContext, value: unknown): EventDraft {
     critical: true,
     actor: { kind: "tool" },
     data: {
-      call_id: ctx.call.data.call_id,
+      call_id: callId,
       is_error: false,
       completeness: "complete",
       preview: preview.value,
@@ -133,20 +147,17 @@ export function answer(ctx: CallContext, value: unknown): EventDraft {
   };
 }
 
-/** Records the op's result, or its refusal, as the call's result. */
-export function recorded(ctx: CallContext, value: unknown): void {
-  ctx.batch.add(
-    answer(
-      ctx,
-      isRefusal(value)
-        ? {
-            code: value.refused,
-            ...(value.detail === undefined ? {} : { detail: value.detail }),
-            status: "refused",
-          }
-        : value,
-    ),
-  );
+/** Records the op's result, or its refusal, as the call's result; returns what it recorded. */
+export function recorded(ctx: CallContext, value: unknown): unknown {
+  const out = isRefusal(value)
+    ? {
+        code: value.refused,
+        ...(value.detail === undefined ? {} : { detail: value.detail }),
+        status: "refused",
+      }
+    : value;
+  ctx.batch.add(answer(ctx, out));
+  return out;
 }
 
 /**
