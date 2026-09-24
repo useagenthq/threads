@@ -10,7 +10,8 @@ from typing import Literal
 from pydantic import BaseModel, JsonValue
 
 from threads import Completed, RunContext, agent, scripted_model, sqlite, tool
-from threads.hooks.extension import extension
+from threads.hooks.extension import Extension, extension
+from threads.hooks.types import ToolGate
 from threads.log import Context, Permissions, ToolCallData
 from threads.loop.scripted import ScriptedModel
 from threads.redaction import StreamRedactor
@@ -144,15 +145,15 @@ def test_hook_text_is_recorded_redacted(tmp_path: Path) -> None:
     ) -> Sequence[str]:
         return [f"context {key}"]
 
-    async def gate(_call: ToolCallData, _ctx: RunContext[None]) -> None:
+    async def gate(_call: ToolCallData, _ctx: RunContext[None]) -> ToolGate:
         raise RuntimeError(f"gate down {key}")
 
     async def noop(_args: NoInput, _ctx: RunContext[None]) -> str:
         return "ok"
 
-    hooked = extension(
+    hooked: Extension[None] = extension(
         name="audit",
-        hooks={"session_start": started, "before_tool": gate},  # type: ignore[typeddict-item] - a gate that only raises
+        hooks={"session_start": started, "before_tool": gate},
     )
     model = scripted_model({"responses": [use("noop"), say("ok")]})
     none = tool(name="noop", description="Nothing.", input=NoInput, execute=noop)

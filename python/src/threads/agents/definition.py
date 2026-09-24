@@ -54,7 +54,7 @@ class Definition[D]:
     context: Context | None = None
     sandbox: Sandbox | None = None
     egress: Egress = ()
-    extensions: tuple[Extension, ...] = ()
+    extensions: "tuple[Extension[D], ...]" = ()
     memory: MemoryProvider | None = None
     memory_write: MemoryWrite = "ask"
     knowledge: KnowledgeProvider | None = None

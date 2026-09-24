@@ -134,29 +134,27 @@ type Fn[*A, R] = Callable[[*A], Awaitable[R]]
 type Source = Literal["startup", "resume", "fork", "compact"]
 
 
-class Hooks(TypedDict, total=False):
-    """spec/api.json `Hooks`: every hook point, each optional. ponytail: hooks see the run's
-    context without deps (`deps` is None); typed deps for hooks when a use needs them."""
+class Hooks[D](TypedDict, total=False):
+    """spec/api.json `Hooks`: every hook point, each optional. Each hook gets the run's context
+    last, with the deps passed to run() (the agent's Deps; None for an agent without deps)."""
 
-    session_start: Fn[
-        Literal["startup", "resume", "fork", "compact"], RunContext[None], Sequence[str]
-    ]
-    session_end: Fn[RunContext[None], None]
-    before_input: Fn[UserInputData, RunContext[None], InputDecision]
-    before_model: Fn[ReducedState, RunContext[None], ModelGate]
-    after_model: Fn[ReducedState, ModelResponseData, RunContext[None], ResponseGate]
-    before_tool: Fn[ToolCallData, RunContext[None], ToolGate]
-    permission_request: Fn[ToolCallData, RunContext[None], ToolGate]
-    permission_denied: Fn[ToolCallData, RunContext[None], None]
-    after_tool: Fn[ToolCallData, ToolResultData, RunContext[None], Sequence[str]]
-    before_tool_result: Fn[ToolCallData, ToolResultData, RunContext[None], ResultGate]
-    after_tool_batch: Fn[ReducedState, RunContext[None], Sequence[str]]
-    before_compact: Fn[ReducedState, RunContext[None], CompactGate]
-    after_compact: Fn[ReducedState, RunContext[None], Sequence[str]]
-    on_stop: Fn[ReducedState, RunContext[None], StopGate]
-    on_stop_failure: "Fn[RunErrorCode, RunContext[None], None]"
-    subagent_start: Fn[ToolCallData, RunContext[None], SwitchGate]
-    subagent_stop: Fn[AgentFinishedData, RunContext[None], StopGate]
-    before_model_switch: Fn[ModelSettings, RunContext[None], SwitchGate]
-    after_model_switch: Fn[ModelSettings, RunContext[None], None]
-    notification: Fn[LogEvent, RunContext[None], None]
+    session_start: Fn[Source, RunContext[D], Sequence[str]]
+    session_end: Fn[RunContext[D], None]
+    before_input: Fn[UserInputData, RunContext[D], InputDecision]
+    before_model: Fn[ReducedState, RunContext[D], ModelGate]
+    after_model: Fn[ReducedState, ModelResponseData, RunContext[D], ResponseGate]
+    before_tool: Fn[ToolCallData, RunContext[D], ToolGate]
+    permission_request: Fn[ToolCallData, RunContext[D], ToolGate]
+    permission_denied: Fn[ToolCallData, RunContext[D], None]
+    after_tool: Fn[ToolCallData, ToolResultData, RunContext[D], Sequence[str]]
+    before_tool_result: Fn[ToolCallData, ToolResultData, RunContext[D], ResultGate]
+    after_tool_batch: Fn[ReducedState, RunContext[D], Sequence[str]]
+    before_compact: Fn[ReducedState, RunContext[D], CompactGate]
+    after_compact: Fn[ReducedState, RunContext[D], Sequence[str]]
+    on_stop: Fn[ReducedState, RunContext[D], StopGate]
+    on_stop_failure: "Fn[RunErrorCode, RunContext[D], None]"
+    subagent_start: Fn[ToolCallData, RunContext[D], SwitchGate]
+    subagent_stop: Fn[AgentFinishedData, RunContext[D], StopGate]
+    before_model_switch: Fn[ModelSettings, RunContext[D], SwitchGate]
+    after_model_switch: Fn[ModelSettings, RunContext[D], None]
+    notification: Fn[LogEvent, RunContext[D], None]

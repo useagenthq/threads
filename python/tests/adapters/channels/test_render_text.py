@@ -30,7 +30,6 @@ def test_a_host_message_is_one_text_op_on_every_channel() -> None:
             app_secret=secret("SIGNING"),
             access_token=secret("TOKEN"),
             verify_token=secret("VERIFY"),
-            phone_number_id="p",
             agent="a",
         ),
         github(webhook_secret=secret("SIGNING"), token=secret("TOKEN"), agent="a"),

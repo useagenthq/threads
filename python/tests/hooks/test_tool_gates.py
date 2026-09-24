@@ -124,7 +124,7 @@ def test_an_ask_rule_is_recorded_then_permission_request_answers_the_ask() -> No
         return {"decision": "allow"}
 
     box = Box()
-    hooks: Hooks = {"before_tool": ask, "permission_request": approve}
+    hooks: Hooks[None] = {"before_tool": ask, "permission_request": approve}
     result, events = asyncio.run(run(hooks, [use(), text("ok")], box))
     assert isinstance(result, Completed)
     assert box.runs == 1
@@ -150,7 +150,7 @@ def test_before_tool_result_sees_only_executed_results() -> None:
         seen.append(r.origin)
         return {"decision": "proceed"}
 
-    hooks: Hooks = {"before_tool": deny, "before_tool_result": guard}
+    hooks: Hooks[None] = {"before_tool": deny, "before_tool_result": guard}
     _result, events = asyncio.run(run(hooks, [use(), text("ok")]))
     assert seen == []
     assert decisions(events) == [("before_tool", "deny")]

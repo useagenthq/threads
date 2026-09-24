@@ -49,7 +49,7 @@ def extension(
 </Field>
 
 <Field name="tools" type={"readonly Tool[]"} default={"[]"}>
-  App tools this extension adds, named &lt;name>__&lt;tool>. In Python they see no deps. Default [] adds none.
+  App tools this extension adds, named &lt;name>__&lt;tool>; they get the run's deps, like the agent's own tools. Default [] adds none.
 </Field>
 
 <Field name="instructions" type={"string"} default={""}>
@@ -57,7 +57,7 @@ def extension(
 </Field>
 
 <Field name="hooks" type={"Hooks<Deps>"} default={"{}"}>
-  Lifecycle hooks that can block or change what a run does (see Hooks). In Python they see no deps. Default &#123;&#125; adds none. See [Hooks](/docs/reference/types/Hooks).
+  Lifecycle hooks that can block or change what a run does (see Hooks); each gets the run's deps in its ctx. Default &#123;&#125; adds none. See [Hooks](/docs/reference/types/Hooks).
 </Field>
 
 <Field name="on" type={"Record<string, (event: Event) => Promise<void>>"} default={"{}"}>

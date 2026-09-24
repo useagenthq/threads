@@ -159,7 +159,7 @@ def test_stream_returns_the_typed_output() -> None:
 @pytest.mark.parametrize("output", [dict, Verdict(fixed=True, tests=1), "Verdict"])
 def test_an_output_that_is_not_a_pydantic_model_class_is_refused(output: object) -> None:
     with pytest.raises(ConfigError) as raised:
-        agent(model=scripted_model({"responses": []}), output=output)  # pyright: ignore[reportArgumentType] - the invalid input under test
+        agent(model=scripted_model({"responses": []}), output=output)  # pyright: ignore[reportCallIssue, reportArgumentType] - the invalid input under test
     assert raised.value.code == "invalid_config"
     assert "output" in str(raised.value)
 
@@ -167,7 +167,7 @@ def test_an_output_that_is_not_a_pydantic_model_class_is_refused(output: object)
 @pytest.mark.parametrize("retries", [True, -1, 1.5, 2**53, 10**100])
 def test_output_retries_must_be_a_non_negative_integer(retries: object) -> None:
     with pytest.raises(ConfigError) as raised:
-        agent(model=scripted_model({"responses": []}), output=Verdict, output_retries=retries)  # pyright: ignore[reportArgumentType] - the invalid input under test
+        agent(model=scripted_model({"responses": []}), output=Verdict, output_retries=retries)  # pyright: ignore[reportCallIssue, reportArgumentType] - the invalid input under test
     assert raised.value.code == "invalid_config"
     assert "output_retries" in str(raised.value)
 

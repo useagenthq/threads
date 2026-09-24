@@ -90,7 +90,7 @@ When the model tries to email `eve@evil.test`, the hook denies the call and the 
   Added to the system prompt after the agent's own instructions, in the order extensions are listed.
 </Field>
 <Field name="tools" type="Tool[]">
-  Tools this extension brings. In Python they receive no `deps`.
+  Tools this extension brings. They get the run's `deps`, like the agent's own tools.
 </Field>
 <Field name="hooks" type="Hooks">
   Any of the hooks below.
@@ -107,7 +107,7 @@ When the model tries to email `eve@evil.test`, the hook denies the call and the 
 
 ## Hook points
 
-Every hook is optional, awaited and time-limited. Each gets the run context last (`ctx`: thread id, principal and, in TypeScript, your `deps`; Python hooks get `deps` as `None`).
+Every hook is optional, awaited and time-limited. Each gets the run context last (`ctx`: thread id, principal and the `deps` you passed to `run()`).
 
 | TypeScript | Python | When | Returns |
 |---|---|---|---|

@@ -98,13 +98,13 @@ class Routed:
     gateway tools to their runners, memory and knowledge tools to their providers, extension
     tools to theirs, every other name to the app tools."""
 
-    def __init__(  # noqa: PLR0913 - one runner per tool source
+    def __init__[D](  # noqa: PLR0913 - one runner per tool source
         self,
         sandbox: ToolRunner | None,
         results: ReadResults,
         app: ToolRunner,
         provided: ToolRunner | None = None,
-        ext: AppTools[None] | None = None,
+        ext: AppTools[D] | None = None,
         *,
         gateways: Mapping[str, ToolRunner] = NO_GATEWAYS,
     ) -> None:
@@ -115,7 +115,8 @@ class Routed:
         # Outside a team, send and start are free names: an app tool may take one.
         self._own = app.names if isinstance(app, AppTools) else frozenset[str]()
         self._provided = provided
-        self._ext = ext
+        self._ext: ToolRunner | None = ext
+        self._ext_names = frozenset[str]() if ext is None else ext.names
 
     def _for(self, name: str) -> ToolRunner:
         if name in self._gateways:
@@ -126,7 +127,7 @@ class Routed:
             return self._provided
         if name in SANDBOXED and self._sandbox is not None:
             return self._sandbox
-        if self._ext is not None and name in self._ext.names:
+        if self._ext is not None and name in self._ext_names:
             return self._ext
         return self._app
 

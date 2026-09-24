@@ -9,9 +9,10 @@ from collections.abc import Callable
 from contextlib import AsyncExitStack
 from typing import Final, Unpack, overload
 
-from threads._tool_deps import ContextDeps, context_deps, missing_deps
+from threads._tool_deps import missing_deps
 from threads.agents.config import ConfigError, Failure
 from threads.agents.definition import Definition
+from threads.agents.deps import readers
 from threads.agents.pinned import outside_any_branch
 from threads.agents.results import Completed, RunResult, StreamEvent
 from threads.agents.run import (
@@ -24,7 +25,6 @@ from threads.agents.run import (
 from threads.agents.servers import with_servers
 from threads.agents.setup import set_up
 from threads.agents.stream import RunStream
-from threads.agents.tool import Tool
 from threads.result import Err, Ok
 
 
@@ -56,10 +56,7 @@ class Agent[D, O]:
             return options["deps"]
         if self._default_deps:
             return self._default_deps[0]
-        tools: list[tuple[str, ContextDeps]] = [
-            (t.name, deps_of(t)) for t in self._definition.tools
-        ]
-        raise ConfigError("invalid_config", missing_deps(self.name, tools))
+        raise ConfigError("invalid_config", missing_deps(self.name, readers(self._definition)))
 
     @overload
     async def run(
@@ -131,10 +128,3 @@ class Agent[D, O]:
 
 def _drop(_item: StreamEvent) -> None:
     pass
-
-
-def deps_of(app_tool: object) -> ContextDeps:
-    """A `tool()`'s context annotation; another AppTool's is never read, so it needs deps."""
-    # Read before narrowing: only the callable matters, not the Tool's type parameters.
-    execute: object = getattr(app_tool, "execute", None)
-    return context_deps(execute) if isinstance(app_tool, Tool) else "deps"

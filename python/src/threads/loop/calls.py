@@ -4,6 +4,7 @@ A call that fails before `effect_begin` (unknown tool, bad arguments, a denial) 
 `tool_result` and nothing runs. Only an allowed call reaches the effect path.
 """
 
+from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic import JsonValue
@@ -64,17 +65,22 @@ async def _run(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
     """An authorized call: framework tools change only the log; the rest dispatch."""
     if output.is_candidate(rt.fold, spec):
         return await output.validate(rt, state)
-    if spec.name == "todo_write":
-        return await todos.write(rt, state)
     if search.is_search(rt.fold, spec):
         return await search.run(rt, state)
-    if spec.name == "ask_user":
-        return await questions.ask(rt, state)
+    if spec.name in _LOG_TOOLS:
+        return await _LOG_TOOLS[spec.name](rt, state)
     if rt.framework is not None and spec.name in rt.framework.names:
         return await rt.framework.run(rt, state)
     if spec.effect_class == "read_only":
         return await _read_only(rt, state, spec)
     return await _effect(rt, state, spec)
+
+
+_LOG_TOOLS: Final[Mapping[str, Callable[[Runtime, CallState], Awaitable[Halt | None]]]] = {
+    "todo_write": todos.write,
+    "ask_user": questions.ask,
+}
+"""The framework tools that only append to this thread's log, by name."""
 
 
 async def _effect(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:

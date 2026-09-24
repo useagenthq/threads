@@ -4,18 +4,19 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import partial
-from typing import TYPE_CHECKING, Final, Literal, Required, TypedDict, TypeGuard, Unpack, overload
+from typing import TYPE_CHECKING, Final, Literal, Required, TypedDict, Unpack, overload
 
 from pydantic import BaseModel
 
 from threads._json_schema import unchecked
 from threads.agents import narrowing
-from threads.agents.agent import Agent, deps_of
+from threads.agents.agent import Agent
 from threads.agents.bindings import DEFAULT_PERMISSIONS, AppTool, ToolServer
 from threads.agents.builtins import Egress
 from threads.agents.catalog import GitOptions, LspOptions, WebOptions, catalog
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
+from threads.agents.deps import needs_no_deps
 from threads.agents.sections import Section, completed
 from threads.agents.skills import Skill, checked
 from threads.agents.team_agent import TeamAgent, TeamLimits
@@ -59,8 +60,6 @@ class CommonOptions(TypedDict, total=False):
     """Absent: no sandbox tools. Present: bash, read, write, edit, ls, glob and grep."""
     egress: Egress
     """Sandbox egress allowlist; [] (the default) is deny-all."""
-    extensions: Sequence[Extension]
-    """Instructions and hooks, run in this order."""
     memory: MemoryProvider
     """save_memory, search_memory and forget_memory."""
     memory_write: MemoryWrite
@@ -86,7 +85,7 @@ class CommonOptions(TypedDict, total=False):
     (spec/schema/README.md, Approval authority)."""
 
 
-class AgentOptions(CommonOptions, total=False):
+class _AgentCommon(CommonOptions, total=False):
     model: Required[Model]
     subagents: "Sequence[Agent[None, object]]"
     """Agents spawn_agent may start, by name; the team tools come with them. A structured
@@ -95,14 +94,21 @@ class AgentOptions(CommonOptions, total=False):
     """Agents this one may hand the conversation to, pinned as policy.handoffs."""
 
 
+class AgentOptions(_AgentCommon, total=False):
+    extensions: Sequence[Extension[None]]
+    """Instructions, hooks and tools, run in this order; they read no deps."""
+
+
 class ServerAgentOptions(AgentOptions, total=False):
     tools: Required[Sequence[ToolServer]]
     """MCP servers only: their tools need no deps."""
 
 
-class ToolAgentOptions[D](AgentOptions, total=False):
-    tools: Required[Sequence[AppTool[D] | ToolServer]]
+class ToolAgentOptions[D](_AgentCommon, total=False):
+    tools: Sequence[AppTool[D] | ToolServer]
     """App tools and MCP servers (`threads.mcp.mcp`)."""
+    extensions: Sequence[Extension[D]]
+    """Instructions, hooks and tools, run in this order; their contexts carry the run's deps."""
 
 
 class OutputAgentOptions[O: BaseModel](AgentOptions, total=False):
@@ -115,8 +121,8 @@ class ServerOutputAgentOptions[O: BaseModel](OutputAgentOptions[O], total=False)
     tools: Required[Sequence[ToolServer]]
 
 
-class ToolOutputAgentOptions[D, O: BaseModel](OutputAgentOptions[O], total=False):
-    tools: Required[Sequence[AppTool[D] | ToolServer]]
+class ToolOutputAgentOptions[D, O: BaseModel](ToolAgentOptions[D], total=False):
+    output: Required[type[O]]
 
 
 class _Team(TypedDict, total=False):
@@ -151,8 +157,7 @@ class TeamToolOutputAgentOptions[D, O: BaseModel](ToolOutputAgentOptions[D, O], 
     pass
 
 
-class _Options[D](AgentOptions, total=False):
-    tools: Sequence[AppTool[D] | ToolServer]
+class _Options[D](ToolAgentOptions[D], total=False):
     output: object
     team: "Sequence[Agent[None, object] | DynamicAgent[None, object]]"
     team_limits: TeamLimits
@@ -209,26 +214,23 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, o
         tuple(a.definition for a in options.get("subagents", ())),
         tuple(a.definition for a in options.get("handoffs", ())),
     )
-    if _take_no_deps(tools):
-        plain = build_definition(options, options["model"], (tools, servers), output, links)
-        return Agent(plain, (None,), decode) if team is None else TeamAgent(plain, (None,), decode)
-    needs = build_definition(options, options["model"], (tools, servers), output, links)
-    return Agent(needs, (), decode) if team is None else TeamAgent(needs, (), decode)
+    extensions = tuple(options.get("extensions", ()))
+    given = ((tools, servers), extensions)
+    definition = build_definition(options, options["model"], given, output, links)
+    if needs_no_deps(definition):
+        if team is None:
+            return Agent(definition, (None,), decode)
+        return TeamAgent(definition, (None,), decode)
+    return Agent(definition, (), decode) if team is None else TeamAgent(definition, (), decode)
 
 
-def _no_templates(options: AgentOptions) -> None:
+def _no_templates(options: _AgentCommon) -> None:
     """A dynamic agent runs only as a team member: never a subagent or a handoff target."""
     for key in ("subagents", "handoffs"):
         found = next((a for a in options.get(key, ()) if a.definition.models), None)
         if found is not None:
             why = f"dynamic agents run as team members; put {found.name} in team"
             raise ConfigError("invalid_config", why)
-
-
-def _take_no_deps[D](tools: tuple[AppTool[D], ...]) -> TypeGuard[tuple[AppTool[None], ...]]:
-    """Every tool's context is annotated `RunContext[None]` (or there are none), so a run's deps
-    default to None. Read from the annotations, which are the tools' static type."""
-    return all(deps_of(t) == "none" for t in tools)
 
 
 def output_model(output: object) -> type[BaseModel] | None:
@@ -284,12 +286,12 @@ class Links:
 def build_definition[T](
     options: CommonOptions,
     model: Model,
-    given: tuple[tuple[AppTool[T], ...], tuple[ToolServer, ...]],
+    given: tuple[tuple[tuple[AppTool[T], ...], tuple[ToolServer, ...]], tuple[Extension[T], ...]],
     output: type[BaseModel] | None,
     links: Links,
 ) -> Definition[T]:
     """The definition agent() and dynamic_agent() describe; raises ConfigError."""
-    tools, servers = given
+    (tools, servers), extensions = given
     sandbox = options.get("sandbox")
     egress = options.get("egress", ())
     if egress != "unenforced" and egress:
@@ -308,7 +310,7 @@ def build_definition[T](
         completed("context", options.get("context"), CONTEXT),
         sandbox,
         egress,
-        tuple(options.get("extensions", ())),
+        extensions,
         options.get("memory"),
         options.get("memory_write", "ask"),
         options.get("knowledge"),

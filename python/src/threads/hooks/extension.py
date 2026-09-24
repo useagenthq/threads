@@ -23,28 +23,29 @@ _NAME: Final = re.compile(r"[a-z][a-z0-9_]{0,63}")
 DEFAULT_TIMEOUT_MS: Final = 5000
 
 
-class ExtensionOptions(TypedDict, total=False):
+class ExtensionOptions[D](TypedDict, total=False):
     name: Required[str]
-    tools: Sequence[AppTool[None]]
-    """Namespaced `<name>__<tool>`. Like hooks, they see no deps."""
+    tools: Sequence[AppTool[D]]
+    """Namespaced `<name>__<tool>`. Like hooks, they get the run's deps."""
     instructions: str
-    hooks: Hooks
+    hooks: Hooks[D]
     on: Mapping[str, Observer]
     setup: Callable[[], Awaitable[None]]
     hook_timeout_ms: int
 
 
 @dataclass(frozen=True, slots=True, weakref_slot=True)
-class Extension:
-    """spec/api.json `Extension`. Build it with `extension()`."""
+class Extension[D]:
+    """spec/api.json `Extension`. Build it with `extension()`. D is the deps its hooks and tools
+    read: the agent's Deps, None when they read none."""
 
     name: str
     instructions: str = ""
-    hooks: Hooks = field(default_factory=Hooks)
+    hooks: Hooks[D] = field(default_factory=Hooks[D])
     on: Mapping[str, Observer] = field(default_factory=dict[str, Observer])
     setup: Callable[[], Awaitable[None]] | None = None
     hook_timeout_ms: int = DEFAULT_TIMEOUT_MS
-    tools: tuple[AppTool[None], ...] = ()
+    tools: tuple[AppTool[D], ...] = ()
 
     def manifest(self) -> JsonValue:
         """What the config pin covers: which hooks this extension declares, in wire-enum order,
@@ -61,32 +62,36 @@ class Extension:
 
 
 @dataclass(frozen=True, slots=True)
-class Namespaced:
+class Namespaced[D]:
     """An extension's tool under its pinned `<ext>__<tool>` name."""
 
     name: str
-    tool: AppTool[None]
+    tool: AppTool[D]
 
     def spec(self) -> ToolSpec:
         return self.tool.spec().model_copy(update={"name": self.name})
 
+    def inner(self) -> object:
+        """The extension's own tool, whatever deps it reads (what deferral looks at)."""
+        return self.tool
+
     def invalid(self, input: JsonObject) -> str | None:
         return self.tool.invalid(input)
 
-    async def run(self, input: JsonObject, ctx: RunContext[None]) -> Dispatched:
+    async def run(self, input: JsonObject, ctx: RunContext[D]) -> Dispatched:
         return await self.tool.run(input, ctx)
 
-    async def lookup(self, effect_key: str, ctx: RunContext[None]) -> LookupResult[str]:
+    async def lookup(self, effect_key: str, ctx: RunContext[D]) -> LookupResult[str]:
         return await self.tool.lookup(effect_key, ctx)
 
 
-def extension_tools(extensions: Sequence[Extension]) -> tuple[Namespaced, ...]:
+def extension_tools[D](extensions: Sequence[Extension[D]]) -> tuple[Namespaced[D], ...]:
     """Every extension's tools, namespaced and sorted by that name."""
     tools = [Namespaced(f"{e.name}__{t.name}", t) for e in extensions for t in e.tools]
     return tuple(sorted(tools, key=lambda t: t.name))
 
 
-def _names(hooks: Hooks) -> list[HookName]:
+def _names[D](hooks: Hooks[D]) -> list[HookName]:
     return [name for name in _ALL if name in hooks]
 
 
@@ -114,7 +119,7 @@ _ALL: Final[tuple[HookName, ...]] = (
 )
 
 
-def extension(**options: Unpack[ExtensionOptions]) -> Extension:
+def extension[D](**options: Unpack[ExtensionOptions[D]]) -> Extension[D]:
     """spec/api.json `extension`. Pure. Raises ConfigError for a name the wire can't hold or a
     non-positive timeout."""
     name = options["name"]
@@ -126,7 +131,7 @@ def extension(**options: Unpack[ExtensionOptions]) -> Extension:
     return Extension(
         name,
         options.get("instructions", ""),
-        options.get("hooks", Hooks()),
+        options.get("hooks", Hooks[D]()),
         dict(options.get("on", {})),
         options.get("setup"),
         timeout,
@@ -134,7 +139,7 @@ def extension(**options: Unpack[ExtensionOptions]) -> Extension:
     )
 
 
-def bind(extensions: Sequence[Extension], ctx: RunContext[None]) -> HookRunner:
+def bind[D](extensions: Sequence[Extension[D]], ctx: RunContext[D]) -> HookRunner:
     """The run's hooks, each with its context bound (spec/api.json `RunContext`)."""
     return HookRunner(
         [

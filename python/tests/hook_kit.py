@@ -61,7 +61,7 @@ class Accent(Box):
 
 
 async def run(
-    hooks: Hooks,
+    hooks: Hooks[None],
     responses: Sequence[JsonValue],
     box: Box | None = None,
     permissions: Permissions = ALLOW,

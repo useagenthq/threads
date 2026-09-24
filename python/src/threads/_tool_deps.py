@@ -1,5 +1,5 @@
-"""Whether a run may omit deps: every app tool's context parameter is annotated
-`RunContext[None]` (spec/api.json Agent.run deps: "omitted, tools see null").
+"""Whether a run may omit deps: every app tool's, extension tool's and hook's context parameter
+is annotated `RunContext[None]` (spec/api.json Agent.run deps: "omitted, tools see null").
 
 Only the context parameter's annotation is read, so an unresolvable name elsewhere in a tool's
 signature (a local class under `from __future__ import annotations`, a TYPE_CHECKING-only
@@ -16,9 +16,10 @@ type ContextDeps = Literal["none", "deps", "unreadable"]
 """none: `RunContext[None]`. deps: any other context type. unreadable: no annotation to read."""
 
 
-def context_deps(execute: object) -> ContextDeps:
+def context_deps(execute: object, at: int = 1) -> ContextDeps:
     """What `execute(input, ctx)` annotates `ctx` with, through partials, `functools.wraps`
-    and `type` aliases."""
+    and `type` aliases. `at` is the context's positional index: -1 for a hook, whose context is
+    its last argument."""
     if not callable(execute):
         return "unreadable"
     try:
@@ -30,9 +31,12 @@ def context_deps(execute: object) -> ContextDeps:
         for p in signature.parameters.values()
         if p.kind in {p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD}
     ]
-    if len(positional) < 2 or positional[1].annotation is inspect.Parameter.empty:  # noqa: PLR2004 - (input, ctx)
+    if not -len(positional) <= at < len(positional):
         return "unreadable"
-    hint = _resolved(positional[1].annotation, _globals(execute))
+    annotation = positional[at].annotation
+    if annotation is inspect.Parameter.empty:
+        return "unreadable"
+    hint = _resolved(annotation, _globals(execute))
     while isinstance(hint, TypeAliasType):
         hint = hint.__value__
     if hint is None:
@@ -46,10 +50,10 @@ def missing_deps(agent_name: str, tools: Sequence[tuple[str, ContextDeps]]) -> s
     unreadable = [name for name, deps in tools if deps == "unreadable"]
     if unreadable:
         return (
-            f"agent {agent_name}: couldn't read the context annotation of tool "
+            f"agent {agent_name}: couldn't read the context annotation of "
             f"{', '.join(unreadable)}; pass run(..., deps=...) (deps=None if it takes none)"
         )
-    return f"agent {agent_name} needs deps for its tools: pass run(..., deps=...)"
+    return f"agent {agent_name} needs deps for its tools or hooks: pass run(..., deps=...)"
 
 
 def _globals(execute: Callable[..., object]) -> dict[str, object]:

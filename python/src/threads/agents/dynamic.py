@@ -12,6 +12,7 @@ from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.config import ConfigError
 from threads.agents.dynamic_agent import DynamicAgent
 from threads.agents.factory import CommonOptions, Links, build_definition, output_model
+from threads.hooks.extension import Extension
 from threads.loop.model import Model
 
 _KEY: Final = re.compile(r"[a-z][a-z0-9_]{0,63}")
@@ -25,6 +26,8 @@ class DynamicAgentOptions(CommonOptions, total=False):
     """The most a member may be given: a start chooses a subset."""
     output: type[BaseModel]
     """The structured final output every member returns."""
+    extensions: Sequence[Extension[None]]
+    """Instructions, hooks and tools, run in this order; they read no deps."""
 
 
 def dynamic_agent(**options: Unpack[DynamicAgentOptions]) -> DynamicAgent[None, object]:
@@ -52,5 +55,6 @@ def dynamic_agent(**options: Unpack[DynamicAgentOptions]) -> DynamicAgent[None, 
     servers = tuple(t for t in tools if isinstance(t, ToolServer))
     own = tuple(t for t in tools if not isinstance(t, ToolServer))
     output = output_model(options.get("output"))
-    template = build_definition(options, models[0][1], (own, servers), output, Links())
+    given = ((own, servers), tuple(options.get("extensions", ())))
+    template = build_definition(options, models[0][1], given, output, Links())
     return DynamicAgent(replace(template, models=models))

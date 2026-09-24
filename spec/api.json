@@ -770,7 +770,7 @@
           "type": {"array": {"$ref": "#/types/Tool"}},
           "required": false,
           "default": [],
-          "doc": "App tools this extension adds, named <name>__<tool>. In Python they see no deps. Default [] adds none."
+          "doc": "App tools this extension adds, named <name>__<tool>; they get the run's deps, like the agent's own tools. Default [] adds none."
         },
         {
           "name": "instructions",
@@ -786,7 +786,7 @@
           "type": {"$ref": "#/types/Hooks", "args": [{"generic": "Deps"}]},
           "required": false,
           "default": {},
-          "doc": "Lifecycle hooks that can block or change what a run does (see Hooks). In Python they see no deps. Default {} adds none."
+          "doc": "Lifecycle hooks that can block or change what a run does (see Hooks); each gets the run's deps in its ctx. Default {} adds none."
         },
         {
           "name": "on",
@@ -2879,7 +2879,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {"array": {"prim": "string"}}
@@ -2898,7 +2898,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {"prim": "void"}
@@ -2924,7 +2924,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -2972,7 +2972,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -3027,7 +3027,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -3078,7 +3078,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -3122,7 +3122,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -3166,7 +3166,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {"prim": "void"}
@@ -3199,7 +3199,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {"array": {"prim": "string"}}
@@ -3232,7 +3232,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -3276,7 +3276,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {"array": {"prim": "string"}}
@@ -3302,7 +3302,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -3346,7 +3346,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {"array": {"prim": "string"}}
@@ -3372,7 +3372,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -3409,7 +3409,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {"prim": "void"}
@@ -3435,7 +3435,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -3472,7 +3472,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -3509,7 +3509,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {
@@ -3546,7 +3546,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {"prim": "void"}
@@ -3572,7 +3572,7 @@
                   "kind": "positional",
                   "type": {"$ref": "#/types/RunContext", "args": [{"generic": "Deps"}]},
                   "required": true,
-                  "doc": "The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None)."
+                  "doc": "The run's context: thread id, branch and the deps passed to run()."
                 }
               ],
               "returns": {"prim": "void"}

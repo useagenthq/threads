@@ -751,6 +751,9 @@
             },
             {
               "$ref": "#/$defs/ev_tools_loaded"
+            },
+            {
+              "$ref": "#/$defs/ev_answer_rejected"
             }
           ]
         }
@@ -1186,7 +1189,8 @@
             "operator_request",
             "operator_refused",
             "message_policy_decided",
-            "tools_loaded"
+            "tools_loaded",
+            "answer_rejected"
           ]
         },
         "type_version": {

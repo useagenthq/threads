@@ -17,7 +17,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="sessionStart(ctx) / session_start(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="sessionEnd / session_end" type={"(ctx: RunContext<Deps>) => Promise<void>"}>
@@ -25,7 +25,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="sessionEnd(ctx) / session_end(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="beforeInput / before_input" type={"(input: UserInputEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\"; injections?: readonly string[] } | { decision: \"deny\"; reason: string }>"}>
@@ -37,7 +37,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeInput(ctx) / before_input(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="beforeInput()[allow].decision / before_input()[allow].decision" type={"\"allow\""} required>
@@ -65,7 +65,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeModel(ctx) / before_model(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="beforeModel()[proceed].decision / before_model()[proceed].decision" type={"\"proceed\""} required>
@@ -97,7 +97,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="afterModel(ctx) / after_model(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="afterModel()[proceed].decision / after_model()[proceed].decision" type={"\"proceed\""} required>
@@ -137,7 +137,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeTool(ctx) / before_tool(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="beforeTool()[allow].decision / before_tool()[allow].decision" type={"\"allow\""} required>
@@ -169,7 +169,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="permissionRequest(ctx) / permission_request(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="permissionRequest()[allow].decision / permission_request()[allow].decision" type={"\"allow\""} required>
@@ -201,7 +201,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="permissionDenied(ctx) / permission_denied(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="afterTool / after_tool" type={"(call: ToolCallEvent.data, result: ToolResultEvent.data, ctx: RunContext<Deps>) => Promise<readonly string[]>"}>
@@ -217,7 +217,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="afterTool(ctx) / after_tool(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="beforeToolResult / before_tool_result" type={"(call: ToolCallEvent.data, result: ToolResultEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"proceed\" } | { decision: \"redact\"; spans: readonly Span[] } | { decision: \"deny\"; reason: string }>"}>
@@ -233,7 +233,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeToolResult(ctx) / before_tool_result(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="beforeToolResult()[proceed].decision / before_tool_result()[proceed].decision" type={"\"proceed\""} required>
@@ -265,7 +265,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="afterToolBatch(ctx) / after_tool_batch(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="beforeCompact / before_compact" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<{ decision: \"proceed\" } | { decision: \"deny\"; reason: string } | { decision: \"guide\"; text: string }>"}>
@@ -277,7 +277,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeCompact(ctx) / before_compact(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="beforeCompact()[proceed].decision / before_compact()[proceed].decision" type={"\"proceed\""} required>
@@ -309,7 +309,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="afterCompact(ctx) / after_compact(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="onStop / on_stop" type={"(state: ReducedState, ctx: RunContext<Deps>) => Promise<{ decision: \"stop\" } | { decision: \"continue\"; reason: string }>"}>
@@ -321,7 +321,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="onStop(ctx) / on_stop(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="onStop()[stop].decision / on_stop()[stop].decision" type={"\"stop\""} required>
@@ -345,7 +345,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="onStopFailure(ctx) / on_stop_failure(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="subagentStart / subagent_start" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string }>"}>
@@ -357,7 +357,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="subagentStart(ctx) / subagent_start(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="subagentStart()[allow].decision / subagent_start()[allow].decision" type={"\"allow\""} required>
@@ -381,7 +381,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="subagentStop(ctx) / subagent_stop(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="subagentStop()[stop].decision / subagent_stop()[stop].decision" type={"\"stop\""} required>
@@ -405,7 +405,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeModelSwitch(ctx) / before_model_switch(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="beforeModelSwitch()[allow].decision / before_model_switch()[allow].decision" type={"\"allow\""} required>
@@ -429,7 +429,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="afterModelSwitch(ctx) / after_model_switch(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>
 
 <Field name="notification" type={"(event: Event, ctx: RunContext<Deps>) => Promise<void>"}>
@@ -441,5 +441,5 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="notification(ctx)" type={"RunContext<Deps>"} required>
-  The run's context: thread id, branch and the agent's deps (in Python, hooks always get deps as None).
+  The run's context: thread id, branch and the deps passed to run().
 </Field>

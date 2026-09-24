@@ -42,7 +42,7 @@ class Pinned:
 
 
 def _deferred(tool: object, spec: ToolSpec, mode: DeferTools) -> bool:
-    inner = tool.tool if isinstance(tool, Namespaced) else tool
+    inner = tool.inner() if isinstance(tool, Namespaced) else tool
     if mode == "never" or not isinstance(inner, Deferrable):
         return False
     return spec.ends_turn is MISSING if mode == "always" else inner.defer

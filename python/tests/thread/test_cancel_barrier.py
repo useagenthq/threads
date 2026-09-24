@@ -50,7 +50,7 @@ class Second:
     leak: str | None = None
     requested: bool = False
     cancel: Cancel | None = None
-    extensions: Sequence[Extension] = ()
+    extensions: Sequence[Extension[None]] = ()
 
 
 async def _second_run(
@@ -105,7 +105,7 @@ def _nothing_sent_after_the_barrier(events: Sequence[Event]) -> None:
     ended_cancelled(events)
 
 
-def _cancels_then_proceeds(cancel: Cancel) -> Extension:
+def _cancels_then_proceeds(cancel: Cancel) -> Extension[None]:
     async def gate(_state: ReducedState, _ctx: RunContext[None]) -> CompactGate:
         await cancel()
         return {"decision": "proceed"}

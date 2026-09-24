@@ -15,6 +15,7 @@ from threads.agents import narrowing
 from threads.agents.bindings import AppTools, capped
 from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
 from threads.agents.catalog import gateways
+from threads.agents.config import ConfigError
 from threads.agents.context import RunContext
 from threads.agents.definition import Definition
 from threads.agents.framework import Agents
@@ -178,8 +179,8 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
         providers = Providers(definition.memory, definition.knowledge)
         lent = RunBinding(now_ms, fenced(writer), lambda: writer.fold.events)
         provided = await provider_tools(sq, providers, definition.name, principal, lent)
-        hook_ctx = RunContext(None, handle.id, handle.branch, principal)
-        ext = AppTools(extension_tools(definition.extensions), hook_ctx)
+        # Hooks and extension tools get the run's deps, as app tools do.
+        ext = AppTools(extension_tools(definition.extensions), ctx)
         routes = gateways(definition.catalog, builtins, sq, fenced(writer))
         if definition.skills:
             routes[SKILL] = SkillLoader(definition.skills)
@@ -212,7 +213,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
             None if definition.output is None else partial(invalid, definition.output),
             observe=stream.observe if side is None else notifying(stream.observe, side.runtime),
             read_file=None if builtins is None else builtins.read_file,
-            hooks=bind(definition.extensions, hook_ctx),
+            hooks=bind(definition.extensions, ctx),
             budgets=covered(launch, member),
             framework=agents,
             concurrent=definition.concurrent_tools(),

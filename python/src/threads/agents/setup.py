@@ -101,7 +101,7 @@ def _weakly_held(target: object) -> None:
         ) from error
 
 
-async def _extension(e: Extension) -> None:
+async def _extension[D](e: Extension[D]) -> None:
     if e.setup is None:
         return
     try:
