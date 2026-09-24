@@ -1,5 +1,5 @@
 """Tool calls, approvals, effects, results, context edits, cancellation and parking (semantic
-rules 7, 8, 9, 11, 13, 19, 25, 46 and 47 in spec/schema/README.md)."""
+rules 7, 8, 9, 11, 13, 19, 25, 48 and 49 in spec/schema/README.md)."""
 
 from collections.abc import Callable, Mapping
 
@@ -183,7 +183,7 @@ def _asking(fold: Fold, call_id: str) -> bool:
 
 
 def _ask(fold: Fold, call_id: str) -> Ask | None:
-    """The ask_user call's input when the question rules accept it (rule 46)."""
+    """The ask_user call's input when the question rules accept it (rule 48)."""
     call = fold.calls.get(CallId(call_id))
     if call is None or call.data.name != "ask_user":
         return None

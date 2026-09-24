@@ -31,7 +31,7 @@ export function norm(text: string): string {
     .join("");
 }
 
-/** Why an ask_user input can't be asked (rule 46), or undefined when it can. */
+/** Why an ask_user input can't be asked (rule 48), or undefined when it can. */
 export function askProblem(ask: Ask): string | undefined {
   const { options, multi_select: multi = false } = ask;
   if (options === undefined)

@@ -39,7 +39,7 @@ describe("ask_user answers", () => {
   });
 });
 
-/** The case's question on ["red", "blue"] (rule 46), parked at seq 7. */
+/** The case's question on ["red", "blue"] (rule 48), parked at seq 7. */
 const colors = () =>
   replayCase("ask-user-rejected-answer-keeps-question-open", 7);
 

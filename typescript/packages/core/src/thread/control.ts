@@ -233,7 +233,7 @@ export function answer(
         message: "only the user whose input opened this turn may answer",
       });
     const asked = writer.chain.fold.asks.get(callId);
-    // Rule 46 keeps an unreadable question from parking; one that did anyway takes free text.
+    // Rule 48 keeps an unreadable question from parking; one that did anyway takes free text.
     const ask = asked === undefined || asked === "invalid" ? FREE : asked;
     const recorded = matchAnswer(ask, text);
     if (recorded === undefined)

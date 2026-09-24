@@ -3,7 +3,7 @@ import { sameAddress } from "../fold/state";
 import { acceptsRecorded } from "../tools/ask-user";
 import { invalid, type Violation } from "./violation";
 
-// Rules 7, 8, 9 (call_id, approval consumption), 11, 13, 19, 25, 46 and 47.
+// Rules 7, 8, 9 (call_id, approval consumption), 11, 13, 19, 25, 48 and 49.
 
 /** Rule 9: a call_id is used once. */
 export function checkToolCall(fold: Fold, e: EventOf<"tool_call">): Violation {
@@ -38,7 +38,7 @@ function asking(fold: Fold, callId: string): boolean {
   return fold.parked.some((address) => sameAddress(address, question));
 }
 
-/** Rule 46: a park on {kind: input} names a pending ask_user call the question rules accept. */
+/** Rule 48: a park on {kind: input} names a pending ask_user call the question rules accept. */
 export function checkQuestionPark(fold: Fold, e: EventOf<"parked">): Violation {
   const { address } = e.data;
   if (address.kind !== "input") return undefined;
@@ -50,7 +50,7 @@ export function checkQuestionPark(fold: Fold, e: EventOf<"parked">): Violation {
     : undefined;
 }
 
-/** Rule 47: a rejected answer names an open question. */
+/** Rule 49: a rejected answer names an open question. */
 export function checkAnswerRejected(
   fold: Fold,
   e: EventOf<"answer_rejected">,

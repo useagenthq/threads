@@ -203,7 +203,7 @@ def requester(events: Sequence[StoredEvent]) -> Principal | None:
 
 
 def question(fold: Fold, call_id: str) -> Ask:
-    """The open question's ask_user input. Rule 46 keeps an unreadable one from parking; one that
+    """The open question's ask_user input. Rule 48 keeps an unreadable one from parking; one that
     parked anyway takes free text."""
     call = fold.calls.get(CallId(call_id))
     ask = None if call is None else ask_of(dict(call.data.input))

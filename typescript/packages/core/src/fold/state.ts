@@ -137,7 +137,7 @@ export type Fold = {
   readonly messageIds: Set<string>;
   readonly itemKeys: Set<string>;
   readonly occurrenceIds: Set<string>;
-  /** Each ask_user call's input, or invalid when rule 46 refuses it (rules 25, 46, 47). */
+  /** Each ask_user call's input, or invalid when rule 48 refuses it (rules 25, 48, 49). */
   readonly asks: Map<string, Ask | "invalid">;
   /** Calls the host issued itself (its channel sends): never the loop's (hostCall). */
   readonly hostCalls: Set<string>;

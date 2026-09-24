@@ -41,7 +41,7 @@ export const TodoWriteInput: Strict<{ todos: Arr<TodoItem> }> = z.strictObject({
 
 /**
  * ask_user. Options unique under the matching rule, and free of the reply separators when
- * multi_select, are semantic rule 46 (spec/schema/README.md, "Questions and remembered rules").
+ * multi_select, are semantic rule 48 (spec/schema/README.md, "Questions and remembered rules").
  */
 export const AskUserInput: Strict<{
   question: z.ZodString;

@@ -305,6 +305,6 @@ export const AnswerRejected: EventDef<
   type: "answer_rejected",
   critical: true,
   description:
-    "The asker's channel reply matched none of the open question's options (rule 47). The question stays open; the host derives the correction message from this event. Render v1 renders nothing for it.",
+    "The asker's channel reply matched none of the open question's options (rule 49). The question stays open; the host derives the correction message from this event. Render v1 renders nothing for it.",
   data: AnswerRejectedData,
 });

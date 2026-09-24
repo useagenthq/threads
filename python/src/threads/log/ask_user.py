@@ -42,7 +42,7 @@ def _multi(ask: Ask) -> bool:
 
 
 def ask_problem(ask: Ask) -> str | None:
-    """Why an ask_user input can't be asked (rule 46), or None when it can."""
+    """Why an ask_user input can't be asked (rule 48), or None when it can."""
     options = _options(ask)
     if options is None:
         return "multi_select needs options" if _multi(ask) else None

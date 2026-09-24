@@ -1,5 +1,5 @@
 {
-  "description": "ask_user's question rules and strict answers (spec/schema/README.md, \"Questions and remembered rules\"). inputs: schema-valid ask_user inputs and whether rule 46 accepts them. replies: an accepted input, a reply (text, or a list as Thread.answer takes it) and the recorded answer, or null when it is invalid_answer. messages: the question and correction texts a channel shows.",
+  "description": "ask_user's question rules and strict answers (spec/schema/README.md, \"Questions and remembered rules\"). inputs: schema-valid ask_user inputs and whether rule 48 accepts them. replies: an accepted input, a reply (text, or a list as Thread.answer takes it) and the recorded answer, or null when it is invalid_answer. messages: the question and correction texts a channel shows.",
   "inputs": [
     {
       "input": {

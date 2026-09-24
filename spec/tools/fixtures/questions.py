@@ -41,7 +41,7 @@ NUMERIC: Obj = {"question": "How many?", "options": ["1", "10"]}
 SIGMA: Obj = {"question": "Road?", "options": ["\u039f\u0394\u039f\u03a3", "x"]}
 FREE: Obj = {"question": "Staging or production?"}
 
-# (input, valid): inputs the schema accepts, judged by the question rules (rule 46).
+# (input, valid): inputs the schema accepts, judged by the question rules (rule 48).
 INPUTS: tuple[tuple[Obj, bool], ...] = (
     (FREE, True),
     (RGB, True),
@@ -128,7 +128,7 @@ def _vector() -> str:
         "description": (
             "ask_user's question rules and strict answers (spec/schema/README.md, "
             '"Questions and remembered rules"). inputs: schema-valid ask_user inputs and whether '
-            "rule 46 accepts them. replies: an accepted input, a reply (text, or a list as "
+            "rule 48 accepts them. replies: an accepted input, a reply (text, or a list as "
             "Thread.answer takes it) and the recorded answer, or null when it is invalid_answer. "
             "messages: the question and correction texts a channel shows."
         ),
@@ -276,7 +276,7 @@ def _invalid_input(root: pathlib.Path) -> None:
             "ask-user-invalid-options-park-rejected",
             FAM,
             "A park on {input, call_id} whose ask_user options are equal under the matching "
-            "rule (rule 46): invalid_transition.",
+            "rule (rule 48): invalid_transition.",
         ),
         _parked({"question": "Ok?", "options": ["Yes", " yes "]}),
     )
@@ -351,7 +351,7 @@ def _rejected(root: pathlib.Path) -> None:
             "ask-user-rejected-answer-keeps-question-open",
             FAM,
             "The asker's channel reply matched no option: channel_delivery then "
-            "answer_rejected, and the branch stays parked on the question (rule 47).",
+            "answer_rejected, and the branch stays parked on the question (rule 49).",
         ),
         log,
         {},
@@ -370,7 +370,7 @@ def _rejected(root: pathlib.Path) -> None:
         (
             "ask-user-rejected-without-question-rejected",
             FAM,
-            "answer_rejected for a call with no open question (rule 47): invalid_transition.",
+            "answer_rejected for a call with no open question (rule 49): invalid_transition.",
         ),
         log,
     )

@@ -17,7 +17,7 @@ export function askUser(
   call: EventOf<"tool_call">,
 ): Halt | undefined {
   const { call_id } = call.data;
-  // Arguments already parsed before authorization; the question rules are rule 46.
+  // Arguments already parsed before authorization; the question rules are rule 48.
   const problem = askProblem(AskUserInput.parse(call.data.input));
   if (problem !== undefined)
     return s.append(
