@@ -10,7 +10,7 @@ import {
 import { knownEvents, type ReducedState, reduce } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
-import type { DecideTx, Refusal } from "../store/writer";
+import { type DecideTx, isRefusal, type Refusal } from "../store/writer";
 import type { Chain, ChainEvent } from "../verify";
 import type { LogError } from "../verify/error";
 import { afterBarrier, opensWork } from "./turn";
@@ -116,10 +116,7 @@ export class Session {
       batch.barred = kept.length !== decided.value.length;
       return ok(kept);
     });
-    if (!appended.ok) {
-      const { error } = appended;
-      return "refused" in error ? error : this.#committed(err(error));
-    }
+    if (isRefusal(appended)) return appended;
     return this.#committed(appended) ?? (batch.barred ? BARRED : undefined);
   }
 

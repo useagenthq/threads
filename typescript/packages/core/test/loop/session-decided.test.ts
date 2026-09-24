@@ -43,7 +43,8 @@ describe("Session.appendDecided", () => {
     const s = session();
     const before = s.fold.seq;
     expect(s.appendDecided(() => err("mailbox_full"))).toEqual({
-      refused: "mailbox_full",
+      kind: "refused",
+      refusal: "mailbox_full",
     });
     expect(s.fold.seq).toBe(before);
   });

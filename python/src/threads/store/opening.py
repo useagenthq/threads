@@ -44,6 +44,8 @@ class NewRoot:
     first: tuple[StoredEvent, bytes]
     content: bytes
     """What the store's thread checks for registered secrets as it publishes the root."""
+    opened: frozenset[str]
+    """Its event's id, if it opened a turn."""
 
 
 def new_root(
@@ -52,19 +54,33 @@ def new_root(
     """A new thread's root branch whose first line is `first`, at epoch 1 (the next writer's
     lease takes epoch 2)."""
     header = header_line(thread_id, branch_id, now)
-    at = Position(thread_id, branch_id, 1, 1, header, now)
-    built = opening(Fold(now=now), header, first, at)
-    if isinstance(built, Err):
-        return built
-    event, line, content = built.value
+    fold = Fold(now=now)
+    enter_segment(fold, Header.model_validate_json(header))
+    admitted = admit(fold, (first,), Position(thread_id, branch_id, 1, 1, header, now))
+    if isinstance(admitted, Err):
+        return admitted
+    ((event, line),) = admitted.value.rows
     row = Branch(branch_id, thread_id, tenant_id, None, None, header, "ready", 1, sha256_hex(line))
-    return Ok(NewRoot(row, (event, line), content))
+    return Ok(NewRoot(row, (event, line), admitted.value.content, admitted.value.opened))
 
 
-def insert_root(conn: sqlite3.Connection, root: NewRoot) -> None:
-    """Inserts the branch and its first event, in the caller's transaction."""
+def insert_root(conn: sqlite3.Connection, root: NewRoot) -> ParseError | None:
+    """Inserts the branch and its first event, and runs the index hooks, in the caller's
+    transaction (which rolls back on an error)."""
     insert_branch(conn, root.row)
     insert_events(conn, (root.first,), root.row.head_hash)
+    event, row = root.first[0], root.row
+    # No lease holds a new root: its first writer takes epoch 2.
+    appended = Appended(
+        row.tenant_id,
+        row.thread_id,
+        row.branch_id,
+        indexing.known([event]),
+        root.opened,
+        "",
+        event.time,
+    )
+    return indexing.index_append(conn, appended)
 
 
 ALREADY_OPEN: Final[Literal["already_open"]] = "already_open"
@@ -94,11 +110,14 @@ def open_branch(
     conn: sqlite3.Connection, o: BranchOpening, now: int
 ) -> OpenedBranch | Literal["already_open"] | ParseError:
     """`branch.open` in the caller's transaction, which rolls back on an error: inserts the
-    thread and branch rows, admits the drafts as a writer would, stores them, takes the first
-    lease and runs the index hooks. A new branch is one nobody can hold yet, so this never
-    appends to a live branch."""
+    thread and branch rows (a thread already stored is refused), admits the drafts as a writer
+    would, stores them, takes the first lease and runs the index hooks. A new branch is one
+    nobody can hold yet, so this never appends to a live branch."""
     if branch(conn, o.branch_id) is not None:
         return ALREADY_OPEN
+    if conn.execute("SELECT 1 FROM threads WHERE thread_id = ?", (o.thread_id,)).fetchone():
+        # A new branch opens a new thread: never a second root of one already stored.
+        return ParseError("invalid_transition", f"thread {o.thread_id} already exists")
     header = header_line(o.thread_id, o.branch_id, now)
     fold = Fold(now=now)
     enter_segment(fold, Header.model_validate_json(header))

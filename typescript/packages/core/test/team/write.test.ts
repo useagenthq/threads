@@ -129,6 +129,22 @@ describe("the feed", () => {
   });
 });
 
+describe("the lookup every append makes", () => {
+  test("which team a branch belongs to is found through indexes, never a scan", () => {
+    const fx = fixture(TENANT);
+    const plan = Rows.parse(
+      fx.db.all(
+        `EXPLAIN QUERY PLAN SELECT team_id FROM team_members WHERE thread_id = ? AND branch_id = ?
+          UNION SELECT team_id FROM teams WHERE team_log_branch_id = ?`,
+        ["t", "b", "b"],
+      ),
+    ).map((r) => String(r["detail"]));
+    expect(plan.some((d) => d.includes("team_members_thread"))).toBe(true);
+    expect(plan.some((d) => d.includes("teams_log_branch"))).toBe(true);
+    expect(plan.some((d) => d.startsWith("SCAN"))).toBe(false);
+  });
+});
+
 describe("mail.claim", () => {
   const TASK = "0192b000-0000-7000-8000-0000000000b1:c1";
 
@@ -137,9 +153,9 @@ describe("mail.claim", () => {
     openLead(fx, 9);
     const t = fx.clock.now;
     expect(claimMail(fx.db, TASK, "a", t)).toBe("claimed");
-    expect(claimMail(fx.db, TASK, "b", t + 1)).toBe("busy");
+    expect(claimMail(fx.db, TASK, "b", t + 1)).toBe("taken");
     const expiry = t + TEAM_CONSTANTS.claimTtlMs;
-    expect(claimMail(fx.db, TASK, "b", expiry - 1)).toBe("busy");
+    expect(claimMail(fx.db, TASK, "b", expiry - 1)).toBe("taken");
     expect(claimMail(fx.db, TASK, "b", expiry, 10)).toBe("claimed");
     expect(rows(fx, "SELECT claim_token, claim_expires_at FROM mail")).toEqual([
       { claim_token: "b", claim_expires_at: expiry + 10 },
@@ -150,8 +166,10 @@ describe("mail.claim", () => {
     const fx = fixture(TENANT);
     openLead(fx, 9);
     fx.db.run("UPDATE mail SET state = 'consumed'", []);
-    expect(claimMail(fx.db, TASK, "a", fx.clock.now)).toBe("busy");
-    expect(claimMail(fx.db, "no-such-mail", "a", fx.clock.now)).toBe("busy");
+    expect(claimMail(fx.db, TASK, "a", fx.clock.now)).toBe("not_pending");
+    expect(claimMail(fx.db, "no-such-mail", "a", fx.clock.now)).toBe(
+      "not_found",
+    );
   });
 });
 

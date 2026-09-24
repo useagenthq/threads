@@ -10,8 +10,21 @@ import { changeRows, insertRows } from "./index";
 // append runs in its transaction, with the same insertRows/changeRows a rebuild folds, so the
 // replay rule holds by construction.
 
-/** The rows the append's events insert, then the rows they change (pending_wakes included). */
-export function indexRows(a: Appended): Result<void, LogError> {
+/**
+ * The team rows the append's events insert, then the rows they change, on a team's own branch
+ * only: one that opens with this append, a member's or lead's (its `team_members.branch_id`), or
+ * a team log. A fork of a lead or member shares its thread but writes no team rows, so the index
+ * stays the fold of the team's own logs (team fork is deferred).
+ */
+export function teamRows(a: Appended): Result<void, LogError> {
+  const opens = a.events.some(
+    (e) => e.type === "thread_started" || e.type === "team_opened",
+  );
+  if (!opens) {
+    const teams = teamsOf(a);
+    if (!teams.ok) return teams;
+    if (teams.value.length === 0) return ok(undefined);
+  }
   const log = { threadId: a.threadId, branchId: a.branchId };
   insertRows(a.db, log, a.events);
   changeRows(a.db, log, a.events, a.opened);
@@ -66,13 +79,11 @@ export function openTeamLog(a: Appended): Result<void, LogError> {
 
 const TeamRow = z.strictObject({ team_id: z.string() });
 
-/**
- * One team_feed row per appended event, under every team the branch belongs to: a member's or
- * lead's (a nested lead has two), or the team whose log it is. Offsets continue the team's
- * current epoch.
- */
-export function feedRows(a: Appended): Result<void, LogError> {
-  const teams = parseRows(
+/** The teams whose own branch this is: a member's or lead's, or the team log. */
+function teamsOf(
+  a: Appended,
+): Result<readonly { team_id: string }[], LogError> {
+  return parseRows(
     TeamRow,
     a.db.all(
       `SELECT team_id FROM team_members WHERE thread_id = ? AND branch_id = ?
@@ -80,6 +91,15 @@ export function feedRows(a: Appended): Result<void, LogError> {
       [a.threadId, a.branchId, a.branchId],
     ),
   );
+}
+
+/**
+ * One team_feed row per appended event, under every team the branch belongs to: a member's or
+ * lead's (a nested lead has two), or the team whose log it is. Offsets continue the team's
+ * current epoch.
+ */
+export function feedRows(a: Appended): Result<void, LogError> {
+  const teams = teamsOf(a);
   if (!teams.ok) return teams;
   for (const { team_id } of teams.value)
     for (const e of a.events)

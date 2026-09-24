@@ -124,8 +124,8 @@ def test_one_worker_claims_a_pending_row_until_its_claim_expires() -> None:
         await _open_lead(store, clock, 9)
         t, ttl = clock(), TEAM_CONSTANTS.claim_ttl_ms
         assert await store.run(lambda c: claim_mail(c, TASK, "a", t)) == "claimed"
-        assert await store.run(lambda c: claim_mail(c, TASK, "b", t + 1)) == "busy"
-        assert await store.run(lambda c: claim_mail(c, TASK, "b", t + ttl - 1)) == "busy"
+        assert await store.run(lambda c: claim_mail(c, TASK, "b", t + 1)) == "taken"
+        assert await store.run(lambda c: claim_mail(c, TASK, "b", t + ttl - 1)) == "taken"
         assert await store.run(lambda c: claim_mail(c, TASK, "b", t + ttl, 10)) == "claimed"
         claims = await store.run(_rows("SELECT claim_token, claim_expires_at FROM mail"))
         assert claims == [("b", t + ttl + 10)]
@@ -137,8 +137,9 @@ def test_a_row_that_is_not_pending_or_does_not_exist_is_never_claimed() -> None:
     async def test(store: SqliteStore, clock: ReplayClock) -> None:
         await _open_lead(store, clock, 9)
         await store.run(lambda c: c.execute("UPDATE mail SET state = 'consumed'"))
-        assert await store.run(lambda c: claim_mail(c, TASK, "a", clock())) == "busy"
-        assert await store.run(lambda c: claim_mail(c, "no-such-mail", "a", clock())) == "busy"
+        assert await store.run(lambda c: claim_mail(c, TASK, "a", clock())) == "not_pending"
+        missing = await store.run(lambda c: claim_mail(c, "no-such-mail", "a", clock()))
+        assert missing == "not_found"
 
     _run(test)
 
@@ -146,3 +147,21 @@ def test_a_row_that_is_not_pending_or_does_not_exist_is_never_claimed() -> None:
 def test_the_teams_constants_are_the_ones_the_op_vectors_pin() -> None:
     vectors = json.loads((CASES.parent / "vectors" / "team-ops.json").read_text())
     assert vectors["constants"] == asdict(TEAM_CONSTANTS)
+
+
+def test_which_team_a_branch_belongs_to_is_found_through_indexes_never_a_scan() -> None:
+    async def test(store: SqliteStore, _clock: ReplayClock) -> None:
+        plan = await store.run(
+            lambda c: c.execute(
+                "EXPLAIN QUERY PLAN SELECT team_id FROM team_members"
+                " WHERE thread_id = ? AND branch_id = ?"
+                " UNION SELECT team_id FROM teams WHERE team_log_branch_id = ?",
+                ("t", "b", "b"),
+            ).fetchall()
+        )
+        details = [str(row[-1]) for row in plan]
+        assert any("team_members_thread" in d for d in details)
+        assert any("teams_log_branch" in d for d in details)
+        assert not any(d.startswith("SCAN") for d in details)
+
+    _run(test)

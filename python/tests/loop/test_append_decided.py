@@ -25,7 +25,7 @@ async def _runtime() -> Runtime:
 
 
 def _decided(*drafts: Draft) -> Decide[str]:
-    return lambda _c, _f: drafts
+    return lambda _tx: drafts
 
 
 def test_a_decided_batch_is_appended_and_observed() -> None:
@@ -49,7 +49,7 @@ def test_a_refusal_comes_back_and_nothing_is_appended() -> None:
     async def main() -> tuple[Appended | Refusal[str], int, int]:
         rt = await _runtime()
         before = rt.fold.seq
-        refused = await rt.append_decided(lambda _c, _f: Refusal("mailbox_full"))
+        refused = await rt.append_decided(lambda _tx: Refusal("mailbox_full"))
         return refused, before, rt.fold.seq
 
     refused, before, after = asyncio.run(main())

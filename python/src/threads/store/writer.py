@@ -17,7 +17,7 @@ from threads.store.appended import Appended
 from threads.store.companion import Companion
 from threads.store.indexing import index_append, known
 from threads.store.lines import Draft, Position, stored_secret
-from threads.store.verify import StoredEvent, verify_export
+from threads.store.verify import StoredEvent
 from threads.store.worker import Clock, Worker
 
 
@@ -25,12 +25,23 @@ from threads.store.worker import Clock, Worker
 class Refusal[E]:
     """A decided append whose decision refused: nothing was appended, and the writer goes on."""
 
-    refused: E
+    refusal: E
 
 
-type Decide[E] = Callable[[sqlite3.Connection, Fold], Sequence[Draft] | Refusal[E]]
-"""Reads the store inside the append's transaction, with the committed fold the batch extends,
-and builds the drafts or refuses. It runs on the store's thread and must not await."""
+@dataclass(frozen=True, slots=True)
+class DecideTx:
+    """What a decided append's decision reads, inside the append's transaction."""
+
+    conn: sqlite3.Connection
+    fold: Fold
+    """The committed fold the drafts extend: the stored head is its head."""
+    now: int
+    """The append's clock: every event's time."""
+
+
+type Decide[E] = Callable[[DecideTx], Sequence[Draft] | Refusal[E]]
+"""Reads the store and builds the drafts, or refuses. It runs on the store's thread and must not
+await."""
 
 _REFUSED = ParseError("invalid_request", "the decision refused")
 """Rolls a refused decision back; a Refused never poisons the writer."""
@@ -40,11 +51,10 @@ type _Outcome = lease.Batch | ParseError | lease.Refused
 
 @dataclass(frozen=True, slots=True)
 class _Commit:
-    """One append's commit: where it goes, its content to check, the fold its batch is admitted
-    into (the committed one, or a decided append's trial copy), its clock and companion."""
+    """One append's commit: where it goes, the trial fold its batch is admitted into, its clock
+    and companion."""
 
     head: lease.Head
-    content: bytes | Sequence[bytes]
     fold: Fold
     now: int
     companion: Companion | None
@@ -118,19 +128,15 @@ class Writer:
         async with self._lock:
             if self._poisoned:
                 return Err(ParseError("writer_poisoned", "this writer lost its lease or head"))
-            if admit is not None:
-                drafts = admit(self._fold, drafts)
-            now = self._clock()
-            head = lease.Head(self._branch, self._lease, self._fold.seq)
-            built = self._admit(self._fold, drafts, now)
-            if isinstance(built, Err):
-                await self._reload(now)
-                return built
-            if not built.value.rows:
+            chosen = tuple(drafts if admit is None else admit(self._fold, drafts))
+            if not chosen:
                 return Ok(())
-            batch = self._batch(head, built.value)
-            commit = _Commit(head, built.value.content, self._fold, now, companion)
-            return _result(await self._commit(commit, lambda _: batch))
+
+            def fixed(_tx: DecideTx) -> Sequence[Draft] | Refusal[None]:
+                return chosen
+
+            outcome, _ = await self._run(fixed, companion)
+            return _result(outcome)
 
     async def append_decided[E](
         self, decide: Decide[E]
@@ -138,27 +144,35 @@ class Writer:
         """One transaction that checks the lease and head, lets `decide` read the store and
         build the drafts, admits them (on the store's thread) and commits. A refusal rolls back
         and leaves the writer usable; `stale_epoch` and `seq_conflict` poison it, as for
-        `append`."""
+        `append`. A batch that comes out empty commits nothing and moves nothing."""
         async with self._lock:
             if self._poisoned:
                 return Err(ParseError("writer_poisoned", "this writer lost its lease or head"))
-            now = self._clock()
-            head = lease.Head(self._branch, self._lease, self._fold.seq)
-            committed, fold = self._fold, trial(self._fold)
-            refusals: list[Refusal[E]] = []
+            outcome, refusal = await self._run(decide, None)
+            return refusal if refusal is not None else _result(outcome)
 
-            def build(conn: sqlite3.Connection) -> lease.Batch | lease.Refused:
-                decided = decide(conn, committed)
-                if isinstance(decided, Refusal):
-                    refusals.append(decided)
-                    return lease.Refused(_REFUSED)
-                built = self._admit(fold, decided, now)
-                if isinstance(built, Err):
-                    return lease.Refused(built.error)
-                return self._batch(head, built.value)
+    async def _run[E](
+        self, decide: Decide[E], companion: Companion | None
+    ) -> tuple[_Outcome, Refusal[E] | None]:
+        """The append's transaction: the fence, then the decision and the admission on the
+        store's thread, into a trial copy of the fold that replaces it once committed."""
+        now = self._clock()
+        head = lease.Head(self._branch, self._lease, self._fold.seq)
+        committed, fold = self._fold, trial(self._fold)
+        refusals: list[Refusal[E]] = []
 
-            outcome = await self._commit(_Commit(head, (), fold, now, None), build)
-            return refusals[0] if refusals else _result(outcome)
+        def build(conn: sqlite3.Connection) -> lease.Batch | lease.Refused:
+            decided = decide(DecideTx(conn, committed, now))
+            if isinstance(decided, Refusal):
+                refusals.append(decided)
+                return lease.Refused(_REFUSED)
+            built = self._admit(fold, decided, now)
+            if isinstance(built, Err):
+                return lease.Refused(built.error)
+            return self._batch(head, built.value)
+
+        outcome = await self._commit(_Commit(head, fold, now, companion), build)
+        return outcome, refusals[0] if refusals else None
 
     def _admit(
         self, fold: Fold, drafts: Sequence[Draft], now: int
@@ -182,33 +196,28 @@ class Writer:
         head, now, after = commit.head, commit.now, self._after(commit)
         op = asyncio.ensure_future(
             self._worker.call(
-                lambda c: _published(
-                    commit.content, lambda: lease.append(c, head, now, build, after)
-                )
+                lambda c: _published(lambda: lease.append(c, head, now, build, after))
             )
         )
         try:
             outcome = await asyncio.shield(op)
         except asyncio.CancelledError:
-            await self._settle(await op, commit.fold, now)
+            self._settle(await op, commit.fold)
             raise
-        await self._settle(outcome, commit.fold, now)
+        self._settle(outcome, commit.fold)
         return outcome
 
-    async def _settle(self, outcome: _Outcome, fold: Fold, now: int) -> None:
-        if isinstance(outcome, lease.Batch):
+    def _settle(self, outcome: _Outcome, fold: Fold) -> None:
+        """A committed batch replaces the fold and moves the writer; an empty one or a refusal
+        leaves both; a lost lease or head leaves it poisoned."""
+        if isinstance(outcome, ParseError):
+            return
+        self._poisoned = False
+        if isinstance(outcome, lease.Batch) and outcome.rows:
             self._fold = fold
-            if outcome.rows:
-                self._last_line = outcome.rows[-1][1]
-            self._poisoned = False
+            self._last_line = outcome.rows[-1][1]
             self._moved.set()
             self._moved = asyncio.Event()
-        elif isinstance(outcome, lease.Refused) and fold is self._fold:
-            # Nothing was written, but the batch was folded into the committed fold: fold the
-            # committed log again.
-            await self._reload(now)
-        elif isinstance(outcome, lease.Refused):
-            self._poisoned = False
 
     def _after(self, commit: _Commit) -> lease.After:
         """The index hooks over the append's events, then its companion."""
@@ -238,18 +247,6 @@ class Writer:
         """Returns on this writer's next committed append after this call, whoever made it (a
         control included)."""
         return self._moved.wait()
-
-    async def _reload(self, now: int) -> None:
-        # A rejected draft may leave earlier drafts of its batch folded in; the committed
-        # log is the truth, so fold it again.
-        export = await self._worker.call(lambda c: sql.export(c, self._branch))
-        match verify_export(export, now):
-            case Ok(value=log):
-                self._fold = log.fold
-                self._last_line = log.segments[-1].last_line
-                self._poisoned = False
-            case Err():
-                self._poisoned = True
 
     async def fence(self) -> Ok[None] | Err[ParseError]:
         """Checked immediately before anything is dispatched (a model attempt, a tool body, a
@@ -288,12 +285,11 @@ def _result(outcome: _Outcome) -> Ok[tuple[StoredEvent, ...]] | Err[ParseError]:
     return Ok(tuple(event for event, _ in outcome.rows))
 
 
-def _published(content: bytes | Sequence[bytes], append: Callable[[], _Outcome]) -> _Outcome:
-    """The append, unless a value registered since `event_line` checked it is in the content:
-    registration is paused until the rows are durable (C5). Refused, like a companion's
-    refusal: nothing was written, so the writer reloads and goes on. A decided append's drafts
-    are built inside, with registration already paused."""
+def _published(append: Callable[[], _Outcome]) -> _Outcome:
+    """The append with secret registration paused until its rows are durable (C5): each draft's
+    content is checked as it is admitted, inside, so no value registered after that check reaches
+    the store."""
     try:
-        return published(content, append)
+        return published(b"", append)
     except SecretInStoredBytesError:
         return lease.Refused(stored_secret())

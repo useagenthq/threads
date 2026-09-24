@@ -83,3 +83,15 @@ def test_inside_another_transaction_it_is_rolled_back_with_it() -> None:
         assert await store.run(_rows("branches")) == []
 
     run(test)
+
+
+def test_a_stored_thread_is_refused_a_new_branch_opens_a_new_thread() -> None:
+    async def test(store: SqliteStore) -> None:
+        clock = Clock()
+        assert await store.create(THREAD, ROOT, clock()) == Ok(None)
+        opened = await store.open_branch(THREAD, CHILD, [STARTED], holder_id="a", clock=clock)
+        assert not isinstance(opened, Ok)
+        assert opened.error.code == "invalid_transition"
+        assert not isinstance(await store.branch(CHILD), Ok)
+
+    run(test)

@@ -4,7 +4,6 @@ The loop appends only through its branch's `Writer`, so every append is fenced b
 epoch: a stale owner's append fails before it can dispatch anything.
 """
 
-import sqlite3
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final, Literal, Protocol
@@ -35,7 +34,7 @@ from threads.render.artifacts import read_verified
 from threads.result import Err, Ok
 from threads.store import Clock, Draft, SqliteStore, StoredEvent, Writer
 from threads.store.companion import Companion
-from threads.store.writer import Decide, Refusal
+from threads.store.writer import Decide, DecideTx, Refusal
 
 type Authorize = Callable[[Fold, ToolCallData, ToolSpec], Decision]
 """The permission fold for one call, against the current policy and mode."""
@@ -251,11 +250,11 @@ class Runtime:
         does, or refuses. A refusal appends nothing and comes back for the caller to record."""
         changed: list[bool] = []
 
-        def barred(conn: sqlite3.Connection, fold: Fold) -> Sequence[Draft] | Refusal[E]:
-            decided = decide(conn, fold)
+        def barred(tx: DecideTx) -> Sequence[Draft] | Refusal[E]:
+            decided = decide(tx)
             if isinstance(decided, Refusal):
                 return decided
-            kept = after_barrier(fold, decided)
+            kept = after_barrier(tx.fold, decided)
             changed.append(len(kept) != len(decided))
             return kept
 

@@ -44,11 +44,6 @@ function insertOne(
       insertMonitor(db, log, e, m, "settle", e.data.wait_id, scope);
   else if (e.type === "monitor_set")
     insertMonitor(db, log, e, e.data.member, "end", null, scope);
-  else if (e.type === "agent_spawned" && e.data.mode === "background")
-    db.run(
-      "INSERT INTO pending_wakes (branch_id, child_thread_id) VALUES (?, ?)",
-      [log.branchId, e.data.child_thread_id],
-    );
 }
 
 type MemberRow = {

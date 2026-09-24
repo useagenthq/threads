@@ -100,3 +100,18 @@ describe("branch.open", () => {
     expect(Rows.parse(db.all("SELECT * FROM branches", []))).toEqual([]);
   });
 });
+
+describe("branch.open on a stored thread", () => {
+  test("is refused: a new branch opens a new thread", () => {
+    const { store } = fixture();
+    unwrap(store.createBranch(THREAD, ROOT));
+    const opened = store.openBranch({
+      threadId: THREAD,
+      branchId: CHILD,
+      lease: LEASE,
+      drafts: [started],
+    });
+    expect(opened.ok ? "ok" : opened.error.code).toBe("invalid_transition");
+    expect(store.branchState(CHILD).ok).toBe(false);
+  });
+});

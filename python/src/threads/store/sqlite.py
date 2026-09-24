@@ -32,6 +32,7 @@ from threads.store.tables import Tables
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
+from threads.team.imported import import_indexed
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
@@ -153,7 +154,8 @@ class SqliteStore(BranchStore):
         now = clock()
         held = lease.Lease(holder_id, 1, now + lease.TTL_MS)
         o = BranchOpening(self._tenant, thread_id, branch_id, held, drafts)
-        opened = await self._worker.call(lambda c: open_alone(c, o, now))
+        # Registration is paused until the rows are durable: the drafts are checked inside (C5).
+        opened = await self._worker.call(lambda c: published(b"", lambda: open_alone(c, o, now)))
         if isinstance(opened, ParseError):
             return Err(opened)
         if isinstance(opened, str):
@@ -163,7 +165,8 @@ class SqliteStore(BranchStore):
     async def import_log(self, log: VerifiedLog) -> Ok[None] | Err[ParseError]:
         """Stores a verified export's lines byte for byte: parents referenced, never copied.
         Every model request must first replay from the log and the artifacts already in the
-        store (C7, Render v1): the first failing request's error is the result."""
+        store (C7, Render v1): the first failing request's error is the result. The index rows
+        the log holds (wake rows, its teams) are folded again in the same transaction."""
         tenant, artifacts = self._tenant, self._artifacts
 
         def store(conn: sqlite3.Connection) -> ParseError | None:
@@ -172,7 +175,7 @@ class SqliteStore(BranchStore):
                 return replayed.error
             # The dropped bytes are durable before the row that references them.
             dropped = artifacts.put(log.dropped) if log.dropped else None
-            return sql.import_segments(conn, log, tenant, dropped)
+            return import_indexed(conn, log, tenant, dropped)
 
         try:
             # Imported bytes are stored exactly as exported, torn tail included (C5).

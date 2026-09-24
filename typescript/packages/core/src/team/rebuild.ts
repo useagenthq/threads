@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { BranchId, TeamId } from "../log";
+import type { TeamId } from "../log";
 import { knownEvents } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { LogStore } from "../store";
@@ -7,6 +7,7 @@ import { TEAM_TABLES } from "../store/deletion";
 import type { SqliteDriver } from "../store/driver";
 import { openedThreads } from "../store/started";
 import { atomically, parseRows } from "../store/tables";
+import { refoldWakes } from "../store/wakes";
 import type { VerifiedLog } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import { checkTeamLogs } from "./cross";
@@ -88,11 +89,8 @@ export function rebuildTeamIndex(
       );
     const epoch = nextEpoch(db, teamId);
     if (!epoch.ok) return epoch;
-    wipe(
-      db,
-      teamId,
-      logs.map((l) => l.branchId),
-    );
+    wipe(db, teamId);
+    for (const log of logs) refoldWakes(db, log.branchId, log.events);
     for (const log of logs) insertRows(db, log, log.events, teamId);
     for (const log of logs)
       changeRows(db, log, log.events, turnOpeners(log.chain.events), teamId);
@@ -109,15 +107,9 @@ export function rebuildTeamIndex(
   });
 }
 
-function wipe(
-  db: SqliteDriver,
-  teamId: TeamId,
-  branches: readonly BranchId[],
-): void {
+function wipe(db: SqliteDriver, teamId: TeamId): void {
   for (const table of TEAM_TABLES)
     db.run(`DELETE FROM ${table} WHERE team_id = ?`, [teamId]);
-  for (const branch of branches)
-    db.run("DELETE FROM pending_wakes WHERE branch_id = ?", [branch]);
 }
 
 /** Code-unit order, as SQLite's BINARY collation and Python sort ids. */

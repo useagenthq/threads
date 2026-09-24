@@ -9,10 +9,9 @@ from collections.abc import Sequence
 
 from store.test_writer import ROOT, TTL, Clock, run, started, user
 
-from threads.reduce import Fold
 from threads.result import Err, Ok
 from threads.store import Draft, SqliteStore, Writer
-from threads.store.writer import Decide, Refusal
+from threads.store.writer import Decide, DecideTx, Refusal
 
 
 def _wakes(conn: sqlite3.Connection) -> int:
@@ -21,23 +20,26 @@ def _wakes(conn: sqlite3.Connection) -> int:
 
 
 def _drafts(*drafts: Draft) -> Decide[str]:
-    return lambda _c, _f: drafts
+    return lambda _tx: drafts
 
 
 def test_the_decision_reads_the_store_in_the_transaction_and_its_drafts_are_appended() -> None:
     async def test(store: SqliteStore) -> None:
-        writer = await started(store, Clock())
+        clock = Clock()
+        writer = await started(store, clock)
 
-        def decide(conn: sqlite3.Connection, fold: Fold) -> Sequence[Draft] | Refusal[str]:
-            (head,) = conn.execute(
+        def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[str]:
+            (head,) = tx.conn.execute(
                 "SELECT head_seq FROM branches WHERE branch_id = ?", (ROOT,)
             ).fetchone()
-            assert head == fold.seq
+            assert head == tx.fold.seq
+            assert tx.now == clock()
             return [user(f"after {head}")]
 
         done = await writer.append_decided(decide)
         assert isinstance(done, Ok)
         assert [e.seq for e in done.value] == [2]
+        assert [e.time for e in done.value] == [clock()]
         assert [e.seq for e in writer.fold.events] == [1, 2]
 
     run(test)
@@ -47,8 +49,8 @@ def test_a_refusal_rolls_back_what_the_decision_wrote_and_the_writer_goes_on() -
     async def test(store: SqliteStore) -> None:
         writer = await started(store, Clock())
 
-        def decide(conn: sqlite3.Connection, _: Fold) -> Refusal[str]:
-            conn.execute("INSERT INTO pending_wakes VALUES (?, 'c')", (ROOT,))
+        def decide(tx: DecideTx) -> Refusal[str]:
+            tx.conn.execute("INSERT INTO pending_wakes VALUES (?, 'c')", (ROOT,))
             return Refusal("mailbox_full")
 
         assert await writer.append_decided(decide) == Refusal("mailbox_full")
@@ -79,7 +81,7 @@ def test_a_lost_lease_is_stale_epoch_before_the_decision_runs_and_poisons() -> N
         assert isinstance(await store.acquire(ROOT, "b", clock), Ok)
         decided: list[bool] = []
 
-        def decide(_c: sqlite3.Connection, _f: Fold) -> Sequence[Draft] | Refusal[str]:
+        def decide(_tx: DecideTx) -> Sequence[Draft] | Refusal[str]:
             decided.append(True)
             return [user("late")]
 
@@ -94,12 +96,39 @@ def test_a_lost_lease_is_stale_epoch_before_the_decision_runs_and_poisons() -> N
     run(test)
 
 
+def test_a_stale_writer_with_a_bad_draft_learns_stale_epoch_as_typescript_does() -> None:
+    async def test(store: SqliteStore) -> None:
+        clock = Clock()
+        writer = await started(store, clock)
+        clock.now += TTL + 1
+        assert isinstance(await store.acquire(ROOT, "b", clock), Ok)
+        stale = await writer.append([user("a"), user("b")])
+        assert isinstance(stale, Err)
+        assert stale.error.code == "stale_epoch"
+
+    run(test)
+
+
+def test_an_empty_decided_batch_commits_nothing_and_moves_nothing() -> None:
+    async def test(store: SqliteStore) -> None:
+        writer = await started(store, Clock())
+        before = writer.fold
+        moved = asyncio.ensure_future(writer.moved())
+        assert await writer.append_decided(_drafts()) == Ok(())
+        await asyncio.sleep(0)
+        assert not moved.done()
+        moved.cancel()
+        assert writer.fold is before
+
+    run(test)
+
+
 def test_a_caller_cancelled_mid_decision_leaves_the_append_settled_and_the_writer_in_step() -> None:
     async def test(store: SqliteStore) -> None:
         writer = await started(store, Clock())
         entered, go = threading.Event(), threading.Event()
 
-        def decide(_c: sqlite3.Connection, _f: Fold) -> Sequence[Draft] | Refusal[str]:
+        def decide(_tx: DecideTx) -> Sequence[Draft] | Refusal[str]:
             entered.set()
             go.wait(5)
             return [user("decided")]

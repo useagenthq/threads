@@ -16,8 +16,6 @@ from pydantic import BaseModel
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import (
-    AgentFinishedEvent,
-    AgentSpawnedEvent,
     AskClosedEvent,
     BranchId,
     Event,
@@ -226,12 +224,6 @@ def _ask(w: _Write, env: MailEnvelope, name: str, generation: int) -> None:
     w.insert("asks", {**row, **recipient, "deadline": env.deadline, "state": "open"})
 
 
-def _spawned(w: _Write, e: AgentSpawnedEvent) -> None:
-    if e.data.mode == "background":
-        row = {"branch_id": w.log.branch_id, "child_thread_id": e.data.child_thread_id}
-        w.insert("pending_wakes", row)
-
-
 _INSERTS: Final[Mapping[type, _Step]] = dict(
     [
         _on(TeamOpenedEvent, _opened),
@@ -241,7 +233,6 @@ _INSERTS: Final[Mapping[type, _Step]] = dict(
         _on(OperatorRequestEvent, _receipt),
         _on(WaitStartedEvent, _waited),
         _on(MonitorSetEvent, _watched),
-        _on(AgentSpawnedEvent, _spawned),
     ]
 )
 
@@ -315,19 +306,6 @@ def _finished_wait(w: _Write, e: WaitFinishedEvent) -> None:
     w.scoped("DELETE FROM monitors WHERE wait_id = ?", e.data.wait_id)
 
 
-def _woke(w: _Write, e: AgentFinishedEvent | ParkedEvent) -> None:
-    """A background child's pending_wakes row goes with its agent_finished, or with the parent's
-    park on it."""
-    if isinstance(e, AgentFinishedEvent):
-        child: str = e.data.child_thread_id
-    elif e.data.address.kind == "child":
-        child = e.data.address.id
-    else:
-        return
-    sql = "DELETE FROM pending_wakes WHERE branch_id = ? AND child_thread_id = ?"
-    w.conn.execute(sql, (w.log.branch_id, child))
-
-
 _MOVES: Final[Mapping[type, _Step]] = dict(
     [
         _on(MessageReceivedEvent, _consumed),
@@ -337,7 +315,5 @@ _MOVES: Final[Mapping[type, _Step]] = dict(
         _on(MessageSentEvent, _fired),
         _on(MemberObservedEvent, _observed),
         _on(WaitFinishedEvent, _finished_wait),
-        _on(AgentFinishedEvent, _woke),
-        _on(ParkedEvent, _woke),
     ]
 )

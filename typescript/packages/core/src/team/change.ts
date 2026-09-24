@@ -22,18 +22,13 @@ export function changeRows(
   scope?: TeamId,
 ): void {
   for (const e of events) {
-    moveRows(db, log, e, scope);
+    moveRows(db, e, scope);
     changeOwnRows(db, log, e, opened.has(e.event_id), scope);
   }
 }
 
-/** Mail, asks, monitors and wake rows another log inserted, moved by this log's event. */
-function moveRows(
-  db: SqliteDriver,
-  log: TeamLog,
-  e: KnownEvent,
-  scope: Scope,
-): void {
+/** Mail, asks and monitors another log inserted, moved by this log's event. */
+function moveRows(db: SqliteDriver, e: KnownEvent, scope: Scope): void {
   const at = scoped(scope);
   if (
     e.type === "message_received" ||
@@ -58,12 +53,11 @@ function moveRows(
       `UPDATE asks SET state = ?, closed_seq = ? WHERE ask_id = ? ${SCOPED}`,
       [e.data.outcome.status, e.seq, e.data.ask_id, ...at],
     );
-  else moveMonitorsAndWakes(db, log, e, at);
+  else moveMonitors(db, e, at);
 }
 
-function moveMonitorsAndWakes(
+function moveMonitors(
   db: SqliteDriver,
-  log: TeamLog,
   e: KnownEvent,
   at: readonly SqlValue[],
 ): void {
@@ -83,17 +77,6 @@ function moveMonitorsAndWakes(
       e.data.wait_id,
       ...at,
     ]);
-  const child =
-    e.type === "agent_finished"
-      ? e.data.child_thread_id
-      : e.type === "parked" && e.data.address.kind === "child"
-        ? e.data.address.id
-        : undefined;
-  if (child !== undefined)
-    db.run(
-      "DELETE FROM pending_wakes WHERE branch_id = ? AND child_thread_id = ?",
-      [log.branchId, child],
-    );
 }
 
 /**

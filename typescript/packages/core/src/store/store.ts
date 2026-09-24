@@ -1,5 +1,6 @@
 import type { BranchId, SandboxId, ThreadId } from "../log";
 import { err, ok, type Result } from "../result";
+import { indexImported } from "../team/imported";
 import { type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import type { ArtifactStore } from "./artifacts";
@@ -156,6 +157,8 @@ export class LogStore {
    * `threads import`: verifies the export, then stores the same bytes, segment by segment. A
    * torn tail's bytes are kept as an artifact, durable before the rows that name them. Every
    * model request must replay from the log and the artifacts already stored (C7, Render v1).
+   * The index rows the log holds (wake rows, its teams) are folded again in the same
+   * transaction.
    */
   importLog(bytes: Uint8Array): Result<VerifiedLog, LogError> {
     const log = verifiedImport(bytes, this.#artifacts);
@@ -165,9 +168,10 @@ export class LogStore {
       tenantId: this.tenant,
       droppedRef: torn === undefined ? null : this.#artifacts.put(torn.bytes),
     };
-    const stored = atomically(this.#db, () =>
-      importSegments(this.#db, log.value, target),
-    );
+    const stored = atomically(this.#db, () => {
+      const imported = importSegments(this.#db, log.value, target);
+      return imported.ok ? indexImported(this, log.value) : imported;
+    });
     return stored.ok ? log : stored;
   }
 

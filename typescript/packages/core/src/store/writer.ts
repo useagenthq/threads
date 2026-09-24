@@ -40,7 +40,19 @@ export type DecideTx = {
 };
 
 /** A decided append whose decision refused: nothing was appended, and the writer goes on. */
-export type Refusal<E> = { readonly refused: E };
+export type Refusal<E> = { readonly kind: "refused"; readonly refusal: E };
+
+/** Whether a decided append was refused, rather than appended or failed. */
+export function isRefusal<T, E>(
+  outcome: T | Refusal<E>,
+): outcome is Refusal<E> {
+  return (
+    typeof outcome === "object" &&
+    outcome !== null &&
+    "kind" in outcome &&
+    outcome.kind === "refused"
+  );
+}
 
 /** The `writer.impl` this implementation writes in every header it creates. */
 export const IMPL = "threads-ts";
@@ -124,19 +136,20 @@ export class Writer {
   /**
    * One transaction that begins, checks the lease and head, lets `decide` read the store and
    * build the drafts, admits them and commits. A refusal rolls back and leaves the writer
-   * usable; `stale_epoch` and `seq_conflict` poison it, as for `append`.
+   * usable; `stale_epoch` and `seq_conflict` poison it, as for `append`. A batch that comes out
+   * empty (the barrier dropped every draft) commits nothing and moves nothing.
    */
   appendDecided<E>(
     decide: (tx: DecideTx) => Result<readonly EventDraft[], E>,
-  ): Result<readonly ChainEvent[], LogError | Refusal<E>> {
+  ): Result<readonly ChainEvent[], LogError> | Refusal<E> {
     const outcome: { refusal?: Refusal<E> } = {};
     const appended = this.#run((tx) => {
       const decided = decide(tx);
       if (decided.ok) return decided;
-      outcome.refusal = { refused: decided.error };
+      outcome.refusal = { kind: "refused", refusal: decided.error };
       return err(REFUSED);
     });
-    return outcome.refusal === undefined ? appended : err(outcome.refusal);
+    return outcome.refusal ?? appended;
   }
 
   #run(
@@ -167,6 +180,7 @@ export class Writer {
       this.#poisoned = code === "stale_epoch" || code === "seq_conflict";
       return committed;
     }
+    if (committed.value.length === 0) return committed;
     this.#chain = trial;
     this.#moved.resolve();
     this.#moved = Promise.withResolvers<void>();
