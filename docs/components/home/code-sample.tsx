@@ -72,8 +72,9 @@ async def main() -> None:
 asyncio.run(main())`;
 
 const LANGS = [
-  { value: "TypeScript", lang: "ts", code: TS },
-  { value: "Python", lang: "python", code: PY },
+  // Values match fumadocs' escaped <Tabs items> ("typescript"), so the persisted docs choice selects a tab here.
+  { value: "typescript", label: "TypeScript", lang: "ts", code: TS },
+  { value: "python", label: "Python", lang: "python", code: PY },
 ] as const;
 
 /** TS/Python sample. Shares the "lang" tab group with the docs, so the choice carries over. */
@@ -82,13 +83,13 @@ export function CodeSample() {
     <CodeBlockTabs
       groupId="lang"
       persist
-      defaultValue="TypeScript"
+      defaultValue="typescript"
       className="my-0 h-full rounded-none border-0 bg-transparent"
     >
       <CodeBlockTabsList>
         {LANGS.map((l) => (
           <CodeBlockTabsTrigger key={l.value} value={l.value}>
-            {l.value}
+            {l.label}
           </CodeBlockTabsTrigger>
         ))}
       </CodeBlockTabsList>
