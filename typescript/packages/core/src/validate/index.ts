@@ -113,6 +113,7 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "todos_updated":
     case "channel_delivery":
     case "schedule_fired":
+    case "schedule_skipped":
       return checkUnique(fold, e);
     case "thread_started":
     case "heartbeat":
@@ -130,7 +131,6 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "cancel_requested":
     case "stop_when_idle":
     case "turn_completed":
-    case "schedule_skipped":
     case "log_repaired":
     case "retry_scheduled":
     case "budget_exceeded":

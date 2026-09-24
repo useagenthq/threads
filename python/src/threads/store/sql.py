@@ -70,12 +70,16 @@ def _wal(conn: sqlite3.Connection) -> None:
 
 
 def install(conn: sqlite3.Connection) -> ParseError | None:
-    """Creates the tables of spec/schema/store.sql. A database a newer schema wrote is
-    refused, never downgraded."""
+    """Creates the tables of spec/schema/store.sql on a new database. A database a newer schema
+    wrote is refused, never downgraded; one an earlier version wrote is refused too, since
+    stores are not migrated."""
     (found,) = conn.execute("PRAGMA user_version").fetchone()
     if int_of(found) > STORE_VERSION:
         message = f"store schema {found} is newer than {STORE_VERSION}"
         return ParseError("unsupported_format", message)
+    if 0 < int_of(found) < STORE_VERSION:
+        message = f"this store was created by an earlier threads version (schema {found});"
+        return ParseError("unsupported_format", f"{message} create a new store")
     conn.executescript(STORE_SQL)
     return None
 

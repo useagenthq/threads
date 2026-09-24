@@ -39,7 +39,7 @@ const INJECTED_SOURCES = [
   "handoff",
 ] as const;
 const TRUST_LEVELS = ["untrusted_reference", "trusted_instruction"] as const;
-const SKIP_REASONS = ["missed", "overlap"] as const;
+const SKIP_REASONS = ["missed", "overlap", "removed"] as const;
 
 // A team member's task arrives as its user_input; mail_id names the task mail it consumes.
 const USER_INPUT_RULE: {
@@ -257,7 +257,7 @@ export const ScheduleFired: EventDef<
   type: "schedule_fired",
   critical: true,
   description:
-    "occurrence_id is (schedule_id, scheduled instant UTC), claimed atomically in schedule_occurrences before this event is appended.",
+    "occurrence_id is <schedule_id>@<scheduled instant, RFC 3339 UTC with milliseconds>. The occurrence's schedule_occurrences row is decided in this event's append transaction, so two schedulers start one run.",
   data: ScheduleFiredData,
 });
 
@@ -282,6 +282,6 @@ export const ScheduleSkipped: EventDef<
   type: "schedule_skipped",
   critical: false,
   description:
-    "An occurrence that was claimed but not run. Skipping it cannot change reduce or render output.",
+    "An occurrence that was reserved but not run: missed (it fell due while no host ran), overlap (the schedule's previous run was still going) or removed (its agent is no longer served, or now pins another config than the thread was started with). Skipping it cannot change reduce or render output.",
   data: ScheduleSkippedData,
 });

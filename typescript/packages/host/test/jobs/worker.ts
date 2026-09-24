@@ -6,7 +6,7 @@
 //   (a redelivery after a restart). The agent answers "done" and the host sends that reply as a
 //   channel_send effect. It stops once the conversation settles: replied, or parked.
 // - schedule: fires every occurrence in DRILL_OCCURRENCES of one schedule, then waits until each
-//   occurrence was claimed and no run is in flight, in whichever process ran it.
+//   occurrence was decided and no run is in flight, in whichever process ran it.
 //
 // With DRILL_GO=1 it first waits for <dir>/go, so two workers start together. At the point named
 // by DRILL_STOP_AT it prints `at <point>` and blocks its event loop, lease renewal included, until
@@ -305,16 +305,17 @@ async function schedule(where: string): Promise<void> {
 
 async function claimed(store: Store): Promise<number> {
   const { db } = await storeConnection(store);
-  return db.all("SELECT 1 FROM schedule_occurrences", []).length;
+  return db.all(
+    "SELECT 1 FROM schedule_occurrences WHERE state <> 'pending'",
+    [],
+  ).length;
 }
 
 async function turnOpen(store: Store): Promise<boolean> {
   const { db } = await storeConnection(store);
   const [row] = z
     .array(z.strictObject({ thread_id: ThreadId }))
-    .parse(
-      db.all("SELECT DISTINCT thread_id FROM schedule_occurrences LIMIT 1", []),
-    );
+    .parse(db.all("SELECT thread_id FROM schedule_threads LIMIT 1", []));
   if (row === undefined) return false;
   const { log } = await openStore(tenantStore(store, "local"));
   const main = log.mainBranch(row.thread_id);

@@ -1,6 +1,7 @@
 import type { Agent, ChannelAdapter } from "@threads/core";
 import {
   type BranchId,
+  type EventDraft,
   type HostRunner,
   hostRunner,
   JsonValue,
@@ -215,6 +216,18 @@ export class HostContext {
     this.#stop.abort();
   }
 
+  /** Until every in-process job has ended, including jobs they queued; later ones still run. */
+  async idle(): Promise<void> {
+    let seen: readonly Promise<unknown>[] = [];
+    while (
+      seen.length !== this.#lanes.size ||
+      !seen.every((job) => [...this.#lanes.values()].includes(job))
+    ) {
+      seen = [...this.#lanes.values()];
+      await Promise.all(seen);
+    }
+  }
+
   /** Aborts, then waits for every in-process execution. */
   async stop(): Promise<void> {
     this.abort();
@@ -280,12 +293,22 @@ export async function samePin(
   events: readonly KnownEvent[],
   hosted: HostedAgent,
 ): Promise<boolean> {
-  const started = events.find((e) => e.type === "thread_started");
-  const pinned = await hosted.runner.started();
+  return pinMatches(events, await hosted.runner.started());
+}
+
+/**
+ * Whether a thread's thread_started pins the config `started` would: false when either has no
+ * pin. The one comparison every "can this agent run this thread" check uses.
+ */
+export function pinMatches(
+  events: readonly KnownEvent[],
+  started: EventDraft,
+): boolean {
+  const pinned = events.find((e) => e.type === "thread_started");
   return (
-    started?.type === "thread_started" &&
-    pinned.type === "thread_started" &&
-    started.data.config_hash === pinned.data.config_hash
+    pinned?.type === "thread_started" &&
+    started.type === "thread_started" &&
+    pinned.data.config_hash === started.data.config_hash
   );
 }
 

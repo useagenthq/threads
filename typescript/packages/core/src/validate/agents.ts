@@ -46,7 +46,11 @@ export function checkTask(fold: Fold, e: TaskChange): Violation {
 export function checkUnique(
   fold: Fold,
   e: EventOf<
-    "team_message" | "todos_updated" | "channel_delivery" | "schedule_fired"
+    | "team_message"
+    | "todos_updated"
+    | "channel_delivery"
+    | "schedule_fired"
+    | "schedule_skipped"
   >,
 ): Violation {
   switch (e.type) {
@@ -61,6 +65,8 @@ export function checkUnique(
     case "channel_delivery":
       return unique(fold.itemKeys, [e.data.item_key], "item_key");
     case "schedule_fired":
+    case "schedule_skipped":
+      // An occurrence is logged once, fired or skipped.
       return unique(
         fold.occurrenceIds,
         [e.data.occurrence_id],

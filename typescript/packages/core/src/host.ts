@@ -24,6 +24,7 @@ export {
   JsonValue,
   type KnownEvent,
   ModelRef,
+  Name,
   NonEmpty,
   PermissionMode,
   PermissionRule,

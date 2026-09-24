@@ -6467,7 +6467,7 @@
         "type": "object"
       },
       "events_ev_schedule_fired": {
-        "description": "occurrence_id is (schedule_id, scheduled instant UTC), claimed atomically in schedule_occurrences before this event is appended.",
+        "description": "occurrence_id is <schedule_id>@<scheduled instant, RFC 3339 UTC with milliseconds>. The occurrence's schedule_occurrences row is decided in this event's append transaction, so two schedulers start one run.",
         "properties": {
           "critical": {
             "const": true
@@ -6513,7 +6513,7 @@
         "type": "object"
       },
       "events_ev_schedule_skipped": {
-        "description": "An occurrence that was claimed but not run. Skipping it cannot change reduce or render output.",
+        "description": "An occurrence that was reserved but not run: missed (it fell due while no host ran), overlap (the schedule's previous run was still going) or removed (its agent is no longer served, or now pins another config than the thread was started with). Skipping it cannot change reduce or render output.",
         "properties": {
           "critical": {
             "const": false
@@ -6527,7 +6527,8 @@
               "reason": {
                 "enum": [
                   "missed",
-                  "overlap"
+                  "overlap",
+                  "removed"
                 ]
               },
               "schedule_id": {

@@ -1,0 +1,97 @@
+import {
+  BranchId,
+  type EventDraft,
+  knownEvents,
+  type LogStore,
+  type SqliteDriver,
+  ThreadId,
+  uuidv7,
+} from "@threads/core/host";
+import { pinMatches } from "../context";
+import {
+  currentThread,
+  type Due,
+  insertPending,
+  makeCurrent,
+  pendingOf,
+  reserved,
+} from "./rows";
+
+// Which thread a schedule's occurrences go to. A schedule keeps its thread while its agent pins
+// the same config; a config change moves it to a new thread once the old one is quiet.
+
+/**
+ * Reserves due occurrences on the schedule's thread, in one transaction with finding that thread:
+ * a deletion commits wholly before (a new thread is made) or after (these rows are retired). A
+ * schedule without a thread gets one; so does one whose agent now pins another config than its
+ * thread's, once that thread is quiet. Keys another scheduler reserved are skipped first, so a
+ * losing scheduler never moves the schedule.
+ */
+export function reserveDue(
+  db: SqliteDriver,
+  log: LogStore,
+  started: EventDraft,
+  due: readonly Due[],
+): void {
+  db.transaction(() => {
+    const fresh = due.filter((row) => !reserved(db, log.tenant, row));
+    const first = fresh[0];
+    if (first === undefined) return;
+    const found = currentThread(db, log.tenant, first.schedule_id);
+    const threadId =
+      found !== undefined && keeps(db, log, found, started)
+        ? found
+        : newThread(db, log, first.schedule_id, started);
+    for (const row of fresh)
+      insertPending(db, log.tenant, threadId, row, log.now());
+  });
+}
+
+/**
+ * Whether the schedule stays on its thread: it pins the same config, or it doesn't but the
+ * thread is still busy. A config change moves to a new thread only once the old one is quiet (no
+ * open turn, no undecided reservation), so no new run starts while the old one goes on.
+ */
+function keeps(
+  db: SqliteDriver,
+  log: LogStore,
+  threadId: ThreadId,
+  started: EventDraft,
+): boolean {
+  const main = log.mainBranch(threadId);
+  const read = main.ok ? log.read(main.value) : undefined;
+  // An unreadable thread can't be shown quiet: the reservation fails, and the identity stays.
+  if (read?.ok !== true)
+    throw new Error(`schedule thread ${threadId} can't be read`);
+  if (pinMatches(knownEvents(read.value), started)) return true;
+  return (
+    read.value.fold.turnOpen || pendingOf(db, log.tenant, threadId).length > 0
+  );
+}
+
+/** A new current thread for the schedule, in the caller's transaction, through the log store. */
+function newThread(
+  db: SqliteDriver,
+  log: LogStore,
+  scheduleId: string,
+  started: EventDraft,
+): ThreadId {
+  const threadId = ThreadId.parse(uuidv7(log.now()));
+  const branchId = BranchId.parse(uuidv7(log.now()));
+  makeCurrent(db, log.tenant, scheduleId, threadId, log.now());
+  must(log.createBranch(threadId, branchId));
+  const writer = must(log.acquire(branchId, `schedule-${uuidv7(log.now())}`));
+  must(writer.append([started]));
+  writer.release();
+  return threadId;
+}
+
+/** A new branch takes its first line: anything else is a bug, not an outcome. */
+function must<T>(
+  result:
+    | { readonly ok: true; readonly value: T }
+    | { readonly ok: false; readonly error: { readonly message: string } },
+): T {
+  if (!result.ok) throw new Error(result.error.message);
+  return result.value;
+}

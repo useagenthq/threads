@@ -1,5 +1,5 @@
 """The store's non-log tables for one tenant: approvals, the inbox and channel
-threads, idempotency receipts, schedule claims, and the branch listing. Each call is one
+threads, idempotency receipts, schedule rows, and the branch listing. Each call is one
 statement (or one transaction) on the store's own thread."""
 
 import sqlite3
@@ -60,11 +60,10 @@ class Tables:
     async def move(self, source: ThreadId, target: ThreadId) -> bool:
         return await self._worker.call(lambda c: inbox.move(c, self.tenant_id, source, target))
 
-    async def claim(self, schedule_id: str, at: int, thread_id: ThreadId, now: int) -> bool:
-        tenant = self.tenant_id
-        return await self._worker.call(
-            lambda c: schedules.claim(c, tenant, schedule_id, at, thread_id, now)
-        )
+    @property
+    def schedules(self) -> schedules.ScheduleRows:
+        """Schedule threads and occurrences of this tenant."""
+        return schedules.ScheduleRows(self._worker, self.tenant_id)
 
     async def unconsumed_threads(self) -> tuple[tuple[str, ThreadId], ...]:
         """(tenant, thread) across every tenant: what a restarted host drains."""

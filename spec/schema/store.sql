@@ -12,7 +12,10 @@
 --   PRAGMA checkpoint_fullfsync = ON;
 --
 -- user_version is the schema version. A store refuses a database whose user_version is newer
--- than the one it embeds (unsupported_format), so a future change is detectable.
+-- than the one it embeds (unsupported_format), so a future change is detectable. It also refuses
+-- an existing database of an older nonzero version (unsupported_format: "create a new store"):
+-- stores are not migrated before v1, so a new version never runs on a partly installed layout.
+-- A new, empty database (version 0) is created at this version.
 
 CREATE TABLE IF NOT EXISTS threads (
   thread_id TEXT PRIMARY KEY,
@@ -212,20 +215,74 @@ CREATE TABLE IF NOT EXISTS approvals (
   decided_at INTEGER
 ) STRICT;
 
--- Schedule occurrences. occurrence_at is the scheduled instant in UTC ms; the
--- pair is the OccurrenceId. A scheduler claims an occurrence by inserting its row before it
--- appends schedule_fired or schedule_skipped, so two schedulers that see the same due occurrence
--- start one run. state is the claim's outcome; thread_id is the thread it ran or was recorded on.
+-- Schedule occurrences, per tenant: occurrence_at is the scheduled instant in UTC ms. A
+-- scheduler reserves a due occurrence by inserting its 'pending' row (the unique key makes one
+-- reservation win) with what firing needs frozen from the schedule at that moment: agent (the
+-- host agent key), input_json (the input as canonical JSON) and timezone. reason is 'missed' at
+-- reservation when the occurrence fell due while no host ran; a pending row whose thread's log
+-- shows an open turn is marked 'overlap' without the writer. Under the thread's writer each
+-- pending row is decided in occurrence order by one conditional UPDATE ... WHERE state =
+-- 'pending' in the transaction that appends its schedule_fired or schedule_skipped, which sets
+-- state, reason and logged_seq (the event's seq); a stale scheduler's update matches nothing and
+-- its append rolls back. An occurrence whose agent is gone, or now pins another config than its
+-- thread's, is skipped as 'removed', never fired into a run its thread's pin would refuse. A
+-- thread's deletion turns its pending rows 'retired': never logged, and never an occurrence
+-- outcome; the row only keeps the key from being reserved again.
 CREATE TABLE IF NOT EXISTS schedule_occurrences (
   tenant_id TEXT NOT NULL,
   schedule_id TEXT NOT NULL,
   occurrence_at INTEGER NOT NULL,
-  state TEXT NOT NULL CHECK (state IN ('fired', 'skipped')),
-  reason TEXT CHECK (reason IN ('missed', 'overlap')),
-  thread_id TEXT,
+  state TEXT NOT NULL CHECK (state IN ('pending', 'fired', 'skipped', 'retired')),
+  reason TEXT CHECK (reason IN ('missed', 'overlap', 'removed')),
+  thread_id TEXT NOT NULL,
   claimed_at INTEGER NOT NULL,
-  UNIQUE (schedule_id, occurrence_at)
+  logged_seq INTEGER,
+  agent TEXT,
+  input_json TEXT,
+  timezone TEXT,
+  UNIQUE (tenant_id, schedule_id, occurrence_at),
+  CHECK (
+    state <> 'pending' OR (agent IS NOT NULL AND input_json IS NOT NULL AND timezone IS NOT NULL)
+  )
 ) STRICT;
+
+-- Every scheduler tick sweeps its tenant's pending rows; this keeps it off decided history.
+CREATE INDEX IF NOT EXISTS schedule_occurrences_pending
+  ON schedule_occurrences (tenant_id, occurrence_at) WHERE state = 'pending';
+
+-- Every thread a schedule has had; current = 1 marks the one new occurrences go to (one per
+-- schedule, by the partial unique index). A schedule keeps its thread while its agent's pinned
+-- config is unchanged; a config change moves it to a new one once the old one is quiet. Older
+-- threads stay listed, so recovery resumes a run left open on any of them (an input sent there
+-- through the run API, say). A scheduler finds the current row, or writes a new one with the
+-- thread's branch and thread_started, in the same transaction as the reservations it makes on
+-- it, so a concurrent deletion lands wholly before or after. Deleted with its thread.
+CREATE TABLE IF NOT EXISTS schedule_threads (
+  tenant_id TEXT NOT NULL,
+  schedule_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
+  current INTEGER NOT NULL CHECK (current IN (0, 1)),
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (tenant_id, schedule_id, thread_id)
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS schedule_threads_current
+  ON schedule_threads (tenant_id, schedule_id) WHERE current = 1;
+
+-- ask_user questions: a rebuildable projection of the log. A row is inserted 'open' in the
+-- transaction that appends parked{awaiting_input} and changes only when the settling tool_result
+-- is appended ('answered' or 'expired'); time alone never changes it.
+CREATE TABLE IF NOT EXISTS questions (
+  tenant_id TEXT NOT NULL,
+  branch_id TEXT NOT NULL,
+  call_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('open', 'answered', 'expired')),
+  decided_at INTEGER,
+  PRIMARY KEY (branch_id, call_id)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS questions_due ON questions (state, expires_at);
 
 -- POST /v1/runs idempotency (openapi.json Idempotency-Key). The receipt is
 -- inserted in the transaction that appends the run's user_input, so a lost response replays
@@ -401,5 +458,8 @@ CREATE TABLE IF NOT EXISTS pending_wakes (
   PRIMARY KEY (branch_id, child_thread_id)
 ) STRICT;
 
--- Version 4: the team tables and pending_wakes. Versions 2 and 3 are lanes 14C and 16C.
-PRAGMA user_version = 4;
+-- Version 4: the team tables and pending_wakes. Version 5: lane 14C's schedule_threads,
+-- tenant-scoped schedule_occurrences with pending and retired rows, and questions (planned as
+-- version 2; the team tables took 4 first, so a version-4 store has the older schedule layout and
+-- is refused).
+PRAGMA user_version = 5;

@@ -2,7 +2,7 @@
 continued one; then record the input. A launched thread (a subagent child or a handoff target)
 is pinned with its parent link, and gets only the inputs its parent sent that it lacks."""
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
@@ -33,7 +33,7 @@ from threads.loop.runtime import Failed as HaltFailed
 from threads.redaction import contains_secret
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
-from threads.store import SqliteStore, Writer
+from threads.store import Draft, SqliteStore, Writer
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
@@ -82,11 +82,24 @@ async def prepare[D](
     return halt
 
 
+def pinned_config(events: Iterable[object]) -> str | None:
+    """The config_hash a thread's thread_started pins; None before it started."""
+    started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
+    return None if started is None else started.data.config_hash
+
+
+def same_pin(events: Iterable[object], started: Draft) -> bool:
+    """Whether a thread pins the config the draft thread_started `started` would: false when
+    either has no pin. The comparison every "can this agent run this thread" check uses."""
+    pinned = pinned_config(events)
+    return pinned is not None and pinned == started.data.get("config_hash")
+
+
 def _check_pin(rt: Runtime, config_hash: object) -> None:
     """A pin never changes in place: continuing a thread needs the config it started with, checked
     before recovery can dispatch anything."""
-    pinned = next((e for e in rt.events if isinstance(e, ThreadStartedEvent)), None)
-    if pinned is not None and pinned.data.config_hash != config_hash:
+    pinned = pinned_config(rt.events)
+    if pinned is not None and pinned != config_hash:
         raise ConfigError(
             "invalid_config",
             "this thread was started with another config; a config change starts a new thread",

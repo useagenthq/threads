@@ -7,8 +7,9 @@ with SIGKILL. `python worker.py <role> <dir>`:
   webhook (a redelivery after a restart). It answers "done" and the host sends that reply as a
   channel_send effect. It stops once the conversation settles: replied, or parked. With
   `DRILL_GO=1` it starts only once `<dir>/go` exists, so two of them race.
-- `schedule`: fires every occurrence in `DRILL_OCCURRENCES` of one schedule once `<dir>/go`
-  exists, then waits until each occurrence's run has ended, in whichever process ran it.
+- `schedule`: ticks one schedule through every occurrence in `DRILL_OCCURRENCES` once
+  `<dir>/go` exists, then waits until each occurrence was decided and no run is in flight, in
+  whichever process ran it.
 
 At the point named by `DRILL_STOP_AT` the process prints `at <point>` and blocks its event loop,
 lease renewal included, until the parent kills it or creates `<dir>/release`. Every send, refusal
@@ -22,6 +23,7 @@ import sys
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Final
 
@@ -44,7 +46,7 @@ from threads.host import (
 )
 from threads.host.runs import Runner
 from threads.host.schedules import Scheduler
-from threads.log import Event, JsonObject, ParseError, Principal, TurnCompletedEvent
+from threads.log import Event, JsonObject, ParseError, Principal
 from threads.loop.guard import block_model_requests
 from threads.loop.model import Found, LookupResult, LookupUnknown, ModelRequest, NotFound
 from threads.memory.fence import check
@@ -230,31 +232,40 @@ async def schedule(where: Path) -> None:
     answers: list[JsonValue] = [DONE] * len(occurrences)
     model = scripted_model({"responses": answers})
     model.before_send = lambda _r: record(where / "model.jsonl", {})
-    runner = Runner(store, {"bot": agent(model=model)}, {})
+    runner = Runner(store, {"bot": agent(name="bot", model=model)}, {})
     tick = Schedule(id="tick", agent="bot", cron="* * * * *", input="Tick.")
     scheduler = Scheduler(runner, [tick])
     await started(where)
-    for at in occurrences:
-        if await scheduler.fire(tick, at):
-            record(where / "claims.jsonl", {"at": at})
     sq = await open_store(store)
-    await until(lambda: _ended(sq, len(occurrences)))
+    started_at = occurrences[0] - 1
+    now = started_at
+    # Like a host's tick loop: every pass decides what is due at `now` and resumes a run whose
+    # input is durable but that never went. Each occurrence waits out the last one's run, so few
+    # are skipped as overlaps.
+    for at in occurrences:
+        await until(partial(_ticked, scheduler, sq, started_at, now, None))
+        now = at + 1
+    await until(partial(_ticked, scheduler, sq, started_at, now, len(occurrences)))
     await runner.stop()
 
 
-async def _ended(sq: SqliteStore, count: int) -> bool:
-    """Every occurrence is claimed and its run's turn has completed."""
-    claimed = await sq.run(
-        lambda c: c.execute("SELECT thread_id FROM schedule_occurrences").fetchall()
+async def _ticked(
+    scheduler: Scheduler, sq: SqliteStore, started_at: int, now: int, count: int | None
+) -> bool:
+    """One pass; done once no turn is open and, with `count`, that many occurrences are
+    decided."""
+    await scheduler.tick(started_at, now)
+    decided = await sq.run(
+        lambda c: c.execute(
+            "SELECT count(*) FROM schedule_occurrences WHERE state <> 'pending'"
+        ).fetchone()
     )
-    if len(claimed) < count:
+    if count is not None and decided != (count,):
         return False
-    for (thread,) in claimed:
+    for thread in await sq.tables.schedules.threads():
         root = await sq.root(thread)
         log = None if isinstance(root, Err) else await sq.read(root.value, 0)
-        if not isinstance(log, Ok):
-            return False
-        if not any(isinstance(e, TurnCompletedEvent) for e in log.value.fold.events):
+        if not isinstance(log, Ok) or log.value.fold.in_turn:
             return False
     return True
 
