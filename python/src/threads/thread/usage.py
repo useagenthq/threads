@@ -21,6 +21,7 @@ from threads.log import (
 from threads.reduce.projections import TreePart, cost, merge_tree
 from threads.result import Err, Ok
 from threads.store import VerifiedLog
+from threads.team.members import Member, open_member, team_members
 from threads.thread.read import read_log
 
 
@@ -33,6 +34,18 @@ class _Pending:
     path: str
 
 
+@dataclass(frozen=True, slots=True)
+class _Member:
+    """A team member of a visited lead, still to read and walk."""
+
+    member: Member
+    lead: VerifiedLog
+    path: str
+
+
+type _Child = _Pending | _Member
+
+
 async def tree_cost(
     store: Store, root: ThreadId, log: VerifiedLog
 ) -> Ok[Cost | None] | Err[ParseError]:
@@ -42,10 +55,11 @@ async def tree_cost(
     started it; a child that doesn't, or a thread named twice (a cycle, or two spawns of one id),
     makes the tree log_corrupt. A child with no log counts as an unpriced thread that ran:
     nothing proves it spent nothing (its log may have been deleted), so the total is incomplete
-    and unbounded, never falsely complete."""
+    and unbounded, never falsely complete. A lead's team members are its children too (after its
+    spawns); one in the starting window counts zero."""
     parts: list[TreePart] = []
     seen = {root}
-    stack: list[_Pending] = []
+    stack: list[_Child] = []
     walk: tuple[VerifiedLog, str] | None = (log, "")
     while walk is not None:
         at, path = walk
@@ -54,7 +68,10 @@ async def tree_cost(
             return _within(path, own)
         events = at.fold.events
         parts.append(TreePart(own.value, any(isinstance(e, ModelRequestEvent) for e in events)))
-        stack.extend(reversed(_pending(events, path)))
+        members = [
+            _Member(m, at, f"{path}member {m.name}: ") for m in await team_members(store, at)
+        ]
+        stack.extend(reversed([*_pending(events, path), *members]))
         read = await _next_child(store, stack, seen, parts)
         if isinstance(read, Err):
             return read
@@ -73,24 +90,32 @@ def _pending(events: Sequence[Event], path: str) -> list[_Pending]:
 
 
 async def _next_child(
-    store: Store, stack: list[_Pending], seen: set[ThreadId], parts: list[TreePart]
+    store: Store, stack: list[_Child], seen: set[ThreadId], parts: list[TreePart]
 ) -> Ok[tuple[VerifiedLog, str] | None] | Err[ParseError]:
-    """Pops pending children until one has a log to walk; each without a log adds its unpriced
-    part instead. None when the stack is empty."""
+    """Pops pending children until one has a log to walk; a spawned child without a log adds
+    its unpriced part instead, a member in the starting window nothing. None when the stack is
+    empty."""
     while stack:
         top = stack.pop()
-        child = top.spawn.data.child_thread_id
+        child = top.member.thread_id if isinstance(top, _Member) else top.spawn.data.child_thread_id
         if child in seen:
             why = f"{top.path}thread {child} appears twice in the tree"
             return Err(ParseError("log_corrupt", why))
         seen.add(child)
-        read = await _child_log(store, top.spawn, top.finish)
+        read = await _open(store, top)
         if isinstance(read, Err):
             return _within(top.path, read)
-        if read.value is not None:
+        if isinstance(read.value, VerifiedLog):
             return Ok((read.value, top.path))
-        parts.append(TreePart(None, ran=True))
+        if read.value is None:
+            parts.append(TreePart(None, ran=True))
     return Ok(None)
+
+
+async def _open(store: Store, child: _Child) -> Ok[VerifiedLog | str | None] | Err[ParseError]:
+    if isinstance(child, _Member):
+        return await open_member(store, child.lead, child.member)
+    return await _child_log(store, child.spawn, child.finish)
 
 
 def _within(path: str, failed: Err[ParseError]) -> Err[ParseError]:

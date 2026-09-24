@@ -43,11 +43,6 @@ type Controlled = Ok[Appended] | Err[ParseError]
 type Build = Callable[[Fold], Ok[Sequence[Draft]] | Err[ParseError]]
 
 
-def principal_key(principal: Principal) -> str:
-    """The normalized issuer/tenant/subject PrincipalKey."""
-    return f"{principal.issuer}/{principal.tenant}/{principal.subject}"
-
-
 def actor(kind: Literal["user", "approver"], principal: Principal) -> "dict[str, JsonValue]":
     return {"kind": kind, "principal": to_json(principal)}
 
