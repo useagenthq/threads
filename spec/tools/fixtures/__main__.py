@@ -46,6 +46,7 @@ from . import (
     styles,
     summaries,
     team_bindings,
+    team_cancel_rule,
     team_edges,
     team_nested,
     team_operator,
@@ -136,6 +137,7 @@ STAGED_PHASE_1 = (
     team_rebind.build,
     team_operator.build,
     team_nested.build,
+    team_cancel_rule.build,
     run_cases.build,
 )
 

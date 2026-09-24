@@ -44,7 +44,7 @@ def _input(log: Log, t: str, principal: Obj = ALICE) -> Obj:
     return log.add("user_input", {"source": "api", "text": t}, actor="user", principal=principal)
 
 
-def _spawn(log: Log, cid: str, kid: str) -> None:
+def spawn_background(log: Log, cid: str, kid: str) -> None:
     spawn: Obj = {"agent": "scanner", "prompt": "Do your part.", "background": True}
     call(log, "spawn_agent", spawn, cid)
     spawned: Obj = {
@@ -75,10 +75,10 @@ def _two_runs(second: Obj) -> Log:
     """Alice's run starts one background child; a second run (`second`'s) starts another."""
     log = _log()
     _input(log, "Scan the dependencies in the background.")
-    _spawn(log, "call_1", KIDS[0])
+    spawn_background(log, "call_1", KIDS[0])
     answer(log, "The first scan is running.")
     _input(log, "Scan the licenses in the background.", second)
-    _spawn(log, "call_2", KIDS[1])
+    spawn_background(log, "call_2", KIDS[1])
     answer(log, "The second scan is running.")
     return log
 
@@ -87,8 +87,8 @@ def one_append_log() -> Log:
     """Two background children; the first ends, recorded with its woken in one append."""
     log = _log()
     user(log, "Scan the dependencies and the licenses in the background.")
-    _spawn(log, "call_1", KIDS[0])
-    _spawn(log, "call_2", KIDS[1])
+    spawn_background(log, "call_1", KIDS[0])
+    spawn_background(log, "call_2", KIDS[1])
     answer(log, "Both scans are running.")
     woken(log, [late(log, "call_1", KIDS[0])])
     return log
@@ -135,7 +135,7 @@ def _by_run(root: pathlib.Path) -> None:
 def _ordinary_input(root: pathlib.Path) -> None:
     log = _log()
     _input(log, "Scan the dependencies in the background.")
-    _spawn(log, "call_1", KIDS[0])
+    spawn_background(log, "call_1", KIDS[0])
     answer(log, "The scan is running.")
     _input(log, "What else is new?", BOB)
     late(log, "call_1", KIDS[0])
@@ -157,8 +157,8 @@ def _ordinary_input(root: pathlib.Path) -> None:
 def _after_pre_woken(root: pathlib.Path) -> None:
     log = _log()
     user(log, "Scan the dependencies and the licenses in the background.")
-    _spawn(log, "call_1", KIDS[0])
-    _spawn(log, "call_2", KIDS[1])
+    spawn_background(log, "call_1", KIDS[0])
+    spawn_background(log, "call_2", KIDS[1])
     answer(log, "Both scans are running.")
     late(log, "call_1", KIDS[0])  # written before woken existed: no wake
     woken(log, [late(log, "call_2", KIDS[1])])
@@ -191,7 +191,7 @@ def _rejected() -> list[tuple[str, str, Log]]:
     )
     log = _log()
     user(log, "Scan in the background.")
-    _spawn(log, "call_1", KIDS[0])
+    spawn_background(log, "call_1", KIDS[0])
     answer(log, "Running.")
     cause = late(log, "call_1", KIDS[0])
     log.add(
@@ -200,7 +200,7 @@ def _rejected() -> list[tuple[str, str, Log]]:
     out.append(("woken-cause-repeated-rejected", "Rule 32: woken names one cause twice.", log))
     log = _log()
     user(log, "Scan in the background.")
-    _spawn(log, "call_1", KIDS[0])
+    spawn_background(log, "call_1", KIDS[0])
     woken(log, [late(log, "call_1", KIDS[0])])
     out.append(("woken-with-open-turn-rejected", "Rule 32: woken while a turn is open.", log))
     log = _log()
@@ -216,7 +216,7 @@ def _rejected() -> list[tuple[str, str, Log]]:
     )
     log = _log()
     user(log, "Scan in the background.")
-    _spawn(log, "call_1", KIDS[0])
+    spawn_background(log, "call_1", KIDS[0])
     answer(log, "Running.")
     woken(log, [late(log, "call_1", KIDS[0])], BOB)
     out.append(

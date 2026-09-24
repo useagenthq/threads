@@ -109,7 +109,7 @@
           "additionalProperties": false,
           "required": ["outcome", "appended", "rows"],
           "properties": {
-            "outcome": { "description": "The op's result: the tool's or Team method's result, or consumed / nothing_pending, materialized / not_starting / rebind_failed, waiting, open, not_due, idle, ended.", "type": "object", "required": ["status"] },
+            "outcome": { "description": "The op's result: the tool's or Team method's result, or consumed / refused (an ended recipient's mail) / nothing_pending, materialized / not_starting / rebind_failed, waiting, open, not_due, idle, ended.", "type": "object", "required": ["status"] },
             "appended": {
               "description": "Per log label, the types of the events the op appended, in order. A log with none is absent.",
               "type": "object",
