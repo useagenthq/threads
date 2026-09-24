@@ -84,7 +84,7 @@ function checkRefForm(fold: Fold, pin: ToolSpec, spec: ToolSpec): Violation {
     : invalid(`tools_changed changes the spec of ${spec.name}`);
 }
 
-/** The fields a reference-form stub fixes: equal in its full form and its artifact (rule 46). */
+/** The fields a reference-form stub fixes: equal in its full form and its artifact (rule 47). */
 export function sameStub(stub: ToolSpec, full: ToolSpec): boolean {
   return (
     stub.name === full.name &&

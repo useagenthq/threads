@@ -1,7 +1,7 @@
 import type { EventOf, Fold } from "../fold/state";
 import { invalid, type Violation } from "./violation";
 
-// Rule 46: a tools_loaded directly follows its tool_search's successful result and loads only
+// Rule 47: a tools_loaded directly follows its tool_search's successful result and loads only
 // tools deferred in reference form, each by the spec_ref it was pinned with. Its artifact checks
 // need artifacts, so import makes them (render/tool-specs.ts).
 

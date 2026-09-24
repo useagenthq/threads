@@ -1,4 +1,4 @@
-"""Semantic rule 46 (spec/schema/README.md): a tools_loaded directly follows a successful
+"""Semantic rule 47 (spec/schema/README.md): a tools_loaded directly follows a successful
 tool_search result for its call, and loads only reference-form tools not yet loaded, each by the
 spec_ref it was pinned with. The artifact checks need artifacts, so import makes them
 (render/loaded.py)."""

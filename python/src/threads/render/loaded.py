@@ -36,7 +36,7 @@ def loaded_spec(read: ReadArtifact, ref: ArtifactRef, seq: int) -> Ok[ToolSpec] 
 
 
 def artifact_error(before: Sequence[Event], event: Event, read: ReadArtifact) -> ParseError | None:
-    """Rule 46's artifact checks for a tools_loaded, and point 6's for a tools_changed: the
+    """Rule 47's artifact checks for a tools_loaded, and point 6's for a tools_changed: the
     loaded spec agrees with its stub and is never deferred again; a full form is the artifact's
     bytes."""
     pins = _pins(before)

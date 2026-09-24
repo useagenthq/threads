@@ -43,7 +43,7 @@ export function verifyRequests(
 ): Result<void, LogError> {
   const pinned = pinnedSpecs(events);
   for (const [i, e] of events.entries()) {
-    // Spec artifacts (rules 17 and 46) are checked in seq order with the requests.
+    // Spec artifacts (rules 17 and 47) are checked in seq order with the requests.
     const specs = checkSpecs(pinned, e, read);
     if (!specs.ok) return specs;
     if (e.type !== "model_request") continue;

@@ -15,7 +15,7 @@ import { type ReadRef, readText } from "./lines";
 import { toolLine } from "./prefix";
 
 // A deferred tool's full spec lives in its spec_ref artifact (spec/schema/README.md, "Deferred
-// tools and tool_search"). Render reads it for a tools_loaded line; import checks it (rule 46,
+// tools and tool_search"). Render reads it for a tools_loaded line; import checks it (rule 47,
 // rule 17 point 6).
 
 /** The full spec an artifact holds; bytes that are not a ToolSpec are corrupt. */
@@ -54,7 +54,7 @@ export function loadedLine(
 }
 
 /**
- * The artifact checks of rule 46 and rule 17 point 6, for one event: a loaded spec is a full
+ * The artifact checks of rule 47 and rule 17 point 6, for one event: a loaded spec is a full
  * form agreeing with its stub, and a full form in a tools_changed is its artifact byte for byte.
  */
 export function checkSpecs(

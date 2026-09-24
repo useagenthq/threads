@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 
 def build(root: pathlib.Path) -> None:
-    for name, desc, log in [*_rule46(), *_ref_forms()]:
+    for name, desc, log in [*_rule47(), *_ref_forms()]:
         reject(root, (name, "log", desc), log)
     _kept(root)
     for name, desc, log, code in _imports():
@@ -60,7 +60,7 @@ def _jira() -> Log:
     return log
 
 
-def _rule46() -> list[tuple[str, str, Log]]:
+def _rule47() -> list[tuple[str, str, Log]]:
     no_search = Log()
     pinned(no_search, JIRA)
     read_turn(no_search)

@@ -76,7 +76,7 @@ export type Fold = {
   tools: readonly ToolSpec[];
   /** Each tool name's spec as pinned by thread_started or first added (rule 17). */
   readonly knownTools: Map<string, ToolSpec>;
-  /** Reference-form tools a tools_loaded loaded, by name, with their spec_ref (rule 46). */
+  /** Reference-form tools a tools_loaded loaded, by name, with their spec_ref (rule 47). */
   readonly loaded: Map<string, ArtifactRef>;
   model: ModelRef | undefined;
   mode: PermissionMode;

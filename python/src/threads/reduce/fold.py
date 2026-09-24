@@ -128,7 +128,7 @@ class Fold:
     known_tools: dict[str, ToolSpec] = field(default_factory=dict[str, ToolSpec])
     """Each name's spec as pinned by thread_started or first added (rule 17)."""
     loaded: dict[str, ArtifactRef] = field(default_factory=dict[str, ArtifactRef])
-    """Reference-form tools a tools_loaded loaded, with their spec_ref (rule 46)."""
+    """Reference-form tools a tools_loaded loaded, with their spec_ref (rule 47)."""
     in_turn: bool = False
     turns: int = 0
     handed_off: bool = False

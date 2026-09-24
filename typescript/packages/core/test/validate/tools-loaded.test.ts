@@ -4,7 +4,7 @@ import { loadCase } from "../conformance/cases";
 import { fixture, unwrap } from "../store/helpers";
 import { draftOf } from "../team/writes";
 
-// Rule 46 and rule 17 point 6 on the write path: each rejection case's log, appended again
+// Rule 47 and rule 17 point 6 on the write path: each rejection case's log, appended again
 // event by event through a writer, is refused at exactly its last event.
 
 const CASES = [
