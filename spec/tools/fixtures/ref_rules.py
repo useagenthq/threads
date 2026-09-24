@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from .common import arr, obj, text
 from .ref_fold import advance
+from .turn_open import mail_opens_turn
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -22,7 +23,6 @@ TEAM_LOG = frozenset(
         "member_observed", "wait_finished",
     }
 )  # fmt: skip
-NOTICES = frozenset({"member_settled", "member_ended"})
 type Run = tuple[str, str]  # (principal key, root request event id)
 
 
@@ -100,13 +100,7 @@ class Check:
     def opens(self, env: Obj) -> bool:
         if self.turn is not None or self.team_log:
             return False
-        kind = env["kind"]
-        if kind in NOTICES:
-            opens = text(env["monitor_id"]) not in self.settle
-        else:
-            opens = kind in ("message", "ask") or (kind == "bounce" and "ask_id" not in env)
-        resolved = {"kind": "member", "id": env.get("monitor_id")}
-        return opens and all(p == resolved for p in self.parks)
+        return mail_opens_turn(env, self.settle, self.parks)
 
     # rules 35, 44, 45: mail this log sends
     def rule_sent(self, _e: Obj, d: Obj) -> str | None:
@@ -201,7 +195,9 @@ class Check:
         runs = [self.spawn_runs.get(self.trailing.get(c, "")) for c in causes]
         if self.turn is not None or len(set(causes)) < len(causes):
             return "32: woken with a turn open, or naming a cause twice"
-        if len(causes) != len(self.trailing) or None in runs or len(set(runs)) != 1:
+        block = list(self.trailing)
+        tail = block[min((block.index(c) for c in causes if c in block), default=0) :]
+        if set(tail) != set(causes) or None in runs or len(set(runs)) != 1:
             return "32: woken causes are not one run's children of this append"
         run = runs[0]
         if run is None or principal(obj(e["actor"])["principal"]) != run[0]:

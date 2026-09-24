@@ -7,13 +7,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import arr, obj, text
+from .turn_open import mail_opens_turn
 
 if TYPE_CHECKING:
     from .jcs import JsonValue, Obj
 
 # turn_completed reasons other than end_turn: the RunResult status each ends the run with.
 ENDS = {"cancelled": "cancelled", "budget_exhausted": "budget_exhausted", "handoff": "handed_off"}
-OPENING_MAIL = frozenset({"message", "ask", "member_settled", "member_ended"})
 
 
 class _Run:
@@ -32,6 +32,7 @@ class _Run:
         self.output: JsonValue = None
         self.status: str | None = None
         self.done = False  # the run ended completed: at the first point its end held
+        self.settle: set[str] = set()  # settle monitors of this log's waits
 
     def _opens(self, e: Obj, d: Obj) -> str | None:
         """The run of the turn this event opens, or None when it opens no turn."""
@@ -40,10 +41,10 @@ class _Run:
             return text(e["event_id"])
         if t == "woken":
             return self.late_runs.get(text(arr(d["causes"])[0]))
-        if t != "message_received" or self.parks:
+        if t != "message_received":
             return None
         env = obj(d["envelope"])
-        if env["kind"] not in OPENING_MAIL:
+        if not mail_opens_turn(env, self.settle, self.parks):
             return None
         return text(obj(obj(env["provenance"])["root_request"])["event_id"])
 
@@ -54,6 +55,7 @@ class _Run:
             if run is not None:
                 self.turn_open, self.current = True, run
         self._helpers(e, d, t)
+        self._waits(e, d, t)
         mine = self.turn_open and self.current == self.request
         if t in ("model_response", "model_response_recovered") and mine:
             self.last_response = e["event_id"]
@@ -75,6 +77,12 @@ class _Run:
         """The run's end holds: an answer, no turn open, nothing parked, every helper reported."""
         idle = not (self.turn_open or self.parks or self.children or self.monitors)
         return self.output is not None and idle
+
+    def _waits(self, e: Obj, d: Obj, t: str) -> None:
+        """A wait's settle monitors: their notifications resume the wait and open no turn."""
+        if t == "wait_started":
+            for m in arr(d["members"]):
+                self.settle.add(f"{self.branch}:{e['event_id']}:{text(obj(m)['name'])}")
 
     def _helpers(self, e: Obj, d: Obj, t: str) -> None:
         if t == "agent_spawned" and d["mode"] == "background" and self.current is not None:
@@ -100,10 +108,12 @@ class _Run:
             return {"status": "completed", "output_event_id": self.output}
         if self.status is not None:
             return {"status": self.status, "output_event_id": None}
-        if self.turn_open:
-            return {"status": "running", "output_event_id": None}
+        # A park wins over an open turn: a lead parked on an approval or a child mid-turn has
+        # still returned parked.
         if self.parks:
             return {"status": "parked", "output_event_id": None}
+        if self.turn_open:
+            return {"status": "running", "output_event_id": None}
         return {"status": "running", "output_event_id": None}
 
 

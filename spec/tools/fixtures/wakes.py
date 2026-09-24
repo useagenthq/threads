@@ -29,6 +29,7 @@ def build(root: pathlib.Path) -> None:
     _one_append(root)
     _by_run(root)
     _ordinary_input(root)
+    _after_pre_woken(root)
     for name, desc, log in _rejected():
         reject(root, (name, FAM, desc), log)
 
@@ -147,6 +148,29 @@ def _ordinary_input(root: pathlib.Path) -> None:
             "A child of Alice's run reports while Bob's run has a turn open: its agent_finished "
             "and tool_result_late are ordinary input to that turn, with no woken (Gate 1 §2.7.3), "
             "as in every log written before woken existed.",
+        ),
+        log,
+        {"children": children(log)},
+    )
+
+
+def _after_pre_woken(root: pathlib.Path) -> None:
+    log = _log()
+    user(log, "Scan the dependencies and the licenses in the background.")
+    _spawn(log, "call_1", KIDS[0])
+    _spawn(log, "call_2", KIDS[1])
+    answer(log, "Both scans are running.")
+    late(log, "call_1", KIDS[0])  # written before woken existed: no wake
+    woken(log, [late(log, "call_2", KIDS[1])])
+    reduce_case(
+        root,
+        (
+            "legacy-wake-after-pre-woken-late-result",
+            FAM,
+            "The upgrade: a writer from before woken recorded the first child's late result with "
+            "no wake; the upgraded writer then records the second child's end and a woken naming "
+            "only it. The causes are the tail of the late-result block, so the earlier result is "
+            "never woken retroactively and the new wake is accepted.",
         ),
         log,
         {"children": children(log)},

@@ -1,0 +1,69 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 1,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 250,
+      "output_tokens": 50,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000008"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-00000000000a"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-00000000000e"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000010"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000013"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000015"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 22,
+      "hash": "4495a9c001532b5e73091ff53bd44e6d67eb06768d8ad1839fc6c5a015d46222"
+    }
+  },
+  "projections": {
+    "children": [
+      {
+        "child_thread_id": "0192a000-0000-7000-8000-0000000000c9",
+        "status": "completed"
+      },
+      {
+        "child_thread_id": "0192a000-0000-7000-8000-0000000000ca",
+        "status": "completed"
+      }
+    ]
+  }
+}

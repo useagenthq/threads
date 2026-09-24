@@ -12,8 +12,12 @@ function causesRun(fold: Fold, causes: readonly string[]): Run | string {
   const { trailingLate, spawnRuns } = fold.wake;
   if (new Set(causes).size !== causes.length)
     return "woken names a cause twice";
-  if (causes.length !== trailingLate.size)
-    return "woken must name exactly the late results of its own append";
+  // The causes are the tail of the late-result block: a late result before the first cause
+  // was recorded without a wake (an older writer, or a result held for another run).
+  const block = [...trailingLate.keys()];
+  const tail = block.slice(Math.min(...causes.map((c) => block.indexOf(c))));
+  if (causes.some((c) => !trailingLate.has(c)) || tail.length !== causes.length)
+    return "woken must name every late result of its own append, and only those";
   const runs = causes.map((cause) => {
     const call = trailingLate.get(cause);
     return call === undefined ? undefined : spawnRuns.get(call);

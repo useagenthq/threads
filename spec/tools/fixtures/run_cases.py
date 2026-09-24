@@ -8,7 +8,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import eid, text
-from .pieces import answer, reduce_case, user
+from .log import Log
+from .pieces import answer, call, reduce_case, started, user
 from .run_end import run_projection
 from .team_pieces import (
     LEAD,
@@ -26,13 +27,13 @@ from .team_pieces import (
     provenance,
 )
 from .team_steps import FAM, idle, received, start
+from .teams import catalog_specs
 from .wakes import KIDS, late, one_append_log, woken
 
 if TYPE_CHECKING:
     import pathlib
 
     from .jcs import Obj
-    from .log import Log
 
 
 def build(root: pathlib.Path) -> None:
@@ -114,6 +115,7 @@ def _cases() -> list[tuple[str, str, Log]]:
             lead,
         )
     )
+    out += _parks()
     log = one_append_log()
     answer(log, "The dependency scan is clean.")
     out.append(
@@ -131,6 +133,61 @@ def _cases() -> list[tuple[str, str, Log]]:
             "legacy-run-final-answer-after-wake",
             "Both background children reported and each woke the lead: the run is completed with "
             "the last wake turn's answer.",
+            log,
+        )
+    )
+    return out
+
+
+def _parks() -> list[tuple[str, str, Log]]:
+    out: list[tuple[str, str, Log]] = []
+    lead, settled = _started()
+    monitor = text(settled["monitor_id"])
+    notice = {**settled, "kind": "member_parked", "reason": "awaiting_approval"}
+    notice = {k: v for k, v in notice.items() if k != "result"}
+    notice["mail_id"] = f"{MEMBER_BRANCH}:{eid(7, MEMBER_BRANCH)}"
+    received(lead, notice)
+    park: Obj = {"kind": "member", "id": monitor}
+    lead.add("parked", {"address": park, "reason": "awaiting_member"})
+    out.append(
+        (
+            "run-member-parks",
+            "researcher-1, which this run started, parks on an approval: its one member_parked "
+            "notice parks the idle lead on it, and the run returns parked.",
+            lead.copy(),
+        )
+    )
+    got = received(lead, settled)  # control mail: clears the last park and opens the wake turn
+    lead.add("resumed", {"address": park, "cause_event_id": got["event_id"]})
+    idle(lead, LEAD, "The researcher says prices fell.")
+    out.append(
+        (
+            "run-member-parks-then-final-answer",
+            "The parked member settles: its notification is control mail that clears the lead's "
+            "last park (message_received, then resumed) and opens the wake turn, whose answer is "
+            "the run's output.",
+            lead,
+        )
+    )
+    log = Log()
+    started(log, catalog_specs(("spawn_agent",)))
+    user(log, "Review the diff.")
+    call(log, "spawn_agent", {"agent": "reviewer", "prompt": "Review it."}, "call_1")
+    spawned: Obj = {
+        "call_id": "call_1",
+        "child_thread_id": KIDS[0],
+        "agent_name": "reviewer",
+        "mode": "foreground",
+        "isolation": "none",
+    }
+    log.add("agent_spawned", spawned)
+    child: Obj = {"kind": "child", "id": KIDS[0]}
+    log.add("parked", {"address": child, "reason": "awaiting_approval"})
+    out.append(
+        (
+            "legacy-run-child-parks",
+            "A foreground child parks, which parks the lead mid-turn (the spawn call stays "
+            "pending): the run returns parked, not running.",
             log,
         )
     )

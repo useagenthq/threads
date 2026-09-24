@@ -1,0 +1,9 @@
+{
+  "name": "legacy-run-child-parks",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "A foreground child parks, which parks the lead mid-turn (the spawn call stays pending): the run returns parked, not running.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

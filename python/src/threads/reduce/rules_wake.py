@@ -26,8 +26,13 @@ def _key(p: Principal) -> PrincipalKey:
 def _causes_run(wake: Wake, causes: list[EventId]) -> Run | str:
     if len(set(causes)) != len(causes):
         return "woken names a cause twice"
-    if len(causes) != len(wake.trailing):
-        return "woken must name exactly the late results of its own append"
+    # The causes are the tail of the late-result block: a late result before the first cause
+    # was recorded without a wake (an older writer, or a result held for another run).
+    block = list(wake.trailing)
+    if any(c not in wake.trailing for c in causes):
+        return "a woken cause is not a late result of its own append"
+    if len(block) - min(block.index(c) for c in causes) != len(causes):
+        return "woken must name every late result of its own append, and only those"
     runs = [wake.spawn_runs.get(wake.trailing[c]) if c in wake.trailing else None for c in causes]
     first = runs[0]
     if first is None or any(r is None for r in runs):
