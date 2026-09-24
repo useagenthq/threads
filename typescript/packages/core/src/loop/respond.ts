@@ -155,7 +155,7 @@ function standing(
 
 /**
  * The output is withheld: each call is recorded and closed without dispatch, so the pairs stay
- * whole, then either the guide instruction re-asks or, with nothing to re-ask, the turn ends.
+ * whole, then either the guide instruction re-asks or, on a deny, the turn ends error.
  */
 function withheld(
   s: Session,
@@ -180,8 +180,8 @@ function withheld(
       : [],
   );
   if (guide !== undefined) return s.append(...closed, guide);
-  if (closed.length > 0) return s.append(...closed);
-  return endTurn(s, "error");
+  // A deny ends the turn error, the calls closed in the same batch: the model isn't asked again.
+  return s.append(...closed, draft.turnCompleted("error"));
 }
 
 /** ask to continue, up to max_output_continuations per turn, then max_output. */

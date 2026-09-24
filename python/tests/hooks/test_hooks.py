@@ -110,7 +110,9 @@ def test_after_model_deny_closes_the_calls_and_withholds_the_output() -> None:
     assert isinstance(result, Failed)
     assert box.runs == 0
     closed = next(e for e in events if e.type == "tool_result")
-    assert json.loads(closed.data.model_dump_json())["origin"] == "denied"
+    data = json.loads(closed.data.model_dump_json())
+    # The model is shown the hook's reason, as in TypeScript.
+    assert (data["origin"], data["preview"]) == ("denied", "denied: unsafe")
 
 
 def test_session_start_and_after_tool_batch_inject_before_their_step() -> None:

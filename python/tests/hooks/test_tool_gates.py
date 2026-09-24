@@ -27,6 +27,8 @@ def test_before_tool_deny_is_folded_into_the_permission_decision_and_nothing_run
     assert kinds(events)[at : at + 3] == ["hook_decision", "permission_decision", "tool_result"]
     permission = json.loads(events[at + 1].data.model_dump_json())
     assert (permission["source"], permission["reason"]) == ("hook", "no echo today")
+    # The model is shown the deny's reason, as in TypeScript.
+    assert json.loads(events[at + 2].data.model_dump_json())["preview"] == "denied: no echo today"
     assert decisions(events) == [("before_tool", "deny")]
 
 

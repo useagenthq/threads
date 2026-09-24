@@ -307,7 +307,9 @@ def test_subagent_start_can_deny_and_subagent_stop_can_continue_once() -> None:
         assert isinstance(first, Completed)
         events = await events_of(first.thread)
         assert not only(events, AgentSpawnedEvent)
-        assert only(events, ToolResultEvent)[0].data.origin == "denied"
+        closed = only(events, ToolResultEvent)[0].data
+        # The parent's model sees the hook's reason, as in TypeScript.
+        assert (closed.origin, closed.preview) == ("denied", "no subagents today")
 
         twice = agent(name="reviewer", model=scripted_model({"responses": [text("a"), text("b")]}))
         lead = agent(

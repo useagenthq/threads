@@ -153,30 +153,41 @@ async def after_model(rt: Runtime) -> Gated:
     request = response.data.request_event_id
     if decided(turn, "after_model", "request_event_id", request):
         return None
-    ran = await rt.hooks.run("after_model", RESPONSE, rt.writer.state(), response.data)
+    # The first answer that isn't proceed decides; later extensions aren't asked.
+    ran = await rt.hooks.run(
+        "after_model",
+        RESPONSE,
+        rt.writer.state(),
+        response.data,
+        until=lambda r: verdict(r) != "proceed",
+    )
     ids = {"request_event_id": request}
     drafts = [
         decision_draft("after_model", r, verdict(r), said(r, "reason") or said(r, "text"), **ids)
         for r in ran
     ]
-    verdicts = {verdict(r) for r in ran}
-    if verdicts == {"proceed"}:
+    last = ran[-1] if ran else None
+    if last is None or verdict(last) == "proceed":
         return await append(rt, drafts)
     # Retries are capped per turn, counted from the log so recovery can't reset them.
-    denied = "deny" in verdicts or ("retry" in verdicts and _retries(turn) >= MAX_RETRIES)
-    why = "denied by an output guardrail" if denied else "withheld: the response was guided"
+    kind = verdict(last)
+    denied = kind not in ("guide", "retry") or (kind == "retry" and _retries(turn) >= MAX_RETRIES)
+    why = said(last, "text") or said(last, "reason") or ""
+    shown = (
+        f"denied: {last.failure or why}"
+        if denied
+        else f"not dispatched: {last.extension} asked for another answer"
+    )
     how = As("denied", True, "host")
     # An older writer recorded the calls with the response: they are pending already.
     for call_id in rt.fold.pending:
-        drafts.append(await result_draft(rt, call_id, why, how))
+        drafts.append(await result_draft(rt, call_id, shown, how))
     for use, call in response_calls(rt.events):
         if call is None:
-            drafts += [call_draft(request, use), await result_draft(rt, use.call_id, why, how)]
-    if denied:
-        drafts.append(draft("turn_completed", {"reason": "error"}))
-    else:
-        guide = "\n".join(said(r, "text") or said(r, "reason") or "" for r in ran)
-        drafts.append(_instruction("after_model", guide))
+            drafts += [call_draft(request, use), await result_draft(rt, use.call_id, shown, how)]
+    drafts.append(
+        draft("turn_completed", {"reason": "error"}) if denied else _instruction("after_model", why)
+    )
     return await append(rt, drafts)
 
 

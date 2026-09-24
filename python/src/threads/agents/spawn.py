@@ -140,12 +140,17 @@ async def _start[D](
     """subagent_start gates the spawn; its decision and agent_spawned are one batch."""
     call_id = state.call.data.call_id
     ids = {"call_id": call_id}
-    ran = await rt.hooks.run("subagent_start", SWITCH, state.call.data)
+    # The first answer that isn't allow decides; later extensions aren't asked.
+    ran = await rt.hooks.run(
+        "subagent_start", SWITCH, state.call.data, until=lambda r: verdict(r) != "allow"
+    )
     drafts = [
         decision_draft("subagent_start", r, verdict(r), said(r, "reason"), **ids) for r in ran
     ]
-    if any(verdict(r) != "allow" for r in ran):
-        why = "denied by subagent_start"
+    if ran and verdict(ran[-1]) != "allow":
+        # The parent's model is shown the hook's reason (or its decision when it gave none).
+        last = ran[-1]
+        why = last.failure or said(last, "reason") or verdict(last)
         drafts.append(await result_draft(rt, call_id, why, As("denied", True, "host")))
         done = await rt.append(*drafts)
         return lost(done.error) if isinstance(done, Err) else None

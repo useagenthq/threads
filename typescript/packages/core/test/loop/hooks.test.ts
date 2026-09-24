@@ -354,8 +354,8 @@ describe("input, model and result gates", () => {
     },
   );
 
-  test("after_model deny closes the undispatched calls and nothing runs", async () => {
-    const h = harness([EMAIL], [], [SEND, FINAL]);
+  test("after_model deny closes the undispatched calls, nothing runs and the turn ends error", async () => {
+    const h = harness([EMAIL], [], [SEND]);
     const log = await run(h, [
       ext({
         after_model: async (args) =>
@@ -369,7 +369,9 @@ describe("input, model and result gates", () => {
       origin: "denied",
       preview: "denied: unsafe",
     });
-    expect(of(log, "turn_completed")[0]?.data.reason).toBe("end_turn");
+    // The contract: the turn ends error; the model is not asked again.
+    expect(of(log, "turn_completed")[0]?.data.reason).toBe("error");
+    expect(of(log, "model_request")).toHaveLength(1);
   });
 
   test("an observer hook failure (notification) is recorded and changes nothing", async () => {

@@ -105,11 +105,11 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="afterModel()[deny].decision / after_model()[deny].decision" type={"\"deny\""} required>
-  deny: the response's output is withheld and each of its tool calls is closed as denied without running. The turn ends error; in TypeScript, a response that had tool calls instead goes back to the model with each call shown as denied.
+  deny: the response's output is withheld and each of its tool calls is closed as denied without running. The turn ends error.
 </Field>
 
 <Field name="afterModel()[deny].reason / after_model()[deny].reason" type={"string"} required>
-  Why, as any text. It is recorded on the hook_decision. TypeScript shows it to the model on each closed call (denied: reason); Python shows a fixed text.
+  Why, as any text. It is recorded on the hook_decision and shown to the model on each closed call (denied: reason).
 </Field>
 
 <Field name="afterModel()[guide].decision / after_model()[guide].decision" type={"\"guide\""} required>
@@ -369,7 +369,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="subagentStart()[deny].reason / subagent_start()[deny].reason" type={"string"} required>
-  Why, as any text. It is recorded on the hook_decision. TypeScript shows it to the parent's model as the denied result; Python shows a fixed text.
+  Why, as any text. It is recorded on the hook_decision and shown to the parent's model as the denied result.
 </Field>
 
 <Field name="subagentStop / subagent_stop" type={"(finished: AgentFinishedEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"stop\" } | { decision: \"continue\"; reason: string }>"}>

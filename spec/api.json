@@ -3025,8 +3025,8 @@
                   {"object": {"decision": {"type": {"literal": "proceed"}, "required": true, "doc": "proceed: the response stands; its tool calls go on to be authorized and run, or the turn ends as the response says."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the response's output is withheld and each of its tool calls is closed as denied without running. The turn ends error; in TypeScript, a response that had tool calls instead goes back to the model with each call shown as denied."},
-                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision. TypeScript shows it to the model on each closed call (denied: reason); Python shows a fixed text."}
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the response's output is withheld and each of its tool calls is closed as denied without running. The turn ends error."},
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and shown to the model on each closed call (denied: reason)."}
                     },
                     "casing": "wire"
                   },
@@ -3434,7 +3434,7 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the subagent never starts. The spawn call closes as a denied tool_result the parent's model sees."},
-                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision. TypeScript shows it to the parent's model as the denied result; Python shows a fixed text."}
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and shown to the parent's model as the denied result."}
                     },
                     "casing": "wire"
                   }
