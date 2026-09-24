@@ -61,7 +61,8 @@ async def run(rt: Runtime, state: CallState) -> Halt | None:
         if s.spec_ref is not MISSING and still_deferred(fold, s)
     }
     deferred = [(s.name, s.description) for s in fold.tools.values() if s.name in refs]
-    others = [n for n in fold.tools if n not in refs]
+    # A legacy inline-deferred tool (older logs) is neither a candidate nor loaded, as in TS.
+    others = [s.name for s in fold.tools.values() if not still_deferred(fold, s)]
     found = search(args.query, args.limit, deferred, others)
     drafts = [await result_draft(rt, call_id, "\n".join(found.lines), As("executed"))]
     if found.loaded:
