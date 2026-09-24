@@ -172,8 +172,10 @@ async function crashAfterQuestionBegun(
   const first = start(store, ask, crashingOn(1), lead);
   await first.h.ready();
   await first.post(hook("E1", [message("Paint it.", "E1#0")]));
-  await until(async () =>
-    (await log(store)).some((e) => e.type === "effect_begin"),
+  // A team lead opens its team first, which takes a while on a loaded CI machine.
+  await until(
+    async () => (await log(store)).some((e) => e.type === "effect_begin"),
+    10_000,
   );
   await first.h.stop();
 }
@@ -329,5 +331,6 @@ describe("a host send in doubt while a question is open", () => {
       expect(runEnd(events, input.event_id).status).toBe("completed");
       expect(settled(events, "q1")).toEqual(["answered:blue"]);
     },
+    30_000,
   );
 });

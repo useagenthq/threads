@@ -145,7 +145,9 @@ export function owedCalls(
         e.type === "tool_call" && e.data.call_id === use.call_id,
     );
     if (call === undefined) return [{ kind: "unrecorded", use }];
-    return fold.pending.has(use.call_id) && !decided.has(use.call_id)
+    return fold.pending.has(use.call_id) &&
+      !fold.hostCalls.has(use.call_id) &&
+      !decided.has(use.call_id)
       ? [{ kind: "undecided", call }]
       : [];
   });

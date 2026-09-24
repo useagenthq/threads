@@ -49,8 +49,13 @@ const hook = (delivery: string, text: string) =>
     ],
   });
 
-function start(store: Store, slack: FakeChannel, sent: string[]) {
-  const responses = [use("send_email", { to: "bob" }, "c1"), say("Sent.")];
+/** A host whose scripted model answers with `responses`, from where the last host left off. */
+function start(
+  store: Store,
+  slack: FakeChannel,
+  sent: string[],
+  responses: readonly unknown[],
+) {
   const h = host({
     store,
     authenticate,
@@ -88,7 +93,8 @@ describe("an approval card send in doubt", () => {
       },
     };
     const sent: string[] = [];
-    const first = start(store, crashing, sent);
+    const ask = [use("send_email", { to: "bob" }, "c1")];
+    const first = start(store, crashing, sent, ask);
     await first.ready();
     await first.fetch(
       new Request("http://host.test/channels/slack/events", {
@@ -115,7 +121,7 @@ describe("an approval card send in doubt", () => {
     expect(granted.ok).toBe(true);
     const slack = fakeChannel("support", { buttons: true });
     slack.lookups.push("found");
-    const next = start(store, slack, sent);
+    const next = start(store, slack, sent, [say("Sent.")]);
     await next.ready();
     await until(async () =>
       (await log(store)).some((e) => e.type === "turn_completed"),
