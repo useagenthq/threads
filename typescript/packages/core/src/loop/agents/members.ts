@@ -150,6 +150,7 @@ export function consumeMail(s: Session): Halt | undefined {
       batch,
       threadId: s.threadId,
       branchId: s.branchId,
+      ...(team.principal === undefined ? {} : { principal: team.principal }),
     });
     return ok(batch.drafts);
   });

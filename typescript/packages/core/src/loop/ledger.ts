@@ -103,14 +103,21 @@ export function inheritedFrom(
   s: View,
   inherited: readonly Covering[],
 ): readonly Covering[] {
-  return [...ownCovering(s), ...inherited].map((c) =>
-    c.scope === "ancestor" ? c : { ...c, scope: "ancestor", owner: s.threadId },
-  );
+  return asAncestors(s.threadId, [...ownCovering(s), ...inherited]);
 }
 
-/** What a child of this thread inherits. */
+/** What a child of this thread inherits: everything covering it, a member's run budget too. */
 export function inheritedBy(s: Session): readonly Covering[] {
-  return inheritedFrom(s, s.config.budgets?.inherited ?? []);
+  return asAncestors(s.threadId, covering(s));
+}
+
+function asAncestors(
+  owner: ThreadId,
+  all: readonly Covering[],
+): readonly Covering[] {
+  return all.map((c) =>
+    c.scope === "ancestor" ? c : { ...c, scope: "ancestor", owner },
+  );
 }
 
 /**

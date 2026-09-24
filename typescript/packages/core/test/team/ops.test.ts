@@ -283,6 +283,8 @@ describe("team op vectors, run by this runtime", () => {
     expect(new Set(mine.map((v) => v.op))).toEqual(
       new Set(["start", "send", "consume", "materialize", "idle", "end"]),
     );
+    // Pinned: a vector that drops out of the selection fails here, not silently.
+    expect(mine).toHaveLength(35);
   });
 
   for (const v of mine)

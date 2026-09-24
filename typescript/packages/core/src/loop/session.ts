@@ -192,7 +192,9 @@ export class Session {
     const events = this.events;
     for (const e of events.slice(events.length - appended.value.length))
       this.config.onEvent?.(e);
-    this.config.team?.notify();
+    // Only a real append is progress: notifying on an empty check would wake a waiting lead
+    // at once, and its next empty check would wake it again, starving the event loop.
+    if (appended.value.length > 0) this.config.team?.notify();
     return undefined;
   }
 

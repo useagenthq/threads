@@ -65,6 +65,7 @@ export function teamOf<Deps, Output>(
         ...base,
         notify: plan.member.notify,
         runCovering: runCovering(opened.log),
+        principal: plan.principal,
       },
       stop: async () => undefined,
     };

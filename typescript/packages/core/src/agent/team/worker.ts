@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { BranchId, type MailEnvelope, type TeamId, ThreadId } from "../../log";
+import {
+  BranchId,
+  type MailEnvelope,
+  type Principal,
+  type TeamId,
+  ThreadId,
+} from "../../log";
 import { knownEvents } from "../../reduce";
 import { ok } from "../../result";
 import { LEASE_TTL_MS, type LogStore } from "../../store";
@@ -7,17 +13,22 @@ import type { ArtifactStore } from "../../store/artifacts";
 import type { SqliteDriver } from "../../store/driver";
 import { uuidv7 } from "../../store/encode";
 import { getLease } from "../../store/tables";
+import { isRefusal } from "../../store/writer";
 import { Batch, type Mint } from "../../team/batch";
 import { claimMail } from "../../team/claim";
 import { TEAM_CONSTANTS } from "../../team/constants";
 import { consumable, consume } from "../../team/consume";
 import { materialize, type Rebind } from "../../team/materialize";
+import { turnProvenance } from "../../team/provenance";
+import { type RebindCode, rebindFailed } from "../../team/rebind";
 import {
   type MemberRow,
   memberRows,
   ownRows,
   pendingFor,
+  teamRow,
 } from "../../team/rows";
+import type { VerifiedLog } from "../../verify";
 import { ConfigError } from "../errors";
 import { memberEntry } from "../registry";
 import type { Store } from "../sqlite";
@@ -82,12 +93,16 @@ export class TeamWorker {
     this.#loop = this.#run();
   }
 
-  /** Stops looking for work and waits for the member runs in flight. */
+  /**
+   * Stops looking for work and waits for the member runs in flight, unless the lead closed its
+   * team: those members are being cancelled, and the run returns without them.
+   */
   async stop(): Promise<void> {
     this.#stopped = true;
     this.notify();
     await this.#loop;
-    await Promise.allSettled(this.#running.values());
+    if (!closed(this.#env.log.driver, this.#env.team))
+      await Promise.allSettled(this.#running.values());
   }
 
   async #run(): Promise<void> {
@@ -122,6 +137,8 @@ export class TeamWorker {
     row: MemberRow,
     recovering: boolean,
   ): (() => Promise<void>) | undefined {
+    // A closed team's members are being cancelled: none starts or resumes.
+    if (row.state !== "ended" && closed(db, row.team_id)) return undefined;
     if (row.state === "starting") return () => this.#materialize(row);
     const branch = row.branch_id;
     if (branch === null) return undefined;
@@ -213,9 +230,6 @@ export class TeamWorker {
     branch: string,
     holder = `team-${crypto.randomUUID()}`,
   ): Promise<void> {
-    const handle = this.#env.agents.get(row.agent);
-    const entry = handle === undefined ? undefined : memberEntry(handle);
-    if (entry === undefined) return;
     const read = this.#env.log.read(BranchId.parse(branch));
     if (!read.ok) throw new Error(`member ${row.name}: ${read.error.message}`);
     const events = knownEvents(read.value);
@@ -225,6 +239,18 @@ export class TeamWorker {
       started?.type === "thread_started" ? started.data.parent : undefined;
     if (parent?.relation !== "team_member" || task?.type !== "user_input")
       throw new Error(`member ${row.name} has no task`);
+    const handle = this.#env.agents.get(row.agent);
+    const entry = handle === undefined ? undefined : memberEntry(handle);
+    const rebind = await this.#rebind(
+      row.agent,
+      started?.data.config_hash ?? "",
+    );
+    if (entry === undefined || rebind.status !== "ok")
+      return this.#unbound(
+        branch,
+        holder,
+        rebind.status === "ok" ? "pin_unavailable" : rebind.status,
+      );
     await entry.run({
       store: this.#env.store,
       thread: {
@@ -233,12 +259,41 @@ export class TeamWorker {
         store: this.#env.store,
       },
       parent: { ...parent, relation: "team_member" },
-      principal: task.actor.principal,
+      principal:
+        principalOf(this.#env.log.driver, read.value, row) ??
+        task.actor.principal,
       holder,
       notify: this.notify,
       covering: ancestorsOf(this.#env.log, parent),
       ...(this.#env.signal === undefined ? {} : { signal: this.#env.signal }),
     });
+  }
+
+  /** A member whose definition can't be rebound here ends failed, under its own writer. */
+  #unbound(branch: string, holder: string, code: RebindCode): void {
+    const writer = this.#env.log.acquire(BranchId.parse(branch), holder);
+    // Held elsewhere: its holder runs it.
+    if (!writer.ok) return;
+    const w = writer.value;
+    const header = w.chain.segments[0]?.header;
+    if (header === undefined) throw new Error("a writer's chain has a header");
+    const ended = w.appendDecided((tx) => {
+      const batch = new Batch(tx.chain.fold.seq, tx.now, this.#env.mint);
+      rebindFailed(
+        {
+          db: tx.db,
+          chain: tx.chain,
+          batch,
+          threadId: header.thread_id,
+          branchId: branch,
+        },
+        code,
+      );
+      return ok(batch.drafts);
+    });
+    w.release();
+    if (isRefusal(ended)) throw new Error("a failed rebind never refuses");
+    if (!ended.ok) throw new Error(`member end: ${ended.error.message}`);
   }
 
   /** An ended member's writer refuses the mail that still reaches it. */
@@ -266,6 +321,21 @@ export class TeamWorker {
   }
 }
 
+/**
+ * The one principal a member run acts under (design §2.6: one turn, one authority): its open
+ * turn's, else that of the first mail it would take. Mail of another principal waits for the
+ * next run.
+ */
+function principalOf(
+  db: SqliteDriver,
+  log: VerifiedLog,
+  row: MemberRow,
+): Principal | undefined {
+  if (log.fold.turnOpen) return turnProvenance(db, log)?.principal;
+  return pendingFor(db, ownRows(db, row.thread_id)).find(consumable)?.provenance
+    .principal;
+}
+
 /** A definition that can't be set up or pinned here is unavailable: a value, not a throw. */
 async function pinnedOrUnavailable<T>(
   pinned: () => Promise<T>,
@@ -276,6 +346,10 @@ async function pinnedOrUnavailable<T>(
     if (error instanceof ConfigError) return undefined;
     throw error;
   }
+}
+
+function closed(db: SqliteDriver, team: string): boolean {
+  return (teamRow(db, team)?.closed_at ?? null) !== null;
 }
 
 /** The team and every team led by one of its members, recursively. */

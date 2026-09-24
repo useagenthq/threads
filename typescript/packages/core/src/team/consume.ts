@@ -1,5 +1,5 @@
 import type { Fold } from "../fold/state";
-import { type MailEnvelope, principalKey } from "../log";
+import { type MailEnvelope, type Principal, principalKey } from "../log";
 import type { Chain } from "../verify";
 import { received } from "./mail";
 import { takeParkNotice } from "./park";
@@ -18,7 +18,11 @@ import { type AppendContext, refuseAll } from "./settle";
 // notices that complete an ask or a wait. Until then those stay pending, and a pending cancel
 // stops the ordinary mail behind it: a member being cancelled takes no new work.
 
-export type ConsumeContext = AppendContext & { readonly chain: Chain };
+export type ConsumeContext = AppendContext & {
+  readonly chain: Chain;
+  /** A member run's principal: ordinary mail of another waits for a run under that one. */
+  readonly principal?: Principal;
+};
 
 export type Consumed =
   | { readonly status: "nothing_pending" }
@@ -96,13 +100,23 @@ function take(
   const pair = pairOf(env.provenance);
   if (pass.turn !== undefined) {
     if (pair !== pass.turn) return false;
-  } else if (pass.batch !== undefined && pair !== pass.batch) {
+  } else if (
+    (pass.batch !== undefined && pair !== pass.batch) ||
+    !underRun(ctx, env)
+  ) {
     pass.blocked = true;
     return false;
   }
   pass.batch = pair;
   ctx.batch.add(received(env));
   return true;
+}
+
+function underRun(ctx: ConsumeContext, env: MailEnvelope): boolean {
+  return (
+    ctx.principal === undefined ||
+    principalKey(ctx.principal) === principalKey(env.provenance.principal)
+  );
 }
 
 /** A task or end notice resolving the park on it: its receipt, then resumed. */

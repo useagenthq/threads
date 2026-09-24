@@ -285,6 +285,11 @@ export type TeamRuntime = {
    * belongs to (its receipt's provenance, or its task's). Absent for a lead, whose run is its own.
    */
   readonly runCovering?: (opener: KnownEvent) => Covering | undefined;
+  /**
+   * A member's: the one principal its run acts under. Its consume takes only mail sent under it;
+   * the worker runs the member again under the principal of the mail left pending.
+   */
+  readonly principal?: Principal;
   /** Called after each append of a team thread: the team worker looks for work. */
   readonly notify: () => void;
   /**

@@ -138,10 +138,10 @@ A received message reaches the model as untrusted reference text, marked with it
 
 - **Members work in parallel.** Each member has its own thread and runs as soon as it starts. `run()` runs the members in the same process as the lead.
 - **The lead wakes for each member it started.** When a member finishes its task, the lead gets its result as a message and takes another turn. `run()` returns once no lead turn is open and every member this run started has reported. The result is the lead's last answer.
-- **A member that ends badly still reports.** If a member's model fails, runs out of budget, or its definition changed since it was started, it ends `failed` (or `budget_exhausted`), and the lead wakes with that result instead.
+- **A member that ends badly still reports.** If a member's model fails, it runs out of budget, or the next run no longer has its definition as it was when it started (the agent was renamed, dropped or changed), it ends `failed` (or `budget_exhausted`), and the lead wakes with that result instead.
 - **A member that waits parks the lead.** If a member stops for an approval, the lead parks on it and `run()` returns `parked`, with the member in `pending`. Answer the approval on the member's thread (the lead's [timeline](/docs/evals/timeline) has the member's `member_started`, with its `thread_id`), then run the lead again: the member carries on, its result wakes the lead, and then your new input starts the next turn.
-- **A lead that ends closes its team.** If the lead's own turn fails, is cancelled or runs out of budget, the run returns that status and the team is closed: no member can be started and no message sent.
-- **Budgets cover the whole team.** A member's model requests count against its own budget, the lead's budget, and the budget of the run that started it. See [Budgets](/docs/control/budgets).
+- **A lead that ends closes its team.** If the lead's own turn fails, is cancelled or runs out of budget, the run returns that status at once and the team is closed: no member can be started or resumed, and no message sent. A member already in the middle of a step finishes that step.
+- **Budgets cover the whole team.** A member's model requests, and its own subagents', count against its own budget, the lead's budget, and the budget of the run its current work came from (the run that started it, or the run whose message it is answering). See [Budgets](/docs/control/budgets).
 - **Safe after a crash.** Every step is one atomic append. If the process dies, the next run of the lead picks up where the logs left off: a member is started once, gets its task once, and reports once.
 
 ## Setting it up
