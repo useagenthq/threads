@@ -101,6 +101,19 @@ describe("a doomed lead's teams are found through their rows, in this tenant", (
     expect(count(t, "teams")).toBe(1);
     expect(count(t, "mail")).toBe(1);
   });
+
+  test("a team log that names another tenant's team never touches that team", () => {
+    const forged = caseLogs(REBIND, ALL, (label, line) =>
+      label === "team" && line["type"] === "team_opened"
+        ? { ...line, data: { ...Object(line["data"]), team: OTHER_TEAM } }
+        : line,
+    );
+    const t = teamStore(forged);
+    rowsOnly(t, "0192a000-0000-7000-8000-0000000000ef", "other");
+    unwrap(deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0));
+    expect(count(t, "teams WHERE team_id = ?", [OTHER_TEAM])).toBe(1);
+    expect(count(t, "mail WHERE team_id = ?", [OTHER_TEAM])).toBe(1);
+  });
 });
 
 describe("what goes with a thread, and what doesn't", () => {

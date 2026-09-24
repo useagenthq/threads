@@ -98,6 +98,7 @@ threads delete --tenant acme        # every thread of a tenant
 Deletion removes the thread's log and records that it was deleted. Threads its subagents ran are deleted with it; threads it handed off to are not. Sandboxes it still held are marked for release by the next `gc`. Deleting a team's lead deletes the whole team: its members, its team log and everything indexed for it. Everything goes in one step, or nothing does:
 
 - `busy`: something in it is still running, has an effect whose outcome is unknown, or has a log this version can't verify. Cancel it, wait for it to stop, resolve any parked effect (or run `threads repair` on a torn branch), then delete.
+  A log that no repair can fix (damaged in the middle, not just a torn tail) keeps its thread, and a whole-tenant delete that includes it, refused. Delete it with the version that wrote it; if that isn't possible, erasing the tenant means recreating the store without it (export the tenants you keep, then import them into a fresh store).
 - `thread_in_team`: the thread is a team member or a team log. Delete its lead instead.
 
 A refusal prints `<code>: <message>` and exits nonzero.

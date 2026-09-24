@@ -9,7 +9,7 @@ from typing import Final, Literal
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import BranchId, TeamOpenedEvent, ThreadId, ThreadStartedEvent
+from threads.log import BranchId, ThreadId, ThreadStartedEvent
 from threads.result import Err, Ok
 from threads.store.sql import export, text_of, transaction
 from threads.store.started import Opened, opened_threads, owner_of
@@ -67,44 +67,40 @@ def _delete_set(
 ) -> Ok[int] | Err[DeleteError]:
     opened = opened_threads(conn, tenant_id)
     doomed = _fixed_point(opened, start)
-    refused = _outside_its_team(opened, doomed) or _running(conn, doomed, now)
+    existing: list[tuple[object]] = conn.execute(
+        "SELECT thread_id FROM threads WHERE tenant_id = ?", (tenant_id,)
+    ).fetchall()
+    alive = {text_of(t) for (t,) in existing}
+    refused = _outside_its_team(opened, doomed, alive) or _running(conn, doomed, now)
     if refused is not None:
         return Err(refused)  # decided before any write, so the refusal writes nothing
-    _delete_teams(conn, tenant_id, _doomed_teams(conn, tenant_id, opened, doomed))
+    _delete_teams(conn, tenant_id, _doomed_teams(conn, tenant_id, doomed))
     for thread in doomed:
         _delete_one(conn, tenant_id, thread, now)
     return Ok(len(doomed))
 
 
 def _doomed_teams(
-    conn: sqlite3.Connection, tenant_id: str, opened: Sequence[Opened], doomed: Collection[ThreadId]
-) -> set[str]:
-    """The teams a doomed lead leads, by `teams.lead_thread_id` in this tenant, and every doomed
-    team log's own team."""
-    leads = list(doomed)
-    marks = ", ".join("?" for _ in leads)
-    rows: list[tuple[object]] = conn.execute(
-        f"SELECT team_id FROM teams WHERE tenant_id = ? AND lead_thread_id IN ({marks})",  # noqa: S608
-        (tenant_id, *leads),
+    conn: sqlite3.Connection, tenant_id: str, doomed: Collection[ThreadId]
+) -> list[str]:
+    """The teams a doomed lead leads, by `teams.lead_thread_id` in this tenant (Gate 1 §4.15
+    rule 2). A team id is never taken from a log: an imported team_opened could name another
+    tenant's team. Filtered here, not in SQL, so a large tenant never passes SQLite's variable
+    limit."""
+    rows: list[tuple[object, object]] = conn.execute(
+        "SELECT team_id, lead_thread_id FROM teams WHERE tenant_id = ?", (tenant_id,)
     ).fetchall()
-    teams = {text_of(t) for (t,) in rows}
-    teams |= {
-        o.event.data.team
-        for o in opened
-        if o.thread_id in doomed and isinstance(o.event, TeamOpenedEvent)
-    }
-    return teams
+    return [text_of(team) for team, lead in rows if text_of(lead) in doomed]
 
 
 def _delete_teams(conn: sqlite3.Connection, tenant_id: str, teams: Collection[str]) -> None:
-    ids = list(teams)
-    marks = ", ".join("?" for _ in ids)
-    for table in TEAM_TABLES:
-        scope = " AND tenant_id = ?" if table == "teams" else ""
-        conn.execute(
-            f"DELETE FROM {table} WHERE team_id IN ({marks}){scope}",  # noqa: S608
-            (*ids, *([tenant_id] if scope else [])),
-        )
+    for team in teams:
+        for table in TEAM_TABLES:
+            scope = " AND tenant_id = ?" if table == "teams" else ""
+            conn.execute(
+                f"DELETE FROM {table} WHERE team_id = ?{scope}",  # noqa: S608
+                (team, *([tenant_id] if scope else [])),
+            )
 
 
 def _fixed_point(opened: Sequence[Opened], start: Sequence[ThreadId]) -> set[ThreadId]:
@@ -121,9 +117,11 @@ def _fixed_point(opened: Sequence[Opened], start: Sequence[ThreadId]) -> set[Thr
     return doomed
 
 
-def _outside_its_team(opened: Sequence[Opened], doomed: Collection[ThreadId]) -> DeleteError | None:
-    """A team member or team log goes only with its lead, unless that lead no longer exists."""
-    alive = {o.thread_id for o in opened}
+def _outside_its_team(
+    opened: Sequence[Opened], doomed: Collection[ThreadId], alive: Collection[str]
+) -> DeleteError | None:
+    """A team member or team log goes only with its lead, unless that lead's thread no longer
+    exists in the tenant (a lead whose first line doesn't parse still exists)."""
     for o in opened:
         owner = owner_of(o)
         if o.thread_id not in doomed or owner in doomed or owner not in alive:

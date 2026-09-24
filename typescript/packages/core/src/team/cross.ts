@@ -80,9 +80,9 @@ function learn(
 }
 
 /**
- * The first break of rule 43, scanning `logs` in order and each log by seq. With `team`, only
- * that team's mail is checked: a nested lead's log also holds its parent team's mail, whose
- * other ends are not among one team's logs.
+ * The first break of rule 43, scanning `logs` in order and each log by seq. With `team`, the
+ * clauses about one mail check only that team's mail: a nested lead's log also holds its parent
+ * team's mail, whose other ends are not among one team's logs. The task-turn clause checks all.
  */
 export function checkTeamLogs(
   logs: readonly TeamLogEvents[],
@@ -90,7 +90,7 @@ export function checkTeamLogs(
 ): CrossFailure | undefined {
   const known = facts(logs);
   for (const log of logs) {
-    const found = firstBreak(log, known, team) ?? taskTurn(log, known, team);
+    const found = firstBreak(log, known, team) ?? taskTurn(log, known);
     if (found !== undefined) return found;
   }
   return undefined;
@@ -121,13 +121,10 @@ function firstBreak(
 /**
  * Mail that renders inside a member's task turn belongs to the task's run: one log shows only
  * the task turn's principal (rule 34), and the task envelope, in the starter's log, holds its
- * root request.
+ * root request. Never limited to one team's mail: a nested lead's own-team mail can arrive in
+ * the task turn its outer team gave it, and only the outer team's rebuild knows that task.
  */
-function taskTurn(
-  log: TeamLogEvents,
-  known: Facts,
-  team: TeamId | undefined,
-): CrossFailure | undefined {
+function taskTurn(log: TeamLogEvents, known: Facts): CrossFailure | undefined {
   const fold = emptyFold();
   let root: MailEnvelope["provenance"]["root_request"] | undefined;
   for (const e of log.events) {
@@ -137,7 +134,6 @@ function taskTurn(
       e.type === "message_received" &&
       inTask &&
       root !== undefined &&
-      !outside(e, team) &&
       mailRenders(e.data.envelope, fold.team.settle) &&
       !sameJson(e.data.envelope.provenance.root_request, root)
     )
@@ -219,6 +215,8 @@ function bounce(
     return "a bounce's causal is not its mail_refused";
   const refused = known.sent.get(refusal.data.mail_id);
   if (refused === undefined) return undefined;
+  if (!sameJson(env.provenance, refused.provenance))
+    return "a bounce's provenance is not its refused mail's";
   if (refused.kind !== "ask")
     return env.ask_id === undefined
       ? undefined
