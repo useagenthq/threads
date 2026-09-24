@@ -11,8 +11,9 @@ import { knownEvents, type ReducedState, reduce } from "../reduce";
 import { err, ok } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import type { Chain } from "../verify";
-import { afterBarrier } from "./turn";
+import { afterBarrier, opensWork } from "./turn";
 import type { ChildEnd, Halt, LoopConfig } from "./types";
+import { BARRED, type Barred } from "./types";
 
 const encoder = new TextEncoder();
 
@@ -75,6 +76,24 @@ export class Session {
    * never append or dispatch again.
    */
   append(...drafts: readonly EventDraft[]): Halt | undefined {
+    if (drafts.some(opensWork))
+      throw new Error("a batch that starts work is appended with appendWork");
+    return this.#admit(drafts);
+  }
+
+  /**
+   * Appends a batch that starts new work (a request, a dispatch, a handoff, a child, a retry
+   * wait, a model switch). BARRED: a pending cancel refused it; its hook decisions were kept, and
+   * the cancellation step is next.
+   */
+  appendWork(...drafts: readonly EventDraft[]): Halt | Barred | undefined {
+    const refused =
+      afterBarrier(this.fold, this.events, drafts).length !== drafts.length;
+    const stopped = this.#admit(drafts);
+    return stopped ?? (refused ? BARRED : undefined);
+  }
+
+  #admit(drafts: readonly EventDraft[]): Halt | undefined {
     const admitted = afterBarrier(this.fold, this.events, drafts);
     if (admitted.length === 0) return undefined;
     const appended = this.#writer.append(admitted);

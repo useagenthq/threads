@@ -4,7 +4,7 @@ import { draft } from "./drafts";
 import { switchGate } from "./lifecycle";
 import { retryPolicy } from "./policy";
 import type { Session } from "./session";
-import type { Halt } from "./types";
+import { BARRED, type Halt } from "./types";
 
 // The turn-scoped fallback revert (ADR 0020): with fallback_scope turn, the next input goes
 // back to the settings in force before the fallback, gated by before_model_switch.
@@ -67,7 +67,7 @@ export async function revert(s: Session): Promise<Halt | undefined | "none"> {
   const cause = due.input.event_id;
   const gate = await switchGate(s, due.settings, { input_event_id: cause });
   if (!gate.allowed) return s.append(...gate.decisions);
-  return s.append(
+  const reverted = s.appendWork(
     ...gate.decisions,
     draft.settingsChanged({
       reason: "revert",
@@ -75,4 +75,6 @@ export async function revert(s: Session): Promise<Halt | undefined | "none"> {
       cause_event_id: cause,
     }),
   );
+  // A cancel landed during the hook: the revert waits for the next turn.
+  return reverted === BARRED ? undefined : reverted;
 }

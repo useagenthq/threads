@@ -6,7 +6,7 @@ import { draft, TOOL } from "../drafts";
 import { inheritedBy } from "../ledger";
 import type { Session } from "../session";
 import { recordOutput } from "../spill";
-import type { ChildDone, ChildEnd, Halt } from "../types";
+import { BARRED, type ChildDone, type ChildEnd, type Halt } from "../types";
 import { continues, startGate, stopGate } from "./gates";
 import { parkOn } from "./park";
 import { teamOf } from "./team";
@@ -58,7 +58,7 @@ async function start(s: Session, call: Call): Promise<Halt | undefined> {
   const denied = await startGate(s, call);
   if (typeof denied !== "string") return denied;
   if (denied !== "allow") return closed(s, call_id, "denied", denied);
-  const stopped = s.append(
+  const stopped = s.appendWork(
     draft.agentSpawned({
       call_id,
       child_thread_id: ThreadId.parse(uuidv7(s.now())),
@@ -68,6 +68,8 @@ async function start(s: Session, call: Call): Promise<Halt | undefined> {
       ...(sub?.budget === undefined ? {} : { budget: sub.budget }),
     }),
   );
+  // A cancel landed during the hook: no child starts; the cancellation step closes the call.
+  if (stopped === BARRED) return undefined;
   return stopped ?? spawnAgent(s, call);
 }
 

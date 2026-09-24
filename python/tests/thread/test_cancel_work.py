@@ -14,7 +14,7 @@ from pydantic import JsonValue
 from threads import HandedOff, RunContext, agent, scripted_model, sqlite, tool
 from threads.agents import handoff
 from threads.hooks.extension import extension
-from threads.hooks.types import ToolGate
+from threads.hooks.types import SwitchGate, ToolGate
 from threads.log import Event, HandoffEvent, ToolCallData, ToolResultEvent
 from threads.loop.runtime import Runtime
 
@@ -126,3 +126,47 @@ def test_a_cancel_while_a_handoff_is_authorized_starts_no_target() -> None:
     assert not isinstance(result, HandedOff)
     assert billing_model.sent == []
     _nothing_after_the_barrier(events, "handoff")
+
+
+def test_a_cancel_during_subagent_start_starts_no_child_and_keeps_the_decision() -> None:
+    """The refused batch's hook decision is still recorded: the hook ran."""
+    cancel = Cancel()
+
+    async def gate(_call: ToolCallData, _ctx: RunContext[None]) -> SwitchGate:
+        await cancel()
+        return {"decision": "allow"}
+
+    child_model = scripted_model({"responses": [text("child")]})
+    reviewer = agent(name="reviewer", model=child_model)
+    spawn: JsonValue = {
+        "content": [
+            {
+                "type": "tool_use",
+                "call_id": "c1",
+                "name": "spawn_agent",
+                "input": {"agent": "reviewer", "prompt": "Review."},
+            }
+        ],
+        "stop_reason": "tool_use",
+        "usage": USAGE,
+    }
+    lead = agent(
+        model=scripted_model({"responses": [text("hi"), spawn, text("never")]}),
+        subagents=[reviewer],
+        extensions=[extension(name="gate", hooks={"subagent_start": gate})],
+    )
+
+    async def main() -> Sequence[Event]:
+        store = sqlite(":memory:")
+        first = await lead.run("hi", store=store)
+        cancel.thread = first.thread
+        await lead.run("review", store=store, thread=first.thread)
+        return await logged(first.thread)
+
+    events = asyncio.run(main())
+    names = [e.type for e in events]
+    rest = names[names.index("cancel_requested") :]
+    assert "agent_spawned" not in rest
+    assert "hook_decision" in rest
+    assert child_model.sent == []
+    ended_cancelled(events)

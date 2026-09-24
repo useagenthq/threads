@@ -4,7 +4,7 @@ import { uuidv7 } from "../../store/encode";
 import { HandoffInput } from "../../tools/agent-inputs";
 import { draft, TOOL } from "../drafts";
 import type { Session } from "../session";
-import type { Halt } from "../types";
+import { BARRED, type Halt } from "../types";
 
 // handoff: the conversation moves to a new thread of a listed agent. This
 // thread records handoff, the call's result and turn_completed{handoff}, and takes no input
@@ -30,7 +30,7 @@ export function handOff(s: Session, call: Call): Halt | undefined {
     );
   // The turn ends here: calls after the handoff in the same response never run.
   const others = [...s.fold.pending].filter((id) => id !== call_id);
-  return s.append(
+  const done = s.appendWork(
     {
       type: "handoff",
       type_version: 1,
@@ -66,6 +66,8 @@ export function handOff(s: Session, call: Call): Halt | undefined {
     ),
     draft.turnCompleted("handoff"),
   );
+  // A cancel landed first: no target starts; the cancellation step closes the call.
+  return done === BARRED ? undefined : done;
 }
 
 /** The forwarded history: what the user and the agent said, as plain text. */

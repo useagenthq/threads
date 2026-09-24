@@ -244,18 +244,20 @@ OPENS_WORK: Final = frozenset(
     }
 )
 """Events that start new work: a request, a dispatch, a handoff target, a child, a retry wait,
-a model switch."""
+a model switch. Teams' member starts and deliveries join this list when they become writable
+(spec/schema/README.md, Teams); TypeScript's `OPENS_WORK` (loop/turn.ts) is the same list."""
 
 
 def after_barrier(fold: Fold, drafts: Sequence[Draft]) -> Sequence[Draft]:
     """Nothing new after a cancel barrier (spec/schema/README.md). With a cancel pending in the
-    open turn, a batch that starts new work is refused whole, and any other batch keeps what it
-    owes (an abandonment, a side request's compaction_failed) but no turn_completed other than
-    cancelled. The cancellation step closes the turn."""
+    open turn, a batch that starts new work is refused (only the hook decisions that ran for it
+    are kept, as the audit record), and any other batch keeps what it owes (an abandonment, a
+    side request's compaction_failed) but no turn_completed other than cancelled. The
+    cancellation step closes the turn."""
     if not fold.in_turn or open_cancel(fold.events) is None:
         return drafts
     if any(d.type in OPENS_WORK for d in drafts):
-        return []
+        return [d for d in drafts if d.type == "hook_decision"]
     return [d for d in drafts if d.type != "turn_completed" or d.data.get("reason") == "cancelled"]
 
 

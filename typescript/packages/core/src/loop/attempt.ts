@@ -15,7 +15,7 @@ import { draft } from "./drafts";
 import { reserve, settleOpen } from "./ledger";
 import type { Session } from "./session";
 import { cancelRequested } from "./turn";
-import type { Halt } from "./types";
+import { BARRED, type Halt } from "./types";
 
 // One model attempt: render, store the request bytes,
 // append model_request (durable before dispatch), then exactly one send.
@@ -98,7 +98,7 @@ export async function attempt(
   const over = reserve(s);
   if (over !== undefined) return refuse(s, over, purpose, cause);
   const tags = purpose === "compaction" ? sideTags(cause) : {};
-  const stopped = s.append(
+  const stopped = s.appendWork(
     draft.modelRequest({
       attempt: number,
       ...tags,
@@ -106,6 +106,7 @@ export async function attempt(
       declared_prefix: { bytes: prefix.length, sha256: sha256Hex(prefix) },
     }),
   );
+  if (stopped === BARRED) return barred(s, purpose, cause);
   if (stopped !== undefined) return { kind: "halt", halt: stopped };
   const requestId = s.events.at(-1)?.event_id ?? "";
   // Fenced in the same synchronous section as the send: a stale owner never sends.
