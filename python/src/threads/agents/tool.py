@@ -42,6 +42,7 @@ class ToolOptions[I: BaseModel, O, D](TypedDict, total=False):
     reconcile: Reconcile[O, D]
     ends_turn: bool
     concurrent: bool
+    defer: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +59,8 @@ class Tool[I: BaseModel, O, D]:
     ends_turn: bool = False
     concurrent: bool = False
     """Runs with the other concurrent read-only calls of one response. Hashed, not in line 0."""
+    defer: bool = False
+    """The model sees only the name and description until tool_search loads it."""
 
     def spec(self) -> ToolSpec:
         """The pinned ToolSpec: what line 0 shows and what decides the effect class."""
@@ -136,7 +139,7 @@ def tool[I: BaseModel, O, D](**options: Unpack[ToolOptions[I, O, D]]) -> Tool[I,
     """spec/api.json `tool`. `runs` defaults to "host" and is not pinned. Raises ConfigError for
     a definition that can't run: a sandbox tool (no sandbox in this build), an idempotent tool
     without its dedup window, a reconcilable tool without its lookup, or a concurrent tool that
-    isn't read_only or ends the turn."""
+    isn't read_only or ends the turn, or a deferred tool that ends the turn."""
     effect = options.get("effect", "unguarded")
     execute = options.get("execute")
     if options.get("runs", "host") != "host" or execute is None:
@@ -155,6 +158,12 @@ def tool[I: BaseModel, O, D](**options: Unpack[ToolOptions[I, O, D]]) -> Tool[I,
             f"tool {options['name']}: concurrent needs effect='read_only' and no ends_turn; "
             "tools with side effects, or that end the turn, run one at a time",
         )
+    defer = options.get("defer", False)
+    if defer and ends_turn:
+        raise ConfigError(
+            "invalid_config",
+            f"tool {options['name']}: defer can't be combined with ends_turn",
+        )
     return Tool(
         options["name"],
         options["description"],
@@ -165,4 +174,5 @@ def tool[I: BaseModel, O, D](**options: Unpack[ToolOptions[I, O, D]]) -> Tool[I,
         reconcile,
         ends_turn,
         concurrent,
+        defer,
     )

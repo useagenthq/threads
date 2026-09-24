@@ -10,6 +10,7 @@ from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
 from threads.agents.cache_ttl import agreed_cache_ttl
 from threads.agents.catalog import NO_CATALOG, Catalog
+from threads.agents.deferral import DeferTools, Pinned, pinned_tools
 from threads.agents.skills import Skill, listing, pinned
 from threads.agents.tool import Tool, json_schema
 from threads.hooks.extension import Extension, extension_tools
@@ -96,6 +97,8 @@ class Definition[D]:
     `model`). Empty: not a template."""
     dynamic: Dynamic | None = None
     """A dynamic member: pinned with this choice, which the hashed config records."""
+    inherited_defer: DeferTools | None = None
+    """A child's parent's resolved defer_tools: pinned when the child sets no context."""
 
     def policy(self) -> dict[str, JsonValue]:
         """The resolved runtime policy: each section absent (ADR defaults) or complete. An
@@ -124,14 +127,25 @@ class Definition[D]:
         return pinned
 
     def _context(self) -> Context | None:
-        """The given context; else, when the models agree on a cache TTL other than the default,
-        the default context with it. An all-5m agent pins what it always did."""
+        """The given context; else, when the models agree on a cache TTL other than the default
+        or a parent's defer_tools isn't the default, the default context with them. An all-5m
+        agent with nothing inherited pins what it always did."""
         if self.context is not None:
             return self.context
+        update: dict[str, object] = {}
         ttl = agreed_cache_ttl((self.model, *self.fallback))
-        if ttl is None or ttl == CONTEXT.cache_ttl_ms:
-            return None
-        return CONTEXT.model_copy(update={"cache_ttl_ms": ttl})
+        if ttl is not None and ttl != CONTEXT.cache_ttl_ms:
+            update["cache_ttl_ms"] = ttl
+        inherited = self.inherited_defer
+        if inherited is not None and inherited != CONTEXT.defer_tools:
+            update["defer_tools"] = inherited
+        return CONTEXT.model_copy(update=update) if update else None
+
+    def defer_tools(self) -> DeferTools:
+        """The resolved defer_tools: what this agent pins, and what its children inherit."""
+        if self.context is not None:
+            return self.context.defer_tools
+        return self.inherited_defer or CONTEXT.defer_tools
 
     def _models(self) -> list[JsonValue]:
         """Every model this thread may use, primary first, once per (provider, name)."""
@@ -160,12 +174,24 @@ class Definition[D]:
             gated=self.catalog.gated(),
             skills=bool(self.skills),
         )
-        ext = extension_tools(self.extensions)
-        mine = (*builtins, *(t.spec() for t in self.tools), *(t.spec() for t in ext))
+        user = self._user_tools()
         allowed = self.allowed
+        mine = (*builtins, *user.specs)
         if allowed is not None:
             mine = tuple(s for s in mine if s.name in allowed)
+        if user.search is not None:
+            # A child's own tool_search is exempt from its parent's names: loads are per thread.
+            mine = _with_search(mine, user.search, {b.name for b in builtins})
         return mine if self.output is None else (*mine, _final_output(self.output))
+
+    def _user_tools(self) -> Pinned:
+        ext = extension_tools(self.extensions)
+        pairs = [(t, t.spec()) for t in self.tools] + [(t, t.spec()) for t in ext]
+        return pinned_tools(pairs, self.defer_tools())
+
+    def spec_artifacts(self) -> tuple[bytes, ...]:
+        """The deferred tools' full specs, each put before the thread_started naming it."""
+        return self._user_tools().artifacts
 
     @property
     def full_instructions(self) -> str:
@@ -261,6 +287,17 @@ def _template_line[D](template: Definition[D]) -> str:
     keys = [k for k, _ in template.models]
     models = ", ".join([f"{keys[0]} (default)", *keys[1:]])
     return f"{template.name} (you write its instructions; tools: {tools}; models: {models})"
+
+
+def _with_search(
+    specs: tuple[ToolSpec, ...], search: ToolSpec, builtins: set[str]
+) -> tuple[ToolSpec, ...]:
+    """tool_search sorted by name among the built-ins, which lead the specs."""
+    at = next(
+        (i for i, s in enumerate(specs) if s.name not in builtins or s.name > search.name),
+        len(specs),
+    )
+    return (*specs[:at], search, *specs[at:])
 
 
 def _settings(model: Model) -> dict[str, JsonValue]:

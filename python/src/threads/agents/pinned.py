@@ -17,8 +17,12 @@ async def pinned_start[D](definition: Definition[D], store: Store) -> Draft:
     first, as a run would be: a setup failure raises ConfigError before anything is stored."""
     await set_up(definition)
     async with AsyncExitStack() as stack:
-        started, config = (await with_servers(definition, stack, outside_any_branch)).pin()
-    await (await open_store(store)).put_artifact(config)
+        connected = await with_servers(definition, stack, outside_any_branch)
+        started, config = connected.pin()
+        specs = connected.spec_artifacts()
+    opened = await open_store(store)
+    for raw in (config, *specs):
+        await opened.put_artifact(raw)
     return draft("thread_started", started)
 
 

@@ -45,8 +45,10 @@ async def member_pin[D](definition: Definition[D]) -> TeamAgentPin:
     await set_up(definition)
     async with AsyncExitStack() as stack:
         connected = await with_servers(definition, stack, outside_any_branch)
-        started, config = replace(connected, in_team=True).pin()
-        names = [s.name for s in replace(connected, in_team=True).specs()]
+        member = replace(connected, in_team=True)
+        started, config = member.pin()
+        specs = member.spec_artifacts()
+        names = [s.name for s in member.specs()]
     if definition.dynamic is not None:
         gone = [t for t in definition.dynamic.define.tools if t not in names]
         if gone:
@@ -64,6 +66,7 @@ async def member_pin[D](definition: Definition[D]) -> TeamAgentPin:
         None if policy is None else Policy.model_validate(policy),
         definition.budget,
         template,
+        specs,
     )
 
 

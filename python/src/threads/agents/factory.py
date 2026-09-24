@@ -330,8 +330,15 @@ def build_definition[T](
     if "on_unknown_usage" in options:
         definition = replace(definition, on_unknown_usage=options["on_unknown_usage"])
     pinned = frozenset(s.name for s in definition.specs())
-    children = tuple(replace(c, allowed=pinned) for c in definition.subagents)
-    definition = replace(definition, subagents=children)
+    defer = definition.defer_tools()
+    # A child that sets no context pins its parent's resolved defer_tools (spec/schema/README.md).
+    children = tuple(
+        replace(c, allowed=pinned, inherited_defer=defer) for c in definition.subagents
+    )
+    handoffs = tuple(replace(h, inherited_defer=defer) for h in definition.handoffs)
+    team_of = definition.team
+    members = None if team_of is None else tuple(replace(m, inherited_defer=defer) for m in team_of)
+    definition = replace(definition, subagents=children, handoffs=handoffs, team=members)
     narrowing.check(definition)
     narrowing.enforceable(definition)
     for kind, names in (

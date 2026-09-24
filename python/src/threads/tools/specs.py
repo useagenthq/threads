@@ -3,7 +3,7 @@ from the shared catalog (spec/schema/tools.v1.catalog.json, generated into `tool
 generated input models parse the model's arguments. Only the effect class is decided here."""
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, TypedDict
 
@@ -106,6 +106,24 @@ class Writes:
 
     effect: EffectClass = "unguarded"
     dedup_window_ms: int | None = None
+
+
+SEARCH: Final = "tool_search"
+"""Pinned, read_only, exactly when something is deferred (spec/schema/README.md)."""
+
+
+def search_tool_spec(deferred_names: Sequence[str]) -> ToolSpec:
+    """tool_search as pinned: the catalog description, then the deferred names by code point.
+    The pin, member rebind and the goldens all build it here."""
+    entry = next(e for e in _ENTRIES if e["name"] == SEARCH)
+    listed = ", ".join(sorted(deferred_names))
+    data: dict[str, JsonValue] = {
+        "name": SEARCH,
+        "description": f"{entry['description']}\n\nDeferred tools (search to load): {listed}",
+        "input_schema": entry["input_schema"],
+        "effect_class": "read_only",
+    }
+    return ToolSpec.model_validate(data)
 
 
 def agent_tools(

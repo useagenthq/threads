@@ -55,6 +55,8 @@ class McpOptions(TypedDict, total=False):
     tools: ToolFilter
     effect: EffectClass
     """Undeclared: unguarded, so an uncertain call parks and is never retried (F1.10)."""
+    defer: bool
+    """True: every tool of the server is deferred until tool_search loads it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +74,8 @@ class McpServer:
     effect: EffectClass = "unguarded"
     http: httpx.AsyncBaseTransport | None = None
     """The HTTP transport under the fence; None opens real connections. Tests pass one."""
+    defer: bool = False
+    """Every tool of the server is deferred until tool_search loads it."""
 
     def connect(self, fence: Fence) -> AbstractAsyncContextManager[Sequence[McpTool]]:
         """The server's pinned tools for one run, live until the context exits."""
@@ -146,7 +150,14 @@ class McpServer:
         name = f"mcp__{self.name}__{READ_RESOURCE}"
         description = f"Read a resource of the {self.name} MCP server by URI."
         return McpTool(
-            name, READ_RESOURCE, description, READ_RESOURCE_SCHEMA, "read_only", session, True
+            name,
+            READ_RESOURCE,
+            description,
+            READ_RESOURCE_SCHEMA,
+            "read_only",
+            session,
+            resource=True,
+            defer=self.defer,
         )
 
     def _tool(self, session: ClientSession, tool: Tool) -> McpTool:
@@ -160,7 +171,7 @@ class McpServer:
             message = f"MCP tool {tool.name}: invalid input schema: {error}"
             raise ConfigError("invalid_config", message) from error
         description = tool.description or tool.title or tool.name
-        return McpTool(name, tool.name, description, schema, self.effect, session)
+        return McpTool(name, tool.name, description, schema, self.effect, session, defer=self.defer)
 
 
 @asynccontextmanager
@@ -219,4 +230,5 @@ def mcp(**options: Unpack[McpOptions]) -> McpServer:
         None if allow is None else frozenset(allow),
         frozenset(filters.get("deny", ())),
         options.get("effect", "unguarded"),
+        defer=options.get("defer", False),
     )

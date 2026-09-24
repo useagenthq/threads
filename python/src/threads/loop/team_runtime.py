@@ -33,6 +33,8 @@ class TeamAgentPin:
     """Its own budget: it covers the member."""
     template: Template | None = None
     """A dynamic agent's base pin: what a start may choose (its tools but F, and its keys)."""
+    specs: tuple[bytes, ...] = ()
+    """Its deferred tools' spec artifacts, stored with the config."""
 
 
 @dataclass(frozen=True, slots=True)

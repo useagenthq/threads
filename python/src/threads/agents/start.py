@@ -65,6 +65,9 @@ async def prepare[D](
         # The resolved config, hooks included, is durable in the content-addressed store under
         # its config_hash before the pin that names it.
         await rt.store.put_artifact(config)
+        # So are the deferred tools' spec artifacts its tools name (spec_ref).
+        for spec in definition.spec_artifacts():
+            await rt.store.put_artifact(spec)
         if launch is not None:
             started = {**started, "parent": launch.parent}
         started = lead_started(definition, started, now_ms())

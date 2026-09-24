@@ -66,7 +66,8 @@ async def start_call(rt: Runtime, state: CallState) -> Halt | None:
         if isinstance(resolved, Resolved) and resolved.define is not None:
             pinned = await team.pin(args.agent, Choice(resolved.define, _name(rt)))
     if pinned is not None:
-        await rt.store.put_artifact(pinned.config)
+        for raw in (pinned.config, *pinned.specs):
+            await rt.store.put_artifact(raw)
         agents[args.agent] = pinned.config_hash
         room = await room_for(rt, pinned)
     thread = uuid7(rt.clock())

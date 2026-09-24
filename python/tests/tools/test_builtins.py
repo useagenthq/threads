@@ -89,7 +89,12 @@ def test_specs_are_the_shared_catalog_and_read_tool_result_is_always_there() -> 
         for s in SPECS.values()
     ]
     assert isinstance(catalog, list)
-    built = [e for e in catalog if isinstance(e, dict) and e["name"] not in MEMBERS]
+    # tool_search is pinned by the agent's pin, only when something is deferred.
+    built = [
+        e
+        for e in catalog
+        if isinstance(e, dict) and e["name"] not in MEMBERS and e["name"] != "tool_search"
+    ]
     assert json.loads(json.dumps(pinned)) == built
     bare = specs(sandbox=False, egress_denied=True)
     assert [s.name for s in bare] == ["read_tool_result", "todo_write"]

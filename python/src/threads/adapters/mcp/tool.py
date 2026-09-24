@@ -53,6 +53,8 @@ class McpTool:
     session: ClientSession
     resource: bool = False
     """mcp__<server>__read_resource: reads a resource by URI."""
+    defer: bool = False
+    """mcp(defer=True): the model sees only the name and description until tool_search."""
 
     def spec(self) -> ToolSpec:
         return ToolSpec.model_validate(
