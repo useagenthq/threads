@@ -14,6 +14,7 @@ from threads.result import Err, Ok
 from threads.sandbox import Sandbox, SandboxError, SandboxSession
 from threads.sandbox.fake import FakeCrashError
 from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, gc, release_session
+from threads.sandbox.protocol import session_lookup
 from threads.store import SqliteStore, Writer
 from threads.store.lease import TTL_MS
 from threads.store.resources import Resource
@@ -51,8 +52,7 @@ class World:
         return Tracked(
             "sandbox",
             create,
-            lambda key: self.sandbox.lookup(key, context),
-            self.sandbox.info.lookup.create,
+            *session_lookup(self.sandbox, context),
             lambda s: s.id,
         )
 

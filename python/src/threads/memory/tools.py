@@ -39,10 +39,9 @@ from threads.loop.tools import (
 )
 from threads.memory.authority import origin
 from threads.memory.guard import ScopedKnowledge, ScopedMemory
-from threads.memory.protocol import Revisioned
-from threads.memory.types import Provenance, ProviderError
+from threads.memory.types import Outcome, Provenance, ProviderError
 from threads.reduce.view import input_principal
-from threads.result import Err, Ok
+from threads.result import Err
 from threads.thread.fork import knowledge_revision
 from threads.tools.runner import parse
 
@@ -160,13 +159,10 @@ class ProviderTools:
         cites = [f"[doc:{r.id}@{r.version}#{r.location}]" for r in refs]
         return Output(_listing("excerpts", cites), False, None, refs)
 
-    async def knowledge_revision(self) -> int | None:
-        """The corpus revision a snapshot records, when the provider keeps one."""
+    async def knowledge_revision(self) -> Outcome[int] | None:
+        """The corpus revision a snapshot records; None without knowledge."""
         k = self.knowledge
-        if k is None or not isinstance(k.provider, Revisioned):
-            return None
-        now = await k.provider.revision(k.owner.scope)
-        return now.value if isinstance(now, Ok) else None
+        return None if k is None else await k.provider.revision(k.owner.scope)
 
     async def lookup(self, call: Invocation) -> LookupResult[str]:
         return LookupUnknown(f"{call.spec.name} has no lookup")

@@ -20,8 +20,8 @@ from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
 from threads.loop.history import CallState, call_state
 from threads.loop.manual import settle_requested
-from threads.loop.model import Found, NotFound
-from threads.loop.runtime import Halt, Runtime, WriterContext, epoch_model, fence, lost
+from threads.loop.model import Found, LooksUp, NotFound
+from threads.loop.runtime import Failed, Halt, Runtime, WriterContext, epoch_model, fence, lost
 from threads.result import Err
 
 if TYPE_CHECKING:
@@ -70,11 +70,17 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
     outcome = "unknown"
     # No settings change can land while a request is open: the current epoch is the request's.
     model = epoch_model(rt)
-    if model is not None and model.info.lookup != "none":
+    # Setup refused a model that declares lookup without the method, so a model that isn't
+    # LooksUp here declared none.
+    if model is not None and model.info.lookup != "none" and isinstance(model, LooksUp):
         stale = await fence(rt)
         if stale is not None:
             return stale
-        match await model.lookup(f"{rt.writer.branch_id}:{request_id}", WriterContext(rt)):
+        looked = await model.lookup(f"{rt.writer.branch_id}:{request_id}", WriterContext(rt))
+        if isinstance(looked, Err):
+            # The fence refused at the lookup's real send point: this writer lost its lease.
+            return Failed("branch_busy", looked.error.message)
+        match looked.value:
             case Found(value=response) if response.provider_request_id is not None:
                 # A found response without the provider's id can't be recorded: it stays unknown.
                 found = response_drafts(rt, request_id, response, response.provider_request_id)

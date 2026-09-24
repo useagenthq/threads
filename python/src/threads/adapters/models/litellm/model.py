@@ -26,13 +26,10 @@ from threads.adapters.models.render import prepare
 from threads.agents.config import ConfigError
 from threads.log import AdapterRef, ModelRef
 from threads.loop.model import (
-    LookupResult,
-    LookupUnknown,
     ModelChunk,
     ModelContext,
     ModelInfo,
     ModelRequest,
-    ModelResponse,
     Rejected,
 )
 from threads.secrets import Secret, credential
@@ -114,9 +111,6 @@ class LiteLLMModel:
         await _close(stream, None)
         for chunk in assembler.finish():
             yield chunk
-
-    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
-        return LookupUnknown("LiteLLM has no lookup by client request id")
 
 
 async def _close(stream: "_Stream", outcome: BaseException | None) -> None:

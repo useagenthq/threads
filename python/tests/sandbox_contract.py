@@ -9,6 +9,7 @@ a fence that runs anywhere but at the transport, or a credential that reaches a 
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
+from typing import Protocol
 
 from sandbox_backend import FakeBackend
 from sandbox_kit import OPEN, KitContext
@@ -16,19 +17,24 @@ from sandbox_kit import OPEN, KitContext
 from threads.adapters.sandboxes.posix import collect
 from threads.loop.model import Found, LookupUnknown, NotFound, NotFoundNonfinal
 from threads.result import Err, Ok
-from threads.sandbox import Sandbox, SandboxSession
+from threads.sandbox import LooksUpSandbox, LooksUpSnapshot, Sandbox, SandboxSession
 from threads.sandbox.manifest import manifest_hash, manifest_of
 from threads.sandbox.protocol import ExecOutput, SandboxError
 from threads.store.context import CleanupAuthority
 
-type Make = Callable[[FakeBackend, str], AbstractAsyncContextManager[Sandbox]]
+
+class Bundled(Sandbox, LooksUpSandbox, LooksUpSnapshot, Protocol):
+    """Every bundled sandbox adapter implements both lookups."""
+
+
+type Make = Callable[[FakeBackend, str], AbstractAsyncContextManager[Bundled]]
 """The adapter over `backend`, named `name` (its SandboxInfo.provider)."""
 
 
 @dataclass(frozen=True)
 class Harness:
     backend: FakeBackend
-    sandbox: Sandbox
+    sandbox: Bundled
     secrets: tuple[str, ...]
     """The credentials the adapter holds: none may reach a sandbox."""
 

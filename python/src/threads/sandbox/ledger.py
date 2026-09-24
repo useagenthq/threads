@@ -23,6 +23,8 @@ from threads.sandbox.protocol import (
     SandboxError,
     SandboxSession,
     is_refusal,
+    session_lookup,
+    snapshot_lookup,
 )
 from threads.store import SqliteStore
 from threads.store.lease import Owner
@@ -169,13 +171,13 @@ async def _find(
     sandbox: Sandbox, row: Resource, context: SandboxContext
 ) -> tuple[Answer, str | None]:
     """A pending row's answer by its operation key, and the ref when found."""
-    info, key = sandbox.info.lookup, row.operation_key
+    key = row.operation_key
     if row.kind == "snapshot":
-        answer, snap = await resolve_key(
-            info.snapshot, lambda k: sandbox.lookup_snapshot(k, context), key
-        )
+        lookup, capability = snapshot_lookup(sandbox, context)
+        answer, snap = await resolve_key(capability, lookup, key)
         return answer, None if snap is None else snap.snapshot_id
-    answer, session = await resolve_key(info.create, lambda k: sandbox.lookup(k, context), key)
+    lookup, capability = session_lookup(sandbox, context)
+    answer, session = await resolve_key(capability, lookup, key)
     return answer, None if session is None else session.id
 
 

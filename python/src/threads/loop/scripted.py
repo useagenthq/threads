@@ -27,9 +27,10 @@ from threads.loop.model import (
     PartChunk,
     Rejected,
     RejectReason,
+    StaleEpoch,
     StopReason,
 )
-from threads.result import Err
+from threads.result import Err, Ok
 
 _PARTS: TypeAdapter[list[OutputPart]] = TypeAdapter(list[OutputPart])
 _STOP: TypeAdapter[StopReason] = TypeAdapter(StopReason)
@@ -98,29 +99,34 @@ class ScriptedModel:
             yield PartChunk(part)
         yield Done(entry.stop_reason, entry.usage)
 
-    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
+    async def lookup(
+        self, request_id: str, context: ModelContext
+    ) -> Ok[LookupResult[ModelResponse]] | Err[StaleEpoch]:
         if isinstance(await context.fence(), Err):
-            return LookupUnknown("the lease moved before the lookup was sent")
+            return Err(StaleEpoch("the lease moved before the lookup was sent"))
         self.looked_up.append(request_id)
         # The script keys answers by the model_request event_id, the id's last component.
-        answer = self._lookups.get(request_id.rsplit(":", 1)[-1])
-        if not isinstance(answer, dict):
-            return LookupUnknown("no scripted answer")
-        final = answer.get("final") is True
-        match answer.get("result"):
-            case "found" if final:
-                found = _response(_OBJECT.validate_python(answer.get("response")))
-                if isinstance(found, Rejected):
-                    raise ValueError("a lookup answer must be a response")
-                provider_id = answer.get("provider_request_id")
-                ident = None if provider_id is None else _STR.validate_python(provider_id)
-                return Found(replace(found, provider_request_id=ident))
-            case "not_found" if final:
-                return NotFound()
-            case "not_found":
-                return NotFoundNonfinal()
-            case _:
-                return LookupUnknown("the answer is not final")
+        return Ok(_answer(self._lookups.get(request_id.rsplit(":", 1)[-1])))
+
+
+def _answer(answer: JsonValue) -> LookupResult[ModelResponse]:
+    if not isinstance(answer, dict):
+        return LookupUnknown("no scripted answer")
+    final = answer.get("final") is True
+    match answer.get("result"):
+        case "found" if final:
+            found = _response(_OBJECT.validate_python(answer.get("response")))
+            if isinstance(found, Rejected):
+                raise ValueError("a lookup answer must be a response")
+            provider_id = answer.get("provider_request_id")
+            ident = None if provider_id is None else _STR.validate_python(provider_id)
+            return Found(replace(found, provider_request_id=ident))
+        case "not_found" if final:
+            return NotFound()
+        case "not_found":
+            return NotFoundNonfinal()
+        case _:
+            return LookupUnknown("the answer is not final")
 
 
 def _with_lookup() -> ModelInfo:

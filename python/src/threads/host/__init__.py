@@ -4,6 +4,7 @@ the CLI's server. Serving over HTTP needs the `host` extra (Starlette); the libr
 
 from threads.host.app import Authenticate, Host, host
 from threads.host.channel import (
+    Challenged,
     ChannelAdapter,
     ChannelCapabilities,
     Control,
@@ -24,6 +25,7 @@ from threads.host.stream import Message as SseMessage
 
 __all__ = [
     "Authenticate",
+    "Challenged",
     "ChannelAdapter",
     "ChannelCapabilities",
     "Control",

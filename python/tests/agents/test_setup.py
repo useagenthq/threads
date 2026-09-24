@@ -31,12 +31,10 @@ from threads import (
 from threads.adapters.sandboxes.daytona.sandbox import DaytonaSandbox
 from threads.log import Permissions, ToolResultEvent
 from threads.loop.model import (
-    LookupResult,
     ModelChunk,
     ModelContext,
     ModelInfo,
     ModelRequest,
-    ModelResponse,
 )
 from threads.loop.scripted import ScriptedModel
 from threads.redaction import redact_secrets
@@ -345,9 +343,6 @@ class Slotted:
 
     def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         return self._inner.send(request, context)
-
-    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
-        return await self._inner.lookup(request_id, context)
 
     async def setup(self) -> None:
         pass

@@ -23,7 +23,7 @@ from threads import (
     tool,
 )
 from threads.log import Permissions, ThreadStartedEvent, ToolResultEvent
-from threads.loop.model import ModelChunk, NotFound
+from threads.loop.model import ModelChunk
 from threads.loop.scripted import SCRIPTED_INFO
 from threads.result import Ok
 
@@ -215,9 +215,6 @@ class RealModel:
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         raise AssertionError(f"reached a provider with {request.request_id}")
         yield  # pragma: no cover
-
-    async def lookup(self, request_id: str, context: ModelContext) -> NotFound:
-        return NotFound()
 
 
 def test_the_guard_blocks_every_model_but_the_scripted_one() -> None:

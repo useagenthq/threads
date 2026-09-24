@@ -8,7 +8,7 @@ the attempt abandoned as unknown.
 
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import JsonValue
 
@@ -154,14 +154,33 @@ class ModelContext(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class StaleEpoch:
+    """spec/api.json `Model.lookup` returns.errors: the fence refused at the lookup's send point,
+    so nothing was asked. Recovery ends the run `branch_busy`."""
+
+    message: str
+    code: Literal["stale_epoch"] = "stale_epoch"
+
+
 class Model(Protocol):
-    """spec/api.json `Model`. `lookup` is present when `info.lookup` is not none."""
+    """spec/api.json `Model`. A model whose `info.lookup` is not none also implements
+    `LooksUp`; check() and the first run refuse one that doesn't (capability_missing)."""
 
     @property
     def info(self) -> ModelInfo: ...
 
     def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]: ...
 
-    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
-        """Awaits `context.fence()` at its real network send point, like `send`."""
+
+@runtime_checkable
+class LooksUp(Protocol):
+    """spec/api.json `Model.lookup`, the optional capability of a `Model`: recover a response
+    after a crash by client request id."""
+
+    async def lookup(
+        self, request_id: str, context: ModelContext
+    ) -> Ok[LookupResult[ModelResponse]] | Err[StaleEpoch]:
+        """Awaits `context.fence()` at its real network send point, like `send`; a refused
+        fence is `Err(StaleEpoch)`."""
         ...

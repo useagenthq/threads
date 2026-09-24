@@ -6,6 +6,8 @@ from threads.sandbox.fake import FakeSandbox, fake_sandbox
 from threads.sandbox.protocol import (
     ExecOutput,
     ExecResult,
+    LooksUpSandbox,
+    LooksUpSnapshot,
     LookupSupport,
     Sandbox,
     SandboxError,
@@ -19,6 +21,8 @@ __all__ = [
     "ExecOutput",
     "ExecResult",
     "FakeSandbox",
+    "LooksUpSandbox",
+    "LooksUpSnapshot",
     "LookupSupport",
     "Sandbox",
     "SandboxError",

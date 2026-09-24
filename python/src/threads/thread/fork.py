@@ -22,7 +22,7 @@ from threads.log import (
 from threads.reduce import Fold
 from threads.result import Err, Ok
 from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, release_session
-from threads.sandbox.protocol import Sandbox, SandboxError
+from threads.sandbox.protocol import Sandbox, SandboxError, session_lookup
 from threads.store import SqliteStore, Writer
 from threads.store.worker import Clock
 
@@ -58,8 +58,7 @@ async def fork_branch(
     restore = Tracked(
         "sandbox",
         lambda key: sandbox.restore(snap.data.snapshot_id, snap.data.manifest_hash, key, context),
-        lambda key: sandbox.lookup(key, context),
-        sandbox.info.lookup.create,
+        *session_lookup(sandbox, context),
         lambda session: session.id,
     )
     restored = await acquire(store.ledger, forking.owner, snap.data.provider, restore, clock)

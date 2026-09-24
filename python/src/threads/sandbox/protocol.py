@@ -6,13 +6,13 @@ failures are `SandboxError` values; an adapter raises only for bugs.
 """
 
 import posixpath
-from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Final, Literal, NewType, Protocol, assert_never
+from typing import Final, Literal, NewType, Protocol, assert_never, runtime_checkable
 
 from threads.log import ArtifactRef, ParseError, SnapshotData
-from threads.loop.model import LookupCapability, LookupResult
+from threads.loop.model import LookupCapability, LookupResult, LookupUnknown
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
 from threads.store.context import CleanupAuthority, OwnerAuthority, SandboxAuthority
@@ -182,6 +182,10 @@ class SandboxSession(Protocol):
 
 
 class Sandbox(Protocol):
+    """spec/api.json `Sandbox`. A sandbox whose `info.lookup.create` is not none also
+    implements `LooksUpSandbox`, and one whose `info.lookup.snapshot` is not none
+    `LooksUpSnapshot`; check() and the first run refuse one that doesn't."""
+
     @property
     def info(self) -> SandboxInfo: ...
 
@@ -197,17 +201,6 @@ class Sandbox(Protocol):
         adapter releases the sandbox it created first."""
         ...
 
-    async def lookup(
-        self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SandboxSession]:
-        """Finds a sandbox whose create or restore answer was lost. Answers only when
-        `info.lookup.create` is not none."""
-        ...
-
-    async def lookup_snapshot(
-        self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SnapshotData]: ...
-
     async def attach(
         self, ref: str, context: SandboxContext
     ) -> Ok[SandboxSession] | Err[SandboxError]:
@@ -219,3 +212,52 @@ class Sandbox(Protocol):
     ) -> Ok[Literal["released", "already_gone"]] | Err[SandboxError]:
         """Releases a snapshot by its durable ref."""
         ...
+
+
+@runtime_checkable
+class LooksUpSandbox(Protocol):
+    """spec/api.json `Sandbox.lookup`, an optional capability of a `Sandbox`."""
+
+    async def lookup(
+        self, operation_key: str, context: SandboxContext
+    ) -> LookupResult[SandboxSession]:
+        """Finds a sandbox whose create or restore answer was lost."""
+        ...
+
+
+@runtime_checkable
+class LooksUpSnapshot(Protocol):
+    """spec/api.json `Sandbox.lookupSnapshot`, an optional capability of a `Sandbox`."""
+
+    async def lookup_snapshot(
+        self, operation_key: str, context: SandboxContext
+    ) -> LookupResult[SnapshotData]:
+        """Finds a snapshot whose capture answer was lost."""
+        ...
+
+
+type Lookup[T] = Callable[[str], Awaitable[LookupResult[T]]]
+"""A lookup by operation key, bound to its context."""
+
+
+async def _unasked(_key: str) -> LookupUnknown:
+    return LookupUnknown("this sandbox has no lookup for it")
+
+
+def session_lookup(
+    sandbox: Sandbox, context: SandboxContext
+) -> tuple[Lookup[SandboxSession], LookupCapability]:
+    """How a lost create or restore is found, and what that lookup can prove. A sandbox
+    without the method declared none (setup refuses any other)."""
+    if isinstance(sandbox, LooksUpSandbox):
+        return (lambda key: sandbox.lookup(key, context)), sandbox.info.lookup.create
+    return _unasked, "none"
+
+
+def snapshot_lookup(
+    sandbox: Sandbox, context: SandboxContext
+) -> tuple[Lookup[SnapshotData], LookupCapability]:
+    """How a lost capture is found, and what that lookup can prove."""
+    if isinstance(sandbox, LooksUpSnapshot):
+        return (lambda key: sandbox.lookup_snapshot(key, context)), sandbox.info.lookup.snapshot
+    return _unasked, "none"

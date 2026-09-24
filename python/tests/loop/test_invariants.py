@@ -18,17 +18,17 @@ from kit import T0, Tools, open_store, spec, start, text, use
 from threads.log import EffectBeginEvent, ModelRequestEvent, TextPart, Usage
 from threads.loop.drive import drive
 from threads.loop.model import (
-    LookupUnknown,
     ModelChunk,
     ModelContext,
     ModelRequest,
     ModelResponse,
+    StaleEpoch,
 )
 from threads.loop.runtime import Failed, Idle, Runtime, WriterContext
 from threads.loop.scripted import ScriptedModel, scripted_model
 from threads.loop.tools import Dispatched, Invocation, Output
 from threads.render.verify import verify_requests
-from threads.result import Ok
+from threads.result import Err, Ok
 from threads.store import MemoryArtifacts, SqliteStore, StoredEvent
 
 if TYPE_CHECKING:
@@ -120,7 +120,7 @@ def test_a_lease_lost_while_a_lookup_is_queued_sends_nothing(tmp_path: Path) -> 
             await store.close()
 
     answer, model = asyncio.run(main())
-    assert isinstance(answer, LookupUnknown)
+    assert answer == Err(StaleEpoch("the lease moved before the lookup was sent"))
     assert model.looked_up == []
 
 

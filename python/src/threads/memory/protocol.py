@@ -55,6 +55,11 @@ class KnowledgeProvider(Protocol):
 
     async def get(self, scope: Scope, doc_id: str, version: str) -> Outcome[Doc]: ...
 
+    async def revision(self, scope: Scope) -> Outcome[int]:
+        """The store's monotonic revision: a snapshot records it, and a pinned fork searches
+        `as_of` it. When it fails, that turn end takes no snapshot."""
+        ...
+
 
 @runtime_checkable
 class DeclaresWrites(Protocol):
@@ -66,11 +71,3 @@ class DeclaresWrites(Protocol):
 
     @property
     def dedup_window_ms(self) -> int | None: ...
-
-
-@runtime_checkable
-class Revisioned(Protocol):
-    """A knowledge provider with a monotonic revision: snapshots record it,
-    and a pinned fork searches `as_of` it. Without one, forks search the live corpus."""
-
-    async def revision(self, scope: Scope) -> Outcome[int]: ...

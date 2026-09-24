@@ -33,6 +33,7 @@ from threads.agents.tool import Reconcile, Tool, tool  # noqa: E402
 from threads.hooks.extension import Extension, extension  # noqa: E402
 from threads.hooks.types import Hooks  # noqa: E402
 from threads.loop.model import (  # noqa: E402
+    LooksUp,
     LookupResult,
     Model,
     ModelChunk,
@@ -40,6 +41,7 @@ from threads.loop.model import (  # noqa: E402
     ModelInfo,
     ModelRequest,
     ModelResponse,
+    StaleEpoch,
 )
 from threads.loop.scripted import scripted_model  # noqa: E402
 from threads.memory.local_knowledge import local_knowledge  # noqa: E402
@@ -60,6 +62,8 @@ from threads.memory.types import (  # noqa: E402
 from threads.sandbox import (  # noqa: E402
     ExecOutput,
     ExecResult,
+    LooksUpSandbox,
+    LooksUpSnapshot,
     Sandbox,
     SandboxInfo,
     SandboxSession,
@@ -94,6 +98,9 @@ __all__ = [
     "KnowledgeHit",
     "KnowledgeProvider",
     "KnowledgeSource",
+    "LooksUp",
+    "LooksUpSandbox",
+    "LooksUpSnapshot",
     "LookupResult",
     "MemoryHit",
     "MemoryProvider",
@@ -122,6 +129,7 @@ __all__ = [
     "Secret",
     "SetsUp",
     "Skill",
+    "StaleEpoch",
     "StatusItem",
     "Store",
     "StreamEvent",

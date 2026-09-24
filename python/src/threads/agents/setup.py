@@ -1,6 +1,7 @@
 """Setup: what `Agent.check()` or the first run resolves before anything is pinned.
 
-Extension setups, then each adapter's `setup` (credentials and configuration: model, sandbox,
+The declared recovery lookups are checked first (`threads.agents.lookups`). Extension setups,
+then each adapter's `setup` (credentials and configuration: model, sandbox,
 memory, knowledge), then the same for every agent this one may start. A setup is remembered
 per object on success only, so a failure is retried by the next check() or run, and an adapter
 shared by a parent and its subagent is set up once. Setup opens no connection and makes no
@@ -16,6 +17,7 @@ from typing import Protocol, runtime_checkable
 
 from threads.agents.config import ConfigError, ConfigErrorCode
 from threads.agents.definition import Definition
+from threads.agents.lookups import check_lookups
 from threads.hooks.extension import Extension
 from threads.redaction import redact_secrets
 
@@ -111,6 +113,7 @@ async def _extension(e: Extension) -> None:
 
 async def set_up[D](definition: Definition[D]) -> None:
     """Sets up `definition` and every agent it may start. Raises `ConfigError`."""
+    check_lookups((definition.model, *definition.fallback), definition.sandbox)
     for e in definition.extensions:
         await _once(e, partial(_extension, e))
     adapters = (
