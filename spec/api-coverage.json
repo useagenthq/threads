@@ -16,6 +16,13 @@
       "tests/agents/test_api.py::test_readme_example"
     ]
   },
+  "Agent.runSync": {
+    "py": [
+      "tests/agents/test_run_sync.py::test_run_sync_returns_what_run_returns",
+      "tests/agents/test_run_sync.py::test_run_sync_inside_a_loop_raises_and_touches_nothing",
+      "tests/agents/test_run_sync.py::test_two_run_sync_calls_through_daytona"
+    ]
+  },
   "Agent.stream": {
     "ts": [
       "packages/core/test/agent/agent.test.ts > stream() > yields committed events and text deltas, then the result"
