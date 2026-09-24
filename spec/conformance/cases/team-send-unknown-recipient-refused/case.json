@@ -1,0 +1,10 @@
+{
+  "name": "team-send-unknown-recipient-refused",
+  "family": "agents_teams",
+  "kind": "recover",
+  "description": "The lead's send_message names billing, which is not on its team (the lead demo, no subagents). The call is refused as an error result that lists the team, and no team_message is appended.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

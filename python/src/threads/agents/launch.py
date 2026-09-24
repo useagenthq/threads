@@ -26,6 +26,8 @@ class Team:
 
     lead: Runtime
     member: str
+    names: tuple[str, ...]
+    """Every name on the team: the lead's, then its subagents' in declaration order."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -45,7 +45,8 @@ class Agents[D]:
                 return await handoff(self._scope, rt, state)
             case _:
                 scope = self._scope
-                return await team_tool(scope.lead(rt), scope.member(), rt, state)
+                team = (scope.lead(rt), scope.member(), scope.team_names())
+                return await team_tool(team, rt, state)
 
     async def flush(self, rt: Runtime) -> Halt | None:
         """At a step boundary: first every child the branch is parked on runs again, and one

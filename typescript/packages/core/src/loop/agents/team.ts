@@ -114,6 +114,11 @@ function send(
   input: ReturnType<typeof SendMessageInput.parse>,
 ): Answer {
   if (s.fold.messageIds.has(messageId)) return ok("sent");
+  const team = teamNames(s);
+  if (input.to !== "*" && !team.includes(input.to))
+    return no(
+      `unknown_recipient: ${input.to} is not on this team; send to ${team.join(", ")} or * for everyone`,
+    );
   return appended(
     "sent",
     s.append(
@@ -125,6 +130,12 @@ function send(
       }),
     ),
   );
+}
+
+/** The lead's name, then its subagents' names: every name a message may be sent to. */
+function teamNames(s: Session): readonly string[] {
+  const agents = s.config.agents;
+  return agents === undefined ? [] : [agents.name, ...agents.subagents];
 }
 
 /** A team tool call in this thread: routed to its lead, or to itself as the lead. */

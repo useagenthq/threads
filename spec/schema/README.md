@@ -222,7 +222,7 @@ A team tool call changes the lead's log through the lead's writer. `<member>` is
 | `team_task_create{subject, description?, blocked_by?}` | `team_task_created{task_id: "<member>/<call_id>"}`; an unknown blocker appends nothing: `no task <id>` (error) | the task id | the task exists: its id, nothing appended |
 | `team_task_claim{task_id}` | `team_task_claimed{task_id, member}` when rule 23 allows; else nothing: `can't claim: <reason>` (error) | `claimed <task_id>` | already claimed by this member: `claimed <task_id>` |
 | `team_task_update{task_id, status}` | `team_task_updated` when this member holds the claim; else `<task_id> is not claimed by <member>` (error) | `<task_id> <status>` | the task already has that status: `<task_id> <status>` |
-| `send_message{to, text}` | `team_message{message_id: "<member>/<call_id>", from: <member>, to, text}` | `sent` | the message_id exists: `sent` |
+| `send_message{to, text}` | `team_message{message_id: "<member>/<call_id>", from: <member>, to, text}`; a `to` that is neither `*` nor a team member appends nothing: `unknown_recipient: <to> is not on this team; send to <names> or * for everyone` (error), where `<names>` are the team's members (the lead's name, then its subagents' names in declaration order) joined by `, ` | `sent` | the message_id exists: `sent` |
 | `spawn_agent{agent, ...}` while this lead already has an unfinished member of that name | nothing (no `agent_spawned`, no child thread) | `member_active: <agent> is still running` (error) | the same refusal, nothing appended |
 
 **A member is its agent name, so names are unique within a team.** A lead's children are its team. `spawn_agent` for an agent name whose earlier child of this lead has `agent_spawned` and no `agent_finished` (foreground or background) is refused with the `member_active` result above. There is never a second concurrent instance of a name. Once that child has finished, the name can be spawned again, and it is the same member (its tasks and messages keep `<member>/<call_id>` ids).
@@ -357,6 +357,12 @@ A handoff target runs inside the originating tree's limits, whoever hands off.
 
 - **Ceilings.** The target's decisions are capped by every ceiling of the run that made the handoff: the host ceiling and the `Agent.run` ceiling and, when a subagent hands off, the subagent's own policy and every ancestor's policy up the spawn chain (a root agent's handoff target is capped by the run's ceilings, not by the source agent's policy: `handoff-target-policy-capped`). A subagent's handoff target never runs under fewer ceilings than the subagent.
 - **Budgets.** Every budget covering the handing-off thread (its thread and run budgets and each one it inherits) also covers the target thread, as an ancestor's; a refusal is `budget_exceeded{scope: ancestor, owner_thread_id}`. The target's model requests reserve against those budgets and its own.
+- **The forwarded transcript.** `handoff.forwarded_ref` names a `text/plain` UTF-8 artifact of the source thread's conversation, stored before the `handoff` append. The target gets it as `injected{source: handoff, trust: untrusted_reference, origin: {id: <source thread_id>}, ref}` before its first `user_input`, so tool output never becomes an instruction (invariant 6). Its lines, joined by `\n`, follow the source log in order:
+  - `user: <text>` for each `user_input` with `text`;
+  - `assistant: <text>` for each `model_response` and `model_response_recovered` whose text parts, joined, are not empty;
+  - and only for the turn that hands off (the events after the last `user_input` or `woken`), its tool context: `tool_call <call_id> <name>: <input>` for each `tool_call` other than a `handoff` call, `<input>` being RFC 8785 JSON, and `tool_result <call_id>: <preview>` for each `tool_result` and `tool_result_late` (`tool_result <call_id> (error): <preview>` when `is_error`). A spilled result contributes its preview only.
+
+  The tool lines are capped at the source's `policy.context.spill.threshold_bytes` (ADR default 32768): while their UTF-8 bytes, joined by `\n`, exceed it, the oldest tool line is dropped, and one line `[<n> earlier tool lines dropped]` stands where the first dropped line was. The user and assistant lines are never dropped. The shared vector is `../conformance/vectors/handoff-transcripts.json`.
 
 ## Budget enforcement
 

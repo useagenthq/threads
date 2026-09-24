@@ -290,5 +290,5 @@ def _launch[D](scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, inputs:
         (own, *scope.ceilings),
         shared,
         (),
-        Team(scope.lead(rt), spawned.data.agent_name),
+        Team(scope.lead(rt), spawned.data.agent_name, scope.team_names()),
     )

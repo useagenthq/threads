@@ -148,7 +148,12 @@ describe("team acts are idempotent per member call (F7.4)", () => {
   test("a repeated claim, update or message appends nothing and answers the same", () => {
     const h = harness([], [], []);
     const writer = unwrap(h.store.acquire(ROOT, "lead"));
-    const s = new Session(writer, h.artifacts, h.config());
+    const agents = {
+      name: "lead",
+      subagent: () => undefined,
+      subagents: ["alice", "bob"],
+    };
+    const s = new Session(writer, h.artifacts, h.config({ agents }));
     const team = teamOf(s);
     const call = (name: string, input: Record<string, string>, id: string) => ({
       call_id: CallId.parse(id),
@@ -171,6 +176,15 @@ describe("team acts are idempotent per member call (F7.4)", () => {
       team.act("alice", send),
     ];
     expect(again).toEqual(first);
+    expect(first.map((a) => a.isError)).toEqual([false, false, false]);
+    expect(s.fold.seq).toBe(seq);
+    // A name that is not on the team is refused and appends nothing.
+    const stray = call("send_message", { to: "billing", text: "Hi." }, "c4");
+    expect(team.act("alice", stray)).toEqual({
+      isError: true,
+      output:
+        "unknown_recipient: billing is not on this team; send to lead, alice, bob or * for everyone",
+    });
     expect(s.fold.seq).toBe(seq);
     expect(
       team.act("bob", call("team_task_claim", { task_id: "lead/c1" }, "c9")),

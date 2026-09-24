@@ -242,6 +242,8 @@ export type Agents = {
   /** This agent's name: its member id in its own team and its parent's. */
   readonly name: string;
   readonly subagent: (name: string) => Subagent | undefined;
+  /** The names spawn_agent may start, in declaration order: with this agent, its team. */
+  readonly subagents: readonly string[];
   /** Present when this thread is a member: its parent's team. */
   readonly team?: Team;
 };

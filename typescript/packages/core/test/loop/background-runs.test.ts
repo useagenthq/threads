@@ -77,6 +77,7 @@ function config(kid: ReturnType<typeof scanner>): Partial<LoopConfig> {
     agents: {
       name: "lead",
       subagent: () => kid.sub,
+      subagents: ["scanner", "licenses"],
     },
     onEvent: kid.onEvent,
   };

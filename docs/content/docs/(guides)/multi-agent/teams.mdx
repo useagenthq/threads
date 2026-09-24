@@ -15,7 +15,7 @@ Any agent with `subagents` leads a team. The lead and every subagent it starts s
 | `team_task_create` | lead and members | Adds a task (`subject`, optional `description`, optional `blocked_by` task ids). Returns the new task id. |
 | `team_task_claim` | lead and members | Claims an open task whose blockers are all completed. Only one member can win a claim. |
 | `team_task_update` | lead and members | Marks a task you claimed `completed` or `failed`, or `released` to put it back in the pool. |
-| `send_message` | lead and members | Sends `text` to a member by agent name, or to `*` for everyone. |
+| `send_message` | lead and members | Sends `text` to a member by agent name, or to `*` for everyone. A name that isn't on the team (the lead or one of its subagents) is refused, and the error lists the names that are. |
 | `spawn_agent` | lead | Starts a member. See [Subagents](/docs/multi-agent/subagents). |
 
 A member is identified by its agent name. A message arrives as reference material just before the recipient's next model call, prefixed with the sender's name, and is delivered once.

@@ -25,6 +25,7 @@ from . import (
     fallbacks,
     forks,
     guards,
+    handoff_transcripts,
     host,
     integrity,
     ladder,
@@ -212,6 +213,7 @@ def main() -> int:
             problems += (
                 tool_inputs.check() + tool_groups.check() + team_wire.check() + team_ops.check()
             )
+            problems += handoff_transcripts.check()
         for p in problems:
             print(f"coverage.json: {p}")
         if problems:
@@ -226,6 +228,7 @@ def main() -> int:
         tool_groups.write()
         team_wire.write()
         team_ops.write()
+        handoff_transcripts.write()
         for built, dest in ((out, CASES), (staged, STAGED)):
             shutil.rmtree(dest, ignore_errors=True)
             shutil.copytree(built, dest)

@@ -1,10 +1,12 @@
-import { type EventOf, responseText } from "../../fold/state";
+import type { EventOf } from "../../fold/state";
 import { ThreadId } from "../../log";
 import { uuidv7 } from "../../store/encode";
 import { HandoffInput } from "../../tools/agent-inputs";
 import { draft, TOOL } from "../drafts";
+import { contextPolicy } from "../policy";
 import type { Session } from "../session";
 import { BARRED, type Halt } from "../types";
+import { handoffTranscript } from "./transcript";
 
 // handoff: the conversation moves to a new thread of a listed agent. This
 // thread records handoff, the call's result and turn_completed{handoff}, and takes no input
@@ -41,7 +43,13 @@ export function handOff(s: Session, call: Call): Halt | undefined {
         to_agent: agent,
         to_thread_id: ThreadId.parse(uuidv7(s.now())),
         forwarded: "transcript",
-        forwarded_ref: s.store(transcript(s), "text/plain"),
+        forwarded_ref: s.store(
+          handoffTranscript(
+            s.events,
+            contextPolicy(s.fold.policy).spill.threshold_bytes,
+          ),
+          "text/plain",
+        ),
       },
     },
     draft.toolResult(
@@ -68,18 +76,4 @@ export function handOff(s: Session, call: Call): Halt | undefined {
   );
   // A cancel landed first: no target starts; the cancellation step closes the call.
   return done === BARRED ? undefined : done;
-}
-
-/** The forwarded history: what the user and the agent said, as plain text. */
-function transcript(s: Session): string {
-  return s.events
-    .flatMap((e) => {
-      if (e.type === "user_input") return [`user: ${e.data.text ?? ""}`];
-      if (e.type === "model_response") {
-        const text = responseText(e.data.content);
-        return text === "" ? [] : [`assistant: ${text}`];
-      }
-      return [];
-    })
-    .join("\n");
 }
