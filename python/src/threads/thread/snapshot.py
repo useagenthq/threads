@@ -14,7 +14,15 @@ from typing import Final
 from threads.log import ParseError, SnapshotData, SnapshotEvent
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
-from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, release_session
+from threads.sandbox.ledger import (
+    Fenced,
+    Tracked,
+    abandon,
+    acquire,
+    release_session,
+    session_lookup,
+    snapshot_lookup,
+)
 from threads.sandbox.protocol import Sandbox, SandboxError, SandboxSession, is_refusal
 from threads.store import Draft, SqliteStore, Writer
 from threads.store.worker import Clock
@@ -57,8 +65,7 @@ async def take_snapshot(  # noqa: PLR0913 - the corpus revision rides with the c
     how: Tracked[SnapshotData] = Tracked(
         "snapshot",
         lambda key: session.snapshot(key, by.context),
-        lambda key: sandbox.lookup_snapshot(key, by.context),
-        sandbox.info.lookup.snapshot,
+        *snapshot_lookup(sandbox, by.context),
         lambda data: data.snapshot_id,
     )
     captured = await acquire(store.ledger, writer.owner, sandbox.info.provider, how, clock)
@@ -85,8 +92,7 @@ async def verify_image(
     restore = Tracked(
         "sandbox",
         lambda key: sandbox.restore(data.snapshot_id, data.manifest_hash, key, context),
-        lambda key: sandbox.lookup(key, context),
-        sandbox.info.lookup.create,
+        *session_lookup(sandbox, context),
         lambda s: s.id,
     )
     got = await acquire(by.ledger, by.owner, sandbox.info.provider, restore, by.clock)

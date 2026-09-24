@@ -22,13 +22,10 @@ from threads.adapters.models.options import ModelOptions, info
 from threads.adapters.models.render import prepare
 from threads.log import AdapterRef, ModelRef
 from threads.loop.model import (
-    LookupResult,
-    LookupUnknown,
     ModelChunk,
     ModelContext,
     ModelInfo,
     ModelRequest,
-    ModelResponse,
     Rejected,
 )
 from threads.secrets import Secret, credential
@@ -102,9 +99,6 @@ class AnthropicModel:
         assembler = Assembler(context, rendered.head.model.name, body.documents)
         async for chunk in transport.relay(response, parse, assembler.feed, _rejected):
             yield chunk
-
-    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
-        return LookupUnknown("the Messages API has no lookup by client request id")
 
 
 def _rejected(error: Exception) -> Rejected | None:

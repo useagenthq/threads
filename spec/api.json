@@ -206,7 +206,7 @@
       "async": false,
       "generics": [{"name": "Deps", "default": {"prim": "null"}}, {"name": "Output", "default": {"prim": "string"}}],
       "params": [
-        {"name": "model", "kind": "option", "type": {"$ref": "#/types/Model"}, "required": true, "doc": "The model every turn is sent to: a model adapter such as anthropic() or openai(), or scriptedModel() in tests. Fallback models are tried after it."},
+        {"name": "model", "kind": "option", "type": {"$ref": "#/types/Model"}, "required": true, "doc": "The model every turn is sent to: a model adapter such as anthropic() or openai(), or scriptedModel() in tests. Fallback models are tried after it. A model (primary, fallback or any subagent's or handoff target's) that declares info.lookup other than none without a lookup method fails check() and the first run with capability_missing."},
         {
           "name": "instructions",
           "kind": "option",
@@ -2526,7 +2526,7 @@
         "lookup": {
           "ts": "lookup",
           "py": "lookup",
-          "doc": "Recover a response after a crash by client request id. Present when info.lookup is not none. Fenced like send: context.fence() at the real network send point; a found response's reasoning and hosted tool bytes are put() before their parts name them.",
+          "doc": "Recover a response after a crash by client request id. Present when info.lookup is not none. Fenced like send: context.fence() at the real network send point; a found response's reasoning and hosted tool bytes are put() before their parts name them. Required when info.lookup is not none: check() and the first run reject a model that declares a lookup capability without this method (capability_missing). A fence refused at the send point is Err stale_epoch.",
           "async": true,
           "optional": true,
           "capability": "LooksUp",
@@ -2749,7 +2749,7 @@
         "lookup": {
           "ts": "lookup",
           "py": "lookup",
-          "doc": "Find a sandbox whose create or restore response was lost, by that call's operation key. Resolves the pending ledger row (LookupResult doc). Present when info.lookup.create is not none. A final not_found retires a pending row only when no older local dispatch for that operation_key can still reach the provider; every create and restore fences its SandboxContext at the provider boundary, so once the lease has moved a stale creator can't pass that fence.",
+          "doc": "Find a sandbox whose create or restore response was lost, by that call's operation key. Resolves the pending ledger row (LookupResult doc). Present when info.lookup.create is not none. A final not_found retires a pending row only when no older local dispatch for that operation_key can still reach the provider; every create and restore fences its SandboxContext at the provider boundary, so once the lease has moved a stale creator can't pass that fence. Required when info.lookup.create is not none: check() and the first run reject a sandbox that declares it without this method (capability_missing).",
           "async": true,
           "optional": true,
           "capability": "LooksUpSandbox",
@@ -2759,7 +2759,7 @@
         "lookupSnapshot": {
           "ts": "lookupSnapshot",
           "py": "lookup_snapshot",
-          "doc": "Find a snapshot whose capture response was lost, by the snapshot call's operation key. Resolves the pending ledger row. Present when info.lookup.snapshot is not none.",
+          "doc": "Find a snapshot whose capture response was lost, by the snapshot call's operation key. Resolves the pending ledger row. Present when info.lookup.snapshot is not none. Required when info.lookup.snapshot is not none: check() and the first run reject a sandbox that declares it without this method (capability_missing).",
           "async": true,
           "optional": true,
           "capability": "LooksUpSnapshot",
@@ -3251,7 +3251,7 @@
         "revision": {
           "ts": "revision",
           "py": "revision",
-          "doc": "The store's current monotonic revision, recorded as snapshot.knowledge_revision at capture.",
+          "doc": "The store's current monotonic revision, recorded as snapshot.knowledge_revision at capture. When it fails, the snapshot is not taken (no fork point at that turn end); a knowledge-bound snapshot always records knowledge_revision.",
           "async": true,
           "params": [
             {"name": "scope", "kind": "positional", "type": {"$ref": "#/types/Scope"}, "required": true, "doc": "The scope asking, issued by the host. local_knowledge keeps one revision for the whole store and ignores it."}

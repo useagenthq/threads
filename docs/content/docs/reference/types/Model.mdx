@@ -81,7 +81,7 @@ def send(
 
 ### lookup
 
-Recover a response after a crash by client request id. Present when info.lookup is not none. Fenced like send: context.fence() at the real network send point; a found response's reasoning and hosted tool bytes are put() before their parts name them.
+Recover a response after a crash by client request id. Present when info.lookup is not none. Fenced like send: context.fence() at the real network send point; a found response's reasoning and hosted tool bytes are put() before their parts name them. Required when info.lookup is not none: check() and the first run reject a model that declares a lookup capability without this method (capability_missing). A fence refused at the send point is Err stale_epoch.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

@@ -2,7 +2,7 @@
 opened through the resource ledger, and one tool runner that routes each call to the built-ins
 or the app tools by name."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import Final, Literal
 
@@ -11,8 +11,9 @@ from threads.log import JsonObject, ParseError, ToolSpec
 from threads.loop.defaults import context
 from threads.loop.model import LookupResult
 from threads.loop.tools import Dispatched, Invocation, Termination, ToolRunner
+from threads.memory.types import Outcome
 from threads.result import Err, Ok
-from threads.sandbox.ledger import Tracked, acquire
+from threads.sandbox.ledger import Tracked, acquire, session_lookup
 from threads.sandbox.protocol import Sandbox, SandboxError, SandboxSession
 from threads.store import SqliteStore, Writer
 from threads.store.worker import Clock
@@ -43,8 +44,7 @@ async def open_session(
     how = Tracked(
         "sandbox",
         lambda key: sandbox.create(key, ctx),
-        lambda key: sandbox.lookup(key, ctx),
-        sandbox.info.lookup.create,
+        *session_lookup(sandbox, ctx),
         lambda session: session.id,
     )
     made = await acquire(store.ledger, writer.owner, sandbox.info.provider, how, clock)
@@ -75,16 +75,22 @@ async def snapshot_turn_end(  # noqa: PLR0913 - the corpus revision rides with t
     tools: SandboxTools,
     clock: Clock,
     *,
-    knowledge_revision: int | None = None,
+    knowledge_revision: Callable[[], Awaitable[Outcome[int] | None]] | None = None,
 ) -> None:
     """The end-of-turn snapshot policy: a turn that used the sandbox ends at a fork point. The
     capture goes through `take_snapshot` (quiescence under the writer, ledger rows, the image
     proven by a restore); nothing else appends a snapshot. The run's loop has returned, so no
-    append or dispatch can interleave. A refused capture appends nothing."""
-    if tools.opened is not None and sandbox.info.capture_classes:
-        revision = knowledge_revision
-        opened = tools.opened
-        await take_snapshot(store, writer, sandbox, opened, clock, knowledge_revision=revision)
+    append or dispatch can interleave. A refused capture appends nothing, and so does a failed
+    knowledge revision: a knowledge-bound snapshot always records one. The revision is read
+    only when a capture follows, and before it, so a failure costs no scratch sandbox."""
+    opened = tools.opened
+    if opened is None or not sandbox.info.capture_classes:
+        return
+    read = None if knowledge_revision is None else await knowledge_revision()
+    if isinstance(read, Err):
+        return
+    revision = None if read is None else read.value
+    await take_snapshot(store, writer, sandbox, opened, clock, knowledge_revision=revision)
 
 
 class Routed:

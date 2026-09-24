@@ -25,9 +25,11 @@ from threads.loop.model import (
     ModelContext,
     ModelRequest,
     ModelResponse,
+    StaleEpoch,
 )
 from threads.loop.scripted import ScriptedModel
 from threads.reduce.state import ReducedState
+from threads.result import Err, Ok
 from threads.store import SqliteStore, StoreError
 
 FEWEST, MOST = 3, 14
@@ -57,7 +59,9 @@ class Lookups(ScriptedModel):
         async for chunk in super().send(request, context):
             yield chunk
 
-    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
+    async def lookup(
+        self, request_id: str, context: ModelContext
+    ) -> Ok[LookupResult[ModelResponse]] | Err[StaleEpoch]:
         self.lookups += 1
         if self.fault is not None:
             raise self.fault()

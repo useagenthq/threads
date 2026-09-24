@@ -59,7 +59,9 @@ def test_invalid_provider_responses_are_typed_failures() -> None:
         made = await sandbox.create("k", OPEN)
         assert isinstance(made, Err)
         assert made.error.code == "unavailable"
-        assert isinstance(await sandbox.lookup("k", OPEN), LookupUnknown)
+        looked = await sandbox.lookup("k", OPEN)
+        assert isinstance(looked, Ok)
+        assert isinstance(looked.value, LookupUnknown)
 
     asyncio.run(main())
 

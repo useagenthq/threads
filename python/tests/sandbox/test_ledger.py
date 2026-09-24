@@ -7,16 +7,17 @@ import sqlite3
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+from partial_sandbox import CreateLookupOnly, NoLookups, SnapshotLookupOnly
 from pydantic import JsonValue
 
 from threads.log import BranchId, ThreadId
 from threads.result import Err, Ok
-from threads.sandbox import FakeSandbox, SandboxSession, fake_sandbox
+from threads.sandbox import FakeSandbox, LookupSupport, SandboxSession, fake_sandbox
 from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, gc, release_session
 from threads.sandbox.manifest import manifest_hash
 from threads.store import SqliteStore, Writer
 from threads.store.lease import TTL_MS
-from threads.store.resources import Resource
+from threads.store.resources import Kind, Resource
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000001")
@@ -260,5 +261,32 @@ def test_a_stale_owner_can_not_release() -> None:
         assert isinstance(refused, Err)
         assert refused.error.code == "stale_epoch"
         assert sandbox.releases == 0
+
+    run(body)
+
+
+async def lost(w: World, sandbox: NoLookups, kind: Kind) -> str:
+    """A pending row whose provider call happened but whose answer was lost, given up: the
+    state it ends in (released when a lookup found it, unknown when nothing could)."""
+    row = await w.store.ledger.pending(w.writer.owner, "fake", kind, T0)
+    assert isinstance(row, Ok)
+    key, context = row.value.operation_key, w.by().context
+    if kind == "sandbox":
+        await sandbox.inner.create(key, context)
+    else:
+        box = await sandbox.inner.create("box", context)
+        assert isinstance(box, Ok)
+        await box.value.snapshot(key, context)
+    return (await abandon(w.by(), sandbox, row.value)).state
+
+
+def test_a_sandbox_looks_up_only_the_operations_it_implements() -> None:
+    async def body(w: World) -> None:
+        create = CreateLookupOnly(fake_sandbox(), LookupSupport(create="final", snapshot="none"))
+        assert await lost(w, create, "sandbox") == "released"
+        assert await lost(w, create, "snapshot") == "unknown"
+        snap = SnapshotLookupOnly(fake_sandbox(), LookupSupport(create="none", snapshot="final"))
+        assert await lost(w, snap, "sandbox") == "unknown"
+        assert await lost(w, snap, "snapshot") == "released"
 
     run(body)

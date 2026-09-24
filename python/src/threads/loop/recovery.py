@@ -10,7 +10,7 @@ the crash left is decided and the decision appended durably.
 Recovery is idempotent: a second pass over its own output finds nothing to decide.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from pydantic.experimental.missing_sentinel import MISSING
 
@@ -20,9 +20,16 @@ from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
 from threads.loop.history import CallState, call_state, open_cancel
 from threads.loop.manual import settle_requested
-from threads.loop.model import Found, NotFound, looked_up
-from threads.loop.runtime import Halt, Runtime, WriterContext, epoch_model, fence, lost
-from threads.result import Err
+from threads.loop.model import (
+    Found,
+    LooksUp,
+    LookupUnknown,
+    NotFound,
+    NotFoundNonfinal,
+    looked_up,
+)
+from threads.loop.runtime import Failed, Halt, Runtime, WriterContext, epoch_model, fence, lost
+from threads.result import Err, Ok
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
@@ -73,13 +80,19 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
     outcome = "unknown"
     # No settings change can land while a request is open: the current epoch is the request's.
     model = epoch_model(rt)
-    if model is not None and model.info.lookup != "none":
+    # A model without the method is treated as declaring none: check() and the first run
+    # refuse one that declares a lookup, and recovery only runs inside a run.
+    if model is not None and model.info.lookup != "none" and isinstance(model, LooksUp):
         stale = await fence(rt)
         if stale is not None:
             return stale
-        match await looked_up(
-            model.lookup(f"{rt.writer.branch_id}:{request_id}", WriterContext(rt))
-        ):
+        looked = await looked_up(
+            model.lookup(f"{rt.writer.branch_id}:{request_id}", WriterContext(rt)), Ok
+        )
+        if isinstance(looked, Err):
+            # The fence refused at the lookup's real send point: this writer lost its lease.
+            return Failed("branch_busy", looked.error.message)
+        match looked.value:
             case Found(value=response) if response.provider_request_id is not None:
                 # A found response without the provider's id can't be recorded: it stays unknown.
                 found = response_drafts(rt, request_id, response, response.provider_request_id)
@@ -87,8 +100,10 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
                 return lost(done.error) if isinstance(done, Err) else None
             case NotFound():
                 outcome = "not_sent"
+            case Found() | NotFoundNonfinal() | LookupUnknown():
+                pass  # no final answer this log can record: the attempt stays unknown
             case _:
-                pass
+                assert_never(looked.value)
     data: dict[str, JsonValue] = {
         "request_event_id": request_id,
         "provider_outcome": outcome,

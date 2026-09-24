@@ -19,6 +19,7 @@ import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
 import { target } from "./handoff";
 import { hosted } from "./hosted";
+import { checkLookups } from "./lookups";
 import type { MemoryWrite, PinOptions } from "./pin";
 import { register } from "./registry";
 import type { RunResult } from "./result";
@@ -172,8 +173,12 @@ function build<Deps, Output>(
     memoryWrite: options.memoryWrite ?? "ask",
     knowledge: options.knowledge,
     skills: options.skills ?? [],
-    setup: (walked) =>
-      setUp(
+    setup: async (walked) => {
+      checkLookups(
+        [options.model, ...(options.fallback ?? [])],
+        options.sandbox,
+      );
+      await setUp(
         options.extensions ?? [],
         [
           options.model,
@@ -185,7 +190,8 @@ function build<Deps, Output>(
         ],
         [...(options.subagents ?? []), ...(options.handoffs ?? [])],
         walked,
-      ),
+      );
+    },
     servers,
     decode,
     ...agentsOf(options),

@@ -120,7 +120,8 @@ export type ModelContext = {
 
 /**
  * What a model adapter returns. One transport attempt per `send`; SDK retries off (
- * item 2). `lookup` is present when `info.lookup` is not `none`.
+ * item 2). `lookup` is optional; a model whose `info.lookup` is not `none` must implement
+ * it, or check() and the first run refuse it (capability_missing).
  */
 export type Model = {
   readonly info: ModelInfo;

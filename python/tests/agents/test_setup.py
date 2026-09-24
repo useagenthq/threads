@@ -31,12 +31,10 @@ from threads import (
 from threads.adapters.sandboxes.daytona.sandbox import DaytonaSandbox
 from threads.log import Permissions, ToolResultEvent
 from threads.loop.model import (
-    LookupResult,
     ModelChunk,
     ModelContext,
     ModelInfo,
     ModelRequest,
-    ModelResponse,
 )
 from threads.loop.scripted import ScriptedModel
 from threads.redaction import redact_secrets
@@ -127,6 +125,17 @@ def test_a_parent_check_fails_on_its_subagents_setup() -> None:
     checked = asyncio.run(parent.check())
     assert isinstance(checked, Err)
     assert checked.error.code == "missing_secret"
+
+
+def test_a_fallback_model_is_set_up_and_its_failure_fails_check() -> None:
+    fallback = Counted([], failing=True)
+    bot = agent(model=Counted([]), fallback=[fallback])
+    assert asyncio.run(bot.check()) == Err(
+        Failure("missing_secret", "fake: set api_key or FAKE_KEY")
+    )
+    fallback.failing = False
+    assert asyncio.run(bot.check()) == Ok(None)
+    assert fallback.setups == FAILED_THEN_SET_UP
 
 
 def test_an_extension_setup_failure_is_invalid_config() -> None:
@@ -345,9 +354,6 @@ class Slotted:
 
     def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         return self._inner.send(request, context)
-
-    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
-        return await self._inner.lookup(request_id, context)
 
     async def setup(self) -> None:
         pass

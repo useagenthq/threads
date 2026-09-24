@@ -243,7 +243,7 @@ export async function execute<Deps, Output>(
         builtin.session,
         log.ledger,
         writer,
-        await providers.revision(),
+        providers.revision,
       );
     if (end.kind === "idle" && writer.chain.fold.handedOff)
       return handedOff(def, plan, writer, thread, config.authorize);

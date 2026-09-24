@@ -33,8 +33,9 @@ def test_daytona_round_trip() -> None:
         s = made.value
         try:
             found = await sandbox.lookup(op, OPEN)
-            assert isinstance(found, Found), found
-            assert found.value.id == s.id
+            assert isinstance(found, Ok), found
+            assert isinstance(found.value, Found), found
+            assert found.value.value.id == s.id
             key = os.environ["DAYTONA_API_KEY"]
             async with (
                 aiohttp.ClientSession() as http,

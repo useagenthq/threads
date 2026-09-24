@@ -33,6 +33,7 @@ from threads.agents.tool import Reconcile, Tool, tool  # noqa: E402
 from threads.hooks.extension import Extension, extension  # noqa: E402
 from threads.hooks.types import Hooks  # noqa: E402
 from threads.loop.model import (  # noqa: E402
+    LooksUp,
     LookupResult,
     Model,
     ModelChunk,
@@ -60,6 +61,8 @@ from threads.memory.types import (  # noqa: E402
 from threads.sandbox import (  # noqa: E402
     ExecOutput,
     ExecResult,
+    LooksUpSandbox,
+    LooksUpSnapshot,
     Sandbox,
     SandboxInfo,
     SandboxSession,
@@ -94,6 +97,9 @@ __all__ = [
     "KnowledgeHit",
     "KnowledgeProvider",
     "KnowledgeSource",
+    "LooksUp",
+    "LooksUpSandbox",
+    "LooksUpSnapshot",
     "LookupResult",
     "MemoryHit",
     "MemoryProvider",

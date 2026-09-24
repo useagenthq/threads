@@ -6,9 +6,9 @@ that goes wrong after the attempt may have reached the provider is uncertainty: 
 the attempt abandoned as unknown.
 """
 
-from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import JsonValue
 
@@ -130,16 +130,19 @@ class LookupUnknown:
 type LookupResult[T] = Found[T] | NotFound | NotFoundNonfinal | LookupUnknown
 
 
-async def looked_up[T](pending: Awaitable[LookupResult[T]]) -> LookupResult[T]:
-    """An adapter's lookup, where raising answers unknown: recovery then settles or parks under
-    its own rules, and the run is never retried for a provider's error. A store error or a
-    broken invariant still raises."""
+async def looked_up[R](
+    pending: Awaitable[R], unknown: Callable[[LookupUnknown], R] = lambda u: u
+) -> R:
+    """An adapter's lookup, where raising answers unknown (wrapped by `unknown` when the lookup's
+    result is wrapped, e.g. `Ok` for a model's): recovery then settles or parks under its own
+    rules, and the run is never retried for a provider's error. A store error or a broken
+    invariant still raises."""
     try:
         return await pending
     except (AssertionError, StoreError):
         raise
     except Exception as error:
-        return LookupUnknown(f"the lookup failed: {type(error).__name__}")
+        return unknown(LookupUnknown(f"the lookup failed: {type(error).__name__}"))
 
 
 class ModelContext(Protocol):
@@ -167,14 +170,34 @@ class ModelContext(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class StaleEpoch:
+    """spec/api.json `Model.lookup` returns.errors: the fence refused at the lookup's send point,
+    so nothing was asked. Recovery ends the run `branch_busy`."""
+
+    message: str
+    code: Literal["stale_epoch"] = "stale_epoch"
+
+
 class Model(Protocol):
-    """spec/api.json `Model`. `lookup` is present when `info.lookup` is not none."""
+    """spec/api.json `Model`. A model whose `info.lookup` is not none also implements
+    `LooksUp`; check() and the first run refuse one that doesn't (capability_missing)."""
 
     @property
     def info(self) -> ModelInfo: ...
 
     def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]: ...
 
-    async def lookup(self, request_id: str, context: ModelContext) -> LookupResult[ModelResponse]:
-        """Awaits `context.fence()` at its real network send point, like `send`."""
+
+@runtime_checkable
+class LooksUp(Protocol):
+    """spec/api.json `Model.lookup`, the optional capability of a `Model`: recover a response
+    after a crash by client request id. `lookup` must be a method: setup checks that it is
+    callable, since an `isinstance` check against this protocol only sees the name."""
+
+    async def lookup(
+        self, request_id: str, context: ModelContext
+    ) -> Ok[LookupResult[ModelResponse]] | Err[StaleEpoch]:
+        """Awaits `context.fence()` at its real network send point, like `send`; a refused
+        fence is `Err(StaleEpoch)`."""
         ...
