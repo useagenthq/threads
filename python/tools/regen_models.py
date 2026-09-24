@@ -18,6 +18,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from eval_models import HEADER as EVAL_HEADER
+from eval_models import combined_eval_schema
 from host_api_models import HEADER as HOST_HEADER
 from host_api_models import combined_schema, defined_names, keep_host_shapes, open_shapes
 from schema_normalize import Obj, as_obj, normalize
@@ -29,6 +31,7 @@ TOOLS_SCHEMA = PYTHON_DIR.parent / "spec" / "schema" / "tools.v1.schema.json"
 TOOLS_CATALOG = PYTHON_DIR.parent / "spec" / "schema" / "tools.v1.catalog.json"
 TOOLS_OUTPUT = PYTHON_DIR / "src" / "threads" / "_generated" / "tools_v1.py"
 HOST_OUTPUT = PYTHON_DIR / "src" / "threads" / "_generated" / "host_api_v1.py"
+EVAL_OUTPUT = PYTHON_DIR / "src" / "threads" / "_generated" / "eval_v1.py"
 CATALOG_SCHEMA = PYTHON_DIR.parent / "spec" / "schema" / "model-catalog.v1.schema.json"
 CATALOG_OUTPUT = PYTHON_DIR / "src" / "threads" / "_generated" / "model_catalog_v1.py"
 CATALOG_HEADER = (
@@ -157,6 +160,17 @@ def generate_host_api(workdir: Path, events_source: str) -> str:
     return ruff(source, "format")
 
 
+def generate_eval(workdir: Path, events_source: str) -> str:
+    """The eval runner's shapes, importing every event type from events_v1."""
+    combined = workdir / "eval.combined.json"
+    schema: Obj = as_obj(json.loads(SCHEMA.read_text(encoding="utf-8")))
+    combined.write_text(json.dumps(combined_eval_schema(schema), indent=2), encoding="utf-8")
+    raw = annotate_config(brand_ids(codegen(combined, workdir / "eval.py", EVAL_HEADER)))
+    source = add_exports(keep_host_shapes(raw, defined_names(events_source)))
+    source = ruff(source, "check", "--fix", "--select=I,F401")
+    return ruff(source, "format")
+
+
 def generate_tools(workdir: Path) -> str:
     """Tool input models (a default is a value, never null: --strict-nullable) and the catalog
     bytes line 0 pins, embedded so the runtime reads no file under spec/."""
@@ -210,6 +224,7 @@ def main(argv: list[str]) -> int:
             (OUTPUT, lambda: events),
             (TOOLS_OUTPUT, lambda: generate_tools(work)),
             (HOST_OUTPUT, lambda: generate_host_api(work, events)),
+            (EVAL_OUTPUT, lambda: generate_eval(work, events)),
             (CATALOG_OUTPUT, lambda: generate_catalog(work)),
         )
         for output, build in builds:

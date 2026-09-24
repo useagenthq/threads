@@ -8,6 +8,7 @@ VERSION: Final[str] = "0.0.0"
 __version__: Final[str] = VERSION
 
 # The public surface imports the store, which reads VERSION above: keep these after it.
+from threads._generated.eval_v1 import EvalCaseResult, EvalReport, Verdict  # noqa: E402
 from threads.agents.agent import Agent, RunStream  # noqa: E402
 from threads.agents.config import ConfigError, ConfigErrorCode, Failure  # noqa: E402
 from threads.agents.context import RunContext  # noqa: E402
@@ -54,9 +55,12 @@ from threads.agents.team_tools import (  # noqa: E402
 )
 from threads.agents.tool import Reconcile, Tool, tool  # noqa: E402
 from threads.agents.usd import usd  # noqa: E402
+from threads.evals.live import Live  # noqa: E402
+from threads.evals.run import run_evals  # noqa: E402
 from threads.hooks.extension import Extension, extension  # noqa: E402
 from threads.hooks.types import Hooks  # noqa: E402
 from threads.log import MemberRef, Principal  # noqa: E402
+from threads.loop.guard import ModelBlockedError  # noqa: E402
 from threads.loop.model import (  # noqa: E402
     LooksUp,
     LookupResult,
@@ -118,6 +122,8 @@ __all__ = [
     "Doc",
     "DocVersion",
     "DynamicAgent",
+    "EvalCaseResult",
+    "EvalReport",
     "EventItem",
     "ExecOutput",
     "ExecResult",
@@ -131,6 +137,7 @@ __all__ = [
     "KnowledgeHit",
     "KnowledgeProvider",
     "KnowledgeSource",
+    "Live",
     "LooksUp",
     "LooksUpSandbox",
     "LooksUpSnapshot",
@@ -141,6 +148,7 @@ __all__ = [
     "MemoryProvider",
     "MemoryRecord",
     "Model",
+    "ModelBlockedError",
     "ModelChunk",
     "ModelContext",
     "ModelInfo",
@@ -184,6 +192,7 @@ __all__ = [
     "TeamRunStream",
     "Thread",
     "Tool",
+    "Verdict",
     "WaitResult",
     "Waited",
     "__version__",
@@ -194,6 +203,7 @@ __all__ = [
     "local_knowledge",
     "local_memory",
     "open_thread",
+    "run_evals",
     "scripted_model",
     "secret",
     "sqlite",

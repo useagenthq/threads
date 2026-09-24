@@ -94,6 +94,12 @@ GATED: Final = WEB | GIT | {"computer", "computer_screenshot", "lsp"}
 """Pinned only when their capability is configured."""
 NAMES: Final = frozenset(MODELS)
 SANDBOXED: Final = NAMES - HOST - FRAMEWORK - WEB - GIT - {SKILL}
+SANDBOX_TOOLS: Final = frozenset(
+    {"bash", "edit", "glob", "grep", "ls", "notebook_edit", "read", "write"}
+)
+"""The sandbox's own tools: what they change stays inside it, so a stub-mode run (a live eval,
+a stub fork) runs them for real only in a sandbox whose egress is deny-all. The computer tool
+is left out: it can act outside the sandbox."""
 PROVIDED: Final[Mapping[str, type[StrictModel]]] = {
     "forget_memory": tools_v1.ForgetMemoryInput,
     "save_memory": tools_v1.SaveMemoryInput,

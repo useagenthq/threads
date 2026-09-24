@@ -168,21 +168,24 @@ class Thread:
             return at
         return Ok(parse_stubs({"stubs": recorded_stubs(read.value.fold, at.value.seq)}))
 
-    async def save_case(
+    async def save_case(  # noqa: PLR0913 - spec/api.json saveCase options, keyword only
         self,
         name: str,
         *,
         expect: CaseExpectation,
         external_effects: Literal["stub"],
         at: EventId | None = None,
+        rubric: Sequence[str] | None = None,
         dir: str = "cases",
     ) -> Ok[SavedCase] | Err[ParseError]:
-        """Writes `<dir>/<name>/`: the export through the snapshot, its artifacts, and case.json
-        with the assertion and declared dependencies."""
+        """Writes `<dir>/<name>/`: any completed turn (the last by default; `at` names its
+        user_input, or a snapshot before it) as a case the eval runner reruns offline, with the
+        assertion and the rubric a live eval's judge grades against. No snapshot is needed."""
         read = await self._read()
         if isinstance(read, Err):
             return read
-        request = CaseRequest(name, expect, external_effects, at, dir)
+        criteria = None if rubric is None else tuple(rubric)
+        request = CaseRequest(name, expect, external_effects, at, dir, criteria)
         return await save_case(await open_store(self.store), read.value, self.sandbox, request)
 
     async def todos(self) -> Ok[tuple[Todo, ...]] | Err[ParseError]:

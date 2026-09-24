@@ -1,7 +1,7 @@
 """Why a continued thread's pin differs from the agent's, in words that say how to continue it.
-Two pin changes came with prompt caching (lane 10), and every thread started before it meets them
-on upgrade. A Python thread pinned before configs recorded their resolved settings can't continue;
-any other change starts a new thread."""
+Two pin changes came with prompt caching (lane 10), and one with tool origins (lane 22): every
+thread started before them meets them on upgrade. A Python thread pinned before configs recorded
+their resolved settings can't continue; any other change starts a new thread."""
 
 from typing import Final
 
@@ -18,6 +18,13 @@ def pin_change(stored: JsonValue, new: JsonValue) -> str:
             "this thread was started by an older Python release that didn't pin its default "
             "permissions, retry and context settings; its config can't be matched now, so start "
             "a new thread"
+        )
+    # Checked before the caching advice: an agent with extension tools can't continue such a
+    # thread whatever its caching settings.
+    if _has_origins(new) and not _has_origins(stored):
+        return (
+            "this thread was started with another config: tool origin was added in this release; "
+            "start a new thread"
         )
     if _prompt_cache(new) is not None and _prompt_cache(stored) is None:
         return (
@@ -53,3 +60,8 @@ def _ttl(started: JsonValue) -> JsonValue:
     context = policy.get("context") if isinstance(policy, dict) else None
     ttl = context.get("cache_ttl_ms") if isinstance(context, dict) else None
     return _DEFAULT_TTL_MS if ttl is None else ttl
+
+
+def _has_origins(started: JsonValue) -> bool:
+    tools = started.get("tools") if isinstance(started, dict) else None
+    return isinstance(tools, list) and any(isinstance(t, dict) and "origin" in t for t in tools)

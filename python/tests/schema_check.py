@@ -15,6 +15,7 @@ _JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 _DOCS: Final[dict[str, JsonValue]] = {}
 for _path in (
     SPEC / "schema" / "events.v1.schema.json",
+    SPEC / "schema" / "eval.v1.schema.json",
     SPEC / "conformance" / "case.schema.json",
     SPEC / "conformance" / "team-ops.schema.json",
 ):

@@ -9,6 +9,8 @@ API. Serving needs the `host` extra.
     threads repair <branch_id>              make a torn import runnable (log_repaired)
     threads delete <thread_id> | --tenant <tenant_id>   delete a thread, or a tenant's threads
     threads gc [--grace-days <n>] [module]  release ledger rows, sweep unreferenced artifacts
+    threads eval [--agent <module>] [--cases <dir>] [--case <name>]... [--live] [--store <dir>]
+                 [--strict] [--out <file>]  check saved cases (replay, rerun, drift, live judge)
 
 `module` is `module`, `module:attribute` or `file.py[:attribute]`, default `app`. The store is
 `--store` (default `.threads`) scoped to `--tenant` (default `local`).
@@ -20,7 +22,7 @@ import os
 import sys
 from collections.abc import Callable, Coroutine, Sequence
 
-from threads.cli import serve, store
+from threads.cli import evals, serve, store
 from threads.store import LOCAL_TENANT
 
 
@@ -45,7 +47,18 @@ def _parser() -> argparse.ArgumentParser:
     collect = commands.add_parser("gc", help="release resources, sweep artifacts")
     collect.add_argument("module", nargs="?", help="the host module whose sandboxes release")
     collect.add_argument("--grace-days", type=float, default=7.0)
+    _eval_options(commands.add_parser("eval", help="check saved cases, and grade them with --live"))
     return parser
+
+
+def _eval_options(run: argparse.ArgumentParser) -> None:
+    run.add_argument("--agent", help="a module defining agents (or agent); adds the drift check")
+    run.add_argument("--cases", default="cases", help="the saved cases (default cases)")
+    run.add_argument("--case", action="append", default=[], dest="only", help="only this case")
+    run.add_argument("--live", action="store_true", help="grade the agents with a judge model")
+    run.add_argument("--store", dest="eval_store", help="keep live and judge threads here")
+    run.add_argument("--strict", action="store_true", help="also fail on stale and skipped")
+    run.add_argument("--out", help="write the report as canonical JSON")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -53,6 +66,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     command = str(args.command)
     if command in ("dev", "start"):
         return _serve(command, str(args.module), int(args.port))
+    if command == "eval":
+        return asyncio.run(evals.evals(_eval_args(args)))
     if command == "delete" and (args.thread_id is None) == (args.all_of is None):
         print("delete needs a thread_id or --tenant <tenant_id>", file=sys.stderr)
         return 2
@@ -75,6 +90,23 @@ def _command(command: str, args: argparse.Namespace) -> Coroutine[object, object
         "gc": lambda: store.gc(path, optional("module"), float(args.grace_days)),
     }
     return commands[command]()
+
+
+def _eval_args(args: argparse.Namespace) -> evals.EvalArgs:
+    def text(name: str) -> str | None:
+        value = getattr(args, name, None)
+        return None if value is None else str(value)
+
+    only: list[object] = list(getattr(args, "only", []))
+    return evals.EvalArgs(
+        agent=text("agent"),
+        cases=str(args.cases),
+        only=tuple(str(o) for o in only),
+        live=bool(args.live),
+        store=text("eval_store"),
+        strict=bool(args.strict),
+        out=text("out"),
+    )
 
 
 def _serve(command: str, module: str, port: int) -> int:

@@ -13,7 +13,7 @@ from typing import TypedDict
 from threads.adapters.loop_resources import holding
 from threads.agents import narrowing
 from threads.agents.bindings import AppTools, capped
-from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
+from threads.agents.builtins import Routed, egress_denied, sandbox_tools, snapshot_turn_end
 from threads.agents.catalog import gateways
 from threads.agents.config import ConfigError
 from threads.agents.context import RunContext
@@ -176,6 +176,9 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
             Routed(builtins, results, app, provided, ext, gateways=routes),
             _stubs(thread, launch),
             definition.model.info,
+            sealed=box is not None
+            and box.info.egress == "enforced"
+            and egress_denied(definition.egress),
         )
         frame = Scope(
             definition,

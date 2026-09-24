@@ -23,7 +23,6 @@ from threads.hooks.types import HookName, Source, wire_name
 from threads.log import (
     Event,
     HookDecisionEvent,
-    InjectedEvent,
     ModelRequestEvent,
     UserInputEvent,
 )
@@ -43,7 +42,6 @@ MAX_RETRIES: Final = 2
 """after_model retry rounds per turn before a retry is a deny."""
 MAX_STOP_CONTINUES: Final = 3
 """on_stop continuations per turn before stop_hook_limit."""
-_STOPPED: Final = "on_stop"
 _FIELDS: Final = TypeAdapter[Mapping[str, object]](Mapping[str, object])
 _TEXTS: Final = TypeAdapter[list[str]](list[str])
 
@@ -194,7 +192,9 @@ async def after_model(rt: Runtime) -> Gated:
         if call is None:
             drafts += [call_draft(request, use), await result_draft(rt, use.call_id, shown, how)]
     drafts.append(
-        draft("turn_completed", {"reason": "error"}) if denied else _instruction("after_model", why)
+        draft("turn_completed", {"reason": "error"})
+        if denied
+        else _instruction(last.extension, why)
     )
     return await append(rt, drafts)
 
@@ -234,24 +234,33 @@ async def end_turn(rt: Runtime) -> Halt | None:
     if not rt.hooks.has("on_stop"):
         return await _done(rt, "end_turn")
     ran = await rt.hooks.run("on_stop", STOP, rt.writer.state())
-    drafts = [decision_draft("on_stop", r, verdict(r, "stop"), said(r, "reason")) for r in ran]
-    reasons = [said(r, "reason") or "" for r in ran if verdict(r, "stop") == "continue"]
+    # Keyed to the response that would end the turn, as TypeScript records it.
+    last = last_response(turn_events(rt.events))
+    ids = {} if last is None else {"request_event_id": last.data.request_event_id}
+    drafts = [
+        decision_draft("on_stop", r, verdict(r, "stop"), said(r, "reason"), **ids) for r in ran
+    ]
+    continuing = [r for r in ran if verdict(r, "stop") == "continue"]
+    reasons = [said(r, "reason") or "" for r in continuing]
     if not reasons:
         drafts.append(draft("turn_completed", {"reason": "end_turn"}))
     elif _continues(rt.events) >= MAX_STOP_CONTINUES:
         drafts.append(draft("turn_completed", {"reason": "stop_hook_limit"}))
     else:
-        drafts.append(_instruction(_STOPPED, "\n".join(reasons)))
+        # Named for the extension that asked, as TypeScript records it.
+        drafts.append(_instruction(continuing[0].extension, "\n".join(reasons)))
     done = await rt.append(*drafts)
     return lost(done.error) if isinstance(done, Err) else None
 
 
 def _continues(events: Sequence[Event]) -> int:
-    """Rounds of on_stop that continued the turn: one instruction each."""
+    """on_stop continue decisions in this turn, as TypeScript counts them."""
     return sum(
         1
         for e in turn_events(events)
-        if isinstance(e, InjectedEvent) and e.data.source == "hook" and e.data.origin.id == _STOPPED
+        if isinstance(e, HookDecisionEvent)
+        and e.data.hook == "on_stop"
+        and e.data.decision == "continue"
     )
 
 

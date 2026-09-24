@@ -5,6 +5,25 @@ from threads.loop.model import Model
 from threads.loop.scripted import ScriptedModel
 
 _blocked = False
+_seen = [0]
+"""Requests to a model that isn't the scripted test kit, blocked or not, in this process."""
+
+
+def requests_seen() -> int:
+    """How many requests this process has tried to send to a real model: a test proves an
+    offline eval adds none."""
+    return _seen[0]
+
+
+class ModelBlockedError(RuntimeError):
+    """Raised by the test model-request guard before dispatch (spec/api.json ModelBlockedError,
+    one type name in both languages). A RuntimeError, so existing `except RuntimeError` blocks
+    behave the same; the eval runner catches exactly this type."""
+
+    def __init__(self, model: str) -> None:
+        super().__init__(f"model requests are blocked in tests: {model}")
+        self.model = model
+        """provider/name of the blocked model."""
 
 
 def block_model_requests(*, blocked: bool = True) -> None:
@@ -16,5 +35,9 @@ def block_model_requests(*, blocked: bool = True) -> None:
 def check(model: Model) -> None:
     """Raises before dispatch when the guard is on and the model is not scripted: a test that
     reaches for a real provider is a bug, never a skipped request."""
-    if _blocked and not isinstance(model, ScriptedModel):
-        raise RuntimeError(f"model requests are blocked in tests: {model.info.model.name}")
+    if isinstance(model, ScriptedModel):
+        return
+    _seen[0] += 1
+    if _blocked:
+        ref = model.info.model
+        raise ModelBlockedError(f"{ref.provider}/{ref.name}")

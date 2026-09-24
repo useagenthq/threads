@@ -1,5 +1,6 @@
 """An agent's definition and what it pins at thread start: `thread_started`."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Literal
 
@@ -314,6 +315,40 @@ def _with_search(
         len(specs),
     )
     return (*specs[:at], search, *specs[at:])
+
+
+@dataclass(frozen=True, slots=True)
+class DryPin:
+    """An agent pinned without setup (spec lane 22, B.3), and what it therefore couldn't see."""
+
+    started: Mapping[str, JsonValue]
+    """The thread_started data a new thread would pin, MCP tools left out."""
+    mcp: tuple[str, ...]
+    """MCP servers whose tools only a connection lists."""
+    setup_extensions: tuple[str, ...]
+    """Extensions with a setup step: their tools and instructions may come from it."""
+    setup_providers: tuple[Literal["memory", "knowledge"], ...]
+    """Memory and knowledge providers with a setup step, by role."""
+    leads_team: bool
+    """agent(team=...): its members run in the team worker, outside the run tree."""
+
+
+def dry_pin[D](definition: Definition[D]) -> DryPin:
+    """The agent's thread_started as a new thread would pin it, without running any setup: it
+    resolves no secret, opens no MCP connection and runs no extension or provider setup."""
+    providers: list[Literal["memory", "knowledge"]] = []
+    # SetsUp (agents/setup.py) imports this module; its one method is what counts.
+    if callable(getattr(definition.memory, "setup", None)):
+        providers.append("memory")
+    if callable(getattr(definition.knowledge, "setup", None)):
+        providers.append("knowledge")
+    return DryPin(
+        definition.pin()[0],
+        tuple(s.name for s in definition.servers),
+        tuple(e.name for e in definition.extensions if e.setup is not None),
+        tuple(providers),
+        definition.team is not None,
+    )
 
 
 def _settings(model: Model) -> dict[str, JsonValue]:

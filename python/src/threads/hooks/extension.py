@@ -14,7 +14,7 @@ from threads.agents.config import ConfigError
 from threads.agents.context import RunContext
 from threads.hooks.runner import Bound, Call, HookRunner
 from threads.hooks.types import HookName, Hooks, wire_name
-from threads.log import Event, JsonObject, ToolSpec
+from threads.log import Event, JsonObject, Origin, ToolSpec
 from threads.loop.model import LookupResult
 from threads.loop.tools import Dispatched
 
@@ -73,9 +73,12 @@ class Namespaced[D]:
 
     name: str
     tool: AppTool[D]
+    extension: str
 
     def spec(self) -> ToolSpec:
-        return self.tool.spec().model_copy(update={"name": self.name})
+        # Not model-visible: line 0 leaves the origin out, config_hash covers it (drift reads it).
+        origin = Origin(extension=self.extension)
+        return self.tool.spec().model_copy(update={"name": self.name, "origin": origin})
 
     def inner(self) -> object:
         """The extension's own tool, whatever deps it reads (what deferral looks at)."""
@@ -93,7 +96,7 @@ class Namespaced[D]:
 
 def extension_tools[D](extensions: Sequence[Extension[D]]) -> tuple[Namespaced[D], ...]:
     """Every extension's tools, namespaced and sorted by that name."""
-    tools = [Namespaced(f"{e.name}__{t.name}", t) for e in extensions for t in e.tools]
+    tools = [Namespaced(f"{e.name}__{t.name}", t, e.name) for e in extensions for t in e.tools]
     return tuple(sorted(tools, key=lambda t: t.name))
 
 

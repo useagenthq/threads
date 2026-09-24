@@ -66,6 +66,11 @@ class StubGateway:
         self.consumed: int = 0
         self.unmatched: int = 0
 
+    @property
+    def left(self) -> int:
+        """Recorded stubs no invocation consumed."""
+        return len(self._stubs)
+
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
         return self._validate(spec, input)
 

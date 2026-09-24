@@ -9,12 +9,12 @@ from pathlib import Path
 
 from corpus import Clock
 from kit import USER, Tools, allow_all, text
-from loop.test_loop_cases import check_expect, run_case
 from pydantic import JsonValue
 from sandbox_kit import OPEN
 from schema_check import CASE_ID, valid
 
 from threads.agents.store import HOLDER, Store, now_ms, open_store, sqlite
+from threads.evals.run import run_evals
 from threads.log import BranchId, ForkEvent, SnapshotEvent, ThreadId
 from threads.loop.drafts import draft
 from threads.loop.drive import drive
@@ -205,10 +205,11 @@ def test_save_case_writes_a_stub_case_the_runner_replays(tmp_path: Path) -> None
             expected = json.loads((folder / f"expected.{impl}.json").read_bytes())
             assert valid(expected, f"{CASE_ID}#/$defs/Expected")
             assert expected["state"] == log.value.state.to_json()
-        # The Python stub runner replays it: input, the recorded reply, and the assertion.
-        outcome = await run_case(folder)
-        assert (outcome.error, outcome.model.remaining) == (None, 0)
-        check_expect(meta, outcome.appended)
+        # The eval runner reruns it: input, the recorded reply, and the assertion.
+        report = await run_evals(cases=str(tmp_path))
+        assert [(c.name, c.status) for c in report.cases] == [("says-hi", "passed")]
+        # The snapshot sits right before the turn's run: a live run may restore it.
+        assert meta["snapshot"]["provider"] == "fake"
         refused = await thread.save_case(
             "no-assertion",
             expect=CaseExpectation(must=()),
@@ -221,7 +222,7 @@ def test_save_case_writes_a_stub_case_the_runner_replays(tmp_path: Path) -> None
     run(body)
 
 
-def test_save_case_needs_a_fork_point(tmp_path: Path) -> None:
+def test_save_case_needs_a_completed_turn(tmp_path: Path) -> None:
     async def body(w: World) -> None:
         thread = await opened(w, sandbox=w.sandbox)
         expect = CaseExpectation(must=({"type": "snapshot"},))
@@ -229,7 +230,7 @@ def test_save_case_needs_a_fork_point(tmp_path: Path) -> None:
             "c", expect=expect, external_effects="stub", dir=str(tmp_path)
         )
         assert isinstance(refused, Err)
-        assert refused.error.code == "no_snapshot_boundary"
+        assert refused.error.code == "invalid_request"
         assert list(tmp_path.iterdir()) == []
 
     run(body)

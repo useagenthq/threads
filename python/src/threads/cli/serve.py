@@ -7,15 +7,14 @@ import importlib
 import importlib.util
 import sys
 from pathlib import Path
+from types import ModuleType
 
 from threads.agents.config import ConfigError
 from threads.host import Host
 
 
-def load(spec: str) -> Host:
-    """`module`, `module:attribute`, or `path/to/file.py[:attribute]`. Without an attribute,
-    the module's one Host."""
-    target, _, attribute = spec.partition(":")
+def import_target(target: str) -> ModuleType:
+    """`module` or `path/to/file.py`, imported (the module's own errors propagate)."""
     if target.endswith(".py"):
         path = Path(target).resolve()
         found = importlib.util.spec_from_file_location(path.stem, path)
@@ -24,9 +23,16 @@ def load(spec: str) -> Host:
         module = importlib.util.module_from_spec(found)
         sys.modules[path.stem] = module
         found.loader.exec_module(module)
-    else:
-        sys.path.insert(0, str(Path.cwd()))
-        module = importlib.import_module(target)
+        return module
+    sys.path.insert(0, str(Path.cwd()))
+    return importlib.import_module(target)
+
+
+def load(spec: str) -> Host:
+    """`module`, `module:attribute`, or `path/to/file.py[:attribute]`. Without an attribute,
+    the module's one Host."""
+    target, _, attribute = spec.partition(":")
+    module = import_target(target)
     if attribute:
         chosen = getattr(module, attribute, None)
         if not isinstance(chosen, Host):

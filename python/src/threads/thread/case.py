@@ -1,11 +1,8 @@
-"""`Thread.save_case` (spec/api.json `saveCase`): a saved case is a `stub` conformance
-case in exactly the spec/conformance layout, so the same runners replay it.
-
-The log is the branch through the snapshot it restores, once per implementation (only the
-writer that a branch's header names may append to it). What the run did after the snapshot
-becomes the case's inputs: the next user input (`input.text`), the recorded model responses
-(model.json) and the recorded tool results (stubs.json). Everything is built from typed
-values, so the case is valid against case.schema.json by construction; tests check it.
+"""`Thread.save_case` (spec/api.json `saveCase`): any completed turn as a `stub` conformance case in
+the spec/conformance layout. The log is the branch through the event before the turn's run; the
+turn itself becomes input.text, model.json, stubs.json (mediated calls), sandbox.json (read-only
+results), extensions.json (hook and recall outcomes), line0.json and `appended`. No sandbox
+snapshot is needed: the offline rerun replays recorded results only.
 """
 
 import re
@@ -14,27 +11,33 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
 
-from pydantic import JsonValue
+from pydantic import JsonValue, TypeAdapter, ValidationError
 
+from threads._generated.eval_v1 import Rubric
+from threads.evals.compare import first_line, matches
 from threads.log import (
+    Event,
     EventId,
-    ModelResponseEvent,
+    ModelRequestEvent,
     ParseError,
-    SnapshotEvent,
     ToolCallEvent,
-    UserInputEvent,
+    UnknownEvent,
 )
-from threads.log.digest import canonical_sha256
+from threads.log.digest import canonical_sha256, sha256_hex
 from threads.log.jcs import canonicalize
 from threads.reduce import Fold
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import SqliteStore, VerifiedLog
+from threads.thread.case_files import model_script, sandbox_results, stub_script
+from threads.thread.case_hooks import extension_script
 from threads.thread.case_log import IMPLS, artifact_refs, per_impl
+from threads.thread.case_turn import Offline, Turn, find_turn, offline_reason
 from threads.thread.fork import fork_point
 
 _NAME: Final = re.compile(r"[a-z0-9][a-z0-9-]*")
+_RUBRIC: Final = TypeAdapter[Sequence[str]](Rubric)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +52,10 @@ class CaseExpectation:
 class SavedCase:
     path: str
     portable: bool
-    """False when the case depends on a named provider."""
+    """True when the case reruns offline from its directory alone."""
+    reason: str | None = None
+    """Why it can't, when it can't: artifact_missing, unsettled_effect, content_input,
+    child_threads, team_calls or extension_events."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,144 +65,228 @@ class CaseRequest:
     external_effects: Literal["stub"]
     at: EventId | None
     dir: str
+    rubric: tuple[str, ...] | None = None
+
+
+def _invalid(message: str) -> Err[ParseError]:
+    return Err(ParseError("invalid_request", message))
+
+
+def _check(request: CaseRequest, sandbox: Sandbox | None) -> ParseError | None:
+    if not request.expect.must:
+        return ParseError("invalid_request", "a case needs an assertion")
+    if not _NAME.fullmatch(request.name):
+        return ParseError("invalid_request", f"case name {request.name} is not lowercase-kebab")
+    if request.rubric is not None:
+        try:
+            _RUBRIC.validate_python(list(request.rubric), strict=True)
+        except ValidationError:
+            return ParseError(
+                "invalid_request",
+                "rubric: 1 to 20 criteria, each 1 to 500 characters; pass rubric=None for none",
+            )
+    if sandbox is not None and sandbox.info.egress != "enforced":
+        why = "a case needs a sandbox that enforces deny-all egress"
+        return ParseError("egress_policy_unsupported", why)
+    return None
+
+
+def _wire(event: Event) -> dict[str, JsonValue]:
+    wire = to_json(event)
+    if not isinstance(wire, dict):
+        raise AssertionError("an event is an object")
+    return wire
+
+
+def _turn(
+    log: VerifiedLog, sandbox: Sandbox | None, request: CaseRequest
+) -> Ok[Turn] | Err[ParseError]:
+    """The turn to save, checked before anything is read or written: the request is valid and
+    every `must` matcher meets something the recorded turn appended."""
+    checked = _check(request, sandbox)
+    if checked is not None:
+        return Err(checked)
+    found = find_turn(log.fold.events, request.at)
+    if isinstance(found, Err):
+        return found
+    wires = [_wire(e) for e in found.value.events]
+    missed = next((m for m in request.expect.must if not any(matches(m, w) for w in wires)), None)
+    if missed is not None:
+        return _invalid(f"must {missed.get('type')} matches nothing the recorded turn appended")
+    return found
 
 
 async def save_case(
     store: SqliteStore, log: VerifiedLog, sandbox: Sandbox | None, request: CaseRequest
 ) -> Ok[SavedCase] | Err[ParseError]:
-    planned = _plan(log, sandbox, request)
-    if isinstance(planned, Err):
-        return planned
-    snap, text = planned.value
-    exported = await store.export_through(snap.branch_id, snap.seq)
-    if isinstance(exported, Err):
-        return exported
-    blobs = await _artifacts(store, exported.value)
-    if isinstance(blobs, Err):
-        return blobs
-    files = _files(request, exported.value, log.fold, snap, text)
-    if isinstance(files, Err):
-        return files
-    folder = Path(request.dir) / request.name
-    (folder / "artifacts").mkdir(parents=True, exist_ok=True)
-    for name, data in (*files.value.items(), *blobs.value.items()):
-        (folder / name).write_bytes(data)
-    return Ok(SavedCase(str(folder), snap.data.provider == "fake"))
-
-
-def _plan(
-    log: VerifiedLog, sandbox: Sandbox | None, request: CaseRequest
-) -> Ok[tuple[SnapshotEvent, str]] | Err[ParseError]:
-    """What the case restores and replays, checked before anything is read or written."""
-    if not request.expect.must or not _NAME.fullmatch(request.name):
-        return Err(ParseError("invalid_request", "a case needs a name and a `must` assertion"))
-    found = _snapshot(log, request.at)
+    found = _turn(log, sandbox, request)
     if isinstance(found, Err):
         return found
-    checked = _dependencies(found.value, sandbox)
-    if checked is not None:
-        return Err(checked)
-    text = _next_input(log.fold, found.value.seq)
-    if text is None:
-        return Err(ParseError("invalid_request", "no user input after the snapshot to replay"))
-    return Ok((found.value, text))
+    turn = found.value
+    exported = await store.export_through(turn.input.branch_id, turn.restore_seq)
+    if isinstance(exported, Err):
+        return exported
+    files = await _files(store, log.fold, turn, request, exported.value)
+    if isinstance(files, Err):
+        return files
+    written, offline = files.value
+    folder = Path(request.dir) / request.name
+    (folder / "artifacts").mkdir(parents=True, exist_ok=True)
+    for name, data in written.items():
+        (folder / name).write_bytes(data)
+    if offline is None:
+        return Ok(SavedCase(str(folder), portable=True))
+    return Ok(SavedCase(str(folder), portable=False, reason=offline.reason))
 
 
-def _snapshot(log: VerifiedLog, at: EventId | None) -> Ok[SnapshotEvent] | Err[ParseError]:
-    """The snapshot the case restores: `at`, else the branch's latest fork point."""
-    if at is None and not log.fold.fork_points:
-        return Err(ParseError("no_snapshot_boundary", "the branch has no fork point"))
-    point = log.fold.fork_points[-1][1] if at is None else at
-    found = fork_point(log.fold, point)
-    if isinstance(found, Err):
-        # An expired snapshot is simply not a boundary a case can restore.
-        return Err(ParseError("no_snapshot_boundary", found.error.message, found.error.seq))
-    return found
-
-
-def _dependencies(snap: SnapshotEvent, sandbox: Sandbox | None) -> ParseError | None:
-    """A case must never run with open egress: the snapshot's provider must
-    be here and must enforce deny-all egress."""
-    provider = snap.data.provider
-    if sandbox is None or sandbox.info.provider != provider:
-        return ParseError("case_missing_dependency", f"no {provider} sandbox adapter", snap.seq)
-    if sandbox.info.egress != "enforced":
-        message = f"{provider} can't enforce deny-all egress"
-        return ParseError("egress_policy_unsupported", message, snap.seq)
-    return None
-
-
-def _next_input(fold: Fold, after: int) -> str | None:
-    event = next((e for e in fold.events if e.seq > after and isinstance(e, UserInputEvent)), None)
-    text = None if event is None else event.data.text
-    return text if isinstance(text, str) else None
-
-
-async def _artifacts(store: SqliteStore, export: bytes) -> Ok[dict[str, bytes]] | Err[ParseError]:
-    """Every artifact the export's lines reference, read and verified."""
-    blobs: dict[str, bytes] = {}
-    for sha in artifact_refs(export):
+async def _copy(store: SqliteStore, refs: Sequence[str], into: dict[str, bytes]) -> list[str]:
+    """Copies each ref's bytes into artifacts/; the shas that are gone from the store."""
+    gone: list[str] = []
+    for sha in refs:
         got = await store.get_artifact(sha)
-        if isinstance(got, Err):
-            return Err(ParseError("case_missing_dependency", got.error.message))
-        blobs[f"artifacts/{sha}"] = got.value
-    return Ok(blobs)
+        if isinstance(got, Ok):
+            into[f"artifacts/{sha}"] = got.value
+        else:
+            gone.append(sha)
+    return gone
 
 
-def _files(
-    request: CaseRequest, export: bytes, fold: Fold, snap: SnapshotEvent, text: str
-) -> Ok[dict[str, bytes]] | Err[ParseError]:
+def _turn_refs(turn: Turn) -> list[str]:
+    """Every artifact a turn event other than a model request names."""
+    lines = [
+        canonical_json(_wire(e)).encode("utf-8")
+        for e in turn.events
+        if not isinstance(e, ModelRequestEvent)
+    ]
+    return artifact_refs(b"\n".join(lines) + b"\n") if lines else []
+
+
+async def _line0(store: SqliteStore, turn: Turn) -> bytes | None:
+    """Line 0 of the turn's first request artifact: what drift compares the agent against."""
+    request = next((e for e in turn.events if isinstance(e, ModelRequestEvent)), None)
+    if request is None:
+        return None
+    got = await store.get_artifact(request.data.request_ref.sha256)
+    return first_line(got.value) if isinstance(got, Ok) else None
+
+
+async def _files(
+    store: SqliteStore, fold: Fold, turn: Turn, request: CaseRequest, export: bytes
+) -> Ok[tuple[dict[str, bytes], Offline | None]] | Err[ParseError]:
     files: dict[str, bytes] = {}
+    stubs = await stub_script(turn.events, store.get_artifact)
+    consumed = len(_list(stubs, "stubs"))
+    appended: list[JsonValue] = [_wire(e) for e in turn.events]
     for impl in IMPLS:
         log = per_impl(export, impl, fold.now)
         if isinstance(log, Err):
             return log
         files[f"log.{impl}.jsonl"] = log.value[0]
-        files[f"expected.{impl}.json"] = _json({"outcome": "ok", "state": log.value[1]})
-    files["case.json"] = _json(_case(request, fold.now, text))
-    files["model.json"] = _json({"responses": _responses(fold, snap.seq)})
-    files["stubs.json"] = _json({"stubs": recorded_stubs(fold, snap.seq)})
-    return Ok(files)
+        files[f"expected.{impl}.json"] = _json(
+            {
+                "outcome": "ok",
+                "state": log.value[1],
+                "appended": appended,
+                "stubs": {"consumed": consumed, "unmatched": 0},
+            }
+        )
+    gone = await _copy(store, artifact_refs(export), files)
+    if gone:
+        return Err(ParseError("case_missing_dependency", f"artifact {gone[0]} is gone"))
+    later = [e for e in fold.events if e.seq > turn.restore_seq and not isinstance(e, UnknownEvent)]
+    missing = await _copy(store, _turn_refs(turn), files)
+    offline = Offline("artifact_missing") if missing else offline_reason(turn, later)
+    sandbox, extensions = sandbox_results(turn.events), extension_script(turn.events)
+    prefix = await _line0(store, turn)
+    if sandbox is not None:
+        files["sandbox.json"] = _json(sandbox)
+    if extensions is not None:
+        files["extensions.json"] = _json(extensions)
+    if prefix is not None:
+        files["line0.json"] = prefix
+    files["model.json"] = _json(model_script(turn.events))
+    files["stubs.json"] = _json(stubs)
+    meta = _case(request, fold, turn, offline, prefix)
+    files["case.json"] = _json(meta | _scripts(sandbox, extensions))
+    return Ok((files, offline))
 
 
-def _case(request: CaseRequest, now: int, text: str) -> JsonValue:
-    expect: dict[str, JsonValue] = {"must": [dict(m) for m in request.expect.must]}
-    if request.expect.expect:
-        expect["expect"] = [dict(m) for m in request.expect.expect]
-    return {
+def _scripts(sandbox: JsonValue | None, extensions: JsonValue | None) -> dict[str, JsonValue]:
+    out: dict[str, JsonValue] = {"model_script": "model.json", "stub_script": "stubs.json"}
+    if sandbox is not None:
+        out["sandbox_script"] = "sandbox.json"
+    if extensions is not None:
+        out["extension_script"] = "extensions.json"
+    return out
+
+
+def _snapshot(fold: Fold, seq: int) -> JsonValue | None:
+    """A sandbox snapshot fork point exactly at the restore point, for a live run."""
+    for at, event_id in fold.fork_points:
+        point = fork_point(fold, event_id) if at == seq else None
+        if isinstance(point, Ok):
+            return {"event_id": event_id, "provider": point.value.data.provider}
+    return None
+
+
+def _case(
+    request: CaseRequest, fold: Fold, turn: Turn, offline: Offline | None, prefix: bytes | None
+) -> dict[str, JsonValue]:
+    text = turn.input.data.text
+    expect: dict[str, JsonValue] = {
+        "must": [dict(m) for m in request.expect.must],
+        "expect": [dict(m) for m in request.expect.expect],
+    }
+    meta: dict[str, JsonValue] = {
         "name": request.name,
         "family": "log_fork_test",
         "kind": "stub",
-        "description": f"Saved case {request.name}: replays its snapshot in stub mode.",
-        "clock": {"now": now},
-        "model_script": "model.json",
-        "stub_script": "stubs.json",
-        "input": {"text": text},
+        "description": (
+            f"Saved from branch {turn.input.branch_id}: replays the turn of input "
+            f"{turn.input.event_id} with every mediated operation stubbed."
+        ),
+        "clock": {"now": fold.now},
+        "input": {"text": text} if isinstance(text, str) else {},
         "expect": expect,
     }
+    if request.rubric is not None:
+        meta["rubric"] = list(request.rubric)
+    snapshot = _snapshot(fold, turn.restore_seq)
+    if snapshot is not None:
+        meta["snapshot"] = snapshot
+    if offline is not None:
+        why: dict[str, JsonValue] = {"runnable": False, "reason": offline.reason}
+        if offline.types is not None:
+            why["types"] = list(offline.types)
+        meta["offline"] = why
+    if prefix is not None:
+        meta["line0"] = {"sha256": sha256_hex(prefix)}
+    return meta
 
 
-def _responses(fold: Fold, after: int) -> list[JsonValue]:
-    return [
-        {
-            "content": [to_json(part) for part in e.data.content],
-            "stop_reason": e.data.stop_reason,
-            "usage": to_json(e.data.usage),
-        }
-        for e in fold.events
-        if e.seq > after and isinstance(e, ModelResponseEvent)
-    ]
+def _list(value: JsonValue, key: str) -> list[JsonValue]:
+    got = value.get(key) if isinstance(value, dict) else None
+    return got if isinstance(got, list) else []
+
+
+def canonical_json(value: JsonValue) -> str:
+    match canonicalize(value):
+        case Ok(value=text):
+            return text
+        case Err(error=reason):
+            raise ValueError(f"saved case: {reason}")
+
+
+def _json(value: JsonValue) -> bytes:
+    return canonical_json(value).encode("utf-8") + b"\n"
 
 
 def recorded_stubs(fold: Fold, after: int) -> list[JsonValue]:
-    """Each recorded tool result after the snapshot, keyed as stub mode matches it: tool,
-    args_hash and occurrence."""
+    """Each recorded tool result after a snapshot, keyed as stub mode matches it: tool, args_hash
+    and occurrence (a stub fork's replay)."""
     stubs: list[JsonValue] = []
     seen: dict[tuple[str, str], int] = {}
-    calls: Sequence[ToolCallEvent] = [
-        e for e in fold.events if e.seq > after and isinstance(e, ToolCallEvent)
-    ]
-    for call in calls:
+    for call in (e for e in fold.events if e.seq > after and isinstance(e, ToolCallEvent)):
         result = fold.results.get(call.data.call_id)
         hashed = canonical_sha256(dict(call.data.input))
         if result is None or not isinstance(hashed, Ok):
@@ -213,11 +303,3 @@ def recorded_stubs(fold: Fold, after: int) -> list[JsonValue]:
             }
         )
     return stubs
-
-
-def _json(value: JsonValue) -> bytes:
-    match canonicalize(value):
-        case Ok(value=text):
-            return text.encode("utf-8") + b"\n"
-        case Err(error=reason):
-            raise ValueError(f"saved case: {reason}")
