@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from threads.log import (
+    ArtifactRef,
     BranchId,
     CallId,
     CompactionRequestedEvent,
@@ -126,6 +127,8 @@ class Fold:
     """The latest set by name; a repeated name keeps its first spec, as TypeScript's lookup."""
     known_tools: dict[str, ToolSpec] = field(default_factory=dict[str, ToolSpec])
     """Each name's spec as pinned by thread_started or first added (rule 17)."""
+    loaded: dict[str, ArtifactRef] = field(default_factory=dict[str, ArtifactRef])
+    """Reference-form tools a tools_loaded loaded, with their spec_ref (rule 46)."""
     in_turn: bool = False
     turns: int = 0
     handed_off: bool = False
@@ -189,6 +192,11 @@ def call_spec(fold: Fold, call_id: CallId) -> ToolSpec | None:
     """The spec a recorded call was made under; a later tools_changed never reclasses it. None:
     its tool was not in the set when the call was made."""
     return fold.call_specs.get(call_id)
+
+
+def still_deferred(fold: Fold, spec: ToolSpec) -> bool:
+    """Whether a spec is still deferred: flagged, and not loaded by a tools_loaded."""
+    return spec.defer_loading is True and spec.name not in fold.loaded
 
 
 def reject(

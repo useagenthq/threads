@@ -1,4 +1,4 @@
-"""Rule 17, points 1-5 (spec/schema/README.md): a new tool set never makes dispatch less safe
+"""Rule 17, points 1-6 (spec/schema/README.md): a new tool set never makes dispatch less safe
 (invariant 3)."""
 
 from pydantic.experimental.missing_sentinel import MISSING
@@ -48,7 +48,10 @@ def _added_error(spec: ToolSpec) -> str | None:
 
 
 def _kept_error(fold: Fold, first: ToolSpec, spec: ToolSpec, *, searched: bool) -> str | None:
-    """Points 1-3: the first spec holds but for defer_loading, which only goes true to absent."""
+    """Points 1-3: the first spec holds but for defer_loading, which only goes true to absent.
+    Point 6: a reference-form pin has its own two forms."""
+    if first.spec_ref is not MISSING:
+        return _ref_form_error(fold, first, spec)
     if not _same(first, spec):
         return f"tools_changed changes the spec of {spec.name}"
     before = fold.tools.get(spec.name, first)
@@ -69,3 +72,21 @@ def _text(spec: ToolSpec) -> str | None:
     """The RFC 8785 text of a spec without defer_loading."""
     text = canonicalize(to_json(spec.model_copy(update={"defer_loading": MISSING})))
     return text.value if isinstance(text, Ok) else None
+
+
+_STUB_FIELDS = ("name", "description", "effect_class", "dedup_window_ms", "ends_turn")
+
+
+def _ref_form_error(fold: Fold, pin: ToolSpec, spec: ToolSpec) -> str | None:
+    """Point 6: the reference form byte for byte while not loaded, else the full form after its
+    tools_loaded, agreeing with the stub (import checks its bytes against the artifact)."""
+    loaded = spec.name in fold.loaded
+    if spec.spec_ref is not MISSING:
+        if _text(spec) != _text(pin) or spec.defer_loading != pin.defer_loading:
+            return f"tools_changed changes the spec of {spec.name}"
+        return f"tools_changed defers {spec.name} again" if loaded else None
+    if not loaded:
+        return f"tools_changed loads {spec.name} without a tools_loaded"
+    stub = all(getattr(spec, k) == getattr(pin, k) for k in _STUB_FIELDS)
+    full = spec.defer_loading is MISSING and stub
+    return None if full else f"tools_changed changes the spec of {spec.name}"

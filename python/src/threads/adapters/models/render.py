@@ -37,9 +37,11 @@ class ToolLine(StrictModel):
     deferred: Literal[True] | MISSING = MISSING
 
     def parameters(self) -> dict[str, JsonValue]:
-        """The input schema; a deferred stub has none, so it is listed with an open object so
-        tool_search can load it, and a call to it fails pre-effect with tool_not_loaded."""
-        return {"type": "object"} if self.input_schema is MISSING else self.input_schema
+        """The input schema. A stub is never a provider tool (`Request.tools`), so every tool an
+        adapter sends has one."""
+        if self.input_schema is MISSING:
+            raise AssertionError(f"{self.name} is a deferred stub, never offered as a tool")
+        return self.input_schema
 
 
 class Head(StrictModel):
@@ -62,6 +64,11 @@ class ToolsLine(StrictModel):
     tools: Sequence[ToolLine]
 
 
+class LoadedLine(StrictModel):
+    role: Literal["tools_loaded"]
+    tools: Sequence[ToolLine]
+
+
 class AssistantLine(StrictModel):
     role: Literal["assistant"]
     content: Sequence[OutputPart]
@@ -77,16 +84,16 @@ class ResultLine(StrictModel):
 
 type Message = UserLine | AssistantLine | ResultLine
 
-_LINE: TypeAdapter[UserLine | ToolsLine | AssistantLine | ResultLine] = TypeAdapter(
-    Annotated[UserLine | ToolsLine | AssistantLine | ResultLine, Field(discriminator="role")]
-)
+type _Line = UserLine | ToolsLine | LoadedLine | AssistantLine | ResultLine
+_LINE: TypeAdapter[_Line] = TypeAdapter(Annotated[_Line, Field(discriminator="role")])
 
 
 @dataclass(frozen=True, slots=True)
 class Request:
     head: Head
     tools: Sequence[ToolLine]
-    """The tool set the model sees now: the last `tools` line, else line 0's."""
+    """The provider tools (Render v1, "Provider tools"): the last complete tool set (a `tools`
+    line, else line 0's) without its stubs, then every tools_loaded spec after it."""
     messages: Sequence[Message]
 
 
@@ -108,15 +115,17 @@ def parse(body: bytes) -> Request:
     """Raises on bytes that are not Render v1: the loop rendered them, so that is a bug."""
     first, *rest = body.decode("utf-8").splitlines()
     head = Head.model_validate_json(first)
-    tools: Sequence[ToolLine] = head.tools
+    tools = [t for t in head.tools if t.deferred is MISSING]
     messages: list[Message] = []
     for text in rest:
         line = _LINE.validate_json(text)
         if isinstance(line, ToolsLine):
-            tools = line.tools
+            tools = [t for t in line.tools if t.deferred is MISSING]
+        elif isinstance(line, LoadedLine):
+            tools.extend(line.tools)
         else:
             messages.append(line)
-    return Request(head, tools, tuple(messages))
+    return Request(head, tuple(tools), tuple(messages))
 
 
 def canonical(value: JsonValue) -> str:

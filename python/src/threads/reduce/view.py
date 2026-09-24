@@ -32,6 +32,7 @@ from threads.log import (
     ToolResultEvent,
     ToolResultLateEvent,
     ToolsChangedEvent,
+    ToolsLoadedEvent,
     ToolUsePart,
     UserInputEvent,
     WaitStartedEvent,
@@ -62,6 +63,11 @@ class RenderView:
     silent_mail: frozenset[EventId] = frozenset()
     """Receipts whose mail reaches the model as a call's result (a reply, an ask's bounce, a
     wait's notification) or not at all (a cancel, a park notice)."""
+    merged: Mapping[EventId, tuple[ToolsLoadedEvent, ...]] = field(
+        default_factory=dict[EventId, tuple[ToolsLoadedEvent, ...]]
+    )
+    """Per compacted range, the loads after its last tools_changed, keyed by the last load: the
+    one tools_loaded line the range renders in their place."""
 
 
 @dataclass(slots=True)
@@ -148,7 +154,25 @@ def render_view(events: Sequence[Event]) -> RenderView:
         frozenset(c for c in b.calls if c not in b.proposed),
         frozenset(i for i, by in b.recalled if by != b.principal),
         frozenset(b.silent_mail),
+        _merged(outer, events),
     )
+
+
+def _merged(
+    ranges: Sequence[CompactedEvent], events: Sequence[Event]
+) -> dict[EventId, tuple[ToolsLoadedEvent, ...]]:
+    out: dict[EventId, tuple[ToolsLoadedEvent, ...]] = {}
+    for c in ranges:
+        kept = [e.seq for e in events if isinstance(e, ToolsChangedEvent) and covers(c, e.seq)]
+        after = kept[-1] if kept else 0
+        loads = tuple(
+            e
+            for e in events
+            if isinstance(e, ToolsLoadedEvent) and covers(c, e.seq) and e.seq > after
+        )
+        if loads:
+            out[loads[-1].event_id] = loads
+    return out
 
 
 def input_principal(events: Sequence[Event]) -> Principal | None:
@@ -181,7 +205,8 @@ def assistant_parts(
 
 def walk(view: RenderView, events: Sequence[Event]) -> Iterator[Event]:
     """The events in render order. A range's first position yields its `CompactedEvent` (the
-    summary), then the last `tools_changed` inside the range, so loaded tools survive. A
+    summary), then the last `tools_changed` inside the range, then the last tools_loaded after
+    it, which renders every load of `view.merged`, so loaded tools survive. A
     `compacted` event at its own position renders nothing and is not yielded."""
     for event in events:
         compacted = next((c for c in view.ranges if covers(c, event.seq)), None)
@@ -200,3 +225,10 @@ def walk(view: RenderView, events: Sequence[Event]) -> Iterator[Event]:
             ]
             if kept:
                 yield kept[-1]
+            yield from (
+                e
+                for e in events
+                if isinstance(e, ToolsLoadedEvent)
+                and e.event_id in view.merged
+                and covers(compacted, e.seq)
+            )

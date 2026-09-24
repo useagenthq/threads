@@ -5,28 +5,34 @@ C7 first: its `declared_prefix` equals the line 0 re-rendered from its own setti
 (semantic rule 14). Equality, never starts-with, and a mismatch never resets the baseline:
 each request is compared with its epoch's pinned settings, not with the previous request.
 Then its `request_ref` artifact must exist and verify, and last it must equal Render v1 of
-the events before it (rule 15).
+the events before it (rule 15). A tools_loaded or tools_changed gets the artifact checks of
+rules 46 and 17 point 6 at its place in the same walk.
 """
 
 from collections.abc import Sequence
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import Event, ModelRequestEvent, ParseError
+from threads.log import Event, ModelRequestEvent, ParseError, ToolsChangedEvent, ToolsLoadedEvent
 from threads.log.digest import sha256_hex
 from threads.render.artifacts import ReadArtifact, read_verified
+from threads.render.loaded import artifact_error
 from threads.render.request import epoch_line0, render
 from threads.result import Err, Ok
 
 
 def verify_requests(events: Sequence[Event], read: ReadArtifact) -> Ok[None] | Err[ParseError]:
     for index, event in enumerate(events):
+        error: ParseError | None = None
         if isinstance(event, ModelRequestEvent):
             # ponytail: re-renders each request from scratch, O(n^2) over the log; fold the
             # render incrementally if replaying long logs gets slow.
             error = _request_error(events[:index], event, read)
-            if error is not None:
-                return Err(error)
+        elif isinstance(event, ToolsLoadedEvent | ToolsChangedEvent):
+            # Rules 46 and 17 point 6: the spec artifacts, in the same seq order.
+            error = artifact_error(events[:index], event, read)
+        if error is not None:
+            return Err(error)
     return Ok(None)
 
 

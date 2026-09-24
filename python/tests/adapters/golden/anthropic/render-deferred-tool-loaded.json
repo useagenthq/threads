@@ -4,7 +4,7 @@
     {
       "content": [
         {
-          "text": "Deploy to staging.",
+          "text": "File a bug about the login page.",
           "type": "text"
         }
       ],
@@ -15,7 +15,7 @@
         {
           "id": "call_1",
           "input": {
-            "query": "deploy"
+            "query": "mcp__jira__create_issue"
           },
           "name": "tool_search",
           "type": "tool_use"
@@ -28,7 +28,7 @@
         {
           "content": [
             {
-              "text": "mcp__ops__deploy: Deploy the app.",
+              "text": "mcp__jira__create_issue: Create a Jira issue in a project.",
               "type": "text"
             }
           ],
@@ -44,6 +44,31 @@
   "stream": true,
   "system": "You are a helpful agent.",
   "tools": [
+    {
+      "description": "Load deferred tools so you can call them. Pass exact tool names, separated by commas, to load those tools; otherwise the query's words are matched against each deferred tool's name and description, and the best matches are loaded. A loaded tool stays available for the rest of the conversation.\n\nDeferred tools (search to load): mcp__jira__create_issue",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 5,
+            "description": "How many keyword matches to load.",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "query": {
+            "description": "Exact tool names separated by commas, or keywords. At most 200 characters.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "name": "tool_search"
+    },
     {
       "description": "Read a file from the sandbox workspace.",
       "input_schema": {
@@ -61,36 +86,24 @@
       "name": "read_file"
     },
     {
-      "description": "Find deferred tools by keyword.",
+      "description": "Create a Jira issue in a project.\nReturns the new issue key.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
-          "query": {
+          "project": {
+            "type": "string"
+          },
+          "summary": {
             "type": "string"
           }
         },
         "required": [
-          "query"
+          "project",
+          "summary"
         ],
         "type": "object"
       },
-      "name": "tool_search"
-    },
-    {
-      "description": "Deploy the app.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "env": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "env"
-        ],
-        "type": "object"
-      },
-      "name": "mcp__ops__deploy"
+      "name": "mcp__jira__create_issue"
     }
   ]
 }

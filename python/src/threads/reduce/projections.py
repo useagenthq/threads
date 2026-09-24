@@ -30,6 +30,7 @@ from threads.log import (
     SettingsChangedEvent,
     TodosUpdatedEvent,
     ToolsChangedEvent,
+    ToolsLoadedEvent,
     Usage,
 )
 from threads.log.jcs import MAX_SAFE_INTEGER
@@ -39,7 +40,13 @@ from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 
 _DROP_MIN = 2000
-_CAUSES = (SettingsChangedEvent, CompactedEvent, ContextEditedEvent, ToolsChangedEvent)
+_CAUSES = (
+    SettingsChangedEvent,
+    CompactedEvent,
+    ContextEditedEvent,
+    ToolsChangedEvent,
+    ToolsLoadedEvent,
+)
 
 
 @dataclass(frozen=True, slots=True)

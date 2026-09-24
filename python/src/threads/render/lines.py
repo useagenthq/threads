@@ -25,6 +25,7 @@ from threads.log import (
     ToolResultEvent,
     ToolResultLateEvent,
     ToolsChangedEvent,
+    ToolsLoadedEvent,
     ToolSpec,
     UserInputEvent,
 )
@@ -41,6 +42,7 @@ from threads.render.framing import (
     reference,
     user_line,
 )
+from threads.render.loaded import loaded_spec
 from threads.result import Err, Ok
 
 
@@ -55,6 +57,8 @@ def spec_line(spec: ToolSpec) -> JsonValue:
     """A tool as the model sees it: a deferred spec is a stub until tool_search loads it."""
     if spec.defer_loading is True:
         return {"name": spec.name, "description": spec.description, "deferred": True}
+    if spec.input_schema is MISSING:
+        raise AssertionError("only the reference form has no input_schema, and it is deferred")
     schema: JsonValue = dict(spec.input_schema)
     return {"name": spec.name, "description": spec.description, "input_schema": schema}
 
@@ -72,7 +76,23 @@ def build(view: RenderView, read: ReadArtifact, event: Event) -> Ok[Line | None]
         return _summary(read, event)
     if isinstance(event, MessageReceivedEvent):
         return _mail(read, event)
+    if isinstance(event, ToolsLoadedEvent):
+        return _loaded(read, view.merged.get(event.event_id, (event,)))
     return Ok(_plain(view, event))
+
+
+def _loaded(
+    read: ReadArtifact, loads: Sequence[ToolsLoadedEvent]
+) -> Ok[Line | None] | Err[ParseError]:
+    """The tools these loads loaded, each read from its spec artifact, in load order."""
+    tools: list[JsonValue] = []
+    for event in loads:
+        for tool in event.data.tools:
+            spec = loaded_spec(read, tool.spec_ref, event.seq)
+            if isinstance(spec, Err):
+                return spec
+            tools.append(spec_line(spec.value))
+    return Ok(Line({"role": "tools_loaded", "tools": tools}))
 
 
 def _mail(read: ReadArtifact, event: MessageReceivedEvent) -> Ok[Line | None] | Err[ParseError]:

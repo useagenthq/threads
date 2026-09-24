@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 from threads.log import Event, Header, ParseError, UnknownEvent
 from threads.reduce import (
+    rules_loaded,
     rules_misc,
     rules_requested,
     rules_team,
@@ -21,6 +22,7 @@ _HANDLERS: Mapping[type, Handler] = {
     **rules_misc.HANDLERS,
     **rules_requested.HANDLERS,
     **rules_wake.HANDLERS,
+    **rules_loaded.HANDLERS,
 }
 
 
