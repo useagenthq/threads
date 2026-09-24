@@ -1,5 +1,4 @@
-import { type Principal, ThreadId } from "../log";
-import { turnEvents } from "../loop/turn";
+import { type KnownEvent, type Principal, ThreadId } from "../log";
 import { ok } from "../result";
 import type { LogStore } from "../store";
 import { control } from "./control";
@@ -29,16 +28,18 @@ export async function cancelTree(
   threadId: ThreadId,
   principal: Principal,
   reason = "ancestor cancelled",
-): Promise<void> {
+): Promise<boolean> {
   const branch = log.mainBranch(threadId);
-  if (!branch.ok) return;
-  await control(log, branch.value, principal, (events, writer) => {
-    const barred = turnEvents(events).some(
-      (e) => e.type === "cancel_requested",
-    );
-    // Nothing to stop: the child's turn is closed or already has a barrier.
-    if (!writer.chain.fold.turnOpen || barred)
-      return { ok: false, error: { code: "not_found", message: "no turn" } };
+  if (!branch.ok) return false;
+  let barred = false;
+  await control(log, branch.value, principal, (events) => {
+    // Already stopped: a thread or tree cancel since its latest input. A child whose turn is
+    // closed is barred too: it may be waiting on its own background children, and an idle tree
+    // cancel ends that run and bars its wakes (rule 32).
+    barred = cancelledSinceInput(events);
+    if (barred)
+      return { ok: false, error: { code: "not_found", message: "stopped" } };
+    barred = true;
     return ok({
       record: {
         type: "cancel_requested",
@@ -50,4 +51,13 @@ export async function cancelTree(
     });
   });
   await cancelChildren(log, threadId, principal);
+  return barred;
+}
+
+/** A thread or tree cancel request since the latest user_input. */
+function cancelledSinceInput(events: readonly KnownEvent[]): boolean {
+  const input = events.findLastIndex((e) => e.type === "user_input");
+  return events
+    .slice(input + 1)
+    .some((e) => e.type === "cancel_requested" && e.data.scope !== "turn");
 }

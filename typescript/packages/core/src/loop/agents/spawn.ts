@@ -107,16 +107,44 @@ function background(s: Session, spawned: Spawned): Halt | undefined {
   return stopped;
 }
 
+/** Background child runs in flight in this process, by child thread id. */
+const RUNNING = new Map<string, Promise<ChildEnd | Halt>>();
+
 /** Runs a background child in this process; the loop records its end at a step boundary. */
 export function launch(s: Session, spawned: Spawned): void {
-  const { call_id } = spawned.data;
+  const { call_id, child_thread_id: child } = spawned.data;
   if (s.background.has(call_id)) return;
   const running = (async () => {
-    const end = await runChild(s, spawned);
-    s.background.delete(call_id);
-    s.finished.set(call_id, end);
+    const { pending } = await adopted(s, spawned);
+    RUNNING.set(child, pending);
+    try {
+      const end = await pending;
+      s.background.delete(call_id);
+      s.finished.set(call_id, end);
+    } finally {
+      if (RUNNING.get(child) === pending) RUNNING.delete(child);
+    }
   })();
   s.background.set(call_id, running);
+}
+
+/**
+ * A child an earlier run of this process left running (it returned on a cancel) is adopted while
+ * that run still holds the child's lease: this run waits for that same run of the child, never a
+ * second one on its busy lease. Otherwise the child runs (resumed from its log).
+ */
+async function adopted(
+  s: Session,
+  spawned: Spawned,
+): Promise<{ readonly pending: Promise<ChildEnd | Halt> }> {
+  const { child_thread_id: child, agent_name } = spawned.data;
+  const prior = RUNNING.get(child);
+  const held =
+    prior !== undefined &&
+    (await s.config.agents?.subagent(agent_name)?.held(child)) === true;
+  return {
+    pending: prior !== undefined && held ? prior : runChild(s, spawned),
+  };
 }
 
 /** Foreground: run the child, then subagent_stop, until the hooks let its result stand. */

@@ -44,7 +44,7 @@ def one_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
     """The lead records ends only once every running child has ended, so children that end
     close together are recorded at one boundary however the event loop orders them."""
 
-    async def every_end(self: Background, *also: Awaitable[None]) -> None:
+    async def every_end(self: Background, *also: Awaitable[object]) -> None:
         for extra in also:  # the lead's log moving is not awaited here: every child ends first
             asyncio.ensure_future(extra).cancel()
         done, _ = await asyncio.wait(self.running.values())

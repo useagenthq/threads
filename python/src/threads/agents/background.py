@@ -44,7 +44,7 @@ class Background:
     def has(self, child: ThreadId) -> bool:
         return child in self.running or child in self.ended
 
-    async def next_end(self, *also: Awaitable[None]) -> None:
+    async def next_end(self, *also: Awaitable[object]) -> None:
         """Waits until a running child ends, or one of `also` does. A child that raised (the
         process is going down) ends the run with it."""
         extra = [asyncio.ensure_future(a) for a in also]

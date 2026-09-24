@@ -21,6 +21,7 @@ from threads.agents.definition import Definition
 from threads.agents.launch import Launch, Team
 from threads.agents.results import Failed, Parked, RunResult
 from threads.agents.scope import Scope
+from threads.agents.store import LIVE
 from threads.hooks.runner import STOP, SWITCH, decision_draft
 from threads.log import (
     AgentFinishedData,
@@ -28,6 +29,7 @@ from threads.log import (
     AgentSpawnedEvent,
     CallId,
     HookDecisionEvent,
+    ThreadId,
 )
 from threads.loop.budget import inherited
 from threads.loop.drafts import draft
@@ -36,7 +38,7 @@ from threads.loop.history import CallState, open_cancel
 from threads.loop.results import As, result_draft, text_ref
 from threads.loop.runtime import Failed as HaltFailed
 from threads.loop.runtime import Halt, Runtime, lost
-from threads.result import Err
+from threads.result import Err, Ok
 from threads.store.lines import uuid7
 
 type Ended = tuple[dict[str, JsonValue], str]
@@ -164,6 +166,22 @@ async def _start[D](
     return lost(done.error) if isinstance(done, Err) else None
 
 
+_RUNNING: "dict[ThreadId, asyncio.Future[Ended | Parked | HaltFailed]]" = {}
+"""Background child runs in flight in this process, by child thread id."""
+
+
+async def _held[D](
+    scope: Scope[D], child: ThreadId, running: "asyncio.Future[Ended | Parked | HaltFailed]"
+) -> bool:
+    """An earlier run of this child in this process that still holds its lease: one to adopt,
+    so this run waits for it and never starts a second run on its busy lease."""
+    if running.get_loop() is not asyncio.get_running_loop():
+        return False
+    root = await scope.sq.root(child)
+    writer = None if isinstance(root, Err) else LIVE.get(root.value)
+    return writer is not None and isinstance(await writer.fence(), Ok)
+
+
 def start_background[D](
     scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, bg: Background
 ) -> None:
@@ -177,7 +195,18 @@ def start_background[D](
     prompt = SpawnAgentInput.model_validate(dict(rt.fold.calls[spawned.data.call_id].data.input))
 
     async def body() -> None:
-        ended = await _outcome(scope, rt, spawned, child, prompt.prompt)
+        # A child an earlier run of this process left running (it returned on a cancel) is
+        # adopted: this run waits for that same run of the child, never a second one on its
+        # busy lease.
+        running = _RUNNING.get(child_id)
+        if running is None or not await _held(scope, child_id, running):
+            running = asyncio.ensure_future(_outcome(scope, rt, spawned, child, prompt.prompt))
+            _RUNNING[child_id] = running
+        try:
+            ended = await running
+        finally:
+            if _RUNNING.get(child_id) is running:
+                del _RUNNING[child_id]
         if isinstance(ended, Parked):
             await stops.park(rt, spawned, ended)
         elif isinstance(ended, HaltFailed):

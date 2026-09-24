@@ -225,14 +225,16 @@ export type Subagent = {
   readonly run: (child: ChildRun) => Promise<ChildEnd | Halt>;
   /**
    * Stops a running child: a durable cancel_requested{scope: tree} with this reason in its own
-   * log (and its descendants'), which it obeys at its next step. A child with no thread yet, or
-   * whose turn is closed, gets nothing.
+   * log (and its descendants'), which it obeys at its next step. True once the child has its
+   * barrier; a child with no thread yet gets nothing and is tried again.
    */
   readonly stop: (
     child: ThreadId,
     principal: Principal,
     reason: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
+  /** Whether a run of this child in this process still holds its lease: one to adopt. */
+  readonly held: (child: ThreadId) => Promise<boolean>;
 };
 
 /** Team state lives in the lead's log; members change it only through the lead's writer. */
