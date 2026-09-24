@@ -1,13 +1,11 @@
 import { readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { err, ok, type Result } from "../result";
-import { type LogError, logError } from "../verify/error";
 import type { SqliteDriver } from "./driver";
-import { atomically, parseRows } from "./tables";
+import { parseRows } from "./tables";
 
-// Retention: `threads delete` and the artifact half of `threads gc`. Nothing is
-// deleted automatically. The resource ledger is never deleted with log rows: it owns cleanup.
+// Retention: the artifact half of `threads gc` (`threads delete` is deletion.ts). Nothing is
+// deleted automatically.
 
 const Id = z.strictObject({ id: z.string() });
 
@@ -18,145 +16,6 @@ function ids(
 ): string[] {
   const rows = parseRows(Id, db.all(sql, params));
   return rows.ok ? rows.value.map((r) => r.id) : [];
-}
-
-/**
- * Deletes a thread of `tenantId` and every subagent thread spawned under it, recursively, in one
- * transaction (spec/schema/README.md, "Deleting a thread"). Handoff targets are independent
- * threads and stay. Another tenant's thread is not_found.
- */
-export function deleteThread(
-  db: SqliteDriver,
-  tenantId: string,
-  threadId: string,
-  now: number,
-): Result<void, LogError> {
-  return atomically(db, () => {
-    const owned = ids(
-      db,
-      "SELECT thread_id AS id FROM threads WHERE thread_id = ? AND tenant_id = ?",
-      [threadId, tenantId],
-    );
-    if (owned.length === 0)
-      return err(logError("not_found", `no thread ${threadId}`));
-    const doomed = [threadId];
-    for (const id of doomed) doomed.push(...subagentsOf(db, tenantId, id));
-    for (const id of doomed) deleteOne(db, tenantId, id, now);
-    return ok(undefined);
-  });
-}
-
-const Started = z.object({
-  data: z.object({
-    parent: z
-      .object({ relation: z.string(), thread_id: z.string() })
-      .optional(),
-  }),
-});
-const StartedRow = z.strictObject({
-  id: z.string(),
-  line: z.instanceof(Uint8Array),
-});
-
-/** The tenant's threads whose thread_started names `parentId` as their subagent parent. */
-function subagentsOf(
-  db: SqliteDriver,
-  tenantId: string,
-  parentId: string,
-): readonly string[] {
-  const rows = parseRows(
-    StartedRow,
-    db.all(
-      `SELECT b.thread_id AS id, e.line FROM events e
-        JOIN branches b ON b.branch_id = e.branch_id
-        JOIN threads t ON t.thread_id = b.thread_id
-        WHERE t.tenant_id = ? AND e.type = 'thread_started' AND e.line LIKE ?`,
-      [tenantId, `%${parentId}%`],
-    ),
-  );
-  if (!rows.ok) return [];
-  return rows.value.flatMap((row) => {
-    const started = Started.safeParse(
-      JSON.parse(new TextDecoder().decode(row.line)),
-    );
-    const parent = started.success ? started.data.data.parent : undefined;
-    return parent?.relation === "subagent" && parent.thread_id === parentId
-      ? [row.id]
-      : [];
-  });
-}
-
-/**
- * One thread's rows: its branches' log rows, leases, cursors, approvals, inbox and channel rows,
- * receipts, schedule identity and budget rows go; its pending schedule reservations are retired;
- * its live resources move to releasing for gc; a tombstone records it.
- */
-function deleteOne(
-  db: SqliteDriver,
-  tenantId: string,
-  threadId: string,
-  now: number,
-): void {
-  const branches = ids(
-    db,
-    "SELECT branch_id AS id FROM branches WHERE thread_id = ?",
-    [threadId],
-  );
-  for (const branch of branches) {
-    db.run("DELETE FROM events WHERE branch_id = ?", [branch]);
-    db.run("DELETE FROM leases WHERE branch_id = ?", [branch]);
-    db.run("DELETE FROM observer_cursors WHERE branch_id = ?", [branch]);
-    db.run(
-      "UPDATE resources SET state = 'releasing' WHERE owner_branch_id = ? AND state = 'live'",
-      [branch],
-    );
-  }
-  for (const table of [
-    "approvals",
-    "inbox",
-    "channel_threads",
-    "run_receipts",
-    "schedule_threads",
-  ])
-    db.run(`DELETE FROM ${table} WHERE thread_id = ? AND tenant_id = ?`, [
-      threadId,
-      tenantId,
-    ]);
-  // Its undecided reservations are dropped, never logged; the rows only keep their keys taken.
-  db.run(
-    `UPDATE schedule_occurrences SET state = 'retired'
-      WHERE thread_id = ? AND tenant_id = ? AND state = 'pending'`,
-    [threadId, tenantId],
-  );
-  db.run("DELETE FROM budget_ledger WHERE budget_id = ? OR budget_id LIKE ?", [
-    `thread:${threadId}`,
-    `run:${threadId}:%`,
-  ]);
-  db.run("DELETE FROM branches WHERE thread_id = ?", [threadId]);
-  db.run("DELETE FROM threads WHERE thread_id = ?", [threadId]);
-  db.run(
-    "INSERT INTO tombstones (thread_id, tenant_id, deleted_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
-    [threadId, tenantId, now],
-  );
-}
-
-/** Every thread of `tenantId`, deleted as deleteThread does. */
-export function deleteTenant(
-  db: SqliteDriver,
-  tenantId: string,
-  now: number,
-): Result<number, LogError> {
-  const threads = ids(
-    db,
-    "SELECT thread_id AS id FROM threads WHERE tenant_id = ?",
-    [tenantId],
-  );
-  for (const thread of threads) {
-    const done = deleteThread(db, tenantId, thread, now);
-    // A subagent thread already went with its parent.
-    if (!done.ok && done.error.code !== "not_found") return done;
-  }
-  return ok(threads.length);
 }
 
 const SHA = /"sha256":"([0-9a-f]{64})"/g;

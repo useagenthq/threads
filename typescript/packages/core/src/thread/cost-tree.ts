@@ -9,6 +9,7 @@ import {
 } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { LogStore } from "../store";
+import { teamMembers } from "../team/members";
 import type { VerifiedLog } from "../verify";
 import { type ReadError, readError, readLog } from "./read";
 
@@ -61,21 +62,26 @@ const neverCreated = ({ data }: Finished): boolean =>
   data.usage.input_tokens === null &&
   data.usage.output_tokens === null;
 
-/** A spawned child still to read and walk, with the path of child ids that leads to it. */
+/** What a child is on the walk: a log to walk, a thread that ran unpriced, or nothing yet. */
+type Child = VerifiedLog | "unpriced" | "pending";
+
+/** A child still to read and walk, with the path of child ids that leads to it. */
 type Pending = {
-  readonly spawn: Spawned;
-  readonly finish: Finished | undefined;
+  readonly child: ThreadId;
   readonly path: string;
+  readonly open: () => Result<Child, ReadError>;
 };
 
 /**
- * Every thread of the tree rooted at `root`, depth first in spawn order, with an explicit stack
- * so a tree of any depth is walked, and each child read only on its turn, so the first broken
- * path depth first is the one reported. Each child must name, as its parent, the agent_spawned
- * that started it; a child that doesn't, or a thread named twice (a cycle, or two spawns of one
- * id), makes the tree log_corrupt. A child with no log counts as an unpriced thread that ran:
- * nothing proves it spent nothing (its log may have been deleted), so the total is incomplete
- * and unbounded, never falsely complete.
+ * Every thread of the tree rooted at `root`, depth first (each thread's subagents in spawn
+ * order, then its team's members), with an explicit stack so a tree of any depth is walked,
+ * and each child read only on its turn, so the first broken path depth first is the one
+ * reported. Each child must name, as its parent, the event that started it; a child that
+ * doesn't, or a thread named twice (a cycle, or two spawns of one id), makes the tree
+ * log_corrupt. A subagent with no log counts as an unpriced thread that ran: nothing proves it
+ * spent nothing (its log may have been deleted), so the total is incomplete and unbounded,
+ * never falsely complete. A member in the starting window has made no model request: it counts
+ * zero and leaves the total complete.
  */
 function treeParts(
   log: LogStore,
@@ -90,63 +96,75 @@ function treeParts(
     path: "",
   };
   while (next !== undefined) {
-    const own = ownCost(next.at);
-    if (!own.ok) return err(within(next.path, own.error));
-    const events = knownEvents(next.at);
+    const { at, path } = next;
+    const own = ownCost(at);
+    if (!own.ok) return err(within(path, own.error));
+    const events = knownEvents(at);
     parts.push({
       cost: own.value,
       ran: events.some((e) => e.type === "model_request"),
     });
-    stack.push(...pending(events, next.path).toReversed());
-    const read = nextChild(log, stack, seen, parts);
+    const members = teamMembers(log, at);
+    if (!members.ok) return err(within(path, members.error));
+    const kids: Pending[] = [
+      ...spawned(log, events, path),
+      ...members.value.map((m) => ({
+        child: m.threadId,
+        path: `${path}member ${m.name}: `,
+        open: m.open,
+      })),
+    ];
+    stack.push(...kids.toReversed());
+    const read = nextChild(stack, seen, parts);
     if (!read.ok) return read;
     next = read.value;
   }
   return ok(parts);
 }
 
-/** The spawns of `events`, in order, each with the parent's agent_finished for its child. */
-function pending(events: readonly KnownEvent[], path: string): Pending[] {
+/** The spawns of `events`, in order, each read with the parent's agent_finished for its child. */
+function spawned(
+  log: LogStore,
+  events: readonly KnownEvent[],
+  path: string,
+): Pending[] {
   const finishes = new Map<ThreadId, Finished>();
   for (const e of events)
     if (e.type === "agent_finished") finishes.set(e.data.child_thread_id, e);
-  return events.flatMap((e) =>
-    e.type === "agent_spawned"
-      ? [
-          {
-            spawn: e,
-            finish: finishes.get(e.data.child_thread_id),
-            path: `${path}child ${e.data.child_thread_id}: `,
-          },
-        ]
-      : [],
-  );
+  return events.flatMap((e) => {
+    if (e.type !== "agent_spawned") return [];
+    const child = e.data.child_thread_id;
+    const open = (): Result<Child, ReadError> => {
+      const read = childLog(log, e, finishes.get(child));
+      return read.ok ? ok(read.value ?? "unpriced") : read;
+    };
+    return [{ child, path: `${path}child ${child}: `, open }];
+  });
 }
 
 /**
- * Pops pending children until one has a log to walk; each without a log adds its unpriced part
- * instead. Undefined when the stack is empty.
+ * Pops pending children until one has a log to walk; each unpriced one adds its part instead,
+ * and a pending member adds nothing. Undefined when the stack is empty.
  */
 function nextChild(
-  log: LogStore,
   stack: Pending[],
   seen: Set<ThreadId>,
   parts: TreePart[],
 ): Result<{ at: VerifiedLog; path: string } | undefined, CostError> {
   for (let top = stack.pop(); top !== undefined; top = stack.pop()) {
-    const child = top.spawn.data.child_thread_id;
-    if (seen.has(child))
+    if (seen.has(top.child))
       return err(
         readError(
           "log_corrupt",
-          `${top.path}thread ${child} appears twice in the tree`,
+          `${top.path}thread ${top.child} appears twice in the tree`,
         ),
       );
-    seen.add(child);
-    const read = childLog(log, top.spawn, top.finish);
+    seen.add(top.child);
+    const read = top.open();
     if (!read.ok) return err(within(top.path, read.error));
-    if (read.value !== undefined) return ok({ at: read.value, path: top.path });
-    parts.push({ cost: undefined, ran: true });
+    if (read.value === "unpriced") parts.push({ cost: undefined, ran: true });
+    else if (read.value !== "pending")
+      return ok({ at: read.value, path: top.path });
   }
   return ok(undefined);
 }

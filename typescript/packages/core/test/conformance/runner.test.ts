@@ -16,6 +16,7 @@ import {
 } from "./cases";
 import { runFork } from "./fork";
 import { runAppending } from "./recover";
+import { runTeam } from "./team";
 
 // One runner for every case in spec/conformance/cases, no per-case code. `reduce` and `render`
 // cases run in full. Other kinds need features after step 2b; their log still imports and reduces here, and
@@ -30,6 +31,7 @@ const LATER: Readonly<Record<Kind, string | undefined>> = {
   intake: "run by packages/host/test/conformance.test.ts",
   host: "run by packages/host/test/conformance.test.ts",
   policy: undefined,
+  team: undefined,
   security: "no runner yet for this reserved kind",
   parity: "no runner yet for this reserved kind",
 };
@@ -206,7 +208,13 @@ describe("conformance", () => {
     const { log } = c;
     // test/permissions/policy.test.ts runs the policy cases.
     if (c.kind === "policy") continue;
-    const run = log === undefined ? undefined : runnerFor(c, log);
+    // A team case has one log per member, so no log.jsonl.
+    const run =
+      c.kind === "team"
+        ? () => runTeam(c)
+        : log === undefined
+          ? undefined
+          : runnerFor(c, log);
     if (run !== undefined) test(`${c.kind}: ${name}`, run);
     else if (log !== undefined)
       test(`${c.kind}: ${name} (import and state only; skipped: ${later})`, () =>
