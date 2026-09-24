@@ -1,0 +1,9 @@
+{
+  "name": "render-team-listed-in-system",
+  "family": "agents_teams",
+  "kind": "render",
+  "description": "An agent with team [researcher, writer]: line 0's system ends with the pinned team sentence naming the agents start may name, in declaration order; its tools include the team's start and send, read_only, sorted by name with the built-ins.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

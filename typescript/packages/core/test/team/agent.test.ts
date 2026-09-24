@@ -13,7 +13,7 @@ import {
 } from "../../src";
 import type { Team } from "../../src/agent/team/types";
 import { assertTeamReplays } from "./kit";
-import { logOf, say, start } from "./run-kit";
+import { events, logOf, say, start } from "./run-kit";
 
 // agent({team}) (spec/api.json agent.team): a TeamAgent, whose run() and stream() results carry
 // the team; setup refuses a member that hands off and a team tool's name.
@@ -146,5 +146,38 @@ describe("agent({team})", () => {
     );
     // @ts-expect-error a value outside the union reaches assertNever only at run time
     expect(() => assertNever("surprise")).toThrow();
+  });
+
+  test("the lead's pinned instructions list the agents start may name, after the others", async () => {
+    const store = sqlite(":memory:");
+    const lead = agent({
+      name: "lead",
+      instructions: "You lead a research team.",
+      model: model(),
+      team: [
+        agent({ name: "researcher", model: model() }),
+        agent({ name: "writer", model: model() }),
+      ],
+    });
+    const r = await lead.run("Hi.", { store });
+    const started = (await events(store, r.thread)).find(
+      (e) => e.type === "thread_started",
+    );
+    expect(
+      started?.type === "thread_started" && started.data.instructions,
+    ).toBe(
+      "You lead a research team.\n\nAgents you can start as team members with start: researcher, writer.",
+    );
+    // An empty team lists nobody.
+    const quiet = sqlite(":memory:");
+    const empty = await agent({ model: model(), team: [] }).run("Hi.", {
+      store: quiet,
+    });
+    const pinned = (await events(quiet, empty.thread)).find(
+      (e) => e.type === "thread_started",
+    );
+    expect(pinned?.type === "thread_started" && pinned.data.instructions).toBe(
+      "",
+    );
   });
 });

@@ -62,8 +62,32 @@ def _listed(root: pathlib.Path) -> None:
     )
 
 
+def _team_listed(root: pathlib.Path) -> None:
+    log = Log()
+    instructions = "\n\n".join(
+        (
+            "You lead a research team.",
+            "Agents you can start as team members with start: researcher, writer.",
+        )
+    )
+    started(log, catalog_specs(("read_tool_result", "send", "start", "todo_write")), instructions)
+    user(log, "Report on batteries.")
+    render_case(
+        root,
+        (
+            "render-team-listed-in-system",
+            FAM,
+            "An agent with team [researcher, writer]: line 0's system ends with the pinned team "
+            "sentence naming the agents start may name, in declaration order; its tools include "
+            "the team's start and send, read_only, sorted by name with the built-ins.",
+        ),
+        log,
+    )
+
+
 def build(root: pathlib.Path) -> None:
     _listed(root)
+    _team_listed(root)
     _replay(root)
     _unknown_recipient(root)
 

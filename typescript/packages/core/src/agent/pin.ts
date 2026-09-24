@@ -219,7 +219,7 @@ function hashedOnly(o: PinOptions): Record<string, unknown> {
 
 /**
  * the base instructions, then each extension's, in declaration order, then the
- * skill listing, then the agents spawn_agent and handoff may name.
+ * skill listing, then the agents spawn_agent, handoff and start may name.
  */
 function instructions(o: PinOptions): string {
   const listed = (label: string, names: readonly string[]): string[] =>
@@ -230,6 +230,7 @@ function instructions(o: PinOptions): string {
     ...skillListing(o.skills),
     ...listed("Subagents you can start with spawn_agent", o.subagents),
     ...listed("Agents you can hand the conversation to", o.handoffs),
+    ...listed("Agents you can start as team members with start", o.team ?? []),
   ]
     .filter((t) => t !== "")
     .join("\n\n");

@@ -155,6 +155,7 @@ const lead = agent({
 ```
 
 - `team` lists the agents the lead may start. Passing it, even as `[]`, makes `agent()` return a `TeamAgent`, whose results carry `team`.
+- The lead's instructions end with the names of the agents its team lists (`Agents you can start as team members with start: researcher, writer.`), so its model knows what `start` may name.
 - `teamLimits.concurrent` caps how many members are starting or running at once (default 4). `teamLimits.mailbox` caps how many messages can wait for one member (default 100).
 - An agent in a team can't hand off, so a listed agent with `handoffs` is refused when the lead is set up (`handoff_in_team`). A lead or member can't have its own tool named `start`, `send`, `ask`, `reply`, `wait`, `monitor` or `cancel` (`duplicate_name`).
 

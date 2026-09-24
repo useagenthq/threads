@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { agent, type Model, scriptedModel } from "../../src";
 import { storeOf } from "../../src/agent/sqlite";
+import { BranchId } from "../../src/log";
 import { markTestKit } from "../../src/model/guard";
 import { LogStore, memoryArtifacts } from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { TEAM_CONSTANTS } from "../../src/team/constants";
+import { memberRows } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
 import { assertTeamReplays } from "./kit";
 import { call, memberEvents, receipts, say, start } from "./run-kit";
@@ -64,8 +66,18 @@ describe("mail claims", () => {
       team: [researcher()],
     }).run("Work.", { store });
     const { thread } = first;
-    // Run 2 lists no researcher: its worker claims the message it sends, can't run the member
-    // here, and stops with the claim still live, as a worker that dies holding it would.
+    // Run 2: another executor holds the researcher's lease, so this run's worker claims the
+    // message it sends, can't run the member, and stops with the claim still live, as a worker
+    // that dies holding it would.
+    const log = unwrap(LogStore.open(db, now, artifacts));
+    const row = memberRows(db, first.team.ref.id).find(
+      (m) => m.role === "member",
+    );
+    if (row?.branch_id === null || row === undefined)
+      throw new Error("materialized");
+    const holder = unwrap(
+      log.acquire(BranchId.parse(row.branch_id), "elsewhere"),
+    );
     const claimed = Promise.withResolvers<void>();
     const watch = setInterval(() => {
       const rows = Claim.parse(
@@ -84,9 +96,10 @@ describe("mail claims", () => {
         ],
         claimed.promise,
       ),
-      team: [],
+      team: [researcher()],
     }).run("One more thing.", { store, thread });
     clearInterval(watch);
+    holder.release();
     const lead = (responses: readonly unknown[]) =>
       agent({
         name: "lead",
