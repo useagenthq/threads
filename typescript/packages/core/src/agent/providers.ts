@@ -20,9 +20,15 @@ import type { MemoryWrite } from "./pin";
 
 export type Providers = {
   readonly tools: readonly ToolImpl[];
-  /** What a snapshot records as knowledge_revision; undefined without knowledge. */
-  readonly revision: () => Promise<number | undefined>;
+  /**
+   * What a snapshot records as knowledge_revision; undefined without knowledge. A failure means
+   * no snapshot at that turn end: a knowledge-bound snapshot always records a revision.
+   */
+  readonly revision: () => Promise<Revision | undefined>;
 };
+
+/** KnowledgeProvider.revision's answer. */
+export type Revision = Awaited<ReturnType<KnowledgeProvider["revision"]>>;
 
 type Config = {
   readonly name: string;
@@ -107,11 +113,7 @@ export async function bindProviders(
         ? []
         : knowledgeTools(knowledge, env(kScope))),
     ],
-    revision: async () => {
-      if (knowledge === undefined) return undefined;
-      const now = await knowledge.revision(kScope);
-      return now.ok ? now.value : undefined;
-    },
+    revision: async () => knowledge?.revision(kScope),
   };
 }
 

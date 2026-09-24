@@ -3,6 +3,7 @@ import { knownEvents } from "../reduce";
 import { captureSnapshot, type Sandbox, snapshotEvent } from "../sandbox";
 import type { ResourceLedger, Writer } from "../store";
 import type { SessionGetter } from "../tools";
+import type { Revision } from "./providers";
 
 // The end-of-turn snapshot policy: a turn that ran a tool whose class
 // is not read_only ends with a capture. It runs after the loop is idle, so no append or dispatch
@@ -22,13 +23,15 @@ export async function snapshotTurn(
   ledger: ResourceLedger,
   writer: Writer,
   /** The corpus revision this branch searches as of, when it has knowledge. */
-  knowledgeRevision?: number,
+  knowledgeRevision?: Revision,
 ): Promise<void> {
+  // A failed revision takes no snapshot: a knowledge-bound one always records its revision.
+  if (knowledgeRevision?.ok === false) return;
   if (sandbox === undefined || !ranEffects(knownEvents(writer.chain))) return;
   const live = await session();
   if (!live.ok) return;
   const captured = await captureSnapshot(ledger, writer, sandbox, live.value);
   // ponytail: a refused capture only costs this turn its fork point; it is not reported yet.
   if (captured.ok)
-    writer.append([snapshotEvent(captured.value, knowledgeRevision)]);
+    writer.append([snapshotEvent(captured.value, knowledgeRevision?.value)]);
 }
