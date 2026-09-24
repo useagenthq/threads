@@ -7,6 +7,7 @@ import asyncio
 from collections.abc import AsyncIterator, Mapping, Sequence
 
 import pytest
+from corpus import CASES
 from pydantic import BaseModel, JsonValue
 
 from threads import (
@@ -25,17 +26,22 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents.background import Background
+from threads.agents.background import Background, may_wake
 from threads.log import (
     Event,
+    Head,
+    Header,
     Principal,
     ToolResultEvent,
     ToolResultLateEvent,
     TurnCompletedEvent,
+    UnknownEvent,
     WokenEvent,
 )
+from threads.log.parse import parse_log_line
 from threads.loop.model import ModelChunk
 from threads.loop.scripted import ScriptedModel, ScriptExhaustedError
+from threads.reduce.fold import Fold
 from threads.result import Ok
 from threads.thread.handle import open_thread
 
@@ -265,3 +271,20 @@ def test_a_late_result_after_the_lead_was_cancelled_is_recorded_with_no_woken() 
         assert wakes(events) == []
 
     asyncio.run(main())
+
+
+def test_a_log_that_has_ended_never_wakes() -> None:
+    staged = CASES.parent / "staged" / "member-ended-then-input-rejected" / "log.jsonl"
+    ended: list[Event] = []
+    for line in staged.read_text().splitlines():
+        parsed = parse_log_line(line)
+        if isinstance(parsed, Ok) and getattr(parsed.value, "type", None) == "member_ended":
+            assert not isinstance(parsed.value, Header | Head | UnknownEvent)
+            ended.append(parsed.value)
+    assert len(ended) == 1
+    fold = Fold(now=0)
+    assert may_wake(fold)
+    fold.events.extend(ended)
+    assert not may_wake(fold)
+    for barred in (Fold(now=0, in_turn=True), Fold(now=0, cancelled=True)):
+        assert not may_wake(barred)

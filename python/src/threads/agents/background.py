@@ -1,7 +1,7 @@
 """Background children (F7.2): each runs beside the parent's loop and hands its end over; the
 loop records it at a step boundary, so a late result never lands inside a step. A result
-recorded while no turn is open and the thread is not cancelled wakes the parent in the same
-append (spec/schema/README.md, "Background wakes"; rules 32 and 45)."""
+recorded while no turn is open, the thread is not cancelled and its log has not ended wakes the
+parent in the same append (spec/schema/README.md, "Background wakes"; rules 32 and 45)."""
 
 import asyncio
 from collections.abc import Sequence
@@ -13,7 +13,7 @@ from threads.log import AgentSpawnedEvent, CallId, ThreadId, UserInputEvent
 from threads.loop.drafts import draft
 from threads.loop.runtime import Failed as HaltFailed
 from threads.loop.runtime import Halt, Runtime, lost
-from threads.reduce.fold import Run
+from threads.reduce.fold import Fold, Run
 from threads.reduce.handlers import to_json
 from threads.result import Err
 from threads.store import Draft
@@ -87,11 +87,18 @@ def _recordable(rt: Runtime, bg: Background) -> list[tuple[AgentSpawnedEvent, En
     return [(spawned, end) for spawned, end in done if run_of(spawned) == target]
 
 
+def may_wake(fold: Fold) -> bool:
+    """Whether a late result recorded now also wakes the thread: no turn is open, the thread is
+    not cancelled and its log has not ended (no member_ended)."""
+    ended = any(e.type == "member_ended" for e in fold.events)
+    return not fold.in_turn and not fold.cancelled and not ended
+
+
 def _wake(rt: Runtime, spawned: AgentSpawnedEvent, causes: Sequence[str]) -> Draft | None:
-    """The woken for late results recorded while no turn is open and the thread is not
-    cancelled, acting for the principal of the run that spawned the children."""
+    """The woken for late results recorded while the thread may wake, acting for the principal
+    of the run that spawned the children."""
     fold = rt.fold
-    if fold.in_turn or fold.cancelled or not causes:
+    if not may_wake(fold) or not causes:
         return None
     run = fold.wake.spawn_runs.get(CallId(spawned.data.call_id))
     opener = next(

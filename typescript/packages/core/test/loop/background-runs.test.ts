@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { KnownEvent, Principal } from "../../src/log";
+import { parseLogLine } from "../../src/log/parse";
 import type { ChildEnd, Halt, LoopConfig, Subagent } from "../../src/loop";
 import { resume } from "../../src/loop";
+import { mayWake } from "../../src/loop/agents/wake";
 import type { EventDraft } from "../../src/store";
 import { pendingWakes, rebuildWakes } from "../../src/store/wakes";
 import { frameworkSpec } from "../../src/tools/framework";
@@ -168,5 +171,31 @@ describe("pending_wakes", () => {
       branch === ROOT ? events(writer) : undefined,
     );
     expect(rows()).toEqual(before);
+  });
+});
+
+describe("the wake condition", () => {
+  test("a log that has ended (member_ended) never wakes", () => {
+    const lines = readFileSync(
+      new URL(
+        "../../../../../spec/conformance/staged/member-ended-then-input-rejected/log.jsonl",
+        import.meta.url,
+      ),
+      "utf8",
+    ).split("\n");
+    const ended = lines.flatMap((line) => {
+      const parsed = line.includes('"member_ended"')
+        ? parseLogLine(line)
+        : undefined;
+      return parsed?.ok === true && parsed.value.kind === "event"
+        ? [parsed.value.event]
+        : [];
+    });
+    expect(ended.map((e) => e.type)).toEqual(["member_ended"]);
+    const idle = { turnOpen: false, cancelled: false };
+    expect(mayWake(idle, [])).toBe(true);
+    expect(mayWake(idle, ended)).toBe(false);
+    expect(mayWake({ turnOpen: true, cancelled: false }, [])).toBe(false);
+    expect(mayWake({ turnOpen: false, cancelled: true }, [])).toBe(false);
   });
 });
