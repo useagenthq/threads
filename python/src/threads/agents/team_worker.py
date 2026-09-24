@@ -18,6 +18,7 @@ from threads.agents.definition import Definition
 from threads.agents.dynamic_agent import member_definition
 from threads.agents.store import Store, now_ms
 from threads.agents.team_budgets import ancestors_of
+from threads.agents.team_log_mail import take_team_log_mail
 from threads.agents.team_units import end_unbound, refuse_ended
 from threads.log import (
     BranchId,
@@ -154,6 +155,8 @@ class TeamWorker:
         if team is None:
             return
         rows = await self._env.sq.run(lambda c: _members(c, team))
+        for each in sorted({team, *(r.team_id for r in rows)}):
+            await take_team_log_mail(self._env.sq, each, self._env.mint)
         for row in rows:
             if row.thread_id in self._running:
                 continue

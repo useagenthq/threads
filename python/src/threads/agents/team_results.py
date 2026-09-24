@@ -1,11 +1,12 @@
-"""What a team lead's run returns (spec/api.json TeamRunResult, Team, TeamRef): every RunResult
-variant, also carrying the lead's team."""
+"""What a team lead's run returns (spec/api.json TeamRunResult): every RunResult variant, also
+carrying the lead's team."""
 
 from dataclasses import dataclass, field
 from typing import assert_never
 
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads.agents.definition import Definition
 from threads.agents.results import (
     BudgetExhausted,
     Cancelled,
@@ -16,24 +17,11 @@ from threads.agents.results import (
     RunResult,
 )
 from threads.agents.store import now_ms, open_store
-from threads.log import ThreadStartedEvent
+from threads.agents.team_handle import HandleEnv, Team
+from threads.agents.team_handle_types import TeamRef
+from threads.agents.teams import pins
+from threads.log import ThreadStartedEvent, UserInputEvent
 from threads.result import Err
-
-
-@dataclass(frozen=True, slots=True)
-class TeamRef:
-    """Which team: team.ref, for openTeam in another process."""
-
-    tenant: str
-    id: str
-
-
-@dataclass(frozen=True, slots=True)
-class Team:
-    """A team's handle. Lane 21F adds its operator methods (start, send, ask, wait, cancel,
-    members, events, ask_status); until then it names the team."""
-
-    ref: TeamRef
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,17 +60,19 @@ type TeamRunResult[O] = (
 """What TeamAgent.run returns: a RunResult whose every variant also carries team."""
 
 
-async def with_team[O](result: RunResult[O]) -> TeamRunResult[O]:
+async def with_team[D, O](lead: Definition[D], result: RunResult[O]) -> TeamRunResult[O]:
     """The result with the lead's team: the team its thread_started names, in its store's
-    tenant."""
+    tenant, acting as the principal of the run's request (its latest user_input)."""
     thread = result.thread
     sq = await open_store(thread.store)
     read = await sq.read(thread.branch, now_ms())
     events = () if isinstance(read, Err) else read.value.fold.events
     started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
-    if started is None or started.data.team is MISSING:
+    request = next((e for e in reversed(events) if isinstance(e, UserInputEvent)), None)
+    if started is None or started.data.team is MISSING or request is None:
         raise AssertionError(f"thread {thread.id} leads no team")
-    team = Team(TeamRef(thread.store.tenant, started.data.team.id))
+    ref = TeamRef(thread.store.tenant, started.data.team.id)
+    team = Team(HandleEnv(sq, ref, request.actor.principal, pins(lead), lead.team_limits))
     match result:
         case Completed():
             return TeamCompleted(result.output, result.thread, team=team)

@@ -17,7 +17,7 @@ from threads.result import Err
 from threads.store.lines import Draft
 from threads.team.call import ReadText, tool_result
 from threads.team.mail import received
-from threads.team.rows import bytes_of, mail_envelope, member_named, own_rows, pending_for
+from threads.team.rows import bytes_of, mail_envelope, member_named, pending_here
 from threads.team.settle import AppendContext
 from threads.team.view import ask_open, items_of, open_waits, parked_on, settle_monitors, untaken
 
@@ -67,7 +67,7 @@ def public_result(result: JsonValue, read: ReadText) -> JsonValue:
 
 def mine(ctx: CloseContext) -> list[MailEnvelope]:
     """This writer's pending mail the batch hasn't taken."""
-    return untaken(pending_for(ctx.conn, own_rows(ctx.conn, ctx.thread_id)), ctx.batch)
+    return untaken(pending_here(ctx.conn, ctx.thread_id, ctx.branch_id), ctx.batch)
 
 
 def _resume(ctx: CloseContext, address: ParkAddress, cause: str) -> None:

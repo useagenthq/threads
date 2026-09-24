@@ -40,7 +40,7 @@ from threads.reduce.openers import turn_start
 from threads.reduce.projections import bound, dispositions, output_bound
 from threads.result import Err
 from threads.store import Draft
-from threads.store.budgets import Cover, LimitName
+from threads.store.budgets import BudgetLedger, Cover, LimitName
 
 _LIMITS: tuple[LimitName, ...] = (
     "max_cost_nanos",
@@ -251,10 +251,18 @@ async def inherited_by(rt: Runtime) -> list[Covering]:
 async def room_for(rt: Runtime, member: TeamAgentPin) -> bool:
     """start's headroom: every budget that would cover the new member (the starter's, and the
     member's own) has room for one request of its model. A limit it can't bound has none."""
-    covering = await covering_of(rt)
+    return await start_room(rt.store.budgets, await covering_of(rt), member)
+
+
+async def start_room(
+    budgets: BudgetLedger, starter: Sequence[Covering], member: TeamAgentPin
+) -> bool:
+    """Whether `starter` (every budget covering whoever starts the member) and the member's own
+    budget have room for one request of its model. An operator start's starter is the lead."""
+    covering = list(starter)
     if member.budget is not None:
         covering.append(Covering("member", member.budget, "thread"))
-    return await _fits(rt, covering, member.policy, member.model, member.params)
+    return await _fits(budgets, covering, member.policy, member.model, member.params)
 
 
 async def room_in(rt: Runtime, to: TeamRecipient) -> bool:
@@ -262,11 +270,11 @@ async def room_in(rt: Runtime, to: TeamRecipient) -> bool:
     asking turn's request (its turn belongs to that request), have room for one request of its
     model."""
     run = [c for c in await covering_of(rt) if c.scope == "run"]
-    return await _fits(rt, [*to.covering, *run], to.policy, to.model, to.params)
+    return await _fits(rt.store.budgets, [*to.covering, *run], to.policy, to.model, to.params)
 
 
 async def _fits(
-    rt: Runtime,
+    budgets: BudgetLedger,
     covering: Sequence[Covering],
     policy: Policy | None,
     ref: ModelRef,
@@ -283,9 +291,7 @@ async def _fits(
             if not isinstance(most, int):
                 continue
             amount = amounts[limit]
-            spent = (
-                0 if c.budget_id == "member" else await rt.store.budgets.spent(c.budget_id, limit)
-            )
+            spent = 0 if c.budget_id == "member" else await budgets.spent(c.budget_id, limit)
             if amount is None or spent + amount > most:
                 return False
     return True

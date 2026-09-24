@@ -69,7 +69,9 @@ class TeamAgent[D, O](Agent[D, O]):
         return TeamRunStream(queue, asyncio.get_running_loop().create_task(run))
 
     async def _team_run(self, input: Input, options: RunOptions[D], emit: Emit) -> TeamRunResult[O]:
-        return await with_team(await self._run(input, options, self._deps(options), emit))
+        return await with_team(
+            self._definition, await self._run(input, options, self._deps(options), emit)
+        )
 
 
 def _drop(_item: StreamEvent) -> None:

@@ -59,10 +59,21 @@ _MEMBER = "team_id, name, generation, role, agent, config_hash, thread_id, branc
 
 
 def team_row(conn: sqlite3.Connection, team: str) -> TeamRow | None:
+    return _team(conn, "team_id", team)
+
+
+def team_of_log(conn: sqlite3.Connection, branch: str) -> TeamRow | None:
+    """The team whose log is `branch`, if it is a team log."""
+    return _team(conn, "team_log_branch_id", branch)
+
+
+def _team(
+    conn: sqlite3.Connection, column: Literal["team_id", "team_log_branch_id"], value: str
+) -> TeamRow | None:
     row: tuple[object, ...] | None = conn.execute(
-        "SELECT team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at FROM teams"
-        " WHERE team_id = ?",
-        (team,),
+        "SELECT team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at FROM teams"  # noqa: S608
+        f" WHERE {column} = ?",
+        (value,),
     ).fetchone()
     if row is None:
         return None
@@ -138,6 +149,15 @@ def pending_to(conn: sqlite3.Connection, team: str, name: str | None) -> list[Ma
         (team, name),
     ).fetchall()
     return _envelopes(rows)
+
+
+def pending_here(conn: sqlite3.Connection, thread: str, branch: str) -> list[MailEnvelope]:
+    """Pending mail to a writer: its thread's own rows, or the team log when it is one."""
+    rows = own_rows(conn, thread)
+    if rows:
+        return pending_for(conn, rows)
+    team = team_of_log(conn, branch)
+    return [] if team is None else pending_to(conn, team.team_id, None)
 
 
 def pending_for(conn: sqlite3.Connection, rows: Sequence[MemberRow]) -> list[MailEnvelope]:

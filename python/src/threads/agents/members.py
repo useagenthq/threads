@@ -18,6 +18,7 @@ from threads._generated.tools_v1 import (
     StartInput,
     WaitInput,
 )
+from threads.agents.start_pin import Chosen, start_pin
 from threads.log import ThreadStartedEvent, ToolCallEvent
 from threads.loop.budget import room_for, room_in
 from threads.loop.history import CallState
@@ -25,16 +26,15 @@ from threads.loop.runtime import Halt, Parked, Runtime, lost
 from threads.loop.team_runtime import TeamRuntime
 from threads.loop.teams import put_text
 from threads.reduce.fold import loop_parked
-from threads.result import Err, Ok
+from threads.result import Err
 from threads.store import Draft
 from threads.store.lines import uuid7
 from threads.store.writer import DecideTx, Refusal
 from threads.team.ask import AskPlan, ask, reply
 from threads.team.batch import Batch
-from threads.team.call import CallContext
+from threads.team.call import CallContext, call_request, named
 from threads.team.close import reader_of
 from threads.team.constants import TEAM_CONSTANTS
-from threads.team.dynamic import Choice, InvalidDefinition, Resolved, Template, resolve_definition
 from threads.team.ops import StartPlan, send, start
 from threads.team.rows import MemberRow, member_named, own_rows
 from threads.team.watch import monitor, wait
@@ -74,31 +74,22 @@ async def start_call(rt: Runtime, state: CallState) -> Halt | None:
     team = _team(rt)
     call = state.call
     args = StartInput.model_validate(dict(call.data.input))
-    pinned = await team.pin(args.agent, None)
-    agents: dict[str, str] = {}
-    room = False
-    resolved: Resolved | InvalidDefinition = Resolved()
-    if pinned is not None:
-        got = _resolve(pinned.template, args)
-        resolved = got.value if isinstance(got, Ok) else got.error
-        if isinstance(resolved, Resolved) and resolved.define is not None:
-            pinned = await team.pin(args.agent, Choice(resolved.define, _name(rt)))
-    if pinned is not None:
-        for raw in (pinned.config, *pinned.specs):
-            await rt.store.put_artifact(raw)
-        agents[args.agent] = pinned.config_hash
-        room = await room_for(rt, pinned)
+    got = await start_pin(team.pin, rt.store.put_artifact, args.agent, _chosen(args), _name(rt))
+    pinned = got.pinned
+    agents = {} if pinned is None else {args.agent: pinned.config_hash}
+    room = pinned is not None and await room_for(rt, pinned)
     thread = uuid7(rt.clock())
-    plan = StartPlan(agents, team.limits, lambda _agent: room, thread, resolved)
-    return await _decided(rt, call, None, lambda ctx: start(ctx, args.agent, args.task, plan))
+    plan = StartPlan(agents, team.limits, lambda _agent: room, thread, got.resolved)
+    return await _decided(
+        rt, call, None, lambda ctx: start(call_request(ctx), args.agent, args.task, plan)
+    )
 
 
-def _resolve(template: Template | None, args: StartInput) -> Ok[Resolved] | Err[InvalidDefinition]:
+def _chosen(args: StartInput) -> Chosen:
     def given[T](value: T | MISSING) -> T | None:
         return None if value is MISSING else value
 
-    return resolve_definition(
-        template,
+    return Chosen(
         label=given(args.label),
         instructions=given(args.instructions),
         tools=None if args.tools is MISSING else tuple(args.tools),
@@ -124,7 +115,12 @@ async def send_call(rt: Runtime, state: CallState) -> Halt | None:
     call = state.call
     args = SendInput.model_validate(dict(call.data.input))
     big = await _big(rt, args.text)
-    return await _decided(rt, call, big, lambda ctx: send(ctx, args.to, args.text, team.limits))
+    return await _decided(
+        rt,
+        call,
+        big,
+        lambda ctx: send(call_request(ctx), named(ctx, args.to), args.text, team.limits),
+    )
 
 
 async def ask_call(rt: Runtime, state: CallState) -> Halt | None:

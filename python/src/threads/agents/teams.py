@@ -76,9 +76,13 @@ def _object(value: JsonValue) -> dict[str, JsonValue]:
     return value
 
 
-def _pins[D](
+type Pin = Callable[[str, Choice | None], Awaitable[TeamAgentPin | None]]
+"""An agent a team lists, pinned as a member (a dynamic one with a start's choice)."""
+
+
+def pins[D](
     definition: Definition[D],
-) -> Callable[[str, Choice | None], Awaitable[TeamAgentPin | None]]:
+) -> Pin:
     """The pins of the agents start may name, each made once, on first use; a dynamic member's
     with its start's choice, each time."""
     made: dict[str, TeamAgentPin | None] = {}
@@ -115,7 +119,7 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
     """A team thread's runtime and what stops it; None for any other thread."""
     if definition.team is None and member is None:
         return None
-    pin, limits = _pins(definition), definition.team_limits
+    pin, limits = pins(definition), definition.team_limits
     if member is not None:
         runtime = TeamRuntime(
             pin,

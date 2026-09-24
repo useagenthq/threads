@@ -15,6 +15,8 @@ from threads.agents.context import RunContext  # noqa: E402
 from threads.agents.dynamic import dynamic_agent  # noqa: E402
 from threads.agents.dynamic_agent import DynamicAgent  # noqa: E402
 from threads.agents.factory import agent  # noqa: E402
+from threads.agents.member_results import StoreCorruptError  # noqa: E402
+from threads.agents.open_team import open_team  # noqa: E402
 from threads.agents.results import (  # noqa: E402
     BudgetExhausted,
     Cancelled,
@@ -46,7 +48,19 @@ from threads.agents.team_answers import (  # noqa: E402
     Waited,
     WaitResult,
 )
-from threads.agents.team_results import TeamRef, TeamRunResult  # noqa: E402
+from threads.agents.team_handle import Team  # noqa: E402
+from threads.agents.team_handle_types import (  # noqa: E402
+    MemberState,
+    OperatorRefusal,
+    TeamCursor,
+    TeamItem,
+    TeamMember,
+    TeamRef,
+    TeamSendResult,
+    TeamSource,
+    TeamStartResult,
+)
+from threads.agents.team_results import TeamRunResult  # noqa: E402
 from threads.agents.team_tools import (  # noqa: E402
     SendRefusal,
     SendResult,
@@ -59,7 +73,7 @@ from threads.evals.live import Live  # noqa: E402
 from threads.evals.run import run_evals  # noqa: E402
 from threads.hooks.extension import Extension, extension  # noqa: E402
 from threads.hooks.types import Hooks  # noqa: E402
-from threads.log import MemberRef, Principal  # noqa: E402
+from threads.log import MemberRef, Principal, StoredMemberResult  # noqa: E402
 from threads.loop.guard import ModelBlockedError  # noqa: E402
 from threads.loop.model import (  # noqa: E402
     LooksUp,
@@ -144,6 +158,7 @@ __all__ = [
     "LookupResult",
     "MemberRef",
     "MemberResult",
+    "MemberState",
     "MemoryHit",
     "MemoryProvider",
     "MemoryRecord",
@@ -156,6 +171,7 @@ __all__ = [
     "ModelResponse",
     "MonitorResult",
     "ObserveRefusal",
+    "OperatorRefusal",
     "Parked",
     "Principal",
     "ProviderError",
@@ -184,12 +200,21 @@ __all__ = [
     "StartResult",
     "StatusItem",
     "Store",
+    "StoreCorruptError",
+    "StoredMemberResult",
     "StreamEvent",
     "SyncReport",
+    "Team",
     "TeamAgent",
+    "TeamCursor",
+    "TeamItem",
+    "TeamMember",
     "TeamRef",
     "TeamRunResult",
     "TeamRunStream",
+    "TeamSendResult",
+    "TeamSource",
+    "TeamStartResult",
     "Thread",
     "Tool",
     "Verdict",
@@ -202,6 +227,7 @@ __all__ = [
     "fake_sandbox",
     "local_knowledge",
     "local_memory",
+    "open_team",
     "open_thread",
     "run_evals",
     "scripted_model",

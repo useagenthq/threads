@@ -22,7 +22,14 @@ from threads.team.close import CloseContext, take_answer, take_wait_notice
 from threads.team.mail import received
 from threads.team.park import take_park_notice
 from threads.team.provenance import turn_provenance
-from threads.team.rows import MemberRow, own_rows, pending_for, team_row
+from threads.team.rows import (
+    MemberRow,
+    own_rows,
+    pending_for,
+    pending_to,
+    team_of_log,
+    team_row,
+)
 from threads.team.settle import refuse_all
 from threads.team.view import parked_on
 
@@ -71,6 +78,8 @@ def may_resume(env: MailEnvelope) -> bool:
 
 def consume(ctx: ConsumeContext) -> Consumed:
     """Consumes this writer's pending mail into the batch."""
+    if ctx.fold.team.team_log:
+        return _consume_team_log(ctx)
     rows = own_rows(ctx.conn, ctx.thread_id)
     pending = pending_for(ctx.conn, rows)
     if not pending:
@@ -86,6 +95,28 @@ def consume(ctx: ConsumeContext) -> Consumed:
         if _take(ctx, state, env):
             state.taken.append(env.mail_id)
     return Consumed("consumed", tuple(state.taken))
+
+
+def _consume_team_log(ctx: ConsumeContext) -> Consumed:
+    """The team log takes every pending row and never parks or opens a turn (design §4.3): its
+    asks' answers and its waits' notices close them, and anything else (a park notice, a task
+    notification, a returned message) is recorded only."""
+    team = team_of_log(ctx.conn, ctx.branch_id)
+    pending = [] if team is None else pending_to(ctx.conn, team.team_id, None)
+    if not pending:
+        return Consumed("nothing_pending")
+    taken: list[str] = []
+    for env in pending:
+        if env.mail_id not in ctx.batch.taken():
+            control = _control(ctx, env)
+            if control == "later":
+                continue
+            if control == "park":
+                take_park_notice(ctx, env, team_log=True)
+            elif control == "ordinary":
+                ctx.batch.add(received(env))
+        taken.append(env.mail_id)
+    return Consumed("consumed", tuple(taken))
 
 
 def _take(ctx: ConsumeContext, state: _Pass, env: MailEnvelope) -> bool:

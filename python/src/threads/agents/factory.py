@@ -20,6 +20,7 @@ from threads.agents.deps import needs_no_deps
 from threads.agents.sections import Section, completed
 from threads.agents.skills import Skill, checked
 from threads.agents.team_agent import TeamAgent, TeamLimits
+from threads.agents.team_leads import register_lead
 from threads.agents.tool import json_schema
 from threads.hooks.extension import Extension
 from threads.log import Budget, Context, Permissions, Principal, Retry
@@ -218,6 +219,8 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, o
     extensions = tuple(options.get("extensions", ()))
     given = ((tools, servers), extensions)
     definition = build_definition(options, options["model"], given, output, links)
+    if team is not None:
+        register_lead(definition)
     if needs_no_deps(definition):
         if team is None:
             return Agent(definition, (None,), decode)

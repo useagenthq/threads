@@ -13,8 +13,10 @@ from threads.team.call import (
     CallContext,
     Refusal,
     call_mail_id,
+    call_request,
     caller_of,
     causal_of,
+    named,
     recorded,
 )
 from threads.team.constants import TEAM_CONSTANTS
@@ -59,7 +61,7 @@ def ask(ctx: CallContext, to: str, question: str, plan: AskPlan) -> JsonValue:
             raise AssertionError("an ask envelope always has a deadline")
         park_call(ctx, caller.provenance)
         return {"status": "open", "ask_id": ask_id, "deadline": opened.deadline}
-    row = deliverable(ctx, caller, "ask", to, plan.limits)
+    row = deliverable(call_request(ctx), "ask", named(ctx, to), plan.limits)
     if isinstance(row, Refusal):
         return recorded(ctx, row)
     if not plan.headroom(row):

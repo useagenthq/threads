@@ -27,6 +27,7 @@ from threads.team.batch import Batch
 from threads.team.dynamic import InvalidDefinition
 from threads.team.mail import PutText
 from threads.team.provenance import turn_provenance
+from threads.team.request import PolicyOp, Request, Target
 from threads.team.rows import MemberRow, TeamRow, member_named, own_rows, ref_of, team_row
 
 type ReadText = Callable[[ArtifactRef], str]
@@ -130,15 +131,62 @@ def tool_result(call_id: str, value: JsonValue) -> Draft:
     return Draft("tool_result", data, {"kind": "tool"})
 
 
+def refused_of(refusal: Refusal) -> dict[str, JsonValue]:
+    """A refusal's recorded value."""
+    value: dict[str, JsonValue] = {"code": refusal.code, "status": "refused"}
+    if refusal.detail is not None:
+        value["detail"] = refusal.detail.to_json()
+    return value
+
+
 def recorded(ctx: CallContext, value: JsonValue | Refusal) -> JsonValue:
     """Records the op's result, or its refusal, as the call's result; returns what it recorded."""
-    if isinstance(value, Refusal):
-        refused: dict[str, JsonValue] = {"code": value.code, "status": "refused"}
-        if value.detail is not None:
-            refused["detail"] = value.detail.to_json()
-        value = refused
+    out = refused_of(value) if isinstance(value, Refusal) else value
+    ctx.batch.add(answer(ctx, out))
+    return out
+
+
+def _done(ctx: CallContext, value: dict[str, JsonValue]) -> dict[str, JsonValue]:
     ctx.batch.add(answer(ctx, value))
     return value
+
+
+def call_request(ctx: CallContext) -> Request:
+    """The call as a team request: its caller sends, and its tool_result records the outcome."""
+    caller = caller_of(ctx)
+
+    def decide_(op: PolicyOp, target: str) -> Refusal | None:
+        # Phase 1: only a lead starts; members send to one another.
+        return decide(ctx, op, target, allow=op != "start" or caller.row.role == "lead")
+
+    def parent(started_id: str) -> JsonValue:
+        return {
+            "thread_id": ctx.call.thread_id,
+            "branch_id": ctx.call.branch_id,
+            "event_id": started_id,
+            "relation": "team_member",
+        }
+
+    return Request(
+        ctx.conn,
+        ctx.batch,
+        ctx.put,
+        caller.team,
+        caller.ref,
+        caller.provenance,
+        causal_of(ctx),
+        call_mail_id(ctx),
+        caller.row,
+        decide_,
+        parent,
+        lambda refusal: _done(ctx, refused_of(refusal)),
+        lambda value: _done(ctx, value),
+    )
+
+
+def named(ctx: CallContext, name: str) -> Target:
+    """A model's target: the member it names, at the generation its own log last recorded."""
+    return Target(name, lambda: addressed(ctx, caller_of(ctx), name))
 
 
 def addressed(ctx: CallContext, caller: Caller, name: str) -> MemberRow | Refusal:

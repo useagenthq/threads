@@ -9,20 +9,28 @@ from pydantic import JsonValue
 from team.vectors import Obj, agents, obj, vector_mint
 
 from threads.agents.outcome import output_text
-from threads.log import MemberIdleEvent, ToolCallEvent, ToolResultEvent
+from threads.log import MemberIdleEvent, MemberRef, Principal, ToolCallEvent, ToolResultEvent
 from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.store import Draft, Writer
 from threads.store.writer import DecideTx, Refusal
 from threads.team.ask import AskPlan, ask, reply
 from threads.team.batch import Batch
-from threads.team.call import CallContext
+from threads.team.call import CallContext, call_request, named
 from threads.team.close import reader_of
 from threads.team.consume import ConsumeContext, consume
 from threads.team.deadline import deadline
 from threads.team.dynamic import InvalidDefinition, Resolved, Template, resolve_definition
+from threads.team.operator import (
+    OperatorContext,
+    OperatorInput,
+    Replayed,
+    open_operator,
+    ref_target,
+)
 from threads.team.ops import StartPlan, TeamLimits, send, start
 from threads.team.provenance import turn_provenance
+from threads.team.rows import team_of_log
 from threads.team.settle import Completed, SettleContext, Settlement, settle
 from threads.team.watch import monitor, wait
 
@@ -55,10 +63,10 @@ def _limits(v: Obj) -> TeamLimits:
     return TeamLimits(concurrent, mailbox)
 
 
-def _listed(given: Obj, inp: Obj) -> tuple[dict[str, str], Resolved | InvalidDefinition]:
+def _listed(given: Obj, inp: Obj, args: Obj) -> tuple[dict[str, str], Resolved | InvalidDefinition]:
     """The agents the team lists with their pins' hashes (a dynamic start's from the vector),
     and the start's fields resolved against its agent."""
-    args, listed = obj(inp["args"]), agents()
+    listed = agents()
     agent, raw = str(args["agent"]), obj(given.get("templates", {})).get(str(args["agent"]))
     template = None
     if raw is not None:
@@ -92,12 +100,10 @@ def _model_op(ctx: CallContext, v: Obj) -> JsonValue:
     headroom = obj(v["given"]).get("headroom", True) is True
     match v["op"]:
         case "send":
-            return send(ctx, str(args["to"]), str(args["text"]), _limits(v))
+            to = named(ctx, str(args["to"]))
+            return send(call_request(ctx), to, str(args["text"]), _limits(v))
         case "start":
-            listed, resolved = _listed(obj(v["given"]), inp)
-            thread = str(inp["thread_id"])
-            plan = StartPlan(listed, _limits(v), lambda _a: headroom, thread, resolved)
-            return start(ctx, str(args["agent"]), str(args["task"]), plan)
+            return start(call_request(ctx), str(args["agent"]), str(args["task"]), _plan(v, args))
         case "ask":
             plan_ = AskPlan(_limits(v), lambda _row: headroom)
             return ask(ctx, str(args["to"]), str(args["question"]), plan_)
@@ -109,6 +115,43 @@ def _model_op(ctx: CallContext, v: Obj) -> JsonValue:
             members = args["members"]
             assert isinstance(members, list)
             return wait(ctx, [str(m) for m in members])
+
+
+def _plan(v: Obj, args: Obj) -> StartPlan:
+    inp, given = obj(v["input"]), obj(v["given"])
+    headroom = given.get("headroom", True) is True
+    listed, resolved = _listed(given, inp, args)
+    return StartPlan(listed, _limits(v), lambda _a: headroom, str(inp["thread_id"]), resolved)
+
+
+async def _operator(w: Writer, v: Obj) -> JsonValue:
+    """An operator request's outcome: what the op returns, or what its key replays."""
+    inp = obj(v["input"])
+    body = obj(inp["body"])
+    key = inp.get("idempotency_key")
+    op = "send" if v["op"] == "send" else "start"
+    principal = Principal.model_validate(inp["principal"])
+    request = OperatorInput(
+        str(inp["request_id"]), op, principal, body, None if key is None else str(key)
+    )
+    out: list[JsonValue] = []
+
+    def decide(tx: DecideTx, batch: Batch) -> None:
+        team = team_of_log(tx.conn, w.branch_id)
+        assert team is not None
+        opened = open_operator(
+            OperatorContext(tx.conn, tx.fold.events, batch, _no_text, team), request
+        )
+        if isinstance(opened, Replayed):
+            out.append(opened.outcome)
+        elif op == "send":
+            to = ref_target(tx.conn, team, MemberRef.model_validate(body["to"]))
+            out.append(send(opened.request, to, str(body["text"]), _limits(v)))
+        else:
+            out.append(start(opened.request, str(body["agent"]), str(body["task"]), _plan(v, body)))
+
+    await _decided(w, decide)
+    return out[0]
 
 
 async def _call(w: Writer, v: Obj) -> JsonValue:
@@ -181,6 +224,8 @@ async def _settle(w: Writer, v: Obj) -> JsonValue:
 async def run_on(w: Writer, v: Obj) -> JsonValue:
     """The op under `w`: its outcome as the vector states it."""
     match v["op"]:
+        case "send" | "start" if "request_id" in obj(v["input"]):
+            return await _operator(w, v)
         case "send" | "start" | "ask" | "reply" | "wait" | "monitor":
             return await _call(w, v)
         case "consume":

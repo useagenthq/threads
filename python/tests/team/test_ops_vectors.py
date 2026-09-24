@@ -39,9 +39,15 @@ CANCELS = frozenset(
         "cancel-stops-new-work",
     }
 )
-"""The operator's side is lane 21F's; applying and requesting a cancel is lane 21E.2's."""
+"""Applying and requesting a cancel is lane 21E.2's."""
+OPERATOR_LATER = frozenset({"ask", "wait"})
+"""The operator's ask and wait wait for their Team methods (lane 21F follow-up)."""
 MINE = [
-    v for v in vectors() if v["by"] != "team" and v["op"] != "cancel" and v["name"] not in CANCELS
+    v
+    for v in vectors()
+    if v["op"] != "cancel"
+    and v["name"] not in CANCELS
+    and not (v["by"] == "team" and v["op"] in OPERATOR_LATER)
 ]
 
 
@@ -108,7 +114,8 @@ def test_the_selection_covers_this_builds_ops() -> None:
         *("materialize", "idle", "end"),
     }
     # Pinned: a vector that drops out of the selection fails here, not silently.
-    assert len(MINE) == 65  # noqa: PLR2004 - the pinned selection size
+    assert len(MINE) == 83  # noqa: PLR2004 - the pinned selection size
+    assert sum(v["by"] == "team" for v in MINE) == 18  # noqa: PLR2004 - of them, the operator's
 
 
 @pytest.mark.parametrize("v", MINE, ids=[str(v["name"]) for v in MINE])
