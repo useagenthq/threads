@@ -327,6 +327,51 @@ search_docs = tool(
 
 Turning `concurrent` on or off changes the agent's config, so a thread started with the old setting can't be continued with the new one; start a new thread.
 
+## Many tools: load them on demand
+
+An agent with dozens or hundreds of tools pays for every schema on every request. Mark the big ones `defer` and the model sees only their names until it needs them.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const support = agent({
+  name: "support",
+  model: anthropic("claude-sonnet-5"),
+  tools: [
+    lookupOrder, // always loaded
+    mcp({ name: "jira", url: JIRA_MCP, defer: true }), // 120 tools, loaded on demand
+    tool({ name: "refund", description: "Refund an order.", input, effect: "reconcilable", reconcile, defer: true, execute }),
+  ],
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+support = agent(
+    name="support",
+    model=anthropic("claude-sonnet-5"),
+    tools=[
+        lookup_order,
+        mcp(name="jira", url=JIRA_MCP, defer=True),
+        tool(name="refund", description="Refund an order.", input=Refund, effect="reconcilable", reconcile=lookup, defer=True, execute=refund),
+    ],
+)
+```
+
+</Tab>
+</Tabs>
+
+- **What the model sees.** Each deferred tool as its name and description, and a `tool_search` tool whose description lists every deferred name.
+- **Exact names or keywords.** `tool_search({query: "mcp__jira__create_issue, mcp__jira__add_comment"})` loads exactly those (up to 10). Any other query loads the best keyword matches from the names and descriptions (`limit`, default 5).
+- **Loaded for good.** A loaded tool stays loaded for the rest of the thread, and a call to a tool that isn't loaded yet fails with a message telling the model to search first.
+- **The prompt prefix never changes.** A load is added to the conversation history, so the cached start of the prompt stays the same. The first request after a load misses the provider's cache once, because the tool list changed.
+- **`context.defer_tools`**: `auto` (the default) honours `defer`, `never` defers nothing, `always` defers every app, extension and MCP tool that doesn't end the turn. Subagents, team members and handoff targets use their parent's setting unless they set their own; they start with nothing loaded.
+
+Defer large catalogs, not two or three small tools. Changing which tools are deferred, or a deferred tool's schema, changes the agent's config, so existing threads need a new thread.
+
 ## Setup errors
 
-`tool()` checks its definition and raises `ConfigError` when it can't run: `dedupWindowMs` without `effect: "idempotent"` (or the reverse), `reconcile` without `effect: "reconcilable"` (or the reverse), `concurrent` on a tool that isn't `read_only` or that ends the turn, or `runs: "sandbox"`, which isn't supported yet.
+`tool()` checks its definition and raises `ConfigError` when it can't run: `dedupWindowMs` without `effect: "idempotent"` (or the reverse), `reconcile` without `effect: "reconcilable"` (or the reverse), `concurrent` on a tool that isn't `read_only` or that ends the turn, `defer` together with `endsTurn`, or `runs: "sandbox"`, which isn't supported yet. A tool of your own named `tool_search` is refused while anything is deferred.

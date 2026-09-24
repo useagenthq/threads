@@ -132,6 +132,10 @@ Running a stdio server inside the sandbox (`runs: "sandbox"`) is not supported y
   What the server's tools do to the outside world, as for [your own tools](/docs/agents/tools#effects-what-happens-after-a-crash). `read_only` lets them run without approval in the default mode. The default, `unguarded`, means an interrupted call parks instead of being retried.
 </Field>
 
+<Field name="defer" type="boolean" default="false">
+  The model sees only the server's tool names until it loads them with `tool_search`. Use it for servers with many tools. See [load them on demand](/docs/agents/tools#many-tools-load-them-on-demand).
+</Field>
+
 <Callout>
 `effect: "idempotent"` with `dedupWindowMs` is TypeScript only. Python refuses `idempotent` for MCP servers.
 </Callout>
