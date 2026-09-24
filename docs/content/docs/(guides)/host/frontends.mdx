@@ -4,7 +4,7 @@ description: Connect a React chat UI with the AI SDK's useChat, or any AG-UI cli
 icon: MonitorSmartphone
 ---
 
-Every host speaks the two common chat UI protocols out of the box: the Vercel **AI SDK UI message stream** (what `useChat` reads) and **AG-UI** (CopilotKit, `@ag-ui/client`). Point the stock client at the host and you get streaming text, tool calls and approvals in the browser. You don't need an adapter, a proxy or any extra config.
+Every host speaks the two common chat UI protocols out of the box: the Vercel **AI SDK UI message stream** (what `useChat` reads) and **AG-UI** (CopilotKit, `@ag-ui/client`). Point the stock client at the host and you get streaming text, tool calls, approvals and questions in the browser. You don't need an adapter, a proxy or any extra config.
 
 What you get for free:
 
@@ -33,18 +33,22 @@ import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
 import { useState } from "react";
 
 export function Chat({ chatId }: { chatId: string }) {
-  const { messages, sendMessage, addToolApprovalResponse, status } = useChat({
+  const { messages, sendMessage, addToolApprovalResponse, addToolOutput, status } = useChat({
     id: chatId,
     resume: true,
     transport: new DefaultChatTransport({
       api: "/v1/ui/ai-sdk/support",
       headers: { authorization: `Bearer ${token}` },
     }),
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    // Send the user's approvals and answers as soon as the last message has them all.
+    sendAutomaticallyWhen: (chat) =>
+      lastAssistantMessageIsCompleteWithApprovalResponses(chat) ||
+      lastAssistantMessageIsCompleteWithToolCalls(chat),
   });
   const [text, setText] = useState("");
 
@@ -62,6 +66,23 @@ export function Chat({ chatId }: { chatId: string }) {
                   <button onClick={() => addToolApprovalResponse({ id: part.approval.id, approved: false })}>No</button>
                 </p>
               );
+            if (part.type === "tool-ask_user" && part.state === "input-available") {
+              // ask_user's input, as the tool's schema defines it.
+              const { question, options = [] } = part.input as { question: string; options?: string[] };
+              return (
+                <p key={i}>
+                  {question}{" "}
+                  {options.map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => addToolOutput({ tool: "ask_user", toolCallId: part.toolCallId, output: option })}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </p>
+              );
+            }
             return null;
           })}
         </div>
@@ -82,7 +103,7 @@ export function Chat({ chatId }: { chatId: string }) {
 
 - `id` is your chat's key. The host turns it into a thread for this caller and this agent, so two users with the same key never share a thread, and the key itself is never stored.
 - `resume: true` reconnects to a run that is still going after a reload.
-- When a tool needs [approval](/docs/control/human-in-the-loop), the user's answer is sent automatically and the run continues in the same assistant message.
+- When a tool needs [approval](/docs/control/human-in-the-loop), or the agent asks the user a question with `ask_user`, the user's answer is sent automatically and the run continues in the same assistant message. A free-text question has no `options`: send the typed text as the `output`.
 
 ## AG-UI and CopilotKit
 
@@ -114,7 +135,7 @@ if (agent.pendingInterrupts.length > 0) {
 
 - `threadId` is your chat's key, scoped to the caller and the agent just like the AI SDK's `id`.
 - One `resume` must answer every pending interrupt: two tool calls that both need approval end the run with two, and the client refuses a resume that leaves one out.
-- An approval is answered with `{decision: "grant" | "deny"}`, and `status: "cancelled"` denies it. Each interrupt carries its `responseSchema`.
+- An approval (`reason: "tool_approval"`) is answered with `{decision: "grant" | "deny"}`, and `status: "cancelled"` denies it. A question (`reason: "user_input"`, from `ask_user`) is answered with `{answer: "..."}`, or a list of the chosen options. Each interrupt carries its `responseSchema`.
 - If someone else settled the interrupt first (an approver in Slack, say), resuming still works, even when their decision lands while yours is on its way. The stream carries a `threads.resume_conflict` custom event that tells you what was recorded.
 - After a dropped connection, call `runAgent()` again with the same messages. The host sees the same last message id and streams that run again from a `MESSAGES_SNAPSHOT`. It never starts a second one.
 
