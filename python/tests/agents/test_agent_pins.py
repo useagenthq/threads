@@ -87,8 +87,8 @@ async def _observe(_event: Event) -> None:
     return None
 
 
-def _extension(d: Obj) -> Extension:
-    hooks: Hooks = {}
+def _extension(d: Obj) -> Extension[None]:
+    hooks: Hooks[None] = {}
     for name in _TEXTS.validate_python(d.get("hooks", [])):
         if name == "session_end":
             hooks["session_end"] = _session_end
