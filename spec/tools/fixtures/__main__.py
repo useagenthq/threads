@@ -48,6 +48,7 @@ from . import (
     team_bindings,
     team_edges,
     team_operator,
+    team_ops,
     team_rebind,
     team_replay,
     team_rules,
@@ -203,7 +204,9 @@ def main() -> int:
         _build_staged(staged)
         problems = coverage.check(out) + ref_team.ref_check(out, staged)
         if sys.argv[1:] == ["--check"]:
-            problems += tool_inputs.check() + tool_groups.check() + team_wire.check()
+            problems += (
+                tool_inputs.check() + tool_groups.check() + team_wire.check() + team_ops.check()
+            )
         for p in problems:
             print(f"coverage.json: {p}")
         if problems:
@@ -217,6 +220,7 @@ def main() -> int:
         tool_inputs.write()
         tool_groups.write()
         team_wire.write()
+        team_ops.write()
         for built, dest in ((out, CASES), (staged, STAGED)):
             shutil.rmtree(dest, ignore_errors=True)
             shutil.copytree(built, dest)

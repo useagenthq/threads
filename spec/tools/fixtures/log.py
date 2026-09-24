@@ -19,6 +19,7 @@ class AddOpts(TypedDict, total=False):
     principal: Obj
     critical: bool
     branch_id: str
+    time: int
 
 
 # The implementation named in every header this run writes. Recover cases append, and only the
@@ -76,7 +77,7 @@ class Log:
             "epoch": self.epoch,
             "type": type_,
             "type_version": 1,
-            "time": T0 + seq * 1000,
+            "time": opts.get("time", T0 + seq * 1000),
             "actor": a,
             "prev_hash": sha(self.lines[-1]),
             "critical": critical,

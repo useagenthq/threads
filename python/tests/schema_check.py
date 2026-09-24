@@ -13,7 +13,11 @@ from pydantic import JsonValue, TypeAdapter
 SPEC = Path(__file__).resolve().parents[2] / "spec"
 _JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 _DOCS: Final[dict[str, JsonValue]] = {}
-for _path in (SPEC / "schema" / "events.v1.schema.json", SPEC / "conformance" / "case.schema.json"):
+for _path in (
+    SPEC / "schema" / "events.v1.schema.json",
+    SPEC / "conformance" / "case.schema.json",
+    SPEC / "conformance" / "team-ops.schema.json",
+):
     _doc = _JSON.validate_json(_path.read_bytes())
     assert isinstance(_doc, dict)
     _DOCS[str(_doc["$id"])] = _doc
