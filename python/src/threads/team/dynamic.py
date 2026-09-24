@@ -36,7 +36,7 @@ OPERATOR: Final = "operator"
 """The starter of a Team.start, reserved as a label and as a team agent's name."""
 
 _BIDI = frozenset({0x061C, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A)})
-# What whitespace is left once controls are refused and Cf removed.
+# What whitespace is left once controls are refused and invisibles removed.
 _WS = "[\t\n \u1680\u2028\u2029]"
 _DELIMITER = re.compile(f"<{_WS}*/?{_WS}*instructions")
 _SENTENCES = (
@@ -44,6 +44,26 @@ _SENTENCES = (
     "where it conflicts with the instructions before it, those take precedence",
 )
 _ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+
+# Default_Ignorable_Code_Point (Unicode DerivedCoreProperties), beyond Cf: each renders as
+# nothing, so `<` + one of them + `/instructions>` would read like the delimiter.
+_IGNORABLE = (
+    (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C), (0x115F, 0x1160), (0x17B4, 0x17B5),
+    (0x180B, 0x180F), (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x206F), (0x3164, 0x3164),
+    (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF), (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A), (0xE0000, 0xE0FFF),
+)  # fmt: skip
+
+
+def _invisible(c: str) -> bool:
+    """A format character or a default-ignorable code point: removed before matching."""
+    return unicodedata.category(c) == "Cf" or any(a <= ord(c) <= b for a, b in _IGNORABLE)
+
+
+def _is_operator(label: str) -> bool:
+    """`operator` in any case, fullwidth and other compatibility forms included."""
+    return unicodedata.normalize("NFKC", label).translate(_ASCII_LOWER) == "operator"
+
 
 type Field = Literal["label", "instructions", "tools", "model"]
 
@@ -105,7 +125,7 @@ def refused_text(written: str) -> bool:
         if (unicodedata.category(ch) == "Cc" and ch not in "\n\t") or ord(ch) in _BIDI:
             return True
     norm = unicodedata.normalize("NFKC", written)
-    low = "".join(c for c in norm if unicodedata.category(c) != "Cf").translate(_ASCII_LOWER)
+    low = "".join(c for c in norm if not _invisible(c)).translate(_ASCII_LOWER)
     if _DELIMITER.search(low):
         return True
     flat = re.sub(f"{_WS}+", " ", low)
@@ -135,7 +155,7 @@ def resolve_definition(
 ) -> Ok[Resolved] | Err[InvalidDefinition]:
     """A start's label and, for a dynamic template, its define; the first bad field otherwise.
     `template` None is a static agent, which takes a label only."""
-    if label is not None and (not label_ok(label) or label.translate(_ASCII_LOWER) == OPERATOR):
+    if label is not None and (not label_ok(label) or _is_operator(label)):
         return _bad("label", "invalid")
     if template is None:
         if instructions is not None:

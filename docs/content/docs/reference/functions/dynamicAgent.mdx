@@ -4,7 +4,7 @@ description: "Describe a dynamic agent: a template in a lead's team whose member
 icon: "SquareFunction"
 ---
 
-A start may choose only a label, instructions (added last, in a delimited block), a subset of this template's tools (built-ins included; the framework tools are always kept) and a models key; everything else (permissions, hooks, skills, memory, sandbox, budget, output) is this config. Only a team lists it: in subagents it is ConfigError invalid_config. Pure, like agent().
+A start may choose only a label, instructions (added last, in a delimited block), a subset of this template's tools (built-ins included; the framework tools are always kept) and a models key; everything else (permissions, hooks, skills, memory, sandbox, budget, output) is this config. Only a team lists it: in subagents or handoffs it is ConfigError invalid_config. The lead's instructions list its choosable tools and model keys, so renaming a tool or a key changes the lead's pinned config and an existing lead thread no longer continues. Tools of its MCP servers are choosable but not listed, since the listing never waits on a connection. Pure, like agent().
 
 Import from `@threads/core` (TypeScript) or `threads` (Python).
 

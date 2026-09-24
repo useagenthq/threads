@@ -57,7 +57,35 @@ export type Resolved = {
 const LABEL_MAX = 64;
 const BIDI = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 const CONTROL = /[^\P{Cc}\t\n]/u;
-const FORMAT = /\p{Cf}/gu;
+// Default_Ignorable_Code_Point (Unicode DerivedCoreProperties), beyond Cf: each renders as
+// nothing, so `<` + one of them + `/instructions>` would read like the delimiter.
+const IGNORABLE: readonly (readonly [number, number])[] = [
+  [0x00ad, 0x00ad],
+  [0x034f, 0x034f],
+  [0x061c, 0x061c],
+  [0x115f, 0x1160],
+  [0x17b4, 0x17b5],
+  [0x180b, 0x180f],
+  [0x200b, 0x200f],
+  [0x202a, 0x202e],
+  [0x2060, 0x206f],
+  [0x3164, 0x3164],
+  [0xfe00, 0xfe0f],
+  [0xfeff, 0xfeff],
+  [0xffa0, 0xffa0],
+  [0xfff0, 0xfff8],
+  [0x1bca0, 0x1bca3],
+  [0x1d173, 0x1d17a],
+  [0xe0000, 0xe0fff],
+];
+const FORMAT = /\p{Cf}/u;
+
+/** A format character or a default-ignorable code point: removed before matching. */
+function invisible(c: string): boolean {
+  const cp = c.codePointAt(0) ?? 0;
+  return FORMAT.test(c) || IGNORABLE.some(([a, b]) => a <= cp && cp <= b);
+}
+
 const DELIMITER =
   /<[\t\n \u1680\u2028\u2029]*\/?[\t\n \u1680\u2028\u2029]*instructions/;
 const SPACES = /[\t\n \u1680\u2028\u2029]+/g;
@@ -76,13 +104,14 @@ export function block(starter: string, text: string): string {
 
 /**
  * The block check: a control (but \n and \t) or bidi character, or, in the NFKC copy with every
- * format character removed and A-Z lowered, the delimiter or the precedence sentence.
+ * format and default-ignorable character removed and A-Z lowered, the delimiter or the precedence
+ * sentence.
  */
 export function refusedText(text: string): boolean {
   if (CONTROL.test(text) || BIDI.test(text)) return true;
-  const low = text
-    .normalize("NFKC")
-    .replace(FORMAT, "")
+  const low = [...text.normalize("NFKC")]
+    .filter((c) => !invisible(c))
+    .join("")
     .replace(/[A-Z]/g, (c) => c.toLowerCase());
   if (DELIMITER.test(low)) return true;
   const flat = low.replace(SPACES, " ");
@@ -114,7 +143,8 @@ export function resolveDefinition(
   if (
     label !== undefined &&
     (!labelOk(label) ||
-      label.replace(/[A-Z]/g, (c) => c.toLowerCase()) === "operator")
+      label.normalize("NFKC").replace(/[A-Z]/g, (c) => c.toLowerCase()) ===
+        "operator")
   )
     return bad("label", "invalid");
   const named = label === undefined ? {} : { label };

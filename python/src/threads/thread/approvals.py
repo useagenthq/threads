@@ -56,18 +56,18 @@ def pending(fold: Fold) -> tuple[PendingApproval, ...]:
         if data.call_id not in fold.pending:
             continue
         reason = reasons.get(data.call_id)
+        approval = PendingApproval(
+            challenge_id=data.challenge_id,
+            call_id=data.call_id,
+            tool=call.data.name,
+            input=call.data.input,
+            args_hash=data.args_hash,
+            expires_at=data.expires_at,
+            suggested_rules=suggested_rules(call.data.name, call.data.input),
+        )
+        # An explicit MISSING is refused: the field is set only when the decision gave one.
         found.append(
-            PendingApproval(
-                challenge_id=data.challenge_id,
-                call_id=data.call_id,
-                tool=call.data.name,
-                input=call.data.input,
-                args_hash=data.args_hash,
-                expires_at=data.expires_at,
-                suggested_rules=suggested_rules(call.data.name, call.data.input),
-                # An explicit MISSING is refused: omit the field instead.
-                **({"reason": reason} if isinstance(reason, str) else {}),
-            )
+            approval.model_copy(update={"reason": reason}) if isinstance(reason, str) else approval
         )
     return tuple(found)
 

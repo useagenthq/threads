@@ -78,10 +78,7 @@ export async function startTool(
   const pinned =
     define === undefined
       ? listed
-      : await team.pin(args.agent, {
-          define,
-          starter: s.config.agents?.name ?? "",
-        });
+      : await team.pin(args.agent, { define, starter: starterOf(s) });
   if (pinned !== undefined) s.artifacts.put(utf8.encode(pinned.config));
   return decided(s, call, (ctx) =>
     start(ctx, args, {
@@ -96,6 +93,16 @@ export async function startTool(
       threadId: ThreadId.parse(uuidv7(s.now())),
     }),
   );
+}
+
+/**
+ * The name the block says wrote it: the calling lead's agent name, which is its member name in
+ * the team it leads (so a rebind, which reads the task's sender, finds the same name).
+ */
+function starterOf(s: Session): string {
+  const name = s.config.agents?.name;
+  if (name === undefined) throw new Error("a team tool outside an agent");
+  return name;
 }
 
 /** A dynamic agent as a start sees it: its pin's tools but F, and its model keys. */

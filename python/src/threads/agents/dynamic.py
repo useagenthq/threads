@@ -14,7 +14,7 @@ from threads.agents.dynamic_agent import DynamicAgent
 from threads.agents.factory import CommonOptions, Links, build_definition, output_model
 from threads.loop.model import Model
 
-_KEY: Final = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_KEY: Final = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _REFUSED: Final = frozenset({"team", "team_limits", "subagents", "handoffs"})
 
 
@@ -30,18 +30,23 @@ class DynamicAgentOptions(CommonOptions, total=False):
 def dynamic_agent(**options: Unpack[DynamicAgentOptions]) -> DynamicAgent[None, object]:
     """spec/api.json `dynamicAgent`. Pure: no I/O. Raises ConfigError invalid_config for missing,
     empty or badly keyed models, and for team, subagents or handoffs."""
-    given = set[str](options)
-    if given & _REFUSED:
-        why = "a dynamic agent can't start or hand off to other agents"
+    nested = next((k for k in sorted(_REFUSED) if k in options), None)
+    if nested is not None:
+        why = f"{nested}: a dynamic agent can't start or hand off to other agents"
         raise ConfigError("invalid_config", why)
-    if "model" in given:
-        raise ConfigError("invalid_config", "a dynamic agent takes models, not model")
+    if "model" in options:
+        why = "a dynamic agent takes models, not model: models={key: model}, the first the default"
+        raise ConfigError("invalid_config", why)
     models = tuple(options.get("models", {}).items())
     if not models:
-        raise ConfigError("invalid_config", "a dynamic agent needs at least one of models")
-    bad = next((k for k, _ in models if not _KEY.match(k)), None)
+        why = "models: a dynamic agent needs at least one model, by key; the first is the default"
+        raise ConfigError("invalid_config", why)
+    bad = next((k for k, _ in models if not _KEY.fullmatch(k)), None)
     if bad is not None:
-        why = f"models key {bad!r}: lowercase letters, digits and underscores, from a letter"
+        why = (
+            f"models: key {bad!r} must be lowercase letters, digits and underscores, starting "
+            "with a letter"
+        )
         raise ConfigError("invalid_config", why)
     tools = options.get("tools", ())
     servers = tuple(t for t in tools if isinstance(t, ToolServer))

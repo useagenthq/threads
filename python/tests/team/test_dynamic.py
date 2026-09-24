@@ -107,10 +107,11 @@ def test_setup_refusals_name_the_option() -> None:
         dynamic_agent(name="s")  # pyright: ignore[reportCallIssue] - models is required
     with pytest.raises(ConfigError, match="models"):
         dynamic_agent(name="s", models={})
-    with pytest.raises(ConfigError, match="models key"):
-        dynamic_agent(name="s", models={"Fast": fast})
+    for key in ("Fast", "fast\n"):
+        with pytest.raises(ConfigError, match="models: key"):
+            dynamic_agent(name="s", models={key: fast})
     for extra in ("team", "subagents", "handoffs"):
-        with pytest.raises(ConfigError, match="can't start or hand off"):
+        with pytest.raises(ConfigError, match=f"{extra}: a dynamic agent can't start or hand off"):
             dynamic_agent(name="s", models={"fast": fast}, **{extra: []})  # pyright: ignore[reportArgumentType] - the refused option
     template = dynamic_agent(name="specialist", models={"fast": fast})
     for key in ("subagents", "handoffs"):
