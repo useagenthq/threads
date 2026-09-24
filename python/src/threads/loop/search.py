@@ -3,12 +3,13 @@ matches the log's current tools and records a load as tools_loaded, in the resul
 read_only and depends only on the log and the pinned tables, so a crash before the batch runs it
 again to the same bytes."""
 
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._generated.tools_v1 import ToolSearchInput
+from threads._tool_names import SEARCH
 from threads.log import JsonObject, ToolSpec
 from threads.log.jcs import canonicalize
 from threads.loop.drafts import draft
@@ -24,13 +25,11 @@ from threads.tools.tool_search import MAX_QUERY, search
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-NAME: Final = "tool_search"
-
 
 def is_search(fold: Fold, spec: ToolSpec) -> bool:
     """The framework tool_search: pinned exactly when something is deferred (setup refuses a user
     tool with its name then)."""
-    return spec.name == NAME and any(s.defer_loading is True for s in fold.known_tools.values())
+    return spec.name == SEARCH and any(s.defer_loading is True for s in fold.known_tools.values())
 
 
 def not_loaded(name: str) -> str:

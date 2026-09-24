@@ -9,6 +9,7 @@ from typing import Literal, Protocol, runtime_checkable
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads._tool_names import SEARCH
 from threads.agents.config import ConfigError
 from threads.hooks.extension import Namespaced
 from threads.log import ToolSpec
@@ -16,7 +17,7 @@ from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.reduce.handlers import to_json
 from threads.result import Ok
-from threads.tools.specs import SEARCH, search_tool_spec
+from threads.tools.specs import search_tool_spec
 
 type DeferTools = Literal["auto", "always", "never"]
 _STUB = ("name", "description", "effect_class", "dedup_window_ms", "ends_turn")

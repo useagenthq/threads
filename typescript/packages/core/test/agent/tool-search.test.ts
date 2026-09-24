@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { agent, openThread, scriptedModel, sqlite } from "../../src";
+import { z } from "zod";
+import { agent, openThread, scriptedModel, sqlite, tool } from "../../src";
 import { openStore } from "../../src/agent/sqlite";
 import { cacheBreaks } from "../../src/reduce/projections";
 import { unwrap } from "../store/helpers";
@@ -175,6 +176,43 @@ describe("tool_search end to end", () => {
     expect(got?.type === "tool_result" && got.data.preview).toBe(
       "no deferred tool matches",
     );
+  });
+});
+
+describe("the name tool_search without deferral", () => {
+  test("with nothing deferred, a user tool named tool_search is the user's tool", async () => {
+    const store = sqlite(":memory:");
+    const own = tool({
+      name: "tool_search",
+      description: "Search our tools catalog.",
+      input: z.object({ term: z.string() }),
+      runs: "host",
+      effect: "read_only",
+      execute: async ({ term }) => `catalog: ${term}`,
+    });
+    const model = scriptedModel({
+      responses: [use("tool_search", { term: "x" }, "c1"), say("ok")],
+    });
+    const result = await agent({ model, tools: [lookup, own] }).run("Go.", {
+      store,
+    });
+    const events = await eventsOf(store, result.thread);
+    const got = events.find((e) => e.type === "tool_result");
+    expect(got?.type === "tool_result" && got.data.preview).toBe("catalog: x");
+    expect(events.some((e) => e.type === "tools_loaded")).toBe(false);
+  });
+
+  test("a query over 200 code points fails before its permission decision", async () => {
+    const store = sqlite(":memory:");
+    const model = scriptedModel({
+      responses: [
+        use("tool_search", { query: "x".repeat(201) }, "c1"),
+        say("ok"),
+      ],
+    });
+    const result = await agent({ model, tools }).run("Go.", { store });
+    const events = await eventsOf(store, result.thread);
+    expect(events.some((e) => e.type === "permission_decision")).toBe(false);
   });
 });
 

@@ -6,6 +6,7 @@ import { authorize } from "./authorize";
 import { draft } from "./drafts";
 import { parseErrors } from "./schema";
 import type { Session } from "./session";
+import { queryTooLong, searchPinned } from "./tool-search";
 import { cancelRequested, owedCalls, type ToolUse, toolSpec } from "./turn";
 import type { Halt } from "./types";
 
@@ -89,8 +90,10 @@ function preEffectFailure(s: Session, use: ToolUse): string | undefined {
   if (use.name === FINAL_OUTPUT) return undefined;
   if (isDeferred(s.fold, spec))
     return `tool_not_loaded: ${use.name}; find it with tool_search first`;
+  const search = use.name === "tool_search" && searchPinned(s.fold);
   const framework =
-    AGENT_TOOLS.has(use.name) ||
+    search ||
+    (AGENT_TOOLS.has(use.name) && use.name !== "tool_search") ||
     (s.config.team !== undefined && MEMBER_TOOLS.has(use.name));
   const input = framework
     ? entry(use.name).input
@@ -98,5 +101,6 @@ function preEffectFailure(s: Session, use: ToolUse): string | undefined {
   // Arguments parse with the tool's own schema; a tool without one fails closed.
   if (input === undefined) return `no implementation for ${use.name}`;
   const errors = parseErrors(input, use.input);
-  return errors === undefined ? undefined : `invalid input: ${errors}`;
+  if (errors !== undefined) return `invalid input: ${errors}`;
+  return search ? queryTooLong(use.input) : undefined;
 }

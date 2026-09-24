@@ -11,6 +11,8 @@ FRAMEWORK: Final = TEAM | PINNED_MEMBERS | {"todo_write", "handoff", "spawn_agen
 """Log-only tools: `read_only` is exact, since only log state changes."""
 FINAL_OUTPUT: Final = "final_output"
 """The structured-output tool, pinned with an output model."""
-LOOP_TOOLS: Final = FRAMEWORK | {FINAL_OUTPUT}
+SEARCH: Final = "tool_search"
+"""Loads deferred tools; pinned only when something is deferred."""
+LOOP_TOOLS: Final = FRAMEWORK | {FINAL_OUTPUT, SEARCH}
 """The tools the loop runs itself, with no effect_begin whatever their spec. Rule 17 never lets a
 tools_changed add one the pin didn't grant."""

@@ -11,7 +11,7 @@ from pydantic import JsonValue, TypeAdapter
 
 from threads._generated import tools_v1
 from threads._strict_model import StrictModel
-from threads._tool_names import FRAMEWORK, PINNED_MEMBERS, TEAM
+from threads._tool_names import FRAMEWORK, PINNED_MEMBERS, SEARCH, TEAM
 from threads.log import EffectClass, ToolSpec
 
 
@@ -106,10 +106,6 @@ class Writes:
 
     effect: EffectClass = "unguarded"
     dedup_window_ms: int | None = None
-
-
-SEARCH: Final = "tool_search"
-"""Pinned, read_only, exactly when something is deferred (spec/schema/README.md)."""
 
 
 def search_tool_spec(deferred_names: Sequence[str]) -> ToolSpec:

@@ -7,11 +7,10 @@ from collections.abc import Mapping
 
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads._tool_names import SEARCH
 from threads.log import ParseError, ToolResultEvent, ToolsLoadedEvent
 from threads.reduce.fold import Fold, reject
 from threads.reduce.handlers import Handler, on
-
-SEARCH = "tool_search"
 
 
 def _tools_loaded(fold: Fold, event: ToolsLoadedEvent) -> ParseError | None:

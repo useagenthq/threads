@@ -11,7 +11,7 @@ import { teamTool } from "./agents/team";
 import { validateCandidate } from "./output";
 import type { Session } from "./session";
 import { writeTodos } from "./todos";
-import { searchTools } from "./tool-search";
+import { searchPinned, searchTools } from "./tool-search";
 import type { Halt } from "./types";
 
 // Framework tools: they change only log state, so the loop runs them with its
@@ -37,10 +37,14 @@ const HANDLERS: Readonly<Record<LoopTool, Handler>> = {
   send: sendTool,
 };
 
-/** A framework tool's handler; a team tool is one only in a team thread. */
+/**
+ * A framework tool's handler; a team tool is one only in a team thread, tool_search only when
+ * something is deferred.
+ */
 export function frameworkTool(s: Session, name: string): Handler | undefined {
   if (!isLoopTool(name)) return undefined;
   if (TEAM_LOOP_TOOLS.has(name) && s.config.team === undefined)
     return undefined;
+  if (name === "tool_search" && !searchPinned(s.fold)) return undefined;
   return HANDLERS[name];
 }
