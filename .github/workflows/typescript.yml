@@ -20,6 +20,12 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: E2B on Node
+        # The e2b adapter runs on Node too: its sources, unbundled, over Node's own fetch.
+        run: node --experimental-strip-types --import ./packages/e2b/test/node/register.ts --test 'packages/e2b/test/node/*.test.ts'
       - name: Model catalogs are append-only
         working-directory: .
         run: python3 spec/tools/check_model_catalog.py
