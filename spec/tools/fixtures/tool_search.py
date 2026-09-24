@@ -114,7 +114,7 @@ def searched(log: Log, query: str, call_id: str, limit: int | None = None) -> li
 
 
 def build(root: pathlib.Path) -> None:
-    for name, desc, log in [*_searches(), _loaded(), _prefix_stable(), _compaction()]:
+    for name, desc, log in [*_searches(), _loaded(), _prefix_stable(), compaction()]:
         render_case(root, (name, FAM, desc), log)
 
 
@@ -210,7 +210,7 @@ def _prefix_stable() -> tuple[str, str, Log]:
     )
 
 
-def _compaction() -> tuple[str, str, Log]:
+def compaction() -> tuple[str, str, Log]:
     log = Log()
     pinned(log, JIRA)
     user(log, "File a bug about the login page.")

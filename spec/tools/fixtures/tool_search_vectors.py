@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING
 from .common import CASES, arr, obj, text
 from .jcs import JsonValue
 from .log import Log
-from .pieces import READ_FILE, answer, dump, user
+from .pieces import answer, dump, user
 from .render import render
 from .search_ref import search
-from .tool_search import COMMENT, CREATE, ISSUES, JIRA, pinned, searched
+from .tool_search import COMMENT, CREATE, ISSUES, JIRA, compaction, pinned, searched
 from .tool_sets import changed
 from .ucd import VERSION, fold, tables, terms, tokens
 
@@ -181,6 +181,7 @@ def _provider_logs() -> list[tuple[str, Log]]:
         ("stubs only: the deferred tools are not offered", stubs),
         ("two loads: each tools_loaded line adds its specs", loads),
         ("a complete tools_changed after the loads, then one more load", restated),
+        ("after a compaction: one merged tools_loaded line", compaction()[2]),
     ]
 
 
@@ -195,19 +196,6 @@ def _provider_vector() -> Obj:
                 "tools": provider_tools(body),
             }
         )
-    compacted: list[JsonValue] = [
-        {"adapter": {}, "model": {}, "params": {}, "system": "", "tools": [READ_FILE_STUB]},
-        {"role": "user", "content": [{"type": "text", "text": "<summary>"}]},
-        {"role": "tools_loaded", "tools": [_line(CREATE), _line(COMMENT)]},
-    ]
-    body = b"".join(json.dumps(x).encode() + b"\n" for x in compacted)
-    cases.append(
-        {
-            "name": "after a compaction: one merged tools_loaded line",
-            "request": compacted,
-            "tools": provider_tools(body),
-        }
-    )
     return {
         "description": (
             "The provider tool list an adapter sends for a Render v1 request: the latest complete "
@@ -216,13 +204,6 @@ def _provider_vector() -> Obj:
         ),
         "cases": cases,
     }
-
-
-READ_FILE_STUB: Obj = {k: READ_FILE[k] for k in ("name", "description", "input_schema")}
-
-
-def _line(spec: Obj) -> JsonValue:
-    return {k: spec[k] for k in ("name", "description", "input_schema")}
 
 
 FILES = {
