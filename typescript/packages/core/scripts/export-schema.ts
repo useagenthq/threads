@@ -4,6 +4,7 @@ import { z } from "zod";
 import { canonicalize } from "../src/log";
 import { ModelCatalog } from "../src/model/catalog";
 import { evalSchema } from "./eval-schema";
+import { Tree } from "../src/sandbox/tree/tree";
 import { specSchema } from "./spec-schema";
 import { toolCatalog, toolSchema } from "./tool-catalog";
 
@@ -106,6 +107,24 @@ const EVAL = join(
   "../../../../spec/schema/eval.v1.schema.json",
 );
 
+const TREE = join(
+  import.meta.dir,
+  "../../../../spec/schema/tree.v1.schema.json",
+);
+
+/** The tree artifact (spec/schema/README.md, Snapshot manifest). */
+function treeSchema(): Json {
+  const exported = z.toJSONSchema(Tree, {
+    target: "draft-2020-12",
+    io: "input",
+    unrepresentable: "throw",
+  });
+  return {
+    ...JSON.parse(JSON.stringify(exported)),
+    $id: "urn:threads:schema:tree:v1",
+  };
+}
+
 const [flag, file = SPEC] = process.argv.slice(2);
 const schema = specSchema();
 if (flag === "--check") {
@@ -115,7 +134,8 @@ if (flag === "--check") {
       ? check(toolSchema(), TOOLS) +
         checkBytes(toolCatalog(), CATALOG) +
         check(catalogSchema(), MODEL_CATALOG) +
-        check(evalSchema(schema), EVAL)
+        check(evalSchema(schema), EVAL) +
+        check(treeSchema(), TREE)
       : 0);
 } else {
   writeFileSync(SPEC, format(schema));
@@ -123,7 +143,8 @@ if (flag === "--check") {
   writeFileSync(CATALOG, toolCatalog());
   writeFileSync(MODEL_CATALOG, format(catalogSchema()));
   writeFileSync(EVAL, format(evalSchema(schema)));
+  writeFileSync(TREE, format(treeSchema()));
   console.log(
-    `wrote ${SPEC}, ${TOOLS}, ${CATALOG}, ${MODEL_CATALOG} and ${EVAL}`,
+    `wrote ${SPEC}, ${TOOLS}, ${CATALOG}, ${MODEL_CATALOG}, ${EVAL} and ${TREE}`,
   );
 }

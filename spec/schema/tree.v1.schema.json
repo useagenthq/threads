@@ -1,0 +1,127 @@
+{
+  "$defs": {
+    "TreeDir": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "dir",
+          "type": "string"
+        },
+        "mode": {
+          "description": "Permission bits, as `stat -c %a` reads them.",
+          "maximum": 4095,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Relative to the root, '/'-separated, with no empty, '.' or '..' component.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "TreeEntry": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TreeFile"
+        },
+        {
+          "$ref": "#/$defs/TreeDir"
+        },
+        {
+          "$ref": "#/$defs/TreeSymlink"
+        }
+      ]
+    },
+    "TreeFile": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "file",
+          "type": "string"
+        },
+        "mode": {
+          "description": "Permission bits, as `stat -c %a` reads them.",
+          "maximum": 4095,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Relative to the root, '/'-separated, with no empty, '.' or '..' component.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "description": "The artifact holding the file's bytes.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "mode",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "TreeSymlink": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "symlink",
+          "type": "string"
+        },
+        "path": {
+          "description": "Relative to the root, '/'-separated, with no empty, '.' or '..' component.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "target": {
+          "description": "Relative, and lexically inside the root.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "target"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:threads:schema:tree:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A sandbox file tree; its semantic rules are in spec/schema/README.md, Snapshot manifest.",
+  "properties": {
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/TreeEntry"
+      },
+      "type": "array"
+    },
+    "tree_version": {
+      "const": 1,
+      "type": "number"
+    }
+  },
+  "required": [
+    "tree_version",
+    "entries"
+  ],
+  "type": "object"
+}

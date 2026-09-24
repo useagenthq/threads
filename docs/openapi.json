@@ -5509,7 +5509,8 @@
           "resource_unknown",
           "writer_mismatch",
           "secret_in_provider_output",
-          "secret_in_stored_bytes"
+          "secret_in_stored_bytes",
+          "archive_invalid"
         ]
       },
       "events_Event": {
