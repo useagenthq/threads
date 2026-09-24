@@ -3471,7 +3471,7 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "continue"}, "required": true, "doc": "continue: the subagent runs again with reason as its next input. After 3 continues, or when the subagent was cancelled, its result stands."},
-                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "The subagent's next input, as any text. It is recorded on the hook_decision. When the continue can't take effect, TypeScript records a stop instead (reason cancelled, or continuation limit after 3 continues); Python records this continue and its reason even when the subagent was cancelled, and after 3 continues doesn't call the hook at all."}
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "The subagent's next input, as any text. It is recorded on the hook_decision. When the continue can't take effect, a stop is recorded instead, with reason cancelled, or continuation limit after 3 continues."}
                     },
                     "casing": "wire"
                   }

@@ -210,9 +210,11 @@ def test_cancelling_a_parent_cancels_its_running_child_before_its_own_stop(
         result = await lead.run("go", store=store, deps=None)
         assert isinstance(result, Cancelled), result
         events = await events_of(result.thread)
-        # The hook's continue is recorded and has no effect.
+        # The hook's continue is recorded as the stop it amounts to (reason cancelled).
         decided = [e for e in events if isinstance(e, HookDecisionEvent)]
-        assert [d.data.decision for d in decided] == (["continue"] if keep_going else [])
+        assert [(d.data.decision, d.data.reason) for d in decided] == (
+            [("stop", "cancelled")] if keep_going else []
+        )
         kinds = [e.type for e in events if not isinstance(e, HookDecisionEvent)][-6:]
         assert kinds == [
             "agent_spawned",

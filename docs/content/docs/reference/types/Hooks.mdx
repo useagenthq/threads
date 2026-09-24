@@ -393,7 +393,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="subagentStop()[continue].reason / subagent_stop()[continue].reason" type={"string"} required>
-  The subagent's next input, as any text. It is recorded on the hook_decision. When the continue can't take effect, TypeScript records a stop instead (reason cancelled, or continuation limit after 3 continues); Python records this continue and its reason even when the subagent was cancelled, and after 3 continues doesn't call the hook at all.
+  The subagent's next input, as any text. It is recorded on the hook_decision. When the continue can't take effect, a stop is recorded instead, with reason cancelled, or continuation limit after 3 continues.
 </Field>
 
 <Field name="beforeModelSwitch / before_model_switch" type={"(settings: ModelSettings, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string }>"}>

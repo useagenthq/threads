@@ -22,7 +22,7 @@ from threads.agents.launch import Launch, Team
 from threads.agents.results import Failed, Parked, RunResult
 from threads.agents.scope import Scope
 from threads.agents.store import LIVE
-from threads.hooks.runner import STOP, SWITCH, decision_draft
+from threads.hooks.runner import STOP, SWITCH, Ran, decision_draft
 from threads.log import (
     AgentFinishedData,
     AgentFinishedEvent,
@@ -39,6 +39,7 @@ from threads.loop.results import As, result_draft, text_ref
 from threads.loop.runtime import Failed as HaltFailed
 from threads.loop.runtime import Halt, Runtime, lost
 from threads.result import Err, Ok
+from threads.store import Draft
 from threads.store.lines import uuid7
 
 type Ended = tuple[dict[str, JsonValue], str]
@@ -268,20 +269,31 @@ async def _run[D](
             return halt
         data, output = await finished(scope.sq, spawned.data.child_thread_id, result)
         data["output_ref"] = await text_ref(rt, output)
-        if not rt.hooks.has("subagent_stop") or len(reasons) >= MAX_STOP_CONTINUES:
+        if not rt.hooks.has("subagent_stop"):
             return data, shown(str(data["status"]), output)
-        ran = await rt.hooks.run("subagent_stop", STOP, AgentFinishedData.model_validate(data))
-        ids = {"call_id": call_id}
-        drafts = [
-            decision_draft("subagent_stop", r, verdict(r, "stop"), said(r, "reason"), **ids)
-            for r in ran
-        ]
-        await rt.append(*drafts)
-        # A continue under a cancel is recorded and has no effect. The append (or its
-        # refusal's reload) brought the parent's log up to date.
+        # A continue that can't take effect (a cancel is final, or past the cap) is recorded as
+        # the stop it amounts to; the first continue that does take effect ends the gate.
         barred = data["status"] == "cancelled" or open_cancel(rt.events) is not None
-        if barred or all(verdict(r, "stop") != "continue" for r in ran):
+        limit = "cancelled" if barred else None
+        if limit is None and len(reasons) >= MAX_STOP_CONTINUES:
+            limit = "continuation limit"
+        ran = await rt.hooks.run(
+            "subagent_stop",
+            STOP,
+            AgentFinishedData.model_validate(data),
+            until=lambda r, limit=limit: limit is None and verdict(r, "stop") == "continue",
+        )
+        await rt.append(*(_stop_decision(r, limit, call_id) for r in ran))
+        if limit is not None or all(verdict(r, "stop") != "continue" for r in ran):
             return data, shown(str(data["status"]), output)
+
+
+def _stop_decision(ran: Ran[object], limit: str | None, call_id: str) -> Draft:
+    """One subagent_stop answer as recorded: a continue past `limit` is the stop it amounts to."""
+    decision = verdict(ran, "stop")
+    if decision == "continue" and limit is not None:
+        return decision_draft("subagent_stop", ran, "stop", limit, call_id=call_id)
+    return decision_draft("subagent_stop", ran, decision, said(ran, "reason"), call_id=call_id)
 
 
 def busy(result: RunResult[str]) -> HaltFailed | None:

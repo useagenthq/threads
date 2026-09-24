@@ -363,3 +363,26 @@ def test_a_crash_mid_child_resumes_the_same_child_once() -> None:
         assert len(only(inside, UserInputEvent)) == 1
 
     asyncio.run(main())
+
+
+def test_a_continue_past_the_cap_is_recorded_as_a_stop_as_in_typescript() -> None:
+    async def always(_finished: AgentFinishedData, _ctx: RunContext[None]) -> StopGate:
+        return {"decision": "continue", "reason": "again"}
+
+    async def main() -> list[tuple[str, str | None]]:
+        child = agent(
+            name="reviewer", model=scripted_model({"responses": [text(str(n)) for n in range(4)]})
+        )
+        lead = agent(
+            model=scripted_model({"responses": [spawn("reviewer"), text("done")]}),
+            subagents=[child],
+            extensions=[extension(name="ops", hooks={"subagent_stop": always})],
+        )
+        result = await lead.run("go", store=sqlite(":memory:"))
+        assert isinstance(result, Completed)
+        return [
+            (d.data.decision, d.data.reason)
+            for d in only(await events_of(result.thread), HookDecisionEvent)
+        ]
+
+    assert asyncio.run(main()) == [("continue", "again")] * 3 + [("stop", "continuation limit")]
