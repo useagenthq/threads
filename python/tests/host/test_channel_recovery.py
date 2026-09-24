@@ -73,6 +73,9 @@ class Replies:
     def ack(self, raw: RawRequest) -> RawResponse:
         return RawResponse(200, {}, b"")
 
+    def render_text(self, text: str) -> Sequence[JsonObject]:
+        return ({"text": text},)
+
     def render(self, event: Event) -> Sequence[JsonObject]:
         if event.type != "model_response":
             return ()
@@ -128,6 +131,9 @@ async def sends(store: Store) -> list[str]:
 class _Dead(Replies):
     """A channel whose every render dies: the host that has it never sends a reply, whichever of
     its paths (the run's delivery, its own recovery pass) gets to the reply first."""
+
+    def render_text(self, text: str) -> Sequence[JsonObject]:
+        return ({"text": text},)
 
     def render(self, event: Event) -> Sequence[JsonObject]:
         if event.type == "model_response":

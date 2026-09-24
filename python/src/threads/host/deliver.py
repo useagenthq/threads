@@ -1,20 +1,25 @@
 """A channel thread's replies, derived from its log (spec/schema/README.md, "Channel replies"),
 never from how its run started.
 
-Sources: the last response of each turn that ended `end_turn`, and each `approval_requested`
-whose challenge is open. Op `i` of `adapter.render(source)` is the host-issued `channel_send`
-call `send_<source seq>_<i>`, its input the op plus the conversation's address and installation
-and `last_inbound_at`. After every run of the thread, and for every channel thread once a host
-starts, each derived call the log lacks is issued; a pending one runs on through the effect
-path; one with a result, or whose effect is parked, is left alone. So a crash between a turn's
-end and its reply's `tool_call` loses no reply and never sends one twice.
+Sources: the last response of each turn that ended `end_turn`, each `approval_requested`
+whose challenge is open, and each open ask_user question and `answer_rejected` for one. Op `i` of
+`adapter.render(source)` is the host-issued `channel_send` call `send_<source seq>_<i>`; a
+question's op `i` of `adapter.render_text(its text)` is `question_<call_id>_<i>`, a correction's
+`question_retry_<answer_rejected event_id>_<i>`. Each input is the op plus the conversation's
+address and installation and `last_inbound_at`. After every run of the thread, and for every
+channel thread once a host starts, each derived call the log lacks is issued; a pending one runs
+on through the effect path; one with a result, or whose effect is parked, is left alone. So a
+crash between a turn's end and its reply's `tool_call` loses no reply and never sends one twice.
 """
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from threads.agents.intake import After
+from threads.host.channel import ChannelAdapter
 from threads.host.send import NAME, Conversation
 from threads.log import (
+    AnswerRejectedEvent,
     ApprovalRequestedEvent,
     CallId,
     ChannelDeliveryEvent,
@@ -24,9 +29,11 @@ from threads.log import (
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
     ParkAddress,
+    ParkedEvent,
     TurnCompletedEvent,
     UserInputEvent,
 )
+from threads.log.ask_user import correction_text, question_text
 from threads.loop import calls
 from threads.loop.drafts import draft
 from threads.loop.runtime import Halt, Runtime, lost
@@ -34,12 +41,16 @@ from threads.reduce import Fold
 from threads.result import Err
 from threads.store import Draft
 from threads.thread import approvals
+from threads.thread.control import question
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
 type Op = tuple[CallId, JsonObject, EventId]
 """A derived send: its call id, its input and the model request it answers."""
+type Source = tuple[str, Sequence[JsonObject], EventId, int | None]
+"""A source's call id stem, its rendered ops, the model request it answers and the time of the
+last channel_delivery before it."""
 
 
 def deliver(to: Conversation) -> After:
@@ -62,9 +73,9 @@ def deliver(to: Conversation) -> After:
 def undelivered(fold: Fold, to: Conversation) -> list[Op]:
     """Each derived send still to do: its call missing, or pending with no parked effect."""
     ops: list[Op] = []
-    for source, request_id, inbound_at in _sources(fold):
-        for index, rendered in enumerate(to.adapter.render(source)):
-            call_id = CallId(f"send_{source.seq}_{index}")
+    for stem, rendered_ops, request_id, inbound_at in _sources(fold, to.adapter):
+        for index, rendered in enumerate(rendered_ops):
+            call_id = CallId(f"{stem}_{index}")
             if call_id in fold.calls and not _pending(fold, call_id):
                 continue
             op: JsonObject = {**rendered, "address": to.address, "installation_id": to.installation}
@@ -80,11 +91,10 @@ def _pending(fold: Fold, call_id: CallId) -> bool:
     return call_id in fold.pending and parked not in fold.parked
 
 
-def _sources(fold: Fold) -> list[tuple[Event, EventId, int | None]]:
-    """The source events, oldest first, each with the model request its send answers and the
-    time of the last channel_delivery before it. ponytail: rescans the branch on every run;
-    index delivered sources if logs grow long."""
-    found: list[tuple[Event, EventId, int | None]] = []
+def _sources(fold: Fold, adapter: ChannelAdapter) -> list[Source]:
+    """The sources, oldest first. ponytail: rescans the branch on every run; index delivered
+    sources if logs grow long."""
+    found: list[Source] = []
     last: ModelResponseEvent | ModelResponseRecoveredEvent | None = None
     inbound_at: int | None = None
     waiting = {p.challenge_id for p in approvals.pending(fold) if p.expires_at > fold.now}
@@ -97,13 +107,33 @@ def _sources(fold: Fold) -> list[tuple[Event, EventId, int | None]]:
             case ModelResponseEvent() | ModelResponseRecoveredEvent():
                 last = event
             case TurnCompletedEvent(data=data) if data.reason == "end_turn" and last is not None:
-                found.append((last, last.data.request_event_id, inbound_at))
+                stem = f"send_{last.seq}"
+                found.append((stem, adapter.render(last), last.data.request_event_id, inbound_at))
             case ApprovalRequestedEvent(data=data) if data.challenge_id in waiting:
                 request = fold.calls[data.call_id].data.request_event_id
-                found.append((event, request, inbound_at))
+                found.append((f"send_{event.seq}", adapter.render(event), request, inbound_at))
             case _:
-                pass
+                found.extend(_asked(fold, event, adapter, inbound_at))
     return found
+
+
+def _asked(
+    fold: Fold, event: Event, adapter: ChannelAdapter, inbound_at: int | None
+) -> list[Source]:
+    """An open question's message, or the correction after a reply that matched none."""
+    match event:
+        case ParkedEvent(data=data) if data.address.kind == "input":
+            call_id, stem = data.address.id, f"question_{data.address.id}"
+        case AnswerRejectedEvent(data=data):
+            call_id, stem = data.call_id, f"question_retry_{event.event_id}"
+        case _:
+            return []
+    if ParkAddress(kind="input", id=call_id) not in fold.parked:
+        return []
+    ask = question(fold, call_id)
+    text = question_text(ask) if isinstance(event, ParkedEvent) else correction_text(ask)
+    request = fold.calls[CallId(call_id)].data.request_event_id
+    return [(stem, adapter.render_text(text), request, inbound_at)]
 
 
 def _issue(call_id: CallId, op: JsonObject, request_id: EventId) -> tuple[Draft, Draft]:

@@ -12,7 +12,7 @@ from threads import Agent, Completed, Parked, Thread, agent, scripted_model
 from threads.agents import run as run_module
 from threads.agents.run import execute
 from threads.agents.store import now_ms, open_store, sqlite
-from threads.log import CallId, ModelRequestEvent, Principal, ToolResultEvent
+from threads.log import CallId, ModelRequestEvent, Principal, ResumedEvent, ToolResultEvent
 from threads.result import Err, Ok
 from threads.store import verify_export
 from threads.store.deletion import delete_thread
@@ -174,5 +174,28 @@ def test_an_imported_open_question_gets_its_row_and_can_be_answered() -> None:
         done = await other.answer(CallId("call_1"), "red", LOCAL_OPERATOR)
         assert isinstance(done, Ok)
         assert await _rows(other) == [("call_1", "answered")]
+
+    asyncio.run(main())
+
+
+def test_an_answer_racing_the_expiry_settles_the_question_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        bot = _bot()
+        thread = await _asked(bot)
+        late = now_ms() + DAY + 1
+        monkeypatch.setattr(run_module, "now_ms", lambda: late)
+        hosted = replace(bot.definition, answerer=True)
+        await asyncio.gather(
+            thread.answer(CallId("call_1"), "red", LOCAL_OPERATOR),
+            execute(hosted, None, {"thread": thread}, None, _drop),
+            return_exceptions=True,
+        )
+        read = await (await open_store(thread.store)).read(thread.branch, 0)
+        assert isinstance(read, Ok)
+        settled = [r for r in await _results(thread) if r.data.call_id == "call_1"]
+        resumes = [e for e in read.value.fold.events if isinstance(e, ResumedEvent)]
+        assert (len(settled), len(resumes)) == (1, 1)
 
     asyncio.run(main())

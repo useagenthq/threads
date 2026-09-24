@@ -19,7 +19,7 @@ from threads.adapters.loop_resources import holding
 from threads.agents.agent import Agent
 from threads.agents.config import ConfigError
 from threads.agents.store import Store, open_store
-from threads.host import start, stream
+from threads.host import expiry, start, stream
 from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
 from threads.host.intake import ChannelIntake
 from threads.host.reopen import Reopening
@@ -146,7 +146,7 @@ class Host:
             _RECOVERY[self][1].extend(await reopening.first((*open_runs, *waking)))
         finally:
             _RECOVERY[self][0].set()
-        loops = [self._scheduler.run(), reopening.run()]
+        loops = [self._scheduler.run(), reopening.run(), expiry.run(self._runner)]
         if self._telemetry is not None:
             loops.append(self._telemetry.run())
         await asyncio.gather(*loops)

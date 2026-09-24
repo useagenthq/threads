@@ -74,6 +74,8 @@ class Runner:
         self._root = root
         self._ceiling = ceiling
         self._agents = agents
+        # A thread a host answers for (a channel conversation, an API call) is offered ask_user.
+        self._answering = {k: replace(a.definition, answerer=True) for k, a in agents.items()}
         self._channels = channels
         self._stores: dict[str, Store] = {}
         self._credentials: dict[str, Mapping[str, str]] = {}
@@ -114,9 +116,11 @@ class Runner:
         for name, adapter in self._channels.items():
             self._credentials[name] = {k: resolve(v) for k, v in adapter.secrets.items()}
 
-    def bound_to(self, key: str, *, channel: Conversation | None = None) -> Bound:
-        """An agent key's binding."""
-        definition = self._agents[key].definition
+    def bound_to(
+        self, key: str, *, channel: Conversation | None = None, answerer: bool = False
+    ) -> Bound:
+        """An agent key's binding; `answerer` offers ask_user (a channel or API thread)."""
+        definition = self._answering[key] if answerer else self._agents[key].definition
         return Bound(definition, channel)
 
     async def bound(self, store: Store, thread_id: ThreadId) -> Bound | None:
@@ -134,13 +138,14 @@ class Runner:
                 adapter, conversation.address, credentials, conversation.installation_id
             )
             # After a handoff the conversation's thread runs the target the channel agent names.
-            name = await _agent_name(sq, thread_id)
-            base = self._agents[adapter.agent].definition
-            found = base if name is None else _named(base, name)
+            pinned = await _pinned(sq, thread_id)
+            base = self.bound_to(adapter.agent, answerer=pinned is None or pinned[1]).definition
+            found = base if pinned is None else _named(base, pinned[0])
             return None if found is None else Bound(found, to)
-        name = await _agent_name(sq, thread_id)
+        pinned = await _pinned(sq, thread_id)
+        name = None if pinned is None else pinned[0]
         key = next((k for k, a in self._agents.items() if a.definition.name == name), None)
-        return None if key is None else self.bound_to(key)
+        return None if key is None or pinned is None else self.bound_to(key, answerer=pinned[1])
 
     async def follow(self, store: Store, thread_id: ThreadId) -> ThreadId | None:
         """The thread a channel conversation handed off to, with the route moved there (one
@@ -363,15 +368,18 @@ class Runner:
             await asyncio.wait(tasks)
 
 
-async def _agent_name(sq: SqliteStore, thread_id: ThreadId) -> str | None:
-    """The agent a thread pinned at its start; None before it started."""
+async def _pinned(sq: SqliteStore, thread_id: ThreadId) -> tuple[str, bool] | None:
+    """The agent a thread pinned at its start, and whether it pinned ask_user; None before it
+    started."""
     root = await sq.root(thread_id)
     read = None if not isinstance(root, Ok) else await sq.read(root.value, 0)
     if read is None or not isinstance(read, Ok):
         return None
     events = read.value.fold.events
     started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
-    return None if started is None else started.data.agent_name
+    if started is None:
+        return None
+    return started.data.agent_name, any(t.name == "ask_user" for t in started.data.tools)
 
 
 def _named(definition: Definition[None], name: str) -> Definition[None] | None:

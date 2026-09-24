@@ -71,6 +71,11 @@
       "tests/adapters/channels/test_approval_cards.py::test_slack_posts_a_card_whose_buttons_carry_only_the_challenge"
     ]
   },
+  "ChannelAdapter.renderText": {
+    "py": [
+      "tests/adapters/channels/test_render_text.py::test_a_host_message_is_one_text_op_on_every_channel"
+    ]
+  },
   "ChannelAdapter.verify": {
     "ts": [
       "packages/github/test/inbound.test.ts > verify > a good signature yields tenant, installation and the body's hash as delivery"

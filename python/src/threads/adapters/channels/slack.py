@@ -187,6 +187,9 @@ class SlackChannel:
             return RawResponse(200, {"content-type": "text/plain"}, body)
         return RawResponse(200, {}, b"")
 
+    def render_text(self, text: str) -> Sequence[JsonObject]:
+        return ({"text": text},)
+
     def render(self, event: Event) -> Sequence[JsonObject]:
         return render_ops(event)
 

@@ -14,13 +14,14 @@
 
 import asyncio
 from collections.abc import Mapping
-from typing import assert_never
+from typing import Literal, assert_never
 
-from pydantic import TypeAdapter
+from pydantic import JsonValue, TypeAdapter
 
 from threads._generated.host_api_v1 import Input
 from threads.agents.intake import Intake
 from threads.agents.store import Store, now_ms, open_store
+from threads.host import answers
 from threads.host.channel import (
     ChannelAdapter,
     Control,
@@ -34,6 +35,7 @@ from threads.host.channel import (
 from threads.host.runs import Bound, Runner
 from threads.log import BranchId, ParseError, TextPart, ThreadId
 from threads.log.jcs import canonicalize
+from threads.reduce import Fold
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import Draft, StoredEvent, inbox
@@ -129,6 +131,8 @@ class ChannelIntake:
                     if isinstance(item, Message) and blocked:
                         continue
                     took = await self._one(store, row, item)
+                    if took == "held":
+                        continue
                     if took is None:
                         # The branch is held elsewhere: this answer and everything after it wait,
                         # in order, until the lease frees.
@@ -143,9 +147,12 @@ class ChannelIntake:
         handle = asyncio.get_running_loop().call_later(RETRY_S, self.consume, store, thread_id)
         self._retries.add(handle)
 
-    async def _one(self, store: Store, row: inbox.Row, item: Inbound) -> bool | None:
+    async def _one(
+        self, store: Store, row: inbox.Row, item: Inbound
+    ) -> bool | Literal["held"] | None:
         """Consumes one item; False when it must wait for the thread to move on, None when an
-        answer or control must wait for another process's lease."""
+        answer or control must wait for another process's lease, held when a message waits
+        behind an open question without blocking the asker's reply."""
         bound = await self._runner.bound(store, row.thread_id)
         branch = await _branch(store, row.thread_id)
         if bound is None or isinstance(branch, Err):
@@ -153,7 +160,12 @@ class ChannelIntake:
         thread = Thread(row.thread_id, branch.value, store)
         match item:
             case Message():
-                if self._runner.running(branch.value) or await _parked(store, branch.value):
+                if self._runner.running(branch.value):
+                    return False
+                fold = await _fold(store, branch.value)
+                if fold is not None and answers.oldest(fold) is not None:
+                    return await self._reply(thread, row, item)
+                if fold is None or fold.parked:
                     return False
                 return await self._message(bound, thread, row, item)
             case Decision() | Control():
@@ -163,18 +175,29 @@ class ChannelIntake:
             case _:
                 assert_never(item)
 
+    async def _reply(
+        self, thread: Thread, row: inbox.Row, item: Message
+    ) -> bool | Literal["held"] | None:
+        """A message while a question is open: the asker's answers it (or is rejected, and the
+        correction goes out), anyone else's waits."""
+        text = _text(item.content)
+        consume = inbox.consume(row.inbox_id)
+        taken = await answers.reply(thread, _delivery(row, item), text, item.principal, consume)
+        match taken:
+            case "answered" | "rejected":
+                # The run goes on after an answer; after a rejection it sends the correction.
+                await self._runner.resume(thread.store, thread.id, thread.branch)
+                return True
+            case "held":
+                return "held"
+            case "busy":
+                return None
+            case "no_question":
+                return False
+
     async def _message(self, bound: Bound, thread: Thread, row: inbox.Row, item: Message) -> bool:
-        delivered = uuid7(now_ms())
-        data = {
-            "channel": row.channel,
-            "installation": row.installation_id,
-            "conversation": item.address,
-            "delivery_id": row.delivery_id,
-            "item_key": row.item_key,
-            "text": _text(item.content),
-        }
-        by = control.actor("user", item.principal) | {"kind": "channel"}
-        delivery = Draft("channel_delivery", data, by, True, delivered)
+        delivery = _delivery(row, item)
+        delivered = delivery.event_id
         recorded: asyncio.Future[StoredEvent] = asyncio.get_running_loop().create_future()
         intake = Intake(
             "channel",
@@ -233,9 +256,23 @@ async def _branch(store: Store, thread_id: ThreadId) -> Ok[BranchId] | Err[Parse
     return Ok(await (await open_store(store)).root_or_create(thread_id, BranchId(uuid7(now)), now))
 
 
-async def _parked(store: Store, branch: BranchId) -> bool:
+async def _fold(store: Store, branch: BranchId) -> Fold | None:
     read = await (await open_store(store)).read(branch, now_ms())
-    return isinstance(read, Ok) and bool(read.value.fold.parked)
+    return read.value.fold if isinstance(read, Ok) else None
+
+
+def _delivery(row: inbox.Row, item: Message) -> Draft:
+    """The message's channel_delivery, with the id the draft after it names."""
+    data: dict[str, JsonValue] = {
+        "channel": row.channel,
+        "installation": row.installation_id,
+        "conversation": item.address,
+        "delivery_id": row.delivery_id,
+        "item_key": row.item_key,
+        "text": _text(item.content),
+    }
+    by = control.actor("user", item.principal) | {"kind": "channel"}
+    return Draft("channel_delivery", data, by, True, uuid7(now_ms()))
 
 
 def _text(content: Input) -> str:

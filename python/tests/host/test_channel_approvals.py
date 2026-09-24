@@ -68,6 +68,9 @@ class ItemsChannel:
     def ack(self, raw: RawRequest) -> RawResponse:
         return RawResponse(200, {}, b"")
 
+    def render_text(self, text: str) -> Sequence[JsonObject]:
+        return ({"text": text},)
+
     def render(self, event: Event) -> Sequence[JsonObject]:
         match event:
             case ApprovalRequestedEvent(data=data):

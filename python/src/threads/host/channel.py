@@ -151,6 +151,11 @@ class ChannelAdapter(Protocol):
         """Outbound ops for a final response: `{"text": ...}` objects, the send tool's input."""
         ...
 
+    def render_text(self, text: str) -> Sequence[JsonObject]:
+        """Outbound ops for a message the host writes itself: an open ask_user question with its
+        choices, or the correction after a reply that matched none of them."""
+        ...
+
     async def perform(
         self, op: JsonObject, effect_key: str, credentials: Mapping[str, str]
     ) -> DeliveryOutcome:

@@ -108,7 +108,7 @@ async def _target(
 ) -> Ok[tuple[Thread, Bound]] | Err[ParseError]:
     """The branch the input goes to: a new thread of the named agent, or the given (or main)
     branch of an existing thread of this tenant, which must run the named agent."""
-    wanted = runner.bound_to(request.agent)
+    wanted = runner.bound_to(request.agent, answerer=True)
     sq = await open_store(store)
     if request.thread_id is MISSING:
         now = now_ms()
@@ -123,7 +123,8 @@ async def _target(
         code = "not_found" if opened.error.code == "not_found" else "branch_not_runnable"
         return Err(ParseError(code, opened.error.message))
     bound = await runner.bound(store, request.thread_id)
-    if bound is None or bound.definition is not wanted.definition:
+    plain = runner.bound_to(request.agent).definition
+    if bound is None or all(bound.definition is not d for d in (wanted.definition, plain)):
         return Err(ParseError("invalid_request", f"the thread does not run {request.agent}"))
     thread = opened.value
     return Ok((Thread(thread.id, thread.branch, store), bound))

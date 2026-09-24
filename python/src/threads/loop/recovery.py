@@ -72,15 +72,14 @@ async def recover(rt: Runtime) -> Halt | None:
 def _open_turn_to_close(rt: Runtime) -> bool:
     """An open turn with nothing pending closes as interrupted, unless none of its input was sent
     yet (no model_request after its last user_input or steer), a cancel is durable in it, or a
-    control just unparked it (its last event is resumed): the run then continues it, or carries
-    the cancel out."""
+    question was answered (or expired) since its last model_request: the run then continues it
+    and sends the answer on, or carries the cancel out."""
     fold = rt.fold
     if not fold.in_turn or fold.pending or fold.open_requests or fold.parked:
         return False
     if record.owed(rt):
         return False  # the response's calls are recorded next, never left without results
-    if open_cancel(rt.events) is not None or isinstance(rt.events[-1], ResumedEvent):
-        # A control unparked the turn (an answer, an expiry) with no run holding the branch.
+    if open_cancel(rt.events) is not None or _answered_since_request(rt):
         return False
     # The turn's opener (an input, a woken, a receipt) or a later steer.
     opened = turn_start(rt.events) or 0
@@ -183,3 +182,13 @@ async def _never_began(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | 
     if state.decision == "allow":
         return await calls.recheck(rt, state, spec)
     return None
+
+
+def _answered_since_request(rt: Runtime) -> bool:
+    """A resumed of a question after the turn's last model_request: its answer is still to send."""
+    for event in reversed(rt.events):
+        if isinstance(event, ModelRequestEvent):
+            return False
+        if isinstance(event, ResumedEvent) and event.data.address.kind == "input":
+            return True
+    return False
