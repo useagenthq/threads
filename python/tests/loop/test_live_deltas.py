@@ -7,8 +7,7 @@ from collections.abc import AsyncIterator
 
 from pydantic import JsonValue
 
-from threads import DeltaItem, scripted_model, sqlite
-from threads.agents.agent import agent
+from threads import DeltaItem, agent, scripted_model, sqlite
 from threads.log import EventId
 from threads.loop.model import Delta, ModelChunk, ModelContext, ModelRequest
 from threads.loop.scripted import ScriptedModel
