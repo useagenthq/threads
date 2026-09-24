@@ -95,3 +95,27 @@ test("a crash right after a refused call's tool_call never lets it run", async (
     "not_executed",
   );
 });
+
+test("an ask's challenge and its park are one batch, so a crash between them can't split them", async () => {
+  const h = harness([EMAIL], [], [BOTH]);
+  const ask = h.config({
+    authorize: () => ({ decision: "ask", source: "policy" }),
+  });
+  const first = unwrap(h.store.acquire(ROOT, "owner"));
+  await resume(
+    first,
+    h.artifacts,
+    {
+      ...ask,
+      onEvent: (e) => {
+        if (e.type === "approval_requested") throw new Error("crash");
+      },
+    },
+    { input: userInput("mail bob twice") },
+  ).catch(() => undefined);
+  h.clock.now += 60_000;
+  const again = unwrap(h.store.acquire(ROOT, "owner-2"));
+  await resume(again, h.artifacts, ask);
+  const parks = events(again).filter((e) => e.type === "parked");
+  expect(parks.map((e) => e.actor.kind)).toEqual(["host"]);
+});

@@ -108,22 +108,19 @@ function ask(s: Session, call: EventOf<"tool_call">): Halt | undefined {
   if (!args.ok) throw new Error("tool_call input is canonical JSON");
   const challenge = crypto.randomUUID();
   const expires = s.now() + HOUR;
-  return (
-    s.append(
-      draft.approvalRequested({
-        challenge_id: challenge,
-        call_id: callId,
-        args_hash: sha256Hex(args.value),
-        expires_at: expires,
-      }),
-    ) ??
-    s.append(
-      draft.parked({
-        address: { kind: "approval", id: challenge },
-        reason: "awaiting_approval",
-        expires_at: expires,
-      }),
-    )
+  // One batch: a crash between them never leaves a challenge nothing parks on.
+  return s.append(
+    draft.approvalRequested({
+      challenge_id: challenge,
+      call_id: callId,
+      args_hash: sha256Hex(args.value),
+      expires_at: expires,
+    }),
+    draft.parked({
+      address: { kind: "approval", id: challenge },
+      reason: "awaiting_approval",
+      expires_at: expires,
+    }),
   );
 }
 
