@@ -1081,6 +1081,38 @@
       "minimum": 0,
       "type": "integer"
     },
+    "InvalidDefinition": {
+      "additionalProperties": false,
+      "description": "Why a start's chosen fields (label, instructions, tools, model) were refused: its invalid_definition detail.",
+      "properties": {
+        "allowed": {
+          "description": "With not_allowed on tools or model: the names the template allows.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "field": {
+          "enum": [
+            "label",
+            "instructions",
+            "tools",
+            "model"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not_allowed",
+            "invalid"
+          ]
+        }
+      },
+      "required": [
+        "field",
+        "reason"
+      ],
+      "type": "object"
+    },
     "JsonObject": {
       "additionalProperties": {
         "$ref": "#/$defs/JsonValue"
@@ -5199,9 +5231,27 @@
         },
         "data": {
           "additionalProperties": false,
+          "else": {
+            "not": {
+              "required": [
+                "detail"
+              ]
+            }
+          },
+          "if": {
+            "properties": {
+              "code": {
+                "const": "invalid_definition"
+              }
+            }
+          },
           "properties": {
             "code": {
               "$ref": "#/$defs/TeamRefusal"
+            },
+            "detail": {
+              "$ref": "#/$defs/InvalidDefinition",
+              "description": "Present exactly when code is invalid_definition, so a replayed request returns it."
             },
             "request_id": {
               "$ref": "#/$defs/RequestId"
@@ -5211,6 +5261,11 @@
             "request_id",
             "code"
           ],
+          "then": {
+            "required": [
+              "detail"
+            ]
+          },
           "type": "object"
         },
         "type": {

@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import arr, num, obj, text
-from .ops_request import Request, open_request, park, same_tenant
+from .ops_request import Request, keyed, open_request, park, same_tenant
 from .ops_world import DEFAULT_MS, TEAM_LOG, Refused
 from .team_pieces import Route, body, envelope
 
@@ -36,6 +36,9 @@ def _deliverable(req: Request, op: str) -> Obj:
 
 
 def send(w: World, label: str, inp: Obj) -> Obj:
+    replayed = keyed(w, label, "send", inp)
+    if replayed is not None:
+        return replayed
     req = open_request(w, label, "send", inp)
     try:
         row = _deliverable(req, "send")
@@ -50,6 +53,9 @@ def send(w: World, label: str, inp: Obj) -> Obj:
 def ask(w: World, label: str, inp: Obj) -> Obj:
     """ask.open: send with kind ask, a deadline, headroom on the recipient's budgets, and a park
     for a member asker whose turn has nothing else to run."""
+    replayed = keyed(w, label, "ask", inp)
+    if replayed is not None:
+        return replayed
     req = open_request(w, label, "ask", inp)
     try:
         row = _deliverable(req, "ask")
@@ -108,6 +114,9 @@ def reply(w: World, label: str, inp: Obj) -> Obj:
 def cancel(w: World, label: str, inp: Obj) -> Obj:
     """cancel's request: durable intent. The target's starter or the operator may; the member
     is known and not ended."""
+    replayed = keyed(w, label, "cancel", inp)
+    if replayed is not None:
+        return replayed
     req = open_request(w, label, "cancel", inp)
     to = req.args["member"]
     name = text(obj(to)["name"]) if req.operator else text(to)

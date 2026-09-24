@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from .common import eid, num, obj, sha, text
 from .jcs import canonical
 from .ops_world import Refused
+from .team_index import principal_key
 from .team_pieces import Route, at, envelope
 
 if TYPE_CHECKING:
@@ -57,6 +58,8 @@ class Request:
             value["detail"] = detail
         if self.operator:
             data: Obj = {"request_id": self.key["request_id"], "code": code}
+            if detail is not None:
+                data["detail"] = detail
             self.w.add(self.label, "operator_refused", data)
         else:
             self.w.answer(self.label, text(self.key["call_id"]), value)
@@ -129,6 +132,59 @@ def open_request(w: World, label: str, op: str, inp: Obj) -> Request:
         at(text(e["event_id"]), log.thread),
         who,
     )
+
+
+def keyed(w: World, label: str, op: str, inp: Obj) -> Obj | None:
+    """An operator request's idempotency key, looked up under the team-log writer before anything
+    else is recorded. A key this team's op already bound returns that request's outcome for the
+    same principal and body, appending nothing; for another principal or body the request is
+    refused, recorded without its key (the key stays bound to the first request)."""
+    key = inp.get("idempotency_key")
+    if "request_id" not in inp or key is None:
+        return None
+    row = next(
+        (r for r in w.rows("operator_receipts") if r["op"] == op and r["idempotency_key"] == key),
+        None,
+    )
+    if row is None:
+        return None
+    if row["principal_key"] != principal_key(obj(inp["principal"])):
+        code = "idempotency_key_principal_mismatch"
+    elif row["body_hash"] != sha(canonical(obj(inp["body"]))):
+        code = "idempotency_key_reused"
+    else:
+        return recorded(w, label, text(row["request_id"]))
+    unkeyed = {k: v for k, v in inp.items() if k != "idempotency_key"}
+    return open_request(w, label, op, unkeyed).refuse(code)
+
+
+def recorded(w: World, label: str, rid: str) -> Obj:
+    """The outcome the team log recorded for request `rid`: its refusal, the member it started,
+    the mail it sent, or the cancel it requested."""
+    log = w.logs[label]
+    request = next(
+        e
+        for e in log.events
+        if e["type"] == "operator_request" and obj(e["data"])["request_id"] == rid
+    )
+    for e in log.events:
+        d = obj(e["data"])
+        if e["type"] == "operator_refused" and d["request_id"] == rid:
+            value: Obj = {"code": d["code"], "status": "refused"}
+            if "detail" in d:
+                value["detail"] = d["detail"]
+            return value
+        root = obj(d["provenance"])["root_request"] if e["type"] == "member_started" else None
+        if root is not None and obj(root)["event_id"] == request["event_id"]:
+            return {"member": d["member"], "status": "started"}
+        env = obj(d["envelope"]) if e["type"] == "message_sent" else {}
+        if env.get("from") == {"operator": rid} and env["kind"] == "message":
+            return {"id": env["mail_id"], "status": "sent"}
+        if env.get("from") == {"operator": rid} and env["kind"] == "cancel":
+            to = obj(env["to"])
+            member = {"tenant": w.team()["tenant_id"], "team": env["team"], **to}
+            return {"member": member, "status": "cancel_requested"}
+    raise AssertionError(f"request {rid}'s outcome: ask and wait re-attach (lanes 21E and 21F)")
 
 
 def _next_event_id(w: World, label: str) -> str:

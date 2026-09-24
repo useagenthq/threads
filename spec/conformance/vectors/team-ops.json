@@ -8883,6 +8883,395 @@
         },
         "rows": {}
       }
+    },
+    {
+      "name": "start-operator-key-replayed",
+      "section": "4.4",
+      "description": "A retry of team.start with the key, principal and body of a recorded request: the first request's outcome, read from the team log. Nothing is appended.",
+      "given": {
+        "world": "start-operator-key-replayed"
+      },
+      "now": 1790000100000,
+      "op": "start",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000102",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "agent": "writer",
+          "task": "Draft the summary."
+        },
+        "idempotency_key": "start-1",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b5"
+      },
+      "expect": {
+        "outcome": {
+          "member": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "writer-1",
+            "generation": 1
+          },
+          "status": "started"
+        },
+        "appended": {},
+        "rows": {}
+      }
+    },
+    {
+      "name": "start-operator-key-reused",
+      "section": "4.4",
+      "description": "The key again with another body: refused idempotency_key_reused. The request is recorded without its key, which stays bound to the first request (no receipt row).",
+      "given": {
+        "world": "start-operator-key-replayed"
+      },
+      "now": 1790000100000,
+      "op": "start",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000102",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "agent": "writer",
+          "task": "Draft it again."
+        },
+        "idempotency_key": "start-1",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b5"
+      },
+      "expect": {
+        "outcome": {
+          "code": "idempotency_key_reused",
+          "status": "refused"
+        },
+        "appended": {
+          "team": [
+            "operator_request",
+            "operator_refused"
+          ]
+        },
+        "rows": {}
+      }
+    },
+    {
+      "name": "start-operator-key-principal-mismatch",
+      "section": "4.4",
+      "description": "The key again from another principal of the tenant: refused idempotency_key_principal_mismatch, checked before the body.",
+      "given": {
+        "world": "start-operator-key-replayed"
+      },
+      "now": 1790000100000,
+      "op": "start",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000102",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "bob"
+        },
+        "body": {
+          "agent": "writer",
+          "task": "Draft it again."
+        },
+        "idempotency_key": "start-1",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b5"
+      },
+      "expect": {
+        "outcome": {
+          "code": "idempotency_key_principal_mismatch",
+          "status": "refused"
+        },
+        "appended": {
+          "team": [
+            "operator_request",
+            "operator_refused"
+          ]
+        },
+        "rows": {}
+      }
+    },
+    {
+      "name": "send-operator-key-replayed-refusal",
+      "section": "4.4",
+      "description": "A refused request is an outcome too: the retry under its key returns the recorded refusal (member_ended) and appends nothing.",
+      "given": {
+        "world": "send-operator-key-replayed-refusal"
+      },
+      "now": 1790000100000,
+      "op": "send",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000102",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "to": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "text": "Status?"
+        },
+        "idempotency_key": "send-1"
+      },
+      "expect": {
+        "outcome": {
+          "code": "member_ended",
+          "status": "refused"
+        },
+        "appended": {},
+        "rows": {}
+      }
+    },
+    {
+      "name": "start-operator-dynamic",
+      "section": "4.4, 4.10",
+      "description": "team.start with a dynamic agent's fields: member_started in the team log records the define and the label, as a lead's start does.",
+      "given": {
+        "world": "send-operator",
+        "templates": {
+          "specialist": {
+            "tools": [
+              "bash",
+              "edit",
+              "glob",
+              "grep",
+              "ls",
+              "read",
+              "web_fetch",
+              "web_search",
+              "write",
+              "invoice_status",
+              "read_notes"
+            ],
+            "models": [
+              "fast",
+              "strong"
+            ]
+          }
+        }
+      },
+      "now": 1790000100000,
+      "op": "start",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "agent": "specialist",
+          "task": "Is INV-1002 paid?",
+          "label": "invoice checker",
+          "model": "strong"
+        },
+        "thread_id": "0192a000-0000-7000-8000-0000000000b5",
+        "config_hash": "c25aea767995b4c107ef32c7fa0ea6d143b580980303722cef35ee2e471bc4b3"
+      },
+      "expect": {
+        "outcome": {
+          "member": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "specialist-1",
+            "generation": 1
+          },
+          "status": "started"
+        },
+        "appended": {
+          "team": [
+            "operator_request",
+            "message_policy_decided",
+            "member_started",
+            "message_sent"
+          ]
+        },
+        "rows": {
+          "team_members": {
+            "insert": [
+              {
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "name": "specialist-1",
+                "generation": 1,
+                "role": "member",
+                "agent": "specialist",
+                "config_hash": "c25aea767995b4c107ef32c7fa0ea6d143b580980303722cef35ee2e471bc4b3",
+                "thread_id": "0192a000-0000-7000-8000-0000000000b5",
+                "branch_id": null,
+                "provenance": {
+                  "principal": {
+                    "issuer": "api",
+                    "tenant": "acme",
+                    "subject": "alice"
+                  },
+                  "root_request": {
+                    "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+                    "event_id": "0192e001-0000-7000-8000-000000000002"
+                  },
+                  "via": []
+                },
+                "state": "starting",
+                "result": null,
+                "updated_seq": 4
+              }
+            ]
+          },
+          "mail": {
+            "insert": [
+              {
+                "mail_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "kind": "task",
+                "to_name": "specialist-1",
+                "to_generation": 1,
+                "principal_key": "api/acme/alice",
+                "root_request": "0192a000-0000-7000-8000-0000000000b3:0192e001-0000-7000-8000-000000000002",
+                "envelope": {
+                  "mail_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+                  "kind": "task",
+                  "team": "0192c000-0000-7000-8000-000000000001",
+                  "from": {
+                    "operator": "0192d000-0000-7000-8000-000000000101"
+                  },
+                  "to": {
+                    "name": "specialist-1",
+                    "generation": 1
+                  },
+                  "provenance": {
+                    "principal": {
+                      "issuer": "api",
+                      "tenant": "acme",
+                      "subject": "alice"
+                    },
+                    "root_request": {
+                      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+                      "event_id": "0192e001-0000-7000-8000-000000000002"
+                    },
+                    "via": []
+                  },
+                  "causal": {
+                    "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+                    "event_id": "0192e001-0000-7000-8000-000000000002"
+                  },
+                  "body": {
+                    "text": "Is INV-1002 paid?"
+                  }
+                },
+                "created_at": 1790000100000,
+                "state": "pending",
+                "consumed_seq": null
+              }
+            ]
+          },
+          "monitors": {
+            "insert": [
+              {
+                "monitor_id": "0192b000-0000-7000-8000-0000000000b3:0192e001-0000-7000-8000-000000000004:task",
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "watcher_branch_id": "0192b000-0000-7000-8000-0000000000b3",
+                "target_name": "specialist-1",
+                "target_generation": 1,
+                "kind": "task",
+                "wait_id": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "start-operator-dynamic-tool-not-allowed",
+      "section": "4.4, 4.10",
+      "description": "An operator start's tool outside the template: operator_refused carries the invalid_definition detail, so a replay under a key returns it whole.",
+      "given": {
+        "world": "send-operator",
+        "templates": {
+          "specialist": {
+            "tools": [
+              "bash",
+              "edit",
+              "glob",
+              "grep",
+              "ls",
+              "read",
+              "web_fetch",
+              "web_search",
+              "write",
+              "invoice_status",
+              "read_notes"
+            ],
+            "models": [
+              "fast",
+              "strong"
+            ]
+          }
+        }
+      },
+      "now": 1790000100000,
+      "op": "start",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "agent": "specialist",
+          "task": "Is INV-1002 paid?",
+          "tools": [
+            "git_push"
+          ]
+        },
+        "thread_id": "0192a000-0000-7000-8000-0000000000b5",
+        "config_hash": "c25aea767995b4c107ef32c7fa0ea6d143b580980303722cef35ee2e471bc4b3"
+      },
+      "expect": {
+        "outcome": {
+          "code": "invalid_definition",
+          "status": "refused",
+          "detail": {
+            "field": "tools",
+            "reason": "not_allowed",
+            "allowed": [
+              "bash",
+              "edit",
+              "glob",
+              "grep",
+              "ls",
+              "read",
+              "web_fetch",
+              "web_search",
+              "write",
+              "invoice_status",
+              "read_notes"
+            ]
+          }
+        },
+        "appended": {
+          "team": [
+            "operator_request",
+            "message_policy_decided",
+            "operator_refused"
+          ]
+        },
+        "rows": {}
+      }
     }
   ],
   "worlds": {
@@ -14914,6 +15303,128 @@
         "operator_receipts": [],
         "pending_wakes": []
       }
+    },
+    "start-operator-key-replayed": {
+      "logs": {
+        "lead": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+          "events": [
+            "f346836cf1927571",
+            "e3518c871880ffe0",
+            "9e120c269dc664f2",
+            "6f4d3ff5801c17e1",
+            "abc74c7e3567009a",
+            "7fbdae9c221f3bee",
+            "151a4f8f9c661b0d",
+            "56567842a679da60",
+            "4dfca82f329ea2dd",
+            "a65ae8dcfcb8d3d2"
+          ]
+        },
+        "researcher": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+          "events": [
+            "078150a0494371bf",
+            "3413706c8e1ed539"
+          ]
+        },
+        "team": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+          "events": [
+            "7b29896169d9dfe8",
+            "c4e660b559910269",
+            "061a47a406b88c10",
+            "87ba9b0b2c5dbe2a",
+            "734e032e31f5f433"
+          ]
+        }
+      },
+      "rows": {
+        "teams": [
+          "00e61f342e72d6ae"
+        ],
+        "team_members": [
+          "7dafa2f438d8de25",
+          "380890775b159143",
+          "ea7437672dc003c8"
+        ],
+        "mail": [
+          "57b4bd27aebba90f",
+          "88630b6140fdafc5"
+        ],
+        "asks": [],
+        "monitors": [
+          "4fb5f5c494c1989d",
+          "1e1178b3963c9928"
+        ],
+        "operator_receipts": [
+          "07f49efaac73de49"
+        ],
+        "pending_wakes": []
+      }
+    },
+    "send-operator-key-replayed-refusal": {
+      "logs": {
+        "lead": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+          "events": [
+            "f346836cf1927571",
+            "e3518c871880ffe0",
+            "9e120c269dc664f2",
+            "6f4d3ff5801c17e1",
+            "abc74c7e3567009a",
+            "7fbdae9c221f3bee",
+            "151a4f8f9c661b0d",
+            "56567842a679da60",
+            "4dfca82f329ea2dd",
+            "a65ae8dcfcb8d3d2"
+          ]
+        },
+        "researcher": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+          "events": [
+            "078150a0494371bf",
+            "3413706c8e1ed539",
+            "6bb9413f219c0c2b",
+            "9bc563dcb92e38b2",
+            "c4c34b2da781ec68"
+          ]
+        },
+        "team": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+          "events": [
+            "7b29896169d9dfe8",
+            "e0752ed7af716f56",
+            "403aa7432adc826a",
+            "74daf24ba2bf2ff0"
+          ]
+        }
+      },
+      "rows": {
+        "teams": [
+          "00e61f342e72d6ae"
+        ],
+        "team_members": [
+          "7dafa2f438d8de25",
+          "c457f872623bbefb"
+        ],
+        "mail": [
+          "57b4bd27aebba90f",
+          "6ee37ada66300241"
+        ],
+        "asks": [],
+        "monitors": [],
+        "operator_receipts": [
+          "ee6818d1fb7a1b5e"
+        ],
+        "pending_wakes": []
+      }
     }
   },
   "events": {
@@ -15496,6 +16007,27 @@
           "output_tokens": 20
         },
         "completeness": "complete"
+      }
+    },
+    "061a47a406b88c10": {
+      "seq": 3,
+      "event_id": "0192e001-0000-7000-8000-000000000003",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "message_policy_decided",
+      "type_version": 1,
+      "time": 1790000003000,
+      "actor": {
+        "kind": "host"
+      },
+      "critical": true,
+      "data": {
+        "op": "start",
+        "decision": "allow",
+        "source": "team",
+        "target": "writer",
+        "request_id": "0192d000-0000-7000-8000-000000000101"
       }
     },
     "06bc4a65f0855a6e": {
@@ -17880,6 +18412,27 @@
         "request_event_id": "0192e001-0000-7000-8000-00000000000b"
       }
     },
+    "403aa7432adc826a": {
+      "seq": 3,
+      "event_id": "0192e001-0000-7000-8000-000000000003",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "message_policy_decided",
+      "type_version": 1,
+      "time": 1790000003000,
+      "actor": {
+        "kind": "host"
+      },
+      "critical": true,
+      "data": {
+        "op": "send",
+        "decision": "allow",
+        "source": "team",
+        "target": "researcher-1",
+        "request_id": "0192d000-0000-7000-8000-000000000101"
+      }
+    },
     "41aaf808fce27773": {
       "seq": 23,
       "event_id": "0192e001-0000-7000-8000-000000000017",
@@ -19291,6 +19844,53 @@
         "request_event_id": "0192e001-0000-7000-8000-000000000003"
       }
     },
+    "734e032e31f5f433": {
+      "seq": 5,
+      "event_id": "0192e001-0000-7000-8000-000000000005",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "message_sent",
+      "type_version": 1,
+      "time": 1790000005000,
+      "actor": {
+        "kind": "host"
+      },
+      "critical": true,
+      "data": {
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+          "kind": "task",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "operator": "0192d000-0000-7000-8000-000000000101"
+          },
+          "to": {
+            "name": "writer-1",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "body": {
+            "text": "Draft the summary."
+          }
+        }
+      }
+    },
     "73f7d0f257d06336": {
       "seq": 2,
       "event_id": "0192e001-0000-7000-8000-000000000002",
@@ -19626,6 +20226,24 @@
           "event_id": "0192e001-0000-7000-8000-000000000001",
           "relation": "team_member"
         }
+      }
+    },
+    "74daf24ba2bf2ff0": {
+      "seq": 4,
+      "event_id": "0192e001-0000-7000-8000-000000000004",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "operator_refused",
+      "type_version": 1,
+      "time": 1790000004000,
+      "actor": {
+        "kind": "host"
+      },
+      "critical": true,
+      "data": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "code": "member_ended"
       }
     },
     "77a8bb0904478f36": {
@@ -20227,6 +20845,49 @@
         "declared_prefix": {
           "bytes": 3370,
           "sha256": "230bf7a5ab349f034234fa0adf5ec342a423e0db1ae0fe7ec4534f873c7f5fe6"
+        }
+      }
+    },
+    "87ba9b0b2c5dbe2a": {
+      "seq": 4,
+      "event_id": "0192e001-0000-7000-8000-000000000004",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "member_started",
+      "type_version": 1,
+      "time": 1790000004000,
+      "actor": {
+        "kind": "host"
+      },
+      "critical": true,
+      "data": {
+        "member": {
+          "tenant": "acme",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "name": "writer-1",
+          "generation": 1
+        },
+        "agent": "writer",
+        "config_hash": "c7c8a3b65717c17e2d722696a05c7f899ad28b17c9c4f6f7109103b4f75ff8bd",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b5",
+        "parent": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+          "event_id": "0192e001-0000-7000-8000-000000000001",
+          "relation": "team_member"
+        },
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
         }
       }
     },
@@ -22134,6 +22795,48 @@
         }
       }
     },
+    "c4e660b559910269": {
+      "seq": 2,
+      "event_id": "0192e001-0000-7000-8000-000000000002",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "operator_request",
+      "type_version": 1,
+      "time": 1790000002000,
+      "actor": {
+        "kind": "host",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        }
+      },
+      "critical": true,
+      "data": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "op": "start",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body_hash": "dc12849df8ac6fcde097440fa53bfb68baf5220a644cdf3cd20a01303312951b",
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
+        },
+        "idempotency_key": "start-1"
+      }
+    },
     "c5ff2f6880b363ab": {
       "seq": 18,
       "event_id": "0192e001-0000-7000-8000-000000000012",
@@ -22854,6 +23557,48 @@
           "output_tokens": 20
         },
         "completeness": "complete"
+      }
+    },
+    "e0752ed7af716f56": {
+      "seq": 2,
+      "event_id": "0192e001-0000-7000-8000-000000000002",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "operator_request",
+      "type_version": 1,
+      "time": 1790000002000,
+      "actor": {
+        "kind": "host",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        }
+      },
+      "critical": true,
+      "data": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "op": "send",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body_hash": "dda8fec57c95b97c2f124366aa8080a0f8dfaf6a0f4eb2d113b93fc3b3ec5a38",
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
+        },
+        "idempotency_key": "send-1"
       }
     },
     "e1e443dbf637587a": {
@@ -24390,6 +25135,15 @@
       "result": null,
       "updated_seq": 12
     },
+    "07f49efaac73de49": {
+      "tenant_id": "acme",
+      "team_id": "0192c000-0000-7000-8000-000000000001",
+      "op": "start",
+      "idempotency_key": "start-1",
+      "principal_key": "api/acme/alice",
+      "body_hash": "dc12849df8ac6fcde097440fa53bfb68baf5220a644cdf3cd20a01303312951b",
+      "request_id": "0192d000-0000-7000-8000-000000000101"
+    },
     "093c3ffba4466824": {
       "team_id": "0192c000-0000-7000-8000-000000000001",
       "name": "writer-1",
@@ -25674,6 +26428,49 @@
         }
       },
       "created_at": 1790000004000,
+      "state": "pending",
+      "consumed_seq": null
+    },
+    "88630b6140fdafc5": {
+      "mail_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+      "team_id": "0192c000-0000-7000-8000-000000000001",
+      "kind": "task",
+      "to_name": "writer-1",
+      "to_generation": 1,
+      "principal_key": "api/acme/alice",
+      "root_request": "0192a000-0000-7000-8000-0000000000b3:0192e001-0000-7000-8000-000000000002",
+      "envelope": {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+        "kind": "task",
+        "team": "0192c000-0000-7000-8000-000000000001",
+        "from": {
+          "operator": "0192d000-0000-7000-8000-000000000101"
+        },
+        "to": {
+          "name": "writer-1",
+          "generation": 1
+        },
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
+        },
+        "causal": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        },
+        "body": {
+          "text": "Draft the summary."
+        }
+      },
+      "created_at": 1790000005000,
       "state": "pending",
       "consumed_seq": null
     },
@@ -27310,6 +28107,31 @@
       "state": "consumed",
       "consumed_seq": 8
     },
+    "ea7437672dc003c8": {
+      "team_id": "0192c000-0000-7000-8000-000000000001",
+      "name": "writer-1",
+      "generation": 1,
+      "role": "member",
+      "agent": "writer",
+      "config_hash": "c7c8a3b65717c17e2d722696a05c7f899ad28b17c9c4f6f7109103b4f75ff8bd",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b5",
+      "branch_id": null,
+      "provenance": {
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "root_request": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        },
+        "via": []
+      },
+      "state": "starting",
+      "result": null,
+      "updated_seq": 4
+    },
     "ec0d148ceb9add0e": {
       "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000007",
       "team_id": "0192c000-0000-7000-8000-000000000001",
@@ -27362,6 +28184,15 @@
       "created_at": 1790000007000,
       "state": "pending",
       "consumed_seq": null
+    },
+    "ee6818d1fb7a1b5e": {
+      "tenant_id": "acme",
+      "team_id": "0192c000-0000-7000-8000-000000000001",
+      "op": "send",
+      "idempotency_key": "send-1",
+      "principal_key": "api/acme/alice",
+      "body_hash": "dda8fec57c95b97c2f124366aa8080a0f8dfaf6a0f4eb2d113b93fc3b3ec5a38",
+      "request_id": "0192d000-0000-7000-8000-000000000101"
     },
     "f37874a7b8c27a37": {
       "mail_id": "0192b000-0000-7000-8000-0000000000b2:c2",

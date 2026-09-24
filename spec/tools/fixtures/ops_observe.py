@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import arr, num, obj, text
-from .ops_request import Request, open_request, park, same_tenant
+from .ops_request import Request, keyed, open_request, park, same_tenant
 from .ops_world import DEFAULT_MS, Refused, public
 
 if TYPE_CHECKING:
@@ -45,6 +45,9 @@ def wait(w: World, label: str, inp: Obj) -> Obj:
         unique = [m for i, m in enumerate(refs) if m not in refs[:i]]
         if isinstance(mode, int) and mode > len(unique):
             return {"code": "invalid_request", "status": "refused"}  # before anything is recorded
+    replayed = keyed(w, label, "wait", inp)
+    if replayed is not None:
+        return replayed
     req = open_request(w, label, "wait", inp)
     try:
         rows = _members(req)

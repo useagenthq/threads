@@ -65,6 +65,29 @@ export const MemberDefine: Strict<{
   })
   .meta({ id: "MemberDefine" });
 
+const DEFINITION_FIELDS = ["label", "instructions", "tools", "model"] as const;
+const DEFINITION_REASONS = ["not_allowed", "invalid"] as const;
+export const InvalidDefinition: Strict<{
+  field: EnumOf<typeof DEFINITION_FIELDS>;
+  reason: EnumOf<typeof DEFINITION_REASONS>;
+  allowed: Opt<Arr<z.ZodString>>;
+}> = z
+  .strictObject({
+    field: z.enum(DEFINITION_FIELDS),
+    reason: z.enum(DEFINITION_REASONS),
+    allowed: z
+      .array(z.string())
+      .describe(
+        "With not_allowed on tools or model: the names the template allows.",
+      )
+      .optional(),
+  })
+  .meta({
+    id: "InvalidDefinition",
+    description:
+      "Why a start's chosen fields (label, instructions, tools, model) were refused: its invalid_definition detail.",
+  });
+
 export const MemberStartedData: Strict<{
   member: typeof MemberRef;
   agent: typeof NonEmpty;

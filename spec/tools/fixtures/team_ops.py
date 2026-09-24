@@ -19,6 +19,7 @@ from .team_ops_ask import ask_vectors
 from .team_ops_dynamic import dynamic_vectors
 from .team_ops_life import life_vectors
 from .team_ops_mail import consume_vectors
+from .team_ops_operator import operator_vectors
 from .team_ops_send import cancel_vectors, send_vectors
 from .team_ops_start import materialize_vectors, start_vectors
 from .team_ops_watch import monitor_vectors, wait_vectors
@@ -62,6 +63,7 @@ def _vectors() -> list[Vec]:
         *woken_vectors(),
         *wait_vectors(),
         *monitor_vectors(),
+        *operator_vectors(),
     ]
 
 

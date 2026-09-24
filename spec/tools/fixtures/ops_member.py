@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from .common import eid, obj, text
 from .dynamic_rules import resolve
-from .ops_request import open_request, same_tenant
+from .ops_request import keyed, open_request, same_tenant
 from .ops_world import Refused
 from .team_pieces import Route, body, config_hash, envelope
 
@@ -60,6 +60,9 @@ def _parent(w: World, req: Request, started_id: str) -> Obj:
 
 
 def start(w: World, label: str, inp: Obj) -> Obj:
+    replayed = keyed(w, label, "start", inp)
+    if replayed is not None:
+        return replayed
     req = open_request(w, label, "start", inp)
     agent = text(req.args["agent"])
     try:

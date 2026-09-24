@@ -12,6 +12,7 @@ import {
   TeamRefusal,
 } from "../team";
 import type { EnumOf, Lit, Opt, Strict } from "../zod-types";
+import { InvalidDefinition } from "./team";
 
 // Mail between team members and the operator, asks, and the decisions around them
 // (spec/schema/README.md, "Teams"). The sender's writer inserts a mail row with its
@@ -152,10 +153,28 @@ export const OperatorRequest: EventDef<
   actor: ActorWithPrincipal,
 });
 
-export const OperatorRefusedData: Strict<{
-  request_id: typeof RequestId;
-  code: typeof TeamRefusal;
-}> = z.strictObject({ request_id: RequestId, code: TeamRefusal });
+const OPERATOR_REFUSED_RULE = {
+  if: { properties: { code: { const: "invalid_definition" } } },
+  then: { required: ["detail"] },
+  else: { not: { required: ["detail"] } },
+} as const;
+export const OperatorRefusedData: Ruled<
+  Strict<{
+    request_id: typeof RequestId;
+    code: typeof TeamRefusal;
+    detail: Opt<typeof InvalidDefinition>;
+  }>,
+  typeof OPERATOR_REFUSED_RULE
+> = withRule(
+  z.strictObject({
+    request_id: RequestId,
+    code: TeamRefusal,
+    detail: InvalidDefinition.describe(
+      "Present exactly when code is invalid_definition, so a replayed request returns it.",
+    ).optional(),
+  }),
+  OPERATOR_REFUSED_RULE,
+);
 export const OperatorRefused: EventDef<
   "operator_refused",
   typeof OperatorRefusedData,
