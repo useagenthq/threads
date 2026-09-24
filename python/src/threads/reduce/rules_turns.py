@@ -1,7 +1,7 @@
 """Turns, model attempts, settings and thread-level rules (semantic rules 12, 17, 18, 20, 21,
 26, 27 in spec/schema/README.md)."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from pydantic.experimental.missing_sentinel import MISSING
@@ -22,6 +22,7 @@ from threads.log import (
     SteerEvent,
     ThreadStartedEvent,
     ToolsChangedEvent,
+    ToolSpec,
     TurnCompletedEvent,
     UserInputEvent,
 )
@@ -30,6 +31,7 @@ from threads.log.jcs import MAX_SAFE_INTEGER
 from threads.reduce import rules_requested
 from threads.reduce.fold import Fold, policy, reject
 from threads.reduce.handlers import Handler, on, to_json
+from threads.reduce.tool_set import tool_set_error
 from threads.result import Ok
 
 if TYPE_CHECKING:
@@ -38,7 +40,7 @@ if TYPE_CHECKING:
 
 def _thread_started(fold: Fold, event: ThreadStartedEvent) -> None:
     fold.started = event.data
-    fold.tools = {spec.name: spec for spec in event.data.tools}
+    _set_tools(fold, event.data.tools)
     pinned = policy(fold)
     if pinned is not None and pinned.permissions is not MISSING:
         fold.mode = pinned.permissions.mode
@@ -50,8 +52,18 @@ def _tools_changed(fold: Fold, event: ToolsChangedEvent) -> ParseError | None:
     tools: JsonValue = [to_json(spec) for spec in event.data.tools]
     if canonical_sha256(tools) != Ok(event.data.tools_hash):
         return reject(event, "tools_hash is not the hash of the RFC 8785 bytes of tools")
-    fold.tools = {spec.name: spec for spec in event.data.tools}
+    error = tool_set_error(fold, event)
+    if error is not None:
+        return reject(event, error)
+    _set_tools(fold, event.data.tools)
     return None
+
+
+def _set_tools(fold: Fold, tools: Sequence[ToolSpec]) -> None:
+    fold.tools = {}
+    for spec in tools:
+        fold.tools.setdefault(spec.name, spec)
+        fold.known_tools.setdefault(spec.name, spec)
 
 
 def _user_input(fold: Fold, event: UserInputEvent) -> ParseError | None:

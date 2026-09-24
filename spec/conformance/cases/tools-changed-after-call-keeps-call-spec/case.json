@@ -1,0 +1,11 @@
+{
+  "name": "tools-changed-after-call-keeps-call-spec",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Crash after effect_begin of an idempotent tool, then the host removed the tool from the set (a valid tools_changed). Recovery classes the pending call by the spec it was made under, not the latest set: it settles safe_to_retry inside the dedup window and re-dispatches with the same effect key, as if the set had not changed.",
+  "clock": {
+    "now": 1790000067000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

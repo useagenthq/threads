@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-cause-mcp-list-changed-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17: cause mcp_list_changed has no writer yet, so an imported one is refused.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

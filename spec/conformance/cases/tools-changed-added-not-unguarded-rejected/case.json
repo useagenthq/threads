@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-added-not-unguarded-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17: A tools_changed adds a tool thread_started did not pin as read_only: an added tool is unguarded, so uncertainty about it always parks.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

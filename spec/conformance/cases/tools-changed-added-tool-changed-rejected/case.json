@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-added-tool-changed-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17: An added tool keeps the spec it was first added with: a later set widens its input_schema.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

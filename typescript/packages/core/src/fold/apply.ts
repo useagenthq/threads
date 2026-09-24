@@ -1,5 +1,5 @@
 import { assertNever } from "../assert-never";
-import type { KnownEvent } from "../log";
+import type { KnownEvent, ToolSpec } from "../log";
 import { applyAgents } from "./agents";
 import { applyControl } from "./control";
 import {
@@ -143,11 +143,13 @@ function applyConfig(fold: Fold, e: ConfigEvent): void {
     case "thread_started":
       fold.policy = e.data.policy;
       fold.tools = e.data.tools;
+      know(fold, e.data.tools);
       fold.model = e.data.model;
       fold.mode = e.data.policy?.permissions?.mode ?? "default";
       return;
     case "tools_changed":
       fold.tools = e.data.tools;
+      know(fold, e.data.tools);
       return;
     case "settings_changed":
       fold.model = e.data.settings.model;
@@ -170,6 +172,12 @@ function applyConfig(fold: Fold, e: ConfigEvent): void {
     default:
       assertNever(e);
   }
+}
+
+/** The first spec seen under each name stays the reference for later sets (rule 17). */
+function know(fold: Fold, tools: readonly ToolSpec[]): void {
+  for (const spec of tools)
+    if (!fold.knownTools.has(spec.name)) fold.knownTools.set(spec.name, spec);
 }
 
 type TurnEvent = EventOf<
@@ -254,10 +262,9 @@ function applyCall(fold: Fold, e: CallEvent): void {
   const call = fold.calls.get(e.data.call_id);
   switch (e.type) {
     case "tool_call": {
-      const spec = fold.tools.find((tool) => tool.name === e.data.name);
       fold.calls.set(e.data.call_id, {
         branchId: e.branch_id,
-        effectClass: spec?.effect_class,
+        spec: fold.tools.find((tool) => tool.name === e.data.name),
         allowed: false,
         barrier: false,
         result: undefined,

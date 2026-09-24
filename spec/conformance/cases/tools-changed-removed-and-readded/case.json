@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-removed-and-readded",
+  "family": "tools_streaming",
+  "kind": "reduce",
+  "description": "The host removes send_email, then re-adds it with its pinned spec: removal is always allowed, and a re-add that keeps the pinned spec is too.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

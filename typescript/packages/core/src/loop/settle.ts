@@ -6,7 +6,7 @@ import { draft } from "./drafts";
 import { lookedUp } from "./lookup";
 import type { Session } from "./session";
 import { recordOutput } from "./spill";
-import { toolSpec } from "./turn";
+import { callSpec } from "./turn";
 import type { Halt, ToolImpl } from "./types";
 
 // an unknown effect is settled only with a proof its class allows;
@@ -26,7 +26,7 @@ export async function settleUnknown(
   );
   if (call?.type !== "tool_call")
     throw new Error("an effect has its tool_call");
-  const spec = toolSpec(s.fold, call.data.name);
+  const spec = callSpec(s.fold, call);
   const impl = s.config.tools.get(call.data.name);
   const effectClass = spec?.effect_class;
   switch (effectClass) {

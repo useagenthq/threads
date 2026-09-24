@@ -39,7 +39,7 @@ async def _next_group(rt: Runtime) -> tuple[CallId, ...] | Halt:
     candidates: list[Candidate] = []
     for call_id in rt.fold.pending:
         state = call_state(rt.events, call_id)
-        spec = rt.fold.tools[state.call.data.name]
+        spec = rt.fold.call_specs[state.call.data.call_id]
         found = _candidate(rt, state, spec)
         # Authorized only once it could join: other calls keep their lazy authorization.
         if found.decision == "none" and joins(replace(found, decision="allow")):
@@ -101,7 +101,7 @@ async def run_group(rt: Runtime, group: Sequence[CallId]) -> Halt | None:
 
 def _invocation(rt: Runtime, call_id: CallId) -> Invocation:
     state = call_state(rt.events, call_id)
-    return effects.invocation(state, rt.fold.tools[state.call.data.name])
+    return effects.invocation(state, rt.fold.call_specs[state.call.data.call_id])
 
 
 async def _start(

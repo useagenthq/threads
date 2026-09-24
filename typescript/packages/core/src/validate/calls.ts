@@ -57,7 +57,7 @@ export function checkEffect(
     return e.type === "effect_begin"
       ? invalid(`effect_begin for ${callId}, which has no tool_call`)
       : undefined;
-  if (call.effectClass === "read_only")
+  if (call.spec?.effect_class === "read_only")
     return invalid(`read_only call ${callId} writes no effect events`);
   if (e.type !== "effect_begin") return undefined;
   if (!call.allowed)

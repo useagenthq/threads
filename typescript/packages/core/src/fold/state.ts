@@ -28,7 +28,8 @@ export type ResultEvent = EventOf<"tool_result"> | EventOf<"tool_result_late">;
 
 export type CallState = {
   readonly branchId: BranchId;
-  readonly effectClass: ToolSpec["effect_class"] | undefined;
+  /** The spec in the tool set when the call was made; a later tools_changed never reclasses it. */
+  readonly spec: ToolSpec | undefined;
   /** permission_decision allow, or a consumed matching approval (rule 8). */
   allowed: boolean;
   /** A cancel_requested came after the call (rule 8). */
@@ -72,6 +73,8 @@ export type Fold = {
   readonly eventIds: Set<string>;
   policy: Policy | undefined;
   tools: readonly ToolSpec[];
+  /** Each tool name's spec as pinned by thread_started or first added (rule 17). */
+  readonly knownTools: Map<string, ToolSpec>;
   model: ModelRef | undefined;
   mode: PermissionMode;
   turnOpen: boolean;
@@ -137,6 +140,7 @@ export function emptyFold(): Fold {
     eventIds: new Set(),
     policy: undefined,
     tools: [],
+    knownTools: new Map(),
     model: undefined,
     mode: "default",
     turnOpen: false,

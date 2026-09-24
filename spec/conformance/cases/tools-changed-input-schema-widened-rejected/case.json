@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-input-schema-widened-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17: A tools_changed widens a pinned tool's input_schema to any object.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

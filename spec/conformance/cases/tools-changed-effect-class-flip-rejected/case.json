@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-effect-class-flip-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17: A pending refund_card call (reconcilable, no effect_begin), then a tools_changed that reclasses refund_card as read_only. Recovery would re-send it with no durable effect record, so a pinned tool's effect class never changes.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

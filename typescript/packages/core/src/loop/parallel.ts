@@ -3,7 +3,7 @@ import { afterTool, body, recordRead, runAlone } from "./dispatch";
 import { frameworkTool } from "./framework";
 import { type Candidate, groups } from "./groups";
 import type { Session } from "./session";
-import { cancelRequested, toolSpec } from "./turn";
+import { callSpec, cancelRequested } from "./turn";
 import type { Halt, ToolRun } from "./types";
 
 // Parallel tool calls (spec/schema/README.md): the pending calls of a step run as planned by
@@ -39,7 +39,7 @@ export async function runCalls(s: Session): Promise<Halt | undefined> {
 
 function candidate(s: Session, call: Call): Candidate {
   const { name, call_id: callId } = call.data;
-  const spec = toolSpec(s.fold, name);
+  const spec = callSpec(s.fold, call);
   return {
     concurrent: s.config.tools.get(name)?.concurrent === true,
     effectClass: spec?.effect_class ?? "unguarded",

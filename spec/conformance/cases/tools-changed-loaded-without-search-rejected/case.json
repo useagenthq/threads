@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-loaded-without-search-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17: A deferred tool is loaded (defer_loading dropped) by a tools_changed with no cause: only a tool_search loads a deferred tool.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

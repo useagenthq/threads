@@ -68,7 +68,7 @@ async def run_call(rt: Runtime, call_id: CallId) -> Halt | None:
         if open_cancel(rt.events) is not None:
             return None
         state = call_state(rt.events, call_id)
-        spec = rt.fold.tools[state.call.data.name]
+        spec = rt.fold.call_specs[state.call.data.call_id]
         halt = await _advance(rt, state, spec)
         if halt is not None:
             return halt
@@ -127,7 +127,7 @@ async def close(
 async def recheck(rt: Runtime, state: CallState) -> Halt | None:
     """An allow recorded before a crash is re-checked against current policy before dispatch; a
     changed decision is recorded and followed instead."""
-    spec = rt.fold.tools[state.call.data.name]
+    spec = rt.fold.call_specs[state.call.data.call_id]
     if rt.authorize(rt.fold, state.call.data, spec).decision == "allow":
         return None
     return await authorize(rt, state, spec, "recovery")
@@ -229,7 +229,7 @@ async def cancel_call(rt: Runtime, call_id: CallId, actor: ActorKind = "host") -
     """Closes a pending call behind a cancel barrier: one that never began as not_executed; one
     whose effect may have been sent is settled or parked, never assumed undone."""
     state = call_state(rt.events, call_id)
-    spec = rt.fold.tools[state.call.data.name]
+    spec = rt.fold.call_specs[state.call.data.call_id]
     if rt.framework is not None and _child_started(rt, call_id):
         # A spawned child is never cancelled over: the parent runs it (barred) to its end and
         # records its one agent_finished, or parks on it (spec/schema/README.md).

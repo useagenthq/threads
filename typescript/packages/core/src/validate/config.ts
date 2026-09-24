@@ -2,17 +2,21 @@ import type { EventOf, Fold } from "../fold/state";
 import { sha256Hex } from "../hash";
 import { canonicalize, JsonValue } from "../log";
 import { conforms } from "./json-schema";
+import { checkToolSet } from "./tool-set";
 import { invalid, type Violation } from "./violation";
 
 // Rules 17, 20 and 27.
 
-/** Rule 17: tools_hash is the SHA-256 of the RFC 8785 bytes of tools. */
-export function checkToolsChanged(e: EventOf<"tools_changed">): Violation {
+/** Rule 17: tools_hash is the SHA-256 of the RFC 8785 bytes of tools, and the set stays safe. */
+export function checkToolsChanged(
+  fold: Fold,
+  e: EventOf<"tools_changed">,
+): Violation {
   // Parsed optional fields are typed `| undefined`; JsonValue gives back the plain JSON type.
   const tools = JsonValue.safeParse(e.data.tools);
   const text = tools.success ? canonicalize(tools.data) : undefined;
   return text?.ok === true && sha256Hex(text.value) === e.data.tools_hash
-    ? undefined
+    ? checkToolSet(fold, e)
     : invalid("tools_hash is not the hash of tools");
 }
 

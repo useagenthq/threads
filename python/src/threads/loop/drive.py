@@ -210,11 +210,10 @@ async def _after_results(rt: Runtime) -> Halt | None:
     if gated is not None:
         return None if gated == gates.AGAIN else gated
     turn = turn_events(rt.events)
-    names = {c.data.call_id: c.data.name for c in rt.fold.calls.values()}
     for event in reversed(turn):
         if not isinstance(event, ToolResultEvent):
             break
-        spec = rt.fold.tools.get(names.get(event.data.call_id, ""))
+        spec = rt.fold.call_specs.get(event.data.call_id)
         if spec is not None and spec.ends_turn is True and not event.data.is_error:
             return await gates.end_turn(rt)
     gated = await tool_gates.after_batch(rt)

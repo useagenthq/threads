@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-readded-reclassed-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17: refund_card is removed, then re-added as read_only: a re-add keeps the pinned spec.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

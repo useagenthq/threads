@@ -77,7 +77,8 @@ async function run(
   const model = scriptedModel(c.scripts.model ?? { responses: [] });
   const sandbox = scriptedTools(
     c.scripts.sandbox,
-    writer.chain.fold.tools,
+    // The host binds every tool its config pinned or added, whatever the latest set holds.
+    [...writer.chain.fold.knownTools.values()],
     () => clock.now,
   );
   const stubs =

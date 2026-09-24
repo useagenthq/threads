@@ -122,6 +122,9 @@ class Fold:
     """Known events of the resolved chain, in order. Unknown non-critical events are skipped."""
     started: ThreadStartedData | None = None
     tools: dict[str, ToolSpec] = field(default_factory=dict[str, ToolSpec])
+    """The latest set by name; a repeated name keeps its first spec, as TypeScript's lookup."""
+    known_tools: dict[str, ToolSpec] = field(default_factory=dict[str, ToolSpec])
+    """Each name's spec as pinned by thread_started or first added (rule 17)."""
     in_turn: bool = False
     turns: int = 0
     handed_off: bool = False
@@ -137,7 +140,8 @@ class Fold:
     responses: dict[EventId, Response] = field(default_factory=dict[EventId, Response])
     calls: dict[CallId, ToolCallEvent] = field(default_factory=dict[CallId, ToolCallEvent])
     pending: list[CallId] = field(default_factory=list[CallId])
-    read_only_calls: set[CallId] = field(default_factory=set[CallId])
+    call_specs: dict[CallId, ToolSpec] = field(default_factory=dict[CallId, ToolSpec])
+    """The spec each call was made under; a later tools_changed never reclasses it."""
     allowed: set[CallId] = field(default_factory=set[CallId])
     challenges: dict[str, tuple[CallId, str]] = field(default_factory=dict[str, tuple[CallId, str]])
     """Open approval challenges: challenge_id -> (call_id, args_hash)."""

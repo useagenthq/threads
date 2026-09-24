@@ -74,7 +74,7 @@ function fail(
 function check(fold: Fold, e: KnownEvent): Violation {
   switch (e.type) {
     case "tools_changed":
-      return checkToolsChanged(e);
+      return checkToolsChanged(fold, e);
     case "user_input":
       return checkTeamInput(fold, e) ?? checkInput(fold, e);
     case "steer":

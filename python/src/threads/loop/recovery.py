@@ -118,7 +118,7 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
 
 
 async def _call(rt: Runtime, state: CallState) -> Halt | None:
-    spec = rt.fold.tools[state.call.data.name]
+    spec = rt.fold.call_specs[state.call.data.call_id]
     match state.effect:
         case "begun":
             data = {"call_id": state.call.data.call_id, "reason": "crash_after_begin"}

@@ -60,6 +60,7 @@ from . import (
     thread_methods,
     tool_groups,
     tool_inputs,
+    tool_sets,
     wake_bars,
     wakes,
 )
@@ -79,6 +80,7 @@ FAMILIES = (
     host,
     channels,
     changes,
+    tool_sets,
     content,
     context,
     models,

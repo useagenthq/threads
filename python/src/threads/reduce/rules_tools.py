@@ -40,10 +40,10 @@ def _tool_call(fold: Fold, event: ToolCallEvent) -> ParseError | None:
         return reject(event, f"call_id {call_id} is already used on this branch")
     fold.calls[call_id] = event
     fold.pending.append(call_id)
-    # The class comes from the tool set in force at the call (schema README, derived values).
+    # The spec comes from the tool set in force at the call (schema README, derived values).
     spec = fold.tools.get(event.data.name)
-    if spec is not None and spec.effect_class == "read_only":
-        fold.read_only_calls.add(call_id)
+    if spec is not None:
+        fold.call_specs[call_id] = spec
     return None
 
 
@@ -81,7 +81,8 @@ def _denied(fold: Fold, event: ApprovalDeniedEvent) -> ParseError | None:
 
 
 def _effect_error(fold: Fold, event: EffectEvent, call: ToolCallEvent) -> str | None:
-    if call.data.call_id in fold.read_only_calls:
+    spec = fold.call_specs.get(call.data.call_id)
+    if spec is not None and spec.effect_class == "read_only":
         return "read_only calls write no effect events"
     if not isinstance(event, EffectBeginEvent):
         return None

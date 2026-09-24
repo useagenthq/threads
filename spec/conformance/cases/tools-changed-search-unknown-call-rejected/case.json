@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-search-unknown-call-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17: A tools_changed{cause: tool_search} names call_9, which no tool_call recorded.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-cause-host-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17: cause host has no writer yet (an absent cause means the host), so it is refused.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

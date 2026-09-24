@@ -12,7 +12,7 @@ import { observe } from "./hooks";
 import type { Session } from "./session";
 import { settleUnknown } from "./settle";
 import { type Recorded, recordOutput } from "./spill";
-import { toolSpec } from "./turn";
+import { callSpec } from "./turn";
 import { BARRED, type Halt, type ToolRun } from "./types";
 
 // Pending calls, in call order: authorization first, then the body. An effect's
@@ -128,7 +128,7 @@ async function dispatch(
   const { name, call_id: callId } = call.data;
   const framework = frameworkTool(name);
   if (framework !== undefined) return framework(s, call);
-  const spec = toolSpec(s.fold, name);
+  const spec = callSpec(s.fold, call);
   if (spec?.effect_class === "read_only") {
     const fenced = s.fence();
     if (fenced !== undefined) return fenced;

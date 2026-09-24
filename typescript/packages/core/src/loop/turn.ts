@@ -58,6 +58,14 @@ export function toolSpec(fold: Fold, name: string): ToolSpec | undefined {
   return fold.tools.find((t) => t.name === name);
 }
 
+/** The spec a recorded call was made under; a later tools_changed never reclasses it. */
+export function callSpec(
+  fold: Fold,
+  call: EventOf<"tool_call">,
+): ToolSpec | undefined {
+  return fold.calls.get(call.data.call_id)?.spec;
+}
+
 /** A cancel_requested barrier in the open turn: nothing new starts after it. */
 export function cancelRequested(
   events: readonly KnownEvent[],
@@ -116,8 +124,7 @@ function endsTurn(after: readonly KnownEvent[], fold: Fold): boolean {
       (c) => c.type === "tool_call" && c.data.call_id === e.data.call_id,
     );
     return (
-      call?.type === "tool_call" &&
-      toolSpec(fold, call.data.name)?.ends_turn === true
+      call?.type === "tool_call" && callSpec(fold, call)?.ends_turn === true
     );
   });
 }

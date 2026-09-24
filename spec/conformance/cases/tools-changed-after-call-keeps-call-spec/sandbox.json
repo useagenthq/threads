@@ -1,0 +1,10 @@
+{
+  "tools": {
+    "charge_card": {
+      "output": "charged ch_999 amount_cents=2000",
+      "executed_keys": {
+        "0192b000-0000-7000-8000-000000000001:call_1": "charged ch_001 amount_cents=2000"
+      }
+    }
+  }
+}
