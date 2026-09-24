@@ -31,6 +31,7 @@ from threads.loop.drafts import call_draft, draft
 from threads.loop.history import last_response, response_calls, turn_events
 from threads.loop.results import As, result_draft
 from threads.loop.runtime import FAILED_CODES, Failed, Halt, Runtime, lost
+from threads.reduce.fold import loop_pending
 from threads.result import Err
 from threads.store import Draft
 
@@ -180,7 +181,7 @@ async def after_model(rt: Runtime) -> Gated:
     )
     how = As("denied", True, "host")
     # An older writer recorded the calls with the response: they are pending already.
-    for call_id in rt.fold.pending:
+    for call_id in loop_pending(rt.fold):
         drafts.append(await result_draft(rt, call_id, shown, how))
     for use, call in response_calls(rt.events):
         if call is None:

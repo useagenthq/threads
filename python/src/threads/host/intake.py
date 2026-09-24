@@ -36,6 +36,7 @@ from threads.host.runs import Bound, Runner
 from threads.log import BranchId, ParseError, TextPart, ThreadId
 from threads.log.jcs import canonicalize
 from threads.reduce import Fold
+from threads.reduce.fold import loop_parked
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import Draft, StoredEvent, inbox
@@ -165,7 +166,7 @@ class ChannelIntake:
                 fold = await _fold(store, branch.value)
                 if fold is not None and answers.oldest(fold) is not None:
                     return await self._reply(thread, row, item)
-                if fold is None or fold.parked:
+                if fold is None or loop_parked(fold):
                     return False
                 return await self._message(bound, thread, row, item)
             case Decision() | Control():

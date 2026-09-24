@@ -14,6 +14,7 @@ from threads.loop.history import last_response, turn_events
 from threads.loop.runtime import Halt, Runtime, lost
 from threads.permissions import Decision
 from threads.permissions.engine import Verdict
+from threads.reduce.fold import loop_pending
 from threads.reduce.handlers import to_json
 from threads.reduce.redaction import first_text_part, span_error, text_part
 from threads.result import Err
@@ -173,7 +174,7 @@ async def after_batch(rt: Runtime) -> Gated:
     request, which waits for them; a failure denies that request (the turn ends error)."""
     turn = turn_events(rt.events)
     response = last_response(turn)
-    if not rt.hooks.has("after_tool_batch") or response is None or rt.fold.pending:
+    if not rt.hooks.has("after_tool_batch") or response is None or loop_pending(rt.fold):
         return None
     request = response.data.request_event_id
     if decided(turn, "after_tool_batch", "request_event_id", request):

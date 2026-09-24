@@ -144,6 +144,9 @@ class Fold:
     responses: dict[EventId, Response] = field(default_factory=dict[EventId, Response])
     calls: dict[CallId, ToolCallEvent] = field(default_factory=dict[CallId, ToolCallEvent])
     pending: list[CallId] = field(default_factory=list[CallId])
+    host_calls: set[CallId] = field(default_factory=set[CallId])
+    """Host-issued channel_send calls (a reply, card, question or correction): the host's
+    outbound path settles them, never the agent's loop. Never removed."""
     call_specs: dict[CallId, ToolSpec] = field(default_factory=dict[CallId, ToolSpec])
     """The spec each call was made under; a later tools_changed never reclasses it."""
     allowed: set[CallId] = field(default_factory=set[CallId])
@@ -180,6 +183,20 @@ class Fold:
     """Background wake bookkeeping (rules_wake)."""
     team: Team = field(default_factory=Team)
     """Team bookkeeping (team_fold)."""
+
+
+def loop_pending(fold: Fold) -> list[CallId]:
+    """The pending calls the agent's loop runs: every pending call but a host send."""
+    return [c for c in fold.pending if c not in fold.host_calls]
+
+
+def loop_parked(fold: Fold) -> list[ParkAddress]:
+    """What the agent's turn waits on: every park but a host send's effect in doubt."""
+    return [
+        a
+        for a in fold.parked
+        if a.kind != "effect" or CallId(a.id.rpartition(":")[2]) not in fold.host_calls
+    ]
 
 
 def policy(fold: Fold) -> Policy | None:

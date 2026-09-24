@@ -16,7 +16,7 @@ from threads.loop.history import (
     turn_events,
 )
 from threads.loop.runtime import Halt, Runtime, lost
-from threads.reduce.fold import still_deferred
+from threads.reduce.fold import loop_pending, still_deferred
 from threads.result import Err
 from threads.store import Draft
 
@@ -33,7 +33,7 @@ def owed(rt: Runtime) -> bool:
 
 
 def _undecided(rt: Runtime, call_id: CallId) -> bool:
-    return call_id in rt.fold.pending and call_state(rt.events, call_id).decision is None
+    return call_id in loop_pending(rt.fold) and call_state(rt.events, call_id).decision is None
 
 
 async def record_calls(rt: Runtime) -> Halt | None:

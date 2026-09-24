@@ -31,6 +31,7 @@ from threads.log import (
     ThreadStartedEvent,
     UserInputEvent,
 )
+from threads.reduce.fold import loop_parked
 from threads.result import Ok
 from threads.secrets import resolve
 from threads.store import SqliteStore, StoreError
@@ -278,7 +279,7 @@ class Runner:
         if not isinstance(read, Ok):
             return None
         fold = read.value.fold
-        cut_short = fold.in_turn and not fold.parked
+        cut_short = fold.in_turn and not loop_parked(fold)
         if cut_short or undelivered(fold, bound.channel):
             return await self.resume(store, thread_id, root.value)
         return None

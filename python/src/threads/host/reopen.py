@@ -20,6 +20,7 @@ from threads.agents.results import Failed
 from threads.agents.store import open_store
 from threads.host.runs import Runner, RunTask
 from threads.log import BranchId, ThreadId
+from threads.reduce.fold import loop_parked
 from threads.reduce.wakes import pending_wakes
 from threads.result import Ok
 from threads.store import LOCAL_TENANT, StoreError
@@ -151,7 +152,7 @@ class Reopening:
             return None
         fold = read.value.fold
         waking = bool(pending_wakes(fold.events, branch))
-        if (not fold.in_turn and not waking) or fold.parked:
+        if (not fold.in_turn and not waking) or loop_parked(fold):
             return None
         return await self._runner.resume(store, thread, branch)
 

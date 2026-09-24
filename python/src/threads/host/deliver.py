@@ -13,7 +13,7 @@ crash between a turn's end and its reply's `tool_call` loses no reply and never 
 """
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from threads.agents.intake import After
 from threads.host.channel import ChannelAdapter
@@ -36,6 +36,7 @@ from threads.log import (
 from threads.log.ask_user import correction_text, question_text
 from threads.loop import calls
 from threads.loop.drafts import draft
+from threads.loop.history import call_state
 from threads.loop.runtime import Halt, Runtime, lost
 from threads.reduce import Fold
 from threads.result import Err
@@ -45,6 +46,10 @@ from threads.thread.control import question
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
+
+NOT_DUE: Final = "not sent: no longer due"
+_NEVER_SENT: Final = frozenset({None, "safe_to_retry", "not_sent", "assume_not_done"})
+"""Effect states of a send that never went out: nothing to reconcile."""
 
 type Op = tuple[CallId, JsonObject, EventId]
 """A derived send: its call id, its input and the model request it answers."""
@@ -57,17 +62,39 @@ def deliver(to: Conversation) -> After:
     """The host's outbound work after a channel thread's run."""
 
     async def after(rt: Runtime) -> Halt | None:
-        for call_id, op, request_id in undelivered(rt.fold, to):
+        due = undelivered(rt.fold, to)
+        for call_id, op, request_id in due:
             if call_id not in rt.fold.calls:
                 issued = await rt.append(*_issue(call_id, op, request_id))
                 if isinstance(issued, Err):
                     return lost(issued.error)
-            stopped = await calls.run_call(rt, call_id)
+            stopped = await _send(rt, call_id, due=True)
             if stopped is not None:
                 return stopped
+        derived = {call_id for call_id, _, _ in due}
+        for call_id in [c for c in rt.fold.host_calls if c not in derived]:
+            if _pending(rt.fold, call_id):
+                stopped = await _send(rt, call_id, due=False)
+                if stopped is not None:
+                    return stopped
         return None
 
     return after
+
+
+async def _send(rt: Runtime, call_id: CallId, *, due: bool) -> Halt | None:
+    """Runs one host send on. One a crash left begun is in doubt, and is reconciled through the
+    effect path whether its source is still due or not (an answered question's send too). One
+    that never began and is no longer due is closed, never sent (invariant 3)."""
+    effect = call_state(rt.events, call_id).effect
+    if not due and effect in _NEVER_SENT:
+        return await calls.close(rt, call_id, "not_executed", NOT_DUE)
+    if effect == "begun":
+        data: dict[str, JsonValue] = {"call_id": call_id, "reason": "crash_after_begin"}
+        done = await rt.append(draft("effect_unknown", data))
+        if isinstance(done, Err):
+            return lost(done.error)
+    return await calls.run_call(rt, call_id)
 
 
 def undelivered(fold: Fold, to: Conversation) -> list[Op]:

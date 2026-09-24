@@ -27,6 +27,7 @@ from threads.host.runs import Runner
 from threads.host.schedule_pass import Pass, isolated
 from threads.host.schedule_threads import reserve_due
 from threads.log import ThreadId
+from threads.reduce.fold import loop_parked
 from threads.result import Ok
 from threads.store import LOCAL_TENANT
 from threads.store.schedules import Due
@@ -146,5 +147,5 @@ class Scheduler:
         if not isinstance(root, Ok) or not isinstance(read, Ok):
             return
         fold = read.value.fold
-        if fold.in_turn and not fold.parked and not self._runner.running(root.value):
+        if fold.in_turn and not loop_parked(fold) and not self._runner.running(root.value):
             await self._runner.resume(p.store, thread, root.value)

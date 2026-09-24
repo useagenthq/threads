@@ -28,6 +28,7 @@ from threads.log import (
     ToolCallEvent,
     ToolResultEvent,
     ToolResultLateEvent,
+    ToolUsePart,
 )
 from threads.log.ask_user import Ask, accepts_recorded, ask_of
 from threads.reduce.fold import EffectStatus, Fold, Result, reject
@@ -43,11 +44,22 @@ def _tool_call(fold: Fold, event: ToolCallEvent) -> ParseError | None:
         return reject(event, f"call_id {call_id} is already used on this branch")
     fold.calls[call_id] = event
     fold.pending.append(call_id)
+    if _host_issued(fold, event):
+        fold.host_calls.add(call_id)
     # The spec comes from the tool set in force at the call (schema README, derived values).
     spec = fold.tools.get(event.data.name)
     if spec is not None:
         fold.call_specs[call_id] = spec
     return None
+
+
+def _host_issued(fold: Fold, event: ToolCallEvent) -> bool:
+    """A channel_send the model didn't ask for: its call_id is no tool_use of its response."""
+    if event.data.name != "channel_send":
+        return False
+    response = fold.responses.get(event.data.request_event_id)
+    parts = () if response is None else response.content
+    return not any(isinstance(p, ToolUsePart) and p.call_id == event.data.call_id for p in parts)
 
 
 def _permission(fold: Fold, event: PermissionDecisionEvent) -> None:

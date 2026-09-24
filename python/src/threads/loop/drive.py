@@ -48,7 +48,7 @@ from threads.loop.history import (
 )
 from threads.loop.runtime import Halt, Idle, Parked, Runtime, lost
 from threads.loop.turn import complete, request
-from threads.reduce.fold import call_spec
+from threads.reduce.fold import call_spec, loop_parked, loop_pending
 from threads.result import Err
 
 if TYPE_CHECKING:
@@ -92,7 +92,7 @@ async def drive(rt: Runtime) -> Halt:
 
 async def _step(rt: Runtime) -> Halt | None:
     fold = rt.fold
-    if fold.parked:
+    if loop_parked(fold):
         return await _still_parked(rt)
     if not fold.in_turn:
         return Idle(_last_reason(rt.events))
@@ -100,7 +100,7 @@ async def _step(rt: Runtime) -> Halt | None:
     if cancel is not None:
         return await _cancel(rt, cancel)
     owed = record.owed(rt)
-    if fold.pending or owed:
+    if loop_pending(fold) or owed:
         gated = await gates.after_model(rt)
         if gated is not None:
             return None if gated == gates.AGAIN else gated
@@ -111,11 +111,11 @@ async def _step(rt: Runtime) -> Halt | None:
 
 async def _still_parked(rt: Runtime) -> Halt | None:
     """Parked, unless an expired question closes now (then the turn goes on)."""
-    waiting = len(rt.fold.parked)
+    waiting = len(loop_parked(rt.fold))
     halt = await questions.expire(rt)
-    if halt is not None or len(rt.fold.parked) < waiting:
+    if halt is not None or len(loop_parked(rt.fold)) < waiting:
         return halt
-    return parked(rt.events, rt.fold.parked)
+    return parked(rt.events, loop_parked(rt.fold))
 
 
 async def _notify_new(rt: Runtime, seen: int) -> Halt | None:
@@ -154,7 +154,7 @@ def _last_reason(events: Sequence[Event]) -> str:
 async def _cancel(rt: Runtime, cancel: CancelRequestedEvent) -> Halt | None:
     """The durable barrier: never-begun calls close as not_executed, then
     `cancelled`. An effect still in doubt is settled or parked first, never cancelled over."""
-    for call_id in list(rt.fold.pending):
+    for call_id in loop_pending(rt.fold):
         halt = await calls.cancel_call(rt, call_id)
         if halt is not None:
             return halt

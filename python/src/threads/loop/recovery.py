@@ -36,7 +36,7 @@ from threads.loop.model import (
     looked_up,
 )
 from threads.loop.runtime import Failed, Halt, Runtime, WriterContext, epoch_model, fence, lost
-from threads.reduce.fold import call_spec
+from threads.reduce.fold import call_spec, loop_parked, loop_pending
 from threads.reduce.openers import turn_start
 from threads.result import Err, Ok
 
@@ -62,7 +62,7 @@ async def recover(rt: Runtime) -> Halt | None:
             halt = await _model(rt, request.event_id)
             if halt is not None:
                 return halt
-    for call_id in list(rt.fold.pending):
+    for call_id in loop_pending(rt.fold):
         halt = await _call(rt, call_state(rt.events, call_id))
         if halt is not None:
             return halt
@@ -75,7 +75,7 @@ def _open_turn_to_close(rt: Runtime) -> bool:
     question was answered (or expired) since its last model_request: the run then continues it
     and sends the answer on, or carries the cancel out."""
     fold = rt.fold
-    if not fold.in_turn or fold.pending or fold.open_requests or fold.parked:
+    if not fold.in_turn or loop_pending(fold) or fold.open_requests or loop_parked(fold):
         return False
     if record.owed(rt):
         return False  # the response's calls are recorded next, never left without results

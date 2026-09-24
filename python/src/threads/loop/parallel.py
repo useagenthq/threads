@@ -13,6 +13,7 @@ from threads.loop.groups import Candidate, Decision, groups, joins
 from threads.loop.history import CallState, call_state, open_cancel
 from threads.loop.runtime import Failed, Halt, Runtime, fence
 from threads.loop.tools import Dispatched, Invocation
+from threads.reduce.fold import loop_pending
 from threads.tools.specs import FRAMEWORK
 
 WINDOW: Final = 8
@@ -24,7 +25,7 @@ async def run_pending(rt: Runtime) -> Halt | None:
     group = _next_group(rt)
     if len(group) > 1:
         return await run_group(rt, group)
-    call_id = rt.fold.pending[0]
+    call_id = loop_pending(rt.fold)[0]
     halt = await calls.run_call(rt, call_id)
     return halt or await tool_gates.after_tool(rt, call_id)
 
@@ -32,13 +33,14 @@ async def run_pending(rt: Runtime) -> Halt | None:
 def _next_group(rt: Runtime) -> tuple[CallId, ...]:
     """The group that starts at the first pending call."""
     candidates: list[Candidate] = []
-    for call_id in rt.fold.pending:
+    pending = loop_pending(rt.fold)
+    for call_id in pending:
         found = _candidate(rt, call_state(rt.events, call_id), calls.pending_spec(rt, call_id))
         candidates.append(found)
         if not joins(found):
             break
     first = groups(candidates)[0] if candidates else ()
-    return tuple(rt.fold.pending[i] for i in first)
+    return tuple(pending[i] for i in first)
 
 
 def _candidate(rt: Runtime, state: CallState, spec: ToolSpec) -> Candidate:
