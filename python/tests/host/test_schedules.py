@@ -21,7 +21,7 @@ from threads.host.schedule_threads import reserve_due
 from threads.host.schedules import Scheduler
 from threads.log import ScheduleFiredEvent, ScheduleSkippedEvent
 from threads.result import Ok
-from threads.store.retention import delete_thread
+from threads.store.deletion import delete_thread
 from threads.store.schedules import Due
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
@@ -120,7 +120,8 @@ def test_a_deletion_before_a_reservation_strands_nothing_and_a_retired_key_stays
         assert isinstance(outbound, Ok)
         await scheduler.tick(NINE - 60_000, NINE + DAY + 1_000)
         await outbound.value.release()
-        await sq.run(lambda c: delete_thread(c, "local", thread, now_ms()))
+        deleted = await sq.run(lambda c: delete_thread(c, "local", thread, now_ms()))
+        assert isinstance(deleted, Ok), deleted
         # The retired key and a new one, reserved after the deletion committed: the retired row
         # stays retired, and the new one lands on a new thread, never the deleted one.
         started = await pinned_start(bot.definition, store)
