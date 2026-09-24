@@ -1,3 +1,4 @@
+import type { Fold } from "../fold/state";
 import { type KnownEvent, type Principal, ThreadId } from "../log";
 import { ok } from "../result";
 import type { LogStore } from "../store";
@@ -31,15 +32,15 @@ export async function cancelTree(
 ): Promise<boolean> {
   const branch = log.mainBranch(threadId);
   if (!branch.ok) return false;
-  let barred = false;
-  await control(log, branch.value, principal, (events) => {
-    // Already stopped: a thread or tree cancel since its latest input. A child whose turn is
-    // closed is barred too: it may be waiting on its own background children, and an idle tree
-    // cancel ends that run and bars its wakes (rule 32).
-    barred = cancelledSinceInput(events);
-    if (barred)
+  let stopped = false;
+  const done = await control(log, branch.value, principal, (events, writer) => {
+    // Nothing to append: it already has a thread or tree cancel since its latest input, or it
+    // has finished (its turn is closed and nothing of its own still runs). A child whose turn is
+    // closed but that waits on its own background children is barred: an idle tree cancel ends
+    // that run and bars its wakes (rule 32).
+    stopped = cancelledSinceInput(events) || finished(writer.chain.fold);
+    if (stopped)
       return { ok: false, error: { code: "not_found", message: "stopped" } };
-    barred = true;
     return ok({
       record: {
         type: "cancel_requested",
@@ -51,7 +52,13 @@ export async function cancelTree(
     });
   });
   await cancelChildren(log, threadId, principal);
-  return barred;
+  // Barred only once its cancel is appended (or nothing was left to stop).
+  return stopped || done.ok;
+}
+
+/** Its turn is closed and none of its own children still runs: it has reported. */
+function finished(fold: Fold): boolean {
+  return !fold.turnOpen && ![...fold.children.values()].includes("running");
 }
 
 /** A thread or tree cancel request since the latest user_input. */
