@@ -6,7 +6,7 @@ import contextlib
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from functools import partial
 from typing import TypedDict
 
@@ -23,15 +23,13 @@ from threads.agents.intake import Intake
 from threads.agents.launch import Launch
 from threads.agents.outcome import result
 from threads.agents.results import (
-    DeltaItem,
-    EventItem,
     Failed,
     RunError,
     RunResult,
-    StatusItem,
     StreamEvent,
     Thread,
 )
+from threads.agents.run_stream import Emit, OnDelta, RunStream
 from threads.agents.scope import Execute, Scope
 from threads.agents.servers import fenced, host_serving, with_servers
 from threads.agents.setup import set_up
@@ -55,7 +53,6 @@ from threads.hooks.observers import ObserverPump
 from threads.log import (
     BranchId,
     Budget,
-    EventId,
     InputPart,
     ParseError,
     Permissions,
@@ -71,7 +68,7 @@ from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, provider_tools
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
-from threads.store import SqliteStore, StoredEvent, Writer
+from threads.store import SqliteStore, Writer
 from threads.store.lines import uuid7
 from threads.thread.control import LOCAL_OPERATOR
 from threads.tools import ReadResults, SandboxTools
@@ -81,9 +78,6 @@ RENEW_EVERY_S = 10.0
 """Lease renewal interval, a third of the TTL."""
 
 type Input = str | Sequence[InputPart]
-type Emit = Callable[[StreamEvent], None]
-type OnDelta = Callable[[EventId, int, str], None]
-"""Internal: each redacted delta with its part index (the host's live hub; DeltaItem has none)."""
 
 
 class _RunOptions(TypedDict, total=False):
@@ -107,27 +101,6 @@ class RunOptionsWithDeps[D](_RunOptions):
     """`Agent.run` options for an agent whose tools read deps: `deps` is required."""
 
     deps: D
-
-
-@dataclass(frozen=True, slots=True)
-class _Stream:
-    emit: Emit
-    pump: ObserverPump
-    on_delta: OnDelta | None = None
-
-    def delta(self, request: EventId, part: int, text: str) -> None:
-        self.emit(DeltaItem(request, text))
-        if self.on_delta is not None:
-            self.on_delta(request, part, text)
-
-    def observe(self, events: Sequence[StoredEvent]) -> None:
-        for event in events:
-            self.emit(EventItem(event))
-        self.pump.poke()
-
-    async def wait_until(self, when: int) -> None:
-        self.emit(StatusItem(when))
-        await asyncio.sleep(max(0, when - now_ms()) / 1000)
 
 
 async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launched
@@ -185,7 +158,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
         observers = {e.name: e.on for e in definition.extensions}
         pump = ObserverPump(sq.cursors, writer.branch_id, lambda: writer.fold.events, observers)
         pump.poke()
-        stream = _Stream(emit, pump, on_delta)
+        stream = RunStream(emit, pump, on_delta)
         box = definition.sandbox
         shared = None if launch is None else launch.shared
         builtins = shared or (None if box is None else _sandbox_tools(sq, box, writer, definition))
