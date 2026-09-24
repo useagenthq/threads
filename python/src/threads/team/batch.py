@@ -27,6 +27,11 @@ class Batch:
         self._mint = mint or mint_uuid7
         self._next: str | None = None
 
+    @property
+    def now(self) -> int:
+        """The append's clock: a deadline is due at or after it."""
+        return self._now
+
     def next_id(self) -> str:
         """The event id the next added draft gets."""
         if self._next is None:

@@ -16,7 +16,7 @@ from threads.agents.pinned import outside_any_branch
 from threads.agents.servers import with_servers
 from threads.agents.setup import set_up
 from threads.agents.store import Store
-from threads.agents.team_budgets import run_covering
+from threads.agents.team_budgets import recipient_of, run_covering
 from threads.agents.team_check import agents_of
 from threads.agents.team_worker import MemberRun, TeamWorker, WorkerEnv
 from threads.log import ModelRef, Policy, ThreadStartedEvent
@@ -124,6 +124,7 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
             member.notify,
             principal=member.principal,
             run_covering=run_covering(sq),
+            recipient=recipient_of(sq),
         )
         return TeamSide(runtime, _nothing)
     if definition.team is None:
@@ -136,5 +137,13 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
     env = WorkerEnv(store, sq, team, agents_of(definition.team), member_pin, run)
     worker = TeamWorker(env)
     worker.start()
-    runtime = TeamRuntime(pin, limits, settled, worker.notify, worker.progress, busy=worker.busy)
+    runtime = TeamRuntime(
+        pin,
+        limits,
+        settled,
+        worker.notify,
+        worker.progress,
+        busy=worker.busy,
+        recipient=recipient_of(sq),
+    )
     return TeamSide(runtime, worker.stop)

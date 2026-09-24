@@ -5,7 +5,9 @@ spec/tools/fixtures/ops_member.py and ops_send.py."""
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import Literal
+
+from pydantic import JsonValue
 
 from threads.reduce.handlers import to_json
 from threads.store.lines import Draft
@@ -23,9 +25,6 @@ from threads.team.call import (
 from threads.team.dynamic import InvalidDefinition, Resolved
 from threads.team.mail import body_of, sent
 from threads.team.rows import MemberRow, member_rows, pending_to
-
-if TYPE_CHECKING:
-    from pydantic import JsonValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +53,7 @@ class StartPlan:
 _LIVE = frozenset({"starting", "running"})
 
 
-def start(ctx: CallContext, agent: str, task: str, plan: StartPlan) -> None:
+def start(ctx: CallContext, agent: str, task: str, plan: StartPlan) -> JsonValue:
     """member.start: member_started and its task mail, which insert the starting row, the
     pending task and the starter's task monitor."""
     caller = caller_of(ctx)
@@ -121,10 +120,10 @@ def _start_checks(ctx: CallContext, caller: Caller, agent: str, plan: StartPlan)
     return None if plan.headroom(agent) else Refusal("budget_exceeded")
 
 
-def send(ctx: CallContext, to: str, text: str, limits: TeamLimits) -> None:
+def send(ctx: CallContext, to: str, text: str, limits: TeamLimits) -> JsonValue:
     """mail.send: a message to a member, pending until its writer consumes it."""
     caller = caller_of(ctx)
-    row = _deliverable(ctx, caller, to, limits)
+    row = deliverable(ctx, caller, "send", to, limits)
     if isinstance(row, Refusal):
         return recorded(ctx, row)
     mail_id = call_mail_id(ctx)
@@ -142,12 +141,12 @@ def send(ctx: CallContext, to: str, text: str, limits: TeamLimits) -> None:
     return recorded(ctx, {"id": mail_id, "status": "sent"})
 
 
-def _deliverable(
-    ctx: CallContext, caller: Caller, to: str, limits: TeamLimits
+def deliverable(
+    ctx: CallContext, caller: Caller, op: Literal["send", "ask"], to: str, limits: TeamLimits
 ) -> MemberRow | Refusal:
-    """After the policy: team open, the member known at its generation, not ended, not the
-    sender, and its mailbox not full."""
-    denied = decide(ctx, "send", to, allow=True)
+    """send and ask, after the policy: team open, the member known at its generation, not
+    ended, not the sender, and its mailbox not full."""
+    denied = decide(ctx, op, to, allow=True)
     if denied is not None:
         return denied
     if caller.team.closed_at is not None:

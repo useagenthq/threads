@@ -10,7 +10,7 @@ its disposition: known usage, or the bound when usage is unknown.
 Turns and wall time are checked from the thread's own log instead (loop/limits.py).
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Literal
 
 from pydantic import JsonValue
@@ -20,9 +20,11 @@ from threads.log import (
     Budget,
     Event,
     Model,
+    ModelRef,
     ModelRequestEvent,
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
+    Policy,
     ThreadId,
     ThreadStartedEvent,
     Usage,
@@ -32,7 +34,7 @@ from threads.loop import epoch
 from threads.loop.covering import Covering
 from threads.loop.drafts import draft
 from threads.loop.runtime import Failed, Runtime, lost
-from threads.loop.team_runtime import TeamAgentPin
+from threads.loop.team_runtime import TeamAgentPin, TeamRecipient
 from threads.reduce.fold import Fold
 from threads.reduce.openers import turn_start
 from threads.reduce.projections import bound, dispositions, output_bound
@@ -252,11 +254,29 @@ async def room_for(rt: Runtime, member: TeamAgentPin) -> bool:
     covering = await covering_of(rt)
     if member.budget is not None:
         covering.append(Covering("member", member.budget, "thread"))
-    policy = member.policy
+    return await _fits(rt, covering, member.policy, member.model, member.params)
+
+
+async def room_in(rt: Runtime, to: TeamRecipient) -> bool:
+    """ask's headroom: the recipient's own and ancestors' budgets, and the run budget of the
+    asking turn's request (its turn belongs to that request), have room for one request of its
+    model."""
+    run = [c for c in await covering_of(rt) if c.scope == "run"]
+    return await _fits(rt, [*to.covering, *run], to.policy, to.model, to.params)
+
+
+async def _fits(
+    rt: Runtime,
+    covering: Sequence[Covering],
+    policy: Policy | None,
+    ref: ModelRef,
+    params: Mapping[str, JsonValue],
+) -> bool:
+    """Every limit of `covering` has room for one request of `ref` (a new member's own budget
+    starts empty). A limit the model can't bound has none."""
     models: Sequence[Model] = () if policy is None or policy.models is MISSING else policy.models
-    ref = member.model
     model = next((m for m in models if (m.provider, m.name) == (ref.provider, ref.name)), None)
-    amounts = bounds(model, member.params.get("max_tokens"))
+    amounts = bounds(model, params.get("max_tokens"))
     for c in covering:
         for limit in _LIMITS:
             most = getattr(c.budget, limit)

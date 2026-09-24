@@ -4,12 +4,14 @@ call's one tool_result carries the op's result as RFC 8785 JSON. Reference:
 spec/tools/fixtures/ops_request.py."""
 
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import JsonValue
 
 from threads.log import (
+    ArtifactRef,
     Event,
     MemberRef,
     MemberStartedEvent,
@@ -18,6 +20,7 @@ from threads.log import (
     ToolCallEvent,
 )
 from threads.log.jcs import canonicalize
+from threads.reduce import Fold
 from threads.result import Ok
 from threads.store.lines import Draft
 from threads.team.batch import Batch
@@ -26,17 +29,21 @@ from threads.team.mail import PutText
 from threads.team.provenance import turn_provenance
 from threads.team.rows import MemberRow, TeamRow, member_named, own_rows, ref_of, team_row
 
+type ReadText = Callable[[ArtifactRef], str]
+"""Reads a {ref} body's text from the content-addressed store (sha256 and length verified)."""
+
 
 @dataclass(frozen=True, slots=True)
 class CallContext:
     """What an op's decision reads, inside the caller's append transaction."""
 
     conn: sqlite3.Connection
-    events: Sequence[Event]
-    """The caller's committed events: its turn, the call and what its log recorded."""
+    fold: Fold
+    """The caller's committed fold: its turn, the call and what its log recorded."""
     batch: Batch
     call: ToolCallEvent
     put: PutText
+    read: ReadText
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,11 +56,15 @@ class Caller:
     provenance: JsonValue
 
 
+type CallRefusal = TeamRefusal | Literal["unknown_ask", "already_replied", "ask_closed"]
+"""Why a call was refused: a team refusal, or one of reply's own."""
+
+
 @dataclass(frozen=True, slots=True)
 class Refusal:
     """An op's refusal: the op records it as the call's result; a start's fields also say why."""
 
-    code: TeamRefusal
+    code: CallRefusal
     detail: InvalidDefinition | None = None
 
 
@@ -63,7 +74,7 @@ def caller_of(ctx: CallContext) -> Caller:
     rows = own_rows(ctx.conn, ctx.call.thread_id)
     row = next((r for r in rows if r.role == "lead"), rows[0] if rows else None)
     team = None if row is None else team_row(ctx.conn, row.team_id)
-    provenance = turn_provenance(ctx.conn, ctx.events)
+    provenance = turn_provenance(ctx.conn, ctx.fold.events)
     if row is None or team is None or provenance is None:
         raise AssertionError("a team tool call outside a team")
     return Caller(team, row, ref_of(team, row), provenance)
@@ -79,7 +90,13 @@ def causal_of(ctx: CallContext) -> JsonValue:
     return {"thread_id": ctx.call.thread_id, "event_id": ctx.call.event_id}
 
 
-def decide(ctx: CallContext, op: str, target: str, *, allow: bool) -> Refusal | None:
+def decide(
+    ctx: CallContext,
+    op: Literal["start", "send", "ask", "monitor", "cancel"],
+    target: str,
+    *,
+    allow: bool,
+) -> Refusal | None:
     """Phase 1 policy: the team's grant (source team), else default deny, which refuses
     forbidden. The decision is recorded either way."""
     data: dict[str, JsonValue] = {
@@ -95,11 +112,16 @@ def decide(ctx: CallContext, op: str, target: str, *, allow: bool) -> Refusal | 
 
 def answer(ctx: CallContext, value: JsonValue) -> Draft:
     """The call's one tool_result: its value as RFC 8785 JSON."""
+    return tool_result(ctx.call.data.call_id, value)
+
+
+def tool_result(call_id: str, value: JsonValue) -> Draft:
+    """A team call's one tool_result, by call id: its value as RFC 8785 JSON."""
     preview = canonicalize(value)
     if not isinstance(preview, Ok):
         raise AssertionError("a team op's result is JSON")
     data: dict[str, JsonValue] = {
-        "call_id": ctx.call.data.call_id,
+        "call_id": call_id,
         "is_error": False,
         "completeness": "complete",
         "preview": preview.value,
@@ -108,21 +130,22 @@ def answer(ctx: CallContext, value: JsonValue) -> Draft:
     return Draft("tool_result", data, {"kind": "tool"})
 
 
-def recorded(ctx: CallContext, value: JsonValue | Refusal) -> None:
-    """Records the op's result, or its refusal, as the call's result."""
+def recorded(ctx: CallContext, value: JsonValue | Refusal) -> JsonValue:
+    """Records the op's result, or its refusal, as the call's result; returns what it recorded."""
     if isinstance(value, Refusal):
         refused: dict[str, JsonValue] = {"code": value.code, "status": "refused"}
         if value.detail is not None:
             refused["detail"] = value.detail.to_json()
         value = refused
     ctx.batch.add(answer(ctx, value))
+    return value
 
 
 def addressed(ctx: CallContext, caller: Caller, name: str) -> MemberRow | Refusal:
     """The member a model addresses by name, at the generation the caller's own log last
     recorded for it (its member_started, or a receipt's sender), else the current row's."""
     row = member_named(ctx.conn, caller.team.team_id, name)
-    seen = _bound(ctx.events, name)
+    seen = _bound(ctx.fold.events, name)
     generation = seen if seen is not None else (0 if row is None else row.generation)
     if row is None or generation > row.generation:
         return Refusal("unknown_member")

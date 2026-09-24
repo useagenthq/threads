@@ -166,7 +166,9 @@ class SqliteStore(BranchStore):
             return Err(opened)
         if isinstance(opened, str):
             return Ok(ALREADY_OPEN)
-        return Ok(Writer(self._worker, held, opened.fold, opened.last_line, clock))
+        return Ok(
+            Writer(self._worker, held, opened.fold, opened.last_line, clock, self._artifacts.get)
+        )
 
     async def open_checked(
         self,
@@ -190,7 +192,16 @@ class SqliteStore(BranchStore):
             return Ok(None)
         if isinstance(opened, str):
             return Ok(ALREADY_OPEN)
-        return Ok(Writer(self._worker, opened.lease, opened.fold, opened.last_line, clock))
+        return Ok(
+            Writer(
+                self._worker,
+                opened.lease,
+                opened.fold,
+                opened.last_line,
+                clock,
+                self._artifacts.get,
+            )
+        )
 
     async def import_log(self, log: VerifiedLog) -> Ok[None] | Err[ParseError]:
         """Stores a verified export's lines byte for byte: parents referenced, never copied.
@@ -331,7 +342,16 @@ class SqliteStore(BranchStore):
         )
         if isinstance(taken, ParseError):
             return Err(taken)
-        return Ok(Writer(self._worker, taken, log.fold, log.segments[-1].last_line, clock))
+        return Ok(
+            Writer(
+                self._worker,
+                taken,
+                log.fold,
+                log.segments[-1].last_line,
+                clock,
+                self._artifacts.get,
+            )
+        )
 
 
 def _repaired(log: VerifiedLog, dropped_sha256: str) -> Draft:

@@ -1,29 +1,42 @@
-"""The team tools start and send (spec/schema/README.md, "Teams", Model tools), run by the loop like
-any framework tool: each is one decided append under the caller's writer, holding the policy
-decision, the op's events and the call's one result, so a call re-dispatched after a crash either
-finds that append or makes it now, never twice."""
+"""The team tools (spec/schema/README.md, "Teams", Model tools), run by the loop like any framework
+tool: each is one decided append under the caller's writer, holding the policy decision, the op's
+events and the call's one result, so a call re-dispatched after a crash either finds that append
+or makes it now, never twice. An ask or a wait stays a pending call: its re-dispatch only parks,
+and the writer's close records its one result."""
 
+import sqlite3
 from collections.abc import Callable, Sequence
 
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads._generated.tools_v1 import SendInput, StartInput
+from threads._generated.tools_v1 import (
+    AskInput,
+    MonitorInput,
+    ReplyInput,
+    SendInput,
+    StartInput,
+    WaitInput,
+)
 from threads.log import ThreadStartedEvent, ToolCallEvent
-from threads.loop.budget import room_for
+from threads.loop.budget import room_for, room_in
 from threads.loop.history import CallState
-from threads.loop.runtime import Halt, Runtime, lost
+from threads.loop.runtime import Halt, Parked, Runtime, lost
 from threads.loop.team_runtime import TeamRuntime
 from threads.loop.teams import put_text
 from threads.result import Err, Ok
 from threads.store import Draft
 from threads.store.lines import uuid7
 from threads.store.writer import DecideTx, Refusal
+from threads.team.ask import AskPlan, ask, reply
 from threads.team.batch import Batch
 from threads.team.call import CallContext
+from threads.team.close import reader_of
 from threads.team.constants import TEAM_CONSTANTS
 from threads.team.dynamic import Choice, InvalidDefinition, Resolved, Template, resolve_definition
 from threads.team.ops import StartPlan, send, start
+from threads.team.rows import MemberRow, member_named, own_rows
+from threads.team.watch import monitor, wait
 
 
 def _team(rt: Runtime) -> TeamRuntime:
@@ -33,21 +46,24 @@ def _team(rt: Runtime) -> TeamRuntime:
 
 
 async def _decided(
-    rt: Runtime, call: ToolCallEvent, big: JsonValue, op: Callable[[CallContext], None]
+    rt: Runtime, call: ToolCallEvent, big: JsonValue, op: Callable[[CallContext], object]
 ) -> Halt | None:
     """One team op decided under the caller's writer."""
     team = _team(rt)
 
     def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[None]:
         batch = Batch(tx.fold.seq, tx.now, team.mint)
-        op(CallContext(tx.conn, tx.fold.events, batch, call, lambda _text: big))
+        op(CallContext(tx.conn, tx.fold, batch, call, lambda _text: big, reader_of(tx.read)))
         return batch.drafts
 
     done = await rt.append_decided(decide)
     if isinstance(done, Refusal):
         raise AssertionError("a team op records its refusals")
-    # A cancel that landed first (Barred): the cancellation step closes the call.
-    return lost(done.error) if isinstance(done, Err) else None
+    if isinstance(done, Err):
+        return lost(done.error)
+    # An ask or a wait parked its call: the park stops the run until an answer resumes it. (A
+    # cancel that landed first, Barred, leaves the call to the cancellation step.)
+    return Parked("awaiting_member", tuple(rt.fold.parked)) if rt.fold.parked else None
 
 
 async def start_call(rt: Runtime, state: CallState) -> Halt | None:
@@ -94,11 +110,63 @@ def _name(rt: Runtime) -> str:
     return started.data.agent_name
 
 
+async def _big(rt: Runtime, text: str) -> JsonValue:
+    """A text over the inline cap, stored before the append that names it."""
+    return (
+        await put_text(rt, text) if len(text.encode()) > TEAM_CONSTANTS.inline_cap_bytes else None
+    )
+
+
 async def send_call(rt: Runtime, state: CallState) -> Halt | None:
     team = _team(rt)
     call = state.call
     args = SendInput.model_validate(dict(call.data.input))
-    big = None
-    if len(args.text.encode()) > TEAM_CONSTANTS.inline_cap_bytes:
-        big = await put_text(rt, args.text)
+    big = await _big(rt, args.text)
     return await _decided(rt, call, big, lambda ctx: send(ctx, args.to, args.text, team.limits))
+
+
+async def ask_call(rt: Runtime, state: CallState) -> Halt | None:
+    """ask.open; headroom is on the recipient's budgets, read from its log before the append."""
+    team = _team(rt)
+    call = state.call
+    args = AskInput.model_validate(dict(call.data.input))
+    big = await _big(rt, args.question)
+    room = await _room(rt, team, args.to)
+    plan = AskPlan(team.limits, lambda _row: room)
+    return await _decided(rt, call, big, lambda ctx: ask(ctx, args.to, args.question, plan))
+
+
+async def _room(rt: Runtime, team: TeamRuntime, name: str) -> bool:
+    """Whether the named member's budgets have room for one request of its model."""
+    if team.recipient is None:
+        return True
+    row = await rt.store.run(lambda c: _named(c, rt, name))
+    to = None if row is None else await team.recipient(row)
+    return to is None or await room_in(rt, to)
+
+
+def _named(conn: sqlite3.Connection, rt: Runtime, name: str) -> MemberRow | None:
+    """The named member of the team this thread acts in (a nested lead's own team first)."""
+    thread = rt.fold.thread_id
+    rows = [] if thread is None else own_rows(conn, thread)
+    row = next((r for r in rows if r.role == "lead"), rows[0] if rows else None)
+    return None if row is None else member_named(conn, row.team_id, name)
+
+
+async def reply_call(rt: Runtime, state: CallState) -> Halt | None:
+    call = state.call
+    args = ReplyInput.model_validate(dict(call.data.input))
+    big = await _big(rt, args.text)
+    return await _decided(rt, call, big, lambda ctx: reply(ctx, args.ask_id, args.text))
+
+
+async def wait_call(rt: Runtime, state: CallState) -> Halt | None:
+    call = state.call
+    args = WaitInput.model_validate(dict(call.data.input))
+    return await _decided(rt, call, None, lambda ctx: wait(ctx, args.members))
+
+
+async def monitor_call(rt: Runtime, state: CallState) -> Halt | None:
+    call = state.call
+    args = MonitorInput.model_validate(dict(call.data.input))
+    return await _decided(rt, call, None, lambda ctx: monitor(ctx, args.member))

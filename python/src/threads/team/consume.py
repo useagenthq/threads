@@ -1,38 +1,37 @@
 """mail.consume under the recipient's writer (spec/schema/README.md, "Teams"; design §4.7): the
-pending rows in (created_at, mail_id) order. Control mail is taken whatever its provenance;
-ordinary mail only when the recipient was not parked when the consume began, as one batch of one
-(principal, root_request): mid-turn the open turn's, else the first row's, ending at the first row
-of another. A member run takes only ordinary mail of its own principal: the rest waits for a
-run under that one. Mail reaching a member that already ended is refused under its writer.
-Reference: spec/tools/fixtures/ops_consume.py.
+pending rows in (created_at, mail_id) order, in one pass. Control mail is taken as it comes,
+whatever its provenance; ordinary mail only when the recipient was not parked when the consume
+began, as one batch of one (principal, root_request): mid-turn the open turn's, else the first
+row's, ending at the first row of another. A member run takes only ordinary mail of its own
+principal: the rest waits for a run under that one. Mail reaching a member that already ended is
+refused under its writer. Reference: spec/tools/fixtures/ops_consume.py.
 
-Lane 21E adds the rest of control mail: applying a cancel, the replies, bounces and notices that
-complete an ask or a wait. Until then those stay pending, and a pending cancel stops the
-ordinary mail behind it: a member being cancelled takes no new work."""
+Applying a cancel is lane 21E.2's: until then a cancel stays pending, and it stops the ordinary
+mail behind it (a member being cancelled takes no new work)."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, assert_never
 
-from threads.log import Event, MailEnvelope, MemberEndedEvent, Principal, Provenance
+from threads.log import Event, MailEnvelope, MemberEndedEvent, ParkAddress, Principal, Provenance
 from threads.log.keys import principal_key
-from threads.reduce import Fold
 from threads.reduce.fold import loop_parked
 from threads.reduce.handlers import to_json
 from threads.store.lines import Draft
+from threads.team.close import CloseContext, take_answer, take_wait_notice
 from threads.team.mail import received
 from threads.team.park import take_park_notice
 from threads.team.provenance import turn_provenance
 from threads.team.rows import MemberRow, own_rows, pending_for, team_row
-from threads.team.settle import AppendContext, refuse_all
+from threads.team.settle import refuse_all
+from threads.team.view import parked_on
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
 
 @dataclass(frozen=True, slots=True)
-class ConsumeContext(AppendContext):
-    fold: Fold
+class ConsumeContext(CloseContext):
     principal: Principal | None = None
     """A member run's principal: ordinary mail of another waits for a run under that one."""
 
@@ -58,10 +57,16 @@ class _Pass:
 
 
 def consumable(env: MailEnvelope) -> bool:
-    """Mail a consume can take now, so the worker wakes its recipient for it: all but the
-    control mail lane 21E consumes (a cancel, a reply, an ask's bounce)."""
-    later = env.kind in ("cancel", "reply")
-    return not (later or (env.kind == "bounce" and isinstance(env.ask_id, str)))
+    """Mail a consume can take now, so the worker wakes its recipient for it: all but a cancel,
+    which lane 21E.2 applies."""
+    return env.kind != "cancel"
+
+
+def may_resume(env: MailEnvelope) -> bool:
+    """Mail that may be control mail for a parked recipient (an answer, a notice, a park notice),
+    so the worker wakes a parked member for it. Its consume decides."""
+    answers = env.kind == "bounce" and isinstance(env.ask_id, str)
+    return answers or env.kind in ("reply", "member_settled", "member_ended", "member_parked")
 
 
 def consume(ctx: ConsumeContext) -> Consumed:
@@ -78,22 +83,32 @@ def consume(ctx: ConsumeContext) -> Consumed:
     turn = None if opened is None else _pair(Provenance.model_validate(opened))
     state = _Pass(turn, bool(loop_parked(fold)))
     for env in pending:
-        if _take(ctx, fold, state, env):
+        if _take(ctx, state, env):
             state.taken.append(env.mail_id)
     return Consumed("consumed", tuple(state.taken))
 
 
-def _take(ctx: ConsumeContext, fold: Fold, state: _Pass, env: MailEnvelope) -> bool:
+def _take(ctx: ConsumeContext, state: _Pass, env: MailEnvelope) -> bool:
     """Whether this pass takes the row: as control mail, or into its one ordinary batch."""
-    control = _control(fold, env)
-    if control == "later":
-        state.blocked = state.blocked or env.kind == "cancel"
-        return False
-    if control != "ordinary":
-        _take_control(ctx, state, env, control)
+    # An earlier control row of this pass took it (an ask's reply, a wait's notice).
+    if env.mail_id in ctx.batch.taken():
         return True
-    if state.blocked:
+    control = _control(ctx, env)
+    if control == "later":
+        state.blocked = True
         return False
+    if control == "taken":
+        return True
+    if control == "park":
+        # Ordinary mail behind a new park waits for the next consume.
+        if take_park_notice(ctx, env, team_log=False):
+            state.blocked = True
+        return True
+    return not state.blocked and _ordinary(ctx, state, env)
+
+
+def _ordinary(ctx: ConsumeContext, state: _Pass, env: MailEnvelope) -> bool:
+    """Ordinary mail: into the pass's one batch of one (principal, root_request)."""
     pair = _pair(env.provenance)
     if state.turn is not None:
         if pair != state.turn:
@@ -111,42 +126,45 @@ def _under_run(ctx: ConsumeContext, env: MailEnvelope) -> bool:
     return who is None or principal_key(who) == principal_key(env.provenance.principal)
 
 
-def _take_control(
-    ctx: ConsumeContext, state: _Pass, env: MailEnvelope, control: Literal["resume", "park"]
-) -> None:
-    if control == "resume":
-        _resume(ctx, env)
-    elif take_park_notice(ctx, env, team_log=False):
-        # Ordinary mail behind a new park waits for the next consume.
-        state.blocked = True
+def _control(
+    ctx: ConsumeContext, env: MailEnvelope
+) -> Literal["taken", "park", "later", "ordinary"]:
+    """Control mail, the exhaustive list, applied now ("taken"; a park notice is "park"): a reply
+    or an ask's bounce, a wait's notice, and a task or end notice resolving a `{kind: member}`
+    park. A cancel waits for lane 21E.2 ("later"); anything else is ordinary."""
+    kind: Literal["taken", "park", "later", "ordinary"]
+    match env.kind:
+        case "member_parked":
+            kind = "park"
+        case "cancel":
+            kind = "later"
+        case "reply":
+            take_answer(ctx, env)
+            kind = "taken"
+        case "bounce" if isinstance(env.ask_id, str):
+            take_answer(ctx, env)
+            kind = "taken"
+        case "member_settled" | "member_ended":
+            kind = "taken" if _take_notice(ctx, env) else "ordinary"
+        case "bounce" | "message" | "ask" | "task":
+            kind = "ordinary"
+        case _:
+            assert_never(env.kind)
+    return kind
 
 
-def _resume(ctx: ConsumeContext, env: MailEnvelope) -> None:
-    """A task or end notice resolving the park on it: its receipt, then resumed."""
-    got = ctx.batch.add(received(env))
+def _take_notice(ctx: ConsumeContext, env: MailEnvelope) -> bool:
+    """A settle or end notice: a wait's, or a task or end notice resolving the park on it."""
+    if take_wait_notice(ctx, env):
+        return True
     monitor = env.monitor_id if isinstance(env.monitor_id, str) else ""
-    data: dict[str, JsonValue] = {
-        "address": {"kind": "member", "id": monitor},
-        "cause_event_id": got,
-    }
+    address = ParkAddress(kind="member", id=monitor)
+    if not parked_on(ctx.fold, ctx.batch, address):
+        return False
+    got = ctx.batch.add(received(env))
+    data: dict[str, JsonValue] = {"address": to_json(address), "cause_event_id": got}
     ctx.batch.add(Draft("resumed", data))
-
-
-def _control(fold: Fold, env: MailEnvelope) -> Literal["resume", "park", "later", "ordinary"]:
-    """Control mail this lane takes: a member's park notice, and a task or end notice resolving a
-    `{kind: member}` park. The rest of control mail waits for lane 21E ("later"); anything else
-    is ordinary."""
-    if env.kind == "member_parked":
-        return "park"
-    if not consumable(env):
-        return "later"
-    if env.kind not in ("member_settled", "member_ended"):
-        return "ordinary"
-    monitor = env.monitor_id
-    if isinstance(monitor, str) and monitor in fold.team.settle:
-        return "later"
-    parked = any(p.kind == "member" and p.id == monitor for p in fold.parked)
-    return "resume" if parked else "ordinary"
+    return True
 
 
 def _refuse_ended(ctx: ConsumeContext, row: MemberRow) -> Consumed:

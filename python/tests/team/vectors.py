@@ -66,9 +66,9 @@ def _exported(ref: Obj) -> bytes:
     return b"\n".join(lines) + b"\n"
 
 
-async def seeded(v: Obj) -> SqliteStore:
+async def seeded(v: Obj, path: str = ":memory:") -> SqliteStore:
     """A store holding the vector's world, its team index rebuilt, every pinned config stored."""
-    opened = await SqliteStore.open(tenant_id="acme")
+    opened = await SqliteStore.open(path, tenant_id="acme")
     assert isinstance(opened, Ok)
     store = opened.value
     await add(store, {label: _exported(ref) for label, ref in world_logs(v).items()}, "acme")

@@ -7,9 +7,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import JsonValue
+from pydantic import JsonValue, TypeAdapter
 
-from threads.log import MailEnvelope
+from threads.log import MailEnvelope, StoredMemberResult
 from threads.store.sql import int_of, text_of
 
 type Role = Literal["lead", "member"]
@@ -53,6 +53,8 @@ class MonitorRow:
     kind: str
 
 
+_RESULT: TypeAdapter[StoredMemberResult] = TypeAdapter(StoredMemberResult)
+_JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 _MEMBER = "team_id, name, generation, role, agent, config_hash, thread_id, branch_id, state"
 
 
@@ -159,6 +161,57 @@ def mail_envelope(conn: sqlite3.Connection, mail_id: str) -> MailEnvelope | None
     ).fetchall()
     found = _envelopes(rows)
     return found[0] if found else None
+
+
+@dataclass(frozen=True, slots=True)
+class Settled:
+    """An idle or ended member's committed result and the seq of the event that wrote it."""
+
+    result: JsonValue
+    seq: int
+
+
+def settled_of(conn: sqlite3.Connection, row: MemberRow) -> Settled:
+    """The member's committed result: the row's, written by its member_idle or member_ended
+    (nothing else changes the row until its next turn opens)."""
+    found: tuple[object, object] | None = conn.execute(
+        "SELECT result, updated_seq FROM team_members WHERE team_id = ? AND name = ?"
+        " AND generation = ?",
+        (row.team_id, row.name, row.generation),
+    ).fetchone()
+    if found is None:
+        raise AssertionError(f"no settled row {row.name}")
+    result = _RESULT.validate_json(bytes_of(found[0]))
+    return Settled(
+        _JSON.validate_python(_RESULT.dump_python(result, mode="json")), int_of(found[1])
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class AskRow:
+    asker_branch_id: str
+    deadline: int
+    state: str
+
+
+def ask_row(conn: sqlite3.Connection, ask_id: str) -> AskRow | None:
+    """An ask's row, whatever its state."""
+    found: tuple[object, object, object] | None = conn.execute(
+        "SELECT asker_branch_id, deadline, state FROM asks WHERE ask_id = ?", (ask_id,)
+    ).fetchone()
+    if found is None:
+        return None
+    return AskRow(text_of(found[0]), int_of(found[1]), text_of(found[2]))
+
+
+def due_asks(conn: sqlite3.Connection, branch: str, now: int) -> list[tuple[str, int]]:
+    """This branch's open asks whose deadline is at or before `now`, oldest first, with it."""
+    rows: list[tuple[object, object]] = conn.execute(
+        "SELECT ask_id, deadline FROM asks WHERE asker_branch_id = ? AND state = 'open'"
+        " AND deadline <= ? ORDER BY deadline, ask_id",
+        (branch, now),
+    ).fetchall()
+    return [(text_of(a), int_of(d)) for a, d in rows]
 
 
 def monitors_on(conn: sqlite3.Connection, team: str, row: MemberRow) -> list[MonitorRow]:

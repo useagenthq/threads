@@ -69,7 +69,7 @@ class BranchStore:
             return Err(error)
         if not start.runnable:
             return Ok(None)
-        return Ok(Writer(self._worker, held, start.fold, start.fork[1], clock))
+        return Ok(Writer(self._worker, held, start.fold, start.fork[1], clock, self._artifacts.get))
 
     async def fail_fork(self, child: BranchId) -> None:
         """The fork failed: the child becomes `fork_failed` and is never listed."""

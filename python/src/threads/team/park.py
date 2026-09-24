@@ -6,11 +6,14 @@ Reference: spec/tools/fixtures/ops_request.py (park) and ops_consume.py."""
 
 from pydantic import JsonValue
 
-from threads.log import MailEnvelope
+from threads.log import MailEnvelope, ParkAddress, ParkedEvent
+from threads.reduce.handlers import to_json
 from threads.store.lines import Draft
+from threads.team.call import CallContext
 from threads.team.mail import address_of, received, sent
 from threads.team.rows import monitors_on, own_rows, ref_of, team_row
 from threads.team.settle import AppendContext
+from threads.team.view import parked_on
 
 
 def park_notice(ctx: AppendContext, provenance: JsonValue, event_id: str, reason: str) -> None:
@@ -34,6 +37,21 @@ def park_notice(ctx: AppendContext, provenance: JsonValue, event_id: str, reason
         "reason": reason,
     }
     ctx.batch.add(sent(env))
+
+
+def park_call(ctx: CallContext, provenance: JsonValue, address: ParkAddress) -> None:
+    """A member's ask or wait parks its call once its turn has nothing else to run (it is the
+    only pending call), with its first park's member_parked notice. The team log never parks."""
+    fold = ctx.fold
+    alone = fold.pending == [ctx.call.data.call_id]
+    if not alone or parked_on(fold, ctx.batch, address):
+        return
+    first = not any(isinstance(e, ParkedEvent) for e in fold.events)
+    data: dict[str, JsonValue] = {"address": to_json(address), "reason": "awaiting_member"}
+    event_id = ctx.batch.add(Draft("parked", data))
+    if first:
+        at = AppendContext(ctx.conn, ctx.batch, ctx.call.thread_id, ctx.call.branch_id)
+        park_notice(at, provenance, event_id, "awaiting_member")
 
 
 def take_park_notice(ctx: AppendContext, env: MailEnvelope, *, team_log: bool) -> bool:

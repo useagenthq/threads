@@ -3,12 +3,20 @@ the team tools each advance their call on the log; background children run besid
 their ends are recorded at step boundaries (waking the idle lead), and the run waits for them
 before it gives its lease back."""
 
+from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, Final
 
 from threads.agents import stops
 from threads.agents.background import Background, settle
 from threads.agents.handoff import handoff
-from threads.agents.members import send_call, start_call
+from threads.agents.members import (
+    ask_call,
+    monitor_call,
+    reply_call,
+    send_call,
+    start_call,
+    wait_call,
+)
 from threads.agents.results import Parked
 from threads.agents.scope import Scope
 from threads.agents.spawn import busy, once, spawn, start_background
@@ -31,6 +39,15 @@ if TYPE_CHECKING:
     from pydantic import JsonValue
 
 NAMES: Final = TEAM | PINNED_MEMBERS | {"spawn_agent", "handoff"}
+_MEMBER_CALLS: Final[Mapping[str, Callable[[Runtime, CallState], Awaitable[Halt | None]]]] = {
+    "start": start_call,
+    "send": send_call,
+    "ask": ask_call,
+    "reply": reply_call,
+    "wait": wait_call,
+    "monitor": monitor_call,
+}
+"""The team tools, each one decided append under the caller's writer (agents/members.py)."""
 
 
 class Agents[D]:
@@ -45,15 +62,15 @@ class Agents[D]:
         return self._names
 
     async def run(self, rt: Runtime, state: CallState) -> Halt | None:
-        match state.call.data.name:
+        name = state.call.data.name
+        member_call = _MEMBER_CALLS.get(name)
+        if member_call is not None:
+            return await member_call(rt, state)
+        match name:
             case "spawn_agent":
                 return await spawn(self._scope, rt, state, self._bg)
             case "handoff":
                 return await handoff(self._scope, rt, state)
-            case "start":
-                return await start_call(rt, state)
-            case "send":
-                return await send_call(rt, state)
             case _:
                 scope = self._scope
                 team = (scope.lead(rt), scope.member(), scope.team_names())

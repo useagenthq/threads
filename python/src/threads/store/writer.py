@@ -10,6 +10,7 @@ from threads.log.digest import sha256_hex
 from threads.redaction import SecretInStoredBytesError, published
 from threads.reduce import Fold
 from threads.reduce.state import HeadRef, ReducedState, reduced_state
+from threads.render.artifacts import ReadArtifact
 from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.admit import Admitted, admit, trial
@@ -37,6 +38,8 @@ class DecideTx:
     """The committed fold the drafts extend: the stored head is its head."""
     now: int
     """The append's clock: every event's time."""
+    read: ReadArtifact
+    """The store's artifacts, read on its thread: a ref a decision needs (a big reply's text)."""
 
 
 type Decide[E] = Callable[[DecideTx], Sequence[Draft] | Refusal[E]]
@@ -65,8 +68,14 @@ class Writer:
     reduced state, then commits them only if the lease is still this writer's and the head is
     where it expects. A lost lease or a moved head poisons the writer."""
 
-    def __init__(
-        self, worker: Worker, held: lease.Lease, fold: Fold, last_line: bytes, clock: Clock
+    def __init__(  # noqa: PLR0913, PLR0917 - the lease, its fold and head, the clock, the artifacts
+        self,
+        worker: Worker,
+        held: lease.Lease,
+        fold: Fold,
+        last_line: bytes,
+        clock: Clock,
+        read: ReadArtifact,
     ) -> None:
         if fold.segment is None or fold.thread_id is None:
             raise ValueError("a writer needs a folded branch")
@@ -76,6 +85,7 @@ class Writer:
         self._branch: BranchId = fold.segment
         self._last_line = last_line
         self._clock = clock
+        self._read = read
         self._poisoned = False
         self._lock = asyncio.Lock()
         self._moved = asyncio.Event()
@@ -162,7 +172,7 @@ class Writer:
         refusals: list[Refusal[E]] = []
 
         def build(conn: sqlite3.Connection) -> lease.Batch | lease.Refused:
-            decided = decide(DecideTx(conn, committed, now))
+            decided = decide(DecideTx(conn, committed, now, self._read))
             if isinstance(decided, Refusal):
                 refusals.append(decided)
                 return lease.Refused(_REFUSED)

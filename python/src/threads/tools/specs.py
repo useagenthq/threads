@@ -24,6 +24,7 @@ class _Entry(TypedDict):
 _ENTRIES: Final = TypeAdapter(list[_Entry]).validate_python(json.loads(tools_v1.TOOL_CATALOG))
 
 MODELS: Final[Mapping[str, type[StrictModel]]] = {
+    "ask": tools_v1.AskInput,
     "ask_user": tools_v1.AskUserInput,
     "bash": tools_v1.BashInput,
     "computer": tools_v1.ComputerInput,
@@ -38,10 +39,12 @@ MODELS: Final[Mapping[str, type[StrictModel]]] = {
     "ls": tools_v1.LsInput,
     "load_skill": tools_v1.LoadSkillInput,
     "lsp": tools_v1.LspInput,
+    "monitor": tools_v1.MonitorInput,
     "notebook_edit": tools_v1.NotebookEditInput,
     "open_pull_request": tools_v1.OpenPullRequestInput,
     "read": tools_v1.ReadInput,
     "read_tool_result": tools_v1.ReadToolResultInput,
+    "reply": tools_v1.ReplyInput,
     "send": tools_v1.SendInput,
     "send_message": tools_v1.SendMessageInput,
     "spawn_agent": tools_v1.SpawnAgentInput,
@@ -50,6 +53,7 @@ MODELS: Final[Mapping[str, type[StrictModel]]] = {
     "team_task_create": tools_v1.TeamTaskCreateInput,
     "team_task_update": tools_v1.TeamTaskUpdateInput,
     "todo_write": tools_v1.TodoWriteInput,
+    "wait": tools_v1.WaitInput,
     "web_fetch": tools_v1.WebFetchInput,
     "web_search": tools_v1.WebSearchInput,
     "write": tools_v1.WriteInput,

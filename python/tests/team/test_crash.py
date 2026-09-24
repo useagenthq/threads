@@ -7,44 +7,18 @@ test/team/crash.test.ts."""
 
 import asyncio
 import sqlite3
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
-from functools import partial
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
+from team.crash_kit import CrashError, Point, crashing, mentions, reached, restart
 from team.run_kit import say, start
 from team.team_kit import assert_team_replays
 
-from threads import Agent, Completed, Principal, agent, scripted_model, sqlite
-from threads.agents.run import RunOptions, execute
-from threads.agents.store import open_store
-from threads.log import (
-    BranchId,
-    MemberStartedEvent,
-    MessageReceivedEvent,
-    ThreadId,
-    UserInputEvent,
-)
+from threads import Agent, Completed, agent, scripted_model
+from threads.log import BranchId, MemberStartedEvent, MessageReceivedEvent, UserInputEvent
 from threads.result import Ok
 from threads.team.rows import member_rows, team_row
-from threads.thread.handle import Thread
-
-OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
-
-
-class CrashError(Exception):
-    """The process dying at a commit point."""
-
-
-type At = Callable[[sqlite3.Connection, str, Sequence[object]], bool]
-
-
-def _mentions(params: Sequence[object], text: str) -> bool:
-    return any(
-        (isinstance(p, str) and text in p) or (isinstance(p, bytes) and text.encode() in p)
-        for p in params
-    )
 
 
 def _a_researchers(conn: sqlite3.Connection, params: Sequence[object]) -> bool:
@@ -56,16 +30,10 @@ def _a_researchers(conn: sqlite3.Connection, params: Sequence[object]) -> bool:
     return row is not None
 
 
-@dataclass(frozen=True, slots=True)
-class Point:
-    name: str
-    at: At
-
-
 POINTS = (
     Point(
         "the lead's start",
-        lambda _c, sql, p: "INSERT INTO team_members" in sql and _mentions(p, "researcher-1"),
+        lambda _c, sql, p: "INSERT INTO team_members" in sql and mentions(p, "researcher-1"),
     ),
     Point(
         "the member's materialize", lambda _c, sql, _p: "UPDATE team_members SET branch_id" in sql
@@ -84,19 +52,6 @@ POINTS = (
 )
 
 
-class _Crashing(sqlite3.Connection):
-    """A connection that dies once, at `point`."""
-
-    point: At | None = None
-
-    def execute(self, sql: str, parameters: Sequence[object] = (), /) -> sqlite3.Cursor:  # type: ignore[override] - narrowed for the drill
-        point = type(self).point
-        if point is not None and point(self, sql, parameters):
-            type(self).point = None
-            raise CrashError(sql)
-        return super().execute(sql, parameters)
-
-
 def _team(*, fresh: bool, researcher: Sequence[str]) -> Agent[None, str]:
     opening = [start("c1", "researcher", "Go.")] if fresh else []
     lead_script = [*opening, say("Started."), say("Final."), say("Final.")]
@@ -111,30 +66,15 @@ def test_a_crash_inside_a_commit_point_stores_none_of_it_the_restart_finishes_on
     point: Point, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     async def main() -> None:
-        crashing = sqlite(str(tmp_path))
-        with monkeypatch.context() as m:
-            m.setattr(sqlite3, "connect", partial(sqlite3.connect, factory=_Crashing))
-            await open_store(crashing)
-        _Crashing.point = point.at
+        store = await crashing(tmp_path, monkeypatch, point)
         with pytest.raises(CrashError):
-            await _team(fresh=True, researcher=["Done."]).run("Work.", store=crashing)
-        assert _Crashing.point is None, "the drill reached its commit point"
+            await _team(fresh=True, researcher=["Done."]).run("Work.", store=store)
+        assert reached(), "the drill reached its commit point"
 
-        store = sqlite(str(tmp_path))
-        sq = await open_store(store)
-        teams: list[tuple[str, str]] = await sq.run(
-            lambda c: c.execute("SELECT lead_thread_id, team_id FROM teams").fetchall()
-        )
-        ((lead_thread, team),) = teams
-        lead_branch = await sq.root(ThreadId(lead_thread))
-        assert isinstance(lead_branch, Ok)
-        thread = Thread(ThreadId(lead_thread), lead_branch.value, store)
-        restarted = _team(fresh=False, researcher=["Done.", "Done."])
-        options: RunOptions[None] = {"store": store, "principal": OPERATOR, "thread": thread}
-        result = await execute(restarted.definition, None, options, None, lambda _e: None)
-        assert isinstance(result, Completed), result
-
-        read = await sq.read(lead_branch.value, 0)
+        again = await restart(tmp_path, _team(fresh=False, researcher=["Done.", "Done."]))
+        assert isinstance(again.result, Completed), again.result
+        sq, team = again.sq, again.team
+        read = await sq.read(again.lead, 0)
         assert isinstance(read, Ok)
         lead = read.value.fold.events
         assert len([e for e in lead if isinstance(e, MemberStartedEvent)]) == 1

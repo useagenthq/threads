@@ -29,6 +29,7 @@ from threads.memory.authority import MemoryWrite
 from threads.memory.protocol import KnowledgeProvider, MemoryProvider
 from threads.sandbox.protocol import Sandbox
 from threads.team.ops import TeamLimits as Limits
+from threads.tools.specs import MEMBERS
 
 if TYPE_CHECKING:
     from threads.agents.dynamic_agent import DynamicAgent
@@ -349,8 +350,10 @@ def build_definition[T](
     definition = replace(definition, subagents=children, handoffs=handoffs, team=members)
     narrowing.check(definition)
     narrowing.enforceable(definition)
+    # A team tool's name taken by an own tool is refused at setup, naming the tool (team_check).
+    own = [s.name for s in definition.specs() if definition.team is None or s.name not in MEMBERS]
     for kind, names in (
-        ("tool", [s.name for s in definition.specs()]),
+        ("tool", own),
         ("MCP server", [s.name for s in servers]),
         ("extension", [e.name for e in definition.extensions]),
     ):

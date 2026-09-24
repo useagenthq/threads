@@ -5,6 +5,7 @@ budget of that turn's root request."""
 
 from collections.abc import Awaitable, Callable
 
+from pydantic import BaseModel, ConfigDict, JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.store import now_ms
@@ -12,24 +13,35 @@ from threads.log import (
     BranchId,
     Event,
     MessageReceivedEvent,
+    ModelRef,
     Parent,
+    Policy,
     RequestRef,
     ThreadId,
     ThreadStartedEvent,
     UserInputEvent,
 )
 from threads.loop.covering import Covering
+from threads.loop.team_runtime import TeamRecipient
 from threads.result import Err
 from threads.store import SqliteStore
-from threads.team.rows import mail_envelope
+from threads.team.rows import MemberRow, mail_envelope, team_row
 
 
 async def ancestors_of(sq: SqliteStore, parent: Parent | None) -> tuple[Covering, ...]:
     """Every ancestor thread's own budget, from the member's parent up to the root."""
+    return await _ancestors(sq, None if parent is None else (parent.thread_id, parent.branch_id))
+
+
+type _At = tuple[str, str]
+"""(thread_id, branch_id) of a structural parent."""
+
+
+async def _ancestors(sq: SqliteStore, at: _At | None) -> tuple[Covering, ...]:
     out: list[Covering] = []
-    at = parent
     while at is not None:
-        read = await sq.read(BranchId(at.branch_id), now_ms())
+        thread, branch = at
+        read = await sq.read(BranchId(branch), now_ms())
         if isinstance(read, Err):
             break
         started = next(
@@ -39,10 +51,62 @@ async def ancestors_of(sq: SqliteStore, parent: Parent | None) -> tuple[Covering
             break
         policy = started.data.policy
         if policy is not MISSING and policy.budget is not MISSING:
-            owner = ThreadId(at.thread_id)
+            owner = ThreadId(thread)
             out.append(Covering(f"thread:{owner}", policy.budget, "ancestor", owner))
-        at = None if started.data.parent is MISSING else started.data.parent
+        parent = started.data.parent
+        at = None if parent is MISSING else (parent.thread_id, parent.branch_id)
     return tuple(out)
+
+
+class _Pinned(BaseModel):
+    """What one request of a member reserves, from its pinned config (a strict subset)."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, strict=True)
+    model: ModelRef
+    model_params: dict[str, JsonValue]
+    policy: Policy | None = None
+
+
+def recipient_of(sq: SqliteStore) -> Callable[[MemberRow], Awaitable[TeamRecipient | None]]:
+    """An asked member's budgets (ask's headroom): its own thread budget and every ancestor's,
+    with what one request of its model reserves, from its thread_started; a member still starting
+    has no log yet, so from its pinned config, under its lead."""
+
+    async def recipient(row: MemberRow) -> TeamRecipient | None:
+        got = await (_configured(sq, row) if row.branch_id is None else _started(sq, row.branch_id))
+        if got is None:
+            return None
+        pinned, parent = got
+        policy = pinned.policy
+        own = () if policy is None or policy.budget is MISSING else (policy.budget,)
+        mine = tuple(Covering(f"thread:{row.thread_id}", b, "thread") for b in own)
+        covering = (*mine, *await _ancestors(sq, parent))
+        return TeamRecipient(pinned.model, pinned.model_params, policy, covering)
+
+    return recipient
+
+
+async def _started(sq: SqliteStore, branch: str) -> tuple[_Pinned, _At | None] | None:
+    read = await sq.read(BranchId(branch), now_ms())
+    if isinstance(read, Err):
+        return None
+    started = next((e for e in read.value.fold.events if isinstance(e, ThreadStartedEvent)), None)
+    if started is None:
+        return None
+    data = started.data
+    policy = None if data.policy is MISSING else data.policy
+    pinned = _Pinned(model=data.model, model_params=dict(data.model_params), policy=policy)
+    parent = None if data.parent is MISSING else (data.parent.thread_id, data.parent.branch_id)
+    return pinned, parent
+
+
+async def _configured(sq: SqliteStore, row: MemberRow) -> tuple[_Pinned, _At | None] | None:
+    config = await sq.get_artifact(row.config_hash)
+    team = await sq.run(lambda c: team_row(c, row.team_id))
+    lead = None if team is None else await sq.root(ThreadId(team.lead_thread_id))
+    if isinstance(config, Err) or team is None or lead is None or isinstance(lead, Err):
+        return None
+    return _Pinned.model_validate_json(config.value), (team.lead_thread_id, lead.value)
 
 
 def run_covering(sq: SqliteStore) -> Callable[[Event], Awaitable[Covering | None]]:

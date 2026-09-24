@@ -18,6 +18,7 @@ from threads.agents.definition import Definition
 from threads.agents.dynamic_agent import member_definition
 from threads.agents.store import Store, now_ms
 from threads.agents.team_budgets import ancestors_of
+from threads.agents.team_units import end_unbound, refuse_ended
 from threads.log import (
     BranchId,
     MailEnvelope,
@@ -33,24 +34,22 @@ from threads.log import UserInputEvent as _Input
 from threads.loop.covering import Covering
 from threads.loop.team_runtime import TeamAgentPin
 from threads.reduce import Fold
-from threads.result import Err, Ok
-from threads.store import Draft, SqliteStore, lease
+from threads.result import Err
+from threads.store import SqliteStore, lease
 from threads.store.lines import uuid7
-from threads.store.writer import DecideTx, Refusal
-from threads.team.batch import Batch, Mint
+from threads.team.batch import Mint
 from threads.team.claim import claim_mail
 from threads.team.constants import TEAM_CONSTANTS
-from threads.team.consume import ConsumeContext, consumable, consume
+from threads.team.consume import consumable, may_resume
+from threads.team.deadline import next_deadline
 from threads.team.dynamic import OPERATOR
 from threads.team.materialize import (
     MaterializeOptions,
     Rebind,
-    RebindCode,
     materialize,
     started_by,
 )
 from threads.team.provenance import turn_provenance
-from threads.team.rebind import rebind_failed
 from threads.team.rows import (
     MemberRow,
     mail_envelope,
@@ -59,7 +58,6 @@ from threads.team.rows import (
     pending_for,
     team_row,
 )
-from threads.team.settle import AppendContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,12 +172,22 @@ class TeamWorker:
         branch = row.branch_id
         if branch is None:
             return None
-        # A parked member runs again at a run's start: what it waits on may be answered by now.
-        if row.state == "parked":
-            return (lambda: self._member(row, BranchId(branch))) if recovering else None
         pending = await self._env.sq.run(lambda c: pending_for(c, own_rows(c, row.thread_id)))
+        # A parked member runs again at a run's start (what it waits on may be answered by now),
+        # for mail that may resume it, and once an ask or a wait it parked on is due.
+        if row.state == "parked":
+            wake = (
+                recovering
+                or await self._claim([m for m in pending if may_resume(m)])
+                or await self._due(BranchId(branch))
+            )
+            return (lambda: self._member(row, BranchId(branch))) if wake else None
         if row.state == "ended":
-            return (lambda: self._refuse(BranchId(branch))) if pending else None
+            return (
+                (lambda: refuse_ended(self._env.sq, self._env.mint, BranchId(branch)))
+                if pending
+                else None
+            )
         # A turn left open with its lease free is resumed (hostless recovery).
         stranded = row.state == "running" and (recovering or await self._free(branch))
         woken = await self._claim([m for m in pending if consumable(m)])
@@ -194,6 +202,17 @@ class TeamWorker:
         first, now, ttl = mail[0].mail_id, now_ms(), self._env.claim_ttl_ms
         got = await self._env.sq.run(lambda c: claim_mail(c, first, self._token, now, ttl))
         return got == "claimed"
+
+    async def _due(self, branch: BranchId) -> bool:
+        """An ask or a wait the parked member waits on is due: its writer closes it.
+        ponytail: reads the member's log each pass; keep its next deadline per head if parked
+        members grow many."""
+        read = await self._env.sq.read(branch, now_ms())
+        if isinstance(read, Err):
+            return False
+        fold = read.value.fold
+        due = await self._env.sq.run(lambda c: next_deadline(c, fold, branch))
+        return due is not None and due <= now_ms()
 
     async def _free(self, branch: str) -> bool:
         def expired(conn: sqlite3.Connection) -> bool:
@@ -289,7 +308,7 @@ class TeamWorker:
         rebind = await self._rebind(member_started, envelope)
         if found is None or rebind.status != "ok":
             code = "pin_unavailable" if rebind.status == "ok" else rebind.status
-            await self._unbound(branch, holder, code)
+            await end_unbound(self._env.sq, self._env.mint, branch, holder, code)
             return
         fold = read.value.fold
         principal = await self._env.sq.run(lambda c: principal_of(c, fold, row))
@@ -303,45 +322,6 @@ class TeamWorker:
             await ancestors_of(self._env.sq, parent),
         )
         await self._env.run(found, run)
-
-    async def _unbound(self, branch: BranchId, holder: str, code: RebindCode) -> None:
-        """A member whose definition can't be rebound here ends failed, under its own writer."""
-        got = await self._env.sq.acquire(branch, holder, now_ms)
-        # Held elsewhere: its holder runs it.
-        if isinstance(got, Err):
-            return
-        w = got.value
-        thread = w.fold.thread_id
-        if thread is None:
-            raise AssertionError("an acquired branch has a thread")
-
-        def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[None]:
-            batch = Batch(tx.fold.seq, tx.now, self._env.mint)
-            rebind_failed(AppendContext(tx.conn, batch, thread, branch), tx.fold, code, tx.now)
-            return batch.drafts
-
-        ended = await w.append_decided(decide)
-        await w.release()
-        if not isinstance(ended, Ok):
-            raise AssertionError(f"member end: {ended}")
-
-    async def _refuse(self, branch: BranchId) -> None:
-        """An ended member's writer refuses the mail that still reaches it."""
-        got = await self._env.sq.acquire(branch, f"team-{uuid.uuid4().hex}", now_ms)
-        if isinstance(got, Err):
-            return
-        w = got.value
-        thread = w.fold.thread_id
-        if thread is None:
-            raise AssertionError("an acquired branch has a thread")
-
-        def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[None]:
-            batch = Batch(tx.fold.seq, tx.now, self._env.mint)
-            consume(ConsumeContext(tx.conn, batch, thread, branch, tx.fold))
-            return batch.drafts
-
-        await w.append_decided(decide)
-        await w.release()
 
 
 def principal_of(conn: sqlite3.Connection, fold: Fold, row: MemberRow) -> Principal | None:

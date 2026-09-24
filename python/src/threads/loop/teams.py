@@ -12,14 +12,17 @@ from threads.log import Event, ParkedEvent, TurnCompletedEvent, UserInputEvent
 from threads.loop.drive import parked
 from threads.loop.runtime import Appended, Halt, Idle, Parked, Runtime, after_barrier, lost
 from threads.loop.team_runtime import TeamRuntime
+from threads.reduce import Fold
 from threads.reduce.fold import loop_parked
 from threads.reduce.run_end import RunStatus, run_end
 from threads.result import Err
 from threads.store import Draft
 from threads.store.writer import DecideTx, Refusal
 from threads.team.batch import Batch
+from threads.team.close import reader_of
 from threads.team.constants import TEAM_CONSTANTS
 from threads.team.consume import ConsumeContext, consume
+from threads.team.deadline import deadline, due_ids
 from threads.team.park import park_notice
 from threads.team.provenance import turn_provenance
 from threads.team.settle import Completed, SettleContext, settle
@@ -87,32 +90,57 @@ async def settled(rt: Runtime, drafts: Sequence[Draft]) -> Appended:
     return done
 
 
-async def consume_mail(rt: Runtime) -> Halt | None:
-    """mail.consume under this writer: a receipt that opens a turn leaves the loop a turn."""
+async def _decided(rt: Runtime, step: Callable[[ConsumeContext], object]) -> Halt | None:
+    """One team step decided under this writer."""
     team = _team(rt)
 
     def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[None]:
         batch = Batch(tx.fold.seq, tx.now, team.mint)
         branch = rt.writer.branch_id
-        consume(ConsumeContext(tx.conn, batch, _thread(rt), branch, tx.fold, team.principal))
+        read = reader_of(tx.read)
+        step(ConsumeContext(tx.conn, batch, _thread(rt), branch, tx.fold, read, team.principal))
         return batch.drafts
 
     done = await rt.append_decided(decide)
     return lost(done.error) if isinstance(done, Err) else None
 
 
+async def team_step(rt: Runtime) -> Halt | None:
+    """One step between turns: the pending mail (a receipt that opens a turn, or an answer that
+    resumes one, leaves the loop a turn to run), then every ask or wait whose deadline passed."""
+
+    def deadlines(ctx: ConsumeContext) -> None:
+        for ident in due_ids(ctx.conn, ctx.fold, ctx.branch_id, ctx.batch.now):
+            deadline(ctx, ident)
+
+    stopped = await _decided(rt, consume)
+    return stopped if stopped is not None else await _decided(rt, deadlines)
+
+
+_TEAM_PARKS = frozenset({"member", "ask", "wait"})
+"""Parks that team mail or a deadline resolves: on a member, an ask or a wait."""
+
+
+def on_team(fold: Fold) -> bool:
+    """Whether every park of this thread is one team mail or a deadline resolves."""
+    return all(p.kind in _TEAM_PARKS for p in loop_parked(fold))
+
+
 async def team_turns(rt: Runtime, halt: Halt, turn: Callable[[], Awaitable[Halt]]) -> Halt:
-    """A team thread's turns after its input's, until nothing opens one (a member) or its run
-    ends (a lead), woken by its members' progress, its own log moving, or the in-process poll."""
+    """A team thread's turns after its input's: while idle, or parked only on team parks, its
+    pending mail is consumed and its due deadlines closed, and each turn that opens or resumes is
+    run. A member run by the team worker stops once nothing opens a turn; the lead of an
+    in-process run waits until its run ends, woken by its members' progress, its own log moving,
+    or the in-process poll; parked on an ask or a wait, until it is answered or due."""
     team = _team(rt)
-    while isinstance(halt, Idle) or (isinstance(halt, Parked) and _on_members(rt)):
+    while isinstance(halt, Idle) or (isinstance(halt, Parked) and on_team(rt.fold)):
         waits = [] if team.progress is None else [team.progress(), rt.writer.moved()]
         tasks = [asyncio.ensure_future(w) for w in waits]
         try:
-            stopped = await consume_mail(rt)
+            stopped = await team_step(rt)
             if stopped is not None:
                 return stopped
-            if rt.fold.in_turn:
+            if rt.fold.in_turn and not loop_parked(rt.fold):
                 halt = await turn()
             elif not tasks or not _waits(rt, team):
                 return _idle_or_parked(rt, halt)
@@ -128,15 +156,14 @@ async def team_turns(rt: Runtime, halt: Halt, turn: Callable[[], Awaitable[Halt]
     return halt
 
 
-def _on_members(rt: Runtime) -> bool:
-    return all(p.kind == "member" for p in loop_parked(rt.fold))
-
-
 def _waits(rt: Runtime, team: TeamRuntime) -> bool:
-    """A lead parked only on its members waits while one of them runs; an idle one while its
-    run is open."""
-    if loop_parked(rt.fold):
-        return _on_members(rt) and team.busy is not None and team.busy()
+    """The lead waits: on an ask or a wait (a deadline bounds it), on members the worker is
+    running, or, idle, while its run is open."""
+    parked = loop_parked(rt.fold)
+    if any(p.kind in ("ask", "wait") for p in parked):
+        return True
+    if parked:
+        return team.busy is not None and team.busy()
     return run_status(rt.events) == "running"
 
 

@@ -16,6 +16,7 @@ from threads.team.ops import TeamLimits
 if TYPE_CHECKING:
     from threads.loop.runtime import Appended, Runtime
     from threads.store import Draft
+    from threads.team.rows import MemberRow
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +36,17 @@ class TeamAgentPin:
     """A dynamic agent's base pin: what a start may choose (its tools but F, and its keys)."""
     specs: tuple[bytes, ...] = ()
     """Its deferred tools' spec artifacts, stored with the config."""
+
+
+@dataclass(frozen=True, slots=True)
+class TeamRecipient:
+    """What covers an asked member (ask's headroom): its own and its ancestors' budgets, and what
+    one request of its model reserves. The ask's run budget is the asker's turn's."""
+
+    model: ModelRef
+    params: Mapping[str, JsonValue]
+    policy: Policy | None
+    covering: tuple[Covering, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,3 +71,6 @@ class TeamRuntime:
     """A member's turn is under the run budget of the root request its opener belongs to."""
     mint: Mint | None = None
     """The event ids of team appends; tests inject deterministic ones."""
+    recipient: "Callable[[MemberRow], Awaitable[TeamRecipient | None]] | None" = None
+    """An asked member's budgets, read from its log (or its pinned config while starting); None:
+    no budget is known, and ask's headroom holds."""
