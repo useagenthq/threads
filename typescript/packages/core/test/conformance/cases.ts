@@ -23,6 +23,7 @@ const KINDS = [
   "security",
   "parity",
   "policy",
+  "team",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -48,9 +49,16 @@ const CaseFile = z.strictObject({
 const ExpectedFile = z.strictObject({
   outcome: z.enum(["ok", "error"]),
   error: z
-    .strictObject({ code: ErrorCode, seq: z.int().min(0).optional() })
+    .strictObject({
+      code: ErrorCode,
+      seq: z.int().min(0).optional(),
+      log: z.string().optional(),
+    })
     .optional(),
   state: z.record(z.string(), z.unknown()).optional(),
+  states: z.record(z.string(), z.unknown()).optional(),
+  index: z.record(z.string(), z.unknown()).optional(),
+  tree: z.unknown().optional(),
   committed_bytes: z.int().min(0).optional(),
   head_verified: z.boolean().optional(),
   projections: z.record(z.string(), z.unknown()).optional(),
@@ -171,9 +179,21 @@ export type Case = {
   readonly kind: Kind;
   readonly now: number;
   readonly error:
-    | { readonly code: string; readonly seq?: number | undefined }
+    | {
+        readonly code: string;
+        readonly seq?: number | undefined;
+        readonly log?: string | undefined;
+      }
     | undefined;
   readonly state: unknown;
+  /** team: each log by label, in input.logs order. */
+  readonly logs: ReadonlyMap<string, Uint8Array>;
+  /** team: the expected states, index and tree. */
+  readonly team: {
+    readonly states: unknown;
+    readonly index: unknown;
+    readonly tree: unknown;
+  };
   readonly projections: Readonly<Record<string, unknown>> | undefined;
   readonly committedBytes: number | undefined;
   readonly headVerified: boolean;
@@ -194,6 +214,23 @@ export type Case = {
 };
 
 const IMPL = "threads-ts";
+
+const TeamInput = z.object({ logs: z.array(z.string()) });
+
+/** A team case's logs, in input.logs order, each at logs/<label>.jsonl. */
+function teamLogs(
+  dir: string,
+  input: unknown,
+): ReadonlyMap<string, Uint8Array> {
+  const labels = TeamInput.safeParse(input);
+  if (!labels.success) return new Map();
+  return new Map(
+    labels.data.logs.map((label) => [
+      label,
+      new Uint8Array(readFileSync(join(dir, "logs", `${label}.jsonl`))),
+    ]),
+  );
+}
 
 /** A recover case ships one file per writer; this runner reads its own. */
 export function ownFile(dir: string, name: string): string {
@@ -249,6 +286,12 @@ export function loadCase(name: string, root: string = CASES_DIR): Case {
     committedBytes: expected.committed_bytes,
     headVerified: expected.head_verified ?? true,
     log: readBytes(logPath),
+    logs: teamLogs(dir, meta.input),
+    team: {
+      states: expected.states,
+      index: expected.index,
+      tree: expected.tree,
+    },
     artifacts: readArtifacts(dir),
     request: readBytes(join(dir, "request.bytes")),
     render: expected.render,

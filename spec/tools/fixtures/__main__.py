@@ -102,6 +102,10 @@ FAMILIES = (
     team_rules,
     team_bindings,
     team_edges,
+    team_replay,
+    team_rebind,
+    team_operator,
+    team_nested,
 )
 
 
@@ -133,10 +137,6 @@ def _build(out: pathlib.Path) -> None:
 STAGED_PHASE_0 = (legacy_run.build, legacy_wake_rows.build)
 STAGED_PHASE_1 = (
     team_bindings.build_staged,
-    team_replay.build,
-    team_rebind.build,
-    team_operator.build,
-    team_nested.build,
     team_cancel_rule.build,
     run_cases.build,
 )

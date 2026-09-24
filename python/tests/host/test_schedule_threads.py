@@ -26,7 +26,7 @@ from threads.log import (
 )
 from threads.result import Ok
 from threads.store import Draft, SqliteStore, Writer
-from threads.store.retention import delete_thread
+from threads.store.deletion import delete_thread
 from threads.store.sql import text_of
 
 VECTOR = Path(__file__).resolve().parents[3] / "spec/conformance/vectors/schedule-threads.json"
@@ -215,7 +215,8 @@ class Replay:
         sq = await open_store(self.store)
         found = await self.thread("local")
         assert found is not None, "no schedule thread to delete"
-        await sq.run(lambda c: delete_thread(c, "local", found[0], now_ms()))
+        deleted = await sq.run(lambda c: delete_thread(c, "local", found[0], now_ms()))
+        assert isinstance(deleted, Ok), deleted
 
     async def observe(self, tenant: str, want: Expected) -> Expected:
         sq = await open_store(self.store)

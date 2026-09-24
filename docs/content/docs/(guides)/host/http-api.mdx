@@ -105,6 +105,8 @@ Everything a caller does is scoped to their `tenant`: another tenant's thread an
 | Same key, different body | `409 idempotency_key_reused` |
 | Same key, different caller | `409 idempotency_key_principal_mismatch` |
 
+The caller is compared as its principal key, `issuer/tenant/subject` with `%` and `/` escaped in each part. Upgrade note: Python hosts before this release stored that key unescaped, so a request first sent before the upgrade and retried after it fails `idempotency_key_principal_mismatch` when its principal's issuer, tenant or subject contains `/` or `%` (an OIDC issuer URL, for example). Nothing runs twice; send it again with a new key.
+
 ## Routes
 
 | Method | Path | Does |

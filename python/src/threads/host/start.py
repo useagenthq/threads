@@ -20,11 +20,11 @@ from threads.agents.store import Store, now_ms, open_store
 from threads.host.runs import Bound, Runner
 from threads.log import BranchId, ParseError, Principal, ThreadId
 from threads.log.digest import canonical_sha256
+from threads.log.keys import principal_key
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import StoredEvent, receipts
 from threads.store.lines import uuid7
-from threads.thread.control import principal_key
 from threads.thread.handle import Thread, open_thread
 
 OPERATION: Final = "startRun"

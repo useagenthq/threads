@@ -167,8 +167,9 @@ Each runner gets a fresh temp directory with a copy of the case, a fresh store, 
 
 **`team`**
 1. Import every log of `input.logs` read-only, as in `reduce` step 1, and reduce each.
-2. Check every receipt against its sender (semantic rule 43): each `message_received` envelope is byte-equal to the `message_sent` envelope of the same `mail_id`, in the log its `from` names. The first failure, in label order then seq, is the result, with its `log`.
-3. Fold the team index from the logs alone into a fresh store (the replay rule, `../schema/README.md`, "Teams") and compare `index`; compare `states`.
+2. Check semantic rule 43 across the logs: each `message_received` envelope is byte-equal to the `message_sent` envelope of the same `mail_id`, the sender's log is the one its `from` names and the receiver's the one its `to` names, bounces, member parents and task principals as the rule says. The first failure, in label order then seq, is the result, with its `log`.
+3. Fold the team index from the logs alone into a fresh store, for every team a lead among the logs names (the replay rule, `../schema/README.md`, "Teams"), and compare `index`; compare `states`.
+4. Walk the tree as cost and usage do, over the rebuilt `team_members` rows in key order, each thread once (a nested lead has two rows): a `lead` row is counted, a `member` row counted or pending as its lead's walk finds it. Compare `tree`; a walk error is the result, with that lead's `log`.
 
 **`security`** and **`parity`** are reserved kinds. `security` covers trust-boundary and fail-closed cases. `parity` covers the cross-language round trip below.
 

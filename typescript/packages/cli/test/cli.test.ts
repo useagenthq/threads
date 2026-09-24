@@ -132,6 +132,24 @@ describe("threads delete and gc", () => {
     ]);
   });
 
+  test("delete of a running thread prints busy: <message>, exits nonzero and writes nothing", async () => {
+    const a = temp();
+    const thread = await seeded(a);
+    const { db } = await storeConnection(sqlite(a));
+    db.run(
+      `INSERT INTO leases (branch_id, holder_id, epoch, expires_at) VALUES (?, 'elsewhere', 9, ?)
+        ON CONFLICT (branch_id) DO UPDATE SET expires_at = excluded.expires_at`,
+      [thread.branch, Date.now() + 60_000],
+    );
+    const refused = await cli(["delete", thread.id, "--store", a]);
+    expect(refused.code).toBe(1);
+    expect(refused.err).toStartWith("busy: ");
+    expect(db.all("SELECT thread_id FROM tombstones", [])).toEqual([]);
+    const everyone = await cli(["delete", "--tenant", "local", "--store", a]);
+    expect(everyone.code).toBe(1);
+    expect(everyone.err).toStartWith("busy: ");
+  });
+
   test("delete takes its subagent threads along, never a handoff target", async () => {
     const a = temp();
     const use = (name: string, input: Record<string, unknown>, id: string) => ({

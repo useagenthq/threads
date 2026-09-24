@@ -13,7 +13,7 @@ from threads.log.jcs import canonicalize
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.sandbox.ledger import gc as release
-from threads.store import retention, verify_export
+from threads.store import deletion, retention, verify_export
 from threads.store.lines import uuid7
 from threads.thread.handle import open_thread
 
@@ -76,17 +76,21 @@ async def repair(path: str, tenant: str, branch: str) -> int:
 
 
 async def delete(path: str, tenant: str, thread: str | None) -> int:
-    """One thread, or with no thread every thread of the tenant; each leaves a tombstone."""
+    """One thread with everything that can't outlive it, or with no thread every thread of the
+    tenant, in one transaction; each leaves a tombstone. A refusal prints `<code>: <message>`."""
     sq = await open_store(_store(path, tenant))
-    chosen = (
-        (ThreadId(thread),) if thread else await sq.run(lambda c: retention.threads_of(c, tenant))
-    )
     now = now_ms()
-    for one in chosen:
-        count = await sq.run(lambda c, t=one: retention.delete_thread(c, tenant, t, now))
-        if count == 0:
-            return _fail(f"not_found: no thread {one}")
-        print(f"deleted {one} ({count} branches)")
+    if thread:
+        done = await sq.run(lambda c: deletion.delete_thread(c, tenant, ThreadId(thread), now))
+    else:
+        done = await sq.run(lambda c: deletion.delete_tenant(c, tenant, now))
+    if isinstance(done, Err):
+        return _fail(f"{done.error.code}: {done.error.message}")
+    print(
+        f"deleted {thread} ({done.value} threads)"
+        if thread
+        else f"deleted {done.value} threads of {tenant}"
+    )
     return 0
 
 

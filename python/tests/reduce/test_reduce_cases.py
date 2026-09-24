@@ -41,11 +41,11 @@ CASE_KEYS = frozenset(
 EXPECTED_KEYS = frozenset(
     {"outcome", "error", "state", "committed_bytes", "appended", "sandbox", "fork", "resources"}
     | {"render", "head_verified", "stubs", "responses", "inbox", "decisions", "projections"}
-    | {"threads", "api", "user_inputs"}
+    | {"threads", "api", "user_inputs", "states", "index", "tree"}
 )
-OWN_RUNNER = frozenset({"policy", "recover", "stub", "fork", "intake", "host"})
+OWN_RUNNER = frozenset({"policy", "recover", "stub", "fork", "intake", "host", "team"})
 """Kinds another runner owns: policy (tests/permissions), recover and stub (tests/loop), fork
-(tests/thread), intake and host (tests/host)."""
+(tests/thread), intake and host (tests/host), team (tests/team)."""
 
 
 def test_corpus_kinds_and_keys_are_known() -> None:

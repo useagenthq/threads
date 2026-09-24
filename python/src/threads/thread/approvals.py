@@ -24,13 +24,14 @@ from threads.log import (
     ThreadId,
     ToolCallEvent,
 )
+from threads.log.keys import principal_key
 from threads.reduce import Fold
 from threads.result import Err, Ok
 from threads.store import Draft, approvals
 from threads.store.companion import Companion, both
 from threads.store.lines import uuid7
 from threads.thread.authority import Checked, refused
-from threads.thread.control import Controlled, actor, append, principal_key, resumed
+from threads.thread.control import Controlled, actor, append, resumed
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

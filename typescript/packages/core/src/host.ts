@@ -51,9 +51,10 @@ export {
   type SqlValue,
   type Writer,
 } from "./store";
+export { deleteTenant, deleteThread } from "./store/deletion";
 export { StoreError } from "./store/driver";
 export { uuidv7 } from "./store/encode";
-export { deleteTenant, deleteThread, sweepArtifacts } from "./store/retention";
+export { sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control } from "./thread/control";
