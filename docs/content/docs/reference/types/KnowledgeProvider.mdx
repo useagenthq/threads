@@ -206,7 +206,7 @@ async def get(
 
 ### revision
 
-TypeScript only. The store's current monotonic revision, recorded as snapshot.knowledge_revision at capture.
+TypeScript only. The store's current monotonic revision, recorded as snapshot.knowledge_revision at capture. When it fails, the snapshot is not taken (no fork point at that turn end); a knowledge-bound snapshot always records knowledge_revision.
 
 ```ts title="TypeScript"
 revision(scope: Scope): Promise<Result<number>>

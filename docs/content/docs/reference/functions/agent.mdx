@@ -85,7 +85,7 @@ def agent(
 ## Parameters
 
 <Field name="model" type={"Model"} required>
-  The model every turn is sent to: a model adapter such as anthropic() or openai(), or scriptedModel() in tests. Fallback models are tried after it. See [Model](/docs/reference/types/Model).
+  The model every turn is sent to: a model adapter such as anthropic() or openai(), or scriptedModel() in tests. Fallback models are tried after it. A model (primary, fallback or any subagent's or handoff target's) that declares info.lookup other than none without a lookup method fails check() and the first run with capability_missing. See [Model](/docs/reference/types/Model).
 </Field>
 
 <Field name="instructions" type={"string"} default={""}>
