@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from pydantic import JsonValue, TypeAdapter
+from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._json_schema import holds
 from threads.log import JsonObject, ParseError, ToolSpec
@@ -57,7 +58,16 @@ def stored_artifacts(case: Path) -> MemoryArtifacts:
 def schema_error(spec: ToolSpec, input: JsonObject) -> str | None:
     """Test-only: the corpus pins its tool and output schemas in the log, so the runner checks
     them with the generated models' keyword subset. Core binds schemas to Pydantic models."""
+    if spec.input_schema is MISSING:
+        return "invalid input: no schema"
     return None if json_schema_holds(dict(spec.input_schema), dict(input)) else "invalid input"
+
+
+def full_spec(case: Path, spec: ToolSpec) -> ToolSpec:
+    """A reference-form spec's full spec, from its artifact (the case's own copy)."""
+    if spec.spec_ref is MISSING:
+        return spec
+    return ToolSpec.model_validate_json((case / "artifacts" / spec.spec_ref.sha256).read_bytes())
 
 
 def json_schema_holds(schema: JsonValue, value: JsonValue) -> bool:
@@ -92,6 +102,8 @@ class ScriptedTools:
 
     script: Mapping[str, JsonValue]
     clock: Clock
+    case: Path | None = None
+    """Where a reference-form tool's spec artifact is read from."""
     dispatches: Counter[str] = field(default_factory=Counter[str])
     new_executions: Counter[str] = field(default_factory=Counter[str])
     lookups: Counter[str] = field(default_factory=Counter[str])
@@ -100,7 +112,7 @@ class ScriptedTools:
         return obj(obj(self.script.get("tools", {})).get(name, {}))
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
-        return schema_error(spec, input)
+        return schema_error(spec if self.case is None else full_spec(self.case, spec), input)
 
     async def dispatch(self, call: Invocation) -> Dispatched:
         name = call.spec.name

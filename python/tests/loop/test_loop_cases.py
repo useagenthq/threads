@@ -90,7 +90,7 @@ def _script(case: Path, meta: dict[str, JsonValue], key: str) -> dict[str, JsonV
 def _runner(case: Path, meta: dict[str, JsonValue], clock: Clock) -> ScriptedTools | StubGateway:
     if meta["kind"] == "stub":
         return StubGateway(parse_stubs(_script(case, meta, "stub_script")), schema_error)
-    return ScriptedTools(_script(case, meta, "sandbox_script"), clock)
+    return ScriptedTools(_script(case, meta, "sandbox_script"), clock, case)
 
 
 async def run_case(case: Path) -> Outcome:

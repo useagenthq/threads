@@ -6,7 +6,7 @@ the recording first, so its log equals an uninterrupted run's."""
 from typing import TYPE_CHECKING
 
 from threads.log import CallId, EventId, ToolUsePart
-from threads.loop import calls, output
+from threads.loop import calls, output, search
 from threads.loop.drafts import call_draft, draft
 from threads.loop.history import (
     call_state,
@@ -16,6 +16,7 @@ from threads.loop.history import (
     turn_events,
 )
 from threads.loop.runtime import Halt, Runtime, lost
+from threads.reduce.fold import still_deferred
 from threads.result import Err
 from threads.store import Draft
 
@@ -74,10 +75,12 @@ def _invalid(rt: Runtime, use: ToolUsePart) -> str | None:
     spec = rt.fold.tools.get(use.name)
     if spec is None:
         return f"unknown tool {use.name}"
-    if spec.defer_loading is True:
-        return f"tool_not_loaded: search for {use.name} with tool_search first"
+    if still_deferred(rt.fold, spec):
+        return search.not_loaded(use.name)
     if output.is_candidate(rt.fold, spec):
         return None  # validated against the pinned output schema, recorded as output_validated
+    if search.is_search(rt.fold, spec):
+        return search.invalid(use.input)
     return rt.tools.invalid(spec, use.input)
 
 

@@ -49,6 +49,7 @@ MODELS = {
     "team_task_create": tools_v1.TeamTaskCreateInput,
     "team_task_update": tools_v1.TeamTaskUpdateInput,
     "todo_write": tools_v1.TodoWriteInput,
+    "tool_search": tools_v1.ToolSearchInput,
     "wait": tools_v1.WaitInput,
     "web_fetch": tools_v1.WebFetchInput,
     "web_search": tools_v1.WebSearchInput,

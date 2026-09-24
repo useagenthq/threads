@@ -10,7 +10,7 @@ from pydantic import JsonValue
 
 from threads.log import AgentSpawnedEvent, CallId, ToolSpec
 from threads.log.digest import canonical_sha256
-from threads.loop import effects, gates, output, todos, tool_gates
+from threads.loop import effects, gates, output, search, todos, tool_gates
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state, open_cancel
 from threads.loop.results import As, reference_drafts, result_draft
@@ -66,6 +66,8 @@ async def _run(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
         return await output.validate(rt, state)
     if spec.name == "todo_write":
         return await todos.write(rt, state)
+    if search.is_search(rt.fold, spec):
+        return await search.run(rt, state)
     if rt.framework is not None and spec.name in rt.framework.names:
         return await rt.framework.run(rt, state)
     if spec.effect_class == "read_only":
