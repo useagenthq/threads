@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.agents.bindings import AppTool, ToolServer
+from threads.agents.bindings import DEFAULT_PERMISSIONS, AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
 from threads.agents.cache_ttl import agreed_cache_ttl
 from threads.agents.catalog import NO_CATALOG, Catalog
@@ -17,7 +17,7 @@ from threads.hooks.extension import Extension, extension_tools
 from threads.log import Budget, Context, MemberDefine, Permissions, Principal, Retry, ToolSpec
 from threads.log.digest import canonical_sha256, sha256_hex
 from threads.log.jcs import canonicalize
-from threads.loop.defaults import CONTEXT
+from threads.loop.defaults import CONTEXT, RETRY
 from threads.loop.model import Model
 from threads.loop.output import FINAL_OUTPUT
 from threads.memory.authority import MemoryWrite
@@ -101,8 +101,9 @@ class Definition[D]:
     """A child's parent's resolved defer_tools: pinned when the child sets no context."""
 
     def policy(self) -> dict[str, JsonValue]:
-        """The resolved runtime policy: each section absent (ADR defaults) or complete. An
-        agent without output or fallback pins no section for them, so its config is unchanged."""
+        """The resolved runtime policy. Permissions, retry and context are always pinned
+        complete, defaults included (spec/schema/README.md, "The pinned config"); an agent
+        without output, budget or fallback pins no section for them."""
         pinned: dict[str, JsonValue] = {"models": self._models()}
         if any(m.info.limits.price is not MISSING for m in (self.model, *self.fallback)):
             # Prices are nano-USD (spec/schema/README.md); without a currency cost() is None.
@@ -112,9 +113,9 @@ class Definition[D]:
         if self.output is not None:
             pinned["output"] = _output_policy(self.output, self.output_retries)
         sections = (
-            ("permissions", self.permissions),
+            ("permissions", self.permissions or DEFAULT_PERMISSIONS),
             ("budget", self.budget),
-            ("retry", self.retry),
+            ("retry", self.retry or RETRY),
             ("context", self._context()),
         )
         pinned |= {name: to_json(value) for name, value in sections if value is not None}
@@ -126,20 +127,18 @@ class Definition[D]:
             pinned["output_styles"] = dict(self.output_styles)
         return pinned
 
-    def _context(self) -> Context | None:
-        """The given context; else, when the models agree on a cache TTL other than the default
-        or a parent's defer_tools isn't the default, the default context with them. An all-5m
-        agent with nothing inherited pins what it always did."""
+    def _context(self) -> Context:
+        """The given context; else the default context with the models' agreed cache TTL and a
+        parent's defer_tools."""
         if self.context is not None:
             return self.context
         update: dict[str, object] = {}
         ttl = agreed_cache_ttl((self.model, *self.fallback))
-        if ttl is not None and ttl != CONTEXT.cache_ttl_ms:
+        if ttl is not None:
             update["cache_ttl_ms"] = ttl
-        inherited = self.inherited_defer
-        if inherited is not None and inherited != CONTEXT.defer_tools:
-            update["defer_tools"] = inherited
-        return CONTEXT.model_copy(update=update) if update else None
+        if self.inherited_defer is not None:
+            update["defer_tools"] = self.inherited_defer
+        return CONTEXT.model_copy(update=update)
 
     def defer_tools(self) -> DeferTools:
         """The resolved defer_tools: what this agent pins, and what its children inherit."""
@@ -240,10 +239,6 @@ class Definition[D]:
         if self.memory is not None:
             # Write authority is config: a changed policy is a changed pin.
             config["memory_write"] = self.memory_write
-        if self.subagents:
-            # What a child may do is part of what this thread may do: a changed subagent is a
-            # changed config.
-            config["subagents"] = [s.pin()[0]["config_hash"] for s in self.subagents]
         if self.dynamic is not None:
             # The choice is config: two keys naming one model still pin differently.
             define = to_json(self.dynamic.define)

@@ -328,8 +328,9 @@ def test_a_fallback_without_a_bound_under_a_budget_is_refused() -> None:
     assert "scripted-small" in str(raised.value)
 
 
-PLAIN_HASH = "c85a1d6bd68e156bae0b3d4dbb15525b3daa78f0b1391d64e9141551d07ea00d"
-"""The config_hash this agent pinned before `output` and `fallback` existed."""
+PLAIN_HASH = "118df2e5df0d26f55795c55185e95d4b82bf0060d21b6c3653abee6bc35f1e8f"
+"""The config_hash this agent pins: unused `output` and `fallback` add nothing to it. (It changed
+once, when Python pins began recording the resolved default settings, as TypeScript's do.)"""
 
 
 def test_a_thread_pinned_before_output_and_fallback_continues_and_fails_closed_on_a_change() -> (

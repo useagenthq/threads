@@ -24,7 +24,7 @@ SAID: JsonValue = {
     "stop_reason": "end_turn",
     "usage": {"input_tokens": 10, "output_tokens": 2},
 }
-HOUR_MS, DAY_MS, TEN_MINUTES_MS = 3_600_000, 86_400_000, 600_000
+HOUR_MS, DAY_MS, TEN_MINUTES_MS, FIVE_MS = 3_600_000, 86_400_000, 600_000, 300_000
 HOUR: Cache = {"ttl_ms": HOUR_MS}
 FIVE: Cache = {"ttl_ms": 300_000}
 DAY: Cache = {"ttl_ms": DAY_MS}
@@ -63,10 +63,10 @@ async def _started(thread: Thread) -> ThreadStartedEvent:
     return next(e.event for e in timeline.value.entries if isinstance(e.event, ThreadStartedEvent))
 
 
-def pinned(primary: Model, fallback: Sequence[Model] = (), ttl: int | None = None) -> int | None:
-    """The pinned policy.context.cache_ttl_ms; None when no context section is pinned."""
+def pinned(primary: Model, fallback: Sequence[Model] = (), ttl: int | None = None) -> int:
+    """The pinned policy.context.cache_ttl_ms: every pin holds a complete context section."""
 
-    async def main() -> int | None:
+    async def main() -> int:
         bot = agent(model=primary, fallback=list(fallback))
         if ttl is not None:
             context = CONTEXT.model_copy(update={"cache_ttl_ms": ttl})
@@ -75,7 +75,8 @@ def pinned(primary: Model, fallback: Sequence[Model] = (), ttl: int | None = Non
         assert isinstance(done, Completed)
         policy = (await _started(done.thread)).data.policy
         assert policy is not MISSING
-        return None if policy.context is MISSING else policy.context.cache_ttl_ms
+        assert policy.context is not MISSING
+        return policy.context.cache_ttl_ms
 
     return asyncio.run(main())
 
@@ -113,9 +114,9 @@ def test_openai_models_with_24h_retention_pin_86400000() -> None:
     assert pinned(a, [b]) == DAY_MS
 
 
-def test_5m_everywhere_pins_nothing_new() -> None:
+def test_5m_everywhere_pins_the_default_300000() -> None:
     a, b = declaring("anthropic/claude-sonnet-5", FIVE), declaring("openai/gpt-5.5", FIVE)
-    assert pinned(a, [b]) is None
+    assert pinned(a, [b]) == FIVE_MS
 
 
 def test_a_fallback_that_never_caches_is_ignored() -> None:
@@ -132,13 +133,13 @@ def test_an_unknown_lifetime_is_refused_even_beside_a_5m_primary() -> None:
     assert refused(declaring("anthropic/claude-sonnet-5", HOUR), [bridge]) == why
     assert refused(declaring("anthropic/haiku", FIVE), [bridge]) == why
     declared = declaring("litellm/large", FIVE)
-    assert pinned(declaring("anthropic/haiku", FIVE), [declared]) is None
+    assert pinned(declaring("anthropic/haiku", FIVE), [declared]) == FIVE_MS
 
 
 def test_a_model_alone_with_an_unknown_lifetime_needs_it_declared() -> None:
     assert "is unknown" in refused(declaring("litellm/large", None))
     assert pinned(declaring("litellm/large", None), ttl=TEN_MINUTES_MS) == TEN_MINUTES_MS
-    assert pinned(declaring("litellm/large", "none")) is None
+    assert pinned(declaring("litellm/large", "none")) == FIVE_MS
 
 
 def test_agent_stays_pure() -> None:

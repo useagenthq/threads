@@ -6,7 +6,7 @@ import sqlite3
 
 import pytest
 from pydantic import JsonValue
-from thread.rewrite_log import Line, obj, rewrite_log
+from thread.rewrite_log import Line, edit_started, obj, rewrite_log
 from thread.usage_kit import ONE, check, corrupt, priced, run, say, spawn, unpriced, usd
 
 from threads import ConfigError, Store, agent
@@ -89,8 +89,14 @@ def test_an_unpriced_model_pins_no_currency_so_cost_is_none() -> None:
 
 
 def test_cache_breaks_uses_the_default_ttl_when_no_context_is_pinned() -> None:
+    def unpinned(data: Line) -> Line:
+        policy = {k: v for k, v in obj(data["policy"]).items() if k != "context"}
+        return {**data, "policy": policy}
+
     async def body(store: Store) -> None:
         thread = await run(store, priced(say("Hi.")))
+        # As an older Python release pinned it: no context section.
+        await rewrite_log(store, thread.id, edit_started(unpinned))
         read = await (await open_store(store)).read(thread.branch, now_ms())
         assert isinstance(read, Ok)
         assert read.value.fold.started is not None

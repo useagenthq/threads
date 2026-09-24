@@ -1,16 +1,24 @@
 """The refusal for a continued thread whose pin changed says how to continue it when the change
-is one prompt caching introduced (lane 10)."""
+is one prompt caching introduced (lane 10), and says a pin from before resolved settings can't be
+continued."""
 
 from pydantic import JsonValue
 
 from threads.agents.pin_change import pin_change
 
 
-def _started(settings: dict[str, JsonValue], ttl: int | None = None) -> JsonValue:
-    data: dict[str, JsonValue] = {"adapter": {"settings": settings}}
-    if ttl is not None:
-        data["policy"] = {"context": {"cache_ttl_ms": ttl}}
-    return data
+def _started(settings: dict[str, JsonValue], ttl: int = 300_000) -> JsonValue:
+    policy: JsonValue = {"permissions": {}, "retry": {}, "context": {"cache_ttl_ms": ttl}}
+    return {"adapter": {"settings": settings}, "policy": policy}
+
+
+def test_a_python_pin_without_its_resolved_settings_starts_a_new_thread() -> None:
+    legacy: JsonValue = {"adapter": {"settings": {}}, "policy": {"models": []}}
+    assert pin_change(legacy, _started({})) == (
+        "this thread was started by a Python threads that left the default permissions, retry "
+        "and context settings out of its pinned config, so its config_hash can't match any agent "
+        "now; start a new thread"
+    )
 
 
 def test_a_thread_from_before_prompt_caching_names_prompt_cache_false() -> None:
