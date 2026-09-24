@@ -160,8 +160,14 @@ export const ContextPolicy: Strict<{
   max_pause_continuations: Int.describe(
     "Re-requests after pause_turn responses in one turn before the turn ends with error. Absent means 3.",
   ).optional(),
-  defer_tools: z.enum(DEFER_TOOLS),
-  defer_threshold: Threshold,
+  defer_tools: z
+    .enum(DEFER_TOOLS)
+    .describe(
+      "auto: tools marked defer are deferred; never: none; always: every app, extension and MCP tool without ends_turn. A child that doesn't set it pins its parent's.",
+    ),
+  defer_threshold: Threshold.describe(
+    "Reserved: not read (no automatic deferral by size). Kept because existing logs pin it.",
+  ),
   server_edits: z.enum(SERVER_EDITS),
 });
 

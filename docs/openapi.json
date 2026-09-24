@@ -2911,9 +2911,11 @@
                 "type": "object"
               },
               "defer_threshold": {
-                "$ref": "#/components/schemas/events_Threshold"
+                "$ref": "#/components/schemas/events_Threshold",
+                "description": "Reserved: not read (no automatic deferral by size). Kept because existing logs pin it."
               },
               "defer_tools": {
+                "description": "auto: tools marked defer are deferred; never: none; always: every app, extension and MCP tool without ends_turn. A child that doesn't set it pins its parent's.",
                 "enum": [
                   "auto",
                   "always",
