@@ -54,7 +54,9 @@ class Materialized:
 
 @dataclass(frozen=True, slots=True)
 class MaterializeOptions:
-    rebind: Callable[[str, str], Awaitable[Rebind]]
+    rebind: Callable[[MemberStartedEvent, MailEnvelope], Awaitable[Rebind]]
+    """Rebinds the member's definition from its member_started and task (whose sender is the
+    starter a dynamic member's block names)."""
     holder: str
     """The lease holder the member's first writer runs under."""
     ttl_ms: int
@@ -93,7 +95,7 @@ async def materialize(
     if isinstance(found, Err) or found.value is None:
         return found if isinstance(found, Err) else Ok(Materialized("not_starting"))
     s = found.value
-    rebind = await o.rebind(s.started.data.agent, s.started.data.config_hash)
+    rebind = await o.rebind(s.started, s.task)
     config = await store.get_artifact(s.started.data.config_hash)
     if isinstance(config, Err):
         return config
@@ -180,8 +182,18 @@ async def _starting(
     teams = await store.run(lambda c: team_row(c, team))
     if task is None or teams is None:
         return Ok(None)
+    started = await started_by(store, (teams.team_log_branch_id, task), row, now)
+    return started if isinstance(started, Err) else Ok(_Starting(row, task, started.value))
+
+
+async def started_by(
+    store: SqliteStore, where: tuple[str, MailEnvelope], row: MemberRow, now: int
+) -> Ok[MemberStartedEvent] | Err[ParseError]:
+    """A member's member_started, read from its starter's log: the team log (`where`'s branch)
+    for an operator start, else the log the task (`where`'s envelope) was sent from."""
+    team_log, task = where
     if isinstance(task.from_, OperatorSender):
-        starter: Ok[BranchId] | Err[ParseError] = Ok(BranchId(teams.team_log_branch_id))
+        starter: Ok[BranchId] | Err[ParseError] = Ok(BranchId(team_log))
     else:
         starter = await store.root(ThreadId(task.causal.thread_id))
     if isinstance(starter, Err):
@@ -194,11 +206,11 @@ async def _starting(
             e
             for e in log.value.fold.events
             if isinstance(e, MemberStartedEvent)
-            and e.data.member.name == name
+            and e.data.member.name == row.name
             and e.data.member.generation == row.generation
         ),
         None,
     )
     if started is None:
-        return Err(ParseError("log_corrupt", f"no member_started for {name}"))
-    return Ok(_Starting(row, task, started))
+        return Err(ParseError("log_corrupt", f"no member_started for {row.name}"))
+    return Ok(started)

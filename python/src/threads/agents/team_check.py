@@ -1,11 +1,12 @@
 """Setup refusals of a team (spec/api.json agent.team): a listed agent that hands off
 (handoff_in_team), two agents of one name in the team tree, and a team thread's own tool taking a
-team tool's name (duplicate_name)."""
+team tool's name (duplicate_name), and an agent named operator, a reserved name (invalid_config)."""
 
 from collections.abc import Sequence
 
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
+from threads.team.dynamic import OPERATOR
 from threads.tools.specs import MEMBERS
 
 
@@ -32,7 +33,10 @@ def check_team[D](lead: Definition[D]) -> None:
     if lead.team is None:
         return
     _team_names(lead)
-    for name, agent in agents_of(lead.team).items():
+    agents = agents_of(lead.team)
+    if lead.name == OPERATOR or OPERATOR in agents:
+        raise ConfigError("invalid_config", "the name operator is reserved in teams")
+    for name, agent in agents.items():
         if agent.handoffs:
             why = (
                 f"agent {name} lists handoffs, and a team member can't hand off; remove its "

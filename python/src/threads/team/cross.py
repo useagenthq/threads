@@ -1,4 +1,4 @@
-"""Semantic rule 43: what only a team's logs together show (spec/schema/README.md, "Semantic
+"""Semantic rules 43 and 46: what only a team's logs together show (spec/schema/README.md, "Semantic
 rules"). Checked by the `team` runner and every index rebuild, never by one log's validate_next.
 
 Every receipt copies its sender's envelope byte for byte, and each mail leaves the log its
@@ -6,7 +6,9 @@ Every receipt copies its sender's envelope byte for byte, and each mail leaves t
 mail_refused, naming the ask exactly when the refused mail is an ask. A member's
 thread_started.parent is its member_started's parent, and a team log is the thread and branch its
 lead's thread_started.team names. A task's input principal is the task's
-provenance principal. The reference is spec/tools/fixtures/ref_team.py.
+provenance principal. A dynamic member pins exactly its define's tools and F, and its line 0
+ends with the block of its define's instructions (rule 46). The reference is
+spec/tools/fixtures/ref_team.py.
 """
 
 from collections.abc import Mapping, Sequence
@@ -32,6 +34,7 @@ from threads.log import (
 )
 from threads.reduce import Fold, apply
 from threads.reduce.team_fold import mail_renders
+from threads.team.dynamic import KEPT, OPERATOR, block
 from threads.team.index import json_bytes
 
 type Identity = tuple[str, str, int] | str
@@ -61,6 +64,8 @@ class _Team:
     identities: Mapping[ThreadId, frozenset[Identity]]
     team_logs: Mapping[str, tuple[str, str]]
     """Each team's log (thread, branch), as its lead's thread_started names it."""
+    starters: Mapping[ThreadId, str]
+    """Each member's starter: operator for a start in a team log, else the lead's agent name."""
 
 
 def check_team_logs(
@@ -85,6 +90,25 @@ def _first_break(log: TeamLogEvents, team: _Team, team_id: str | None) -> CrossF
         why = _check(e, log, mine, team)
         if why is not None:
             return CrossFailure(log.branch_id, e.seq, f"43: {why}")
+        why = _dynamic(e, team)
+        if why is not None:
+            return CrossFailure(log.branch_id, e.seq, f"46: {why}")
+    return None
+
+
+def _dynamic(e: Event, team: _Team) -> str | None:
+    """A dynamic member's thread_started pins define.tools and F, and its instructions end
+    with the block for define.instructions."""
+    start = team.started.get(e.thread_id) if isinstance(e, ThreadStartedEvent) else None
+    if not isinstance(e, ThreadStartedEvent) or start is None or start.data.define is MISSING:
+        return None
+    define = start.data.define
+    if [t.name for t in e.data.tools if t.name not in KEPT] != list(define.tools):
+        return "a dynamic member's pinned tools are not define.tools and F"
+    written = define.instructions
+    starter = team.starters.get(e.thread_id, "")
+    if written is not MISSING and not e.data.instructions.endswith(block(starter, written)):
+        return "a dynamic member's instructions don't end with its define's block"
     return None
 
 
@@ -132,6 +156,9 @@ def _team(logs: Sequence[TeamLogEvents]) -> _Team:
     started = {e.data.thread_id: e for _, e in events if isinstance(e, MemberStartedEvent)}
     identities: dict[ThreadId, set[Identity]] = {}
     team_logs: dict[str, tuple[str, str]] = {}
+    starters: dict[ThreadId, str] = {}
+    logged = {e.thread_id for _, e in events if isinstance(e, TeamOpenedEvent)}
+    leads = {e.thread_id: e.data.agent_name for _, e in events if isinstance(e, ThreadStartedEvent)}
     for log, e in events:
         if isinstance(e, TeamOpenedEvent):
             identities.setdefault(log.thread_id, set()).add("team_log")
@@ -141,13 +168,15 @@ def _team(logs: Sequence[TeamLogEvents]) -> _Team:
             team_logs[t.id] = (t.log_thread_id, t.log_branch_id)
     for thread, s in started.items():
         m = s.data.member
+        starters[thread] = OPERATOR if s.thread_id in logged else leads.get(s.thread_id, "")
         identities.setdefault(thread, set()).add((m.team, m.name, m.generation))
     sent = {
         e.data.envelope.mail_id: e.data.envelope
         for _, e in events
         if isinstance(e, MessageSentEvent)
     }
-    return _Team(sent, started, {t: frozenset(i) for t, i in identities.items()}, team_logs)
+    frozen = {t: frozenset(i) for t, i in identities.items()}
+    return _Team(sent, started, frozen, team_logs, starters)
 
 
 def _check(e: Event, log: TeamLogEvents, mine: frozenset[Identity], team: _Team) -> str | None:

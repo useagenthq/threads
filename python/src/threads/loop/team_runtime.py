@@ -10,6 +10,7 @@ from pydantic import JsonValue
 from threads.log import Budget, Event, ModelRef, Policy, Principal
 from threads.loop.covering import Covering
 from threads.team.batch import Mint
+from threads.team.dynamic import Choice, Template
 from threads.team.ops import TeamLimits
 
 if TYPE_CHECKING:
@@ -30,12 +31,15 @@ class TeamAgentPin:
     policy: Policy | None
     budget: Budget | None
     """Its own budget: it covers the member."""
+    template: Template | None = None
+    """A dynamic agent's base pin: what a start may choose (its tools but F, and its keys)."""
 
 
 @dataclass(frozen=True, slots=True)
 class TeamRuntime:
-    pin: Callable[[str], Awaitable[TeamAgentPin | None]]
-    """The agents start may name, pinned on first use; None for an agent the team lacks."""
+    pin: Callable[[str, Choice | None], Awaitable[TeamAgentPin | None]]
+    """The agents start may name, pinned on first use (a dynamic agent's with a start's
+    choice); None for an agent the team lacks. Raises ConfigError."""
     limits: TeamLimits
     settle: "Callable[[Runtime, Sequence[Draft]], Awaitable[Appended]]"
     """A turn end's append, with the member's settlement in it (threads.loop.teams.settled)."""

@@ -23,13 +23,22 @@ from team.vectors import (
     world_logs,
 )
 
-from threads.log import BranchId, Event, MemberIdleEvent, ToolCallEvent, ToolResultEvent
+from threads.log import (
+    BranchId,
+    Event,
+    MailEnvelope,
+    MemberIdleEvent,
+    MemberStartedEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from threads.result import Err, Ok
 from threads.store import Draft, SqliteStore, Writer
 from threads.store.writer import DecideTx, Refusal
 from threads.team.batch import Batch
 from threads.team.call import CallContext
 from threads.team.consume import ConsumeContext, consume
+from threads.team.dynamic import InvalidDefinition, Resolved, Template, resolve_definition
 from threads.team.materialize import MaterializeOptions, Rebind, materialize
 from threads.team.ops import StartPlan, TeamLimits, send, start
 from threads.team.provenance import turn_provenance
@@ -112,12 +121,44 @@ async def _call(store: SqliteStore, v: Obj) -> JsonValue:
             send(ctx, str(args["to"]), str(args["text"]), limits)
         else:
             headroom = given.get("headroom", True) is True
-            plan = StartPlan(agents(), limits, lambda _a: headroom, str(inp["thread_id"]))
+            listed, resolved = _listed(given, inp)
+            plan = StartPlan(listed, limits, lambda _a: headroom, str(inp["thread_id"]), resolved)
             start(ctx, str(args["agent"]), str(args["task"]), plan)
 
     await _decided(w, decide)
     result = next(e for e in reversed(w.fold.events) if isinstance(e, ToolResultEvent))
     return json.loads(result.data.preview)
+
+
+def _listed(given: Obj, inp: Obj) -> tuple[dict[str, str], Resolved | InvalidDefinition]:
+    """The agents the team lists with their pins' hashes (a dynamic start's from the vector),
+    and the start's fields resolved against its agent."""
+    args, listed = obj(inp["args"]), agents()
+    agent, raw = str(args["agent"]), obj(given.get("templates", {})).get(str(args["agent"]))
+    template = None
+    if raw is not None:
+        t = obj(raw)
+        template = Template(tuple(_strs(t["tools"])), tuple(_strs(t["models"])))
+        listed[agent] = str(inp["config_hash"])
+    tools = args.get("tools")
+    got = resolve_definition(
+        template,
+        label=_opt(args, "label"),
+        instructions=_opt(args, "instructions"),
+        tools=None if tools is None else tuple(_strs(tools)),
+        model=_opt(args, "model"),
+    )
+    return listed, got.value if isinstance(got, Ok) else got.error
+
+
+def _strs(value: JsonValue) -> list[str]:
+    assert isinstance(value, list)
+    return [str(x) for x in value]
+
+
+def _opt(args: Obj, key: str) -> str | None:
+    value = args.get(key)
+    return None if value is None else str(value)
 
 
 async def _consume(store: SqliteStore, v: Obj) -> JsonValue:
@@ -167,7 +208,7 @@ async def _materialize(store: SqliteStore, v: Obj) -> JsonValue:
     status = inp["rebind"]
     assert status in ("ok", "pin_unavailable", "pin_mismatch")
 
-    async def rebind(_agent: str, _hash: str) -> Rebind:
+    async def rebind(_started: MemberStartedEvent, _task: MailEnvelope) -> Rebind:
         return Rebind(status)
 
     o = MaterializeOptions(
@@ -221,7 +262,7 @@ def test_the_selection_covers_this_builds_ops() -> None:
         "end",
     }
     # Pinned: a vector that drops out of the selection fails here, not silently.
-    assert len(MINE) == 35  # noqa: PLR2004 - the pinned selection size
+    assert len(MINE) == 44  # noqa: PLR2004 - the pinned selection size
 
 
 @pytest.mark.parametrize("v", MINE, ids=[str(v["name"]) for v in MINE])

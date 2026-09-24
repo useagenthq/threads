@@ -5,11 +5,18 @@ from dataclasses import dataclass
 from typing import Literal
 
 from threads.log import MemberRef
+from threads.team.dynamic import InvalidDefinition
 
 type StartRefusal = Literal[
-    "forbidden", "unknown_agent", "concurrency_cap", "budget_exceeded", "team_closed"
+    "forbidden",
+    "unknown_agent",
+    "concurrency_cap",
+    "budget_exceeded",
+    "team_closed",
+    "invalid_definition",
 ]
-"""Why a start was refused. team_closed: the lead ended, which closes the team."""
+"""Why a start was refused. team_closed: the lead ended, which closes the team.
+invalid_definition: a label, instructions, tools or model the start may not choose."""
 type SendRefusal = Literal[
     "forbidden",
     "unknown_member",
@@ -34,6 +41,8 @@ class Started:
 class StartRefused:
     code: StartRefusal
     status: Literal["refused"] = "refused"
+    detail: InvalidDefinition | None = None
+    """Present exactly when code is invalid_definition: which field, why, what is allowed."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -2,9 +2,9 @@
 `TeamAgent`. `agent()` does no I/O, reads no env and opens no sockets."""
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from functools import partial
-from typing import Final, Literal, Required, TypedDict, TypeGuard, Unpack, overload
+from typing import TYPE_CHECKING, Final, Literal, Required, TypedDict, TypeGuard, Unpack, overload
 
 from pydantic import BaseModel
 
@@ -27,9 +27,13 @@ from threads.memory.protocol import KnowledgeProvider, MemoryProvider
 from threads.sandbox.protocol import Sandbox
 from threads.team.ops import TeamLimits as Limits
 
+if TYPE_CHECKING:
+    from threads.agents.dynamic_agent import DynamicAgent
 
-class AgentOptions(TypedDict, total=False):
-    model: Required[Model]
+
+class CommonOptions(TypedDict, total=False):
+    """agent()'s options that dynamic_agent() takes too: all but model and the team's."""
+
     instructions: str
     name: str
     permissions: Permissions
@@ -60,11 +64,6 @@ class AgentOptions(TypedDict, total=False):
     """search_knowledge over host-ingested sources."""
     skills: Sequence[Skill]
     """Host-pinned skills: listed in line 0, a body loaded on demand."""
-    subagents: "Sequence[Agent[None, object]]"
-    """Agents spawn_agent may start, by name; the team tools come with them. A structured
-    subagent reports the canonical JSON of its output."""
-    handoffs: "Sequence[Agent[None, object]]"
-    """Agents this one may hand the conversation to, pinned as policy.handoffs."""
     web: WebOptions
     """Host-side web_fetch and web_search."""
     git: GitOptions
@@ -80,6 +79,15 @@ class AgentOptions(TypedDict, total=False):
     """Who may answer approval challenges and resolve parked effects for runs this agent roots,
     its subagents and handoff targets included. Unset: the root run's originating principal
     (spec/schema/README.md, Approval authority)."""
+
+
+class AgentOptions(CommonOptions, total=False):
+    model: Required[Model]
+    subagents: "Sequence[Agent[None, object]]"
+    """Agents spawn_agent may start, by name; the team tools come with them. A structured
+    subagent reports the canonical JSON of its output."""
+    handoffs: "Sequence[Agent[None, object]]"
+    """Agents this one may hand the conversation to, pinned as policy.handoffs."""
 
 
 class ServerAgentOptions(AgentOptions, total=False):
@@ -107,7 +115,7 @@ class ToolOutputAgentOptions[D, O: BaseModel](OutputAgentOptions[O], total=False
 
 
 class _Team(TypedDict, total=False):
-    team: Required["Sequence[Agent[None, object]]"]
+    team: Required["Sequence[Agent[None, object] | DynamicAgent[None, object]]"]
     """Agents this one may start as team members, with the team tools. Even [] makes a TeamAgent,
     whose run() result carries the team."""
     team_limits: TeamLimits
@@ -141,7 +149,7 @@ class TeamToolOutputAgentOptions[D, O: BaseModel](ToolOutputAgentOptions[D, O], 
 class _Options[D](AgentOptions, total=False):
     tools: Sequence[AppTool[D] | ToolServer]
     output: object
-    team: "Sequence[Agent[None, object]]"
+    team: "Sequence[Agent[None, object] | DynamicAgent[None, object]]"
     team_limits: TeamLimits
 
 
@@ -181,7 +189,8 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, o
     """spec/api.json `agent`. Pure: no I/O. Raises ConfigError for duplicate tool names, an
     output that is not a Pydantic model class, or output_retries that is not a non-negative
     integer."""
-    output = _output(options.get("output"))
+    _no_templates(options)
+    output = output_model(options.get("output"))
     decode: Callable[[str], object] = _text
     if output is not None:
         decode = partial(output.model_validate_json, strict=True)
@@ -189,12 +198,26 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, o
     servers = tuple(t for t in given if isinstance(t, ToolServer))
     tools = tuple(t for t in given if not isinstance(t, ToolServer))
     team = None if "team" not in options else tuple(a.definition for a in options["team"])
-    limits = Limits(**options.get("team_limits", {}))
+    links = Links(
+        team,
+        Limits(**options.get("team_limits", {})),
+        tuple(a.definition for a in options.get("subagents", ())),
+        tuple(a.definition for a in options.get("handoffs", ())),
+    )
     if _take_no_deps(tools):
-        plain = _definition(options, tools, servers, output, (team, limits))
+        plain = build_definition(options, options["model"], (tools, servers), output, links)
         return Agent(plain, (None,), decode) if team is None else TeamAgent(plain, (None,), decode)
-    needs = _definition(options, tools, servers, output, (team, limits))
+    needs = build_definition(options, options["model"], (tools, servers), output, links)
     return Agent(needs, (), decode) if team is None else TeamAgent(needs, (), decode)
+
+
+def _no_templates(options: AgentOptions) -> None:
+    """A dynamic agent runs only as a team member: never a subagent or a handoff target."""
+    for key in ("subagents", "handoffs"):
+        found = next((a for a in options.get(key, ()) if a.definition.models), None)
+        if found is not None:
+            why = f"dynamic agents run as team members; put {found.name} in team"
+            raise ConfigError("invalid_config", why)
 
 
 def _take_no_deps[D](tools: tuple[AppTool[D], ...]) -> TypeGuard[tuple[AppTool[None], ...]]:
@@ -203,7 +226,7 @@ def _take_no_deps[D](tools: tuple[AppTool[D], ...]) -> TypeGuard[tuple[AppTool[N
     return all(deps_of(t) == "none" for t in tools)
 
 
-def _output(output: object) -> type[BaseModel] | None:
+def output_model(output: object) -> type[BaseModel] | None:
     """A Pydantic model class whose JSON Schema the log can check in full (semantic rule 20):
     anything else is refused here, never by a run that has an answer to record."""
     if output is None:
@@ -222,7 +245,7 @@ _MAX_SAFE: Final = 2**53 - 1
 """The largest integer the wire carries (spec/schema/README.md, wire rule 4)."""
 
 
-def _retries(options: AgentOptions) -> int:
+def _retries(options: CommonOptions) -> int:
     retries = options.get("output_retries", 2)
     # bool is an int subclass, and True is not a retry count; the pin is a wire integer.
     if type(retries) is not int or not 0 <= retries <= _MAX_SAFE:
@@ -243,13 +266,25 @@ def _style(name: object, text: object) -> tuple[str, str]:
     return name, text
 
 
-def _definition[T](
-    options: AgentOptions,
-    tools: tuple[AppTool[T], ...],
-    servers: tuple[ToolServer, ...],
+@dataclass(frozen=True, slots=True)
+class Links:
+    """The agents a definition may start or hand off to, and its team's limits."""
+
+    team: tuple[Definition[None], ...] | None = None
+    limits: Limits = field(default_factory=Limits)
+    subagents: tuple[Definition[None], ...] = ()
+    handoffs: tuple[Definition[None], ...] = ()
+
+
+def build_definition[T](
+    options: CommonOptions,
+    model: Model,
+    given: tuple[tuple[AppTool[T], ...], tuple[ToolServer, ...]],
     output: type[BaseModel] | None,
-    team: tuple[tuple[Definition[None], ...] | None, Limits],
+    links: Links,
 ) -> Definition[T]:
+    """The definition agent() and dynamic_agent() describe; raises ConfigError."""
+    tools, servers = given
     sandbox = options.get("sandbox")
     egress = options.get("egress", ())
     if egress != "unenforced" and egress:
@@ -259,7 +294,7 @@ def _definition[T](
         raise ConfigError("egress_policy_unsupported", f"{sandbox.info.provider}: egress")
     definition = Definition(
         options.get("name", "agent"),
-        options["model"],
+        model,
         options.get("instructions", ""),
         tools,
         options.get("permissions"),
@@ -273,10 +308,10 @@ def _definition[T](
         options.get("memory_write", "ask"),
         options.get("knowledge"),
         servers,
-        tuple(replace(a.definition, member=True) for a in options.get("subagents", ())),
-        tuple(a.definition for a in options.get("handoffs", ())),
-        team=team[0],
-        team_limits=team[1],
+        tuple(replace(a, member=True) for a in links.subagents),
+        links.handoffs,
+        team=links.team,
+        team_limits=links.limits,
         skills=checked(options.get("skills", ())),
         catalog=catalog(
             sandbox,

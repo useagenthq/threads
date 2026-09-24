@@ -53,6 +53,7 @@ from threads.thread.case import (
 )
 from threads.thread.control import Controlled
 from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch, fork_point
+from threads.thread.member_view import member_of, with_member
 from threads.thread.read import read_error, read_log
 from threads.thread.usage import tree_cost
 
@@ -251,7 +252,11 @@ class Thread:
     async def pending_approvals(self) -> Ok[tuple[PendingApproval, ...]] | Err[ParseError]:
         """Open challenges on this branch, with the rules an approver may keep."""
         read = await self._read()
-        return read if isinstance(read, Err) else Ok(approvals.pending(read.value.fold))
+        if isinstance(read, Err):
+            return read
+        fold = read.value.fold
+        member = await member_of(await open_store(self.store), fold)
+        return Ok(with_member(approvals.pending(fold), member))
 
     async def approve(
         self,

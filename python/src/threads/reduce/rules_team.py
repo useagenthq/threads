@@ -1,4 +1,4 @@
-"""Semantic rules 31 and 33-45 on one log (spec/schema/README.md, "Semantic rules"; reference:
+"""Semantic rules 31 and 33-46 on one log (spec/schema/README.md, "Semantic rules"; reference:
 spec/tools/fixtures/ref_rules.py). Rule 43 is cross-log and 32 is woken's (rules_wake)."""
 
 from collections.abc import Mapping
@@ -37,6 +37,7 @@ from threads.reduce.team_fold import (
     mail_run,
     principal_key,
 )
+from threads.team.dynamic import KEPT, label_ok, refused_text
 
 TEAM_LOG = frozenset(
     {
@@ -226,8 +227,11 @@ def _decided(fold: Fold, event: MessagePolicyDecidedEvent) -> ParseError | None:
 
 
 def _started(fold: Fold, event: MemberStartedEvent) -> ParseError | None:
-    """Rules 42 and 45: a lead's member_started is its member's parent; a team log's names the
-    lead and follows its operator_request."""
+    """Rules 42, 45 and 46: a lead's member_started is its member's parent; a team log's names the
+    lead and follows its operator_request; a label and a define are well formed."""
+    why = _defined(event)
+    if why is not None:
+        return reject(event, why)
     parent, team = event.data.parent, fold.team
     if team.team_log:
         if parent.thread_id != team.lead_thread:
@@ -242,6 +246,23 @@ def _started(fold: Fold, event: MemberStartedEvent) -> ParseError | None:
         event.event_id,
     )
     return None if itself else reject(event, "a lead's member_started does not name itself")
+
+
+def _defined(event: MemberStartedEvent) -> str | None:
+    """Rule 46 on one log: the label has no control or format character, and a define names each
+    tool once, none of F, and instructions that pass the block check."""
+    d = event.data
+    if d.label is not MISSING and not label_ok(d.label):
+        return "a member_started label has a control or format character, or is too long"
+    if d.define is MISSING:
+        return None
+    tools = d.define.tools
+    if len(set(tools)) != len(tools) or any(t in KEPT for t in tools):
+        return "define.tools repeats a tool or chooses a framework tool"
+    written = d.define.instructions
+    if written is not MISSING and refused_text(written):
+        return "define.instructions holds the delimiter, the precedence sentence or a control"
+    return None
 
 
 _CHECKS: Mapping[type, Handler] = dict(

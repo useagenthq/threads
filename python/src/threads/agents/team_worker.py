@@ -11,13 +11,18 @@ import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 
+from pydantic.experimental.missing_sentinel import MISSING
+
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
+from threads.agents.dynamic_agent import member_definition
 from threads.agents.store import Store, now_ms
 from threads.agents.team_budgets import ancestors_of
 from threads.log import (
     BranchId,
     MailEnvelope,
+    MemberStartedEvent,
+    OperatorSender,
     Parent,
     Principal,
     Provenance,
@@ -36,10 +41,24 @@ from threads.team.batch import Batch, Mint
 from threads.team.claim import claim_mail
 from threads.team.constants import TEAM_CONSTANTS
 from threads.team.consume import ConsumeContext, consumable, consume
-from threads.team.materialize import MaterializeOptions, Rebind, RebindCode, materialize
+from threads.team.dynamic import OPERATOR
+from threads.team.materialize import (
+    MaterializeOptions,
+    Rebind,
+    RebindCode,
+    materialize,
+    started_by,
+)
 from threads.team.provenance import turn_provenance
 from threads.team.rebind import rebind_failed
-from threads.team.rows import MemberRow, member_rows, own_rows, pending_for, team_row
+from threads.team.rows import (
+    MemberRow,
+    mail_envelope,
+    member_rows,
+    own_rows,
+    pending_for,
+    team_row,
+)
 from threads.team.settle import AppendContext
 
 
@@ -208,22 +227,48 @@ class TeamWorker:
         if got.value.status == "materialized" and writer is not None:
             await self._member(row, writer.branch_id, holder)
 
-    async def _rebind(self, agent: str, config_hash: str) -> Rebind:
-        """Rebinds a member's definition by name in this process (design §4.10, prework)."""
-        found = self._env.agents.get(agent)
+    async def _rebind(self, started: MemberStartedEvent, task: MailEnvelope) -> Rebind:
+        """Rebinds a member's definition by name in this process (design §4.10, prework): a
+        dynamic member's from its template with the recorded define and starter."""
+        found = self._bound(started, task)
         if found is None:
             return Rebind("pin_unavailable")
         try:
             pinned = await self._env.pin(found)
         except ConfigError:
             return Rebind("pin_unavailable")
-        if pinned.config_hash != config_hash:
+        if pinned.config_hash != started.data.config_hash:
             return Rebind("pin_mismatch")
         if found.team is None:
             return Rebind("ok")
         now = now_ms()
         team = {"id": uuid7(now), "log_thread_id": uuid7(now), "log_branch_id": uuid7(now)}
         return Rebind("ok", team)
+
+    def _bound(self, started: MemberStartedEvent, task: MailEnvelope) -> Definition[None] | None:
+        """The definition a member runs, rebound by its agent's name; None when it is gone."""
+        found = self._env.agents.get(started.data.agent)
+        define = started.data.define
+        if found is None or define is MISSING:
+            return found
+        starter = OPERATOR if isinstance(task.from_, OperatorSender) else task.from_.name
+        try:
+            return member_definition(found, define, starter)
+        except ConfigError:
+            return None
+
+    async def _started(
+        self, row: MemberRow, mail_id: str
+    ) -> tuple[MemberStartedEvent, MailEnvelope]:
+        """A running member's member_started and task, read from its starter's log."""
+        task = await self._env.sq.run(lambda c: mail_envelope(c, mail_id))
+        team = await self._env.sq.run(lambda c: team_row(c, row.team_id))
+        if task is None or team is None:
+            raise AssertionError(f"member {row.name} has no task mail")
+        started = await started_by(self._env.sq, (team.team_log_branch_id, task), row, now_ms())
+        if isinstance(started, Err):
+            raise AssertionError(f"member {row.name}: {started.error.message}")
+        return started.value, task
 
     async def _member(self, row: MemberRow, branch: BranchId, holder: str | None = None) -> None:
         """Runs a member branch until it is idle, parked or ended; one whose definition can't be
@@ -237,8 +282,11 @@ class TeamWorker:
         if started is None or task is None or not isinstance(started.data.parent, Parent):
             raise AssertionError(f"member {row.name} has no task")
         parent, holder = started.data.parent, holder or f"team-{uuid.uuid4().hex}"
-        found = self._env.agents.get(row.agent)
-        rebind = await self._rebind(row.agent, started.data.config_hash)
+        if task.data.mail_id is MISSING:
+            raise AssertionError(f"member {row.name}'s first input is not its task")
+        member_started, envelope = await self._started(row, task.data.mail_id)
+        found = self._bound(member_started, envelope)
+        rebind = await self._rebind(member_started, envelope)
         if found is None or rebind.status != "ok":
             code = "pin_unavailable" if rebind.status == "ok" else rebind.status
             await self._unbound(branch, holder, code)

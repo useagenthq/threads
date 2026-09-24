@@ -21,6 +21,7 @@ from threads.log.jcs import canonicalize
 from threads.result import Ok
 from threads.store.lines import Draft
 from threads.team.batch import Batch
+from threads.team.dynamic import InvalidDefinition
 from threads.team.mail import PutText
 from threads.team.provenance import turn_provenance
 from threads.team.rows import MemberRow, TeamRow, member_named, own_rows, ref_of, team_row
@@ -50,9 +51,10 @@ class Caller:
 
 @dataclass(frozen=True, slots=True)
 class Refusal:
-    """An op's refusal: the op records it as the call's result."""
+    """An op's refusal: the op records it as the call's result; a start's fields also say why."""
 
     code: TeamRefusal
+    detail: InvalidDefinition | None = None
 
 
 def caller_of(ctx: CallContext) -> Caller:
@@ -109,7 +111,10 @@ def answer(ctx: CallContext, value: JsonValue) -> Draft:
 def recorded(ctx: CallContext, value: JsonValue | Refusal) -> None:
     """Records the op's result, or its refusal, as the call's result."""
     if isinstance(value, Refusal):
-        value = {"code": value.code, "status": "refused"}
+        refused: dict[str, JsonValue] = {"code": value.code, "status": "refused"}
+        if value.detail is not None:
+            refused["detail"] = value.detail.to_json()
+        value = refused
     ctx.batch.add(answer(ctx, value))
 
 

@@ -1,6 +1,6 @@
 """An agent's definition and what it pins at thread start: `thread_started`."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from pydantic import BaseModel, JsonValue
@@ -13,7 +13,7 @@ from threads.agents.catalog import NO_CATALOG, Catalog
 from threads.agents.skills import Skill, listing, pinned
 from threads.agents.tool import Tool, json_schema
 from threads.hooks.extension import Extension, extension_tools
-from threads.log import Budget, Context, Permissions, Principal, Retry, ToolSpec
+from threads.log import Budget, Context, MemberDefine, Permissions, Principal, Retry, ToolSpec
 from threads.log.digest import canonical_sha256, sha256_hex
 from threads.log.jcs import canonicalize
 from threads.loop.defaults import CONTEXT
@@ -25,9 +25,20 @@ from threads.memory.setup import writes
 from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.sandbox.protocol import Sandbox
+from threads.team.dynamic import KEPT, block
 from threads.team.ops import TeamLimits
 from threads.tools import specs
 from threads.tools.specs import agent_tools
+
+
+@dataclass(frozen=True, slots=True)
+class Dynamic:
+    """A dynamic member's choice: its template, the define its starter chose, and the starter
+    (the lead's name, or operator), whose name marks the written block."""
+
+    template: str
+    define: MemberDefine
+    starter: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +91,11 @@ class Definition[D]:
     """Models to fall back to, in order, when the current one stays overloaded."""
     output_styles: tuple[tuple[str, str], ...] = ()
     """Named instructions Thread.set_output_style switches to, pinned as policy.output_styles."""
+    models: tuple[tuple[str, Model], ...] = ()
+    """dynamic_agent(models=...): a template's model keys in order, the first the default (and
+    `model`). Empty: not a template."""
+    dynamic: Dynamic | None = None
+    """A dynamic member: pinned with this choice, which the hashed config records."""
 
     def policy(self) -> dict[str, JsonValue]:
         """The resolved runtime policy: each section absent (ADR defaults) or complete. An
@@ -166,7 +182,12 @@ class Definition[D]:
             parts.append(f"Agents you can hand the conversation to: {names}.")
         if self.team:
             names = ", ".join(a.name for a in self.team)
-            parts.append(f"Agents you can start as team members with start: {names}.")
+            listed = [f"Agents you can start as team members with start: {names}."]
+            listed += [_template_line(a) for a in self.team if a.models]
+            parts.append("\n".join(listed))
+        written = None if self.dynamic is None else self.dynamic.define.instructions
+        if self.dynamic is not None and isinstance(written, str):
+            parts.append(block(self.dynamic.starter, written))
         return "\n\n".join(p for p in parts if p)
 
     def pin(self) -> tuple[dict[str, JsonValue], bytes]:
@@ -197,6 +218,10 @@ class Definition[D]:
             # What a child may do is part of what this thread may do: a changed subagent is a
             # changed config.
             config["subagents"] = [s.pin()[0]["config_hash"] for s in self.subagents]
+        if self.dynamic is not None:
+            # The choice is config: two keys naming one model still pin differently.
+            define = to_json(self.dynamic.define)
+            config["dynamic"] = {"template": self.dynamic.template, "define": define}
         if concurrent := self.concurrent_tools():
             # Changes when reads run, not what the model sees: hashed, not in line 0.
             config["concurrent_tools"] = list[JsonValue](sorted(concurrent))
@@ -222,6 +247,20 @@ class Definition[D]:
     def thread_started(self) -> dict[str, JsonValue]:
         """The pinned, secret-free config. Everything model-visible in it is line 0."""
         return self.pin()[0]
+
+
+def choosable[D](template: Definition[D]) -> tuple[str, ...]:
+    """A template's tools a start may choose: its member pin's names but F, in pinned order."""
+    specs = replace(template, in_team=True).specs()
+    return tuple(s.name for s in specs if s.name not in KEPT)
+
+
+def _template_line[D](template: Definition[D]) -> str:
+    """The lead's listing line for a dynamic agent (spec/schema/README.md, Dynamic members)."""
+    tools = ", ".join(choosable(template)) or "none"
+    keys = [k for k, _ in template.models]
+    models = ", ".join([f"{keys[0]} (default)", *keys[1:]])
+    return f"{template.name} (you write its instructions; tools: {tools}; models: {models})"
 
 
 def _settings(model: Model) -> dict[str, JsonValue]:

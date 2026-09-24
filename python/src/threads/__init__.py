@@ -11,6 +11,8 @@ __version__: Final[str] = VERSION
 from threads.agents.agent import Agent, RunStream  # noqa: E402
 from threads.agents.config import ConfigError, ConfigErrorCode, Failure  # noqa: E402
 from threads.agents.context import RunContext  # noqa: E402
+from threads.agents.dynamic import dynamic_agent  # noqa: E402
+from threads.agents.dynamic_agent import DynamicAgent  # noqa: E402
 from threads.agents.factory import agent  # noqa: E402
 from threads.agents.results import (  # noqa: E402
     BudgetExhausted,
@@ -39,6 +41,7 @@ from threads.agents.team_tools import (  # noqa: E402
     StartResult,
 )
 from threads.agents.tool import Reconcile, Tool, tool  # noqa: E402
+from threads.agents.usd import usd  # noqa: E402
 from threads.hooks.extension import Extension, extension  # noqa: E402
 from threads.hooks.types import Hooks  # noqa: E402
 from threads.log import MemberRef, Principal  # noqa: E402
@@ -80,6 +83,7 @@ from threads.sandbox import (  # noqa: E402
 )
 from threads.secrets import Secret, secret  # noqa: E402
 from threads.telemetry import Exporter, SkippedBranch, SyncReport  # noqa: E402
+from threads.team.dynamic import InvalidDefinition  # noqa: E402
 from threads.thread.case import CaseExpectation, SavedCase  # noqa: E402
 from threads.thread.handle import open_thread  # noqa: E402
 from threads.web.search import SearchBackend, SearchHit  # noqa: E402
@@ -98,6 +102,7 @@ __all__ = [
     "DeltaItem",
     "Doc",
     "DocVersion",
+    "DynamicAgent",
     "EventItem",
     "ExecOutput",
     "ExecResult",
@@ -107,6 +112,7 @@ __all__ = [
     "Failure",
     "HandedOff",
     "Hooks",
+    "InvalidDefinition",
     "KnowledgeHit",
     "KnowledgeProvider",
     "KnowledgeSource",
@@ -160,6 +166,7 @@ __all__ = [
     "Tool",
     "__version__",
     "agent",
+    "dynamic_agent",
     "extension",
     "fake_sandbox",
     "local_knowledge",
@@ -169,4 +176,5 @@ __all__ = [
     "secret",
     "sqlite",
     "tool",
+    "usd",
 ]

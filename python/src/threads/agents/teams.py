@@ -9,7 +9,9 @@ from dataclasses import dataclass, replace
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
+from threads.agents.dynamic_agent import member_definition
 from threads.agents.pinned import outside_any_branch
 from threads.agents.servers import with_servers
 from threads.agents.setup import set_up
@@ -23,6 +25,7 @@ from threads.loop.team_runtime import TeamAgentPin, TeamRuntime
 from threads.loop.teams import settled
 from threads.store import SqliteStore, Writer
 from threads.store.lines import uuid7
+from threads.team.dynamic import KEPT, Choice, Template
 
 
 def lead_started[D](
@@ -37,11 +40,21 @@ def lead_started[D](
 
 async def member_pin[D](definition: Definition[D]) -> TeamAgentPin:
     """Its pin as a team member, after setup: config_hash, the canonical config, and what one
-    request of it reserves. Raises ConfigError."""
+    request of it reserves; a template's also what a start may choose. Raises ConfigError, also
+    for a dynamic member whose chosen tool its template no longer has."""
     await set_up(definition)
     async with AsyncExitStack() as stack:
         connected = await with_servers(definition, stack, outside_any_branch)
         started, config = replace(connected, in_team=True).pin()
+        names = [s.name for s in replace(connected, in_team=True).specs()]
+    if definition.dynamic is not None:
+        gone = [t for t in definition.dynamic.define.tools if t not in names]
+        if gone:
+            raise ConfigError("invalid_config", f"{definition.name} no longer has {gone[0]}")
+    template = None
+    if definition.models and definition.dynamic is None:
+        choosable = tuple(n for n in names if n not in KEPT)
+        template = Template(choosable, tuple(k for k, _ in definition.models))
     policy = started.get("policy")
     return TeamAgentPin(
         sha256_hex(config),
@@ -50,6 +63,7 @@ async def member_pin[D](definition: Definition[D]) -> TeamAgentPin:
         _object(started["model_params"]),
         None if policy is None else Policy.model_validate(policy),
         definition.budget,
+        template,
     )
 
 
@@ -59,13 +73,18 @@ def _object(value: JsonValue) -> dict[str, JsonValue]:
     return value
 
 
-def _pins[D](definition: Definition[D]) -> Callable[[str], Awaitable[TeamAgentPin | None]]:
-    """The pins of the agents start may name, each made once, on first use."""
+def _pins[D](
+    definition: Definition[D],
+) -> Callable[[str, Choice | None], Awaitable[TeamAgentPin | None]]:
+    """The pins of the agents start may name, each made once, on first use; a dynamic member's
+    with its start's choice, each time."""
     made: dict[str, TeamAgentPin | None] = {}
 
-    async def pin(agent: str) -> TeamAgentPin | None:
+    async def pin(agent: str, choice: Choice | None) -> TeamAgentPin | None:
+        found = next((a for a in definition.team or () if a.name == agent), None)
+        if found is not None and choice is not None:
+            return await member_pin(member_definition(found, choice.define, choice.starter))
         if agent not in made:
-            found = next((a for a in definition.team or () if a.name == agent), None)
             made[agent] = None if found is None else await member_pin(found)
         return made[agent]
 
