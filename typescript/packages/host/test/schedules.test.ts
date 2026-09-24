@@ -12,7 +12,9 @@ import { HostContext } from "../src/context";
 import { occurrences, parseCron } from "../src/cron";
 import { bindSchedules, tick } from "../src/schedules";
 import { logOccurrence } from "../src/schedules/decide";
-import { pendingRows, reserveDue } from "../src/schedules/rows";
+import { reserveDue } from "../src/schedules/identity";
+import { newPass } from "../src/schedules/pass";
+import { pendingRows } from "../src/schedules/rows";
 import { eventsOf, mailer, say } from "./kit";
 
 // Cron parsing and DST rules, and the single winner of a pending occurrence. The schedule lifecycle
@@ -116,7 +118,7 @@ describe("scheduler", () => {
     await b.ctx.idle();
     const writer = log.acquire(branch, "stale-scheduler");
     if (!writer.ok) throw new Error(writer.error.message);
-    const pass = { ctx: b.ctx, db, log, tenant: "local" };
+    const pass = newPass(b.ctx, db, log, "local");
     expect(logOccurrence(pass, writer.value, stale, null)).toBe(false);
     writer.value.release();
     const logged = (await eventsOf(store, "local", branch)).filter(
@@ -255,9 +257,8 @@ describe("scheduler", () => {
       { id: "daily", agent: "support", cron: "0 9 * * *", input: "Report." },
     ]);
     if (typeof bound === "string") throw new Error(bound);
-    await expect(
-      tick(ctx, bound, nine - 60_000, nine + 1_000),
-    ).rejects.toThrow();
+    // Reported, not thrown (schedule-failures.test.ts): nothing is stored for it.
+    await tick(ctx, bound, nine - 60_000, nine + 1_000);
     const { db } = await storeConnection(store);
     expect(
       db.all(

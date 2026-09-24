@@ -2,23 +2,22 @@ import {
   type ChainEvent,
   type EventDraft,
   err,
+  knownEvents,
   type LogError,
   type LogStore,
   ok,
   type Principal,
   type Result,
-  type SqliteDriver,
   type ThreadId,
   type Writer,
 } from "@threads/core/host";
-import type { HostContext } from "../context";
+import { pinMatches } from "../context";
+import type { Pass } from "./pass";
 import {
   decide,
-  hashOf,
   markOverlaps,
   type Pending,
   pendingOf,
-  pinOf,
   type Reason,
 } from "./rows";
 
@@ -26,14 +25,6 @@ import {
 // turn); a busy writer proves nothing, since outbound, intake or a control may hold it briefly.
 // Every decision is appended under the thread's writer, in occurrence order, with the row's
 // conditional update in the same transaction.
-
-/** One scheduler pass over a tenant. */
-export type Pass = {
-  readonly ctx: HostContext;
-  readonly db: SqliteDriver;
-  readonly log: LogStore;
-  readonly tenant: string;
-};
 
 /** Decides the thread's pending rows and starts the run of the one it fires, if any. */
 export async function decideThread(
@@ -45,16 +36,17 @@ export async function decideThread(
   const read = main.ok ? log.read(main.value) : undefined;
   if (!main.ok || read?.ok !== true) return;
   if (read.value.fold.turnOpen) markOverlaps(db, tenant, threadId);
-  const pins = await pinsOf(ctx, pendingOf(db, tenant, threadId));
+  const pins = await pinsOf(pass, pendingOf(db, tenant, threadId));
   const writer = await briefly(log, main.value);
   // Contention is not an overlap: the rows stay pending for the next tick.
   if (!writer.ok) return;
-  const pinned = pinOf(log, threadId);
+  const events = knownEvents(writer.value.chain);
   let fired: Pending | undefined;
   try {
     for (const row of pendingOf(db, tenant, threadId)) {
       const { turnOpen } = writer.value.chain.fold;
-      const runs = pins.get(row.agent) === pinned;
+      const started = pins.get(row.agent);
+      const runs = started !== undefined && pinMatches(events, started);
       const reason = classify(row, turnOpen, runs);
       // Another scheduler decided it first: its state is current, so stop here.
       if (!logOccurrence(pass, writer.value, row, reason)) break;
@@ -85,16 +77,15 @@ function classify(
   return runs ? null : "removed";
 }
 
-/** The config each served agent of the rows would pin now, by agent key. */
+/** The thread_started each served agent of the rows would pin now, by agent key. */
 async function pinsOf(
-  ctx: HostContext,
+  pass: Pass,
   rows: readonly Pending[],
-): Promise<ReadonlyMap<string, string | undefined>> {
-  const pins = new Map<string, string | undefined>();
+): Promise<ReadonlyMap<string, EventDraft>> {
+  const pins = new Map<string, EventDraft>();
   for (const key of new Set(rows.map((r) => r.agent))) {
-    const hosted = ctx.agents.get(key);
-    if (hosted !== undefined)
-      pins.set(key, hashOf(await hosted.runner.started()));
+    const hosted = pass.ctx.agents.get(key);
+    if (hosted !== undefined) pins.set(key, await pass.started(hosted));
   }
   return pins;
 }

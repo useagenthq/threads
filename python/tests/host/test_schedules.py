@@ -13,9 +13,12 @@ from threads import ConfigError, agent, extension, scripted_model, sqlite
 from threads.agents.run import pinned_start
 from threads.agents.store import Store, now_ms, open_store
 from threads.host import Schedule, host
+from threads.host.cron import parse_cron
 from threads.host.occurrences import log_occurrence
 from threads.host.runs import Runner
-from threads.host.schedules import Scheduler, parse_cron
+from threads.host.schedule_pass import Pass
+from threads.host.schedule_threads import reserve_due
+from threads.host.schedules import Scheduler
 from threads.log import ScheduleFiredEvent, ScheduleSkippedEvent
 from threads.result import Ok
 from threads.store.retention import delete_thread
@@ -122,7 +125,7 @@ def test_a_deletion_before_a_reservation_strands_nothing_and_a_retired_key_stays
         # stays retired, and the new one lands on a new thread, never the deleted one.
         started = await pinned_start(bot.definition, store)
         due = [Due("daily", NINE + n * DAY, "bot", "Report.", "UTC", missed=False) for n in (1, 2)]
-        await rows.reserve_due(started, due, now_ms())
+        await reserve_due(Pass(runner, store, "local"), started, due, now_ms())
         (identity,) = await rows.threads()
         assert identity != thread
         found = await sq.run(
@@ -151,7 +154,7 @@ def test_an_unreadable_schedule_thread_fails_the_reservation_and_keeps_its_ident
         started = await pinned_start(bot.definition, store)
         due = [Due("daily", NINE + DAY, "bot", "Report.", "UTC", missed=False)]
         with pytest.raises(TypeError, match="can't be read"):
-            await rows.reserve_due(started, due, now_ms())
+            await reserve_due(Pass(runner, store, "local"), started, due, now_ms())
         assert await rows.threads() == (thread,)
         count = await sq.run(
             lambda c: c.execute("SELECT count(*) FROM schedule_occurrences").fetchone()
@@ -191,8 +194,8 @@ def test_a_setup_failure_decides_nothing_and_writes_no_thread() -> None:
             extensions=[extension(name="boot", setup=broken)],
         )
         runner = Runner(store, {"bot": bot}, {})
-        with pytest.raises(ConfigError, match="setup failed"):
-            await Scheduler(runner, [DAILY]).tick(NINE - 60_000, NINE + 1_000)
+        # Reported, not raised (test_schedule_failures.py): nothing is stored for it.
+        await Scheduler(runner, [DAILY]).tick(NINE - 60_000, NINE + 1_000)
         sq = await open_store(store)
         counts = await sq.run(
             lambda c: c.execute(
@@ -229,7 +232,7 @@ def test_a_setup_failure_is_reported_and_the_scheduler_keeps_running(
             await running
 
     asyncio.run(main())
-    assert "schedule tick failed" in capsys.readouterr().err
+    assert "schedule daily failed" in capsys.readouterr().err
 
 
 def test_ready_refuses_a_schedule_of_an_unknown_agent() -> None:

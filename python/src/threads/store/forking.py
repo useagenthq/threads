@@ -7,14 +7,15 @@ from dataclasses import dataclass
 
 from pydantic import JsonValue
 
-from threads.log import BranchId, Header, ParseError
+from threads.log import BranchId, ParseError
 from threads.log.digest import sha256_hex
 from threads.redaction import SecretInStoredBytesError, published
-from threads.reduce import Fold, apply, enter_segment
+from threads.reduce import Fold
 from threads.result import Err, Ok
 from threads.store import lease
 from threads.store.lease import TTL_MS, Lease, Owner
-from threads.store.lines import Draft, Position, event_line, header_line, stored_secret
+from threads.store.lines import Draft, Position, header_line, stored_secret
+from threads.store.opening import opening
 from threads.store.sql import Branch
 from threads.store.verify import StoredEvent, VerifiedLog
 
@@ -93,13 +94,9 @@ def start_child(
     }
     child = started.row.branch_id
     at = Position(fold.thread_id, child, fold.seq + 1, started.owner.lease.epoch, header, now)
-    built = event_line(Draft("fork", link), at)
+    built = opening(fold, header, Draft("fork", link), at)
     if isinstance(built, Err):
         return built
-    enter_segment(fold, Header.model_validate_json(header))
-    error = apply(fold, built.value[0])
-    if error is not None:
-        return Err(error)
     row = Branch(
         child,
         fold.thread_id,

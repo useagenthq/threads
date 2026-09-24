@@ -1,23 +1,18 @@
 import { Input } from "@threads/core";
 import {
-  BranchId,
   canonicalize,
-  type EventDraft,
   Int,
   JsonValue,
-  knownEvents,
-  type LogStore,
   NonEmpty,
   parseRows,
   type SqliteDriver,
   ThreadId,
-  uuidv7,
-  type VerifiedLog,
 } from "@threads/core/host";
 import { z } from "zod";
 
-// The scheduler's rows (spec/schema/store.sql): a schedule's thread (schedule_threads) and its
-// occurrences (schedule_occurrences), every read and write scoped by tenant.
+// The scheduler's rows (spec/schema/store.sql): the threads a schedule has had
+// (schedule_threads) and its occurrences (schedule_occurrences), every read and write scoped by
+// tenant. SQL only: which thread a schedule uses is decided in identity.ts.
 
 const REASONS = ["missed", "overlap", "removed"] as const;
 export type Reason = (typeof REASONS)[number];
@@ -89,46 +84,41 @@ export function pendingOf(
   );
 }
 
-/**
- * Reserves due occurrences on the schedule's thread, in one transaction with finding that thread:
- * a deletion commits wholly before (a new thread is made) or after (these rows are retired). A
- * schedule without a thread gets one; so does one whose agent now pins another config than its
- * thread's (a config change starts a new thread), once that thread is quiet. The identity row,
- * branch and thread_started are written together. Keys another scheduler reserved are skipped.
- */
-export function reserveDue(
+/** Whether the occurrence's key is already reserved, in any state. */
+export function reserved(db: SqliteDriver, tenant: string, row: Due): boolean {
+  return (
+    db.all(
+      `SELECT 1 FROM schedule_occurrences
+        WHERE tenant_id = ? AND schedule_id = ? AND occurrence_at = ?`,
+      [tenant, row.schedule_id, row.occurrence_at],
+    ).length > 0
+  );
+}
+
+/** Inserts a pending row; a key another scheduler reserved first wins silently. */
+export function insertPending(
   db: SqliteDriver,
-  log: LogStore,
-  started: EventDraft,
-  due: readonly Due[],
+  tenant: string,
+  threadId: ThreadId,
+  row: Due,
+  now: number,
 ): void {
-  db.transaction(() => {
-    const fresh = due.filter((row) => !reserved(db, log.tenant, row));
-    const first = fresh[0];
-    if (first === undefined) return;
-    const found = threadOf(db, log.tenant, first.schedule_id);
-    const threadId =
-      found !== undefined && keeps(db, log, found, started)
-        ? found
-        : newThread(db, log, first.schedule_id, started);
-    for (const row of fresh)
-      db.run(
-        `INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state, reason,
-          thread_id, claimed_at, agent, input_json, timezone)
-          VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
-        [
-          log.tenant,
-          row.schedule_id,
-          row.occurrence_at,
-          row.missed ? "missed" : null,
-          threadId,
-          log.now(),
-          row.agent,
-          canonical(row.input),
-          row.timezone,
-        ],
-      );
-  });
+  db.run(
+    `INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state, reason,
+      thread_id, claimed_at, agent, input_json, timezone)
+      VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+    [
+      tenant,
+      row.schedule_id,
+      row.occurrence_at,
+      row.missed ? "missed" : null,
+      threadId,
+      now,
+      row.agent,
+      canonical(row.input),
+      row.timezone,
+    ],
+  );
 }
 
 /** Marks a thread's undecided pending rows as overlaps: its log shows a turn still open. */
@@ -202,63 +192,8 @@ export function scheduleThreads(
   ).map((r) => r.thread_id);
 }
 
-/** The config_hash a draft thread_started pins. */
-export function hashOf(started: EventDraft): string | undefined {
-  return started.type === "thread_started"
-    ? started.data.config_hash
-    : undefined;
-}
-
-/** The config_hash a stored thread was started with, read back through the log. */
-export function pinOf(log: LogStore, threadId: ThreadId): string | undefined {
-  const read = logOf(log, threadId);
-  return read === undefined ? undefined : pinIn(read);
-}
-
-/**
- * Whether the schedule stays on its thread: it pins the same config, or it doesn't but the
- * thread is still busy. A config change moves to a new thread only once the old one is quiet (no
- * open turn, no undecided reservation), so no run is left behind where recovery won't look and
- * no new run starts while the old one goes on.
- */
-function keeps(
-  db: SqliteDriver,
-  log: LogStore,
-  threadId: ThreadId,
-  started: EventDraft,
-): boolean {
-  const read = logOf(log, threadId);
-  // An unreadable thread can't be shown quiet: the pass fails, and its identity stays.
-  if (read === undefined)
-    throw new Error(`schedule thread ${threadId} can't be read`);
-  if (pinIn(read) === hashOf(started)) return true;
-  return read.fold.turnOpen || pendingOf(db, log.tenant, threadId).length > 0;
-}
-
-function logOf(log: LogStore, threadId: ThreadId): VerifiedLog | undefined {
-  const main = log.mainBranch(threadId);
-  const read = main.ok ? log.read(main.value) : undefined;
-  return read?.ok === true ? read.value : undefined;
-}
-
-function pinIn(read: VerifiedLog): string | undefined {
-  const started = knownEvents(read).find((e) => e.type === "thread_started");
-  return started?.type === "thread_started"
-    ? started.data.config_hash
-    : undefined;
-}
-
-function reserved(db: SqliteDriver, tenant: string, row: Due): boolean {
-  return (
-    db.all(
-      `SELECT 1 FROM schedule_occurrences
-        WHERE tenant_id = ? AND schedule_id = ? AND occurrence_at = ?`,
-      [tenant, row.schedule_id, row.occurrence_at],
-    ).length > 0
-  );
-}
-
-function threadOf(
+/** The schedule's current thread. */
+export function currentThread(
   db: SqliteDriver,
   tenant: string,
   scheduleId: string,
@@ -274,41 +209,24 @@ function threadOf(
   return found?.thread_id;
 }
 
-/** A new thread for the schedule, in the caller's transaction: identity, branch, thread_started. */
-function newThread(
+/** Makes `threadId` the schedule's current thread; the old one stays listed for recovery. */
+export function makeCurrent(
   db: SqliteDriver,
-  log: LogStore,
+  tenant: string,
   scheduleId: string,
-  started: EventDraft,
-): ThreadId {
-  const threadId = ThreadId.parse(uuidv7(log.now()));
-  const branchId = BranchId.parse(uuidv7(log.now()));
-  // The old thread stays listed, so recovery still finds it.
+  threadId: ThreadId,
+  now: number,
+): void {
   db.run(
     `UPDATE schedule_threads SET current = 0
       WHERE tenant_id = ? AND schedule_id = ? AND current = 1`,
-    [log.tenant, scheduleId],
+    [tenant, scheduleId],
   );
   db.run(
     `INSERT INTO schedule_threads (tenant_id, schedule_id, thread_id, current, created_at)
       VALUES (?, ?, ?, 1, ?)`,
-    [log.tenant, scheduleId, threadId, log.now()],
+    [tenant, scheduleId, threadId, now],
   );
-  must(log.createBranch(threadId, branchId));
-  const writer = must(log.acquire(branchId, `schedule-${uuidv7(log.now())}`));
-  must(writer.append([started]));
-  writer.release();
-  return threadId;
-}
-
-/** A new branch takes its first line: anything else is a bug, not an outcome. */
-function must<T>(
-  result:
-    | { readonly ok: true; readonly value: T }
-    | { readonly ok: false; readonly error: { readonly message: string } },
-): T {
-  if (!result.ok) throw new Error(result.error.message);
-  return result.value;
 }
 
 function canonical(input: Input): string {

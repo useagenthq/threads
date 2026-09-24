@@ -1,5 +1,6 @@
-"""The scheduler's rows (store.sql `schedule_threads`, `schedule_occurrences`): a schedule's thread
-and its occurrences, every read and write scoped by tenant.
+"""The scheduler's rows (store.sql `schedule_threads`, `schedule_occurrences`): the threads a
+schedule has had and its occurrences, every read and write scoped by tenant. SQL only: which
+thread a schedule uses is decided in `threads.host.schedule_threads`.
 
 A due occurrence is reserved as a `pending` row with what firing it needs frozen (agent, input,
 timezone), then decided under its thread's writer by a conditional update in the transaction of
@@ -14,25 +15,13 @@ from typing import Final, Literal
 from pydantic import TypeAdapter, ValidationError
 
 from threads._generated.host_api_v1 import Input
-from threads.log import BranchId, Header, ParseError, ThreadId, ThreadStartedEvent
-from threads.log.digest import sha256_hex
+from threads.log import ParseError, ThreadId
 from threads.log.jcs import canonicalize
-from threads.reduce import Fold, apply, enter_segment
 from threads.reduce.handlers import to_json
-from threads.result import Err, Ok
+from threads.result import Ok
 from threads.store.companion import Companion
-from threads.store.lines import Draft, Position, event_line, header_line, uuid7
-from threads.store.sql import (
-    Branch,
-    export,
-    insert_branch,
-    insert_events,
-    int_of,
-    root,
-    text_of,
-    transaction,
-)
-from threads.store.verify import StoredEvent, verify_export
+from threads.store.sql import int_of, text_of
+from threads.store.verify import StoredEvent
 from threads.store.worker import Worker
 
 type Reason = Literal["missed", "overlap", "removed"]
@@ -82,26 +71,7 @@ class ScheduleRows:
         """Pending rows in occurrence order: the tenant's, whatever schedules are configured
         now, or one thread's."""
         tenant = self._tenant
-        return await self._worker.call(lambda c: _pending(c, tenant, thread_id))
-
-    async def reserve_due(self, started: Draft, due: Sequence[Due], now: int) -> None:
-        """Reserves due occurrences on the schedule's thread, in one transaction with finding
-        that thread: a deletion commits wholly before (a new thread is made) or after (these rows
-        are retired). A schedule without a thread gets one; so does one whose agent now pins
-        another config than its thread's (a config change starts a new thread), once that thread
-        is quiet. The identity row, branch and thread_started are written together. Another
-        scheduler's
-        reservation of a key is skipped."""
-        if not due:
-            return
-        tenant = self._tenant
-        thread_id, branch_id = ThreadId(uuid7(now)), BranchId(uuid7(now))
-        header = header_line(thread_id, branch_id, now)
-        line = _first_line(started, Position(thread_id, branch_id, 1, 1, header, now))
-        row = Branch(
-            branch_id, thread_id, tenant, None, None, header, "ready", 1, sha256_hex(line[1])
-        )
-        await self._worker.call(lambda c: _reserve_due(c, row, line, due, now))
+        return await self._worker.call(lambda c: pending_rows(c, tenant, thread_id))
 
     async def mark_overlaps(self, thread_id: ThreadId) -> None:
         """The thread's log shows a turn still open: its undecided pending rows are overlaps."""
@@ -161,9 +131,10 @@ def decided(tenant_id: str, row: Pending, reason: Reason | None) -> Companion:
     return run
 
 
-def _pending(
-    conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId | None
+def pending_rows(
+    conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId | None = None
 ) -> tuple[Pending, ...]:
+    """Pending rows in occurrence order: the tenant's, or one thread's."""
     if thread_id is None:
         rows: list[tuple[object, ...]] = conn.execute(_PENDING + _ORDER, (tenant_id,)).fetchall()
     else:
@@ -213,57 +184,8 @@ def _reason(value: object) -> Reason | None:
     raise TypeError(f"a stored skip reason {value!r} is not one of {_REASONS}")
 
 
-def _reserve_due(
-    conn: sqlite3.Connection,
-    new: Branch,
-    first: tuple[ThreadStartedEvent, bytes],
-    due: Sequence[Due],
-    now: int,
-) -> None:
-    tenant_id, schedule_id = new.tenant_id, due[0].schedule_id
-    with transaction(conn):
-        fresh = [d for d in due if not _reserved(conn, tenant_id, d)]
-        if not fresh:
-            return
-        found = _thread_of(conn, tenant_id, schedule_id)
-        thread = found
-        if found is None or not _keeps(conn, tenant_id, found, first[0].data.config_hash, now):
-            # The old thread stays listed, so recovery still finds it.
-            conn.execute(
-                "UPDATE schedule_threads SET current = 0"
-                " WHERE tenant_id = ? AND schedule_id = ? AND current = 1",
-                (tenant_id, schedule_id),
-            )
-            conn.execute(
-                "INSERT INTO schedule_threads (tenant_id, schedule_id, thread_id, current,"
-                " created_at) VALUES (?, ?, ?, 1, ?)",
-                (tenant_id, schedule_id, new.thread_id, now),
-            )
-            insert_branch(conn, new)
-            insert_events(conn, (first,), new.head_hash)
-            thread = new.thread_id
-        conn.executemany(
-            "INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state,"
-            " reason, thread_id, claimed_at, agent, input_json, timezone)"
-            " VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
-            [
-                (
-                    tenant_id,
-                    d.schedule_id,
-                    d.occurrence_at,
-                    "missed" if d.missed else None,
-                    thread,
-                    now,
-                    d.agent,
-                    _canonical(d.input),
-                    d.timezone,
-                )
-                for d in fresh
-            ],
-        )
-
-
-def _thread_of(conn: sqlite3.Connection, tenant_id: str, schedule_id: str) -> ThreadId | None:
+def current_thread(conn: sqlite3.Connection, tenant_id: str, schedule_id: str) -> ThreadId | None:
+    """The schedule's current thread."""
     found: tuple[object] | None = conn.execute(
         "SELECT thread_id FROM schedule_threads"
         " WHERE tenant_id = ? AND schedule_id = ? AND current = 1",
@@ -272,26 +194,8 @@ def _thread_of(conn: sqlite3.Connection, tenant_id: str, schedule_id: str) -> Th
     return None if found is None else _thread_id(found[0])
 
 
-def _keeps(
-    conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, pin: str, now: int
-) -> bool:
-    """Whether the schedule stays on its thread: it pins the same config, or it doesn't but the
-    thread is still busy. A config change moves to a new thread only once the old one is quiet (no
-    open turn, no undecided reservation), so no run is left behind where recovery won't look and
-    no new run starts while the old one goes on."""
-    branch = root(conn, thread_id, tenant_id)
-    read = None if branch is None else verify_export(export(conn, branch), now)
-    if not isinstance(read, Ok):
-        # An unreadable thread can't be shown quiet: the pass fails, and its identity stays.
-        raise TypeError(f"schedule thread {thread_id} can't be read")
-    fold = read.value.fold
-    started = next((e for e in fold.events if isinstance(e, ThreadStartedEvent)), None)
-    if started is not None and started.data.config_hash == pin:
-        return True
-    return fold.in_turn or bool(_pending(conn, tenant_id, thread_id))
-
-
-def _reserved(conn: sqlite3.Connection, tenant_id: str, due: Due) -> bool:
+def reserved(conn: sqlite3.Connection, tenant_id: str, due: Due) -> bool:
+    """Whether the occurrence's key is already reserved, in any state."""
     found = conn.execute(
         "SELECT 1 FROM schedule_occurrences"
         " WHERE tenant_id = ? AND schedule_id = ? AND occurrence_at = ?",
@@ -300,21 +204,42 @@ def _reserved(conn: sqlite3.Connection, tenant_id: str, due: Due) -> bool:
     return found is not None
 
 
-def _first_line(first: Draft, at: Position) -> tuple[ThreadStartedEvent, bytes]:
-    """A new branch's thread_started, checked like any append: failing is a bug, not an
-    outcome."""
-    built = event_line(first, at)
-    if isinstance(built, Err):
-        raise ValueError(built.error.message)
-    event = built.value[0]
-    if not isinstance(event, ThreadStartedEvent):
-        raise TypeError("a schedule thread opens with thread_started")
-    fold = Fold(now=at.now)
-    enter_segment(fold, Header.model_validate_json(at.prev_line))
-    error = apply(fold, event)
-    if error is not None:
-        raise ValueError(error.message)
-    return event, built.value[1]
+def insert_pending(
+    conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, due: Due, now: int
+) -> None:
+    """Inserts a pending row; a key another scheduler reserved first wins silently."""
+    conn.execute(
+        "INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state,"
+        " reason, thread_id, claimed_at, agent, input_json, timezone)"
+        " VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+        (
+            tenant_id,
+            due.schedule_id,
+            due.occurrence_at,
+            "missed" if due.missed else None,
+            thread_id,
+            now,
+            due.agent,
+            _canonical(due.input),
+            due.timezone,
+        ),
+    )
+
+
+def make_current(
+    conn: sqlite3.Connection, tenant_id: str, schedule_id: str, thread_id: ThreadId, now: int
+) -> None:
+    """Makes `thread_id` the schedule's current thread; the old one stays listed for recovery."""
+    conn.execute(
+        "UPDATE schedule_threads SET current = 0"
+        " WHERE tenant_id = ? AND schedule_id = ? AND current = 1",
+        (tenant_id, schedule_id),
+    )
+    conn.execute(
+        "INSERT INTO schedule_threads (tenant_id, schedule_id, thread_id, current, created_at)"
+        " VALUES (?, ?, ?, 1, ?)",
+        (tenant_id, schedule_id, thread_id, now),
+    )
 
 
 def _canonical(given: Input) -> str:

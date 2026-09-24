@@ -14,6 +14,7 @@ import { failure } from "./errors";
 import { type Authenticate, api } from "./http";
 import { channelThreads } from "./inbox";
 import { challenge, receive } from "./intake";
+import { isolated } from "./isolated";
 import { unfinishedRuns } from "./receipts";
 import { Recovery } from "./recovery";
 import { type RunAccepted, type StartRunCode, startRun } from "./runs";
@@ -221,11 +222,13 @@ export function host(options: HostOptions): Host {
         tickWaiters = [];
         ticking = (async (): Promise<void> => {
           try {
-            await tick(ctx, bound, startedAt, Date.now());
-            await recoverReplies();
-            await sweep();
-          } catch (error) {
-            console.error("threads host: tick failed", error);
+            // Each step runs even when an earlier one fails: a broken schedule never holds up
+            // reply recovery or the inbox sweep.
+            await isolated("schedule tick", () =>
+              tick(ctx, bound, startedAt, Date.now()),
+            );
+            await isolated("reply recovery", recoverReplies);
+            await isolated("inbox sweep", sweep);
           } finally {
             ticking = undefined;
             for (const resolve of waiting) resolve();
