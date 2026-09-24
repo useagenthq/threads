@@ -188,6 +188,7 @@ function agents<Deps, Output>(
   };
   return {
     name: def.name,
+    subagents: def.agents.map((a) => a.name),
     subagent: (name) => {
       const found = def.agents.find((a) => a.name === name);
       return found === undefined ? undefined : childFactory(found)?.(shared);

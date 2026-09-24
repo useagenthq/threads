@@ -198,44 +198,6 @@ describe("spawn_agent in the foreground", () => {
   });
 });
 
-describe("spawn_agent in the background (F7.2)", () => {
-  test("a deferred placeholder at once, then agent_finished and tool_result_late", async () => {
-    const store = sqlite(":memory:");
-    const scanner = agent({
-      name: "scanner",
-      model: scriptedModel({ responses: [say("No vulnerable deps.")] }),
-    });
-    const lead = agent({
-      model: scriptedModel({
-        responses: [
-          use(
-            "spawn_agent",
-            { agent: "scanner", prompt: "Scan.", background: true },
-            "c1",
-          ),
-          say("Scan started."),
-        ],
-      }),
-      subagents: [scanner],
-    });
-    const result = await lead.run("go", { store });
-    expect(result).toMatchObject({
-      status: "completed",
-      output: "Scan started.",
-    });
-    const log = await events(store, result.thread);
-    expect(only(log, "tool_result").map((e) => e.data.origin)).toEqual([
-      "deferred",
-    ]);
-    const types = log.map((e) => e.type);
-    const at = types.indexOf("agent_finished");
-    expect(types.slice(at)).toEqual(["agent_finished", "tool_result_late"]);
-    expect(only(log, "tool_result_late")[0]?.data.preview).toBe(
-      "No vulnerable deps.",
-    );
-  });
-});
-
 describe("subagent hooks", () => {
   test("subagent_start deny: a denied result and no child", async () => {
     const store = sqlite(":memory:");

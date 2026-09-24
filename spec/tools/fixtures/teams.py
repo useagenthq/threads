@@ -65,6 +65,48 @@ def _listed(root: pathlib.Path) -> None:
 def build(root: pathlib.Path) -> None:
     _listed(root)
     _replay(root)
+    _unknown_recipient(root)
+
+
+def _unknown_recipient(root: pathlib.Path) -> None:
+    """send_message to a name that is not on the team is refused and appends no team_message.
+    The runner's thread is its own lead and lists no subagents, so its team is `demo`."""
+    log = Log()
+    started(log, catalog_specs(TEAM_TOOLS))
+    user(log, "Tell billing.")
+    r = log.model_request()
+    send: Obj = {"to": "billing", "text": "Refund order 42."}
+    use: JsonValue = {"type": "tool_use", "call_id": "c1", "name": "send_message", "input": send}
+    log.model_response(r, [use], "tool_use", tokens(80, 20))
+    log.tool_call(r, "c1", "send_message", send)
+    log.add("permission_decision", {"call_id": "c1", **ALLOW})
+    refused: Obj = {
+        "type": "tool_result",
+        "actor_kind": "tool",
+        "data": {
+            "call_id": "c1",
+            "is_error": True,
+            "origin": "executed",
+            "preview": "unknown_recipient: billing is not on this team; send to demo or * for "
+            "everyone",
+        },
+    }
+    write_case(
+        root,
+        case(
+            "team-send-unknown-recipient-refused",
+            FAM,
+            "recover",
+            "The lead's send_message names billing, which is not on its team (the lead demo, no "
+            "subagents). The call is refused as an error result that lists the team, and no "
+            "team_message is appended.",
+            NOW,
+            model_script="model.json",
+        ),
+        log,
+        {"outcome": "ok", "state": reduce(log, NOW), "appended": [refused, *TAIL]},
+        extra={"model.json": {"responses": [FINAL]}},
+    )
 
 
 def _replay(root: pathlib.Path) -> None:

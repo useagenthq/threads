@@ -85,8 +85,10 @@ export type AgentOptions<Deps, Output> = {
   /** Skills from the host store: listed in line 0, loaded with load_skill. */
   readonly skills?: readonly Skill[];
   /**
-   * Who may answer this agent's approval challenges through a host. Absent:
-   * the host API's authenticated principals of the thread's tenant, and nobody over a channel.
+   * Who may answer approval challenges and resolve parked effects for runs this agent roots,
+   * its subagents and handoff targets included. Absent: only the root run's originating
+   * principal, the principal of the root thread's latest user_input (spec/schema/README.md,
+   * Approval authority).
    */
   readonly approvers?: readonly Principal[];
 };

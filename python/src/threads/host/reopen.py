@@ -1,5 +1,7 @@
 """API runs a crash left open, resumed by a starting host and looked at again until each closes or
-parks (spec/schema/README.md, "API run recovery").
+parks (spec/schema/README.md, "API run recovery"); and each second, every branch with a
+background child still to report (pending_wakes), run on so the child reports and wakes its lead
+(Gate 1 §2.7.3).
 
 A look that loses to another host's lease is tried again each second. A store error (the store
 raises `StoreError`, wherever it met SQLite) is tried again with backoff while it lasts, said
@@ -18,8 +20,9 @@ from threads.agents.results import Failed
 from threads.agents.store import open_store
 from threads.host.runs import Runner, RunTask
 from threads.log import BranchId, ThreadId
+from threads.reduce.wakes import pending_wakes
 from threads.result import Ok
-from threads.store import StoreError
+from threads.store import LOCAL_TENANT, StoreError
 from threads.thread.handle import Thread
 
 type OpenRun = tuple[str, ThreadId, BranchId]
@@ -53,6 +56,9 @@ class Reopening:
         self._runner = runner
         self._open: dict[OpenRun, RunTask] = {}
         self._streaks: dict[OpenRun, _Streak] = {}
+        self._given_up: dict[OpenRun, int] = {}
+        """Rows given up on, with the head seq they failed at: a pending wake is re-listed every
+        pass, and is run again only once its log moves."""
 
     async def first(self, rows: Sequence[OpenRun]) -> list[RunTask]:
         """The start's pass: each open, unparked run resumed. Returns the runs it started."""
@@ -69,10 +75,11 @@ class Reopening:
             self._open.setdefault((tenant, thread.id, thread.branch), run)
 
     async def run(self) -> None:
-        """Looks again each second at every run not yet closed, parked or given up on, until the
-        host stops."""
+        """Looks again each second at every run not yet closed, parked or given up on, and at
+        every branch with a pending wake, until the host stops."""
         while True:
             await asyncio.sleep(REOPEN_S)
+            await self._wakes()
             for row, run in tuple(self._open.items()):
                 again = await self._look(row, run)
                 if again is None:
@@ -80,6 +87,22 @@ class Reopening:
                     self._streaks.pop(row, None)
                 else:
                     self._open[row] = again
+
+    async def _wakes(self) -> None:
+        """Every branch with a pending wake not looked at yet is run on. A store error is said
+        and looked at again on the next pass."""
+        try:
+            sq = await open_store(self._runner.store(LOCAL_TENANT))
+            for row in await sq.tables.wake_branches():
+                if row in self._given_up and self._given_up[row] == await self._head(row):
+                    continue
+                self._given_up.pop(row, None)
+                if row not in self._open:
+                    run = await self._reopen(row)
+                    if run is not None:
+                        self._open[row] = run
+        except StoreError as error:
+            _log.warning("threads host: pending wakes not read (%s)", error)
 
     async def _look(self, row: OpenRun, run: RunTask) -> RunTask | None:
         """The run carrying the row after one more look, or None to stop looking."""
@@ -92,6 +115,7 @@ class Reopening:
             if fresh:
                 self._fail(row, error, run)
         elif _gave_up(row, run):
+            self._given_up[row] = await self._head(row)
             return None
         elif fresh:
             # A run since the streak began ended without a store error: the streak is over.
@@ -125,9 +149,16 @@ class Reopening:
                 "threads host: API run on %s not recovered (%s: %s)", branch, code, message
             )
             return None
-        if not read.value.fold.in_turn or read.value.fold.parked:
+        fold = read.value.fold
+        waking = bool(pending_wakes(fold.events, branch))
+        if (not fold.in_turn and not waking) or fold.parked:
             return None
         return await self._runner.resume(store, thread, branch)
+
+    async def _head(self, row: OpenRun) -> int:
+        """The row's branch head seq, or -1 when it can't be read."""
+        read = await (await open_store(self._runner.store(row[0]))).read(row[2], 0)
+        return read.value.fold.seq if isinstance(read, Ok) else -1
 
     def _fail(self, row: OpenRun, error: StoreError, counted: RunTask) -> None:
         """One more store error in the row's streak: the next look waits twice as long."""

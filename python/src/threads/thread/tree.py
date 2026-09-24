@@ -13,8 +13,16 @@ from typing import TYPE_CHECKING, Final
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.store import Store, now_ms, open_store
-from threads.log import BranchId, ParseError, Principal, ThreadId, ThreadStartedEvent
-from threads.loop.history import open_cancel
+from threads.log import (
+    BranchId,
+    CancelRequestedEvent,
+    Event,
+    ParseError,
+    Principal,
+    ThreadId,
+    ThreadStartedEvent,
+    UserInputEvent,
+)
 from threads.reduce import Fold
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
@@ -51,25 +59,43 @@ def unfinished(fold: Fold) -> list[ThreadId]:
     return [child for child, done in fold.children.items() if not done]
 
 
-async def bar_child(store: Store, child: ThreadId, principal: Principal) -> None:
-    """The child's tree barrier, when its turn is open and not barred yet, then its own
-    children's. A refusal (the child's lease held elsewhere) is left to that child's run: its
-    parent bars it again before running it on."""
+async def bar_child(
+    store: Store, child: ThreadId, principal: Principal, reason: str = REASON
+) -> bool:
+    """The child's tree barrier, unless it already has a thread or tree cancel request since
+    its latest input, then its own children's. A child whose turn is closed is barred too: it may
+    be waiting on its own background children, and an idle tree cancel ends that run and bars its
+    wakes (rule 32). True once the child has its barrier. A refusal (the child's lease held
+    elsewhere) is left to that child's run: its parent bars it again before running it on."""
     sq = await open_store(store)
     root = await sq.root(child)
     if isinstance(root, Err):
-        return
-    data: dict[str, JsonValue] = {"scope": "tree", "reason": REASON}
+        return False
+    data: dict[str, JsonValue] = {"scope": "tree", "reason": reason}
     by: dict[str, JsonValue] = {"kind": "host", "principal": to_json(principal)}
     barrier = first("cancel_requested", data, by)
+    stopped = False
 
     def build(fold: Fold) -> Ok[Sequence[Draft]] | Err[ParseError]:
-        if not fold.in_turn or open_cancel(fold.events) is not None:
-            return Err(ParseError("not_found", "nothing to stop"))
+        nonlocal stopped
+        if cancelled_since_input(fold.events):
+            stopped = True
+            return Err(ParseError("not_found", "already stopped"))
         return Ok(barred(fold, barrier))
 
-    await append(store, root.value, build)
+    done = await append(store, root.value, build)
     await cancel_children(store, root.value, principal)
+    return stopped or isinstance(done, Ok)
+
+
+def cancelled_since_input(events: Sequence[Event]) -> bool:
+    """A thread or tree cancel request since the latest user_input."""
+    for event in reversed(events):
+        if isinstance(event, UserInputEvent):
+            return False
+        if isinstance(event, CancelRequestedEvent) and event.data.scope != "turn":
+            return True
+    return False
 
 
 async def root_of(

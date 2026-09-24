@@ -37,3 +37,9 @@ class Scope[D]:
 
     def member(self) -> str:
         return self.definition.name if self.team is None else self.team.member
+
+    def team_names(self) -> tuple[str, ...]:
+        """Every name a team message may be sent to: the lead's, then its subagents'."""
+        if self.team is not None:
+            return self.team.names
+        return (self.definition.name, *(d.name for d in self.definition.subagents))

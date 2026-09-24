@@ -135,7 +135,9 @@ class Host:
                     if run is not None:
                         _RECOVERY[self][1].append(run)
             # ponytail: API runs are found at start only; a live peer's crash waits for a restart.
-            _RECOVERY[self][1].extend(await reopening.first(await sq.tables.unfinished_runs()))
+            open_runs = await sq.tables.unfinished_runs()
+            waking = [row for row in await sq.tables.wake_branches() if row not in open_runs]
+            _RECOVERY[self][1].extend(await reopening.first((*open_runs, *waking)))
         finally:
             _RECOVERY[self][0].set()
         await asyncio.gather(self._scheduler.run(), reopening.run())

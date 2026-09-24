@@ -61,7 +61,7 @@ The model calls `handoff` with one argument, `agent`: a name from `handoffs`. An
 ## What happens
 
 1. The first agent's turn ends. Any other tool calls in the same model response are not run.
-2. A new thread starts for the target. It gets the conversation so far as reference material, and the customer's latest message as its first input.
+2. A new thread starts for the target. It gets the conversation so far as reference material, and the customer's latest message as its first input. The reference includes the tool calls and results of the turn that handed off, so the target knows what was already looked up. When those are large, the oldest are left out first, and a note says how many were dropped.
 3. The target runs its first turn right away, inside the same `run` call.
 4. `run` returns a result with status `handed_off`. `thread` is the first agent's thread and `to_thread` is the target's.
 

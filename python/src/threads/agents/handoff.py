@@ -3,7 +3,6 @@ and policy, so C7 holds per thread. The target keeps the originating principal a
 forwarded transcript as untrusted reference plus the pending request; the old thread takes no
 input after it (semantic rule 26)."""
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from pydantic.experimental.missing_sentinel import MISSING
@@ -13,15 +12,13 @@ from threads.agents.bindings import permissions
 from threads.agents.definition import Definition
 from threads.agents.launch import Launch
 from threads.agents.scope import Scope
+from threads.agents.transcript import handoff_transcript
 from threads.log import (
-    Event,
     HandoffEvent,
-    ModelResponseEvent,
-    ModelResponseRecoveredEvent,
-    TextPart,
     UserInputEvent,
 )
 from threads.loop.budget import inherited
+from threads.loop.defaults import context
 from threads.loop.drafts import draft
 from threads.loop.history import CallState
 from threads.loop.results import As, result_draft, text_ref
@@ -49,7 +46,7 @@ async def handoff[D](scope: Scope[D], rt: Runtime, state: CallState) -> Halt | N
         "to_agent": name,
         "to_thread_id": uuid7(rt.clock()),
         "forwarded": "transcript",
-        "forwarded_ref": await text_ref(rt, _transcript(rt.events)),
+        "forwarded_ref": await text_ref(rt, _forwarded(rt)),
     }
     result = await result_draft(rt, call_id, f"handed off to {name}", As("executed"))
     done = await rt.append(
@@ -58,21 +55,13 @@ async def handoff[D](scope: Scope[D], rt: Runtime, state: CallState) -> Halt | N
     return lost(done.error) if isinstance(done, Err) else None
 
 
+def _forwarded(rt: Runtime) -> str:
+    cap = context(rt.fold).spill.threshold_bytes
+    return handoff_transcript(rt.events, cap)
+
+
 def target[D](scope: Scope[D], name: str) -> Definition[None] | None:
     return next((d for d in scope.definition.handoffs if d.name == name), None)
-
-
-def _transcript(events: Sequence[Event]) -> str:
-    """The conversation so far as plain text: what the user asked and the agent answered."""
-    lines: list[str] = []
-    for event in events:
-        if isinstance(event, UserInputEvent) and isinstance(event.data.text, str):
-            lines.append(f"user: {event.data.text}")
-        elif isinstance(event, ModelResponseEvent | ModelResponseRecoveredEvent):
-            said = "".join(p.text for p in event.data.content if isinstance(p, TextPart))
-            if said:
-                lines.append(f"assistant: {said}")
-    return "\n".join(lines)
 
 
 def launch[D](scope: Scope[D], rt: Runtime, event: HandoffEvent) -> tuple[Launch, str]:

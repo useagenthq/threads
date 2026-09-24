@@ -36,7 +36,6 @@ from threads.log import (
     ThreadStartedEvent,
     ToolCallData,
     ToolResultEvent,
-    ToolResultLateEvent,
     UserInputEvent,
 )
 from threads.loop.scripted import ScriptExhaustedError
@@ -128,26 +127,6 @@ def test_a_foreground_child_runs_in_its_own_thread_and_feeds_the_call_result() -
         children = await result.thread.children()
         assert isinstance(children, Ok)
         assert [c.status for c in children.value] == ["completed"]
-
-    asyncio.run(main())
-
-
-def test_a_background_child_gets_a_placeholder_then_a_late_result() -> None:
-    async def main() -> None:
-        scanner = agent(name="scanner", model=scripted_model({"responses": [text("no vulns")]}))
-        lead = agent(
-            model=scripted_model({"responses": [spawn("scanner", background=True), text("ok")]}),
-            subagents=[scanner],
-        )
-        result = await lead.run("go", store=sqlite(":memory:"))
-        assert isinstance(result, Completed)
-        events = await events_of(result.thread)
-        placeholder = only(events, ToolResultEvent)[0]
-        assert placeholder.data.origin == "deferred"
-        late = only(events, ToolResultLateEvent)
-        assert [(r.data.call_id, r.data.preview) for r in late] == [("call_1", "no vulns")]
-        assert [f.data.status for f in only(events, AgentFinishedEvent)] == ["completed"]
-        assert [e.data.mode for e in only(events, AgentSpawnedEvent)] == ["background"]
 
     asyncio.run(main())
 

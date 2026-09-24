@@ -14,12 +14,14 @@ from pydantic import JsonValue
 
 from threads._generated.tools_v1 import SpawnAgentInput
 from threads.agents import stops
+from threads.agents.background import Background
 from threads.agents.bindings import permissions
 from threads.agents.children import finished, shown
 from threads.agents.definition import Definition
 from threads.agents.launch import Launch, Team
 from threads.agents.results import Failed, Parked, RunResult
 from threads.agents.scope import Scope
+from threads.agents.store import LIVE
 from threads.hooks.runner import STOP, SWITCH, decision_draft
 from threads.log import (
     AgentFinishedData,
@@ -36,17 +38,16 @@ from threads.loop.history import CallState, open_cancel
 from threads.loop.results import As, result_draft, text_ref
 from threads.loop.runtime import Failed as HaltFailed
 from threads.loop.runtime import Halt, Runtime, lost
-from threads.result import Err
+from threads.result import Err, Ok
 from threads.store.lines import uuid7
 
-type Tasks = dict[ThreadId, asyncio.Task[None]]
 type Ended = tuple[dict[str, JsonValue], str]
 """A child's agent_finished data and the spawn call's result text."""
 
 _DEFERRED: Final = "started in background"
 
 
-async def spawn[D](scope: Scope[D], rt: Runtime, state: CallState, tasks: Tasks) -> Halt | None:
+async def spawn[D](scope: Scope[D], rt: Runtime, state: CallState, bg: Background) -> Halt | None:
     call_id = state.call.data.call_id
     args = SpawnAgentInput.model_validate(dict(state.call.data.input))
     spawned = _spawned(rt, call_id)
@@ -63,7 +64,7 @@ async def spawn[D](scope: Scope[D], rt: Runtime, state: CallState, tasks: Tasks)
     if child is None:
         return await _close(rt, call_id, f"agent {spawned.data.agent_name} is not configured")
     if spawned.data.mode == "background":
-        start_background(scope, rt, spawned, tasks)
+        start_background(scope, rt, spawned, bg)
         return None
     return await _foreground(rt, spawned, await _outcome(scope, rt, spawned, child, args.prompt))
 
@@ -165,31 +166,61 @@ async def _start[D](
     return lost(done.error) if isinstance(done, Err) else None
 
 
+_RUNNING: "dict[ThreadId, asyncio.Future[Ended | Parked | HaltFailed]]" = {}
+"""Background child runs in flight in this process, by child thread id."""
+
+
+async def _held[D](
+    scope: Scope[D], child: ThreadId, running: "asyncio.Future[Ended | Parked | HaltFailed]"
+) -> bool:
+    """An earlier run of this child in this process that still holds its lease: one to adopt,
+    so this run waits for it and never starts a second run on its busy lease."""
+    if running.get_loop() is not asyncio.get_running_loop():
+        return False
+    root = await scope.sq.root(child)
+    writer = None if isinstance(root, Err) else LIVE.get(root.value)
+    return writer is not None and isinstance(await writer.fence(), Ok)
+
+
 def start_background[D](
-    scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, tasks: Tasks
+    scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, bg: Background
 ) -> None:
-    """Runs the child beside the parent; its result lands as tool_result_late. Also restarts a
-    background child a crash interrupted: the same child thread, never a second one."""
+    """Runs the child beside the parent; the loop records its end as tool_result_late at a step
+    boundary (threads.agents.background). Also restarts a background child a crash
+    interrupted: the same child thread, never a second one."""
+    child_id = spawned.data.child_thread_id
     child = _child(scope, spawned.data.agent_name)
-    if spawned.data.child_thread_id in tasks or child is None:
+    if bg.has(child_id) or child is None:
         return
     prompt = SpawnAgentInput.model_validate(dict(rt.fold.calls[spawned.data.call_id].data.input))
 
     async def body() -> None:
-        ended = await _outcome(scope, rt, spawned, child, prompt.prompt)
-        # ponytail: a busy background child is left unfinished for the next run to restart.
-        if isinstance(ended, HaltFailed):
-            return
+        # A child an earlier run of this process left running (it returned on a cancel) is
+        # adopted: this run waits for that same run of the child, never a second one on its
+        # busy lease.
+        running = _RUNNING.get(child_id)
+        if running is None or not await _held(scope, child_id, running):
+            running = asyncio.ensure_future(_outcome(scope, rt, spawned, child, prompt.prompt))
+            _RUNNING[child_id] = running
+        try:
+            ended = await running
+        finally:
+            if _RUNNING.get(child_id) is running:
+                del _RUNNING[child_id]
         if isinstance(ended, Parked):
             await stops.park(rt, spawned, ended)
-            return
-        data, text = ended
-        late = await result_draft(rt, spawned.data.call_id, text, As("executed"))
-        fields = {k: v for k, v in late.data.items() if k != "origin"}
-        fields["is_error"] = data["status"] != "completed"
-        await rt.append(draft("agent_finished", data), draft("tool_result_late", fields))
+        elif isinstance(ended, HaltFailed):
+            bg.ended[child_id] = (spawned, ended)
+        else:
+            data, text = ended
+            late = await result_draft(rt, spawned.data.call_id, text, As("executed"))
+            fields = {k: v for k, v in late.data.items() if k != "origin"}
+            fields["is_error"] = data["status"] != "completed"
+            bg.ended[child_id] = (spawned, (data, fields))
+        # Only now: the lead never sees a child neither running nor ended (nor its park).
+        del bg.running[child_id]
 
-    tasks[spawned.data.child_thread_id] = asyncio.create_task(body())
+    bg.running[child_id] = asyncio.create_task(body())
 
 
 async def _outcome[D](
@@ -289,5 +320,5 @@ def _launch[D](scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, inputs:
         (own, *scope.ceilings),
         shared,
         (),
-        Team(scope.lead(rt), spawned.data.agent_name),
+        Team(scope.lead(rt), spawned.data.agent_name, scope.team_names()),
     )

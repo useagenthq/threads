@@ -21,11 +21,16 @@ from threads.result import Err
 from threads.store import Draft
 from threads.tools import TEAM
 
+type Seat = tuple[Runtime, str, tuple[str, ...]]
+"""The team's lead runtime, the calling member's name, and every name on the team."""
 
-async def team_tool(lead: Runtime, member: str, rt: Runtime, state: CallState) -> Halt | None:
-    """`rt` is the calling thread; `lead` is the team's lead (`rt` itself for the lead)."""
+
+async def team_tool(seat: Seat, rt: Runtime, state: CallState) -> Halt | None:
+    """`rt` is the calling thread; the seat's lead is the team's lead (`rt` itself for the
+    lead)."""
+    lead, member, names = seat
     call = state.call.data
-    event, text, failed = _decide(lead, member, call)
+    event, text, failed = _decide(lead, member, names, call)
     if event is not None and lead is not rt:
         # The lead's writer records the team state; this member's writer records the result.
         done = await lead.append(event)
@@ -41,7 +46,7 @@ type Answer = tuple[Draft | None, str, bool]
 """The team event to append (if any), the result text, and whether it is an error."""
 
 
-def _decide(lead: Runtime, member: str, call: ToolCallData) -> Answer:
+def _decide(lead: Runtime, member: str, names: tuple[str, ...], call: ToolCallData) -> Answer:
     """Ids are keyed to the call (`<member>/<call_id>`), so a call re-run after a crash finds
     what it already recorded and appends nothing (invariant 3)."""
     input = dict(call.input)
@@ -55,7 +60,7 @@ def _decide(lead: Runtime, member: str, call: ToolCallData) -> Answer:
             return _update(lead, member, TeamTaskUpdateInput.model_validate(input))
         case _:
             args_m = SendMessageInput.model_validate(input)
-            return _send(lead, member, f"{member}/{call.call_id}", args_m)
+            return _send(lead, (member, names), f"{member}/{call.call_id}", args_m)
 
 
 def _create(lead: Runtime, task_id: str, args: TeamTaskCreateInput) -> Answer:
@@ -97,12 +102,19 @@ def _update(lead: Runtime, member: str, args: TeamTaskUpdateInput) -> Answer:
     return draft("team_task_updated", data), done, False
 
 
-def _send(lead: Runtime, member: str, message_id: str, args: SendMessageInput) -> Answer:
+def _send(
+    lead: Runtime, sender: tuple[str, tuple[str, ...]], message_id: str, args: SendMessageInput
+) -> Answer:
+    member, names = sender
     sent = any(
         isinstance(e, TeamMessageEvent) and e.data.message_id == message_id for e in lead.events
     )
     if sent:
         return None, "sent", False
+    if args.to != "*" and args.to not in names:
+        known = ", ".join(names)
+        why = f"unknown_recipient: {args.to} is not on this team; send to {known} or * for everyone"
+        return None, why, True
     data: dict[str, JsonValue] = {
         "message_id": message_id,
         "from": member,
@@ -152,7 +164,7 @@ class Lead:
         return TEAM
 
     async def run(self, rt: Runtime, state: CallState) -> Halt | None:
-        return await team_tool(rt, self._member, rt, state)
+        return await team_tool((rt, self._member, (self._member,)), rt, state)
 
     async def flush(self, rt: Runtime) -> Halt | None:
         return None

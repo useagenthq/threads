@@ -20,6 +20,7 @@ import {
   insertEvents,
   putLease,
 } from "./tables";
+import { recordWakes } from "./wakes";
 
 type EnvelopeKey =
   | "seq"
@@ -32,11 +33,16 @@ type EnvelopeKey =
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   ? Omit<T, K>
   : never;
-/** An event before the writer fills its envelope. It is parsed like any stored line. */
+/**
+ * An event before the writer fills its envelope. It is parsed like any stored line. A draft may
+ * bring its own `event_id` (minted with `uuidv7` from the writer's clock) when a later event of
+ * the same append must name it; the line schema checks its format and validate_next that it is
+ * unique.
+ */
 export type EventDraft = DistributiveOmit<
   z.input<typeof KnownEvent>,
   EnvelopeKey
->;
+> & { readonly event_id?: string };
 
 export type Lease = {
   readonly branchId: string;
@@ -84,6 +90,7 @@ export class Writer {
   readonly requiresRecovery: boolean;
   #chain: Chain;
   #poisoned = false;
+  #moved = Promise.withResolvers<void>();
 
   constructor(db: SqliteDriver, now: () => number, lease: Lease, chain: Chain) {
     this.#db = db;
@@ -97,6 +104,11 @@ export class Writer {
       effects
         .values()
         .some((e) => e.status === "begun" || e.status === "unknown");
+  }
+
+  /** Settles on this writer's next committed append, whoever made it (a control included). */
+  moved(): Promise<void> {
+    return this.#moved.promise;
   }
 
   /** The committed chain this writer appends to. Each append replaces it; none mutates it. */
@@ -134,6 +146,8 @@ export class Writer {
       return committed;
     }
     this.#chain = trial;
+    this.#moved.resolve();
+    this.#moved = Promise.withResolvers<void>();
     return ok(added);
   }
 
@@ -230,7 +244,7 @@ export class Writer {
       actor,
       data,
       seq: trial.fold.seq + 1,
-      event_id: uuidv7(now),
+      event_id: draft.event_id ?? uuidv7(now),
       thread_id: segment.header.thread_id,
       branch_id: segment.header.branch_id,
       epoch: this.lease.epoch,
@@ -260,6 +274,7 @@ export class Writer {
         logError("seq_conflict", `the stored head is not ${expectedSeq}`),
       );
     insertEvents(this.#db, this.lease.branchId, added);
+    recordWakes(this.#db, this.lease.branchId, added);
     const approvals = recordApprovals(
       this.#db,
       branch.value,

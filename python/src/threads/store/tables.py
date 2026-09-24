@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from threads.log import BranchId, ThreadId
-from threads.store import approvals, inbox, receipts, schedules
+from threads.store import approvals, inbox, receipts, schedules, wakes
 from threads.store.sql import int_of, text_of
 from threads.store.worker import Worker
 
@@ -77,6 +77,11 @@ class Tables:
         """(tenant, thread, branch) of API runs a crash may have left open, across every
         tenant."""
         return await self._worker.call(receipts.unfinished)
+
+    async def wake_branches(self) -> tuple[tuple[str, ThreadId, BranchId], ...]:
+        """(tenant, thread, branch) of branches with a background child still to report, across
+        every tenant."""
+        return await self._worker.call(wakes.branches)
 
     async def branches(self, thread_id: ThreadId) -> tuple[BranchRow, ...]:
         return await self._worker.call(lambda c: _branches(c, self.tenant_id, thread_id))

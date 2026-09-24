@@ -223,6 +223,18 @@ export type Subagent = {
    * child that can't run now (its lease is held elsewhere) is a halt: nothing is recorded.
    */
   readonly run: (child: ChildRun) => Promise<ChildEnd | Halt>;
+  /**
+   * Stops a running child: a durable cancel_requested{scope: tree} with this reason in its own
+   * log (and its descendants'), which it obeys at its next step. True once the child has its
+   * barrier; a child with no thread yet gets nothing and is tried again.
+   */
+  readonly stop: (
+    child: ThreadId,
+    principal: Principal,
+    reason: string,
+  ) => Promise<boolean>;
+  /** Whether a run of this child in this process still holds its lease: one to adopt. */
+  readonly held: (child: ThreadId) => Promise<boolean>;
 };
 
 /** Team state lives in the lead's log; members change it only through the lead's writer. */
@@ -242,6 +254,8 @@ export type Agents = {
   /** This agent's name: its member id in its own team and its parent's. */
   readonly name: string;
   readonly subagent: (name: string) => Subagent | undefined;
+  /** The names spawn_agent may start, in declaration order: with this agent, its team. */
+  readonly subagents: readonly string[];
   /** Present when this thread is a member: its parent's team. */
   readonly team?: Team;
 };

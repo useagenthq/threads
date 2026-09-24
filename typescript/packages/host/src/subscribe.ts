@@ -9,6 +9,7 @@ import {
   openStore,
   type Principal,
   type Result,
+  runEnd,
   type ThreadId,
   threadHandle,
 } from "@threads/core/host";
@@ -89,7 +90,7 @@ async function* follow(
     const result =
       outcomeFromLog(events, runId, read.value.fold.parked, handle) ??
       halted(ctx, runId);
-    const end = result === undefined ? own.length : endOf(own) + 1;
+    const end = endOf(events, runId, start) + 1;
     for (const event of own.slice(0, end))
       if (event.seq > cursor) {
         cursor = event.seq;
@@ -105,10 +106,19 @@ async function* follow(
   }
 }
 
-/** The run's last event: its turn_completed, else the one before the next input, else the latest. */
-function endOf(own: readonly KnownEvent[]): number {
-  const done = own.findIndex((e) => e.type === "turn_completed");
-  if (done !== -1) return done;
+/**
+ * The run's last event, relative to its user_input at `start`: where it ended, else (running,
+ * parked or halted) the one before the next input, else the latest. The stream never shows
+ * another run's events.
+ */
+function endOf(
+  events: readonly KnownEvent[],
+  runId: EventId,
+  start: number,
+): number {
+  const { at } = runEnd(events, runId);
+  if (at !== undefined) return at - start;
+  const own = events.slice(start);
   const next = own.slice(1).findIndex((e) => e.type === "user_input");
   return next === -1 ? own.length - 1 : next;
 }

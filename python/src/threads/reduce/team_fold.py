@@ -8,6 +8,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 from threads.log import (
     AgentSpawnedEvent,
     AskClosedEvent,
+    CancelRequestedEvent,
     Event,
     MailEnvelope,
     MailRefusedEvent,
@@ -27,7 +28,7 @@ from threads.log import (
     WaitStartedEvent,
     WokenEvent,
 )
-from threads.reduce.fold import Fold, PrincipalKey, Run, Team, TurnRun
+from threads.reduce.fold import Fold, PrincipalKey, Team, TurnRun
 
 NOTICES = frozenset({"member_settled", "member_ended"})
 
@@ -109,7 +110,11 @@ def _turn(fold: Fold, event: Event) -> None:
         call = fold.wake.trailing.get(event.data.causes[0])
         team.turn = None if call is None else team.spawns.get(call)
     elif isinstance(event, TurnCompletedEvent):
+        if event.data.reason != "end_turn" and team.turn is not None:
+            team.ended_runs.add(team.turn)
         team.turn, team.last_end = None, event.data.reason
+    elif isinstance(event, CancelRequestedEvent) and event.data.scope != "turn":
+        team.barred.update(team.spawns)
     elif isinstance(event, AgentSpawnedEvent) and event.data.mode == "background" and team.turn:
         team.spawns[event.data.call_id] = team.turn
 
@@ -139,7 +144,6 @@ def _received(fold: Fold, env: MailEnvelope) -> None:
     if mail_opens_turn(fold, env):
         run = mail_run(env)
         fold.in_turn, team.turn = True, run
-        fold.wake.run = Run(run.principal, env.provenance.root_request.event_id)
     team.mail_done.add(env.mail_id)
     if env.kind == "ask" and env.ask_id is not MISSING:
         team.asks_in.add(env.ask_id)

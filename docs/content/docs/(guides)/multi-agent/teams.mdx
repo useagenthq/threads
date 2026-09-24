@@ -15,7 +15,7 @@ Any agent with `subagents` leads a team. The lead and every subagent it starts s
 | `team_task_create` | lead and members | Adds a task (`subject`, optional `description`, optional `blocked_by` task ids). Returns the new task id. |
 | `team_task_claim` | lead and members | Claims an open task whose blockers are all completed. Only one member can win a claim. |
 | `team_task_update` | lead and members | Marks a task you claimed `completed` or `failed`, or `released` to put it back in the pool. |
-| `send_message` | lead and members | Sends `text` to a member by agent name, or to `*` for everyone. |
+| `send_message` | lead and members | Sends `text` to a member by agent name, or to `*` for everyone. A name that isn't on the team (the lead or one of its subagents) is refused, and the error lists the names that are. |
 | `spawn_agent` | lead | Starts a member. See [Subagents](/docs/multi-agent/subagents). |
 
 A member is identified by its agent name. A message arrives as reference material just before the recipient's next model call, prefixed with the sender's name, and is delivered once.
@@ -97,7 +97,7 @@ The scripted model plays the calls a real model would make. With a real model, t
 - **Claims are atomic.** Two members racing for one task: one wins, the other gets an error it can act on.
 - **Blockers are respected.** A task with `blocked_by` can't be claimed until every blocker is completed.
 - **Safe to retry.** If a member's process restarts and repeats a call, it gets the same answer. Nothing is claimed or sent twice.
-- **Run members in parallel** by starting them with `background: true`. The lead's run returns once all of them have finished.
+- **Run members in parallel** by starting them with `background: true`. Each result wakes the lead for another turn, and the lead's run returns once all of them have reported, with the lead's last answer. See [Background subagents](/docs/multi-agent/subagents#background-subagents).
 
 <Callout>
   There is no API to read the task list directly today. It lives in the lead's log as `team_task_*` and `team_message` events.

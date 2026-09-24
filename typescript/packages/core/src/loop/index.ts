@@ -1,8 +1,10 @@
 import { ConfigError } from "../agent/errors";
 import { isTestKit } from "../model/guard";
+import { endedOtherwise } from "../reduce/run-end";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
-import { drainBackground, resumeBackground } from "./agents/background";
+import { resumeBackground } from "./agents/background";
 import { unparkChildren } from "./agents/park";
+import { runStatus, stopChildren } from "./agents/stop";
 import { observe } from "./hooks";
 import { sessionStart } from "./lifecycle";
 import { recover } from "./recover";
@@ -84,11 +86,35 @@ async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
   const unparked = await unparkChildren(s);
   if (unparked !== undefined) return { kind: "halted", halt: unparked };
   resumeBackground(s);
-  const end = await turns(s, input);
-  if (end.kind === "halted") return end;
-  // Background children end while this writer holds the lease; their results are recorded.
-  const drained = await drainBackground(s);
-  return drained === undefined ? end : { kind: "halted", halt: drained };
+  return waitForChildren(s, await turns(s, input));
+}
+
+/**
+ * A run waits for its background children while this writer holds the lease: each end is
+ * recorded, and one recorded while no turn is open wakes this thread for another turn
+ * (spec/schema/README.md, "Background wakes" and "Run completion"). A cancelled run returns
+ * once its own log records the cancel; one that ended failed, budget_exhausted or handed_off
+ * first stops its own children and records their ends. A parked branch stops once nothing more
+ * is running; an end held for another run stays for the next run.
+ */
+async function waitForChildren(s: Session, first: LoopEnd): Promise<LoopEnd> {
+  let end = first;
+  while (end.kind !== "halted") {
+    const status = runStatus(s);
+    if (status === "cancelled") {
+      // Its children have durable barriers already; a later run or a host records their ends.
+      void Promise.allSettled(s.background.values());
+      return end;
+    }
+    if (endedOtherwise(status)) return stopChildren(s, end);
+    const idleWithEnds = end.kind === "idle" && s.finished.size > 0;
+    if (!idleWithEnds && s.background.size === 0) return end;
+    // The lead's own log moving (a cancel) wakes the wait too, even while a child hangs.
+    if (!idleWithEnds)
+      await Promise.race([...s.background.values(), s.moved()]);
+    end = await runLoop(s);
+  }
+  return end;
 }
 
 async function turns(s: Session, input?: EventDraft): Promise<LoopEnd> {

@@ -1,8 +1,9 @@
 """A run's result as data (host-api `RunOutcome`), and read back from the log.
 
-A run is named by its user_input's event_id. Its outcome is decided by the first turn end after
-that input, or, while none has come, by an open park. So a subscriber that arrives late, or
-after a restart, reads the same outcome the run returned.
+A run is named by its user_input's event_id. Its outcome is decided by run completion
+(spec/schema/README.md, "Run completion"): the answer after its last wake once every background
+child it spawned has reported, the first of its turns that ended otherwise, or an open park. So a
+subscriber that arrives late, or after a restart, reads the same outcome the run returned.
 """
 
 from collections.abc import Sequence
@@ -31,6 +32,7 @@ from threads.log import (
 )
 from threads.loop.runtime import FAILED_MESSAGES
 from threads.reduce.handlers import to_json
+from threads.reduce.run_end import run_end
 from threads.thread.handle import Thread
 
 
@@ -71,14 +73,26 @@ def logged(
     events: Sequence[Event], start: int, parked: Sequence[ParkAddress], thread: Thread
 ) -> JsonValue | None:
     """The outcome the log records for the run starting at `start`, or None while it runs."""
-    rest = events[start + 1 :]
-    for i, event in enumerate(rest):
-        if isinstance(event, TurnCompletedEvent):
-            return _ended(rest[: i + 1], event, thread)
-    if parked and any(isinstance(e, ParkedEvent) for e in rest):
-        last = next(e for e in reversed(rest) if isinstance(e, ParkedEvent))
+    end = run_end(events, events[start].event_id)
+    if end.status == "running":
+        return None
+    if end.status == "parked":
+        last = next(e for e in reversed(events) if isinstance(e, ParkedEvent))
         return outcome(Parked(last.data.reason, tuple(parked), thread))
-    return None
+    done = end.turn[-1]
+    if not isinstance(done, TurnCompletedEvent):
+        raise AssertionError("an ended run ended its turn")
+    return _ended(end.turn, done, thread)
+
+
+def run_events(events: Sequence[Event], start: int) -> Sequence[Event]:
+    """The run's own events: through where it ended, else up to the next input. A stream never
+    shows another run's events."""
+    end = run_end(events, events[start].event_id)
+    if end.at is not None:
+        return events[start : end.at + 1]
+    later = (i for i in range(start + 1, len(events)) if isinstance(events[i], UserInputEvent))
+    return events[start : next(later, len(events))]
 
 
 def _ended(events: Sequence[Event], end: TurnCompletedEvent, thread: Thread) -> JsonValue:

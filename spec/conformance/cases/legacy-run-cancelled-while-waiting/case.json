@@ -1,0 +1,9 @@
+{
+  "name": "legacy-run-cancelled-while-waiting",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "The run answered and waited for its background child; a tree cancel while no turn was open ends the run cancelled, and the child's late result is recorded with no woken.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

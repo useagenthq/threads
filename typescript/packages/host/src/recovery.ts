@@ -2,13 +2,14 @@ import {
   type BranchId,
   knownEvents,
   type Principal,
+  pendingWakes,
   StoreError,
   type ThreadId,
 } from "@threads/core/host";
 import type { HostContext, HostedAgent } from "./context";
 
 // Runs a crash left open, run on from the log by a host's recovery pass (spec/schema/README.md,
-// "API run recovery"). A watched thread is looked at on every tick until it settles. A lost lease
+// "API run recovery"), and branches with a background child still to report (pending_wakes). A watched thread is looked at on every tick until it settles. A lost lease
 // is tried again on the next tick; a store outage (StoreError, wherever it met the store: reading
 // the thread, or the run) after a wait that doubles from 1 s to 60 s while it lasts, said once per
 // streak. Any other failure is said with its reason and not retried: the turn stays open in the
@@ -24,8 +25,11 @@ type Streak = { readonly waitMs: number; readonly atMs: number };
 
 export class Recovery {
   readonly #ctx: HostContext;
-  /** Branches a recovery run failed on another way than a lost lease or an outage. */
-  readonly #notRetried = new Set<BranchId>();
+  /**
+   * Branches a recovery run failed on another way than a lost lease or an outage, with the head
+   * seq it failed at: not run again until the log moves (a pending wake is re-listed every tick).
+   */
+  readonly #notRetried = new Map<BranchId, number>();
   /** Store outages in a row, by branch (or thread, before its main branch is known). */
   readonly #streaks = new Map<string, Streak>();
 
@@ -85,8 +89,6 @@ export class Recovery {
     const branch = known ?? (main?.ok === true ? main.value : undefined);
     if (branch === undefined) return "done";
     if (this.#ctx.busy(branch)) return "busy";
-    // Said once when it failed; the watch drops it now.
-    if (this.#notRetried.delete(branch)) return "done";
     const read = log.read(branch);
     if (!read.ok) {
       console.error(
@@ -96,9 +98,14 @@ export class Recovery {
     }
     const thread = { id, branch };
     const { fold } = read.value;
-    if (!fold.turnOpen || fold.parked.length > 0)
-      return this.#ctx.replies(tenant, thread);
+    // Said once when it failed; the watch drops it until its log moves.
+    if (this.#notRetried.get(branch) === fold.seq) return "done";
+    this.#notRetried.delete(branch);
     const events = knownEvents(read.value);
+    // A background child a crash stopped runs on too, so it reports and wakes this thread.
+    const waiting = pendingWakes(events, branch).length > 0;
+    if ((!fold.turnOpen && !waiting) || fold.parked.length > 0)
+      return this.#ctx.replies(tenant, thread);
     const hosted = this.#ctx.agentOf(events);
     const who = events.findLast((e) => e.type === "user_input")?.actor
       .principal;
@@ -133,7 +140,9 @@ export class Recovery {
           ? `${ran.result.error.code}: ${ran.result.error.message}`
           : undefined;
     if (why === undefined) return;
-    this.#notRetried.add(thread.branch);
+    const { log } = await this.#ctx.open(tenant);
+    const read = log.read(thread.branch);
+    this.#notRetried.set(thread.branch, read.ok ? read.value.fold.seq : -1);
     console.error(`threads host: run on ${thread.branch} not retried (${why})`);
   }
 }

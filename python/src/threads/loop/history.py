@@ -34,6 +34,7 @@ from threads.log import (
     ToolCallEvent,
     ToolResultEvent,
     UserInputEvent,
+    WokenEvent,
 )
 
 CONTINUE_TEXT: Final = (
@@ -43,9 +44,9 @@ CONTINUE_TEXT: Final = (
 
 
 def turn_events(events: Sequence[Event]) -> Sequence[Event]:
-    """The open turn's events, from its `user_input` on."""
+    """The open (or last) turn's events, from the `user_input` or `woken` that opened it."""
     for index in range(len(events) - 1, -1, -1):
-        if isinstance(events[index], UserInputEvent):
+        if isinstance(events[index], UserInputEvent | WokenEvent):
             return events[index:]
     return ()
 

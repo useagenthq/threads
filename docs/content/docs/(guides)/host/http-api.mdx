@@ -79,7 +79,7 @@ Everything a caller does is scoped to their `tenant`: another tenant's thread an
       -H "authorization: Bearer $API_TOKEN"
     ```
 
-    The response is a Server-Sent Events stream. Each logged step arrives as an `event` message with its sequence number as the SSE id, and the stream ends with the run's `result`:
+    The response is a Server-Sent Events stream. Each logged step arrives as an `event` message with its sequence number as the SSE id, and the stream ends with the run's `result`. A run that started [background subagents](/docs/multi-agent/subagents#background-subagents) streams through each wake turn they cause, so the result comes after the last one:
 
     ```text
     id: 2

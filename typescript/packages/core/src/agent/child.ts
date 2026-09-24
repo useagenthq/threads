@@ -3,7 +3,7 @@ import { assertNever } from "../assert-never";
 import { canonicalize } from "../log";
 import type { ChildDone, ChildEnd, Halt, Subagent } from "../loop";
 import { reduce } from "../reduce";
-import type { EventDraft } from "../store";
+import { type EventDraft, liveWriter } from "../store";
 import { cancelTree } from "../thread/cancel";
 import type { ChildEnv, ChildFactory } from "./registry";
 import type { RunResult } from "./result";
@@ -50,6 +50,16 @@ export function subagent<Deps, Output>(
         inputs,
       );
       return ended(result, await usage(env, result));
+    },
+    held: async (child) => {
+      const { log } = await openStore(env.store);
+      const branch = log.mainBranch(child);
+      const writer = branch.ok ? liveWriter(branch.value) : undefined;
+      return writer?.fence().ok === true;
+    },
+    stop: async (child, principal, reason) => {
+      const { log } = await openStore(env.store);
+      return cancelTree(log, child, principal, reason);
     },
   });
 }

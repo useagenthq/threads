@@ -1,4 +1,5 @@
-"""A run's `RunResult`, read off the log it wrote: the turn's end reason decides the variant."""
+"""A run's `RunResult`, read off the log it wrote (spec/schema/README.md, "Run completion"): the
+reason its deciding turn ended decides the variant."""
 
 from collections.abc import Sequence
 from typing import assert_never
@@ -23,11 +24,13 @@ from threads.log import (
     OutputValidatedEvent,
     TextPart,
     TurnCompletedEvent,
+    UserInputEvent,
 )
 from threads.log.jcs import canonicalize
 from threads.loop import runtime
 from threads.loop.history import turn_events
 from threads.loop.runtime import FAILED_CODES, FAILED_MESSAGES, Halt, RunErrorCode
+from threads.reduce.run_end import run_end
 from threads.result import Ok
 
 
@@ -37,10 +40,25 @@ def result(rt: runtime.Runtime, halt: Halt, thread: Thread) -> RunResult[str]:
             return Parked(reason, pending, thread)
         case runtime.Failed(code=code, message=message):
             return Failed(RunError(code, message), thread)
-        case runtime.Idle(reason=reason):
-            return ended(rt.events, reason, thread)
+        case runtime.Idle():
+            return _run_result(rt.events, thread)
         case _:
             assert_never(halt)
+
+
+def _run_result(events: Sequence[Event], thread: Thread) -> RunResult[str]:
+    """The ended run of the latest input: completed with the answer after its last wake, or
+    the outcome of its turn that ended otherwise."""
+    request = next(e for e in reversed(events) if isinstance(e, UserInputEvent))
+    end = run_end(events, request.event_id)
+    if end.status == "cancelled" and not end.turn:
+        # A cancel while the run waited on its children ends it outside any turn.
+        return Cancelled(thread)
+    turn = end.turn
+    done = turn[-1] if turn else None
+    if not isinstance(done, TurnCompletedEvent):
+        raise AssertionError("an idle run ended its turn")
+    return ended(turn, done.data.reason, thread)
 
 
 def ended(events: Sequence[Event], reason: str, thread: Thread) -> RunResult[str]:

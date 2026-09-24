@@ -67,11 +67,19 @@ class _Run:
                 else:
                     self.status = ENDS.get(reason, "failed")
             self.turn_open = False
+        elif t == "cancel_requested" and self._idle_cancel(d):
+            self.status = "cancelled"
         elif t == "parked":
             self.parks.append(d["address"])
         elif t == "resumed":
             self.parks.remove(d["address"])
         self.done = self.done or (self.status is None and self._ended())
+
+    def _idle_cancel(self, d: Obj) -> bool:
+        """A thread or tree cancel while no turn is open, after the run answered and before it
+        ended: the run ends cancelled."""
+        waiting = self.output is not None and not self.turn_open and not self.done
+        return waiting and self.status is None and d["scope"] in ("thread", "tree")
 
     def _ended(self) -> bool:
         """The run's end holds: an answer, no turn open, nothing parked, every helper reported."""

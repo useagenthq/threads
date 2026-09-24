@@ -106,6 +106,7 @@ async function run(
     agents: {
       name: started?.type === "thread_started" ? started.data.agent_name : "",
       subagent: () => undefined,
+      subagents: [],
     },
     ...(stubs === undefined ? {} : { stub: stubs }),
     ...(output === undefined

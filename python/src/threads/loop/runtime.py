@@ -214,7 +214,17 @@ class Runtime:
         """Appends one durable batch. Nothing is dispatched on its account until this returns."""
         return await self.append_with(drafts, None)
 
-    async def append_with(self, drafts: Sequence[Draft], companion: Companion | None) -> Appended:
+    async def append_built(self, build: Callable[[Fold], Sequence[Draft]]) -> Appended:
+        """`append`, with the batch built from the committed fold under the writer's lock, so a
+        decision that reads the log (a background wake) sees exactly what the append extends."""
+        return await self.append_with((), None, build)
+
+    async def append_with(
+        self,
+        drafts: Sequence[Draft],
+        companion: Companion | None,
+        build: Callable[[Fold], Sequence[Draft]] | None = None,
+    ) -> Appended:
         """`append`, with host rows bound to the same transaction. Every loop append passes the
         cancel barrier (`after_barrier`) under the writer's lock: a batch it changed comes back
         as `Barred`, never as a plain success, so a caller that opened work (or ended the
@@ -222,8 +232,9 @@ class Runtime:
         changed: list[bool] = []
 
         def admit(fold: Fold, batch: Sequence[Draft]) -> Sequence[Draft]:
-            kept = after_barrier(fold, batch)
-            changed.append(len(kept) != len(batch))
+            wanted = batch if build is None else build(fold)
+            kept = after_barrier(fold, wanted)
+            changed.append(len(kept) != len(wanted))
             return kept
 
         done = await self.writer.append(drafts, companion, admit=admit)
