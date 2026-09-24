@@ -767,7 +767,7 @@
         {
           "name": "tools",
           "kind": "option",
-          "type": {"array": {"union": [{"$ref": "#/types/Tool"}, {"$ref": "#/types/McpServer"}]}},
+          "type": {"array": {"$ref": "#/types/Tool"}},
           "required": false,
           "default": [],
           "doc": "App tools this extension adds, named <name>__<tool>. In Python they see no deps. Default [] adds none."
@@ -2571,7 +2571,7 @@
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
-            "errors": ["forbidden", "not_found", "approval_mismatch", "approval_expired", "approval_duplicate", "branch_busy"]
+            "errors": ["forbidden", "not_found", "invalid_request", "approval_mismatch", "approval_expired", "approval_duplicate", "branch_busy"]
           },
           "doc": "Grants an open approval challenge: appends approval_granted and resumes the branch if it was parked on it. Each challenge takes one answer: a second is approval_duplicate, and one after it expires is approval_expired."
         },
@@ -4711,7 +4711,7 @@
             "principal": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true},
             "address": {"type": {"prim": "string"}, "required": true, "doc": "Conversation key; the host maps it to a thread."},
             "item_key": {"type": {"prim": "string"}, "required": true, "doc": "Inbox dedup key, derived only from signed content (spec/schema/README.md, Channel replies)."},
-            "command": {"type": {"enum": ["cancel", "stop_when_idle"]}, "required": true, "doc": "cancel stops the run and its children now; stop_when_idle stops it once the current work finishes. The TypeScript host consumes stop_when_idle without acting on it today."}
+            "command": {"type": {"enum": ["cancel", "stop_when_idle"]}, "required": true, "doc": "cancel stops the run and its children now; stop_when_idle is recorded in the thread's log as a request to stop once the current work finishes; neither host acts on it yet, so the run goes on."}
           },
           "casing": "wire"
         },

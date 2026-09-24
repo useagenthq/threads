@@ -271,7 +271,7 @@ async def approve(
   One of the challenge's suggested_rules, also recorded as an allow rule so matching calls later in the thread need no approval. Any other rule is invalid_request. Omitted: the approval covers this one call.
 </Field>
 
-**Returns an error value** with one of these codes: `forbidden`, `not_found`, `approval_mismatch`, `approval_expired`, `approval_duplicate`, `branch_busy`.
+**Returns an error value** with one of these codes: `forbidden`, `not_found`, `invalid_request`, `approval_mismatch`, `approval_expired`, `approval_duplicate`, `branch_busy`.
 
 ### deny
 

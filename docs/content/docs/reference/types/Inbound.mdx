@@ -73,7 +73,7 @@ A union discriminated by `kind`.
 </Field>
 
 <Field name="command" type={"\"cancel\" | \"stop_when_idle\""} required>
-  cancel stops the run and its children now; stop_when_idle stops it once the current work finishes. The TypeScript host consumes stop_when_idle without acting on it today.
+  cancel stops the run and its children now; stop_when_idle is recorded in the thread's log as a request to stop once the current work finishes; neither host acts on it yet, so the run goes on.
 </Field>
 
 ### ignore

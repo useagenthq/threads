@@ -14,7 +14,7 @@ Import from `@threads/core` (TypeScript) or `threads` (Python).
 ```ts
 function extension(options: {
   name: Name;
-  tools?: readonly (Tool | McpServer)[];
+  tools?: readonly Tool[];
   instructions?: string;
   hooks?: Hooks<Deps>;
   on?: Record<string, (event: Event) => Promise<void>>;
@@ -30,7 +30,7 @@ function extension(options: {
 def extension(
     *,
     name: Name,
-    tools: Sequence[Tool | McpServer] = (),
+    tools: Sequence[Tool] = (),
     instructions: str = "",
     hooks: Hooks[Deps] = {},
     on: Mapping[str, Callable[[Event], Awaitable[None]]] = {},
@@ -48,7 +48,7 @@ def extension(
   Unique; tools are namespaced &lt;ext>__&lt;tool>.
 </Field>
 
-<Field name="tools" type={"readonly (Tool | McpServer)[]"} default={"[]"}>
+<Field name="tools" type={"readonly Tool[]"} default={"[]"}>
   App tools this extension adds, named &lt;name>__&lt;tool>. In Python they see no deps. Default [] adds none.
 </Field>
 
