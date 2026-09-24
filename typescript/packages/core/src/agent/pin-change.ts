@@ -19,13 +19,14 @@ const DEFAULT_TTL_MS = 300_000;
 
 /** The refusal for continuing `stored` with an agent that pins `next`. */
 export function pinChange(stored: Started, next: Started): string {
+  // Any pin missing a section: only an older Python release pinned one from agent().
   const p = stored.policy;
   if (
     p?.permissions === undefined ||
     p.retry === undefined ||
     p.context === undefined
   )
-    return "this thread was started by a Python threads that left the default permissions, retry and context settings out of its pinned config, so its config_hash can't match any agent now; start a new thread";
+    return "this thread was started by an older Python release that didn't pin its default permissions, retry and context settings; its config can't be matched now, so start a new thread";
   if (
     next.adapter.settings["prompt_cache"] !== undefined &&
     stored.adapter.settings["prompt_cache"] === undefined

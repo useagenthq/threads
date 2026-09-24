@@ -122,7 +122,7 @@ export type Extension<Deps = undefined> = ExtensionOptions<Deps> & {
   readonly kind: "extension";
 };
 
-const DEFAULT_TIMEOUT_MS = 5000;
+export const DEFAULT_TIMEOUT_MS = 5000;
 
 export function extension<Deps = undefined>(
   options: ExtensionOptions<Deps>,

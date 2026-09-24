@@ -29,7 +29,7 @@ describe("pinChange", () => {
   test("a Python pin without its resolved settings starts a new thread", () => {
     const legacy = { adapter: { settings: {} }, policy: {} };
     expect(pinChange(legacy, started({}))).toBe(
-      "this thread was started by a Python threads that left the default permissions, retry and context settings out of its pinned config, so its config_hash can't match any agent now; start a new thread",
+      "this thread was started by an older Python release that didn't pin its default permissions, retry and context settings; its config can't be matched now, so start a new thread",
     );
   });
 

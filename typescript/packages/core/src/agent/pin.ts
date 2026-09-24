@@ -22,7 +22,7 @@ import { requireCapabilities } from "../tools/gated";
 import { deferredNames, referenceForm } from "./defer";
 import { checkEnforceable } from "./enforceable";
 import { ConfigError } from "./errors";
-import { type Extension, hookNames } from "./extension";
+import { DEFAULT_TIMEOUT_MS, type Extension, hookNames } from "./extension";
 import { instructions } from "./instructions";
 import { checkRetries, checkStyles, finalOutput, policy } from "./policy";
 import { checkSkills, type Skill, skillPins, skillSpecs } from "./skills";
@@ -273,7 +273,8 @@ function chosen(
 /**
  * Pinned by config_hash but not model-visible, so not in thread_started's fields: what the
  * extensions hook and observe (hooks load only from the pinned config, and a
- * changed hook set is a new thread), and the sandbox settings a resumed run must match.
+ * changed hook set is a new thread), and the sandbox settings a resumed run must match. Defaults
+ * are resolved (a 5000 ms hook timeout, a deny-all egress policy), as Python pins them.
  */
 function hashedOnly(o: PinOptions): Record<string, unknown> {
   return {
@@ -292,7 +293,7 @@ function hashedOnly(o: PinOptions): Record<string, unknown> {
             name: e.name,
             hooks: hookNames(e),
             observers: Object.keys(e.on ?? {}).toSorted(),
-            hook_timeout_ms: e.hookTimeoutMs ?? null,
+            hook_timeout_ms: e.hookTimeoutMs ?? DEFAULT_TIMEOUT_MS,
           })),
         }),
     ...(o.sandbox === undefined
@@ -302,7 +303,7 @@ function hashedOnly(o: PinOptions): Record<string, unknown> {
             provider: o.sandbox.info.provider,
             egress: o.sandbox.info.egress,
             capture_classes: [...o.sandbox.info.capture_classes],
-            policy: o.egress ?? null,
+            policy: o.egress ?? [],
           },
         }),
   };
