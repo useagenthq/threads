@@ -16,6 +16,7 @@ from threads.log import (
     EffectClass,
     Event,
     InjectedEvent,
+    PermissionDecisionEvent,
     Permissions,
     Principal,
     ToolResultEvent,
@@ -139,6 +140,11 @@ def test_a_write_resumed_by_another_run_lands_in_the_input_principal_scope() -> 
         assert isinstance(parked, Parked)
         pending = await parked.thread.pending_approvals()
         assert isinstance(pending, Ok)
+        # The park names the option to change.
+        assert pending.value[0].reason == (
+            'memory_write is "ask": approve this call, or set memory_write to '
+            '"allow_principal" or "allow"'
+        )
         assert isinstance(await parked.thread.approve(pending.value[0].challenge_id, carol), Ok)
         # The resuming run is the operator's; the save is still for the input's principal.
         done = await execute(asks.definition, None, {"thread": parked.thread}, None, lambda _: None)
@@ -180,6 +186,11 @@ def test_poisoned_tool_output_is_never_written_without_a_principal_rule() -> Non
         )
         assert isinstance(result, Parked)
         assert result.reason == "awaiting_approval"
+        decided = [e for e in await events(store, result) if isinstance(e, PermissionDecisionEvent)]
+        assert decided[-1].data.reason == (
+            'memory_write is "allow_principal" and this turn holds content its principal '
+            'didn\'t write: approve this call, or set memory_write to "allow"'
+        )
 
     asyncio.run(main())
 

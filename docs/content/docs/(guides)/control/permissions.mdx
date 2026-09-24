@@ -159,17 +159,20 @@ A rule is a tool name, optionally with a specifier in parentheses: `tool` or `to
 |---|---|---|
 | File tools (`read`, `write`, `edit`, `ls`, `glob`, `grep`, `notebook_edit`) | A gitignore-style glob, relative to the workspace | `edit(src/**)`, `read(secrets/**)` |
 | `bash` | An exact command, or a prefix ending in `:*` | `bash(git status)`, `bash(npm test:*)` |
+| `bash(*)` | Every command, whatever it contains. Deny rules, ask rules, plan mode and the `.threads` guard still apply first. Use it when the sandbox is your boundary. | `bash(*)` |
 | `web_fetch` | `domain:` a host, or `domain:*.` a parent domain | `web_fetch(domain:*.example.com)` |
 | `spawn_agent`, `handoff` | An agent name | `spawn_agent(researcher)` |
 | Any tool | None | `send_email`, `mcp__github__*` |
 
-For `bash`, a command is split into its simple commands (`a && b | c`). A `deny` or `ask` rule matches if any of them matches. An `allow` rule allows only if the command parses and every one of them is allowed.
+For `bash`, a command is split into its simple commands (`a && b | c`). A `deny` or `ask` rule matches if any of them matches. An `allow` rule allows only if the command parses and every one of them is allowed, so a bare `bash` allow still asks for a redirection, `$`, a backslash or a leading `PATH=`. `bash(*)` is the exception: it matches every command in `allow`, `ask` and `deny`, and it is never offered as a suggested rule.
 
 ## Approvals
 
 When a call asks, the run stops and returns `parked` with reason `awaiting_approval`. A person approves or denies it, then the thread continues. The full flow is on [Human-in-the-loop](/docs/control/human-in-the-loop).
 
 When approving, you can keep one of the call's suggested rules (such as `send_email` or `bash(npm test:*)`), so later matching calls on that thread run without asking.
+
+A pending approval's `reason` says why the call asks, when one was recorded. A memory write that asks because of `memory_write` names the setting to change.
 
 ### Who may approve
 

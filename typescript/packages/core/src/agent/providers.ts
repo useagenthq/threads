@@ -119,6 +119,13 @@ export async function bindProviders(
 
 const WRITES: ReadonlySet<string> = new Set(["save_memory", "forget_memory"]);
 
+// The permission_decision reason of a write memory_write parks: it names the option to change.
+const ASK_REASON = {
+  ask: 'memory_write is "ask": approve this call, or set memory_write to "allow_principal" or "allow"',
+  allow_principal:
+    'memory_write is "allow_principal" and this turn holds content its principal didn\'t write: approve this call, or set memory_write to "allow"',
+} as const;
+
 /**
  * after the permission fold: memory_write only makes a write's decision
  * stricter, never turns a deny or ask into an allow. allow_principal holds only for a
@@ -139,9 +146,9 @@ export function withMemoryWrite(
     case "allow_principal":
       return principalAuthored(events)
         ? decided
-        : { decision: "ask", source: "policy" };
+        : { decision: "ask", source: "policy", reason: ASK_REASON[write] };
     case "ask":
-      return { decision: "ask", source: "policy" };
+      return { decision: "ask", source: "policy", reason: ASK_REASON[write] };
     default:
       return assertNever(write);
   }

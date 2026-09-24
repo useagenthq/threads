@@ -11,6 +11,8 @@ import shlex
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
 
+from pydantic.experimental.missing_sentinel import MISSING
+
 from threads._generated.host_api_v1 import PendingApproval
 from threads.agents.store import Store, now_ms, open_store
 from threads.log import (
@@ -19,6 +21,7 @@ from threads.log import (
     JsonObject,
     ParkAddress,
     ParseError,
+    PermissionDecisionEvent,
     PermissionRule,
     Principal,
     ThreadId,
@@ -40,6 +43,10 @@ if TYPE_CHECKING:
 def pending(fold: Fold) -> tuple[PendingApproval, ...]:
     """Open challenges: requested, unanswered, their call still waiting."""
     calls = {e.data.call_id: e for e in fold.events if isinstance(e, ToolCallEvent)}
+    # The call's latest decision: a recovery re-check records a new one.
+    reasons = {
+        e.data.call_id: e.data.reason for e in fold.events if isinstance(e, PermissionDecisionEvent)
+    }
     found: list[PendingApproval] = []
     for event in fold.events:
         if not isinstance(event, ApprovalRequestedEvent):
@@ -50,33 +57,37 @@ def pending(fold: Fold) -> tuple[PendingApproval, ...]:
             continue
         if data.call_id not in fold.pending:
             continue
+        approval = PendingApproval(
+            challenge_id=data.challenge_id,
+            call_id=data.call_id,
+            tool=call.data.name,
+            input=call.data.input,
+            args_hash=data.args_hash,
+            expires_at=data.expires_at,
+            suggested_rules=suggested_rules(call.data.name, call.data.input),
+        )
+        reason = reasons.get(data.call_id, MISSING)
         found.append(
-            PendingApproval(
-                challenge_id=data.challenge_id,
-                call_id=data.call_id,
-                tool=call.data.name,
-                input=call.data.input,
-                args_hash=data.args_hash,
-                expires_at=data.expires_at,
-                suggested_rules=suggested_rules(call.data.name, call.data.input),
-            )
+            approval if reason is MISSING else approval.model_copy(update={"reason": reason})
         )
     return tuple(found)
 
 
 def suggested_rules(tool: str, input: JsonObject) -> tuple[str, ...]:
     """What an approver may keep for the thread: a shell command exactly, or its two-word
-    prefix form (`bash(git push:*)`); any other tool as a whole."""
+    prefix form (`bash(git push:*)`); any other tool as a whole. Never `bash(*)`."""
     command = input.get("command")
     if tool != "bash" or not isinstance(command, str) or not command.strip():
         return (tool,)
+    exact = f"bash({command})"
     try:
         words = shlex.split(command)
     except ValueError:
-        return (f"bash({command})",)
+        return (exact,)
     # ponytail: two-word prefix (git push, npm run); a smarter prefix needs the shell grammar.
-    prefix = " ".join(words[:2])
-    return (f"bash({command})", f"bash({prefix}:*)")
+    prefix = f"bash({' '.join(words[:2])}:*)"
+    # `bash(*)` allows every command; only configured policy may say that.
+    return (prefix,) if exact == "bash(*)" else (exact, prefix)
 
 
 async def decide(  # noqa: PLR0913 - one answer and its bindings

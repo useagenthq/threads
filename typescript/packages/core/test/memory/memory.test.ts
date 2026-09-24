@@ -5,6 +5,7 @@ import {
   localMemory,
   type MemoryHit,
   type MemoryProvider,
+  openThread,
   scriptedModel,
   sqlite,
   tool,
@@ -149,14 +150,21 @@ describe("save, then recall in a later run (F3.1, F3.2)", () => {
 });
 
 describe("write authority (F3.3)", () => {
-  test("ask, the default, parks the write for approval", async () => {
+  test("ask, the default, parks the write for approval and says why", async () => {
+    const store = sqlite(":memory:");
     const result = await agent({
       model: scriptedModel({
         responses: [use("save_memory", { text: "x" }, "c1")],
       }),
       memory: localMemory(),
-    }).run("remember x", { store: sqlite(":memory:"), principal: ALICE });
+    }).run("remember x", { store, principal: ALICE });
     expect(result.status).toBe("parked");
+    // The park names the option to change.
+    const thread = unwrap(await openThread(store, result.thread.id));
+    const [pending] = await thread.pendingApprovals();
+    expect(pending?.reason).toBe(
+      'memory_write is "ask": approve this call, or set memory_write to "allow_principal" or "allow"',
+    );
   });
 
   test("deny never writes", async () => {
@@ -190,6 +198,12 @@ describe("write authority (F3.3)", () => {
     ]).run("read the page", { store: sqlite(":memory:"), principal: ALICE });
     expect(result.status).toBe("parked");
     expect(calls).not.toContain("remember");
+    const decided = (await eventsOf(result)).findLast(
+      (e) => e.type === "permission_decision",
+    );
+    expect(decided?.type === "permission_decision" && decided.data.reason).toBe(
+      'memory_write is "allow_principal" and this turn holds content its principal didn\'t write: approve this call, or set memory_write to "allow"',
+    );
   });
 
   test("allow: a write after tool output keeps origin tool_output forever", async () => {

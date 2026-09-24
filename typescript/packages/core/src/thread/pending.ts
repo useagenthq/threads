@@ -20,6 +20,8 @@ export type PendingApproval = {
   readonly args_hash: string;
   readonly expires_at: number;
   readonly suggested_rules: readonly z.infer<typeof PermissionRule>[];
+  /** Copied from the call's permission_decision: a hook's rule, or the memory_write option to change. */
+  readonly reason?: string;
 };
 
 /** host-api BranchInfo. */
@@ -44,6 +46,13 @@ export function pendingApprovals(
       (c) => c.type === "tool_call" && c.data.call_id === e.data.call_id,
     );
     if (call?.type !== "tool_call") return [];
+    // The call's latest decision: a recovery re-check records a new one.
+    const decided = events.findLast(
+      (d) =>
+        d.type === "permission_decision" && d.data.call_id === e.data.call_id,
+    );
+    const reason =
+      decided?.type === "permission_decision" ? decided.data.reason : undefined;
     return [
       {
         challenge_id: e.data.challenge_id,
@@ -53,6 +62,7 @@ export function pendingApprovals(
         args_hash: e.data.args_hash,
         expires_at: e.data.expires_at,
         suggested_rules: suggestedRules(call.data.name, call.data.input),
+        ...(reason === undefined ? {} : { reason }),
       },
     ];
   });
@@ -61,7 +71,7 @@ export function pendingApprovals(
 /**
  * What an approver may keep for the thread (spec/schema/README.md, "Questions and remembered
  * rules"): a shell command exactly, then its two-word prefix form (`bash(git push:*)`); any other
- * tool as a whole.
+ * tool as a whole. Never `bash(*)`.
  */
 export function suggestedRules(
   tool: string,
@@ -72,9 +82,12 @@ export function suggestedRules(
     return [tool];
   const words = shellWords(command);
   // ponytail: two-word prefix (git push, npm run); a smarter prefix needs the shell grammar.
-  return words === undefined
-    ? [`bash(${command})`]
-    : [`bash(${command})`, `bash(${words.slice(0, 2).join(" ")}:*)`];
+  const rules =
+    words === undefined
+      ? [`bash(${command})`]
+      : [`bash(${command})`, `bash(${words.slice(0, 2).join(" ")}:*)`];
+  // `bash(*)` allows every command; only configured policy may say that.
+  return rules.filter((rule) => rule !== "bash(*)");
 }
 
 // A shell word: bare characters, a backslash escape, a single-quoted or a double-quoted run.

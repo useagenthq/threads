@@ -32,6 +32,7 @@ from threads.log import (
     SettingsChangedEvent,
 )
 from threads.result import Err, Ok
+from threads.thread.approvals import suggested_rules
 from threads.thread.control import LOCAL_OPERATOR
 from threads.thread.handle import open_thread
 
@@ -208,3 +209,9 @@ def test_a_remembered_rule_must_be_one_the_challenge_suggested() -> None:
         assert isinstance(await thread.approve(challenge, LOCAL_OPERATOR), Ok)
 
     asyncio.run(main())
+
+
+def test_bash_any_is_never_a_suggested_rule() -> None:
+    # bash(*) allows every command: only configured policy may hold it.
+    assert suggested_rules("bash", {"command": "*"}) == ("bash(*:*)",)
+    assert suggested_rules("bash", {"command": "ls"}) == ("bash(ls)", "bash(ls:*)")

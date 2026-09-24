@@ -29,6 +29,13 @@ from threads.reduce import Fold
 type MemoryWrite = Literal["deny", "ask", "allow_principal", "allow"]
 
 WRITES: Final = frozenset({"save_memory", "forget_memory"})
+# The permission_decision reason of a write memory_write parks: it names the option to change.
+_ASK_REASON: Final = {
+    "ask": 'memory_write is "ask": approve this call, or set memory_write to "allow_principal" '
+    'or "allow"',
+    "allow_principal": 'memory_write is "allow_principal" and this turn holds content its '
+    'principal didn\'t write: approve this call, or set memory_write to "allow"',
+}
 
 
 def _untrusted(event: Event) -> bool:
@@ -70,6 +77,6 @@ def with_memory_write(base: Authorize, write: MemoryWrite) -> Authorize:
             case "allow_principal" if principal_authored(fold.events):
                 return decided
             case "allow_principal" | "ask":
-                return Decision("ask", "policy")
+                return Decision("ask", "policy", reason=_ASK_REASON[write])
 
     return authorize

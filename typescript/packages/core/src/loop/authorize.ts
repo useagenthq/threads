@@ -136,13 +136,14 @@ export async function authorize(
   });
 }
 
-type Final = Authorization & { readonly reason?: string };
-
 /**
  * deny > ask > allow. A policy deny stands. A hook decision at least as strict as the
  * policy's is the recorded one (source hook); a hook can never loosen the policy.
  */
-function folded(policy: Authorization, hook: Verdict | undefined): Final {
+function folded(
+  policy: Authorization,
+  hook: Verdict | undefined,
+): Authorization {
   if (policy.decision === "deny" || hook === undefined) return policy;
   return SEVERITY[hook.decision] >= SEVERITY[policy.decision]
     ? { ...hook, source: "hook" }

@@ -270,7 +270,8 @@
         "input": { "$ref": "urn:threads:schema:events:v1#/$defs/JsonObject" },
         "args_hash": { "$ref": "urn:threads:schema:events:v1#/$defs/Sha256" },
         "expires_at": { "$ref": "urn:threads:schema:events:v1#/$defs/TimeMs" },
-        "suggested_rules": { "description": "Rules the approver may keep for this thread.", "type": "array", "items": { "$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule" } }
+        "suggested_rules": { "description": "Rules the approver may keep for this thread.", "type": "array", "items": { "$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule" } },
+        "reason": { "description": "Why the call asks, copied from its permission_decision: a hook's rule, or the memory_write option to change.", "type": "string" }
       }
     },
     "ApprovalDecision": {

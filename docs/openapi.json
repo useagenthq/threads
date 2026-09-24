@@ -755,6 +755,10 @@
             "items": {
               "$ref": "#/components/schemas/events_PermissionRule"
             }
+          },
+          "reason": {
+            "description": "Why the call asks, copied from its permission_decision: a hook's rule, or the memory_write option to change.",
+            "type": "string"
           }
         }
       },

@@ -324,7 +324,7 @@
           "type": {"enum": ["deny", "ask", "allow_principal", "allow"]},
           "required": false,
           "default": "ask",
-          "doc": "Write authority for save_memory."
+          "doc": "Write authority for save_memory. A write it turns into an ask records a reason naming memory_write, shown as PendingApproval.reason."
         },
         {"name": "knowledge", "kind": "option", "type": {"$ref": "#/types/KnowledgeProvider"}, "required": false, "doc": "Retrieval over sources the host admits: localKnowledge(paths) or a knowledge adapter. It pins search_knowledge. Omitted: the agent has no knowledge tool."},
         {
@@ -382,7 +382,7 @@
           "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}},
           "required": false,
           "default_doc": "mode default, no rules, the protected paths, allow_bypass false, plan_exit_mode default",
-          "doc": "The permission policy every tool call is decided under: mode, allow, ask and deny rules, protected_paths, allow_bypass and plan_exit_mode. In TypeScript the fields you give override the defaults; Python takes a complete Permissions. Omitted: mode default, no rules, the built-in protected paths, allow_bypass false and plan_exit_mode default."
+          "doc": "The permission policy every tool call is decided under: mode, allow, ask and deny rules, protected_paths, allow_bypass and plan_exit_mode. The rule bash(*) matches every shell command, whatever it contains, in allow, ask and deny; deny rules, plan mode, protected paths, ask rules and the .threads guard still decide first. A bare bash rule allows only commands that parse. In TypeScript the fields you give override the defaults; Python takes a complete Permissions. Omitted: mode default, no rules, the built-in protected paths, allow_bypass false and plan_exit_mode default."
         },
         {
           "name": "approvers",
@@ -2246,7 +2246,7 @@
           "async": true,
           "params": [],
           "returns": {"array": {"$ref": "urn:threads:schema:host-api:v1#/$defs/PendingApproval"}},
-          "doc": "Open approval challenges on this branch, each with the tool call it guards and the suggested_rules an approver may keep. Python returns Ok or Err."
+          "doc": "Open approval challenges on this branch, each with the tool call it guards, the suggested_rules an approver may keep, and the reason it asks when one was recorded. Python returns Ok or Err."
         },
         "approve": {
           "ts": "approve",

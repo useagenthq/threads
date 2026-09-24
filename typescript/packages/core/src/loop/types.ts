@@ -120,6 +120,7 @@ export type Authorization = {
   readonly decision: "allow" | "deny" | "ask";
   readonly source: EventOf<"permission_decision">["data"]["source"];
   readonly rule_id?: string;
+  readonly reason?: string;
 };
 
 /**
