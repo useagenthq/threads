@@ -234,7 +234,7 @@ describe("spawn_agent in the foreground", () => {
     expect(first.status).toBe("parked");
     const principal = { issuer: "api", tenant: "local", subject: "alice" };
     const thread = unwrap(await openThread(store, first.thread.id));
-    const [pending] = await thread.pendingApprovals();
+    const [pending] = unwrap(await thread.pendingApprovals());
     if (pending === undefined) throw new Error("one open challenge");
     unwrap(
       await thread.approve(pending.challenge_id, principal, {

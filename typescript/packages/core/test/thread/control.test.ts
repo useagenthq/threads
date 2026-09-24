@@ -187,7 +187,7 @@ describe("approvals", () => {
     const sent: string[] = [];
     const next = use("send_email", { to: "carol" }, "c2");
     const { store, thread, resume } = await parked(sent, [next]);
-    const [pending] = await thread.pendingApprovals();
+    const [pending] = unwrap(await thread.pendingApprovals());
     if (pending === undefined) throw new Error("one open challenge");
     unwrap(
       await thread.approve(pending.challenge_id, alice, {
