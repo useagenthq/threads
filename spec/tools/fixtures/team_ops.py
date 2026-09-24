@@ -16,8 +16,10 @@ from .ops_run import dump_log, rows, run
 from .ops_world import CONSTANTS
 from .pieces import dump
 from .team_ops_ask import ask_vectors
-from .team_ops_mail import consume_vectors, materialize_vectors
+from .team_ops_life import life_vectors
+from .team_ops_mail import consume_vectors
 from .team_ops_send import cancel_vectors, send_vectors
+from .team_ops_start import materialize_vectors, start_vectors
 from .team_ops_watch import monitor_vectors, wait_vectors
 
 if TYPE_CHECKING:
@@ -35,11 +37,13 @@ DESCRIPTION = (
     "`input` at clock `now` (and the limits in `given`), then compares the op's outcome, the "
     "event types it appended per log, in order (none for a log not listed), and the row changes "
     "per table: rows inserted, rows updated (as they are after), and the keys of rows deleted. "
-    "Every appended event also adds its team_feed row. Claims are off. Ops: send, ask, reply, "
-    "cancel, wait, monitor (a model call: input.call_id and input.args of a pending tool_call; "
-    "or an operator request in the team log: request_id, principal, body, idempotency_key?), "
+    "Every appended event also adds its team_feed row. Claims are off. Ops: start, send, "
+    "ask, reply, cancel, wait, monitor (a model call: input.call_id and input.args of a "
+    "pending tool_call; or an operator request in the team log: request_id, principal, body, "
+    "idempotency_key?), "
     "consume, deadline (the worker's step for input.id, an AskId or WaitId), materialize "
-    "(input.rebind is what the rebind found)."
+    "(input.rebind is what the rebind found), idle and end (the member's own settling "
+    "appends)."
 )
 
 
@@ -49,7 +53,9 @@ def _vectors() -> list[Vec]:
         *ask_vectors(),
         *cancel_vectors(),
         *consume_vectors(),
+        *start_vectors(),
         *materialize_vectors(),
+        *life_vectors(),
         *wait_vectors(),
         *monitor_vectors(),
     ]

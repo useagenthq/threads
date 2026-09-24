@@ -7,11 +7,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import eid, obj, text
-from .team_pieces import Route, at, envelope, failed, member_log
+from .common import obj, text
+from .ops_life import ended
+from .team_pieces import member_log
 
 if TYPE_CHECKING:
-    from .jcs import JsonValue, Obj
+    from .jcs import Obj
     from .ops_world import World
 
 
@@ -50,53 +51,14 @@ def materialize(w: World, _label: str, inp: Obj) -> Obj:
     w.add(label, "user_input", data, who=who)
     if rebind == "ok":
         return {"status": "materialized"}
-    _end(w, label, row, rebind, env)
+    _end(w, label, rebind)
     return {"status": "rebind_failed", "code": rebind}
 
 
-def _end(w: World, label: str, row: Obj, code: str, task: Obj) -> None:
-    """turn_completed{error}, member_ended{failed}, one member_ended notification per monitor
-    on this generation, and a mail_refused plus a bounce for every other pending inbound mail."""
-    ref = w.ref(row)
-    prov = obj(task["provenance"])
-    log = w.logs[label]
+def _end(w: World, label: str, code: str) -> None:
+    """The failed rebind's end: the task turn closes before any model request, then the member
+    ends failed, with everything a member's end carries."""
     w.add(label, "turn_completed", {"reason": "error", "code": code})
-    ended = failed(ref, code)
-    end = w.add(label, "member_ended", {"result": ended})
-
-    def next_id() -> str:
-        return f"{log.branch}:{eid(log.seq + 1, log.branch)}"
-
-    watched = [
-        m
-        for m in w.rows("monitors")
-        if m["target_name"] == row["name"] and m["target_generation"] == row["generation"]
-    ]
-    for m in watched:
-        to = w.address(text(m["watcher_branch_id"]))
-        notice = envelope(
-            next_id(),
-            "member_ended",
-            Route(ref, to, prov),
-            at(text(end["event_id"]), log.thread),
-            monitor_id=m["monitor_id"],
-            result=ended,
-        )
-        w.add(label, "message_sent", {"envelope": notice})
-    for mail in w.pending(text(row["name"])):
-        refused = obj(mail["envelope"])
-        why = w.add(label, "mail_refused", {"mail_id": refused["mail_id"], "code": "member_ended"})
-        extra: dict[str, JsonValue] = {}
-        if refused["kind"] == "ask":
-            extra = {"ask_id": refused["ask_id"], "result": ended}
-        sender = obj(refused["from"])
-        back = "team_log" if "operator" in sender else text(sender["name"])
-        bounce = envelope(
-            next_id(),
-            "bounce",
-            Route(ref, back, prov),
-            at(text(why["event_id"]), log.thread),
-            code="member_ended",
-            **extra,
-        )
-        w.add(label, "message_sent", {"envelope": bounce})
+    ended(
+        w, label, {"status": "failed", "error": {"code": code, "message": f"rebind failed: {code}"}}
+    )

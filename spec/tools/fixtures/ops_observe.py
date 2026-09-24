@@ -38,7 +38,8 @@ def _members(req: Request) -> list[Obj]:
 
 
 def wait(w: World, label: str, inp: Obj) -> Obj:
-    mode: JsonValue = obj(inp.get("body", inp.get("args", {}))).get("mode", "all")
+    # The model's wait tool has no mode and no timeout: always all, with the default deadline.
+    mode: JsonValue = obj(inp["body"]).get("mode", "all") if "body" in inp else "all"
     if "body" in inp:
         refs = arr(obj(inp["body"])["members"])
         unique = [m for i, m in enumerate(refs) if m not in refs[:i]]
@@ -51,7 +52,8 @@ def wait(w: World, label: str, inp: Obj) -> Obj:
             req.decide("monitor", text(row["name"]), allow=not req.operator or same_tenant(req))
     except Refused as r:
         return req.refuse(r.code)
-    timeout = min(num(req.args.get("timeout_ms", DEFAULT_MS)), DEFAULT_MS)
+    asked = num(req.args.get("timeout_ms", DEFAULT_MS)) if req.operator else DEFAULT_MS
+    timeout = min(asked, DEFAULT_MS)
     wait_id = req.mail_id
     refs: list[JsonValue] = [w.ref(r) for r in rows]
     started = w.add(

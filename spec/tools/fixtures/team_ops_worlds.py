@@ -7,8 +7,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from .common import ALICE, T0, eid, text
+from .common import ALICE, T0, text, tokens
 from .ops_consume import consume
+from .ops_life import idle
 from .ops_observe import monitor, wait
 from .ops_send import ask, cancel, reply, send
 from .ops_start import materialize
@@ -20,13 +21,10 @@ from .team_pieces import (
     WRITER,
     WRITER_BRANCH,
     WRITER_THREAD,
-    Route,
-    at,
-    envelope,
     lead_log,
     team_log,
 )
-from .team_steps import idle, start
+from .team_steps import start
 
 if TYPE_CHECKING:
     from .jcs import JsonValue, Obj
@@ -35,6 +33,7 @@ NOW = T0 + 100_000  # every world's builder times are before it
 DUE = NOW + 120_000  # an ask or wait a world opens at NOW is due here
 REQUESTS = tuple(f"0192d000-0000-7000-8000-00000000010{i}" for i in range(1, 6))
 GLOBEX: Obj = {"issuer": "api", "tenant": "globex", "subject": "mallory"}
+BOB: Obj = {"issuer": "api", "tenant": "acme", "subject": "bob"}
 
 
 def team(*, writer: bool = False) -> World:
@@ -57,27 +56,11 @@ def run(w: World, name: str = "researcher-1", rebind: str = "ok") -> None:
 
 
 def go_idle(w: World, label: str, text_: str) -> None:
-    """The member's task turn ends completed: member_idle, and each settle monitor and the
-    unfired task monitor on it fires member_settled, in monitor_id order."""
+    """The member answers and goes idle through the reference idle append."""
     log = w.logs[label]
-    row = w.own_row(label)
-    if row is None:
-        raise AssertionError(label)
-    done = idle(log, w.caller(label), text_)
-    ended = log.events[-1]
-    prov = w.turn_provenance(label)
-    for m in w.rows("monitors"):
-        if m["target_name"] != row["name"] or m["kind"] == "end":
-            continue
-        notice = envelope(
-            f"{log.branch}:{eid(log.seq + 1, log.branch)}",
-            "member_settled",
-            Route(w.ref(row), w.address(text(m["watcher_branch_id"])), prov),
-            at(text(ended["event_id"]), log.thread),
-            monitor_id=m["monitor_id"],
-            result=done,
-        )
-        log.add("message_sent", {"envelope": notice})
+    r = log.model_request()
+    log.model_response(r, [{"type": "text", "text": text_}], "end_turn", tokens(90, 10))
+    idle(w, label, {})
 
 
 def dispatch(w: World, label: str, op: str, args: Obj, cid: str) -> Obj:

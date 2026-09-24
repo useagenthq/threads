@@ -11,6 +11,8 @@ from .common import arr, num, obj, sha, text
 from .jcs import JsonValue, canonical
 from .log import Log
 from .ops_consume import consume, deadline
+from .ops_life import end, idle
+from .ops_member import start
 from .ops_observe import monitor, wait
 from .ops_send import ask, cancel, reply, send
 from .ops_start import materialize
@@ -32,6 +34,9 @@ OPS: dict[str, Callable[[World, str, Obj], Obj]] = {
     "consume": consume,
     "deadline": deadline,
     "materialize": materialize,
+    "start": start,
+    "idle": idle,
+    "end": end,
 }
 # Every table's primary key (store.sql). team_feed is left out: an op adds one feed row per
 # appended event, so the appended types already say which.
@@ -99,6 +104,7 @@ def run(world: Obj, vector: Obj) -> tuple[Obj, list[str]]:
         logs,
         num(vector["now"]),
         mailbox=num(given.get("mailbox", 100)),
+        concurrent=num(given.get("concurrent", 4)),
         headroom=given.get("headroom", True) is True,
     )
     problems = _validate(w, "world")

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from .jcs import JsonValue
 from .ops_consume import deadline
+from .ops_life import end
 from .ops_send import ask
 from .team_ops_worlds import (
     DUE,
@@ -285,7 +286,7 @@ def _ask_complete_vectors() -> list[Vec]:
             {},
         )
     )
-    return out + _operator_ask()
+    return out + _operator_ask() + _cancelled()
 
 
 def _operator_ask() -> list[Vec]:
@@ -304,3 +305,48 @@ def _operator_ask() -> list[Vec]:
             [f"{MEMBER_BRANCH}:c2"],
         )
     ]
+
+
+def _cancelled() -> list[Vec]:
+    """The deadline step finds a cancel (member asker) or a closed team (team-log asker)."""
+    w = asked()
+    dispatch(w, "lead", "cancel", {"member": "writer-1"}, "c3")
+    out = [
+        Vec(
+            "ask-deadline-cancel-pending",
+            "4.8, 4.14",
+            "At the deadline the writer's cancel is pending and no reply or bounce is: the step "
+            "applies the cancel (receipt and barrier), which closes the ask cancelled, not "
+            "timed_out.",
+            w,
+            "deadline",
+            "writer",
+            {"id": ASK},
+            {"ask_id": ASK, "status": "cancelled"},
+            {"writer": [RECEIVED, "cancel_requested", *CLOSE]},
+            DUE,
+        )
+    ]
+    w = running(writer=True)
+    ask(w, "team", operator(REQUESTS[1], {"to": RESEARCHER, "question": "Any risks?"}))
+    w.logs["lead"].model_request()
+    down: Obj = {"status": "failed", "error": {"code": "model_unavailable", "message": "Down."}}
+    end(w, "lead", {"reason": "model_unavailable", "result": down})
+    ask_id = f"{LOG_BRANCH}:{REQUESTS[1]}"
+    out.append(
+        Vec(
+            "ask-operator-deadline-team-closed",
+            "4.8",
+            "The lead ended, which closed the team, while the operator's ask was open: at the "
+            "deadline the team log closes it cancelled (no resumed and no result: team.ask "
+            "returns it).",
+            w,
+            "deadline",
+            "team",
+            {"id": ask_id},
+            {"ask_id": ask_id, "status": "cancelled"},
+            {"team": ["ask_closed"]},
+            DUE,
+        )
+    )
+    return out

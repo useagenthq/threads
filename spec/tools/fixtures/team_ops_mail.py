@@ -1,6 +1,6 @@
 # pyright: strict
-"""Team op vectors on the recipient's side (design §4.7 consume, §4.10 materialize and a failed
-rebind, §4.14 cancel's application): batches, control mail, parks."""
+"""Team op vectors on the recipient's side (design §4.7 consume, §4.14 cancel's application):
+batches, control mail, parks, and what a cancel releases."""
 
 from __future__ import annotations
 
@@ -135,7 +135,7 @@ def consume_vectors() -> list[Vec]:
             [],
         )
     )
-    return out + _park_vectors() + _cancel_applied()
+    return out + _park_vectors() + _cancel_applied() + _released()
 
 
 def _lead_idle_writer_parked() -> World:
@@ -244,101 +244,69 @@ def _cancel_applied() -> list[Vec]:
     return out
 
 
-def materialize_vectors() -> list[Vec]:
-    def inp(rebind: str) -> Obj:
-        return {
-            "member": "researcher-1",
-            "label": "researcher",
-            "branch_id": MEMBER_BRANCH,
-            "rebind": rebind,
-        }
-
+def _released() -> list[Vec]:
+    """What one consume may not do, and what a cancel releases besides an ask."""
+    w = _lead_idle_writer_parked()
+    take(w, "lead")
+    _writer_answered(w)
+    lead = next(r for r in w.rows("team_members") if r["role"] == "lead")
+    send(w, "team", operator(REQUESTS[3], {"to": w.ref(lead), "text": "Status?"}))
+    settle = next(str(m["mail_id"]) for m in w.pending("lead") if m["kind"] == "member_settled")
     out = [
-        Vec(
-            "materialize-opens-branch",
-            "4.10",
-            "The first consume of a starting member opens its branch: thread_started (the "
-            "parent member_started names) and user_input{team_task} with the task, which "
-            "consumes the task row; the row becomes running with its branch.",
-            team(),
-            "materialize",
-            "researcher",
-            inp("ok"),
-            {"status": "materialized"},
-            {"researcher": ["thread_started", "user_input"]},
-        ),
-        Vec(
-            "materialize-not-starting",
-            "4.10",
-            "The row check in the transaction: the member is no longer starting, so nothing is "
-            "committed.",
-            _both(),
-            "materialize",
-            "researcher",
-            inp("ok"),
-            {"status": "not_starting"},
-            {},
-        ),
+        _consume(
+            "consume-unparked-mail-waits",
+            "4.7",
+            "The lead is parked on writer-1, whose settlement is pending, and so is an operator "
+            "message of another request. The settlement is control mail: receipt and resumed, "
+            "which opens the lead's turn under the lead's run. The operator's message is ordinary "
+            "mail that the control row unblocked: it waits for the next consume, so one turn "
+            "never holds two authorities.",
+            w,
+            "lead",
+            _taken(settle),
+            [RECEIVED, "resumed"],
+        )
     ]
-    w = team(writer=True)
-    run(w, "writer-1")
-    _lead_sends(w)
+    w = _both()
+    w.stamp = True
     writer_asks(w)
+    w.now += 1000
+    dispatch(w, "lead", "cancel", {"member": "writer-1"}, "c3")
+    w.now += 1000
+    take(w, "researcher")
+    dispatch(w, "researcher", "reply", {"ask_id": ASK, "text": "Batteries."}, "c2")
+    w.now += 1000
     out.append(
         Vec(
-            "failed-rebind-pin-unavailable",
-            "4.10",
-            "The rebind finds the definition unregistered: one append opens the branch with "
-            "thread_started, the task's user_input, turn_completed{error: pin_unavailable} and "
-            "member_ended{failed}; one member_ended notification for the lead's task monitor; "
-            "then, "
-            "in (created_at, mail_id) order, a mail_refused and a bounce for the lead's message "
-            "and "
-            "for the writer's ask (whose bounce carries the ask_id and the result).",
+            "cancel-applied-asker-with-pending-reply",
+            "4.8, 4.14",
+            "The cancel mail is ahead of a reply the researcher sent while the ask was open. "
+            "ask.complete's order still holds: the reply wins, so the ask closes answered, and "
+            "the barrier follows the cancel's receipt.",
             w,
-            "materialize",
-            "researcher",
-            inp("pin_unavailable"),
-            {"status": "rebind_failed", "code": "pin_unavailable"},
-            {
-                "researcher": [
-                    "thread_started",
-                    "user_input",
-                    "turn_completed",
-                    "member_ended",
-                    SENT,
-                    "mail_refused",
-                    SENT,
-                    "mail_refused",
-                    SENT,
-                ]
-            },
+            "consume",
+            "writer",
+            {},
+            _taken(f"{LEAD_BRANCH}:c3", f"{MEMBER_BRANCH}:c2"),
+            {"writer": [RECEIVED, "cancel_requested", RECEIVED, *CLOSE]},
+            w.now,
         )
     )
-    w = team()
-    dispatch(w, "lead", "monitor", {"member": "researcher-1"}, "c3")
+    w = _both()
+    dispatch(w, "writer", "wait", {"members": ["researcher-1"]}, "c1")
+    dispatch(w, "lead", "cancel", {"member": "writer-1"}, "c3")
     out.append(
-        Vec(
-            "failed-rebind-pin-mismatch-fires-every-monitor",
-            "4.10",
-            "The rebuilt config_hash differs: the same end append, with one member_ended "
-            "notification per monitor row on the member (the task monitor and the lead's end "
-            "monitor), in monitor_id order.",
+        _consume(
+            "cancel-applied-waiter",
+            "4.12, 4.14",
+            "writer-1 is parked on a wait when its cancel is applied: the receipt, the barrier, "
+            "and the wait finishes with what has settled (nothing, so timed_out: the mode is "
+            "unmet), which deletes its settle monitor row; resumed and the wait call's result "
+            "follow.",
             w,
-            "materialize",
-            "researcher",
-            inp("pin_mismatch"),
-            {"status": "rebind_failed", "code": "pin_mismatch"},
-            {
-                "researcher": [
-                    "thread_started",
-                    "user_input",
-                    "turn_completed",
-                    "member_ended",
-                    SENT,
-                    SENT,
-                ]
-            },
+            "writer",
+            _taken(f"{LEAD_BRANCH}:c3"),
+            [RECEIVED, "cancel_requested", "wait_finished", "resumed", "tool_result"],
         )
     )
     return out

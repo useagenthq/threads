@@ -44,6 +44,7 @@ class World:
     now: int
     mailbox: int = 100
     concurrent: int = 4
+    agents: tuple[str, ...] = ("researcher", "writer")  # the agents the team lists
     headroom: bool = True
     stamp: bool = True  # False while building a vector's world: builder times, not the clock
     appended: dict[str, list[str]] = field(default_factory=dict[str, list[str]])

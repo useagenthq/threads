@@ -1,7 +1,8 @@
 # pyright: strict
 """Reference mail.consume, ask.complete, cancel application and the deadline step (spec/schema/
 README.md, "Teams"; design §4.7, §4.8 complete, §4.12 deadline, §4.14 application). Control mail
-is always taken; ordinary mail is taken as one homogeneous batch, never while parked."""
+is always taken; ordinary mail is taken as one homogeneous batch, and only when the recipient was
+not parked when the consume began."""
 
 from __future__ import annotations
 
@@ -24,8 +25,16 @@ def _receive(w: World, label: str, env: Obj) -> Obj:
     return w.add(label, "message_received", {"mail_id": env["mail_id"], "envelope": env}, who=who)
 
 
+def _mine(w: World, label: str) -> list[Obj]:
+    return [obj(m["envelope"]) for m in w.pending(w.address(w.logs[label].branch))]
+
+
+def _still_pending(w: World, label: str, mail_id: JsonValue) -> bool:
+    return any(e["mail_id"] == mail_id for e in _mine(w, label))
+
+
 def close_ask(w: World, label: str, ask_id: str, outcome: Obj, cause: str | None) -> Obj:
-    """ask.complete: ask_closed, and for a member asker its resumed and the call's one result."""
+    """ask_closed, and for a member asker its resumed and the call's one result."""
     closed = w.add(label, "ask_closed", {"ask_id": ask_id, "outcome": outcome})
     status = text(outcome["status"])
     value: Obj = {"ask_id": ask_id, "status": status}
@@ -38,13 +47,30 @@ def close_ask(w: World, label: str, ask_id: str, outcome: Obj, cause: str | None
     if not w.is_team_log(label):
         address: Obj = {"kind": "ask", "id": ask_id}
         if address in arr(w.state(label)["parked"]):
-            w.add(
-                label,
-                "resumed",
-                {"address": address, "cause_event_id": cause or closed["event_id"]},
-            )
+            data: Obj = {"address": address, "cause_event_id": cause or closed["event_id"]}
+            w.add(label, "resumed", data)
         w.answer(label, call_of(ask_id), value)
     return value
+
+
+def complete(w: World, label: str, ask_id: str, *, cancelled: bool, due: bool) -> Obj | None:
+    """ask.complete's one decision, whoever triggers it: a pending reply, then a pending ask
+    bounce, then a cancel (or, for the team log, a closed team), then the deadline."""
+    for kind in ("reply", "bounce"):
+        env = next(
+            (e for e in _mine(w, label) if e["kind"] == kind and e.get("ask_id") == ask_id), None
+        )
+        if env is not None:
+            got = _receive(w, label, env)
+            outcome: Obj = (
+                {"status": "answered", "reply": env["mail_id"]}
+                if kind == "reply"
+                else {"status": "member_ended", "result": env["result"]}
+            )
+            return close_ask(w, label, ask_id, outcome, text(got["event_id"]))
+    if cancelled:
+        return close_ask(w, label, ask_id, {"status": "cancelled"}, None)
+    return close_ask(w, label, ask_id, {"status": "timed_out"}, None) if due else None
 
 
 def _open_ask(w: World, label: str, ask_id: JsonValue) -> bool:
@@ -74,9 +100,12 @@ def _control(w: World, label: str, env: Obj) -> bool:
     member_park: Obj = {"kind": "member", "id": env.get("monitor_id")}
     team_log = w.is_team_log(label)
     if kind == "cancel":
-        _cancel(w, label, env)
-    elif kind in ("reply", "bounce") and "ask_id" in env and _open_ask(w, label, env["ask_id"]):
-        _answered(w, label, env)
+        apply_cancel(w, label, env)
+    elif kind in ("reply", "bounce") and "ask_id" in env:
+        if _open_ask(w, label, env["ask_id"]):
+            complete(w, label, text(env["ask_id"]), cancelled=False, due=False)
+        else:
+            _receive(w, label, env)  # a late reply or ask bounce is recorded only
     elif kind in NOTICES and env["monitor_id"] in _waits(w, label):
         got = _receive(w, label, env)
         finish(w, label, _waits(w, label)[text(env["monitor_id"])], text(got["event_id"]))
@@ -96,27 +125,23 @@ def _control(w: World, label: str, env: Obj) -> bool:
     return True
 
 
-def _answered(w: World, label: str, env: Obj) -> Obj:
-    """A reply or an ask's bounce closes its open ask: answered, or member_ended."""
-    got = _receive(w, label, env)
-    outcome: Obj = (
-        {"status": "answered", "reply": env["mail_id"]}
-        if env["kind"] == "reply"
-        else {"status": "member_ended", "result": env["result"]}
-    )
-    return close_ask(w, label, text(env["ask_id"]), outcome, text(got["event_id"]))
-
-
-def _cancel(w: World, label: str, env: Obj) -> None:
-    """Applying a cancel: its receipt and today's barrier, cancel_requested{scope: tree}, in one
-    append; an asker parked on an open ask closes it cancelled. The barrier rules end the member."""
-    got = _receive(w, label, env)
+def apply_cancel(w: World, label: str, env: Obj) -> None:
+    """Applying a cancel: its receipt and today's barrier, cancel_requested{scope: tree}. Every
+    park it leaves is released in the same append: an open ask completes (a pending reply or
+    bounce still wins, else cancelled), a wait finishes with what has settled, and a member park
+    resumes. The barrier rules then end the member."""
+    got = text(_receive(w, label, env)["event_id"])
     who = obj(obj(env["provenance"])["principal"])
     w.add(label, "cancel_requested", {"scope": "tree"}, who=who)
     for p in arr(w.state(label)["parked"]):
         address = obj(p)
-        if address["kind"] == "ask" and _open_ask(w, label, address["id"]):
-            close_ask(w, label, text(address["id"]), {"status": "cancelled"}, text(got["event_id"]))
+        ident = text(address["id"])
+        if address["kind"] == "ask" and _open_ask(w, label, ident):
+            complete(w, label, ident, cancelled=True, due=False)
+        elif address["kind"] == "wait" and ident in _waits(w, label).values():
+            finish(w, label, ident, got, deadline=True)
+        elif address["kind"] == "member":
+            w.add(label, "resumed", {"address": address, "cause_event_id": got})
 
 
 def _pair(prov: JsonValue) -> tuple[str, str]:
@@ -129,32 +154,33 @@ def _pair(prov: JsonValue) -> tuple[str, str]:
 def consume(w: World, label: str, _inp: Obj) -> Obj:
     """mail.consume: the recipient's pending rows in (created_at, mail_id) order. Mid-turn only
     rows of the open turn's (principal, root_request); else the longest prefix sharing the first
-    row's pair."""
+    row's pair. Ordinary mail a control row unblocks waits for the next consume."""
     row = w.own_row(label)
-    to = TEAM_LOG if row is None else text(row["name"])
-    turn = _pair(w.turn_provenance(label)) if w.state(label)["status"] == "in_turn" else None
-    taken: list[JsonValue] = []
-    batch: tuple[str, str] | None = None
-    stopped = False
-    rows = w.pending(to)
+    rows = w.pending(TEAM_LOG if row is None else text(row["name"]))
     if not rows:
         return {"status": "nothing_pending"}
+    state = w.state(label)
+    turn = _pair(w.turn_provenance(label)) if state["status"] == "in_turn" else None
+    blocked = bool(arr(state["parked"]))
+    batch: tuple[str, str] | None = None
     for m in rows:
         env = obj(m["envelope"])
+        if not _still_pending(w, label, env["mail_id"]):
+            continue  # an earlier control row of this pass took it
         if _control(w, label, env):
-            taken.append(env["mail_id"])
             continue
-        if stopped or arr(w.state(label)["parked"]):
-            continue  # a parked recipient leaves ordinary mail pending
+        if blocked or arr(w.state(label)["parked"]):
+            continue
         pair = _pair(env["provenance"])
         if turn is not None and pair != turn:
             continue
         if turn is None and batch is not None and pair != batch:
-            stopped = True
+            blocked = True  # the longest prefix ends here
             continue
         batch = pair
         _receive(w, label, env)
-        taken.append(env["mail_id"])
+    left = {text(e["mail_id"]) for e in _mine(w, label)}
+    taken: list[JsonValue] = [m["mail_id"] for m in rows if m["mail_id"] not in left]
     return {"status": "consumed", "mail_ids": taken}
 
 
@@ -163,15 +189,7 @@ def deadline(w: World, label: str, inp: Obj) -> Obj:
     key = text(inp["id"])
     ask = next((a for a in w.rows("asks") if a["ask_id"] == key), None)
     if ask is not None:
-        if ask["state"] != "open" or w.now < num(ask["deadline"]):
-            return {"status": "not_due"}
-        to = w.address(w.logs[label].branch)
-        mine = [obj(m["envelope"]) for m in w.pending(to)]
-        for kind in ("reply", "bounce"):  # the decision order: a reply, then a bounce
-            env = next((e for e in mine if e["kind"] == kind and e.get("ask_id") == key), None)
-            if env is not None:
-                return _answered(w, label, env)
-        return close_ask(w, label, key, {"status": "timed_out"}, None)
+        return _ask_due(w, label, key, ask)
     started = next(
         e
         for e in w.logs[label].events
@@ -180,8 +198,21 @@ def deadline(w: World, label: str, inp: Obj) -> Obj:
     if w.now < num(obj(started["data"])["deadline"]) or key not in _waits(w, label).values():
         return {"status": "not_due"}
     monitors = {k for k, v in _waits(w, label).items() if v == key}
-    for m in w.pending(w.address(w.logs[label].branch)):
-        env = obj(m["envelope"])
+    for env in _mine(w, label):
         if env["kind"] in NOTICES and env["monitor_id"] in monitors:
             _receive(w, label, env)  # committed before this step: it counts
     return finish(w, label, key, None, deadline=True)
+
+
+def _ask_due(w: World, label: str, key: str, ask: Obj) -> Obj:
+    if ask["state"] != "open" or w.now < num(ask["deadline"]):
+        return {"status": "not_due"}
+    replied = any(
+        e.get("ask_id") == key and e["kind"] in ("reply", "bounce") for e in _mine(w, label)
+    )
+    cancel = next((e for e in _mine(w, label) if e["kind"] == "cancel"), None)
+    if cancel is not None and not replied:
+        apply_cancel(w, label, cancel)  # the barrier closes the ask cancelled
+        return {"ask_id": key, "status": "cancelled"}
+    closed = w.is_team_log(label) and w.team()["closed_at"] is not None
+    return complete(w, label, key, cancelled=closed, due=True) or {"status": "not_due"}
