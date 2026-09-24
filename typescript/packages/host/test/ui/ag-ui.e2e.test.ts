@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import type { HttpAgent } from "@ag-ui/client";
 import { agent } from "@threads/core";
+import { z } from "zod";
 import { uiThreadId } from "../../src/ui/key";
 import { alice, bob, type Harness, harness, mailer, say, use } from "../kit";
 import { attempt, pending, succeed, uninterrupted, user } from "./ag-ui-kit";
@@ -87,6 +88,50 @@ describe("AG-UI end to end", () => {
     expect(sent).toEqual(["bob"]);
     expect(pending(a)).toEqual([]);
     await equalsUninterrupted(a, [mail]);
+  });
+
+  test("a question (ask_user), answered by a resume with an Answer", async () => {
+    h = harness({
+      agents: {
+        support: agent({
+          name: "support",
+          model: liveModel([
+            use(
+              "ask_user",
+              { question: "Which colour?", options: ["Red", "Blue"] },
+              "q1",
+            ),
+            say("Blue it is."),
+          ]),
+        }),
+      },
+    });
+    const { agent: a } = agUi(h.host, alice, "chat-1");
+    const paint = user("m1", "Paint it");
+    a.addMessage(paint);
+    const asked = await succeed(a);
+    expect(
+      z
+        .object({
+          outcome: z.object({
+            interrupts: z.array(z.object({ reason: z.string() })),
+          }),
+        })
+        .parse(asked.at(-1))
+        .outcome.interrupts.map((i) => i.reason),
+    ).toEqual(["user_input"]);
+    await succeed(a, {
+      resume: [
+        {
+          interruptId: only(a),
+          status: "resolved",
+          payload: { answer: "Blue" },
+        },
+      ],
+    });
+    expect(pending(a)).toEqual([]);
+    expect(JSON.stringify(a.messages)).toContain("Blue it is.");
+    await equalsUninterrupted(a, [paint]);
   });
 
   test("a resume with cancelled denies", async () => {

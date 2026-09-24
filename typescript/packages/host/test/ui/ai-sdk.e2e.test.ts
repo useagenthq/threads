@@ -88,6 +88,41 @@ describe("AI SDK end to end", () => {
     expect(c.messages).toHaveLength(2);
   });
 
+  test("ask_user answered with addToolOutput sends automatically and resumes", async () => {
+    h = harness({
+      agents: {
+        support: agent({
+          name: "support",
+          model: liveModel([
+            use(
+              "ask_user",
+              { question: "Which colour?", options: ["Red", "Blue"] },
+              "q1",
+            ),
+            say("Blue it is."),
+          ]),
+        }),
+      },
+    });
+    const { chat: c, log } = chat(h.host, alice, "chat-1");
+    await c.sendMessage({ text: "Paint it" });
+    await settled(c);
+    const asked = z
+      .object({ state: z.literal("input-available"), toolCallId: z.string() })
+      .parse(c.messages.at(-1)?.parts.find((p) => p.type === "tool-ask_user"));
+    await c.addToolOutput({
+      tool: "ask_user",
+      toolCallId: asked.toolCallId,
+      output: "Blue",
+    });
+    await settled(c, () => JSON.stringify(c.messages).includes("Blue it is."));
+    expect(c.error).toBeUndefined();
+    expect(log.requests.filter((r) => r.method === "POST")).toHaveLength(2);
+    const run = Assistant.parse(c.messages.at(-1)).id;
+    expect(last(c)).toEqual(await uninterrupted(run));
+    expect(c.messages).toHaveLength(2);
+  });
+
   test("a second tab approving an already approved call streams the run, with no error", async () => {
     const sent: string[] = [];
     h = harness({
