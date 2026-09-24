@@ -155,7 +155,11 @@
   },
   "KnowledgeProvider.revision": {
     "ts": [
-      "packages/core/test/memory/knowledge.test.ts > forks honor knowledge_policy (F14.2) > pinned (the default) searches as of the snapshot's revision"
+      "packages/core/test/memory/knowledge.test.ts > forks honor knowledge_policy (F14.2) > pinned (the default) searches as of the snapshot's revision",
+      "packages/core/test/memory/revision.test.ts > KnowledgeProvider.revision > an error skips that turn end's snapshot, and no scratch sandbox is made for it"
+    ],
+    "py": [
+      "tests/memory/test_custom_knowledge.py::test_revision_error_skips_the_snapshot"
     ]
   },
   "KnowledgeProvider.search": {
