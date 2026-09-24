@@ -1,5 +1,6 @@
 import { DocsLayout } from "fumadocs-ui/layouts/notebook";
 import type { ReactNode } from "react";
+import { LangSwitch } from "@/components/lang-switch";
 import { baseOptions } from "@/lib/layout.shared";
 import { source } from "@/lib/source";
 
@@ -10,7 +11,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     <DocsLayout
       tree={source.getPageTree()}
       {...base}
-      nav={{ ...base.nav, mode: "top" }}
+      nav={{ ...base.nav, mode: "top", children: <LangSwitch /> }}
       tabMode="navbar"
       links={[]}
     >

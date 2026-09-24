@@ -20,7 +20,7 @@ export function LogoMark(props: SVGProps<SVGSVGElement>) {
 
 export function Logo() {
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
       <LogoMark className="h-5.5 w-auto text-fd-primary" />
       <span className="text-[0.95rem] font-semibold tracking-tight">
         Threads <span className="text-fd-muted-foreground">AI</span>
