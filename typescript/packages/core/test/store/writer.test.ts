@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { reduce } from "../../src/reduce";
+import { LOCAL_TENANT, type SqliteDriver } from "../../src/store";
+import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { verifyExport } from "../../src/verify";
 import {
   fixture,
@@ -71,6 +73,30 @@ describe("append", () => {
     expect(writer.chain.fold.seq).toBe(1);
     unwrap(writer.append([userInput("hi")]));
     expect(unwrap(store.read(ROOT)).fold.seq).toBe(2);
+  });
+
+  test("a read ends at the head it read, whatever is appended while it reads", () => {
+    const base = openBunSqlite(":memory:");
+    let between: (() => void) | undefined;
+    // Another process appends after this read took the branch row, before it reads the lines.
+    const db: SqliteDriver = {
+      ...base,
+      all: (sql, params) => {
+        const append = between;
+        if (sql.includes("FROM events") && append !== undefined) {
+          between = undefined;
+          append();
+        }
+        return base.all(sql, params);
+      },
+    };
+    const { store } = fixture(LOCAL_TENANT, db);
+    unwrap(store.createBranch(THREAD, ROOT));
+    const writer = unwrap(store.acquire(ROOT, "holder-a"));
+    unwrap(writer.append([started, userInput("hi")]));
+    between = () => unwrap(writer.append([turnCompleted]));
+    expect(unwrap(store.read(ROOT)).fold.seq).toBe(2);
+    expect(unwrap(store.read(ROOT)).fold.seq).toBe(3);
   });
 
   test("a draft that fails its schema is an invalid line", () => {

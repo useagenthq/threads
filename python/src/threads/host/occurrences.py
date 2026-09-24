@@ -46,6 +46,10 @@ async def decide_thread(p: Pass, thread_id: ThreadId) -> None:
     try:
         for row in await rows.pending(thread_id):
             started = pins.get(row.agent)
+            if started is None and p.runner.agent(row.agent) is not None:
+                # Reserved by another scheduler after the pins were taken: it waits for the next
+                # tick. Only an agent this host no longer serves is removed.
+                break
             runs = started is not None and same_pin(events, started)
             reason = _classify(row, in_turn=writer.fold.in_turn, runs=runs)
             if not await log_occurrence(writer, p.tenant, row, reason):
