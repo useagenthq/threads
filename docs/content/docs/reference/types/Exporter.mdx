@@ -1,0 +1,36 @@
+---
+title: "Exporter"
+description: "A telemetry exporter (otel())."
+icon: "Plug"
+---
+
+A host with telemetry calls sync() every second and once more, bounded by 5 s, on stop(); runs never wait on it.
+
+<Callout>A protocol: adapters implement it.</Callout>
+
+## Methods
+
+### sync
+
+Sends every span that closed since the last acknowledged sync, then the unreported deletion losses, and moves each branch's cursor only after the collector accepted its spans. One sync runs at a time. collector_unavailable: a network error, timeout, 408, 429 or 5xx; collector_rejected: any other 4xx, with its status and the start of its body in the message. Nothing is dropped on an error: the next sync sends it again, with the same ids. Throws ConfigError invalid_config when the exporter has no store (made without one and not passed to a host).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+sync(): Promise<Result<SyncReport>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def sync() -> Ok[SyncReport] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+**Returns an error value** with one of these codes: `collector_unavailable`, `collector_rejected`.
+
+**Throws** `ConfigError` for a definition that can't run.

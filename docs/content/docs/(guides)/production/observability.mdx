@@ -1,0 +1,172 @@
+---
+title: Observability
+description: "Send every run to Honeycomb, Datadog, Langfuse or any OpenTelemetry collector: one line in host(), the standard OTEL_* variables."
+icon: Activity
+---
+
+See every turn, model call and tool call of your agents in the tracing tool you already use. Traces are built from each thread's log, so they cover runs from every process on the store, runs that crashed and were recovered, and approvals a person gave hours later.
+
+## Turn it on
+
+Add `otel()` to your host and point the standard OpenTelemetry variables at your collector.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { host } from "@threads/host";
+import { otel } from "@threads/otel";
+
+// OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
+// OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<your key>
+// OTEL_SERVICE_NAME=support-bot
+export default host({ store, agents: { support }, telemetry: otel() });
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.host import host
+from threads.otel import otel
+
+app = host(store=store, agents={"support": support}, telemetry=otel())
+```
+
+Install the extra: `pip install "threads[otel]"`.
+
+</Tab>
+</Tabs>
+
+The host sends new spans every second, on their own schedule: a slow or unreachable collector never holds up a run. It retries with back-off and logs once until the collector is back. When the host stops, it sends once more (for at most 5 seconds).
+
+## What a trace looks like
+
+One trace per run. Each turn is an `invoke_agent` span, with a `chat` span per model call and an `execute_tool` span per tool call:
+
+```
+invoke_agent support                       turn
+├─ chat claude-sonnet-5                    model call: tokens, cache, finish reason
+├─ execute_tool mcp__billing__refund       parked for approval (threads.parked)
+│
+invoke_agent support                       the turn after the approval, same trace
+└─ execute_tool mcp__billing__refund       the approved call running: effect events
+```
+
+- A turn that waits for an approval ends there. The approval starts the next turn span, in the same trace and linked to the first, and the tool's work after the approval is a second `execute_tool` span linked to the first.
+- A subagent's turns are children of the tool call that started it, in the parent's trace.
+- A retried model call shows as a failed `chat` span (status error, `error.type`), and the next attempt carries a `retry_scheduled` event naming it.
+- Every span carries `threads.thread_id`, `threads.branch_id` and the log positions it covers (`threads.seq.start`, `threads.seq.end`), so you can open the exact events with `threads timeline`.
+
+Attributes follow the OpenTelemetry GenAI semantic conventions of core release **1.41.1** (`gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.usage.*`, `gen_ai.tool.name`, ...). `gen_ai.usage.input_tokens` counts cached input too, and cache reads and writes are also sent on their own. The GenAI names are moving to a separate conventions project; threads will follow it at its first release.
+
+## Configuration
+
+An option given to `otel()` wins over the variables. The traces-specific variable wins over the generic one.
+
+| Setting | Option | Variables | Default |
+|---|---|---|---|
+| Collector URL | `endpoint` | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` (used as is), `OTEL_EXPORTER_OTLP_ENDPOINT` (`/v1/traces` is added) | none: setup fails naming both |
+| Headers | `headers` | `OTEL_EXPORTER_OTLP_TRACES_HEADERS`, `OTEL_EXPORTER_OTLP_HEADERS` (`key=value,key=value`) | none |
+| Service name | `service` | `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | `threads` |
+| Timeout | | `OTEL_EXPORTER_OTLP_TRACES_TIMEOUT`, `OTEL_EXPORTER_OTLP_TIMEOUT` (ms) | 10000 |
+| Compression | | `OTEL_EXPORTER_OTLP_TRACES_COMPRESSION`, `OTEL_EXPORTER_OTLP_COMPRESSION` | `none` (`gzip` supported) |
+| Content | `content` | | `false` |
+
+- Spans are sent as **OTLP/HTTP JSON**, which every OpenTelemetry collector and the vendors below accept. An unset protocol means JSON; `grpc` or `http/protobuf` is refused at setup, as are client certificate variables. Put an OpenTelemetry Collector in front if you need them.
+- Header values are credentials: they are never logged or shown in an error.
+- Two exporters with different `name`s each send every span, for example to two vendors.
+
+### Vendors
+
+| Vendor | Variables |
+|---|---|
+| Honeycomb | `OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io` and `OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<API key>` |
+| Datadog | Run the Datadog Agent with its OTLP HTTP receiver on, then `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` |
+| Langfuse | `OTEL_EXPORTER_OTLP_ENDPOINT=https://cloud.langfuse.com/api/public/otel` and `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20<base64 of public key:secret key>` |
+
+## Content is off by default
+
+Spans carry names, timings, token counts and outcomes, never the conversation. With `otel({ content: true })` tool spans also carry the tool arguments and result preview, and model spans the response text. These are the bytes the log holds, with registered secrets already redacted. Prompts are never exported.
+
+## Export without a host
+
+Outside a host, give `otel()` your store and call `sync()` yourself. It sends what has been committed so far.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { agent, scriptedModel, sqlite } from "@threads/core";
+import { otel } from "@threads/otel";
+
+// OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 bun examples/telemetry.ts
+const store = sqlite(".threads");
+const bot = agent({
+  model: scriptedModel({
+    responses: [
+      {
+        content: [{ type: "text", text: "Hello!" }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 12, output_tokens: 3 },
+      },
+    ],
+  }),
+});
+await bot.run("Hi.", { store });
+
+const exporter = otel({ store, service: "support-bot" });
+const sent = await exporter.sync();
+if (!sent.ok) console.error(sent.error.code, sent.error.message);
+else console.log(sent.value.spans, "spans exported");
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+import asyncio
+
+from threads import agent, scripted_model, sqlite
+from threads.otel import otel
+from threads.result import Err, Ok
+
+
+# OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 python examples/telemetry.py
+async def main() -> None:
+    store = sqlite(".threads")
+    reply = {
+        "content": [{"type": "text", "text": "Hello!"}],
+        "stop_reason": "end_turn",
+        "usage": {"input_tokens": 12, "output_tokens": 3},
+    }
+    bot = agent(model=scripted_model({"responses": [reply]}))
+    await bot.run("Hi.", store=store)
+
+    exporter = otel(store=store, service="support-bot")
+    match await exporter.sync():
+        case Ok(value):
+            print(value.spans, "spans exported")
+        case Err(error):
+            print(error.code, error.message)
+
+
+asyncio.run(main())
+```
+
+</Tab>
+</Tabs>
+
+`sync()` returns an error value instead of throwing: `collector_unavailable` (network error, timeout, `408`, `429` or `5xx`) or `collector_rejected` (any other `4xx`, with its status). It also reports `skipped`: a branch whose log doesn't read (for example a corrupted file) is left out and retried with back-off, and every other branch is exported as usual.
+
+## Delivery guarantees
+
+- **Each span is sent once, when it closes**, then never again. A turn with forty model calls sends each `chat` span on the sync after it finishes, and the turn span when the turn ends.
+- **Nothing is dropped while the collector is down.** Progress is saved only after the collector accepts a batch, and the next sync sends what is left.
+- **At least once, not exactly once.** If the process dies after the collector accepted a batch but before the progress was saved, that batch is sent again with the same span ids. Most backends de-duplicate on span id.
+- **A fork sends only its own turns.** The history before the fork point stays with the parent's traces.
+- **Deleted threads.** Deleting a thread before its spans were sent records how many events may not have been, and the next sync sends a `threads.export.possibly_lost` span with that count.
+
+## Upgrading
+
+Telemetry adds tables to the store (store version 7). A store created by an earlier version is refused with "create a new store": `threads export` the threads you want to keep, then import them into a new store.

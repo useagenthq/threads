@@ -1,0 +1,73 @@
+---
+title: "otel"
+description: "An Exporter that sends each span of every thread in the store once, when it closes, to an OpenTelemetry collector over OTLP/HTTP JSON."
+icon: "Plug"
+---
+
+Pass it as host(&#123;telemetry: otel()&#125;), or call sync() yourself. Settings not given as options come from the standard OTEL_EXPORTER_OTLP_* variables; semantic conventions core v1.41.1. Setup errors are thrown here: invalid_config names the option or variable.
+
+Import from `@threads/otel` (TypeScript) or `threads.otel` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function otel(options?: {
+  store?: Store;
+  endpoint?: string;
+  headers?: Record<string, string>;
+  service?: string;
+  name?: string;
+  content?: boolean;
+}): Exporter
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def otel(
+    *,
+    store: Store | None = None,
+    endpoint: str | None = None,
+    headers: Mapping[str, str] | None = None,
+    service: str | None = None,
+    name: str | None = None,
+    content: bool = False,
+) -> Exporter
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="store" type={"Store"}>
+  The store whose threads are exported, every tenant. Omitted: the store of the host it is passed to; sync() outside a host without one is invalid_config. See [Store](/docs/reference/types/Store).
+</Field>
+
+<Field name="endpoint" type={"string"}>
+  The collector's traces URL, used as is. Omitted: the traces variable as is, else the generic one with /v1/traces appended; neither set is invalid_config naming both.
+</Field>
+
+<Field name="headers" type={"Record<string, string>"}>
+  Request headers, such as a vendor's API key. Omitted: the variables (k=v,k=v, percent-decoded). They are credentials: never logged or put in an error.
+</Field>
+
+<Field name="service" type={"string"}>
+  The resource's service.name. Omitted: OTEL_SERVICE_NAME, else service.name in OTEL_RESOURCE_ATTRIBUTES, else threads.
+</Field>
+
+<Field name="name" type={"string"}>
+  Names this exporter's cursor (observer otel:&lt;name>), so two exporters with different names each send every span, to different collectors. Omitted: the observer is otel.
+</Field>
+
+<Field name="content" type={"boolean"} default={"false"}>
+  true: tool spans also carry the tool arguments and result preview, and model spans the response text, as logged (already redacted). Prompts are never exported.
+</Field>
+
+## Returns
+
+[`Exporter`](/docs/reference/types/Exporter)
+
+**Throws** `ConfigError` with one of these codes: `invalid_config`.

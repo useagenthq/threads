@@ -1,0 +1,23 @@
+---
+title: "SkippedBranch"
+description: "A branch Exporter.sync() skipped."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="branch_id" type={"BranchId"} required>
+  The branch that was not read.
+</Field>
+
+<Field name="thread_id" type={"ThreadId"} required>
+  Its thread.
+</Field>
+
+<Field name="code" type={"string"} required>
+  Why it didn't read: a log error code such as log_corrupt or unsupported_format.
+</Field>
+
+<Field name="head_seq" type={"Int"} required>
+  The head it failed at. A new failure at the same head is the same back-off streak; the host logs a branch once per streak.
+</Field>

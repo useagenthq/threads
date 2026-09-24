@@ -1,0 +1,19 @@
+---
+title: "SyncReport"
+description: "What one Exporter.sync() sent."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="spans" type={"number"} required>
+  Spans the collector accepted in this sync.
+</Field>
+
+<Field name="possiblyLostEvents / possibly_lost_events" type={"number"} required>
+  Events of deleted threads this exporter may never have sent (an upper bound), reported in this sync.
+</Field>
+
+<Field name="skipped" type={"readonly SkippedBranch[]"} required>
+  Branches that could not be read this sync. Each is retried with back-off (1 s doubling to 1 h), sooner when its head moves; the others are exported as usual.
+</Field>

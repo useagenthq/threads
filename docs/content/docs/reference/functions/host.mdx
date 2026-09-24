@@ -17,6 +17,7 @@ function host(options: {
   agents: Record<string, Agent<unknown, unknown>>;
   channels?: Record<string, ChannelAdapter>;
   ceiling?: Partial<Policy.permissions>;
+  telemetry?: Exporter;
   schedules?: readonly Schedule[];
   authenticate?: (request: Request) => Promise<Principal | null>;
 }): Host
@@ -32,6 +33,7 @@ def host(
     agents: Mapping[str, Agent[object, object]],
     channels: Mapping[str, ChannelAdapter] = {},
     ceiling: Policy.permissions | None = None,
+    telemetry: Exporter | None = None,
     schedules: Sequence[Schedule] = (),
     authenticate: Callable[[starlette.requests.Request], Awaitable[Principal | None]] | None = None,
 ) -> Host
@@ -56,6 +58,10 @@ def host(
 
 <Field name="ceiling" type={"Partial<Policy.permissions>"}>
   The host ceiling every run this host starts or resumes is also decided under (Agent.run ceiling). Omitted: no ceiling.
+</Field>
+
+<Field name="telemetry" type={"Exporter"}>
+  An exporter, such as otel(), that the host syncs every second and once more on stop() (bounded by 5 s). A failing collector is retried with back-off (1 s doubling to 60 s) and logged once per streak; runs never wait on it. Omitted: no telemetry. See [Exporter](/docs/reference/types/Exporter).
 </Field>
 
 <Field name="schedules" type={"readonly Schedule[]"} default={"[]"}>
