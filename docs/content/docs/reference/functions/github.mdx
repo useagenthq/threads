@@ -62,6 +62,10 @@ def github(
   TypeScript only. The tenant for an installation, or a function mapping an installation id to one (undefined refuses it). Omitted: github:&lt;installation_id>. In Python each channel is github:&lt;installation_id>.
 </Field>
 
+<Field name="tenant(installationId)" type={"string"} required>
+  TypeScript only. The App installation id the delivery came from.
+</Field>
+
 <Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
   TypeScript only. Seam: the fetch the SDK sends through (tests); the run's fence wraps it either way. Omitted: the process's fetch.
 </Field>

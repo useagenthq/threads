@@ -28,6 +28,7 @@ from threads.adapters.sandboxes.e2b.envd import Envd, Transports
 from threads.adapters.sandboxes.e2b.session import E2BSession, Owner, call
 from threads.adapters.sandboxes.e2b.transport import FencedHttpx, http_transport, rpc_transport
 from threads.adapters.sandboxes.e2b.wire import Sandbox as Described
+from threads.agents.config import ConfigError
 from threads.log import SnapshotData
 from threads.loop.model import Found, LookupUnknown, NotFoundNonfinal
 from threads.result import Err, Ok
@@ -210,6 +211,10 @@ def e2b(  # noqa: PLR0913 - the provider's settings
     `secret("E2B_API_KEY")`, resolved at setup; it authenticates the control plane only and
     never enters a sandbox.
     `template` must carry /bin/sh, sed, find, stat and sha256sum (E2B's base does)."""
+    if lifetime_ms <= 0:
+        raise ConfigError(
+            "invalid_config", f"e2b: lifetime_ms must be a positive number of ms, not {lifetime_ms}"
+        )
     return E2BSandbox(
         api_key,
         lambda: Transports(http_transport(), rpc_transport()),

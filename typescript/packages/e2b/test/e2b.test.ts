@@ -111,6 +111,13 @@ describe("e2b declarations", () => {
     expect(body).toContain('"threads_operation_key":"op-7"');
   });
 
+  test("a lifetime that isn't a positive whole number of milliseconds is invalid_config", () => {
+    for (const lifetimeMs of [0, -60_000, 1.5])
+      expect(() => e2b({ apiKey: CANARY, lifetimeMs })).toThrow(
+        expect.objectContaining({ code: "invalid_config" }),
+      );
+  });
+
   test("defaults: template base, a one-hour lifetime and no internet", async () => {
     const world = new World();
     const { sandbox, backend } = adapter(world);

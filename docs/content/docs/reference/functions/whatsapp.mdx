@@ -69,6 +69,10 @@ def whatsapp(
   TypeScript only. The tenant for a business phone number, or a function mapping a phone number id to one (undefined refuses it). Omitted: whatsapp:&lt;phone_number_id>. In Python each number is whatsapp:&lt;phone_number_id>.
 </Field>
 
+<Field name="tenant(phoneNumberId)" type={"string"} required>
+  TypeScript only. The business phone number id the webhook speaks for.
+</Field>
+
 <Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
   TypeScript only. Seam: the fetch replies are sent through (tests); the run's fence wraps it either way. Omitted: the process's fetch.
 </Field>

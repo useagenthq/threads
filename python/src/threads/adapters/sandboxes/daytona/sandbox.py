@@ -92,6 +92,9 @@ class DaytonaSandbox:
             raise ConfigError("invalid_config", f"provider name {name!r}: [a-z][a-z0-9_]*")
         if auto_stop_minutes <= 0:
             raise ConfigError("invalid_config", f"auto_stop_minutes {auto_stop_minutes}: > 0")
+        # Daytona reads a TTL of 0 as "no TTL": a sandbox declared expired would live on.
+        if lifetime_ms is not None and lifetime_ms <= 0:
+            raise ConfigError("invalid_config", f"daytona: lifetime_ms {lifetime_ms}: > 0")
         self.lifetime_ms: int | None = lifetime_ms
         """The declared provider expiry of a created sandbox, when set."""
         ttl = None if lifetime_ms is None else -(-lifetime_ms // 60_000)

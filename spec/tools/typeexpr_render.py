@@ -83,6 +83,8 @@ PRIMS = {
     "number": ("number", "float"),
     "boolean": ("boolean", "bool"),
     "null": ("null", "None"),
+    # An omitted value: TS undefined (a callback's "no answer"), Python None.
+    "undefined": ("undefined", "None"),
     "bytes": ("Uint8Array", "bytes"),
     "unknown": ("unknown", "object"),
     "void": ("void", "None"),
@@ -217,7 +219,11 @@ class Render:
         return f"Sequence[{inner}]"
 
     def _union(self, t: Obj, casing: str) -> str:
-        return " | ".join(self.expr(v, casing) for v in objs(t["union"]))
+        # A TS function type inside a union needs parentheses: `string | ((id: string) => T)`.
+        return " | ".join(
+            f"({self.expr(v, casing)})" if self.ts and "fn" in v else self.expr(v, casing)
+            for v in objs(t["union"])
+        )
 
     def _native(self, t: Obj, casing: str) -> str:
         return text(obj(t["native"]).get(self.lang, ""))

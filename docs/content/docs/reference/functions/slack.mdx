@@ -63,6 +63,10 @@ def slack(
   TypeScript only. The tenant for a workspace, or a function mapping a team id to one (undefined refuses that workspace). Omitted: slack:&lt;team_id>. In Python each channel is slack:&lt;team_id>.
 </Field>
 
+<Field name="tenant(teamId)" type={"string"} required>
+  TypeScript only. The Slack team (workspace) id the request came from.
+</Field>
+
 <Field name="now" type={"() => number"}>
   TypeScript only. Seam: the clock the request timestamp is checked against, in milliseconds (tests). Omitted: Date.now.
 </Field>

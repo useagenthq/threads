@@ -51,7 +51,7 @@ def e2b(
 </Field>
 
 <Field name="lifetimeMs / lifetime_ms" type={"number"} default={"3600000"}>
-  How long a sandbox lives, in milliseconds, before E2B kills it (the declared expiry).
+  How long a sandbox lives, in milliseconds, before E2B kills it (the declared expiry). A positive integer; anything else is invalid_config.
 </Field>
 
 <Field name="allowInternet / allow_internet" type={"boolean"} default={"false"}>
@@ -74,4 +74,4 @@ def e2b(
 
 [`Sandbox`](/docs/reference/types/Sandbox)
 
-**Throws** `ConfigError` with one of these codes: `missing_secret`, `transport_fence_unsupported` (TypeScript only).
+**Throws** `ConfigError` with one of these codes: `invalid_config`, `missing_secret`, `transport_fence_unsupported` (TypeScript only).

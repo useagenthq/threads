@@ -12,7 +12,7 @@ from typing import NotRequired, TypedDict, Unpack
 import pytest
 from factory_surface_py import check_py_factory, modules_of, namespace
 from gen_api_surface_factories import adapter_packages, factories
-from typeexpr_render import Json, Obj, obj, text
+from typeexpr_render import Json, Obj, Render, obj, text
 
 import threads
 from threads import Secret
@@ -191,3 +191,13 @@ def test_an_optional_option_without_a_literal_default_is_t_or_none() -> None:
 
 
 def keyword_region(*, base_url: str = "us") -> None: ...
+
+
+def test_a_callback_in_a_union_is_parenthesized_in_typescript() -> None:
+    """A tenant: a string, or a callback whose "no answer" is undefined in TS and None in Python."""
+    param: Obj = {"name": "team_id", "kind": "positional", "type": STRING, "required": True}
+    answer: Obj = {"union": [STRING, {"prim": "undefined"}]}
+    fn: Obj = {"fn": {"async": False, "params": [param], "returns": answer}}
+    tenant: Obj = {"union": [STRING, fn]}
+    assert Render("ts").expr(tenant) == "string | ((teamId: string) => string | undefined)"
+    assert Render("py").expr(tenant) == "str | Callable[[str], str | None]"

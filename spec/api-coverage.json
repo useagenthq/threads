@@ -643,10 +643,12 @@
   },
   "daytona!invalid_config": {
     "ts": [
-      "packages/daytona/test/daytona.test.ts > daytona declarations > a sandbox is private and can't outlive a leak: finite auto-stop, then auto-delete"
+      "packages/daytona/test/daytona.test.ts > daytona declarations > a sandbox is private and can't outlive a leak: finite auto-stop, then auto-delete",
+      "packages/daytona/test/daytona.test.ts > daytona declarations > a lifetime that isn't a positive whole number of milliseconds is invalid_config"
     ],
     "py": [
-      "tests/adapters/sandboxes/test_daytona.py::test_a_sandbox_is_private_and_cannot_outlive_a_leak"
+      "tests/adapters/sandboxes/test_daytona.py::test_a_sandbox_is_private_and_cannot_outlive_a_leak",
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_a_lifetime_that_is_not_positive_is_invalid_config[0]"
     ]
   },
   "daytona!missing_secret": {
@@ -700,6 +702,14 @@
     ],
     "py": [
       "tests/adapters/sandboxes/test_factory_defaults.py::test_e2b_defaults"
+    ]
+  },
+  "e2b!invalid_config": {
+    "ts": [
+      "packages/e2b/test/e2b.test.ts > e2b declarations > a lifetime that isn't a positive whole number of milliseconds is invalid_config"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_a_lifetime_that_is_not_positive_is_invalid_config[0]"
     ]
   },
   "e2b!missing_secret": {

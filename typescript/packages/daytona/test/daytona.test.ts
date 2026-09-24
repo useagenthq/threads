@@ -192,6 +192,14 @@ describe("daytona declarations", () => {
     expect(sandbox.expiry.sandboxMs).toBe(3_600_000);
   });
 
+  test("a lifetime that isn't a positive whole number of milliseconds is invalid_config", () => {
+    // Daytona reads a TTL of 0 as no TTL, and a negative one as invalid.
+    for (const lifetimeMs of [0, -60_000, 1.5])
+      expect(() => daytona({ apiKey: CANARY, lifetimeMs })).toThrow(
+        expect.objectContaining({ code: "invalid_config" }),
+      );
+  });
+
   test("snapshot, target and lifetimeMs are sent as given; a lifetime rounds up to a minute", async () => {
     const backend = daytonaBackend(new World());
     const sandbox = daytona({

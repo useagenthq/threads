@@ -72,6 +72,12 @@ const openSocket: OpenSocket = (url, headers) =>
 
 export function daytona(options: DaytonaOptions = {}): ProviderSandbox {
   const lifetimeMs = options.lifetimeMs ?? HOUR_MS;
+  // Daytona reads a TTL of 0 as "no TTL": a sandbox declared expired would live on.
+  if (!Number.isInteger(lifetimeMs) || lifetimeMs <= 0)
+    throw new ConfigError(
+      "invalid_config",
+      `daytona: lifetimeMs must be a positive whole number of milliseconds, not ${lifetimeMs}`,
+    );
   const autoStopMinutes = options.autoStopMinutes ?? 60;
   if (!Number.isInteger(autoStopMinutes) || autoStopMinutes <= 0)
     throw new ConfigError(

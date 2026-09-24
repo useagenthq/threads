@@ -17,12 +17,25 @@ from sandbox_kit import OPEN
 
 from threads.adapters.loop_resources import holding
 from threads.adapters.sandboxes.e2b import sandbox as e2b_module
+from threads.agents.config import ConfigError
 from threads.daytona import daytona
 from threads.e2b import e2b
 from threads.modal import modal
 from threads.result import Ok
 
 HOUR_MS = 3_600_000
+
+
+@pytest.mark.parametrize("lifetime_ms", [0, -60_000])
+def test_a_lifetime_that_is_not_positive_is_invalid_config(lifetime_ms: int) -> None:
+    """Daytona reads a TTL of 0 as no TTL: a sandbox declared expired would live on."""
+    for make in (
+        lambda: e2b(api_key=E2B_KEY, lifetime_ms=lifetime_ms),
+        lambda: daytona(api_key=DAYTONA_KEY, lifetime_ms=lifetime_ms),
+    ):
+        with pytest.raises(ConfigError) as refused:
+            make()
+        assert refused.value.code == "invalid_config"
 
 
 def test_e2b_defaults(monkeypatch: pytest.MonkeyPatch) -> None:

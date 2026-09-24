@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   type ChannelAdapter,
   ConfigError,
@@ -58,14 +58,26 @@ async function refusal(
   throw new Error(`${name}: ready() accepted the channel`);
 }
 
-function setAll(): void {
-  for (const name of SECRETS) process.env[name] = `${name.toLowerCase()}-value`;
-}
+const saved = new Map<string, string | undefined>();
+
+beforeEach(() => {
+  for (const name of SECRETS) {
+    saved.set(name, process.env[name]);
+    process.env[name] = `${name.toLowerCase()}-value`;
+  }
+});
+
+afterEach(() => {
+  for (const [name, value] of saved) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+  saved.clear();
+});
 
 describe("channel bindings at ready()", () => {
   for (const [name, make] of Object.entries(CHANNELS)) {
     test(`${name}: an agent that isn't a host agent is invalid_config`, async () => {
-      setAll();
       const refused = await refusal(name, make("sales"));
       expect(refused.code).toBe("invalid_config");
       expect(refused.message).toContain(name);
@@ -73,7 +85,6 @@ describe("channel bindings at ready()", () => {
     });
 
     test(`${name}: an unset secret is missing_secret`, async () => {
-      setAll();
       delete process.env["CH_BIND_TWO"];
       expect((await refusal(name, make("support"))).code).toBe(
         "missing_secret",

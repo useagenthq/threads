@@ -53,6 +53,11 @@ export function e2bOn(runtime: object, options: E2bOptions): ProviderSandbox {
       "e2b: on Node the E2B SDK sends through undici, which threads can't fence; run on Bun",
     );
   const lifetimeMs = options.lifetimeMs ?? HOUR_MS;
+  if (!Number.isInteger(lifetimeMs) || lifetimeMs <= 0)
+    throw new ConfigError(
+      "invalid_config",
+      `e2b: lifetimeMs must be a positive whole number of milliseconds, not ${lifetimeMs}`,
+    );
   const internet = options.allowInternet ?? false;
   const apiKey = credential("e2b", "apiKey", options.apiKey, "E2B_API_KEY");
   const driver = e2bDriver({
