@@ -78,7 +78,10 @@ async def bar_child(
 
     def build(fold: Fold) -> Ok[Sequence[Draft]] | Err[ParseError]:
         nonlocal stopped
-        if cancelled_since_input(fold.events):
+        # Nothing to append: it already has a thread or tree cancel since its latest input,
+        # or it has finished (its turn is closed and nothing of its own still runs).
+        finished = not fold.in_turn and all(fold.children.values())
+        if cancelled_since_input(fold.events) or finished:
             stopped = True
             return Err(ParseError("not_found", "already stopped"))
         return Ok(barred(fold, barrier))
