@@ -70,8 +70,52 @@ def _bounce(events: list[Obj], env: Obj, sent: dict[str, Obj]) -> str | None:
     return "43: only an ask's bounce names an ask" if "ask_id" in env else None
 
 
+def _key(team: JsonValue, name: JsonValue, generation: JsonValue) -> str:
+    return f"{text(team)}/{text(name)}/{generation}"
+
+
+def _identities(logs: dict[str, list[Obj]]) -> dict[str, set[str]]:
+    """Who each log speaks for: `team_log`, or `<team>/<name>/<generation>` (a nested lead has
+    two: its member ref in the parent team and its lead ref in its own)."""
+    by_thread = {text(es[0]["thread_id"]): label for label, es in logs.items() if es}
+    out: dict[str, set[str]] = {label: set() for label in logs}
+    for label, es in logs.items():
+        for e in es:
+            d, t = obj(e["data"]), e["type"]
+            if t == "team_opened":
+                out[label].add("team_log")
+            elif t == "thread_started" and "team" in d:
+                out[label].add(_key(obj(d["team"])["id"], d["agent_name"], 1))
+            elif t == "member_started" and text(d["thread_id"]) in by_thread:
+                m = obj(d["member"])
+                out[by_thread[text(d["thread_id"])]].add(
+                    _key(m["team"], m["name"], m["generation"])
+                )
+    return out
+
+
+def _addressed(e: Obj, own: set[str], sent: dict[str, Obj]) -> str | None:
+    """The mail clauses: a receipt copies its sender's envelope and sits in the log `to` names;
+    a sent mail sits in the log `from` names; a bounce answers its own mail_refused."""
+    d = obj(e["data"])
+    env = obj(d["envelope"])
+    if e["type"] == "message_received":
+        if d["mail_id"] in sent and sent[text(d["mail_id"])] != env:
+            return "43: a receipt differs from its sender's mail"
+        to = env["to"]
+        want = (
+            "team_log"
+            if to == "team_log"
+            else _key(env["team"], obj(to)["name"], obj(to)["generation"])
+        )
+        return None if want in own else "43: a receipt is not in the log `to` names"
+    frm = obj(env["from"])
+    want = "team_log" if "operator" in frm else _key(frm["team"], frm["name"], frm["generation"])
+    return None if want in own else "43: a mail is not in the log `from` names"
+
+
 def _cross_one(
-    events: list[Obj], logs: dict[str, list[Obj]], sent: dict[str, Obj]
+    events: list[Obj], logs: dict[str, list[Obj]], sent: dict[str, Obj], own: set[str]
 ) -> tuple[int, str] | None:
     started = {
         obj(e["data"])["thread_id"]: obj(e["data"])["parent"]
@@ -82,20 +126,20 @@ def _cross_one(
     for e in events:
         d, t = obj(e["data"]), e["type"]
         why = None
-        if (
-            t == "message_received"
-            and d["mail_id"] in sent
-            and sent[text(d["mail_id"])] != d["envelope"]
-        ):
-            why = "43: a receipt differs from its sender's mail"
-        elif t == "message_sent" and obj(d["envelope"])["kind"] == "bounce":
-            why = _bounce(events, obj(d["envelope"]), sent)
+        if t in ("message_received", "message_sent"):
+            why = _addressed(e, own, sent)
+            if why is None and t == "message_sent" and obj(d["envelope"])["kind"] == "bounce":
+                why = _bounce(events, obj(d["envelope"]), sent)
         elif (
             t == "thread_started"
             and e["thread_id"] in started
             and d.get("parent") != started[e["thread_id"]]
         ):
             why = "43: a member's parent is not its member_started's"
+        elif t == "user_input" and d.get("mail_id") in sent:
+            principal = obj(sent[text(d["mail_id"])]["provenance"])["principal"]
+            if obj(e["actor"]).get("principal") != principal:
+                why = "43: a task's input principal is not its mail's provenance principal"
         if why is not None:
             return (int(str(e["seq"])), why)
     return None
@@ -103,8 +147,9 @@ def _cross_one(
 
 def cross(logs: dict[str, list[Obj]]) -> Found:
     sent = _sent(logs)
+    own = _identities(logs)
     for label in sorted(logs):
-        found = _cross_one(logs[label], logs, sent)
+        found = _cross_one(logs[label], logs, sent, own[label])
         if found is not None:
             return (label, found[0], found[1])
     return None

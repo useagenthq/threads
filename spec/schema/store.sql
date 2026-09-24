@@ -287,7 +287,8 @@ CREATE INDEX IF NOT EXISTS questions_due ON questions (state, expires_at);
 -- POST /v1/runs idempotency (openapi.json Idempotency-Key). The receipt is
 -- inserted in the transaction that appends the run's user_input, so a lost response replays
 -- it. The key is unique per tenant and operation; principal_key (the full normalized
--- issuer/tenant/subject PrincipalKey) and body_hash (sha256 of the request's canonical JSON) are
+-- PrincipalKey: issuer/tenant/subject, each part with % then / escaped as %25 and %2F, the
+-- same form in every principal_key column) and body_hash (sha256 of the request's canonical JSON) are
 -- its binding: the same principal and body replay the receipt and start nothing, a different
 -- body is idempotency_key_reused, and a different principal is idempotency_key_principal_mismatch
 -- and never sees the receipt. run_id is the user_input's event_id.
