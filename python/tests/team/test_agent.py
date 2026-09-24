@@ -7,7 +7,7 @@ import re
 from typing import assert_never, assert_type
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 from team.run_kit import say, sq_of, start
 from team.team_kit import assert_team_replays
 
@@ -158,3 +158,22 @@ def test_assert_never_ends_a_match_over_a_tool_results_statuses() -> None:
         tenant="local", team="0192e001-0000-7000-8000-000000000001", name="writer-1", generation=1
     )
     assert describe(Started(member)) == "writer-1"
+
+
+def test_a_non_empty_team_is_listed_in_the_pinned_system_an_empty_one_is_not() -> None:
+    def pinned(team: list[Agent[None, str]]) -> JsonValue:
+        lead = agent(
+            model=scripted_model({"responses": []}),
+            instructions="You lead a research team.",
+            team=team,
+        )
+        started, _config = lead.definition.pin()
+        return started["instructions"]
+
+    researcher = agent(name="researcher", model=scripted_model({"responses": []}))
+    writer = agent(name="writer", model=scripted_model({"responses": []}))
+    assert pinned([researcher, writer]) == (
+        "You lead a research team.\n\n"
+        "Agents you can start as team members with start: researcher, writer."
+    )
+    assert pinned([]) == "You lead a research team."

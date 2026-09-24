@@ -31,7 +31,7 @@ from threads.log import (
     HookDecisionEvent,
     ThreadId,
 )
-from threads.loop.budget import inherited
+from threads.loop.budget import inherited_by
 from threads.loop.drafts import draft
 from threads.loop.gates import MAX_STOP_CONTINUES, said, verdict
 from threads.loop.history import CallState, open_cancel
@@ -240,7 +240,7 @@ async def once[D](scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent) -> R
     if child is None:
         raise AssertionError("a parked child is a configured subagent")
     inputs = len(_continues(rt, spawned.data.call_id)) + 1
-    return await scope.execute(child, "", _launch(scope, rt, spawned, inputs))
+    return await scope.execute(child, "", await _launch(scope, rt, spawned, inputs))
 
 
 async def _run[D](
@@ -253,7 +253,9 @@ async def _run[D](
     while True:
         reasons = _continues(rt, call_id)
         text = reasons[-1] if reasons else prompt
-        result = await scope.execute(child, text, _launch(scope, rt, spawned, len(reasons) + 1))
+        result = await scope.execute(
+            child, text, await _launch(scope, rt, spawned, len(reasons) + 1)
+        )
         if isinstance(result, Parked):
             return result
         halt = busy(result)
@@ -297,7 +299,9 @@ def _continues(rt: Runtime, call_id: str) -> list[str]:
     ]
 
 
-def _launch[D](scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, inputs: int) -> Launch:
+async def _launch[D](
+    scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, inputs: int
+) -> Launch:
     fold = rt.fold
     thread_id = fold.thread_id
     if thread_id is None:
@@ -316,7 +320,7 @@ def _launch[D](scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, inputs:
         "parent_agent",
         scope.principal,
         inputs,
-        tuple(inherited(thread_id, fold, rt.budgets)),
+        tuple(await inherited_by(rt)),
         (own, *scope.ceilings),
         shared,
         (),

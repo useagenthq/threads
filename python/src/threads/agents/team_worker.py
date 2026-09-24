@@ -20,13 +20,15 @@ from threads.log import (
     MailEnvelope,
     Parent,
     Principal,
+    Provenance,
     ThreadId,
     ThreadStartedEvent,
 )
 from threads.log import UserInputEvent as _Input
 from threads.loop.covering import Covering
 from threads.loop.team_runtime import TeamAgentPin
-from threads.result import Err
+from threads.reduce import Fold
+from threads.result import Err, Ok
 from threads.store import Draft, SqliteStore, lease
 from threads.store.lines import uuid7
 from threads.store.writer import DecideTx, Refusal
@@ -34,8 +36,11 @@ from threads.team.batch import Batch, Mint
 from threads.team.claim import claim_mail
 from threads.team.constants import TEAM_CONSTANTS
 from threads.team.consume import ConsumeContext, consumable, consume
-from threads.team.materialize import MaterializeOptions, Rebind, materialize
-from threads.team.rows import MemberRow, member_rows, own_rows, pending_for
+from threads.team.materialize import MaterializeOptions, Rebind, RebindCode, materialize
+from threads.team.provenance import turn_provenance
+from threads.team.rebind import rebind_failed
+from threads.team.rows import MemberRow, member_rows, own_rows, pending_for, team_row
+from threads.team.settle import AppendContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,16 +108,20 @@ class TeamWorker:
         self._loop = asyncio.get_running_loop().create_task(self._run())
 
     async def stop(self) -> None:
-        """Stops looking for work and waits for the member runs in flight."""
+        """Stops looking for work and waits for the member runs in flight, unless the lead closed
+        its team: those members are being cancelled, and the run returns without them."""
         self._stopped = True
         self.notify()
         if self._loop is not None:
             await self._loop
-        await asyncio.gather(*self._running.values(), return_exceptions=True)
+        team = self._env.team()
+        if team is None or not await self._env.sq.run(lambda c: _closed(c, team)):
+            await asyncio.gather(*self._running.values(), return_exceptions=True)
 
     async def _run(self) -> None:
         recovering = True
-        while not self._stopped:
+        # The recovery pass always runs: even a worker stopped at once looks at its members.
+        while recovering or not self._stopped:
             changed = self._changed
             await self._pass(recovering=recovering)
             if recovering:
@@ -138,6 +147,9 @@ class TeamWorker:
         self, row: MemberRow, *, recovering: bool
     ) -> Callable[[], Awaitable[None]] | None:
         """What a member needs now, if anything."""
+        # A closed team's members are being cancelled: none starts or resumes.
+        if row.state != "ended" and await self._env.sq.run(lambda c: _closed(c, row.team_id)):
+            return None
         if row.state == "starting":
             return lambda: self._materialize(row)
         branch = row.branch_id
@@ -214,10 +226,8 @@ class TeamWorker:
         return Rebind("ok", team)
 
     async def _member(self, row: MemberRow, branch: BranchId, holder: str | None = None) -> None:
-        """Runs a member branch until it is idle, parked or ended."""
-        found = self._env.agents.get(row.agent)
-        if found is None:
-            return
+        """Runs a member branch until it is idle, parked or ended; one whose definition can't be
+        rebound here ends failed instead."""
         read = await self._env.sq.read(branch, now_ms())
         if isinstance(read, Err):
             raise AssertionError(f"member {row.name}: {read.error.message}")
@@ -226,17 +236,46 @@ class TeamWorker:
         task = next((e for e in events if isinstance(e, _Input)), None)
         if started is None or task is None or not isinstance(started.data.parent, Parent):
             raise AssertionError(f"member {row.name} has no task")
-        parent = started.data.parent
+        parent, holder = started.data.parent, holder or f"team-{uuid.uuid4().hex}"
+        found = self._env.agents.get(row.agent)
+        rebind = await self._rebind(row.agent, started.data.config_hash)
+        if found is None or rebind.status != "ok":
+            code = "pin_unavailable" if rebind.status == "ok" else rebind.status
+            await self._unbound(branch, holder, code)
+            return
+        fold = read.value.fold
+        principal = await self._env.sq.run(lambda c: principal_of(c, fold, row))
         run = MemberRun(
             ThreadId(row.thread_id),
             branch,
             parent,
-            task.actor.principal,
-            holder or f"team-{uuid.uuid4().hex}",
+            principal or task.actor.principal,
+            holder,
             self.notify,
             await ancestors_of(self._env.sq, parent),
         )
         await self._env.run(found, run)
+
+    async def _unbound(self, branch: BranchId, holder: str, code: RebindCode) -> None:
+        """A member whose definition can't be rebound here ends failed, under its own writer."""
+        got = await self._env.sq.acquire(branch, holder, now_ms)
+        # Held elsewhere: its holder runs it.
+        if isinstance(got, Err):
+            return
+        w = got.value
+        thread = w.fold.thread_id
+        if thread is None:
+            raise AssertionError("an acquired branch has a thread")
+
+        def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[None]:
+            batch = Batch(tx.fold.seq, tx.now, self._env.mint)
+            rebind_failed(AppendContext(tx.conn, batch, thread, branch), tx.fold, code)
+            return batch.drafts
+
+        ended = await w.append_decided(decide)
+        await w.release()
+        if not isinstance(ended, Ok):
+            raise AssertionError(f"member end: {ended}")
 
     async def _refuse(self, branch: BranchId) -> None:
         """An ended member's writer refuses the mail that still reaches it."""
@@ -255,6 +294,24 @@ class TeamWorker:
 
         await w.append_decided(decide)
         await w.release()
+
+
+def principal_of(conn: sqlite3.Connection, fold: Fold, row: MemberRow) -> Principal | None:
+    """The one principal a member run acts under (design §2.6: one turn, one authority): its open
+    turn's, else that of the first mail it would take. Mail of another principal waits for the
+    next run."""
+    if fold.in_turn:
+        opened = turn_provenance(conn, fold.events)
+        return None if opened is None else Provenance.model_validate(opened).principal
+    first = next(
+        (m for m in pending_for(conn, own_rows(conn, row.thread_id)) if consumable(m)), None
+    )
+    return None if first is None else first.provenance.principal
+
+
+def _closed(conn: sqlite3.Connection, team: str) -> bool:
+    found = team_row(conn, team)
+    return found is not None and found.closed_at is not None
 
 
 def _members(conn: sqlite3.Connection, root: str) -> list[MemberRow]:

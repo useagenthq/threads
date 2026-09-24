@@ -95,7 +95,14 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
         return None
     pin, limits = _pins(definition), definition.team_limits
     if member is not None:
-        runtime = TeamRuntime(pin, limits, settled, member.notify, run_covering=run_covering(sq))
+        runtime = TeamRuntime(
+            pin,
+            limits,
+            settled,
+            member.notify,
+            principal=member.principal,
+            run_covering=run_covering(sq),
+        )
         return TeamSide(runtime, _nothing)
     if definition.team is None:
         return None

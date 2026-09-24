@@ -92,7 +92,8 @@ async def consume_mail(rt: Runtime) -> Halt | None:
 
     def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[None]:
         batch = Batch(tx.fold.seq, tx.now, team.mint)
-        consume(ConsumeContext(tx.conn, batch, _thread(rt), rt.writer.branch_id, tx.fold))
+        branch = rt.writer.branch_id
+        consume(ConsumeContext(tx.conn, batch, _thread(rt), branch, tx.fold, team.principal))
         return batch.drafts
 
     done = await rt.append_decided(decide)

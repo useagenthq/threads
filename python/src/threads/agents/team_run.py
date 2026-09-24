@@ -50,11 +50,12 @@ async def _again[D](rt: Runtime, agents: Agents[D]) -> Halt:
 def notifying(
     observe: Callable[[Sequence[StoredEvent]], None], team: TeamRuntime
 ) -> Callable[[Sequence[StoredEvent]], None]:
-    """Every committed batch of a team thread also wakes its team's worker."""
+    """Every committed, non-empty batch of a team thread also wakes its team's worker."""
 
     def both(events: Sequence[StoredEvent]) -> None:
         observe(events)
-        team.notify()
+        if events:
+            team.notify()
 
     return both
 

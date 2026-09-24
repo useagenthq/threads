@@ -220,6 +220,8 @@ def test_the_selection_covers_this_builds_ops() -> None:
         "idle",
         "end",
     }
+    # Pinned: a vector that drops out of the selection fails here, not silently.
+    assert len(MINE) == 35  # noqa: PLR2004 - the pinned selection size
 
 
 @pytest.mark.parametrize("v", MINE, ids=[str(v["name"]) for v in MINE])

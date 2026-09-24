@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import JsonValue
 
-from threads.log import Budget, Event, ModelRef, Policy
+from threads.log import Budget, Event, ModelRef, Policy, Principal
 from threads.loop.covering import Covering
 from threads.team.batch import Mint
 from threads.team.ops import TeamLimits
@@ -44,6 +44,9 @@ class TeamRuntime:
     progress: Callable[[], Awaitable[None]] | None = None
     """The lead of an in-process run waits here for its members' progress until its run ends;
     None: a thread takes its pending mail and stops once idle (a member run by the worker)."""
+    principal: Principal | None = None
+    """A member's: the one principal its run acts under. Its consume takes only mail sent under
+    it; the worker runs the member again under the principal of the mail left pending."""
     busy: Callable[[], bool] | None = None
     """Whether the team worker has a member run in flight: a lead parked on its members waits."""
     run_covering: Callable[[Event], Awaitable[Covering | None]] | None = None

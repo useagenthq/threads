@@ -154,8 +154,8 @@ class Definition[D]:
     @property
     def full_instructions(self) -> str:
         """Base instructions, then each extension's, in declaration order, then the skill listing,
-        then the agents this one may start and hand off to: all line 0, so pinned per thread
-        (C7)."""
+        then the agents this one may start, hand off to and start as team members: all line 0,
+        so pinned per thread (C7)."""
         parts = [self.instructions, *(e.instructions for e in self.extensions)]
         parts.append(listing(self.skills))
         if self.subagents:
@@ -164,6 +164,9 @@ class Definition[D]:
         if self.handoffs:
             names = ", ".join(a.name for a in self.handoffs)
             parts.append(f"Agents you can hand the conversation to: {names}.")
+        if self.team:
+            names = ", ".join(a.name for a in self.team)
+            parts.append(f"Agents you can start as team members with start: {names}.")
         return "\n\n".join(p for p in parts if p)
 
     def pin(self) -> tuple[dict[str, JsonValue], bytes]:

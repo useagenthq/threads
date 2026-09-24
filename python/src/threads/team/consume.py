@@ -2,8 +2,9 @@
 pending rows in (created_at, mail_id) order. Control mail is taken whatever its provenance;
 ordinary mail only when the recipient was not parked when the consume began, as one batch of one
 (principal, root_request): mid-turn the open turn's, else the first row's, ending at the first row
-of another. Mail reaching a member that already ended is refused under its writer. Reference:
-spec/tools/fixtures/ops_consume.py.
+of another. A member run takes only ordinary mail of its own principal: the rest waits for a
+run under that one. Mail reaching a member that already ended is refused under its writer.
+Reference: spec/tools/fixtures/ops_consume.py.
 
 Lane 21E adds the rest of control mail: applying a cancel, the replies, bounces and notices that
 complete an ask or a wait. Until then those stay pending, and a pending cancel stops the
@@ -13,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
-from threads.log import Event, MailEnvelope, MemberEndedEvent, Provenance
+from threads.log import Event, MailEnvelope, MemberEndedEvent, Principal, Provenance
 from threads.log.keys import principal_key
 from threads.reduce import Fold
 from threads.reduce.handlers import to_json
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, slots=True)
 class ConsumeContext(AppendContext):
     fold: Fold
+    principal: Principal | None = None
+    """A member run's principal: ordinary mail of another waits for a run under that one."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,12 +97,17 @@ def _take(ctx: ConsumeContext, fold: Fold, state: _Pass, env: MailEnvelope) -> b
     if state.turn is not None:
         if pair != state.turn:
             return False
-    elif state.batch is not None and pair != state.batch:
+    elif (state.batch is not None and pair != state.batch) or not _under_run(ctx, env):
         state.blocked = True
         return False
     state.batch = pair
     ctx.batch.add(received(env))
     return True
+
+
+def _under_run(ctx: ConsumeContext, env: MailEnvelope) -> bool:
+    who = ctx.principal
+    return who is None or principal_key(who) == principal_key(env.provenance.principal)
 
 
 def _take_control(

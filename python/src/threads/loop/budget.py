@@ -234,6 +234,18 @@ async def covering_of(rt: Runtime) -> list[Covering]:
     return [*own(thread_id, rt.events), *run, *rt.budgets]
 
 
+async def inherited_by(rt: Runtime) -> list[Covering]:
+    """What covers a subagent of this thread: every budget covering this one, a member's run
+    budget too, as an ancestor's."""
+    thread_id = rt.writer.fold.thread_id
+    if thread_id is None:
+        raise AssertionError("an acquired branch has a thread")
+    return [
+        c if c.scope == "ancestor" else Covering(c.budget_id, c.budget, "ancestor", thread_id)
+        for c in await covering_of(rt)
+    ]
+
+
 async def room_for(rt: Runtime, member: TeamAgentPin) -> bool:
     """start's headroom: every budget that would cover the new member (the starter's, and the
     member's own) has room for one request of its model. A limit it can't bound has none."""
