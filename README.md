@@ -46,12 +46,7 @@ import { e2b } from "@threads/e2b";
 const coder = agent({
   name: "coder",
   instructions: "Fix the failing tests in /workspace.",
-  model: anthropic({
-    model: "claude-sonnet-5",
-    maxTokens: 8192,
-    contextWindow: 1_000_000,
-    maxOutputTokens: 128_000,
-  }),
+  model: anthropic("claude-sonnet-5"), // ANTHROPIC_API_KEY
   sandbox: e2b(), // E2B_API_KEY. Your keys never enter the sandbox.
 });
 
@@ -69,7 +64,7 @@ from threads.e2b import e2b
 coder = agent(
     name="coder",
     instructions="Fix the failing tests in /workspace.",
-    model=anthropic("claude-sonnet-5", context_window=1_000_000, max_output_tokens=128_000),
+    model=anthropic("claude-sonnet-5"),  # ANTHROPIC_API_KEY
     sandbox=e2b(),  # E2B_API_KEY. Your keys never enter the sandbox.
 )
 
@@ -166,9 +161,9 @@ import { anthropic } from "@threads/anthropic";
 import { openai } from "@threads/openai";
 import { aiSdk } from "@threads/ai-sdk";
 
-model: anthropic({ model: "claude-sonnet-5", maxTokens: 8192, contextWindow: 1_000_000, maxOutputTokens: 128_000 }), // ANTHROPIC_API_KEY
-model: openai({ model: "gpt-5.5", contextWindow: 1_050_000, maxOutputTokens: 128_000 }),                              // OPENAI_API_KEY
-model: aiSdk({ model: (fetch) => yourProvider({ fetch })("model-id"), contextWindow: 128_000, maxOutputTokens: 8192 }), // any AI SDK provider
+model: anthropic("claude-sonnet-5"),                    // ANTHROPIC_API_KEY
+model: openai("gpt-5.5", { maxTokens: 32_000 }),         // OPENAI_API_KEY; maxTokens is the per-request cap
+model: aiSdk({ model: (fetch) => yourProvider({ fetch })("model-id"), maxInputTokens: 128_000, maxOutputTokens: 8192 }), // any AI SDK provider
 ```
 
 ```python
@@ -176,10 +171,12 @@ from threads.anthropic import anthropic
 from threads.litellm import litellm
 from threads.openai import openai
 
-model=anthropic("claude-sonnet-5", context_window=1_000_000, max_output_tokens=128_000)  # ANTHROPIC_API_KEY
-model=openai("gpt-5.5", context_window=1_050_000, max_output_tokens=128_000)             # OPENAI_API_KEY
-model=litellm("openai/my-model", base_url="http://localhost:4000", context_window=128_000, max_output_tokens=8192)
+model=anthropic("claude-sonnet-5")                  # ANTHROPIC_API_KEY
+model=openai("gpt-5.5", max_tokens=32_000)          # OPENAI_API_KEY; max_tokens is the per-request cap
+model=litellm("openai/my-model", base_url="http://localhost:4000", max_input_tokens=128_000, max_output_tokens=8192)
 ```
+
+Limits for listed model ids come from a catalog verified against each provider (`spec/models/`); another id takes `maxInputTokens` and `maxOutputTokens` (`max_input_tokens`, `max_output_tokens`). The per-request output cap defaults to 8192.
 
 </details>
 

@@ -1217,7 +1217,8 @@
             "additionalProperties": false,
             "properties": {
               "context_window": {
-                "$ref": "#/$defs/PosInt"
+                "$ref": "#/$defs/PosInt",
+                "description": "Maximum input tokens one request may carry (the factory's max_input_tokens)."
               },
               "input_billing_bound": {
                 "description": "context_window: the adapter declares that billed input units (input plus cache reads and writes) per attempt never exceed the context window. none: no bound is known, so a cost budget can't be enforced for this model (setup refuses it unless on_unknown_usage is stop).",

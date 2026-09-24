@@ -93,7 +93,7 @@ def _openai_turn(item: JsonValue) -> Runtime:
     info = openai(
         "gpt-test",
         hosted_tools=[{"type": "web_search"}],
-        context_window=400_000,
+        max_input_tokens=400_000,
         max_output_tokens=64,
         api_key="sk-test-openai",
     ).info

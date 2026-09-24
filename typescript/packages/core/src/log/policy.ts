@@ -39,6 +39,8 @@ export const Price: Strict<{
   })
   .describe("Nano-currency units per token (USD 3 per million tokens = 3000).");
 
+export type Price = z.infer<typeof Price>;
+
 const BILLING_BOUNDS = ["context_window", "none"] as const;
 export const PolicyModel: Strict<{
   provider: typeof Name;
@@ -50,7 +52,9 @@ export const PolicyModel: Strict<{
 }> = z.strictObject({
   provider: Name,
   name: NonEmpty,
-  context_window: PosInt,
+  context_window: PosInt.describe(
+    "Maximum input tokens one request may carry (the factory's max_input_tokens).",
+  ),
   max_output_tokens: PosInt,
   input_billing_bound: z
     .enum(BILLING_BOUNDS)

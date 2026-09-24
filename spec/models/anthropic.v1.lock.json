@@ -1,0 +1,21 @@
+{
+  "entries": {
+    "claude-fable-5-1": {
+      "behavior_sha256": "08802b06124ef6977b9b68d1e3b4d108b573dfa5d2fafe491f22109ff2e79679",
+      "verified": "2026-09-24"
+    },
+    "claude-haiku-4-5-20251001": {
+      "behavior_sha256": "a15a8386fdcbf09561cce317a22898d1cc745f3f90031f9cd37787bac036376a",
+      "verified": "2026-09-24"
+    },
+    "claude-opus-5-5": {
+      "behavior_sha256": "33c9ddcd61c1b880ca431072b86343ec41ff05be7ebda055f7b92ca030844114",
+      "verified": "2026-09-24"
+    },
+    "claude-sonnet-5": {
+      "behavior_sha256": "66efb30f5fe8b3acc81aaab0f21aaaa045aa9db0e0f4a2f9c711c158203104ef",
+      "verified": "2026-09-24"
+    }
+  },
+  "withdrawn": {}
+}

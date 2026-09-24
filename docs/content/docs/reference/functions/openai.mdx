@@ -1,0 +1,95 @@
+---
+title: "openai"
+description: "An OpenAI model through the Responses API (stateless: store is false)."
+icon: "Plug"
+---
+
+openai("gpt-5.5") needs no limits: they come from spec/models/openai.v1.json, verified against OpenAI's model pages. Pass it as agent(&#123;model: openai("gpt-5.5")&#125;).
+
+Import from `@threads/openai` (TypeScript) or `threads.openai` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function openai(model: string, options?: {
+  maxInputTokens?: number;
+  maxOutputTokens?: number;
+  maxTokens?: number;
+  params?: JsonObject;
+  price?: Price;
+  hostedTools?: readonly JsonObject[];
+  apiKey?: string | Secret;
+  baseUrl?: string;
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+}): Model
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def openai(
+    model: str,
+    *,
+    max_input_tokens: int | None = None,
+    max_output_tokens: int | None = None,
+    max_tokens: int | None = None,
+    params: Mapping[str, pydantic.JsonValue] | None = None,
+    price: threads.log.Price | None = None,
+    hosted_tools: Sequence[Mapping[str, pydantic.JsonValue]] | None = None,
+    api_key: str | Secret | None = None,
+    base_url: str | None = None,
+) -> Model
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="model" type={"string"} required>
+  The provider's exact model id. Matched against spec/models/openai.v1.json by string equality only; a snapshot id keeps a long-lived thread on one model.
+</Field>
+
+<Field name="maxInputTokens / max_input_tokens" type={"number"}>
+  The most input tokens one request may carry; compaction and the input billing bound use it. Pinned as policy.models[].context_window. Omitted: the catalog entry's value; a model id the catalog doesn't list needs it.
+</Field>
+
+<Field name="maxOutputTokens / max_output_tokens" type={"number"}>
+  The most output tokens the model can produce in one response. Pinned in policy.models. Omitted: the catalog entry's value; a model id the catalog doesn't list needs it.
+</Field>
+
+<Field name="maxTokens / max_tokens" type={"number"}>
+  The per-request output cap, pinned as params.max_tokens (the pinned prompt prefix) and sent as max_output_tokens. Output-token budgets read it. Omitted: min(8192, max_output_tokens); a long answer continues in a new request. Above max_output_tokens is invalid_config.
+</Field>
+
+<Field name="params" type={"JsonObject"}>
+  Other Responses API request fields (temperature, reasoning and the like), pinned in the system prompt. A field the adapter derives from the render, or the cap, is invalid_config. Omitted: none.
+</Field>
+
+<Field name="price" type={"Price"}>
+  Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown.
+</Field>
+
+<Field name="hostedTools / hosted_tools" type={"readonly JsonObject[]"}>
+  Provider-executed tools, sent as given and pinned in the system prompt: web search (web_search, with an optional _preview and date) only; any other is hosted_tool_unsupported. Omitted: none.
+</Field>
+
+<Field name="apiKey / api_key" type={"string | Secret"}>
+  The API key: a secret() or a string. Omitted: secret("OPENAI_API_KEY"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. Never pinned or logged.
+</Field>
+
+<Field name="baseUrl / base_url" type={"string"}>
+  The API base URL. Omitted: the SDK's default endpoint.
+</Field>
+
+<Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
+  TypeScript only. Seam: the fetch the SDK sends through (a proxy, a test server); the run's fence wraps it either way. Omitted: globalThis.fetch.
+</Field>
+
+## Returns
+
+[`Model`](/docs/reference/types/Model)
+
+**Throws** `ConfigError` with one of these codes: `hosted_tool_unsupported`, `invalid_config`, `missing_secret`.

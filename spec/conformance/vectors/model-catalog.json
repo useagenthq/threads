@@ -1,0 +1,109 @@
+{
+  "description": "Model catalog files (spec/models/<provider>.v1.json, schema spec/schema/model-catalog.v1.schema.json). valid is the parser's verdict: the schema, then the semantic rule that entry ids are unique and withdrawn ids are unique (spec/schema/README.md, Model catalog). Both languages must agree on every case.",
+  "cases": [
+    {
+      "name": "one entry",
+      "valid": true,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": 1000, "max_output_tokens": 100, "source": "https://acme.test/m-1", "verified": "2026-09-24"}
+      ]}
+    },
+    {
+      "name": "an alias and a withdrawal",
+      "valid": true,
+      "catalog": {"version": 1, "provider": "acme", "entries": [
+        {"id": "m", "max_input_tokens": 1000, "max_output_tokens": 100, "alias_of": "m-1", "source": "https://acme.test/m", "verified": "2026-09-24"},
+        {"id": "m-1", "max_input_tokens": 1000, "max_output_tokens": 100, "source": "https://acme.test/m-1", "verified": "2026-09-24"}
+      ], "withdrawn": [
+        {"id": "m-1", "reason": "the page was misread", "use": {"max_input_tokens": 900, "max_output_tokens": 100}}
+      ]}
+    },
+    {
+      "name": "an empty catalog",
+      "valid": true,
+      "catalog": {"version": 1, "provider": "acme", "entries": [], "withdrawn": []}
+    },
+    {
+      "name": "a duplicate entry id",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": 1000, "max_output_tokens": 100, "source": "https://acme.test/m-1", "verified": "2026-09-24"},
+        {"id": "m-1", "max_input_tokens": 2000, "max_output_tokens": 100, "source": "https://acme.test/m-1", "verified": "2026-09-24"}
+      ]}
+    },
+    {
+      "name": "a duplicate withdrawn id",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "entries": [], "withdrawn": [
+        {"id": "m-1", "reason": "wrong", "use": {"max_input_tokens": 900, "max_output_tokens": 100}},
+        {"id": "m-1", "reason": "still wrong", "use": {"max_input_tokens": 800, "max_output_tokens": 100}}
+      ]}
+    },
+    {
+      "name": "a zero limit",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": 0, "max_output_tokens": 100, "source": "https://acme.test/m-1", "verified": "2026-09-24"}
+      ]}
+    },
+    {
+      "name": "a fractional limit",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": 1000, "max_output_tokens": 100.5, "source": "https://acme.test/m-1", "verified": "2026-09-24"}
+      ]}
+    },
+    {
+      "name": "a limit given as a string",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": "1000", "max_output_tokens": 100, "source": "https://acme.test/m-1", "verified": "2026-09-24"}
+      ]}
+    },
+    {
+      "name": "a missing source",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": 1000, "max_output_tokens": 100, "verified": "2026-09-24"}
+      ]}
+    },
+    {
+      "name": "an unknown key",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": 1000, "max_output_tokens": 100, "context_window": 1100, "source": "https://acme.test/m-1", "verified": "2026-09-24"}
+      ]}
+    },
+    {
+      "name": "a date that is not YYYY-MM-DD",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": 1000, "max_output_tokens": 100, "source": "https://acme.test/m-1", "verified": "Sep 24 2026"}
+      ]}
+    },
+    {
+      "name": "a source that is not https",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": 1000, "max_output_tokens": 100, "source": "http://acme.test/m-1", "verified": "2026-09-24"}
+      ]}
+    },
+    {
+      "name": "a withdrawal missing its corrected output cap",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "entries": [], "withdrawn": [
+        {"id": "m-1", "reason": "wrong", "use": {"max_input_tokens": 900}}
+      ]}
+    },
+    {
+      "name": "another version",
+      "valid": false,
+      "catalog": {"version": 2, "provider": "acme", "entries": [], "withdrawn": []}
+    },
+    {
+      "name": "a provider name with capitals",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "Acme", "entries": [], "withdrawn": []}
+    }
+  ]
+}

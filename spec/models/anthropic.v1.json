@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "provider": "anthropic",
+  "entries": [
+    {
+      "id": "claude-fable-5-1",
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "source": "https://api.anthropic.com/v1/models/claude-fable-5-1",
+      "verified": "2026-09-24"
+    },
+    {
+      "id": "claude-haiku-4-5-20251001",
+      "max_input_tokens": 200000,
+      "max_output_tokens": 64000,
+      "source": "https://api.anthropic.com/v1/models/claude-haiku-4-5-20251001",
+      "verified": "2026-09-24"
+    },
+    {
+      "id": "claude-opus-5-5",
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "source": "https://api.anthropic.com/v1/models/claude-opus-5-5",
+      "verified": "2026-09-24"
+    },
+    {
+      "id": "claude-sonnet-5",
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "source": "https://api.anthropic.com/v1/models/claude-sonnet-5",
+      "verified": "2026-09-24"
+    }
+  ],
+  "withdrawn": []
+}

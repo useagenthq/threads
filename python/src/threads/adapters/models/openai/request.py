@@ -153,10 +153,15 @@ async def build(request: Request, context: ModelContext) -> dict[str, JsonValue]
                 await builder.result(line)
             case _:
                 assert_never(line)
+    # Line 0 pins the cap under the provider-neutral max_tokens; the Responses API names it
+    # max_output_tokens.
+    params = {k: v for k, v in head.params.items() if k != "max_tokens"}
+    if "max_tokens" in head.params:
+        params["max_output_tokens"] = head.params["max_tokens"]
     body: dict[str, JsonValue] = {
         "store": False,
         "include": ["reasoning.encrypted_content"],
-        **head.params,
+        **params,
         "model": head.model.name,
         "input": builder.items,
         "stream": True,

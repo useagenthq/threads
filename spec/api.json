@@ -9,7 +9,7 @@
     "async": "async true: TS returns a Promise, Python is async def. A stream is TS AsyncIterable, Python AsyncIterator.",
     "refs": "urn:threads:schema:events:v1 is spec/schema/events.v1.schema.json, urn:threads:schema:host-api:v1 is spec/schema/host-api/host-api.v1.schema.json, urn:threads:schema:conformance:v1 is spec/conformance/case.schema.json. #/types/X is a type in this file.",
     "generics": "Deps defaults to null (TS undefined, Python None); Output defaults to string (the final text). Agent<Deps, Output> carries both into RunContext and RunResult.",
-    "adapters": "Model, Sandbox, MemoryProvider, KnowledgeProvider, ChannelAdapter and SearchBackend are protocols. A provider factory is a function of an adapter package (packages kind adapter): it returns one of these protocols and lists the ConfigError codes it can raise in config_errors. Params whose doc starts with Seam: exist in one language to swap a transport or clock in tests. Factories not yet in this file are listed in spec/api-surface-factory-decisions.json. Credentials: a single-account adapter (model, sandbox, memory provider) takes its credential as an option that defaults to secret(\"<ENV>\"), with the env name documented per factory. It is resolved in the adapter's setup (check() or the first run), never by the factory. A missing value is missing_secret, and the message names the option and the env variable. An explicit value is registered for redaction exactly as a revealed Secret is, under the same rules (at least 8 characters, not a schema literal). Channel adapters, search backends and MCP servers take every secret explicitly; search backends also resolve theirs at setup. Credential values are never pinned, logged, rendered or passed into a sandbox (invariant 4)."
+    "adapters": "Model, Sandbox, MemoryProvider, KnowledgeProvider, ChannelAdapter and SearchBackend are protocols. A provider factory is a function of an adapter package (packages kind adapter): it returns one of these protocols and lists the ConfigError codes it can raise in config_errors. Params whose doc starts with Seam: exist in one language to swap a transport or clock in tests. Factories not yet in this file are listed in spec/api-surface-factory-decisions.json. Credentials: a single-account adapter (model, sandbox, memory provider) takes its credential as an option that defaults to secret(\"<ENV>\"), with the env name documented per factory. It is resolved in the adapter's setup (check() or the first run), never by the factory. A missing value is missing_secret, and the message names the option and the env variable. An explicit value is registered for redaction exactly as a revealed Secret is, under the same rules (at least 8 characters, not a schema literal). Channel adapters, search backends and MCP servers take every secret explicitly; search backends also resolve theirs at setup. Credential values are never pinned, logged, rendered or passed into a sandbox (invariant 4). Model factories take the provider's exact model id first, then options (TS object, Python keywords). max_input_tokens (the maximum input tokens one request may carry; pinned as policy.models[].context_window) and max_output_tokens default from the adapter's exact-id catalog (spec/models/<provider>.v1.json); an id that isn't in the catalog, or is withdrawn, must be given both, otherwise ConfigError invalid_config naming each missing option. max_tokens, the per-request output cap, defaults to min(8192, max_output_tokens); above max_output_tokens it is ConfigError invalid_config. It is pinned as model_params.max_tokens (Render v1 line 0) for every adapter and sent under the provider's own field name; params can't set it. Limits are pinned in policy.models (config_hash). A released catalog entry's behavioral fields never change."
   },
   "packages": {
     "core": {
@@ -43,6 +43,20 @@
       "py": "threads.zep",
       "provider": "Zep",
       "doc": "Hosted memory on the official Zep SDK (Python extra zep). Every request goes through the run's fenced transport."
+    },
+    "anthropic": {
+      "kind": "adapter",
+      "ts": "@threads/anthropic",
+      "py": "threads.anthropic",
+      "provider": "Anthropic",
+      "doc": "Claude models on the official Anthropic SDK (Python extra anthropic). Every request goes through the run's fenced transport."
+    },
+    "openai": {
+      "kind": "adapter",
+      "ts": "@threads/openai",
+      "py": "threads.openai",
+      "provider": "OpenAI",
+      "doc": "OpenAI models on the official OpenAI SDK (Python extra openai). Every request goes through the run's fenced transport."
     },
     "search": {
       "kind": "adapter",
@@ -881,6 +895,49 @@
       ],
       "returns": {"$ref": "#/types/MemoryProvider"},
       "config_errors": [{"code": "missing_secret"}]
+    },
+    "anthropic": {
+      "ts": "anthropic",
+      "py": "anthropic",
+      "package": "anthropic",
+      "doc": "A Claude model through the Messages API. anthropic(\"claude-sonnet-5\") needs no limits: they come from spec/models/anthropic.v1.json, verified against the Anthropic Models API. Pass it as agent({model: anthropic(\"claude-sonnet-5\")}).",
+      "async": false,
+      "params": [
+        {"name": "model", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The provider's exact model id. Matched against spec/models/anthropic.v1.json by string equality only; a snapshot id keeps a long-lived thread on one model."},
+        {"name": "max_input_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "the catalog entry's max_input_tokens", "doc": "The most input tokens one request may carry; compaction and the input billing bound use it. Pinned as policy.models[].context_window. Omitted: the catalog entry's value; a model id the catalog doesn't list needs it."},
+        {"name": "max_output_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "the catalog entry's max_output_tokens", "doc": "The most output tokens the model can produce in one response. Pinned in policy.models. Omitted: the catalog entry's value; a model id the catalog doesn't list needs it."},
+        {"name": "max_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "min(8192, max_output_tokens)", "doc": "The per-request output cap, pinned as params.max_tokens (Render v1 line 0) and sent as max_tokens. Output-token budgets read it. Omitted: min(8192, max_output_tokens); a long answer continues in a new request. Above max_output_tokens is invalid_config."},
+        {"name": "params", "kind": "option", "type": {"platform": {"ts": "JsonObject", "py": "Mapping[str, pydantic.JsonValue]"}}, "required": false, "doc": "Other Messages API request fields (temperature, reasoning and the like), pinned in line 0. A field the adapter derives from the render, or the cap, is invalid_config. Omitted: none."},
+        {"name": "price", "kind": "option", "type": {"platform": {"ts": "Price", "py": "threads.log.Price"}}, "required": false, "doc": "Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown."},
+        {"name": "hosted_tools", "kind": "option", "type": {"array": {"platform": {"ts": "JsonObject", "py": "Mapping[str, pydantic.JsonValue]"}}}, "required": false, "doc": "Provider-executed tools, sent as given and pinned in line 0: web search and web fetch (web_search_YYYYMMDD, web_fetch_YYYYMMDD) only; any other is hosted_tool_unsupported. Omitted: none."},
+        {"name": "citations", "kind": "option", "lang": "py", "type": {"prim": "boolean"}, "required": false, "doc": "Enables citations on documents (an adapter setting, pinned in line 0). Omitted: off."},
+        {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"ANTHROPIC_API_KEY\")", "doc": "The API key: a secret() or a string. Omitted: secret(\"ANTHROPIC_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. Never pinned or logged."},
+        {"name": "base_url", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The API base URL. Omitted: the SDK's default endpoint."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch the SDK sends through (a proxy, a test server); the run's fence wraps it either way. Omitted: globalThis.fetch."}
+      ],
+      "returns": {"$ref": "#/types/Model"},
+      "config_errors": [{"code": "invalid_config"}, {"code": "missing_secret"}, {"code": "hosted_tool_unsupported"}]
+    },
+    "openai": {
+      "ts": "openai",
+      "py": "openai",
+      "package": "openai",
+      "doc": "An OpenAI model through the Responses API (stateless: store is false). openai(\"gpt-5.5\") needs no limits: they come from spec/models/openai.v1.json, verified against OpenAI's model pages. Pass it as agent({model: openai(\"gpt-5.5\")}).",
+      "async": false,
+      "params": [
+        {"name": "model", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The provider's exact model id. Matched against spec/models/openai.v1.json by string equality only; a snapshot id keeps a long-lived thread on one model."},
+        {"name": "max_input_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "the catalog entry's max_input_tokens", "doc": "The most input tokens one request may carry; compaction and the input billing bound use it. Pinned as policy.models[].context_window. Omitted: the catalog entry's value; a model id the catalog doesn't list needs it."},
+        {"name": "max_output_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "the catalog entry's max_output_tokens", "doc": "The most output tokens the model can produce in one response. Pinned in policy.models. Omitted: the catalog entry's value; a model id the catalog doesn't list needs it."},
+        {"name": "max_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "min(8192, max_output_tokens)", "doc": "The per-request output cap, pinned as params.max_tokens (Render v1 line 0) and sent as max_output_tokens. Output-token budgets read it. Omitted: min(8192, max_output_tokens); a long answer continues in a new request. Above max_output_tokens is invalid_config."},
+        {"name": "params", "kind": "option", "type": {"platform": {"ts": "JsonObject", "py": "Mapping[str, pydantic.JsonValue]"}}, "required": false, "doc": "Other Responses API request fields (temperature, reasoning and the like), pinned in line 0. A field the adapter derives from the render, or the cap, is invalid_config. Omitted: none."},
+        {"name": "price", "kind": "option", "type": {"platform": {"ts": "Price", "py": "threads.log.Price"}}, "required": false, "doc": "Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown."},
+        {"name": "hosted_tools", "kind": "option", "type": {"array": {"platform": {"ts": "JsonObject", "py": "Mapping[str, pydantic.JsonValue]"}}}, "required": false, "doc": "Provider-executed tools, sent as given and pinned in line 0: web search (web_search, with an optional _preview and date) only; any other is hosted_tool_unsupported. Omitted: none."},
+        {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"OPENAI_API_KEY\")", "doc": "The API key: a secret() or a string. Omitted: secret(\"OPENAI_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. Never pinned or logged."},
+        {"name": "base_url", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The API base URL. Omitted: the SDK's default endpoint."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch the SDK sends through (a proxy, a test server); the run's fence wraps it either way. Omitted: globalThis.fetch."}
+      ],
+      "returns": {"$ref": "#/types/Model"},
+      "config_errors": [{"code": "invalid_config"}, {"code": "missing_secret"}, {"code": "hosted_tool_unsupported"}]
     },
     "exa": {
       "ts": "exa",
@@ -2587,7 +2644,7 @@
         "limits": {
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/models/items"},
           "required": true,
-          "doc": "Window, output cap, billing bound and price."
+          "doc": "Input bound, output cap, billing bound and price. A factory's max_input_tokens (TS maxInputTokens) is pinned here as context_window."
         },
         "accepts": {
           "type": {"array": {"enum": ["text", "image_ref", "document_ref", "audio_ref"]}},

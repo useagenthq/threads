@@ -38,7 +38,7 @@
     }
   ],
   "instructions": "You are a helpful agent.",
-  "max_tokens": 1024,
+  "max_output_tokens": 1024,
   "model": "scripted-1",
   "store": false,
   "stream": true,

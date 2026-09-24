@@ -103,11 +103,7 @@ threads reserves each request's worst case before sending it, so it needs to kno
 
 ```ts
 // A cost limit needs the model's price (nano-units per token: USD 2 per million tokens = 2000).
-const priced = anthropic({
-  model: "claude-sonnet-5",
-  maxTokens: 8192,
-  contextWindow: 1_000_000,
-  maxOutputTokens: 128_000,
+const priced = anthropic("claude-sonnet-5", {
   price: { input: 2000, output: 10000 },
 });
 const capped = agent({ model: priced, budget: { max_cost_nanos: 2_000_000_000 } }); // USD 2
@@ -118,12 +114,7 @@ const capped = agent({ model: priced, budget: { max_cost_nanos: 2_000_000_000 } 
 
 ```python
 # A cost limit needs the model's price (nano-units per token: USD 2 per million tokens = 2000).
-priced = anthropic(
-    "claude-sonnet-5",
-    context_window=1_000_000,
-    max_output_tokens=128_000,
-    price=Price(input=2000, output=10000),
-)
+priced = anthropic("claude-sonnet-5", price=Price(input=2000, output=10000))
 capped = agent(model=priced, budget=Budget(max_cost_nanos=2_000_000_000))  # USD 2
 ```
 

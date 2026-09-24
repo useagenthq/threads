@@ -12,10 +12,7 @@ import { anthropic } from "../src";
 // SDK-level fetch mocks: the real SDK, no network.
 
 const options = {
-  model: "claude-sonnet-5",
   maxTokens: 1024,
-  contextWindow: 200_000,
-  maxOutputTokens: 64_000,
   apiKey: "test-key",
 };
 const head = {
@@ -54,7 +51,7 @@ async function run(responses: Response[], live = () => true) {
   const { fetch, calls } = recordingFetch(responses);
   const context = memoryContext(live);
   const out = await drain(
-    anthropic({ ...options, fetch }).send(request, context),
+    anthropic("claude-sonnet-5", { ...options, fetch }).send(request, context),
   );
   return { ...out, calls, context };
 }
@@ -357,7 +354,7 @@ describe("fencing at the transport boundary", () => {
   test("a send queued in the SDK that loses the lease before fetch sends nothing", async () => {
     let lost = false;
     const { fetch, calls } = recordingFetch([sse([start, stop])]);
-    const stream = anthropic({ ...options, fetch }).send(
+    const stream = anthropic("claude-sonnet-5", { ...options, fetch }).send(
       request,
       memoryContext(() => !lost),
     );

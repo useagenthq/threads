@@ -50,7 +50,8 @@ class ModelInfo:
     """Window, output cap, billing bound and price."""
     lookup: LookupCapability
     """Response lookup by client request id."""
-    accepts: tuple[Literal["text", "image_ref", "document_ref", "audio_ref"], ...] = ("text",)
+    accepts: tuple[Literal["text", "image_ref", "document_ref", "audio_ref"], ...]
+    """Input parts it accepts; others fail pre-dispatch with content_unsupported."""
     hosted_tools: tuple[str, ...] = ()
 
 

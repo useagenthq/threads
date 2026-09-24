@@ -12,6 +12,14 @@
     "zep": {
       "ts": ["typescript/packages/zep/src"],
       "py": ["python/src/threads/zep.py", "python/src/threads/adapters/memories/zep.py"]
+    },
+    "anthropic": {
+      "ts": ["typescript/packages/anthropic/src"],
+      "py": ["python/src/threads/anthropic.py", "python/src/threads/adapters/models/anthropic"]
+    },
+    "openai": {
+      "ts": ["typescript/packages/openai/src"],
+      "py": ["python/src/threads/openai.py", "python/src/threads/adapters/models/openai"]
     }
   },
   "factories": {
@@ -20,8 +28,8 @@
     "brave": { "owner": "15A", "review_only": { "transport": "Seam: the live transport is the network itself; tests pass a fake one." } },
     "supermemory": { "owner": "15A" },
     "zep": { "owner": "15A" },
-    "anthropic": { "owner": "06", "pending": "Claude models." },
-    "openai": { "owner": "06", "pending": "OpenAI models." },
+    "anthropic": { "owner": "06" },
+    "openai": { "owner": "06" },
     "aiSdk": { "owner": "06", "pending": "Any AI SDK model (TypeScript only)." },
     "litellm": { "owner": "06", "pending": "Models through LiteLLM (Python only)." },
     "e2b": { "owner": "15B", "pending": "E2B sandboxes." },
@@ -38,6 +46,7 @@
     { "factory": "anthropic", "option": "base_url", "lang": "ts", "decision": "TS baseURL becomes baseUrl.", "owner": "06" },
     { "factory": "anthropic", "option": "api_key", "lang": "both", "decision": "string | Secret, resolved at setup (lane 09).", "owner": "09" },
     { "factory": "anthropic", "option": "prompt_cache", "lang": "both", "decision": "Added by lane 10 with citations.", "owner": "10" },
+    { "factory": "anthropic", "option": "citations", "lang": "py", "decision": "Python only until lane 10 adds citations to TypeScript with prompt caching.", "owner": "10" },
     { "factory": "anthropic", "option": "fetch", "lang": "ts", "decision": "Seam.", "owner": "06" },
     { "factory": "openai", "option": "model", "lang": "both", "decision": "Same shape as anthropic.", "owner": "06" },
     { "factory": "openai", "option": "fetch", "lang": "ts", "decision": "Seam.", "owner": "06" },

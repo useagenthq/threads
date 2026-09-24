@@ -49,16 +49,16 @@ type Make = Callable[[str], Model]
 ADAPTERS: dict[str, tuple[tuple[str, ...], Make]] = {
     "anthropic": (
         ("ANTHROPIC_API_KEY", "THREADS_LIVE_ANTHROPIC_MODEL"),
-        lambda name: anthropic(name, context_window=200_000, max_output_tokens=64),
+        lambda name: anthropic(name, max_input_tokens=200_000, max_output_tokens=64),
     ),
     "openai": (
         ("OPENAI_API_KEY", "THREADS_LIVE_OPENAI_MODEL"),
-        lambda name: openai(name, context_window=128_000, max_output_tokens=64),
+        lambda name: openai(name, max_input_tokens=128_000, max_output_tokens=64),
     ),
     "litellm": (
         ("THREADS_LIVE_LITELLM_MODEL",),
         # A reasoning model (gpt-5) can spend 64 tokens on reasoning alone, with no text.
-        lambda name: litellm(name, context_window=32_000, max_output_tokens=1024),
+        lambda name: litellm(name, max_input_tokens=32_000, max_output_tokens=1024),
     ),
 }
 

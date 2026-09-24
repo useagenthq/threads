@@ -47,7 +47,7 @@ def end(kind: str = "response.completed", **response: JsonValue) -> Ev:
 
 def model(script: Script) -> OpenAIModel:
     declared = openai(
-        "gpt-test", context_window=WINDOW, max_output_tokens=4096, api_key="sk-test-1"
+        "gpt-test", max_input_tokens=WINDOW, max_output_tokens=4096, api_key="sk-test-1"
     ).info
     return OpenAIModel(declared, "sk-test-1", http=httpx2.MockTransport(script))
 
@@ -195,7 +195,7 @@ def test_a_failure_before_content_is_a_rejection_and_after_content_uncertain() -
 
 
 def test_the_factory_declares_its_limits_and_no_lookup() -> None:
-    made = openai("gpt-test", context_window=WINDOW, max_output_tokens=8192, api_key="sk-test-1")
+    made = openai("gpt-test", max_input_tokens=WINDOW, max_output_tokens=8192, api_key="sk-test-1")
     assert made.info.limits.context_window == WINDOW
-    assert made.info.params == {"max_output_tokens": 8192}
+    assert made.info.params == {"max_tokens": 8192}
     assert made.info.lookup == "none"

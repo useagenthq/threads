@@ -3,6 +3,7 @@
 import asyncio
 import sqlite3
 from collections.abc import Callable, Coroutine, Sequence
+from dataclasses import replace
 
 from pydantic import JsonValue, TypeAdapter
 
@@ -31,9 +32,7 @@ class Priced(ScriptedModel):
     def info(self) -> ModelInfo:
         base = super().info
         limits = {**base.limits.model_dump(mode="json"), "price": self.price}
-        return ModelInfo(
-            base.model, base.adapter, base.params, ModelLimits.model_validate(limits), base.lookup
-        )
+        return replace(base, limits=ModelLimits.model_validate(limits))
 
 
 def say(text: str, usage: JsonValue = USAGE) -> ModelResponse:

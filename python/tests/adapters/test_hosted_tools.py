@@ -34,7 +34,7 @@ WEB_SEARCH: dict[str, JsonValue] = {"type": "web_search_20250305", "name": "web_
 )
 def test_anthropic_refuses_effectful_hosted_tools_at_setup(tool: dict[str, JsonValue]) -> None:
     with pytest.raises(ConfigError) as raised:
-        anthropic("claude-test", hosted_tools=[tool], context_window=1, max_output_tokens=1)
+        anthropic("claude-test", hosted_tools=[tool], max_input_tokens=1, max_output_tokens=1)
     assert raised.value.code == "hosted_tool_unsupported"
 
 
@@ -54,7 +54,7 @@ def test_openai_refuses_effectful_hosted_tools_at_setup(kind: str) -> None:
         openai(
             "gpt-test",
             hosted_tools=[{"type": kind}],
-            context_window=1,
+            max_input_tokens=1,
             max_output_tokens=1,
             api_key="sk-test-1",
         )
@@ -63,18 +63,18 @@ def test_openai_refuses_effectful_hosted_tools_at_setup(kind: str) -> None:
 
 def test_allowed_hosted_tools_are_pinned_in_adapter_settings() -> None:
     fetch: dict[str, JsonValue] = {"type": "web_fetch_20250910", "name": "web_fetch"}
-    info = anthropic("c", hosted_tools=[WEB_SEARCH, fetch], context_window=1, max_output_tokens=1)
+    info = anthropic("c", hosted_tools=[WEB_SEARCH, fetch], max_input_tokens=1, max_output_tokens=1)
     assert info.info.adapter.settings == {"hosted_tools": [WEB_SEARCH, fetch]}
     assert info.info.hosted_tools == ("web_search", "web_fetch")
     oa = openai(
         "g",
         hosted_tools=[{"type": "web_search"}],
-        context_window=1,
+        max_input_tokens=1,
         max_output_tokens=1,
         api_key="sk-test-1",
     )
     assert oa.info.hosted_tools == ("web_search",)
-    plain = anthropic("c", context_window=1, max_output_tokens=1)
+    plain = anthropic("c", max_input_tokens=1, max_output_tokens=1)
     assert plain.info.adapter.settings == {}
     assert plain.info.hosted_tools == ()
 
@@ -136,7 +136,7 @@ def test_anthropic_server_tool_blocks_become_hosted_parts_and_replay_exactly() -
     declared = anthropic(
         "m",
         hosted_tools=[WEB_SEARCH],
-        context_window=1,
+        max_input_tokens=1,
         max_output_tokens=1,
         api_key="sk-test-1",
     ).info
@@ -197,7 +197,7 @@ def test_openai_hosted_items_become_hosted_parts() -> None:
     declared = openai(
         "m",
         hosted_tools=[{"type": "web_search"}],
-        context_window=1,
+        max_input_tokens=1,
         max_output_tokens=1,
         api_key="sk-test-1",
     ).info

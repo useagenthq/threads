@@ -4,14 +4,9 @@ import { memoryContext, parseRender } from "@threads/core/adapter";
 import { openai } from "../src";
 import { toOpenAI } from "../src/request";
 
-const options = {
-  model: "gpt-5.5",
-  contextWindow: 400_000,
-  maxOutputTokens: 128_000,
-};
-const model = openai({
-  ...options,
-  params: { max_output_tokens: 1024, reasoning: { effort: "low" } },
+const model = openai("gpt-5.5", {
+  maxTokens: 1024,
+  params: { reasoning: { effort: "low" } },
 });
 const encoder = new TextEncoder();
 
@@ -100,7 +95,7 @@ describe("replay", () => {
 
 describe("setup", () => {
   test("params can't override what the render decides", () => {
-    expect(() => openai({ ...options, params: { store: true } })).toThrow(
+    expect(() => openai("gpt-5.5", { params: { store: true } })).toThrow(
       "can't set store",
     );
   });

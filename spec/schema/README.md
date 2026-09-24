@@ -7,6 +7,7 @@ The wire contract for the threads log. Both implementations read and write exact
 | `events.v1.schema.json` | JSON Schema (draft 2020-12) for one canonical line of a branch: the `Header`, an event (envelope plus per-type `data`), or the `Head` checkpoint |
 | `host-api/` | The host HTTP API: `openapi.json` (routes) and `host-api.v1.schema.json` (bodies and projections, `$id` `urn:threads:schema:host-api:v1`) |
 | `api.schema.json` | The shape of `../api.json`, the public API contract |
+| `model-catalog.v1.schema.json` | The shape of a model catalog, `../models/<provider>.v1.json` (Zod source `typescript/packages/core/src/model/catalog.ts`). Both runtimes embed the catalogs (`../tools/gen_model_catalogs.py`) and parse them at load |
 | `store.sql` | The normative SQLite DDL of the log store, versioned by `PRAGMA user_version`. Embedded in both implementations by `../tools/gen_store_sql.py` (`--check` in CI) |
 
 **Every `api.json` entry is explained.** Every public function, type, method, parameter, option, field and property, and every field of an inline object and parameter of a callback at any depth, has an explanation. Inputs (parameters, options, inline object fields, callback parameters) always have their own `doc`, and an optional one shows its `default` or says what omitting it does. A field or property may instead take the first sentence of the type it references, unless its type is primitive, `JsonValue` or a union. `../tools/check_api.py` enforces it with the rule in `../tools/api_docs.py`, which the docs generator uses for its rows.
@@ -59,6 +60,10 @@ SQLite is the storage engine. JSONL is the interchange, export and conformance f
 ## Adapter factories
 
 Adapter factories are contract: each is a function of an adapter package in `spec/api.json` (`packages.<name>.kind: "adapter"`). Checked mechanically: arity, exact option keys, option types (callbacks and `platform` types included), return types (`spec/tools/gen_api_surface_factories.py`, compiled by `tsc` and `pyright`; `spec/tools/factory_surface_py.py` at test time), and the `config_errors` each factory can raise: a source scan of the adapter package (`spec/tools/factory_decisions.py`) is red on an undeclared code, and each declared code has a `<factory>!<code>@<lang>` test. An entry without `lang` applies to every language the factory exists in. Defaults are proven by behavior tests (both languages) where the default has an observable effect; Python keyword-only defaults are also checked by `inspect`. Review-only, and listed in `spec/api-surface-factory-decisions.json`: defaults with no observable effect (for example a test transport seam) and `schema` type variance. That file also lists every provider whose factory is not in the contract yet, every known cross-language difference with its decision and owner, and temporary `gaps`: codes the scan finds that a factory can't declare yet, each with the lane that closes it and its pinned sites.
+
+## Model catalog
+
+A model factory takes its limits from its provider's catalog, `../models/<provider>.v1.json` (`spec/api.json` `conventions.adapters`). The file is checked by `model-catalog.v1.schema.json` plus one rule JSON Schema can't state: **entry ids are unique, and withdrawn ids are unique** (both parsers, `parseCatalog` / `parse_catalog`; shared vector `../conformance/vectors/model-catalog.json`, cases `a duplicate entry id` and `a duplicate withdrawn id`). A released entry is append-only: `../tools/check_model_catalog.py` (CI) compares each catalog with its lock, `<provider>.v1.lock.json` (see `../models/README.md`).
 
 ## Snapshot manifest
 

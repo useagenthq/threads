@@ -36,6 +36,7 @@ jobs:
           uv run ruff format --check ../spec/tools
           uv run python ../spec/tools/gen_fixtures.py --check
           uv run python ../spec/tools/check_api.py
+          uv run python ../spec/tools/check_model_catalog.py
       - name: API surface base
         working-directory: .
         run: |

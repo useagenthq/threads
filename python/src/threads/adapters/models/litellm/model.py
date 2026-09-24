@@ -12,7 +12,7 @@ routes are refused at setup (`transport_fence_unsupported`), never run with a we
 
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable, Mapping
 from functools import partial
-from typing import Protocol, TypeGuard, Unpack
+from typing import Final, Protocol, TypeGuard, Unpack
 
 import litellm as bridge
 import openai as sdk
@@ -21,7 +21,7 @@ from litellm.exceptions import ContextWindowExceededError
 from threads.adapters.models import transport
 from threads.adapters.models.litellm.request import build
 from threads.adapters.models.litellm.stream import Assembler
-from threads.adapters.models.options import ModelOptions, info
+from threads.adapters.models.options import ExplicitOptions, info
 from threads.adapters.models.render import prepare
 from threads.agents.config import ConfigError
 from threads.log import AdapterRef, ModelRef
@@ -144,9 +144,14 @@ def _is_stream(value: object) -> TypeGuard[_Stream]:
     return hasattr(value, "aclose") and isinstance(value, AsyncIterable)
 
 
-def litellm(name: str, **options: Unpack[ModelOptions]) -> LiteLLMModel:
+RESERVED: Final = ("model", "messages", "tools", "stream", "stream_options", "max_tokens")
+"""Request fields the adapter derives from the render, and the cap (the max_tokens option)."""
+
+
+def litellm(name: str, **options: Unpack[ExplicitOptions]) -> LiteLLMModel:
     """A model behind LiteLLM's `openai/` route (any OpenAI-compatible endpoint via `base_url`).
-    `params` are completion fields; `max_tokens` defaults to `max_output_tokens`. `api_key`
+    Both limits are required: the name doesn't identify the model behind `base_url`. `params`
+    are completion fields; `max_tokens` defaults to min(8192, max_output_tokens). `api_key`
     defaults to `secret("OPENAI_API_KEY")`, resolved at setup. Other routes raise ConfigError
     `transport_fence_unsupported` (module docstring)."""
     if not name.startswith("openai/"):
@@ -158,7 +163,7 @@ def litellm(name: str, **options: Unpack[ModelOptions]) -> LiteLLMModel:
         ModelRef(provider=PROVIDER, name=name),
         AdapterRef(name=ADAPTER, version=VERSION, settings={}),
         options,
-        {"max_tokens": options["max_output_tokens"]},
+        RESERVED,
     )
     base_url = options.get("base_url")
 

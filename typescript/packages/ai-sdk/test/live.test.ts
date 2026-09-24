@@ -15,9 +15,9 @@ describe.skipIf(!live)("live gate: ai-sdk", () => {
     const mod: { default: AiSdkOptions["model"] } = await import(target ?? "");
     const model = aiSdk({
       model: mod.default,
-      contextWindow: 128_000,
+      maxInputTokens: 128_000,
       maxOutputTokens: 4096,
-      params: { maxOutputTokens: 64 },
+      maxTokens: 64,
     });
     const { adapter, params } = model.info;
     const body = renderBody([

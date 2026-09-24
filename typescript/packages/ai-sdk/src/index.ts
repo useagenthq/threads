@@ -18,6 +18,7 @@ import type {
 import {
   ConfigError,
   fencedFetch,
+  modelLimits,
   parseRender,
   rejectionFor,
   StaleEpochError,
@@ -42,7 +43,8 @@ type Media = ModelInfo["accepts"][number];
 
 /** The JSON call options line 0 pins; the prompt, tools and signal come from the render. */
 const CallParams = z.strictObject({
-  maxOutputTokens: z.int().positive().exactOptional(),
+  // The output cap, pinned under the provider-neutral key budgets read; sent as maxOutputTokens.
+  max_tokens: z.int().positive().exactOptional(),
   temperature: z.number().exactOptional(),
   stopSequences: z.array(z.string()).exactOptional(),
   topP: z.number().exactOptional(),
@@ -72,10 +74,13 @@ export type AiSdkOptions = {
   readonly model: (fetch: Fetch) => LanguageModelV4;
   /** The transport under the lease check. Defaults to the global fetch. */
   readonly fetch?: Fetch;
-  /** The model's declared context window and output cap. */
-  readonly contextWindow: number;
+  /** The most input tokens one request may carry. Pinned as policy.models[].context_window. */
+  readonly maxInputTokens: number;
+  /** The most output tokens the model can produce in one response. */
   readonly maxOutputTokens: number;
-  /** Call options (maxOutputTokens, temperature, providerOptions, ...), pinned in line 0. */
+  /** The per-request output cap. Defaults to min(8192, maxOutputTokens). */
+  readonly maxTokens?: number;
+  /** Call options (temperature, providerOptions, ...), pinned in line 0. */
   readonly params?: JsonObject;
   /** Input parts the model takes; others fail before dispatch. Defaults to text only. */
   readonly accepts?: readonly Media[];
@@ -117,22 +122,30 @@ export function aiSdk(options: AiSdkOptions): Model {
       "invalid_config",
       "aiSdk needs an AI SDK v4 language model",
     );
-  const params = CallParams.safeParse(options.params ?? {});
+  const given = options.params ?? {};
+  if (Object.hasOwn(given, "max_tokens"))
+    throw new ConfigError(
+      "invalid_config",
+      "aiSdk params can't set max_tokens: pass maxTokens",
+    );
+  const params = CallParams.safeParse(given);
   if (!params.success)
     throw new ConfigError(
       "invalid_config",
       `aiSdk params: ${z.prettifyError(params.error)}`,
     );
+  // No catalog: an aiSdk model's id doesn't say which provider's model it is.
+  const limits = modelLimits("aiSdk", model.modelId, options);
   const provider = nameOf(model.provider);
   const info: ModelInfo = {
     model: { provider, name: model.modelId },
     adapter: { name: "ai_sdk", version: "1", settings: {} },
-    params: options.params ?? {},
+    params: { ...given, max_tokens: limits.max_tokens },
     limits: {
       provider,
       name: model.modelId,
-      context_window: options.contextWindow,
-      max_output_tokens: options.maxOutputTokens,
+      context_window: limits.max_input_tokens,
+      max_output_tokens: limits.max_output_tokens,
       input_billing_bound: options.inputBillingBound ?? "none",
       ...(options.price === undefined ? {} : { price: options.price }),
     },
@@ -178,9 +191,11 @@ async function* send(
   let yielded = false;
   try {
     const sending: Sending = { context, fetches: 0 };
+    const { max_tokens: cap, ...call } = CallParams.parse(render.head.params);
     const { stream } = await current.run(sending, () =>
       model.doStream({
-        ...CallParams.parse(render.head.params),
+        ...call,
+        ...(cap === undefined ? {} : { maxOutputTokens: cap }),
         prompt: mapped.prompt,
         ...(mapped.tools.length === 0 ? {} : { tools: mapped.tools }),
         ...(signal === undefined ? {} : { abortSignal: signal }),

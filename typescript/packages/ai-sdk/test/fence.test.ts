@@ -12,7 +12,7 @@ import { fakeModel, offline } from "./fake";
 // The lease check at the provider's real send point: a send can carry
 // provider-hosted tools, so no provider request may leave without it.
 
-const limits = { contextWindow: 128_000, maxOutputTokens: 8192 };
+const limits = { maxInputTokens: 128_000, maxOutputTokens: 8192 };
 const hi = { role: "user", content: [{ type: "text", text: "hi" }] };
 const finish = (unified: "stop") => ({
   type: "finish" as const,

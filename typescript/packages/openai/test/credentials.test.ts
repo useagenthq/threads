@@ -13,10 +13,7 @@ credentialCases({
   env: "OPENAI_API_KEY",
   slot: (apiKey) => ({
     fallback: [
-      openai({
-        model: "gpt-5.5",
-        contextWindow: 400_000,
-        maxOutputTokens: 128_000,
+      openai("gpt-5.5", {
         fetch: offline,
         ...(apiKey === undefined ? {} : { apiKey }),
       }),

@@ -35,14 +35,14 @@ _CHAT = (
 
 
 def _claude(url: str) -> Model:
-    info = anthropic("claude-test", context_window=1000, max_output_tokens=8).info
+    info = anthropic("claude-test", max_input_tokens=1000, max_output_tokens=8).info
     return AnthropicModel(info, "sk-test-1", url)
 
 
 def _bridged(url: str) -> Model:
     return litellm(
         "openai/gpt-test",
-        context_window=1000,
+        max_input_tokens=1000,
         max_output_tokens=8,
         api_key="sk-test-1",
         base_url=url,

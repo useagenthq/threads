@@ -4,15 +4,13 @@ description: Connect Anthropic, OpenAI or any other provider, with retries and f
 icon: Cpu
 ---
 
-A model is one line of config. Keys come from your environment unless you pass them.
+A model is one line of config: the provider's model id. Keys come from your environment unless you pass them.
 
 | | TypeScript | Python |
 |---|---|---|
 | Anthropic | `anthropic()` from `@threads/anthropic` | `anthropic()` from `threads.anthropic` |
 | OpenAI | `openai()` from `@threads/openai` | `openai()` from `threads.openai` |
 | Everything else | `aiSdk()` from `@threads/ai-sdk` (any AI SDK provider) | `litellm()` from `threads.litellm` (LiteLLM's `openai/` route) |
-
-You declare the model's context window and output cap yourself. threads never guesses them from a model name, because a wrong guess would silently break budgets and context management.
 
 ## Anthropic
 
@@ -22,13 +20,7 @@ You declare the model's context window and output cap yourself. threads never gu
 ```ts
 import { anthropic } from "@threads/anthropic";
 
-const claude = anthropic({
-  model: "claude-sonnet-5",
-  maxTokens: 8192,
-  contextWindow: 1_000_000,
-  maxOutputTokens: 128_000,
-  params: { temperature: 0.2 },
-});
+const claude = anthropic("claude-sonnet-5");
 ```
 
 </Tab>
@@ -37,18 +29,13 @@ const claude = anthropic({
 ```python
 from threads.anthropic import anthropic
 
-claude = anthropic(
-    "claude-sonnet-5",
-    context_window=1_000_000,
-    max_output_tokens=128_000,
-    params={"temperature": 0.2},
-)
+claude = anthropic("claude-sonnet-5")
 ```
 
 </Tab>
 </Tabs>
 
-Reads `ANTHROPIC_API_KEY`. In TypeScript, `maxTokens` is sent as `max_tokens`; in Python it defaults to `max_output_tokens`.
+Reads `ANTHROPIC_API_KEY`.
 
 ## OpenAI
 
@@ -60,10 +47,7 @@ Uses the Responses API.
 ```ts
 import { openai } from "@threads/openai";
 
-const gpt = openai({
-  model: "gpt-5.5",
-  contextWindow: 1_050_000,
-  maxOutputTokens: 128_000,
+const gpt = openai("gpt-5.5", {
   params: { reasoning: { effort: "medium" } },
 });
 ```
@@ -74,22 +58,57 @@ const gpt = openai({
 ```python
 from threads.openai import openai
 
-gpt = openai(
-    "gpt-5.5",
-    context_window=1_050_000,
-    max_output_tokens=128_000,
-    params={"reasoning": {"effort": "medium"}},
-)
+gpt = openai("gpt-5.5", params={"reasoning": {"effort": "medium"}})
 ```
 
 </Tab>
 </Tabs>
 
-Reads `OPENAI_API_KEY`.
+Reads `OPENAI_API_KEY`. Both factories read the key at `check()` or the first run, never when you call them.
 
-<Callout>
-In Python, `openai()` needs the key when you call it (the OpenAI SDK checks at construction). `anthropic()` only needs it when the first request is sent.
-</Callout>
+## Limits
+
+threads needs two numbers for every model: the most input tokens one request may carry (for compaction and cost budgets) and the most output tokens the model can produce. For the model ids below you pass neither: they come from a catalog each provider's own source was checked against.
+
+| Model id | Max input tokens | Max output tokens | Checked against |
+|---|---|---|---|
+| `claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5` | 1,000,000 | 128,000 | Anthropic Models API |
+| `claude-haiku-4-5-20251001` | 200,000 | 64,000 | Anthropic Models API |
+| `gpt-5.5`, `gpt-5.5-2026-04-23`, `gpt-6-sol` | 922,000 | 128,000 | OpenAI model pages* |
+
+\* OpenAI publishes GPT-5.5's 1,050,000-token context window and 128,000 output limit but no separate input limit; 922,000 is the window minus the output limit, which is the input limit OpenAI publishes for GPT-6 Sol with the same window.
+
+The id must match exactly: `claude-haiku-4-5` is not `claude-haiku-4-5-20251001`. A dated snapshot id keeps a long-lived thread on one model. For any other id, pass both limits; leaving one out is a `ConfigError` that names it:
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const next = anthropic("claude-next", {
+  maxInputTokens: 1_000_000,
+  maxOutputTokens: 128_000,
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+next_model = anthropic("claude-next", max_input_tokens=1_000_000, max_output_tokens=128_000)
+```
+
+</Tab>
+</Tabs>
+
+Each request asks for at most `maxTokens` (`max_tokens`) output tokens: 8192 by default, or the model's output limit if that is lower. A longer answer continues in a new request. Raise it for long single answers, up to the model's output limit:
+
+```ts
+const writer = anthropic("claude-sonnet-5", { maxTokens: 32_000 });
+```
+
+`maxTokens` is the only way to set the cap: putting `max_tokens` (or OpenAI's `max_output_tokens`) in `params` is refused. Output-token budgets read this cap, for every provider.
+
+The limits are recorded when a thread starts. If a catalog entry is ever found wrong, it is withdrawn rather than edited: the factory then asks you for the limits, and its error prints both the corrected values (for new threads) and the old ones (to keep continuing a thread started with them).
 
 ## Other providers
 
@@ -102,12 +121,12 @@ In Python, `openai()` needs the key when you call it (the OpenAI SDK checks at c
 
     aiSdk({
       model: (fetch) => createProvider({ fetch })("model-id"),
-      contextWindow: 128_000,
+      maxInputTokens: 128_000,
       maxOutputTokens: 8192,
     });
     ```
 
-    `createProvider` stands for your provider's factory, such as `createOpenAI` or `createMistral`. Passing a ready-made model instead of a factory is refused at setup. Other options: `params` (AI SDK call options like `temperature`), `accepts` (input types, default text only), `price`.
+    `createProvider` stands for your provider's factory, such as `createOpenAI` or `createMistral`. Passing a ready-made model instead of a factory is refused at setup. The two limits are required: the model id alone doesn't say whose model it is. Other options: `maxTokens`, `params` (AI SDK call options like `temperature`), `accepts` (input types, default text only), `price`.
   </Tab>
   <Tab value="Python: LiteLLM">
     `litellm()` works with any OpenAI-compatible endpoint through LiteLLM's `openai/` route, such as a LiteLLM proxy or a local server.
@@ -118,12 +137,12 @@ In Python, `openai()` needs the key when you call it (the OpenAI SDK checks at c
     local = litellm(
         "openai/my-model",
         base_url="http://localhost:4000",
-        context_window=128_000,
+        max_input_tokens=128_000,
         max_output_tokens=8192,
     )
     ```
 
-    Only the `openai/` route is supported; other routes raise `ConfigError("transport_fence_unsupported")`. The key comes from `api_key`, or from `OPENAI_API_KEY` when you don't pass one.
+    The two limits are required: the name doesn't say which model sits behind `base_url`. Only the `openai/` route is supported; other routes raise `ConfigError("transport_fence_unsupported")`. The key comes from `api_key`, or from `OPENAI_API_KEY` when you don't pass one.
   </Tab>
 </Tabs>
 
@@ -131,13 +150,14 @@ In Python, `openai()` needs the key when you call it (the OpenAI SDK checks at c
 
 | Option (TS / Python) | What it does |
 |---|---|
-| `contextWindow` / `context_window` | Required. The model's context window in tokens |
-| `maxOutputTokens` / `max_output_tokens` | Required. The model's output cap |
-| `params` | Provider request fields (temperature, reasoning, thinking, ...). Fields threads sets itself, like `model` or `tools`, are refused |
+| `maxInputTokens` / `max_input_tokens` | The most input tokens one request may carry. Default: the catalog's value; required for an unlisted id. Recorded as the model's `context_window` |
+| `maxOutputTokens` / `max_output_tokens` | The model's output limit. Default: the catalog's value; required for an unlisted id |
+| `maxTokens` / `max_tokens` | The output cap of each request. Default: 8192, or the output limit if lower |
+| `params` | Other provider request fields (temperature, reasoning, thinking, ...). Fields threads sets itself, like `model`, `tools` or the output cap, are refused |
 | `price` | Price per token, for cost budgets: `{ input, output, cache_read?, cache_write? }` in nano-dollars (USD 3 per million tokens is `3000`) |
 | `hostedTools` / `hosted_tools` | Provider-run tools. Only web search (both) and web fetch (Anthropic) are accepted |
 | `apiKey` / `api_key` | A string or a `secret()`. Default: the provider's environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`), read at `check()` or the first run. Never logged, and redacted from tool results |
-| `baseURL` / `base_url` | A proxy or compatible endpoint |
+| `baseUrl` / `base_url` | A proxy or compatible endpoint |
 
 Model settings are fixed for the life of a thread, which keeps the prompt prefix identical on every request so provider caches keep hitting.
 

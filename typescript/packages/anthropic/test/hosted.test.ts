@@ -5,10 +5,7 @@ import { anthropic } from "../src";
 // allowed, pinned in line 0 as adapter.settings.hosted_tools; the rest fail at construction.
 
 const options = {
-  model: "claude-sonnet-5",
   maxTokens: 1024,
-  contextWindow: 200_000,
-  maxOutputTokens: 64_000,
   apiKey: "test-key",
 };
 
@@ -18,7 +15,7 @@ describe("anthropic hosted tools", () => {
       { type: "web_search_20250305", name: "web_search", max_uses: 3 },
       { type: "web_fetch_20250910", name: "web_fetch" },
     ];
-    const { info } = anthropic({ ...options, hostedTools });
+    const { info } = anthropic("claude-sonnet-5", { ...options, hostedTools });
     expect(info.adapter.settings).toEqual({ hosted_tools: hostedTools });
     expect(info.hosted_tools).toEqual(["web_search", "web_fetch"]);
   });
@@ -32,7 +29,10 @@ describe("anthropic hosted tools", () => {
     "web_search",
   ])("%s is refused with hosted_tool_unsupported", (type) => {
     expect(() =>
-      anthropic({ ...options, hostedTools: [{ type, name: "x" }] }),
+      anthropic("claude-sonnet-5", {
+        ...options,
+        hostedTools: [{ type, name: "x" }],
+      }),
     ).toThrow(expect.objectContaining({ code: "hosted_tool_unsupported" }));
   });
 });

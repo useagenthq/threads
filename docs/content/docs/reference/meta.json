@@ -21,6 +21,8 @@
     "---[Plug]Providers---",
     "functions/supermemory",
     "functions/zep",
+    "functions/anthropic",
+    "functions/openai",
     "functions/exa",
     "functions/tavily",
     "functions/brave",

@@ -1,0 +1,17 @@
+{
+  "entries": {
+    "gpt-5.5": {
+      "behavior_sha256": "9cab63db45c8eeb25f9fcea5098bb5ba758fdbfdbf1c108600a9e8846e015dd2",
+      "verified": "2026-09-24"
+    },
+    "gpt-5.5-2026-04-23": {
+      "behavior_sha256": "fd89ad50053c4b1325daaff58d1043252fb0474a758d4471a1921fabac77668a",
+      "verified": "2026-09-24"
+    },
+    "gpt-6-sol": {
+      "behavior_sha256": "bbce6eecf12ac669303a034ceb1fd6e694f80eb8cc22250a19ecfcd666f46704",
+      "verified": "2026-09-24"
+    }
+  },
+  "withdrawn": {}
+}

@@ -48,7 +48,7 @@ def stops(rt: Runtime) -> list[str]:
 
 def claude(*replies: httpx2.Response) -> tuple[AnthropicModel, Script]:
     script = Script(list(replies))
-    info = anthropic("claude-test", context_window=200_000, max_output_tokens=64).info
+    info = anthropic("claude-test", max_input_tokens=200_000, max_output_tokens=64).info
     return AnthropicModel(info, "sk-test-anthropic", http=httpx2.MockTransport(script)), script
 
 
@@ -97,7 +97,7 @@ def test_an_anthropic_stop_it_cannot_name_ends_the_turn_with_error() -> None:
 
 def gpt(*replies: httpx2.Response) -> OpenAIModel:
     info = openai(
-        "gpt-test", context_window=400_000, max_output_tokens=64, api_key="sk-test-1"
+        "gpt-test", max_input_tokens=400_000, max_output_tokens=64, api_key="sk-test-1"
     ).info
     return OpenAIModel(info, "sk-test-openai", http=httpx2.MockTransport(Script(list(replies))))
 
@@ -139,7 +139,7 @@ def test_a_litellm_finish_reason_it_cannot_name_ends_the_turn_with_error() -> No
         return chunks()
 
     info = litellm(
-        "openai/gpt-test", context_window=1000, max_output_tokens=8, api_key="sk-test-1"
+        "openai/gpt-test", max_input_tokens=1000, max_output_tokens=8, api_key="sk-test-1"
     ).info
     halt, rt = drive_turn(LiteLLMModel(info, "sk-test-litellm", lambda _key: complete))
     assert stops(rt) == ["other"]

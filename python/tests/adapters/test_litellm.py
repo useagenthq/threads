@@ -21,7 +21,7 @@ from threads.log import CallId, TextPart, ToolUsePart, Usage
 from threads.loop.model import Delta, Done, ModelChunk, ModelRequest, PartChunk, Rejected
 
 ROUTE = "openai/gpt-test"
-INFO = litellm(ROUTE, context_window=128_000, max_output_tokens=4096, api_key="sk-test-1").info
+INFO = litellm(ROUTE, max_input_tokens=128_000, max_output_tokens=4096, api_key="sk-test-1").info
 
 
 @dataclass
@@ -171,12 +171,12 @@ def test_a_route_it_cannot_fence_at_the_transport_is_refused_at_setup() -> None:
     # A send can carry provider-hosted tools, so a stale send is never harmless: a route whose
     # real transport isn't ours is refused, not shipped with a weaker fence.
     with pytest.raises(ConfigError) as refused:
-        litellm("bedrock/some-model", context_window=1000, max_output_tokens=8)
+        litellm("bedrock/some-model", max_input_tokens=1000, max_output_tokens=8)
     assert refused.value.code == "transport_fence_unsupported"
 
 
 def test_credentials_are_passed_per_call_never_pinned() -> None:
-    made = litellm(ROUTE, context_window=1000, max_output_tokens=8, api_key="sk-secret")
+    made = litellm(ROUTE, max_input_tokens=1000, max_output_tokens=8, api_key="sk-secret")
     assert "sk-secret" not in json.dumps(made.info.params)
     assert made.info.params == {"max_tokens": 8}
     assert made.info.lookup == "none"

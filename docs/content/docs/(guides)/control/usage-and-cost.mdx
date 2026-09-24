@@ -16,11 +16,7 @@ Every model response records its token counts in the thread's log, so what a thr
 ```ts
 // A price on the model is what lets cost() count money (see Models).
 const bot = agent({
-  model: anthropic({
-    model: "claude-sonnet-5",
-    maxTokens: 8192,
-    contextWindow: 1_000_000,
-    maxOutputTokens: 128_000,
+  model: anthropic("claude-sonnet-5", {
     price: { input: 2000, output: 10000 },
   }),
 });
@@ -41,14 +37,7 @@ const { input_tokens, output_tokens, unknown_responses } = usage.value;
 
 ```python
 # A price on the model is what lets cost() count money (see Models).
-bot = agent(
-    model=anthropic(
-        "claude-sonnet-5",
-        context_window=1_000_000,
-        max_output_tokens=128_000,
-        price=Price(input=2000, output=10000),
-    )
-)
+bot = agent(model=anthropic("claude-sonnet-5", price=Price(input=2000, output=10000)))
 store = sqlite(".threads")
 
 result = await bot.run("Summarize the report.", store=store)

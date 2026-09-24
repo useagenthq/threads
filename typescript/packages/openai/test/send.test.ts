@@ -12,9 +12,6 @@ import { openai } from "../src";
 // SDK-level fetch mocks: the real SDK, no network.
 
 const options = {
-  model: "gpt-5.5",
-  contextWindow: 400_000,
-  maxOutputTokens: 128_000,
   apiKey: "test-key",
 };
 const request = {
@@ -50,7 +47,9 @@ const completed = (u: Json = usage) =>
 async function run(responses: Response[], live = () => true) {
   const { fetch, calls } = recordingFetch(responses);
   const context = memoryContext(live);
-  const out = await drain(openai({ ...options, fetch }).send(request, context));
+  const out = await drain(
+    openai("gpt-5.5", { ...options, fetch }).send(request, context),
+  );
   return { ...out, calls, context };
 }
 
@@ -278,7 +277,7 @@ describe("fencing at the transport boundary", () => {
     let lost = false;
     const { fetch, calls } = recordingFetch([sse([completed()])]);
     const pending = drain(
-      openai({ ...options, fetch }).send(
+      openai("gpt-5.5", { ...options, fetch }).send(
         request,
         memoryContext(() => !lost),
       ),

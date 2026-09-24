@@ -19,7 +19,7 @@ icon: "Braces"
 </Field>
 
 <Field name="limits" type={"Policy.models.items"} required>
-  Window, output cap, billing bound and price.
+  Input bound, output cap, billing bound and price. A factory's max_input_tokens (TS maxInputTokens) is pinned here as context_window.
 </Field>
 
 <Field name="accepts" type={"readonly (\"text\" | \"image_ref\" | \"document_ref\" | \"audio_ref\")[]"} required>

@@ -8,16 +8,17 @@ lease while the SDK prepared or queued the request sends nothing.
 import re
 from collections.abc import AsyncIterator, Mapping, Sequence
 from http import HTTPStatus
-from typing import Unpack
+from typing import Final, Unpack
 
 import anthropic as sdk
 import httpx2
+from pydantic import JsonValue
 
 from threads.adapters.models import transport
 from threads.adapters.models.anthropic.request import PROVIDER, build
 from threads.adapters.models.anthropic.stream import Assembler, ProviderStreamError
 from threads.adapters.models.anthropic.wire import parse
-from threads.adapters.models.hosted import HostedTool, declare
+from threads.adapters.models.hosted import declare
 from threads.adapters.models.options import ModelOptions, info
 from threads.adapters.models.render import prepare
 from threads.log import AdapterRef, ModelRef
@@ -110,29 +111,36 @@ def _too_long(error: sdk.APIStatusError) -> bool:
 
 
 class AnthropicOptions(ModelOptions, total=False):
+    """Limits default from spec/models/anthropic.v1.json when the model id is listed there."""
+
     citations: bool
     """Enables citations on documents (an adapter setting, so pinned in line 0)."""
-    hosted_tools: Sequence[HostedTool]
+    hosted_tools: Sequence[Mapping[str, JsonValue]]
     """Server tools, sent as given and pinned in line 0: web search and web fetch only
     (`web_search_YYYYMMDD`, `web_fetch_YYYYMMDD`); anything else raises hosted_tool_unsupported."""
+
+
+RESERVED: Final = ("model", "messages", "system", "tools", "stream", "max_tokens")
+"""Request fields the adapter derives from the render, and the cap (the max_tokens option)."""
 
 
 def _web(kind: str) -> bool:
     return re.fullmatch(r"(web_search|web_fetch)_\d{8}", kind) is not None
 
 
-def anthropic(name: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel:
-    """An Anthropic model (the `anthropic()` of spec/api.json conventions.adapters).
-    `max_tokens` defaults to `max_output_tokens`; other `params` are Messages API fields.
-    `api_key` defaults to `secret("ANTHROPIC_API_KEY")`, resolved at setup."""
+def anthropic(model: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel:
+    """A Claude model by its exact id: `anthropic("claude-sonnet-5")` (spec/api.json
+    conventions.adapters). `max_tokens` defaults to min(8192, max_output_tokens); other `params`
+    are Messages API fields. `api_key` defaults to `secret("ANTHROPIC_API_KEY")`, resolved at
+    setup."""
     settings, hosted = declare(options.get("hosted_tools", ()), _web, "name")
     if options.get("citations"):
         settings["citations"] = True
     declared = info(
-        ModelRef(provider=PROVIDER, name=name),
+        ModelRef(provider=PROVIDER, name=model),
         AdapterRef(name=ADAPTER, version=VERSION, settings=settings),
         options,
-        {"max_tokens": options["max_output_tokens"]},
+        RESERVED,
         hosted,
     )
     return AnthropicModel(declared, options.get("api_key"), options.get("base_url"))
