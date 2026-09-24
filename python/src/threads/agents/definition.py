@@ -232,6 +232,15 @@ class Definition[D]:
         if self.sandbox is not None:
             data["sandbox_provider"] = self.sandbox.info.provider
         config: dict[str, JsonValue] = dict(data)
+        if self.sandbox is not None:
+            # A resumed run must match these, so a changed one is a changed config.
+            info = self.sandbox.info
+            config["sandbox"] = {
+                "provider": info.provider,
+                "egress": info.egress,
+                "capture_classes": list[JsonValue](info.capture_classes),
+                "policy": self.egress if isinstance(self.egress, str) else list(self.egress),
+            }
         if self.extensions:
             config["extensions"] = self.manifests()
         if self.skills:

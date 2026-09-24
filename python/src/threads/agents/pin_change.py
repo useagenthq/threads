@@ -15,9 +15,9 @@ def pin_change(stored: JsonValue, new: JsonValue) -> str:
     that pins `new`."""
     if _unresolved(stored):
         return (
-            "this thread was started by a Python threads that left the default permissions, "
-            "retry and context settings out of its pinned config, so its config_hash can't match "
-            "any agent now; start a new thread"
+            "this thread was started by an older Python release that didn't pin its default "
+            "permissions, retry and context settings; its config can't be matched now, so start "
+            "a new thread"
         )
     if _prompt_cache(new) is not None and _prompt_cache(stored) is None:
         return (
@@ -34,7 +34,8 @@ def pin_change(stored: JsonValue, new: JsonValue) -> str:
 
 
 def _unresolved(started: JsonValue) -> bool:
-    """Pinned before every config recorded its resolved permissions, retry and context."""
+    """A pin missing any of permissions, retry and context, whatever wrote it: only an older
+    Python release pinned one from agent()."""
     policy = started.get("policy") if isinstance(started, dict) else None
     return not isinstance(policy, dict) or any(
         k not in policy for k in ("permissions", "retry", "context")

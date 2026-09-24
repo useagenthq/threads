@@ -47,10 +47,10 @@ class Extension:
     tools: tuple[AppTool[None], ...] = ()
 
     def manifest(self) -> JsonValue:
-        """What the config pin covers: which hooks and observers this
-        extension declares, by name, and its timeout. Code is identified by the host, not the
+        """What the config pin covers: which hooks this extension declares, in wire-enum order,
+        its observers, sorted, and its timeout. Code is identified by the host, not the
         log; the pin makes a changed hook set a changed config."""
-        hooks: list[JsonValue] = [*sorted(wire_name(h) for h in _names(self.hooks))]
+        hooks: list[JsonValue] = [wire_name(h) for h in _names(self.hooks)]
         observers: list[JsonValue] = [*sorted(self.on)]
         return {
             "name": self.name,

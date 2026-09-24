@@ -15,9 +15,9 @@ def _started(settings: dict[str, JsonValue], ttl: int = 300_000) -> JsonValue:
 def test_a_python_pin_without_its_resolved_settings_starts_a_new_thread() -> None:
     legacy: JsonValue = {"adapter": {"settings": {}}, "policy": {"models": []}}
     assert pin_change(legacy, _started({})) == (
-        "this thread was started by a Python threads that left the default permissions, retry "
-        "and context settings out of its pinned config, so its config_hash can't match any agent "
-        "now; start a new thread"
+        "this thread was started by an older Python release that didn't pin its default "
+        "permissions, retry and context settings; its config can't be matched now, so start a "
+        "new thread"
     )
 
 
