@@ -6,7 +6,10 @@ license = "Apache-2.0"
 description = "Event-log agent framework."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2,<3"]
+# typing_extensions: Extension's deps type parameter defaults to None (PEP 696, not in 3.12's
+# typing). pydantic already depends on it, so this installs nothing new; declared because the
+# core imports it directly.
+dependencies = ["pydantic>=2,<3", "typing_extensions>=4.12"]
 classifiers = ["Private :: Do Not Upload"]
 
 [project.optional-dependencies]

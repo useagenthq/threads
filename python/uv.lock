@@ -2879,6 +2879,7 @@ version = "0.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
+    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -2956,6 +2957,7 @@ requires-dist = [
     { name = "slack-sdk", marker = "extra == 'slack'", specifier = ">=3.40,<4" },
     { name = "starlette", marker = "extra == 'host'", specifier = ">=1.6,<2" },
     { name = "supermemory", marker = "extra == 'supermemory'", specifier = ">=3.62,<4" },
+    { name = "typing-extensions", specifier = ">=4.12" },
     { name = "uvicorn", marker = "extra == 'host'", specifier = ">=0.53,<1" },
     { name = "zep-cloud", marker = "extra == 'zep'", specifier = ">=3.28,<4" },
 ]

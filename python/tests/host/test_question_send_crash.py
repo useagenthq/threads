@@ -8,11 +8,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 import pytest
-from host.test_channel_approvals import TEAM, ItemsChannel, text, webhook
+from host.test_channel_approvals import REQUESTER, TEAM, ItemsChannel, Note, message, text, webhook
 from host.test_channel_questions import ASKER, CORRECTION, QUESTION
 from pydantic import JsonValue
 
-from threads import agent, scripted_model, sqlite
+from threads import RunContext, agent, scripted_model, sqlite, tool
 from threads.agents.store import Store, open_store, scoped
 from threads.host import ChannelCapabilities, DeliveryOutcome, Sent, host
 from threads.host import deliver as deliver_module
@@ -20,8 +20,10 @@ from threads.host.app import recovered
 from threads.log import (
     ApprovalRequestedEvent,
     CallId,
+    EffectUnknownEvent,
     Event,
     JsonObject,
+    ParkedEvent,
     ToolResultEvent,
     TurnCompletedEvent,
     UserInputEvent,
@@ -218,4 +220,57 @@ def test_a_correction_send_in_doubt_is_reconciled_not_sent_twice() -> None:
     asyncio.run(main())
     events = asyncio.run(_events(store))
     assert _texts(channel, "Please answer") == [CORRECTION]
+    assert _completed(events)
+
+
+def test_an_approval_card_in_doubt_is_reconciled_after_its_grant() -> None:
+    """A card is the host's own send too: left begun by a crash and granted meanwhile, it is
+    reconciled by outbound (one post), never recovered by the loop, and the call runs once."""
+    runs: list[str] = []
+
+    async def send(args: Note, _ctx: RunContext[None]) -> str:
+        runs.append(args.text)
+        return "sent"
+
+    use: JsonValue = {
+        "content": [{"type": "tool_use", "call_id": "c1", "name": "send", "input": {"text": "x"}}],
+        "stop_reason": "tool_use",
+        "usage": USAGE,
+    }
+    send_tool = tool(name="send", description="Send.", input=Note, runs="host", execute=send)
+    bot = agent(model=scripted_model({"responses": [use, text("Sent.")]}), tools=[send_tool])
+    store = sqlite(":memory:")
+    channel = Crashy(hang="Approve?", capabilities=_caps("final"))
+
+    async def main() -> None:
+        first = host(store=store, agents={"bot": bot}, channels={"fake": channel})
+        await first.ready()
+        await first.receive("fake", webhook("d1", message("m1", "send it")))
+        await asyncio.wait_for(channel.sending.wait(), STOP_S)
+        await asyncio.wait_for(first.stop(), STOP_S)
+        asked = [e for e in await _events(store) if isinstance(e, ApprovalRequestedEvent)]
+        sq = await open_store(scoped(store, TEAM))
+        rows = await sq.tables.inbox_rows()
+        opened = await open_thread(scoped(store, TEAM), rows[0].thread_id)
+        assert isinstance(opened, Ok)
+        granted = await opened.value.approve(asked[0].data.challenge_id, REQUESTER)
+        assert isinstance(granted, Ok), granted
+        async with host(store=store, agents={"bot": bot}, channels={"fake": channel}) as again:
+            await recovered(again)
+            await _pause()
+
+    asyncio.run(main())
+    events = asyncio.run(_events(store))
+    assert runs == ["x"]
+    assert _texts(channel, "Approve?") == ["Approve?"]
+    cards = [
+        e.data.preview
+        for e in events
+        if isinstance(e, ToolResultEvent) and e.data.call_id.startswith("send_")
+    ]
+    assert "ts-found" in cards
+    # Outbound settled it (confirmed by lookup): no park for a human, and the loop never
+    # recovered it as the agent's call.
+    assert not any(isinstance(e, ParkedEvent) and e.data.address.kind == "effect" for e in events)
+    assert all(e.actor.kind == "host" for e in events if isinstance(e, EffectUnknownEvent))
     assert _completed(events)

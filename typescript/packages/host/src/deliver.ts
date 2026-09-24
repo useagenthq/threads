@@ -61,6 +61,13 @@ export async function sendOp(
   };
   const known = writer.chain.fold.calls.get(call.callId);
   if (known?.result !== undefined) return;
+  // The id is a model call's (its tool_use took it): never send on the agent's own call.
+  if (known !== undefined && !writer.chain.fold.hostCalls.has(call.callId)) {
+    console.error(
+      `threads host: ${call.callId} is a model call on ${branch}; that message is not sent`,
+    );
+    return;
+  }
   if (known === undefined) {
     const opened = writer.append([
       {
@@ -86,7 +93,12 @@ export async function sendOp(
         },
       },
     ]);
-    if (!opened.ok) return;
+    if (!opened.ok) {
+      console.error(
+        `threads host: send ${call.callId} on ${branch} not issued (${opened.error.code}: ${opened.error.message})`,
+      );
+      return;
+    }
   }
   const status = writer.chain.fold.effects.get(s.key)?.status;
   // A send already begun and unsettled (a crash) is reconciled, never blindly re-sent.

@@ -25,9 +25,9 @@ if TYPE_CHECKING:
 DAY_MS: Final = 86_400_000
 """Default TTL of a parked effect."""
 SKEW_MS: Final = 1000
+"""The adapter's declared clock skew margin for dedup windows; doubled on the host clock."""
 MAX_SENDS: Final = 3
 """Attempts in total for a channel send refused rate_limited or transient (as TypeScript)."""
-"""The adapter's declared clock skew margin for dedup windows; doubled on the host clock."""
 
 
 def invocation(state: CallState, spec: ToolSpec) -> Invocation:

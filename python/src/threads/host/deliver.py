@@ -12,6 +12,7 @@ on through the effect path; one with a result, or whose effect is parked, is lef
 crash between a turn's end and its reply's `tool_call` loses no reply and never sends one twice.
 """
 
+import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Final
 
@@ -58,6 +59,9 @@ type Source = tuple[str, Sequence[JsonObject], EventId, int | None]
 last channel_delivery before it."""
 
 
+_log = logging.getLogger(__name__)
+
+
 def deliver(to: Conversation) -> After:
     """The host's outbound work after a channel thread's run."""
 
@@ -67,7 +71,12 @@ def deliver(to: Conversation) -> After:
             if call_id not in rt.fold.calls:
                 issued = await rt.append(*_issue(call_id, op, request_id))
                 if isinstance(issued, Err):
+                    _log.error("send %s not issued: %s", call_id, issued.error.message)
                     return lost(issued.error)
+            elif call_id not in rt.fold.host_calls:
+                # The id is a model call's (its tool_use took it): never send on the agent's call.
+                _log.error("%s is a model call; that message is not sent", call_id)
+                continue
             stopped = await _send(rt, call_id, due=True)
             if stopped is not None:
                 return stopped
