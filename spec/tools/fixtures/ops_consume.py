@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import arr, num, obj, text
+from .ops_life import bounce
 from .ops_observe import call_of, finish
 from .ops_world import TEAM_LOG, public
 from .ref_rules import principal
@@ -81,17 +82,31 @@ def _open_ask(w: World, label: str, ask_id: JsonValue) -> bool:
     )
 
 
-def _waits(w: World, label: str) -> dict[str, str]:
-    """This log's open waits: settle MonitorId -> WaitId."""
+def _settles(w: World, label: str) -> dict[str, str]:
+    """Every settle MonitorId this log registered -> its WaitId."""
     log, out = w.logs[label], dict[str, str]()
     for e in log.events:
         d = obj(e["data"])
         if e["type"] == "wait_started":
             for m in arr(d["members"]):
                 out[f"{log.branch}:{e['event_id']}:{text(obj(m)['name'])}"] = text(d["wait_id"])
-        elif e["type"] == "wait_finished":
-            out = {k: v for k, v in out.items() if v != d["wait_id"]}
     return out
+
+
+def _waits(w: World, label: str) -> dict[str, str]:
+    """This log's open waits: settle MonitorId -> WaitId."""
+    finished = (e for e in w.logs[label].events if e["type"] == "wait_finished")
+    done = {text(obj(e["data"])["wait_id"]) for e in finished}
+    return {k: v for k, v in _settles(w, label).items() if v not in done}
+
+
+def _committed(w: World, label: str, wait_id: str) -> None:
+    """Every settle or end notice of this wait already committed counts: consume it before the
+    wait finishes, whatever finishes it (commit order, never timestamps)."""
+    monitors = {k for k, v in _waits(w, label).items() if v == wait_id}
+    for env in _mine(w, label):
+        if env["kind"] in NOTICES and env["monitor_id"] in monitors:
+            _receive(w, label, env)
 
 
 def _control(w: World, label: str, env: Obj) -> bool:
@@ -106,13 +121,8 @@ def _control(w: World, label: str, env: Obj) -> bool:
             complete(w, label, text(env["ask_id"]), cancelled=False, due=False)
         else:
             _receive(w, label, env)  # a late reply or ask bounce is recorded only
-    elif kind in NOTICES and env["monitor_id"] in _waits(w, label):
-        got = _receive(w, label, env)
-        finish(w, label, _waits(w, label)[text(env["monitor_id"])], text(got["event_id"]))
-    elif kind in NOTICES and (team_log or member_park in arr(w.state(label)["parked"])):
-        got = _receive(w, label, env)
-        if not team_log:
-            w.add(label, "resumed", {"address": member_park, "cause_event_id": got["event_id"]})
+    elif kind in NOTICES and _notice(w, label, env):
+        pass
     elif kind == "member_parked":
         live = any(m["monitor_id"] == env["monitor_id"] for m in w.rows("monitors"))
         _receive(w, label, env)
@@ -120,6 +130,26 @@ def _control(w: World, label: str, env: Obj) -> bool:
             w.add(label, "parked", {"address": member_park, "reason": "awaiting_member"})
     elif team_log:
         _receive(w, label, env)  # the team log takes everything, and opens no turn
+    else:
+        return False
+    return True
+
+
+def _notice(w: World, label: str, env: Obj) -> bool:
+    """A settle or end notice that is control mail: its wait's (open, or finished and so
+    recorded only), the team log's, or one resolving a member park."""
+    monitor = text(env["monitor_id"])
+    member_park: Obj = {"kind": "member", "id": monitor}
+    team_log = w.is_team_log(label)
+    if monitor in _waits(w, label):
+        got = _receive(w, label, env)
+        finish(w, label, _waits(w, label)[monitor], text(got["event_id"]))
+    elif monitor in _settles(w, label):
+        _receive(w, label, env)  # its wait already finished: recorded only
+    elif team_log or member_park in arr(w.state(label)["parked"]):
+        got = _receive(w, label, env)
+        if not team_log:
+            w.add(label, "resumed", {"address": member_park, "cause_event_id": got["event_id"]})
     else:
         return False
     return True
@@ -139,6 +169,7 @@ def apply_cancel(w: World, label: str, env: Obj) -> None:
         if address["kind"] == "ask" and _open_ask(w, label, ident):
             complete(w, label, ident, cancelled=True, due=False)
         elif address["kind"] == "wait" and ident in _waits(w, label).values():
+            _committed(w, label, ident)
             finish(w, label, ident, got, deadline=True)
         elif address["kind"] == "member":
             w.add(label, "resumed", {"address": address, "cause_event_id": got})
@@ -159,6 +190,8 @@ def consume(w: World, label: str, _inp: Obj) -> Obj:
     rows = w.pending(TEAM_LOG if row is None else text(row["name"]))
     if not rows:
         return {"status": "nothing_pending"}
+    if row is not None and row["state"] == "ended":
+        return refuse_all(w, label, row)
     state = w.state(label)
     turn = _pair(w.turn_provenance(label)) if state["status"] == "in_turn" else None
     blocked = bool(arr(state["parked"]))
@@ -168,6 +201,7 @@ def consume(w: World, label: str, _inp: Obj) -> Obj:
         if not _still_pending(w, label, env["mail_id"]):
             continue  # an earlier control row of this pass took it
         if _control(w, label, env):
+            blocked = blocked or env["kind"] == "cancel"  # a cancelled member takes no new work
             continue
         if blocked or arr(w.state(label)["parked"]):
             continue
@@ -197,15 +231,17 @@ def deadline(w: World, label: str, inp: Obj) -> Obj:
     )
     if w.now < num(obj(started["data"])["deadline"]) or key not in _waits(w, label).values():
         return {"status": "not_due"}
-    monitors = {k for k, v in _waits(w, label).items() if v == key}
-    for env in _mine(w, label):
-        if env["kind"] in NOTICES and env["monitor_id"] in monitors:
-            _receive(w, label, env)  # committed before this step: it counts
+    _committed(w, label, key)
     return finish(w, label, key, None, deadline=True)
 
 
 def _ask_due(w: World, label: str, key: str, ask: Obj) -> Obj:
-    if ask["state"] != "open" or w.now < num(ask["deadline"]):
+    if ask["state"] != "open":
+        return {"status": "not_due"}
+    if w.is_team_log(label) and w.team()["closed_at"] is not None:
+        # Team close is a trigger of its own: the team log's next step closes its open asks.
+        return complete(w, label, key, cancelled=True, due=False) or {"status": "not_due"}
+    if w.now < num(ask["deadline"]):
         return {"status": "not_due"}
     replied = any(
         e.get("ask_id") == key and e["kind"] in ("reply", "bounce") for e in _mine(w, label)
@@ -214,5 +250,16 @@ def _ask_due(w: World, label: str, key: str, ask: Obj) -> Obj:
     if cancel is not None and not replied:
         apply_cancel(w, label, cancel)  # the barrier closes the ask cancelled
         return {"ask_id": key, "status": "cancelled"}
-    closed = w.is_team_log(label) and w.team()["closed_at"] is not None
-    return complete(w, label, key, cancelled=closed, due=True) or {"status": "not_due"}
+    return complete(w, label, key, cancelled=False, due=True) or {"status": "not_due"}
+
+
+def refuse_all(w: World, label: str, row: Obj) -> Obj:
+    """Mail reaching a member that already ended is refused under its writer, never left pending:
+    mail_refused{member_ended}, and a bounce only for a message or an ask, whose sender waits."""
+    taken: list[JsonValue] = []
+    for env in _mine(w, label):
+        why = w.add(label, "mail_refused", {"mail_id": env["mail_id"], "code": "member_ended"})
+        if env["kind"] in ("message", "ask"):
+            bounce(w, label, env, why)
+        taken.append(env["mail_id"])
+    return {"status": "refused", "mail_ids": taken}

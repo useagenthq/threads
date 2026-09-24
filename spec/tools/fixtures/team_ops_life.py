@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import tokens
+from .common import text, tokens
 from .ops_consume import deadline
+from .ops_life import end
 from .ops_member import start
 from .ops_observe import wait
 from .ops_send import send
@@ -22,6 +23,7 @@ from .team_ops_worlds import (
     operator,
     run,
     running,
+    take,
     team,
 )
 from .team_pieces import RESEARCHER, WRITER_THREAD
@@ -125,7 +127,7 @@ def life_vectors() -> list[Vec]:
             {"lead": ["turn_completed", "member_ended", S, S]},
         )
     )
-    return out + _team_log_vectors()
+    return [*out, _ended_lead_refuses(), *_team_log_vectors()]
 
 
 def _operator_started() -> World:
@@ -199,3 +201,29 @@ def _team_log_vectors() -> list[Vec]:
         )
     )
     return out
+
+
+def _ended_lead_refuses() -> Vec:
+    """After lead close, a member applies its cancel and ends: its end notice reaches the
+    lead's task monitor, but the lead has ended."""
+    w = running()
+    w.logs["lead"].model_request()
+    end(w, "lead", DOWN)
+    take(w, "researcher")
+    ended_: Obj = {"reason": "cancelled", "result": {"status": "cancelled"}}
+    end(w, "researcher", ended_)
+    notice = [text(m["mail_id"]) for m in w.pending("lead")]
+    return Vec(
+        "ended-lead-refuses-late-notice",
+        "4.11",
+        "The lead's end closed the team and cancelled researcher-1, whose own end then fired "
+        "the lead's task monitor. Mail reaching a member that already ended is refused under its "
+        "writer, never left pending: mail_refused{member_ended}, with no bounce for a "
+        "notification (only a message or an ask is bounced).",
+        w,
+        "consume",
+        "lead",
+        {},
+        {"status": "refused", "mail_ids": [*notice]},
+        {"lead": ["mail_refused"]},
+    )

@@ -1331,7 +1331,12 @@
         "team_feed": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "required": [
+              "team_id",
+              "branch_id",
+              "seq"
+            ]
           }
         },
         "pending_wakes": {

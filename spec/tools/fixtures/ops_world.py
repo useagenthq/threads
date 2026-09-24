@@ -154,7 +154,14 @@ class World:
         """The (principal, root_request) of label's open or last turn, as provenance."""
         log = self.logs[label]
         opened = turn_openers(log.events)
-        e = next(e for e in reversed(log.events) if text(e["event_id"]) in opened)
+        return self._opener(
+            label, next(e for e in reversed(log.events) if text(e["event_id"]) in opened)
+        )
+
+    def _opener(self, label: str, e: Obj) -> Obj:
+        """A turn opener's provenance. A woken turn belongs to the run that spawned its
+        children: the provenance of the turn in which the first cause's agent_spawned was."""
+        log = self.logs[label]
         d = obj(e["data"])
         if e["type"] == "message_received":
             return obj(obj(d["envelope"])["provenance"])
@@ -164,6 +171,18 @@ class World:
         if e["type"] == "user_input":
             root: Obj = {"thread_id": log.thread, "event_id": e["event_id"]}
             return {"principal": obj(e["actor"])["principal"], "root_request": root, "via": []}
+        if e["type"] == "woken":
+            late = next(x for x in log.events if x["event_id"] == arr(d["causes"])[0])
+            call = obj(late["data"])["call_id"]
+            spawn = next(
+                i for i, x in enumerate(log.events)
+                if x["type"] == "agent_spawned" and obj(x["data"])["call_id"] == call
+            )  # fmt: skip
+            opened = turn_openers(log.events[:spawn])
+            return self._opener(
+                label,
+                next(x for x in reversed(log.events[:spawn]) if text(x["event_id"]) in opened),
+            )
         raise AssertionError(f"no team provenance for a turn opened by {e['type']}")
 
     def call(self, label: str, call_id: str, args: Obj) -> Obj:

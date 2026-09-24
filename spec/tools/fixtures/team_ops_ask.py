@@ -337,16 +337,16 @@ def _cancelled() -> list[Vec]:
         Vec(
             "ask-operator-deadline-team-closed",
             "4.8",
-            "The lead ended, which closed the team, while the operator's ask was open: at the "
-            "deadline the team log closes it cancelled (no resumed and no result: team.ask "
-            "returns it).",
+            "The lead ended, which closed the team, while the operator's ask was open. Team "
+            "close is a trigger of its own: the team log's next step closes the ask cancelled "
+            "at once, long before its deadline (no resumed and no result: team.ask returns it).",
             w,
             "deadline",
             "team",
             {"id": ask_id},
             {"ask_id": ask_id, "status": "cancelled"},
             {"team": ["ask_closed"]},
-            DUE,
+            NOW,
         )
     )
     return out

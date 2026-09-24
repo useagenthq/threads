@@ -88,26 +88,38 @@ def ended(w: World, label: str, outcome: Obj) -> Obj:
 
 
 def _refuse(w: World, label: str, row: Obj, result: Obj) -> None:
-    """Every pending inbound mail is returned. Its bounce carries the refused mail's provenance,
-    so it belongs to the request that sent it; an open ask's bounce carries the result."""
-    log = w.logs[label]
+    """Every pending inbound mail is returned, each with a bounce."""
     for mail in w.pending(text(row["name"])):
         refused = obj(mail["envelope"])
         why = w.add(label, "mail_refused", {"mail_id": refused["mail_id"], "code": "member_ended"})
-        extra: dict[str, JsonValue] = {}
-        if refused["kind"] == "ask":
-            extra = {"ask_id": refused["ask_id"], "result": result}
-        sender = obj(refused["from"])
-        back = "team_log" if "operator" in sender else text(sender["name"])
-        bounce = envelope(
-            _next_id(w, label),
-            "bounce",
-            Route(w.ref(row), back, obj(refused["provenance"])),
-            at(text(why["event_id"]), log.thread),
-            code="member_ended",
-            **extra,
-        )
-        w.add(label, "message_sent", {"envelope": bounce})
+        bounce(w, label, refused, why, result)
+
+
+def bounce(w: World, label: str, refused: Obj, why: Obj, result: Obj | None = None) -> None:
+    """A bounce carries the refused mail's provenance, so it belongs to the request that sent it;
+    an ask's bounce carries the ended member's result."""
+    row = w.own_row(label)
+    if row is None:
+        raise AssertionError(label)
+    extra: dict[str, JsonValue] = {}
+    if refused["kind"] == "ask":
+        extra = {"ask_id": refused["ask_id"], "result": result or _last_result(w, label)}
+    sender = obj(refused["from"])
+    back = "team_log" if "operator" in sender else text(sender["name"])
+    note = envelope(
+        _next_id(w, label),
+        "bounce",
+        Route(w.ref(row), back, obj(refused["provenance"])),
+        at(text(why["event_id"]), w.logs[label].thread),
+        code="member_ended",
+        **extra,
+    )
+    w.add(label, "message_sent", {"envelope": note})
+
+
+def _last_result(w: World, label: str) -> JsonValue:
+    ended_ = next(e for e in reversed(w.logs[label].events) if e["type"] == "member_ended")
+    return obj(ended_["data"])["result"]
 
 
 def _close(w: World, label: str, settled: Obj) -> None:

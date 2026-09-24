@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from .ops_send import send
 from .team_ops_worlds import (
+    NOW,
     REQUESTS,
     Vec,
     dispatch,
@@ -135,7 +136,7 @@ def consume_vectors() -> list[Vec]:
             [],
         )
     )
-    return out + _park_vectors() + _cancel_applied() + _released()
+    return out + _park_vectors() + _cancel_applied() + _released() + _cancel_orders()
 
 
 def _lead_idle_writer_parked() -> World:
@@ -307,6 +308,91 @@ def _released() -> list[Vec]:
             "writer",
             _taken(f"{LEAD_BRANCH}:c3"),
             [RECEIVED, "cancel_requested", "wait_finished", "resumed", "tool_result"],
+        )
+    )
+    return out
+
+
+def _waiting_writer(*, settled_first: bool) -> World:
+    """writer-1 waits on researcher-1; the lead's cancel and the researcher's settlement are
+    both committed, in the given order, before the writer consumes."""
+    w = _both()
+    dispatch(w, "writer", "wait", {"members": ["researcher-1"]}, "c1")
+    w.stamp = True
+    w.now = NOW + 1000
+    if settled_first:
+        go_idle(w, "researcher", "Prices fell.")
+        w.now += 1000
+    dispatch(w, "lead", "cancel", {"member": "writer-1"}, "c3")
+    if not settled_first:
+        w.now += 1000
+        go_idle(w, "researcher", "Prices fell.")
+    w.now += 1000
+    return w
+
+
+def _cancel_orders() -> list[Vec]:
+    out: list[Vec] = []
+    for settled_first, name in ((False, "cancel-first"), (True, "settlement-first")):
+        w = _waiting_writer(settled_first=settled_first)
+        out.append(
+            Vec(
+                f"cancel-applied-waiter-counts-committed-settlement-{name}",
+                "4.12, 4.14",
+                "writer-1 waits on researcher-1. Its cancel and the researcher's settlement are "
+                "both committed before the writer consumes"
+                + (", the settlement first. " if settled_first else ", the cancel first. ")
+                + "Either way the settlement counts (commit order, as at the deadline step): "
+                "applying the cancel consumes the wait's committed notices, then finishes the "
+                "wait with the researcher in finished and timed_out false.",
+                w,
+                "consume",
+                "writer",
+                {},
+                _taken(*_mail_to(w, "writer-1")),
+                {
+                    "writer": [
+                        RECEIVED,
+                        "cancel_requested",
+                        RECEIVED,
+                        "wait_finished",
+                        "resumed",
+                        "tool_result",
+                    ]
+                    if not settled_first
+                    else [
+                        RECEIVED,
+                        "wait_finished",
+                        "resumed",
+                        "tool_result",
+                        RECEIVED,
+                        "cancel_requested",
+                    ]
+                },
+                w.now,
+            )
+        )
+    w = _both(researcher_idle=True)
+    w.stamp = True
+    w.now = NOW + 1000
+    dispatch(w, "lead", "cancel", {"member": "researcher-1"}, "c3")
+    w.now += 1000
+    dispatch(w, "lead", "send", {"to": "researcher-1", "text": "One more thing."}, "c4")
+    w.now += 1000
+    out.append(
+        Vec(
+            "cancel-stops-new-work",
+            "4.7, 4.14",
+            "The idle researcher's pending mail is the lead's cancel, then a message of the same "
+            "run. The cancel is applied, and a cancelled member takes no new work: the message "
+            "stays pending (the member's end refuses it), so no turn opens.",
+            w,
+            "consume",
+            "researcher",
+            {},
+            _taken(f"{LEAD_BRANCH}:c3"),
+            {"researcher": [RECEIVED, "cancel_requested"]},
+            w.now,
         )
     )
     return out
