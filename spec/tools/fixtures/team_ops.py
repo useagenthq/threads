@@ -21,6 +21,7 @@ from .team_ops_mail import consume_vectors
 from .team_ops_send import cancel_vectors, send_vectors
 from .team_ops_start import materialize_vectors, start_vectors
 from .team_ops_watch import monitor_vectors, wait_vectors
+from .team_ops_woken import woken_vectors
 
 if TYPE_CHECKING:
     from .jcs import Obj
@@ -56,6 +57,7 @@ def _vectors() -> list[Vec]:
         *start_vectors(),
         *materialize_vectors(),
         *life_vectors(),
+        *woken_vectors(),
         *wait_vectors(),
         *monitor_vectors(),
     ]

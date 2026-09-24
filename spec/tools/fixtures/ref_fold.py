@@ -42,8 +42,10 @@ def _first(c: Check, e: Obj, d: Obj, t: str) -> None:
     c.branch = text(e["branch_id"])
     if t == "team_opened":
         c.team_log, c.lead_thread = True, text(d["lead_thread_id"])
-    elif t == "thread_started" and "parent" in d:
-        c.member = obj(d["parent"])["relation"] == "team_member"
+    elif t == "thread_started":
+        parent = d.get("parent")
+        c.member = isinstance(parent, dict) and parent["relation"] == "team_member"
+        c.in_team = c.member or "team" in d
 
 
 def _received(c: Check, e: Obj, env: Obj) -> None:
@@ -126,6 +128,11 @@ def _member_ended(c: Check, _e: Obj, _d: Obj) -> None:
     c.ended = True
 
 
+def _cancel(c: Check, _e: Obj, d: Obj) -> None:
+    """A tree cancel stops a team member (the lead included) for good: its end follows."""
+    c.stopped = c.stopped or (c.in_team and d["scope"] == "tree")
+
+
 FOLDS: dict[str, Callable[[Check, Obj, Obj], None]] = {
     "user_input": _input,
     "woken": _woken,
@@ -135,6 +142,7 @@ FOLDS: dict[str, Callable[[Check, Obj, Obj], None]] = {
     "message_sent": _sent,
     "ask_closed": lambda c, _e, d: c.asks_out.discard(text(d["ask_id"])),
     "member_ended": _member_ended,
+    "cancel_requested": _cancel,
     "operator_request": _request,
     "tool_call": _set("pending", "call_id"),
     "tool_result": lambda c, _e, d: c.pending.discard(text(d["call_id"])),

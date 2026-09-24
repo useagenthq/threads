@@ -1,0 +1,16 @@
+{
+  "name": "member-cancelled-then-turn-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 37: researcher-1 applied the lead's tree cancel (message_received, cancel_requested{scope: tree}) and its turn ended cancelled, but its log then takes the lead's message as a new turn. After a tree cancel a team member's log opens no turn (only a resumed may continue the turn already open), even before its member_ended: invalid_transition at the receipt, in the researcher's log.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "researcher",
+      "team"
+    ]
+  }
+}

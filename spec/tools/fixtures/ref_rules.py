@@ -36,7 +36,7 @@ class Check:
 
     def __init__(self) -> None:
         self.first = True
-        self.team_log = self.member = False
+        self.team_log = self.member = self.in_team = self.stopped = False
         self.branch = ""
         self.lead_thread = ""
         self.turn: Run | None = None
@@ -98,8 +98,8 @@ class Check:
             return "45: a receipt's actor is not its provenance principal"
         if self.turn is not None and not joins(self.turn, run) and mail_renders(env, self.settle):
             return "34: mail of another request joins an open turn"
-        if self.ended and self.opens(env):
-            return "37: an ended member's log opens a turn"
+        if (self.ended or self.stopped) and self.opens(env):
+            return "37: an ended or cancelled member's log opens a turn"
         return None
 
     def rule_mail_refused(self, _e: Obj, d: Obj) -> str | None:
@@ -167,8 +167,8 @@ class Check:
 
     # rules 41, 45: inputs
     def rule_input(self, _e: Obj, d: Obj) -> str | None:
-        if self.ended:
-            return "37: an ended member's log opens a turn"
+        if self.ended or self.stopped:
+            return "37: an ended or cancelled member's log opens a turn"
         if d.get("mail_id") in self.mail_done:
             return "31: a task taken twice"
         task = d["source"] == "team_task"
@@ -212,8 +212,8 @@ class Check:
 
     # rules 32, 45: background wakes
     def rule_woken(self, e: Obj, d: Obj) -> str | None:
-        if self.ended:
-            return "37: an ended member's log opens a turn"
+        if self.ended or self.stopped:
+            return "37: an ended or cancelled member's log opens a turn"
         causes = [text(c) for c in arr(d["causes"])]
         runs = [self.spawn_runs.get(self.trailing.get(c, "")) for c in causes]
         if self.turn is not None or len(set(causes)) < len(causes):
