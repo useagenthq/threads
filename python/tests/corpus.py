@@ -1,6 +1,7 @@
 """The shared conformance corpus (spec/conformance/cases): reading case files, and the test-kit
 sandbox the `recover` cases script. Runners import this; it holds no per-case code."""
 
+import json
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -9,11 +10,12 @@ from pathlib import Path
 from pydantic import JsonValue, TypeAdapter
 
 from threads._json_schema import holds
-from threads.log import JsonObject, ToolSpec
+from threads.log import JsonObject, ParseError, ToolSpec
 from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound, NotFoundNonfinal
 from threads.loop.tools import Dispatched, Invocation, Output, Termination
 from threads.reduce.handlers import to_json
-from threads.store import MemoryArtifacts, StoredEvent
+from threads.result import Err, Ok
+from threads.store import MemoryArtifacts, SqliteStore, StoredEvent, VerifiedLog, verify_export
 
 CASES = Path(__file__).resolve().parents[2] / "spec" / "conformance" / "cases"
 IMPL = "threads-py"
@@ -160,3 +162,31 @@ def matches(matcher: dict[str, JsonValue], event: StoredEvent) -> bool:
     if "actor_kind" in matcher and matcher["actor_kind"] != obj(wire["actor"])["kind"]:
         return False
     return _subset(matcher.get("data", {}), wire["data"])
+
+
+def error_json(error: ParseError) -> Err[str]:
+    return Err(json.dumps({"code": error.code, "seq": error.seq}))
+
+
+async def import_and_read(case: Path, log: bytes, now: int) -> Ok[VerifiedLog] | Err[str]:
+    """Imports an export into a fresh store holding the case's artifacts and reads the last
+    branch back from SQLite."""
+    verified = verify_export(log, now)
+    if isinstance(verified, Err):
+        return error_json(verified.error)
+    opened = await SqliteStore.open(artifacts=stored_artifacts(case))
+    assert isinstance(opened, Ok)
+    store = opened.value
+    try:
+        stored = await store.import_log(verified.value)
+        if isinstance(stored, Err):
+            return error_json(stored.error)
+        branch = verified.value.segments[-1].header.branch_id
+        if verified.value.head_verified:
+            # SQLite and JSONL are one contract: the export is the imported bytes.
+            assert await store.export(branch) == Ok(log)
+        read = await store.read(branch, now)
+    finally:
+        await store.close()
+    assert isinstance(read, Ok), read
+    return read

@@ -3,7 +3,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { parseLogLine } from "../../src/log";
-import { verifyExport } from "../../src/verify/verify";
 import { caseSchema } from "../conformance/schema";
 
 // The team wire contract before its build: the shared line vector parses exactly as authored,
@@ -59,21 +58,5 @@ describe("staged cases", () => {
         for (const line of lines.filter((l) => l !== ""))
           expect(outcome(line)).not.toBe("invalid_line");
       }
-    });
-});
-
-// Until the Teams build, a reader refuses a team log at its first team event or team form
-// (a lead's thread_started{team}, a member's team_member parent, a team log's team_opened).
-describe("team logs before the build", () => {
-  for (const label of ["lead", "researcher", "team"])
-    test(`the ${label} log of a staged team case is unsupported_critical_event at seq 1`, () => {
-      const bytes = readFileSync(
-        join(STAGED, "team-settle-wakes-lead", "logs", `${label}.jsonl`),
-      );
-      const verified = verifyExport(new Uint8Array(bytes));
-      expect(verified.ok ? "ok" : verified.error.code).toBe(
-        "unsupported_critical_event",
-      );
-      expect(verified.ok ? 0 : verified.error.seq).toBe(1);
     });
 });

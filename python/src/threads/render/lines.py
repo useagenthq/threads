@@ -8,14 +8,19 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import (
     CompactedEvent,
+    CompletedResult,
     Event,
     HeartbeatEvent,
     InjectedEvent,
+    MailEnvelope,
+    MailSender1,
+    MessageReceivedEvent,
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
     ParseError,
     Span,
     SteerEvent,
+    TextBody,
     TextPart,
     ToolResultEvent,
     ToolResultLateEvent,
@@ -23,10 +28,19 @@ from threads.log import (
     ToolSpec,
     UserInputEvent,
 )
+from threads.log.jcs import canonicalize
 from threads.reduce.handlers import to_json
 from threads.reduce.view import RenderView, assistant_parts
 from threads.render.artifacts import AnyRef, Part, ReadArtifact, part_refs, read_text
-from threads.render.framing import CLEARED, REDACTED, context, heartbeat, reference, user_line
+from threads.render.framing import (
+    CLEARED,
+    REDACTED,
+    context,
+    esc,
+    heartbeat,
+    reference,
+    user_line,
+)
 from threads.result import Err, Ok
 
 
@@ -56,7 +70,49 @@ def build(view: RenderView, read: ReadArtifact, event: Event) -> Ok[Line | None]
         return _injected(read, event)
     if isinstance(event, CompactedEvent):
         return _summary(read, event)
+    if isinstance(event, MessageReceivedEvent):
+        return _mail(read, event)
     return Ok(_plain(view, event))
+
+
+def _mail(read: ReadArtifact, event: MessageReceivedEvent) -> Ok[Line | None] | Err[ParseError]:
+    """A received mail as an untrusted `<message>` user line, from its envelope alone."""
+    env = event.data.envelope
+    body = _mail_text(read, env, event.seq)
+    if isinstance(body, Err):
+        return body
+    sender = env.from_
+    # No member name can produce operator="true".
+    who = 'operator="true"' if isinstance(sender, MailSender1) else f'from="{esc(sender.name)}"'
+    ask = f' ask_id="{esc(env.ask_id)}"' if env.kind == "ask" and env.ask_id is not MISSING else ""
+    head = f'<message {who} kind="{env.kind}"{ask} untrusted="true">'
+    return Ok(Line(user_line(f"{head}\n{esc(body.value)}\n</message>")))
+
+
+def _mail_text(read: ReadArtifact, env: MailEnvelope, seq: int) -> Ok[str] | Err[ParseError]:
+    """A mail's text: its body, a notification's result as RFC 8785 JSON, or a bounce's code."""
+    if env.body is not MISSING:
+        return _body_text(read, env.body, seq)
+    if env.result is MISSING:
+        return Ok(f"bounced: {'' if env.code is MISSING else env.code}")
+    value = to_json(env.result)
+    if isinstance(env.result, CompletedResult) and isinstance(value, dict):
+        output = _body_text(read, env.result.output, seq)
+        if isinstance(output, Err):
+            return output
+        value = {**value, "output": output.value}
+    text = canonicalize(value)
+    if isinstance(text, Err):
+        raise AssertionError(f"a parsed result is always canonical: {text.error}")
+    return Ok(text.value)
+
+
+def _body_text(read: ReadArtifact, body: TextBody, seq: int) -> Ok[str] | Err[ParseError]:
+    if body.text is not MISSING:
+        return Ok(body.text)
+    if body.ref is MISSING:
+        raise AssertionError("the schema requires a body's text or ref")
+    return read_text(read, body.ref, seq)
 
 
 def _plain(view: RenderView, event: Event) -> Line | None:

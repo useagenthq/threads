@@ -20,6 +20,8 @@ export type TranscriptEntry = {
 export function transcript(
   events: readonly KnownEvent[],
 ): readonly TranscriptEntry[] {
+  // A team log has no thread_started: it never renders.
+  if (!events.some((e) => e.type === "thread_started")) return [];
   const v = view(events);
   const out: TranscriptEntry[] = [];
   for (const entry of walk(v, events)) {
@@ -40,6 +42,7 @@ function roleOf(v: View, e: VisibleEvent): TranscriptEntry["role"] | undefined {
       return v.denied.has(e.event_id) ? undefined : "user";
     case "injected":
     case "heartbeat":
+    case "message_received":
       return "context";
     case "model_response":
     case "model_response_recovered":

@@ -1,5 +1,6 @@
 import { assertNever } from "../assert-never";
 import type { EventOf } from "../fold/state";
+import { monitorId } from "../fold/team";
 import { type KnownEvent, principalKey } from "../log";
 
 /** The events that render a conversational line (Render v1 table, spec/schema/README.md). */
@@ -13,6 +14,7 @@ export type VisibleEvent = EventOf<
   | "tools_changed"
   | "tool_result"
   | "tool_result_late"
+  | "message_received"
 >;
 export type Compacted = EventOf<"compacted">;
 
@@ -33,6 +35,8 @@ export type View = {
   readonly hostCalls: ReadonlySet<string>;
   /** Memory recalled for another principal than the current input's: renders nothing. */
   readonly foreignMemory: ReadonlySet<string>;
+  /** Receipts whose mail reaches the model as a call's result, or not at all. */
+  readonly silentMail: ReadonlySet<string>;
 };
 
 function covers(c: Compacted, seq: number): boolean {
@@ -63,7 +67,35 @@ export function view(events: readonly KnownEvent[]): View {
     ),
     hostCalls: hostCalls(events),
     foreignMemory: foreignMemory(events),
+    silentMail: silentMail(events),
   };
+}
+
+/**
+ * A reply, an ask's bounce and a wait's notification answer their call; a cancel and a park
+ * notice reach no model. Their receipts render nothing (reference: render.py `message`).
+ */
+function silentMail(events: readonly KnownEvent[]): ReadonlySet<string> {
+  const settle = new Set(
+    events.flatMap((e) =>
+      e.type === "wait_started"
+        ? e.data.members.map((m) => monitorId(e, m.name))
+        : [],
+    ),
+  );
+  return new Set(
+    events.flatMap((e) => {
+      if (e.type !== "message_received") return [];
+      const { kind, ask_id: ask, monitor_id: monitor } = e.data.envelope;
+      const silent =
+        kind === "reply" ||
+        kind === "cancel" ||
+        kind === "member_parked" ||
+        (kind === "bounce" && ask !== undefined) ||
+        (monitor !== undefined && settle.has(monitor));
+      return silent ? [e.event_id] : [];
+    }),
+  );
 }
 
 /**
@@ -156,7 +188,8 @@ function hidden(v: View, e: KnownEvent): boolean {
   return (
     ((e.type === "tool_result" || e.type === "tool_result_late") &&
       v.hostCalls.has(e.data.call_id)) ||
-    (e.type === "injected" && v.foreignMemory.has(e.event_id))
+    (e.type === "injected" && v.foreignMemory.has(e.event_id)) ||
+    v.silentMail.has(e.event_id)
   );
 }
 
@@ -171,6 +204,7 @@ function visible(e: KnownEvent): VisibleEvent | undefined {
     case "tools_changed":
     case "tool_result":
     case "tool_result_late":
+    case "message_received":
       return e;
     case "thread_started":
     case "model_request":
@@ -227,7 +261,6 @@ function visible(e: KnownEvent): VisibleEvent | undefined {
     case "wait_finished":
     case "woken":
     case "message_sent":
-    case "message_received":
     case "mail_refused":
     case "ask_closed":
     case "operator_request":

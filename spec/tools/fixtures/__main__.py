@@ -93,6 +93,8 @@ FAMILIES = (
     thread_methods,
     styles,
     wakes,
+    team_rules,
+    team_bindings,
 )
 
 
@@ -123,8 +125,14 @@ def _build_staged(out: pathlib.Path) -> None:
     """Cases for an approved spec whose build hasn't landed: generated and checked like the
     corpus, but no runner reads them until the build moves each family into FAMILIES."""
     out.mkdir()
-    for family in (team_rules, team_bindings, team_replay, team_rebind, team_operator, run_cases):
-        family.build(out)
+    for build in (
+        team_bindings.build_staged,
+        team_replay.build,
+        team_rebind.build,
+        team_operator.build,
+        run_cases.build,
+    ):
+        build(out)
 
 
 APPENDING_KINDS = frozenset({"recover", "stub"})

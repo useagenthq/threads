@@ -20,7 +20,20 @@ import {
   checkOutputStyle,
   checkRequestedCompacted,
 } from "./requested";
-import { checkNotYetTeam } from "./team";
+import {
+  checkAskClosed,
+  checkMemberEnd,
+  checkNotEnded,
+  checkOperator,
+  checkReceived,
+  checkRefused,
+  checkSent,
+  checkStarted,
+  checkTeamInput,
+  checkTeamLog,
+  checkTeamPark,
+  checkWaits,
+} from "./team";
 import {
   checkCompacted,
   checkInput,
@@ -32,7 +45,7 @@ import { checkWoken } from "./wake";
 
 /**
  * The semantic rules that need earlier events (spec/schema/README.md, "Semantic rules" 6-13
- * and 17-30), checked against the fold before `line` is applied. Rules 1-4 are the chain's,
+ * and 17-45, but 43), checked against the fold before `line` is applied. Rules 1-4 are the chain's,
  * 5 is the parser's, and 14-16 need rendering or a fork request.
  */
 export function validateNext(
@@ -45,7 +58,7 @@ export function validateNext(
   if (fold.eventIds.has(event.event_id))
     return fail(`event_id ${event.event_id} repeats on the chain`, event.seq);
   if (line.kind === "unknown_event") return ok(undefined);
-  const violation = checkNotYetTeam(line.event) ?? check(fold, line.event);
+  const violation = checkTeamLog(fold, line.event) ?? check(fold, line.event);
   return violation === undefined
     ? ok(undefined)
     : err(logError(violation.code, violation.message, event.seq));
@@ -63,6 +76,7 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "tools_changed":
       return checkToolsChanged(e);
     case "user_input":
+      return checkInput(fold, e) ?? checkTeamInput(fold, e);
     case "steer":
       return checkInput(fold, e);
     case "model_request":
@@ -125,7 +139,6 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "approval_requested":
     case "snapshot":
     case "fork":
-    case "parked":
     case "park_escalated":
     case "resumed":
     case "cancel_requested":
@@ -140,24 +153,34 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "team_task_created":
     case "context_preflight_blocked":
       return undefined;
+    case "parked":
+      return checkTeamPark(fold, e);
     case "woken":
-      return checkWoken(fold, e);
+      return checkWoken(fold, e) ?? checkNotEnded(fold);
     case "team_opened":
+    case "monitor_set":
+      return undefined;
     case "member_started":
+      return checkStarted(fold, e);
     case "member_idle":
     case "member_ended":
-    case "member_observed":
-    case "monitor_set":
+      return checkMemberEnd(fold, e);
     case "wait_started":
     case "wait_finished":
+    case "member_observed":
+      return checkWaits(fold, e);
     case "message_sent":
+      return checkSent(fold, e);
     case "message_received":
+      return checkReceived(fold, e);
     case "mail_refused":
+      return checkRefused(fold, e);
     case "ask_closed":
+      return checkAskClosed(fold, e);
     case "operator_request":
     case "operator_refused":
     case "message_policy_decided":
-      return undefined;
+      return checkOperator(fold, e);
     default:
       return assertNever(e);
   }

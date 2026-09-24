@@ -10,8 +10,7 @@ from pydantic import JsonValue
 from schema_check import CASE_ID, valid
 
 from threads.log import parse_log_line
-from threads.result import Err, Ok
-from threads.store import verify_export
+from threads.result import Ok
 
 SPEC = Path(__file__).resolve().parents[3] / "spec"
 STAGED = SPEC / "conformance" / "staged"
@@ -56,13 +55,3 @@ def test_a_staged_case_is_valid_and_its_lines_pass_the_schema(case: Path) -> Non
     for log in _logs(case):
         for line in log.read_text(encoding="utf-8").splitlines():
             assert _outcome(line) != "invalid_line", (log.name, line[:80])
-
-
-@pytest.mark.parametrize("label", ["lead", "researcher", "team"])
-def test_a_team_log_is_refused_until_the_build(label: str) -> None:
-    """Until the Teams build, a reader refuses a team log at its first team event or team form
-    (a lead's thread_started{team}, a member's team_member parent, a team log's team_opened)."""
-    log = (STAGED / "team-settle-wakes-lead" / "logs" / f"{label}.jsonl").read_bytes()
-    verified = verify_export(log, 0)
-    assert isinstance(verified, Err)
-    assert (verified.error.code, verified.error.seq) == ("unsupported_critical_event", 1)
