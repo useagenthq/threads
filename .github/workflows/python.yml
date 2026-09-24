@@ -29,6 +29,13 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pytest --junitxml=junit.xml
+      - uses: oven-sh/setup-bun@v2
+      - name: The stock web clients (AI SDK, AG-UI) against the Python host
+        working-directory: typescript
+        run: |
+          ../scripts/generate.sh ts
+          bun install --frozen-lockfile
+          bun test packages/host/test/jobs/ui-python.test.ts
       - name: Spec tooling is strictly typed and fixtures are current
         run: |
           uv run pyright ../spec/tools

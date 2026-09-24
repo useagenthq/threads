@@ -1,0 +1,123 @@
+---
+title: Frontends
+description: Connect a React chat UI with the AI SDK's useChat, or any AG-UI client such as CopilotKit, straight to the host.
+icon: MonitorSmartphone
+---
+
+Every host speaks the two common chat UI protocols out of the box: the Vercel **AI SDK UI message stream** (what `useChat` reads) and **AG-UI** (CopilotKit, `@ag-ui/client`). Point the stock client at the host and you get streaming text, tool calls, approvals and questions in the browser. You don't need an adapter, a proxy or any extra config.
+
+What you get for free:
+
+- **Streams survive drops.** A reload or a flaky connection picks up the same run where it was. Retrying a message never starts a second run.
+- **Approvals in the UI.** A tool that needs approval shows up as an approval request, and the user's answer resumes the run.
+- **Every frame comes from the log.** What the browser shows is exactly what the [timeline](/docs/evals/timeline) and [replay](/docs/evals/replay) show.
+
+Both hosts serve the same routes, byte for byte:
+
+| Method | Path | For |
+|---|---|---|
+| `POST` | `/v1/ui/ai-sdk/{agent}` | `useChat` / `DefaultChatTransport` |
+| `GET` | `/v1/ui/ai-sdk/{agent}/{chat_id}/stream` | `useChat`'s `resume: true` reconnect |
+| `POST` | `/v1/ui/ag-ui/{agent}` | AG-UI `HttpAgent` and CopilotKit |
+| `GET` | `/v1/threads/{thread_id}/runs/{run_id}/ui/{protocol}` | Custom clients: a run's frames, resumable by `Last-Event-ID` |
+
+The routes use the host's [`authenticate`](/docs/host/http-api#authenticate-callers), like the rest of the HTTP API.
+
+## React with the AI SDK
+
+Install `ai@7` and `@ai-sdk/react`, then point `useChat` at the host:
+
+```tsx
+"use client";
+import { useChat } from "@ai-sdk/react";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+} from "ai";
+import { useState } from "react";
+
+export function Chat({ chatId }: { chatId: string }) {
+  const { messages, sendMessage, addToolApprovalResponse, status } = useChat({
+    id: chatId,
+    resume: true,
+    transport: new DefaultChatTransport({
+      api: "/v1/ui/ai-sdk/support",
+      headers: { authorization: `Bearer ${token}` },
+    }),
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+  });
+  const [text, setText] = useState("");
+
+  return (
+    <div>
+      {messages.map((m) => (
+        <div key={m.id}>
+          {m.parts.map((part, i) => {
+            if (part.type === "text") return <p key={i}>{part.text}</p>;
+            if (part.type.startsWith("tool-") && "approval" in part && part.state === "approval-requested")
+              return (
+                <p key={i}>
+                  Allow {part.type.slice(5)}?{" "}
+                  <button onClick={() => addToolApprovalResponse({ id: part.approval.id, approved: true })}>Yes</button>
+                  <button onClick={() => addToolApprovalResponse({ id: part.approval.id, approved: false })}>No</button>
+                </p>
+              );
+            return null;
+          })}
+        </div>
+      ))}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          sendMessage({ text });
+          setText("");
+        }}
+      >
+        <input value={text} onChange={(e) => setText(e.target.value)} disabled={status !== "ready"} />
+      </form>
+    </div>
+  );
+}
+```
+
+- `id` is your chat's key. The host turns it into a thread for this caller and this agent, so two users with the same key never share a thread, and the key itself is never stored.
+- `resume: true` reconnects to a run that is still going after a reload.
+- When a tool needs [approval](/docs/control/human-in-the-loop), the user's answer is sent automatically and the run continues in the same assistant message.
+
+## AG-UI and CopilotKit
+
+Any AG-UI 1.0 client works. With `@ag-ui/client`:
+
+```ts
+import { HttpAgent } from "@ag-ui/client";
+
+const agent = new HttpAgent({
+  url: "https://api.example.com/v1/ui/ag-ui/support",
+  headers: { authorization: `Bearer ${token}` },
+  threadId: "chat-1",
+});
+
+agent.addMessage({ id: crypto.randomUUID(), role: "user", content: "Mail the report to Bob" });
+await agent.runAgent();
+
+// A tool that needs approval ends the run with an interrupt. Answer it to resume.
+for (const interrupt of agent.pendingInterrupts) {
+  await agent.runAgent({
+    resume: [{ interruptId: interrupt.id, status: "resolved", payload: { decision: "grant" } }],
+  });
+}
+```
+
+- `threadId` is your chat's key, scoped to the caller and the agent just like the AI SDK's `id`.
+- An approval is answered with `{decision: "grant" | "deny"}`, and `status: "cancelled"` denies it. A question takes `{answer: "..."}`. Each interrupt carries its `responseSchema`.
+- If someone else settled the interrupt first (an approver in Slack, say), resuming still works. The stream carries a `threads.resume_conflict` custom event that tells you what was recorded.
+- After a dropped connection, call `runAgent()` again with the same messages. The host sees the same last message id and streams that run again from a `MESSAGES_SNAPSHOT`. It never starts a second one.
+
+## Custom clients
+
+`GET /v1/threads/{thread_id}/runs/{run_id}/ui/ai-sdk` (or `/ag-ui`) streams a run's frames from the log. Each frame has an SSE id. Send the last one back as `Last-Event-ID` (or `?after=`) to continue with no gap and no duplicate. A cursor that isn't a frame of the run answers `400 invalid_cursor`.
+
+## Limits
+
+- User messages are text. File parts and frontend-defined tools answer `400 invalid_request`. Define tools on the agent instead.
+- The AI SDK's `regenerate` isn't supported: to try again, [fork](/docs/evals/fork) the thread.

@@ -20,8 +20,9 @@ def schema_ids() -> dict[str, Path]:
 
 
 def resolve(doc: Json, pointer: str) -> Json:
+    """The node `pointer` names; an empty pointer names the whole document."""
     node = doc
-    for part in pointer.strip("/").split("/"):
+    for part in [p for p in pointer.strip("/").split("/") if p]:
         if not isinstance(node, dict):
             raise ValueError(pointer)
         node = node[part.replace("~1", "/").replace("~0", "~")]
@@ -48,10 +49,15 @@ class Bundler:
         parts = [p for p in pointer.split("/") if p not in ("", "$defs", "properties")]
         name = "_".join(parts)
         if not path.name.startswith("host-api"):
-            name = path.name.split(".")[0] + "_" + name
+            name = "_".join(p for p in (path.name.split(".")[0], name) if p)
         self.names[(path, pointer)] = name
         self.schemas[name] = None  # reserve before recursing: schemas may be recursive
-        self.schemas[name] = self.rewrite(resolve(self.load(path), pointer), path)
+        node = resolve(self.load(path), pointer)
+        if isinstance(node, dict) and not pointer.strip("/"):
+            # A whole document (the UI protocol schemas): its $defs become components of
+            # their own as its refs reach them.
+            node = {k: v for k, v in node.items() if k not in ("$defs", "$schema")}
+        self.schemas[name] = self.rewrite(node, path)
         return name
 
     def ref(self, ref: str, base: Path) -> str:

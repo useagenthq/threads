@@ -1,0 +1,53 @@
+name: ui-drift
+
+# A drift alarm, never a gate (spec/schema/ui/README.md): the host's frames and foldAgUi are
+# pinned to @ag-ui/client@1.0.0 and the vendored AG-UI 1.0 schema. Once a week the same checks
+# run against the latest client, and the vendored schema is compared with the one at AG-UI's
+# latest release. A mismatch opens an issue; a version bump re-checks the pins in its own PR.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  latest-ag-ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript/packages/host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: typescript
+      - run: ./scripts/generate.sh
+        working-directory: .
+      - run: bun add --dev @ag-ui/client@latest @ag-ui/core@latest
+      - name: The ui cases and foldAgUi against the latest client
+        id: client
+        continue-on-error: true
+        run: bun test test/ui/cases.test.ts test/ui/pins.test.ts test/ui/ag-ui.e2e.test.ts
+      - name: The vendored schema against AG-UI's latest release
+        id: schema
+        continue-on-error: true
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo ag-ui-protocol/ag-ui --json tagName -q .tagName)
+          curl -fsSL "https://raw.githubusercontent.com/ag-ui-protocol/ag-ui/$tag/docs/spec/1.0/schema.json" \
+            -o "$RUNNER_TEMP/ag-ui.schema.json"
+          cmp "$RUNNER_TEMP/ag-ui.schema.json" spec/schema/ui/ag-ui-1.0.schema.json
+      - name: Open an issue on drift
+        if: steps.client.outcome == 'failure' || steps.schema.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --repo "${{ github.repository }}" \
+            --title "UI drift: the latest AG-UI differs from the pinned 1.0.0" \
+            --body "The weekly ui-drift job found a difference (client checks: ${{ steps.client.outcome }}, schema: ${{ steps.schema.outcome }}): ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. The pins hold on 1.0.0. Bump the client or re-vendor the schema in its own PR, and re-record spec/conformance/vectors/ag-ui-fold.json."

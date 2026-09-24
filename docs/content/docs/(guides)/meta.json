@@ -35,6 +35,7 @@
     "host/github",
     "host/schedules",
     "host/http-api",
+    "host/frontends",
     "---[Brain]Memory & knowledge---",
     "memory/memory",
     "memory/knowledge",

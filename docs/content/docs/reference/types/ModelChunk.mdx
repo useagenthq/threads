@@ -12,8 +12,12 @@ A union discriminated by `kind`.
   "delta": a piece of streamed text, shown live and not recorded on its own.
 </Field>
 
+<Field name="part" type={"number"} required>
+  The index this text will have in the committed response content (text parts only). An adapter that can't name it sends no deltas; the parts still arrive whole.
+</Field>
+
 <Field name="text" type={"string"} required>
-  The new text since the last delta.
+  The new text of that part since its last delta.
 </Field>
 
 ### part

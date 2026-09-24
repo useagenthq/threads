@@ -18,6 +18,10 @@
     "cancel",
     "set-model",
     "set-mode",
+    "ui-ai-sdk-chat",
+    "ui-ai-sdk-reconnect",
+    "ui-ag-ui-run",
+    "ui-run-frames",
     "channel-challenge",
     "channel-webhook"
   ]

@@ -123,6 +123,7 @@ The caller is compared as its principal key, `issuer/tenant/subject` with `%` an
 | `POST` | `/v1/threads/{thread_id}/cancel` | Cancel the thread's current work |
 | `POST` | `/v1/threads/{thread_id}/settings` | Switch the thread's model |
 | `POST` | `/v1/threads/{thread_id}/mode` | Change the permission mode |
+| `POST`, `GET` | `/v1/ui/...` | Chat UIs over the AI SDK and AG-UI protocols. See [Frontends](/docs/host/frontends) |
 | `GET`, `POST` | `/channels/{channel}/events` | Channel webhooks (no `authenticate`; verified per provider) |
 
 Errors are always `{"error": {"code": "...", "message": "..."}}`: `400 invalid_request`, `401 unauthenticated`, `403 forbidden`, `404 not_found`, and `409` for domain errors such as `branch_busy`. Most thread routes take an optional `?branch_id=` query parameter to act on a branch other than the main one.
