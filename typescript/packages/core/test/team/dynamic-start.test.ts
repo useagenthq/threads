@@ -3,11 +3,13 @@ import {
   agent,
   ConfigError,
   dynamicAgent,
+  openThread,
   scriptedModel,
   sqlite,
 } from "../../src";
 import { memberEntry } from "../../src/agent/registry";
 import { block, type Define } from "../../src/team/dynamic";
+import { unwrap } from "../store/helpers";
 import {
   invoiceStatus,
   PREAMBLE,
@@ -89,6 +91,9 @@ describe("a lead defines a member of a dynamic agent", () => {
     );
     expect(pinned.data.config_hash).toBe(started?.data.config_hash ?? "");
     expect(JSON.stringify(member)).not.toContain("invoice checker");
+    // The member's recorded requests re-render byte for byte.
+    const thread = unwrap(await openThread(store, pinned.thread_id));
+    expect(await thread.replay()).toEqual({ ok: true, value: undefined });
     assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
