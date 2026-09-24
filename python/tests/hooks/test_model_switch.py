@@ -54,10 +54,16 @@ RETRY: JsonValue = {
 
 
 def test_a_denied_model_switch_keeps_the_epoch_and_retries_on_it() -> None:
-    """ADR 0020: a deny keeps the old epoch; the attempt is retried on it, not given up."""
+    """ADR 0020: a deny keeps the old epoch; the attempt is retried on it, not given up. The
+    first deny stops the gate: a later extension is not asked (as in TypeScript)."""
+    asked: list[str] = []
 
     async def deny(_settings: ModelSettings, _ctx: RunContext[None]) -> SwitchGate:
         return {"decision": "deny", "reason": "stay on the pinned model"}
+
+    async def later(_settings: ModelSettings, _ctx: RunContext[None]) -> SwitchGate:
+        asked.append("later")
+        return {"decision": "allow"}
 
     async def main() -> list[str]:
         clock = Clock(T0)
@@ -84,7 +90,13 @@ def test_a_denied_model_switch_keeps_the_epoch_and_retries_on_it() -> None:
         }
         principal = Principal(issuer="api", tenant="t", subject="u")
         ctx = RunContext(None, thread, branch, principal)
-        hooks = bind([extension(name="ops", hooks={"before_model_switch": deny})], ctx)
+        hooks = bind(
+            [
+                extension(name="ops", hooks={"before_model_switch": deny}),
+                extension(name="late", hooks={"before_model_switch": later}),
+            ],
+            ctx,
+        )
         rt = Runtime(
             store, writer, serving(model), tools, allow_all, clock, clock.wait_until, hooks=hooks
         )
@@ -95,6 +107,7 @@ def test_a_denied_model_switch_keeps_the_epoch_and_retries_on_it() -> None:
         return [e.type for e in rt.events]
 
     appended = asyncio.run(main())
+    assert asked == []
     assert "settings_changed" not in appended
     denied = appended.index("hook_decision")
     assert appended[denied - 1 : denied + 3] == [

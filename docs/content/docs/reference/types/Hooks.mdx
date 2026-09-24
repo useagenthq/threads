@@ -129,7 +129,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeTool / before_tool" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string } | { decision: \"ask\"; rule?: PermissionRule }>"}>
-  Runs before the permission decision on every tool call, even one the policy denies (the deny stands). Return allow, deny with a reason, or ask to require approval; when several extensions answer, the strictest wins, and a throw or timeout denies. TypeScript stops at the first extension that denies, so later ones aren't called; Python calls every extension. Omit it and the agent's permission rules decide alone.
+  Runs before the permission decision on every tool call, even one the policy denies (the deny stands). Return allow, deny with a reason, or ask to require approval; extensions are asked in declaration order and the strictest answer wins; the first deny (a throw or timeout denies) stops the gate, so later extensions aren't called. Omit it and the agent's permission rules decide alone.
 </Field>
 
 <Field name="beforeTool(call) / before_tool(call)" type={"ToolCallEvent.data"} required>
@@ -161,7 +161,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="permissionRequest / permission_request" type={"(call: ToolCallEvent.data, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string } | { decision: \"ask\"; rule?: PermissionRule }>"}>
-  Answers a tool call the permission rules would send for approval. Return allow or deny to decide it, or ask to leave it to a human; a throw or timeout denies. Omit it and the call waits for a human approval.
+  Answers a tool call the permission rules would send for approval. Return allow or deny to decide it, or ask to leave it to a human; a throw or timeout denies, and the first deny stops the gate (later extensions aren't called). Omit it and the call waits for a human approval.
 </Field>
 
 <Field name="permissionRequest(call) / permission_request(call)" type={"ToolCallEvent.data"} required>
@@ -397,7 +397,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeModelSwitch / before_model_switch" type={"(settings: ModelSettings, ctx: RunContext<Deps>) => Promise<{ decision: \"allow\" } | { decision: \"deny\"; reason: string }>"}>
-  Gates an automatic model switch: the switch to a fallback model after repeated overloaded rejections (retry.fallback_after) and, with fallback_scope turn, the revert at the next input. Return allow, or deny with a reason to stay on the current model; a throw or timeout denies. Thread.setModel doesn't run it. Omit it and every automatic switch is allowed.
+  Gates an automatic model switch: the switch to a fallback model after repeated overloaded rejections (retry.fallback_after) and, with fallback_scope turn, the revert at the next input. Return allow, or deny with a reason to stay on the current model; a throw or timeout denies, and the first deny stops the gate (later extensions aren't called). Thread.setModel doesn't run it. Omit it and every automatic switch is allowed.
 </Field>
 
 <Field name="beforeModelSwitch(settings) / before_model_switch(settings)" type={"ModelSettings"} required>
@@ -413,7 +413,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeModelSwitch()[deny].decision / before_model_switch()[deny].decision" type={"\"deny\""} required>
-  deny: no switch to the fallback model. TypeScript keeps retrying the current model; Python ends the turn model_unavailable.
+  deny: no switch to the fallback model; the attempt is retried on the current model.
 </Field>
 
 <Field name="beforeModelSwitch()[deny].reason / before_model_switch()[deny].reason" type={"string"} required>

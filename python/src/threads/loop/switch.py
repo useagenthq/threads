@@ -36,7 +36,10 @@ def next_fallback(fold: Fold) -> ModelSettings | None:
 
 async def gate(rt: Runtime, settings: ModelSettings, **ids: str) -> tuple[list[Draft], bool]:
     """Asks before_model_switch: its decisions to record, and whether every hook allowed."""
-    ran = await rt.hooks.run("before_model_switch", SWITCH, settings)
+    # The first deny (or failure) decides: later extensions are not asked.
+    ran = await rt.hooks.run(
+        "before_model_switch", SWITCH, settings, until=lambda r: verdict(r) != "allow"
+    )
     hook = "before_model_switch"
     drafts = [decision_draft(hook, r, verdict(r), said(r, "reason"), **ids) for r in ran]
     return drafts, all(verdict(r) == "allow" for r in ran)

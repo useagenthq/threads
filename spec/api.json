@@ -3093,7 +3093,7 @@
             }
           },
           "required": false,
-          "doc": "Runs before the permission decision on every tool call, even one the policy denies (the deny stands). Return allow, deny with a reason, or ask to require approval; when several extensions answer, the strictest wins, and a throw or timeout denies. TypeScript stops at the first extension that denies, so later ones aren't called; Python calls every extension. Omit it and the agent's permission rules decide alone."
+          "doc": "Runs before the permission decision on every tool call, even one the policy denies (the deny stands). Return allow, deny with a reason, or ask to require approval; extensions are asked in declaration order and the strictest answer wins; the first deny (a throw or timeout denies) stops the gate, so later extensions aren't called. Omit it and the agent's permission rules decide alone."
         },
         "permission_request": {
           "type": {
@@ -3137,7 +3137,7 @@
             }
           },
           "required": false,
-          "doc": "Answers a tool call the permission rules would send for approval. Return allow or deny to decide it, or ask to leave it to a human; a throw or timeout denies. Omit it and the call waits for a human approval."
+          "doc": "Answers a tool call the permission rules would send for approval. Return allow or deny to decide it, or ask to leave it to a human; a throw or timeout denies, and the first deny stops the gate (later extensions aren't called). Omit it and the call waits for a human approval."
         },
         "permission_denied": {
           "type": {
@@ -3507,7 +3507,7 @@
                   {"object": {"decision": {"type": {"literal": "allow"}, "required": true, "doc": "allow: the switch to the fallback model goes ahead (settings_changed with reason fallback)."}}, "casing": "wire"},
                   {
                     "object": {
-                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: no switch to the fallback model. TypeScript keeps retrying the current model; Python ends the turn model_unavailable."},
+                      "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: no switch to the fallback model; the attempt is retried on the current model."},
                       "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision; the model never sees it."}
                     },
                     "casing": "wire"
@@ -3517,7 +3517,7 @@
             }
           },
           "required": false,
-          "doc": "Gates an automatic model switch: the switch to a fallback model after repeated overloaded rejections (retry.fallback_after) and, with fallback_scope turn, the revert at the next input. Return allow, or deny with a reason to stay on the current model; a throw or timeout denies. Thread.setModel doesn't run it. Omit it and every automatic switch is allowed."
+          "doc": "Gates an automatic model switch: the switch to a fallback model after repeated overloaded rejections (retry.fallback_after) and, with fallback_scope turn, the revert at the next input. Return allow, or deny with a reason to stay on the current model; a throw or timeout denies, and the first deny stops the gate (later extensions aren't called). Thread.setModel doesn't run it. Omit it and every automatic switch is allowed."
         },
         "after_model_switch": {
           "type": {

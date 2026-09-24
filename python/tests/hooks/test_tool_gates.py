@@ -6,11 +6,13 @@ import asyncio
 import json
 
 import pytest
-from hook_kit import ALLOW, Accent, Box, decisions, kinds, run, text, use
+from hook_kit import ALLOW, Accent, Box, Echo, decisions, kinds, run, text, use
 
-from threads import Completed, RunContext
+from threads import Completed, RunContext, agent, scripted_model, sqlite, tool
+from threads.hooks.extension import extension
 from threads.hooks.types import Hooks, ResultGate, ToolGate
 from threads.log import HookDecisionEvent, Span, ToolCallData, ToolResultData
+from threads.result import Ok
 
 
 def test_before_tool_deny_is_folded_into_the_permission_decision_and_nothing_runs() -> None:
@@ -150,3 +152,34 @@ def test_before_tool_result_sees_only_executed_results() -> None:
     _result, events = asyncio.run(run(hooks, [use(), text("ok")]))
     assert seen == []
     assert decisions(events) == [("before_tool", "deny")]
+
+
+def test_before_tool_stops_at_the_first_deny_as_in_typescript() -> None:
+    """Later extensions are not asked once one denies (before_tool and permission_request)."""
+    asked: list[str] = []
+
+    async def deny(_call: ToolCallData, _ctx: RunContext[None]) -> ToolGate:
+        return {"decision": "deny", "reason": "no"}
+
+    async def later(_call: ToolCallData, _ctx: RunContext[None]) -> ToolGate:
+        asked.append("later")
+        return {"decision": "allow"}
+
+    async def main() -> list[tuple[str, str]]:
+        echo = tool(name="echo", description="Echo.", input=Echo, runs="host", execute=Box().run)
+        bot = agent(
+            model=scripted_model({"responses": [use(), text("ok")]}),
+            tools=[echo],
+            permissions=ALLOW,
+            extensions=[
+                extension(name="first", hooks={"before_tool": deny}),
+                extension(name="second", hooks={"before_tool": later}),
+            ],
+        )
+        result = await bot.run("go", store=sqlite(":memory:"), deps=None)
+        timeline = await result.thread.timeline()
+        assert isinstance(timeline, Ok)
+        return decisions([e.event for e in timeline.value.entries])
+
+    assert asyncio.run(main()) == [("before_tool", "deny")]
+    assert asked == []

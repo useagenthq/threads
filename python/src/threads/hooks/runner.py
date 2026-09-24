@@ -81,10 +81,22 @@ class HookRunner:
         order = reversed(self._bound) if hook.startswith("after") else iter(self._bound)
         return tuple(b for b in order if hook in b.hooks)
 
-    async def run[T](self, hook: HookName, parse: TypeAdapter[T], *args: object) -> list[Ran[T]]:
+    async def run[T](
+        self,
+        hook: HookName,
+        parse: TypeAdapter[T],
+        *args: object,
+        until: Callable[[Ran[T]], bool] | None = None,
+    ) -> list[Ran[T]]:
         """Every extension's hook in `defining` order, one at a time: a later hook sees the log
-        the earlier one led to."""
-        return [await run_one(b, hook, parse, *args) for b in self.defining(hook)]
+        the earlier one led to. With `until`, the first answer it accepts is the last one asked
+        (a gate stops at its first deny)."""
+        out: list[Ran[T]] = []
+        for b in self.defining(hook):
+            out.append(await run_one(b, hook, parse, *args))
+            if until is not None and until(out[-1]):
+                break
+        return out
 
 
 async def run_one[T](bound: Bound, hook: HookName, parse: TypeAdapter[T], *args: object) -> Ran[T]:

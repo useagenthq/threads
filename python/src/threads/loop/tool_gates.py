@@ -40,6 +40,11 @@ def _hooked(ran: Sequence[Ran[object]]) -> Decision:
     return Decision(strictest, "hook", reason=first.failure or _why(first))
 
 
+def _denies(ran: Ran[object]) -> bool:
+    """A gate stops at its first deny (a failure denies): later extensions are not asked."""
+    return _VERDICTS.get(verdict(ran), "deny") == "deny"
+
+
 def _why(ran: Ran[object]) -> str | None:
     """What a tool gate's answer records as its reason: an ask's rule, else its reason."""
     return said(ran, "rule") if verdict(ran) == "ask" else said(ran, "reason")
@@ -55,13 +60,13 @@ async def authorize(
     drafts: list[Draft] = []
     decision = policy
     if rt.hooks.has("before_tool"):
-        ran = await rt.hooks.run("before_tool", TOOL, call.data)
+        ran = await rt.hooks.run("before_tool", TOOL, call.data, until=_denies)
         drafts += [decision_draft("before_tool", r, verdict(r), _why(r), **ids) for r in ran]
         hooked = _hooked(ran)
         if policy.decision != "deny" and _RANK[hooked.decision] >= _RANK[policy.decision]:
             decision = hooked
     if decision.decision == "ask" and rt.hooks.has("permission_request"):
-        ran = await rt.hooks.run("permission_request", TOOL, call.data)
+        ran = await rt.hooks.run("permission_request", TOOL, call.data, until=_denies)
         drafts += [decision_draft("permission_request", r, verdict(r), _why(r), **ids) for r in ran]
         answered = _hooked(ran)
         # An ask answers nothing: the earlier decision and its reason stand.

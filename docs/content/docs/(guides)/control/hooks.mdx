@@ -132,7 +132,7 @@ Every hook is optional, awaited and time-limited. Each gets the run context last
 | `afterModelSwitch` | `after_model_switch` | After the model changed | Nothing |
 | `notification` | `notification` | The run parked or scheduled a retry (TypeScript also: a budget ran out, a subagent finished) | Nothing |
 
-A `deny` always carries a `reason`, recorded in the log. When several extensions define `beforeTool`, the strictest answer wins; TypeScript stops at the first `deny`, while Python calls every extension. `redact` spans are UTF-8 byte offsets into the result's first text part (the preview when it has no content); an empty list, an empty span, or a span outside that text or splitting a character fails the hook and clears the whole result. For a denied tool call, the model sees `denied: <reason>` as the result. Text a hook adds is shown to the model as context from the hook.
+A `deny` always carries a `reason`, recorded in the log. When several extensions define `beforeTool`, the strictest answer wins, and the first `deny` stops the gate: later extensions aren't called. `redact` spans are UTF-8 byte offsets into the result's first text part (the preview when it has no content); an empty list, an empty span, or a span outside that text or splitting a character fails the hook and clears the whole result. For a denied tool call, the model sees `denied: <reason>` as the result. Text a hook adds is shown to the model as context from the hook.
 
 ### When a hook fails
 
