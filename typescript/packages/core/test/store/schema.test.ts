@@ -27,7 +27,7 @@ describe("store schema", () => {
     expect(
       f.db.all("SELECT type, name, sql FROM sqlite_master ORDER BY name", []),
     ).toEqual(schema(spec));
-    expect(f.db.all("PRAGMA user_version", [])).toEqual([{ user_version: 5 }]);
+    expect(f.db.all("PRAGMA user_version", [])).toEqual([{ user_version: 7 }]);
     expect(f.db.all("SELECT thread_id, tenant_id FROM threads", [])).toEqual([
       { thread_id: THREAD, tenant_id: LOCAL_TENANT },
     ]);
@@ -61,6 +61,22 @@ describe("store schema", () => {
         [],
       ),
     ).toEqual([]);
+  });
+
+  test("a version 5 or 6 store is refused: version 7 adds the telemetry tables", () => {
+    for (const version of [5, 6]) {
+      const db = openBunSqlite(":memory:");
+      db.exec(
+        `CREATE TABLE threads (thread_id TEXT PRIMARY KEY); PRAGMA user_version = ${version}`,
+      );
+      const opened = LogStore.open(db, () => 0, memoryArtifacts());
+      expect(opened.ok ? "ok" : opened.error.message).toBe(
+        `this store was created by an earlier threads version (schema ${version}); create a new store`,
+      );
+      expect(
+        db.all("SELECT name FROM sqlite_master WHERE name = 'observers'", []),
+      ).toEqual([]);
+    }
   });
 
   test("the pending sweep reads the partial index, and removed is a stored reason", () => {

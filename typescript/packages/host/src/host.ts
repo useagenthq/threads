@@ -1,5 +1,11 @@
-import { type Agent, type ChannelAdapter, ConfigError } from "@threads/core";
 import {
+  type Agent,
+  type ChannelAdapter,
+  ConfigError,
+  type Exporter,
+} from "@threads/core";
+import {
+  bindTelemetry,
   type EventId,
   type Principal,
   type Result,
@@ -22,6 +28,7 @@ import { type RunAccepted, type StartRunCode, startRun } from "./runs";
 import { bindSchedules, type Schedule, tick } from "./schedules";
 import type { StartRunRequest } from "./schemas";
 import { type SseMessage, subscribe } from "./subscribe";
+import { Telemetry } from "./telemetry";
 import { Watch } from "./watch";
 
 // host() (spec/api.json): binds agents to a store, channels
@@ -44,6 +51,8 @@ export type HostOptions = {
   readonly authenticate?: Authenticate;
   /** The host ceiling every run of this host is also decided under. */
   readonly ceiling?: HostCeiling;
+  /** An exporter, such as otel(), synced every second and once more on stop(). */
+  readonly telemetry?: Exporter;
 };
 
 export type Host = {
@@ -105,6 +114,12 @@ export function host(options: HostOptions): Host {
     options.ceiling,
   );
   const consuming = new Map<string, Promise<void>>();
+  const telemetry =
+    options.telemetry === undefined
+      ? undefined
+      : new Telemetry(options.telemetry);
+  if (options.telemetry !== undefined)
+    bindTelemetry(options.telemetry, options.store);
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking: Promise<void> | undefined;
   let tickWaiters: (() => void)[] = [];
@@ -192,6 +207,8 @@ export function host(options: HostOptions): Host {
     await ticking;
     await Promise.all(consuming.values());
     await ctx.stop();
+    // After the runs: their last events are committed, so the last sync sends them.
+    await telemetry?.stop();
   };
 
   const made: Host = {
@@ -221,6 +238,7 @@ export function host(options: HostOptions): Host {
       if (typeof bound === "string")
         throw new ConfigError("invalid_config", bound);
       await storeConnection(ctx.store);
+      telemetry?.start();
       const startedAt = Date.now();
       timer = setInterval(() => {
         if (ticking !== undefined) return;

@@ -3,6 +3,7 @@ import { BranchId, TeamId, type ThreadId } from "../log";
 import { ok, type Result } from "../result";
 import type { LogError } from "../verify/error";
 import type { SqliteDriver } from "./driver";
+import { recordLosses } from "./losses";
 import { parseRows } from "./tables";
 
 // The rows a deletion removes, once deletion.ts has decided the set may go. A row that fails its
@@ -78,7 +79,7 @@ export function deleteTeam(
 /**
  * One thread's rows: its branches' log rows, leases, cursors and wake rows (and its parent's wake
  * row for it), approvals, inbox and channel rows, receipts and budget rows go; its live resources
- * move to releasing for gc; a tombstone records it.
+ * move to releasing for gc; a tombstone and one loss row per telemetry observer record it.
  */
 export function deleteOne(
   db: SqliteDriver,
@@ -88,6 +89,8 @@ export function deleteOne(
 ): Result<void, LogError> {
   const branches = branchesOf(db, threadId);
   if (!branches.ok) return branches;
+  // Before the events go: what each telemetry exporter may not have sent yet.
+  recordLosses(db, tenantId, threadId, now);
   for (const branch of branches.value) {
     for (const table of [
       "events",

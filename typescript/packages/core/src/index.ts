@@ -27,6 +27,12 @@ export {
 export * from "./reduce";
 export * from "./sandbox";
 export * from "./store";
+export type {
+  Exporter,
+  SkippedBranch,
+  SyncError,
+  SyncReport,
+} from "./telemetry";
 export * from "./thread";
 export type {
   Capabilities,

@@ -64,6 +64,7 @@ export { uuidv7 } from "./store/encode";
 export { sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";
 export { pendingWakes, wakeBranches } from "./store/wakes";
+export { bindTelemetry } from "./telemetry";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control } from "./thread/control";
 export { decide } from "./thread/decide";

@@ -146,6 +146,17 @@
         "@threads/adapter-testkit": "workspace:*",
       },
     },
+    "packages/otel": {
+      "name": "@threads/otel",
+      "version": "0.0.0",
+      "dependencies": {
+        "@threads/core": "workspace:*",
+        "zod": "^4.6.5",
+      },
+      "devDependencies": {
+        "@threads/host": "workspace:*",
+      },
+    },
     "packages/slack": {
       "name": "@threads/slack",
       "version": "0.0.0",
@@ -288,6 +299,8 @@
     "@threads/modal": ["@threads/modal@workspace:packages/modal"],
 
     "@threads/openai": ["@threads/openai@workspace:packages/openai"],
+
+    "@threads/otel": ["@threads/otel@workspace:packages/otel"],
 
     "@threads/slack": ["@threads/slack@workspace:packages/slack"],
 

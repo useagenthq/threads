@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./bun-sqlite": "./src/store/bun-sqlite.ts",
     "./adapter": "./src/adapter.ts",
-    "./host": "./src/host.ts"
+    "./host": "./src/host.ts",
+    "./internal/feed": "./src/store/feed.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"
