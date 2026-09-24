@@ -57,7 +57,9 @@ type Seen = {
   readonly type: string;
   readonly data?:
     | {
-        readonly tools?: { name: string; effect_class: string }[] | undefined;
+        readonly tools?:
+          | { name: string; effect_class?: string | undefined }[]
+          | undefined;
         readonly preview?: string | undefined;
         readonly origin?: string | undefined;
       }
@@ -70,7 +72,9 @@ const Seen: z.ZodType<Seen> = z.object({
   data: z
     .object({
       tools: z
-        .array(z.object({ name: z.string(), effect_class: z.string() }))
+        .array(
+          z.object({ name: z.string(), effect_class: z.string().optional() }),
+        )
         .optional(),
       preview: z.string().optional(),
       origin: z.string().optional(),

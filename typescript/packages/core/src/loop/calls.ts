@@ -1,3 +1,4 @@
+import { isDeferred } from "../fold/state";
 import type { EventDraft } from "../store";
 import { AGENT_TOOLS, entry, MEMBER_TOOLS } from "../tools/catalog";
 import { FINAL_OUTPUT } from "../tools/loop-tools";
@@ -86,7 +87,7 @@ function preEffectFailure(s: Session, use: ToolUse): string | undefined {
   if (spec === undefined) return `unknown tool: ${use.name}`;
   // A final_output candidate is checked once, as output_validated.
   if (use.name === FINAL_OUTPUT) return undefined;
-  if (spec.defer_loading === true)
+  if (isDeferred(s.fold, spec))
     return `tool_not_loaded: ${use.name}; find it with tool_search first`;
   const framework =
     AGENT_TOOLS.has(use.name) ||

@@ -224,6 +224,8 @@ export type ChildRun = {
   readonly team: Team;
   /** Every budget covering the parent, which covers the child too. */
   readonly covering: readonly Covering[];
+  /** The parent's resolved context.defer_tools: the child's, unless it sets its own. */
+  readonly deferTools?: NonNullable<Policy["context"]>["defer_tools"];
   /**
    * The parent is cancelled, by this principal: the child gets a barrier and no new input, and
    * one that never started is not created (spec/schema/README.md, Subagent cancellation).
@@ -290,6 +292,8 @@ export type TeamAgentPin = {
   readonly tools: readonly string[];
   /** A dynamic agent: its model keys, the first the default. */
   readonly models?: readonly string[];
+  /** Its deferred tools' spec artifacts, put before the start that pins it. */
+  readonly artifacts: readonly Uint8Array[];
 };
 
 /** What the loop of a team's lead or member needs from its team. */

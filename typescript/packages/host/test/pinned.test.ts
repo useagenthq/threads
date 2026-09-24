@@ -68,7 +68,7 @@ describe("the pinned config", () => {
     // Right before this host takes the lease, another host pins another config.
     const other = hostRunner(support("Be verbose."));
     if (other === undefined) throw new Error("agent() registers a runner");
-    const pinned = await other.started();
+    const pinned = await other.started(at.store);
     const acquire = log.acquire.bind(log);
     let raced = false;
     log.acquire = (b, holder, ttl) => {

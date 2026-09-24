@@ -11,6 +11,7 @@ export const LOOP_TOOLS = [
   "team_task_create",
   "team_task_update",
   "todo_write",
+  "tool_search",
   "send",
   "start",
 ] as const;

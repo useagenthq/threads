@@ -292,8 +292,9 @@ export type Attempt =
 export async function samePin(
   events: readonly KnownEvent[],
   hosted: HostedAgent,
+  store: Store,
 ): Promise<boolean> {
-  return pinMatches(events, await hosted.runner.started());
+  return pinMatches(events, await hosted.runner.started(store));
 }
 
 /**

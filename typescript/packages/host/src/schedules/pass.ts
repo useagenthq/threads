@@ -26,7 +26,7 @@ export function newPass(
     started: (hosted) => {
       const found = pins.get(hosted.key);
       if (found !== undefined) return found;
-      const pinned = hosted.runner.started();
+      const pinned = hosted.runner.started(ctx.storeFor(tenant));
       pins.set(hosted.key, pinned);
       return pinned;
     },

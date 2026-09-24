@@ -79,7 +79,10 @@ export async function startTool(
     define === undefined
       ? listed
       : await team.pin(args.agent, { define, starter: starterOf(s) });
-  if (pinned !== undefined) s.artifacts.put(utf8.encode(pinned.config));
+  if (pinned !== undefined) {
+    s.artifacts.put(utf8.encode(pinned.config));
+    for (const bytes of pinned.artifacts) s.artifacts.put(bytes);
+  }
   return decided(s, call, (ctx) =>
     start(ctx, args, {
       agents: new Map(

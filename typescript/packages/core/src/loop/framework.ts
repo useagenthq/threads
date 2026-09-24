@@ -11,6 +11,7 @@ import { teamTool } from "./agents/team";
 import { validateCandidate } from "./output";
 import type { Session } from "./session";
 import { writeTodos } from "./todos";
+import { searchTools } from "./tool-search";
 import type { Halt } from "./types";
 
 // Framework tools: they change only log state, so the loop runs them with its
@@ -25,6 +26,7 @@ type Handler = (
 const HANDLERS: Readonly<Record<LoopTool, Handler>> = {
   final_output: validateCandidate,
   todo_write: writeTodos,
+  tool_search: searchTools,
   spawn_agent: spawnAgent,
   handoff: handOff,
   send_message: teamTool,

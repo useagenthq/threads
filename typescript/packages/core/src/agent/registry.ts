@@ -30,6 +30,8 @@ export type ChildEnv = {
   readonly chain?: ChildRun["ceiling"];
   /** A handoff target: every budget covering the handing-off thread, as an ancestor's. */
   readonly covering?: readonly Covering[];
+  /** A handoff target: the handing-off thread's resolved defer_tools. */
+  readonly deferTools?: NonNullable<Policy["context"]>["defer_tools"];
 };
 
 export type ChildFactory = (env: ChildEnv) => Subagent;
@@ -69,9 +71,13 @@ export type MemberEntry = {
   };
   /**
    * Its pin as a team member, after setup: config_hash and the canonical config; a dynamic
-   * agent's as the member a choice defines. Throws ConfigError.
+   * agent's as the member a choice defines. `deferTools` is the lead's resolved defer_tools,
+   * which it inherits unless it sets its own. Throws ConfigError.
    */
-  readonly pinned: (choice?: DynamicChoice) => Promise<TeamAgentPin>;
+  readonly pinned: (
+    deferTools: NonNullable<Policy["context"]>["defer_tools"] | undefined,
+    choice?: DynamicChoice,
+  ) => Promise<TeamAgentPin>;
   /** Runs one member branch of it until the branch is idle, parked or ended. */
   readonly run: (env: MemberEnv) => Promise<void>;
 };
@@ -91,6 +97,8 @@ export type MemberEnv = {
   readonly signal?: AbortSignal;
   /** A dynamic agent's member: what its starter chose. */
   readonly dynamic?: DynamicChoice;
+  /** The lead's resolved defer_tools, inherited unless the member sets its own. */
+  readonly deferTools?: NonNullable<Policy["context"]>["defer_tools"];
 };
 
 type Entry = {

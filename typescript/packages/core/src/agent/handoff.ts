@@ -5,7 +5,12 @@ import { knownEvents } from "../reduce";
 import type { EventDraft, Writer } from "../store";
 import type { Thread } from "../thread/handle";
 import { execute } from "./execute";
-import { type ChildEnv, type TargetFactory, targetFactory } from "./registry";
+import {
+  type ChildEnv,
+  type HandoffLink,
+  type TargetFactory,
+  targetFactory,
+} from "./registry";
 import type { RunResult } from "./result";
 import { ceilingsOf, inheritedOf, type Plan, type Resolved } from "./run";
 
@@ -37,24 +42,32 @@ export function target<Deps, Output>(
       actor: { kind: "user", principal },
       data: { source: "handoff", text: link.request },
     };
-    const result = await execute(
-      def,
-      {
-        store: env.store,
-        principal,
-        target: {
-          threadId: link.threadId,
-          parent: link.parent,
-          prefix: [injected],
-        },
-        ...(env.signal === undefined ? {} : { signal: env.signal }),
-        ceilings: env.ceilings ?? [],
-        ...(env.chain === undefined ? {} : { chain: env.chain }),
-        ...(env.covering === undefined ? {} : { covering: env.covering }),
-      },
-      [request],
-    );
+    const result = await execute(def, targetPlan(env, link, injected), [
+      request,
+    ]);
     return result.thread;
+  };
+}
+
+/** A handoff target's execution: its thread, and the handing-off run's limits. */
+function targetPlan<Deps>(
+  env: ChildEnv,
+  link: HandoffLink,
+  injected: EventDraft,
+): Plan<Deps> {
+  return {
+    store: env.store,
+    principal: env.principal,
+    target: {
+      threadId: link.threadId,
+      parent: link.parent,
+      prefix: [injected],
+    },
+    ...(env.signal === undefined ? {} : { signal: env.signal }),
+    ceilings: env.ceilings ?? [],
+    ...(env.chain === undefined ? {} : { chain: env.chain }),
+    ...(env.covering === undefined ? {} : { covering: env.covering }),
+    ...(env.deferTools === undefined ? {} : { deferTools: env.deferTools }),
   };
 }
 
@@ -89,6 +102,9 @@ export async function handedOff<Deps, Output>(
     covering: inheritedFrom(view, inheritedOf(plan)),
     ...(chain === undefined ? {} : { chain }),
     ...(plan.signal === undefined ? {} : { signal: plan.signal }),
+    ...(writer.chain.fold.policy?.context === undefined
+      ? {}
+      : { deferTools: writer.chain.fold.policy.context.defer_tools }),
   })({
     threadId: handoff.data.to_thread_id,
     parent: {

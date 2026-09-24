@@ -17,8 +17,9 @@ import type { EventDraft } from "../store";
 import { TEAM_TOOLS, TEAM_TOOLS_PINNED } from "../team/constants";
 import { type DynamicChoice, KEPT_TOOLS } from "../team/dynamic";
 import { builtins, type Capabilities, type Egress } from "../tools";
-import { frameworkSpec } from "../tools/framework";
+import { frameworkSpec, searchToolSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
+import { deferredNames, referenceForm } from "./defer";
 import { checkEnforceable } from "./enforceable";
 import { ConfigError } from "./errors";
 import { type Extension, hookNames } from "./extension";
@@ -102,11 +103,18 @@ export function pin(
   readonly specs: readonly ToolSpec[];
   readonly started: EventDraft;
   readonly config: string;
+  /** The deferred tools' spec artifacts: put before `started` is appended. */
+  readonly artifacts: readonly Uint8Array[];
 } {
-  const { specs, cfg, config } = pinned(options, child?.tools, member);
+  const { specs, cfg, config, artifacts } = pinned(
+    options,
+    child?.tools,
+    member,
+  );
   return {
     specs,
     config,
+    artifacts,
     started: {
       type: "thread_started",
       type_version: 1,
@@ -131,8 +139,35 @@ function pinned(
   readonly specs: readonly ToolSpec[];
   readonly cfg: Cfg;
   readonly config: string;
+  readonly artifacts: readonly Uint8Array[];
 } {
-  const o = within === undefined ? options : { ...options, sandbox: undefined };
+  const deferTools = options.context.defer_tools ?? "auto";
+  const base =
+    within === undefined ? options : { ...options, sandbox: undefined };
+  const o = { ...base, context: { ...base.context, defer_tools: deferTools } };
+  const user = [...o.tools, ...extensionTools(o.extensions, o.mcp)];
+  // Only the tools this thread pins are deferred: a child's within its parent's, a dynamic
+  // member's among its starter's choice.
+  const picked =
+    o.dynamic === undefined ? undefined : new Set(o.dynamic.define.tools);
+  const deferred = deferredNames(
+    user.filter(
+      (t) =>
+        (within === undefined || within.has(t.name)) &&
+        (picked === undefined || picked.has(t.name)),
+    ),
+    deferTools,
+  );
+  const artifacts: Uint8Array[] = [];
+  const pinnedSpec = (t: {
+    readonly name: string;
+    readonly spec: () => ToolSpec;
+  }): ToolSpec => {
+    if (!deferred.has(t.name)) return t.spec();
+    const form = referenceForm(t.spec());
+    artifacts.push(form.bytes);
+    return form.stub;
+  };
   // A child runs without a sandbox and within its parent's tools, which were checked already.
   if (within === undefined) requireCapabilities(o.capabilities, o.sandbox);
   checkSkills(o.skills);
@@ -151,14 +186,18 @@ function pinned(
       ...(o.memory === undefined ? [] : memorySpecs(o.memory)),
       ...(o.knowledge === undefined ? [] : knowledgeSpecs()),
       ...skillSpecs(o.skills),
+      ...(deferred.size === 0 ? [] : [searchToolSpec([...deferred])]),
     ].toSorted(byName),
-    ...o.tools.map((t) => t.spec()),
-    ...extensionTools(o.extensions, o.mcp).map((t) => t.spec()),
+    ...user.map(pinnedSpec),
   ];
   // A child never gains a tool its parent lacks; a dynamic member has what its starter chose.
+  // Either one's own tool_search comes with its own deferral.
   const narrow = within ?? chosen(o.dynamic, all);
   const specs = [
-    ...all.filter((t) => narrow === undefined || narrow.has(t.name)),
+    ...all.filter(
+      (t) =>
+        narrow === undefined || narrow.has(t.name) || t.name === "tool_search",
+    ),
     ...finalOutput(o.output),
   ];
   const exts = o.extensions.map((e) => e.name);
@@ -200,7 +239,7 @@ function pinned(
     }),
   );
   if (!text.ok) throw new ConfigError("invalid_config", text.error.message);
-  return { specs, cfg, config: text.value };
+  return { specs, cfg, config: text.value, artifacts };
 }
 
 /**
@@ -324,6 +363,7 @@ function namespaced<Deps>(
   return {
     name,
     ...(t.concurrent === undefined ? {} : { concurrent: t.concurrent }),
+    ...(t.defer === undefined ? {} : { defer: t.defer }),
     spec: () => ({ ...t.spec(), name }),
     bind: (env) => {
       const impl = t.bind(env);

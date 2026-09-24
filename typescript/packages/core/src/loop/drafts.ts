@@ -54,6 +54,12 @@ export const draft = {
     actor: HOST,
     data: d,
   }),
+  toolsLoaded: (d: Data<"tools_loaded">): EventDraft => ({
+    ...base,
+    type: "tools_loaded",
+    actor: HOST,
+    data: d,
+  }),
   toolCall: (d: Data<"tool_call">): EventDraft => ({
     ...base,
     type: "tool_call",

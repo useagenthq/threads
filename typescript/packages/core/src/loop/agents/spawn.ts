@@ -194,6 +194,9 @@ export async function runChild(
     tools: new Set(s.fold.tools.map((t) => t.name)),
     team: teamOf(s),
     covering: inheritedBy(s),
+    ...(s.fold.policy?.context === undefined
+      ? {}
+      : { deferTools: s.fold.policy.context.defer_tools }),
     ...(cancel === undefined ? {} : { cancel }),
   });
 }

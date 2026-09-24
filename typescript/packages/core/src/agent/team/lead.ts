@@ -71,9 +71,13 @@ export function memberOf<Deps, Output>(
                 .filter((n) => !KEPT_TOOLS.has(n)),
           },
         }),
-    pinned: async (choice) => {
+    pinned: async (deferTools, choice) => {
       const member = choice === undefined ? def : memberDef(def, choice);
-      const { config, started } = await pinnedAfterSetup(member, true);
+      const { config, started, artifacts } = await pinnedAfterSetup(
+        member,
+        true,
+        deferTools,
+      );
       if (started.type !== "thread_started")
         throw new Error("a pin is a thread_started");
       const pinned = ThreadStartedData.parse(started.data);
@@ -87,6 +91,7 @@ export function memberOf<Deps, Output>(
         budget: def.budget,
         tools: pinned.tools.map((t) => t.name),
         ...(keys === undefined ? {} : { models: keys }),
+        artifacts,
       };
     },
     run: async (env) => {
@@ -98,6 +103,9 @@ export function memberOf<Deps, Output>(
           thread: env.thread,
           holder: env.holder,
           member: { parent: env.parent, notify: env.notify },
+          ...(env.deferTools === undefined
+            ? {}
+            : { deferTools: env.deferTools }),
           covering: env.covering,
           ...(env.signal === undefined ? {} : { signal: env.signal }),
         },

@@ -6,6 +6,7 @@ import { type Thread, threadHandle } from "../thread/handle";
 import { bindBuiltins } from "../tools";
 import type { LogError } from "../verify";
 import { loopConfig } from "./config";
+import { inheritDefer, storeSpecs } from "./defer";
 import { ConfigError } from "./errors";
 import { observerOf } from "./extension";
 import { handedOff } from "./handoff";
@@ -49,8 +50,11 @@ export async function execute<Deps, Output>(
   const opened = await openStore(store);
   const { log, artifacts } = opened;
   const link = linkOf(plan);
-  const set: SetUp<Deps, Output> = { ...def, mcp: mcp.tools };
+  const context = inheritDefer(def.context, parentDefer(plan));
+  const set: SetUp<Deps, Output> = { ...def, context, mcp: mcp.tools };
   const pinned = pin(set, link);
+  // Durable before any event names them (a thread_started of this pin).
+  storeSpecs(artifacts, pinned.artifacts);
   // Each run is its own executor: a second run on a busy branch is branch_busy.
   const holder = plan.holder ?? `run-${crypto.randomUUID()}`;
   const began = open(
@@ -164,6 +168,11 @@ async function drive(
     end = await resume(writer, artifacts, config, { input });
   }
   return end;
+}
+
+/** The resolved defer_tools of the thread that started this one, which it inherits. */
+function parentDefer(plan: Plan<unknown>): Plan<unknown>["deferTools"] {
+  return plan.deferTools ?? plan.child?.deferTools;
 }
 
 /** How a thread started by another links to it: a subagent, a handoff target, a member. */

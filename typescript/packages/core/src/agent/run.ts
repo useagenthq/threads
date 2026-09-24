@@ -10,6 +10,7 @@ import type { ChildRun, Covering } from "../loop";
 import { DEFAULT_PERMISSIONS } from "../permissions";
 import type { EventDraft } from "../store";
 import type { Agent, Models } from "./agent";
+import { type DeferTools, inheritDefer, storeSpecs } from "./defer";
 import { checkTree } from "./enforceable";
 import { execute } from "./execute";
 import type { Extension } from "./extension";
@@ -18,7 +19,7 @@ import { pin } from "./pin";
 import type { MemberEnv } from "./registry";
 import type { Decode, RunResult, ThreadRef } from "./result";
 import { connectAll, type McpServer } from "./setup";
-import { type Store, sqlite } from "./sqlite";
+import { openStore, type Store, sqlite } from "./sqlite";
 import type { DynamicAgent } from "./team/types";
 import type { Tool } from "./tool";
 
@@ -125,6 +126,8 @@ export type Plan<Deps> = RunOptions<Deps> & {
   readonly chain?: ChildRun["ceiling"];
   /** A handoff target: every budget covering the handing-off thread, as an ancestor's. */
   readonly covering?: readonly Covering[];
+  /** A handoff target's or member's parent's resolved defer_tools, unless it sets its own. */
+  readonly deferTools?: DeferTools;
 };
 
 /** Every ceiling this run is also decided under. */
@@ -150,10 +153,21 @@ export type Target = {
 export async function pinnedAfterSetup<Deps, Output>(
   def: Resolved<Deps, Output>,
   member = false,
+  deferTools?: DeferTools,
 ): Promise<ReturnType<typeof pin>> {
   await def.setup();
   await using mcp = await connectAll(def.servers);
-  return pin({ ...def, mcp: mcp.tools }, undefined, member);
+  const context = inheritDefer(def.context, deferTools);
+  return pin({ ...def, context, mcp: mcp.tools }, undefined, member);
+}
+
+/** Puts a pin's spec artifacts: before any append of its thread_started. */
+export async function putSpecs(
+  store: Store,
+  pinned: Pick<ReturnType<typeof pin>, "artifacts">,
+): Promise<void> {
+  const { artifacts } = await openStore(store);
+  storeSpecs(artifacts, pinned.artifacts);
 }
 
 /** Budgets covering this thread as an ancestor's: a child's parent's, a target's source's. */

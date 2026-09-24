@@ -34,6 +34,7 @@ import {
   teamRow,
 } from "../../team/rows";
 import type { VerifiedLog } from "../../verify";
+import type { DeferTools } from "../defer";
 import { ConfigError } from "../errors";
 import { memberEntry } from "../registry";
 import type { Store } from "../sqlite";
@@ -56,6 +57,8 @@ export type WorkerEnv = {
   readonly mint?: Mint;
   /** How long a claim holds a pending row; tests inject a shorter one. */
   readonly claimTtlMs?: number;
+  /** The lead's resolved defer_tools, which its members inherit unless they set their own. */
+  readonly deferTools?: DeferTools;
 };
 
 const Row = z.object({ lead_thread_id: ThreadId, team_id: z.string() });
@@ -222,7 +225,9 @@ export class TeamWorker {
     const handle = this.#env.agents.get(agent);
     const entry = handle === undefined ? undefined : memberEntry(handle);
     if (entry === undefined) return { status: "pin_unavailable" };
-    const pinned = await pinnedOrUnavailable(() => entry.pinned(choice));
+    const pinned = await pinnedOrUnavailable(() =>
+      entry.pinned(this.#env.deferTools, choice),
+    );
     if (pinned === undefined) return { status: "pin_unavailable" };
     if (pinned.configHash !== configHash) return { status: "pin_mismatch" };
     if (entry.team === undefined) return { status: "ok" };
@@ -282,6 +287,9 @@ export class TeamWorker {
       covering: ancestorsOf(this.#env.log, parent),
       ...(this.#env.signal === undefined ? {} : { signal: this.#env.signal }),
       ...(choice === undefined ? {} : { dynamic: choice }),
+      ...(this.#env.deferTools === undefined
+        ? {}
+        : { deferTools: this.#env.deferTools }),
     });
   }
 

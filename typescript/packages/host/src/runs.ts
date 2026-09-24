@@ -11,6 +11,7 @@ import {
   type Principal,
   principalKey,
   type Result,
+  type Store,
   sha256Hex,
   storeConnection,
   ThreadId,
@@ -119,7 +120,8 @@ async function accept(
   key: { readonly at: Keyed; readonly binding: Binding },
 ): Promise<Started> {
   const { log } = await ctx.open(principal.tenant);
-  const target = await branchFor(log, hosted, request);
+  const store = ctx.storeFor(principal.tenant);
+  const target = await branchFor(log, store, hosted, request);
   if (!target.ok) return target;
   const { threadId, branchId, first } = target.value;
   const holder = `host-${crypto.randomUUID()}`;
@@ -190,6 +192,7 @@ type Target = {
 /** The branch to continue (it must be the thread's and started by this agent), or a new thread. */
 async function branchFor(
   log: LogStore,
+  store: Store,
   hosted: HostedAgent,
   request: StartRunRequest,
 ): Promise<Result<Target, StartFailure>> {
@@ -198,7 +201,11 @@ async function branchFor(
     const branchId = BranchId.parse(uuidv7(log.now()));
     const made = log.createBranch(threadId, branchId);
     if (!made.ok) return fail("invalid_request", made.error.message);
-    return ok({ threadId, branchId, first: [await hosted.runner.started()] });
+    return ok({
+      threadId,
+      branchId,
+      first: [await hosted.runner.started(store)],
+    });
   }
   const threadId = request.thread_id;
   const branchId = request.branch_id ?? mainOf(log, threadId);
@@ -211,7 +218,7 @@ async function branchFor(
     return fail("not_found", `no thread ${threadId}`);
   const read = log.read(branchId);
   if (!read.ok) return fail("branch_not_runnable", read.error.message);
-  if (!(await samePin(knownEvents(read.value), hosted)))
+  if (!(await samePin(knownEvents(read.value), hosted, store)))
     return fail(
       "invalid_request",
       `thread ${threadId} was not started with this agent's config`,

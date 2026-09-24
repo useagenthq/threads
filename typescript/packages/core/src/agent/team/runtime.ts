@@ -4,6 +4,7 @@ import { knownEvents } from "../../reduce";
 import type { EventDraft, Writer } from "../../store";
 import { uuidv7 } from "../../store/encode";
 import { TEAM_TOOLS } from "../../team/constants";
+import type { DeferTools } from "../defer";
 import { ConfigError } from "../errors";
 import { memberEntry } from "../registry";
 import type { Plan, Resolved } from "../run";
@@ -58,7 +59,9 @@ export function teamOf<Deps, Output>(
   | { readonly runtime: TeamRuntime; readonly stop: () => Promise<void> }
   | undefined {
   if (def.team === undefined && plan.member === undefined) return undefined;
-  const base = { pin: pins(def), limits: def.teamLimits };
+  // Members inherit the lead's resolved defer_tools unless they set their own.
+  const deferTools = writer.chain.fold.policy?.context?.defer_tools;
+  const base = { pin: pins(def, deferTools), limits: def.teamLimits };
   if (plan.member !== undefined)
     return {
       runtime: {
@@ -82,6 +85,7 @@ export function teamOf<Deps, Output>(
     team,
     agents: agentsOf(def.members),
     ...(plan.signal === undefined ? {} : { signal: plan.signal }),
+    ...(deferTools === undefined ? {} : { deferTools }),
   });
   worker.start();
   return {
@@ -97,9 +101,13 @@ export function teamOf<Deps, Output>(
 
 /**
  * The pins of the agents start may name, each made once, on first use; a dynamic member's each
- * time, for its starter's choice.
+ * time, for its starter's choice. Each inherits the lead's resolved defer_tools unless it sets
+ * its own.
  */
-function pins<Deps, Output>(def: Resolved<Deps, Output>): TeamRuntime["pin"] {
+function pins<Deps, Output>(
+  def: Resolved<Deps, Output>,
+  deferTools: DeferTools | undefined,
+): TeamRuntime["pin"] {
   const made = new Map<string, Promise<TeamAgentPin | undefined>>();
   const entryOf = (agent: string) => {
     const handle = def.members.find((a) => a.name === agent);
@@ -107,10 +115,13 @@ function pins<Deps, Output>(def: Resolved<Deps, Output>): TeamRuntime["pin"] {
   };
   return (agent, choice) => {
     if (choice !== undefined)
-      return entryOf(agent)?.pinned(choice) ?? Promise.resolve(undefined);
+      return (
+        entryOf(agent)?.pinned(deferTools, choice) ?? Promise.resolve(undefined)
+      );
     const known = made.get(agent);
     if (known !== undefined) return known;
-    const pinned = entryOf(agent)?.pinned() ?? Promise.resolve(undefined);
+    const pinned =
+      entryOf(agent)?.pinned(deferTools) ?? Promise.resolve(undefined);
     made.set(agent, pinned);
     return pinned;
   };

@@ -41,6 +41,8 @@ export type McpOptions = {
   readonly effect?: "read_only" | "unguarded" | "idempotent";
   /** Required exactly when effect is idempotent: the server dedups on the effect key within it. */
   readonly dedupWindowMs?: number;
+  /** true: every tool of this server is deferred: the model loads it with tool_search. */
+  readonly defer?: boolean;
   /** The HTTP client's fetch (a proxy, a test server); the fence wraps it either way. */
   readonly fetch?: Fetch;
 };
@@ -190,7 +192,11 @@ export function mcp(options: McpOptions): McpServer {
       await client.close();
     };
     try {
-      const tools = await listed(options, client, effect);
+      const listedTools = await listed(options, client, effect);
+      const tools =
+        options.defer === true
+          ? listedTools.map((t) => ({ ...t, defer: true as const }))
+          : listedTools;
       return { tools, close, [Symbol.asyncDispose]: close };
     } catch (error) {
       await close();

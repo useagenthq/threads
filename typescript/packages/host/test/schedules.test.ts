@@ -153,7 +153,7 @@ describe("scheduler", () => {
     const deciding = decideThread(newPass(a.ctx, db, log, "local"), thread);
     await Bun.sleep(1);
     // Meanwhile the next occurrence is reserved, for an agent this host still serves.
-    const started = await a.bound[0]?.hosted.runner.started();
+    const started = await a.bound[0]?.hosted.runner.started(a.ctx.store);
     if (started === undefined) throw new Error("no schedule");
     const due = {
       schedule_id: "daily",
@@ -191,7 +191,7 @@ describe("scheduler", () => {
     outbound.value.release();
     const done = deleteThread(db, "local", thread, Date.now());
     if (!done.ok) throw new Error(done.error.message);
-    const started = await a.bound[0]?.hosted.runner.started();
+    const started = await a.bound[0]?.hosted.runner.started(a.ctx.store);
     if (started === undefined) throw new Error("no schedule");
     const due = (at: number) => ({
       schedule_id: "daily",
@@ -253,7 +253,7 @@ describe("scheduler", () => {
     await a.ctx.idle();
     const { db, log, thread } = await scheduleThread(store);
     db.run("UPDATE events SET line = ? WHERE seq = 1", [new Uint8Array([0])]);
-    const started = await a.bound[0]?.hosted.runner.started();
+    const started = await a.bound[0]?.hosted.runner.started(a.ctx.store);
     if (started === undefined) throw new Error("no schedule");
     const due = {
       schedule_id: "daily",

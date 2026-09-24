@@ -146,7 +146,7 @@ describe("a lead defines a member of a dynamic agent", () => {
     const entry = memberEntry(specialist());
     if (entry === undefined) throw new Error("not registered");
     const hash = async (define: Define) =>
-      (await entry.pinned({ define, starter: "lead" })).configHash;
+      (await entry.pinned(undefined, { define, starter: "lead" })).configHash;
     const base = { tools: ["invoice_status"], model: "fast" };
     const one = await hash(base);
     expect(await hash(base)).toBe(one);

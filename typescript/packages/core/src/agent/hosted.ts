@@ -4,7 +4,7 @@ import type { EventDraft } from "../store";
 import { execute } from "./execute";
 import type { RunResult, ThreadRef } from "./result";
 import type { Hooks, RunOptions } from "./run";
-import { pinnedAfterSetup, type Resolved } from "./run";
+import { pinnedAfterSetup, putSpecs, type Resolved } from "./run";
 import type { Store } from "./sqlite";
 import { leadStarted } from "./team/runtime";
 
@@ -14,8 +14,11 @@ import { leadStarted } from "./team/runtime";
 // that takes whatever inputs the host already recorded, or none, to resume a parked branch.
 
 export type HostRunner = {
-  /** The pinned thread_started for a new thread of this agent. Throws ConfigError. */
-  readonly started: () => Promise<EventDraft>;
+  /**
+   * The pinned thread_started for a new thread of this agent, its deferred tools' spec artifacts
+   * already put in `store` (they must be durable before it is appended). Throws ConfigError.
+   */
+  readonly started: (store: Store) => Promise<EventDraft>;
   /** Runs the branch until idle or parked: `inputs` are appended in order, each once idle. */
   readonly execute: (
     plan: {
@@ -42,8 +45,11 @@ export function hosted<Deps, Output>(
 ): HostRunner {
   return {
     // A lead's first append, whoever makes it (a run, a channel, a schedule), opens its team.
-    started: async () =>
-      leadStarted(def, (await pinnedAfterSetup(def)).started, Date.now()),
+    started: async (store) => {
+      const pinned = await pinnedAfterSetup(def);
+      await putSpecs(store, pinned);
+      return leadStarted(def, pinned.started, Date.now());
+    },
     execute: (plan, inputs, hooks = {}) => execute(def, plan, inputs, hooks),
     approvers,
     sandbox: def.sandbox,

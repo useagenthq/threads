@@ -94,7 +94,10 @@ async function target(
   const started = events.some((e) => e.type === "thread_started");
   const hosted = started ? ctx.agentOf(events) : ctx.agents.get(adapter.agent);
   // An agent of the pinned name but another config can't continue the thread: another host may.
-  if (hosted === undefined || (started && !(await samePin(events, hosted))))
+  if (
+    hosted === undefined ||
+    (started && !(await samePin(events, hosted, ctx.storeFor(tenant))))
+  )
     return undefined;
   const conversation = {
     tenant,
@@ -146,10 +149,15 @@ async function message(
     const w = writer.value;
     // Only the thread's first event is its thread_started, whichever process creates it.
     const first: readonly EventDraft[] =
-      w.chain.fold.seq === 0 ? [await t.hosted.runner.started()] : [];
+      w.chain.fold.seq === 0
+        ? [await t.hosted.runner.started(ctx.storeFor(tenant))]
+        : [];
     // Checked again on the chain this lease holds: another host may have pinned another config
     // since target() looked, and nothing can be appended under it until release.
-    if (first.length === 0 && !(await samePin(knownEvents(w.chain), t.hosted)))
+    if (
+      first.length === 0 &&
+      !(await samePin(knownEvents(w.chain), t.hosted, ctx.storeFor(tenant)))
+    )
       return "busy";
     const done = w.fenced(() => {
       const delivered = w.append([...first, delivery(next)]);

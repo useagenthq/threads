@@ -47,6 +47,8 @@ export type ToolDefinition<Input, Output, Deps = undefined> = {
   readonly endsTurn?: boolean;
   /** true: runs with the other concurrent read-only calls of one response. Hashed, not in line 0. */
   readonly concurrent?: boolean;
+  /** true: the model sees only its name and description until tool_search loads it. */
+  readonly defer?: boolean;
 };
 
 /** The environment a run binds its tools to. */
@@ -66,6 +68,8 @@ export type Tool<Input, Output, Deps = undefined> = {
   readonly bind: (env: ToolEnv<Deps>) => ToolImpl;
   /** Declared `concurrent: true`; pinned by config_hash as concurrent_tools. */
   readonly concurrent?: true;
+  /** Declared `defer: true`: pinned in reference form when context.defer_tools is auto. */
+  readonly defer?: true;
 };
 
 export function tool<Input, Output, Deps = undefined>(
@@ -80,6 +84,7 @@ export function tool<Input, Output, Deps = undefined>(
     spec,
     bind: (env) => bound(def, strict, spec(), env),
     ...(def.concurrent === true ? { concurrent: true } : {}),
+    ...(def.defer === true ? { defer: true } : {}),
   };
 }
 
@@ -110,6 +115,11 @@ function pinned<Input, Output, Deps>(
     throw new ConfigError(
       "invalid_config",
       `tool ${def.name}: concurrent needs effect: "read_only" and no endsTurn; tools with side effects, or that end the turn, run one at a time`,
+    );
+  if (def.defer === true && def.endsTurn === true)
+    throw new ConfigError(
+      "invalid_config",
+      `tool ${def.name}: defer can't be combined with endsTurn; a deferred tool is loaded by tool_search first`,
     );
   const parsed = ToolSpec.safeParse({
     name: def.name,
