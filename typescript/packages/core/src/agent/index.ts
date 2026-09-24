@@ -26,7 +26,6 @@ export type {
   SendResult,
   StartRefusal,
   StartResult,
-  Team,
   TeamAgent,
   TeamRef,
   TeamRunResult,

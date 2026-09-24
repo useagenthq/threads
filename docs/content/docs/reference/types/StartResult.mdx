@@ -1,0 +1,27 @@
+---
+title: "StartResult"
+description: "The model's start tool result."
+icon: "Braces"
+---
+
+A union discriminated by `status`.
+
+### started
+
+<Field name="status" type={"\"started\""} required>
+  "started": the member exists in state starting; its task is queued.
+</Field>
+
+<Field name="member" type={"MemberRef"} required>
+  The new member: its name is &lt;agent>-&lt;k>.
+</Field>
+
+### refused
+
+<Field name="status" type={"\"refused\""} required>
+  "refused": nothing was done; code says why.
+</Field>
+
+<Field name="code" type={"StartRefusal"} required>
+  Why it was refused.
+</Field>

@@ -6,6 +6,7 @@ import type { RunResult, ThreadRef } from "./result";
 import type { Hooks, RunOptions } from "./run";
 import { pinnedAfterSetup, type Resolved } from "./run";
 import type { Store } from "./sqlite";
+import { leadStarted } from "./team/runtime";
 
 // What the host (@threads/host) needs from an agent handle beyond run(): the thread_started a new
 // thread of it opens with, so the host can make a run's first input durable together with its
@@ -40,7 +41,9 @@ export function hosted<Deps, Output>(
   approvers: readonly Principal[] | undefined,
 ): HostRunner {
   return {
-    started: async () => (await pinnedAfterSetup(def)).started,
+    // A lead's first append, whoever makes it (a run, a channel, a schedule), opens its team.
+    started: async () =>
+      leadStarted(def, (await pinnedAfterSetup(def)).started, Date.now()),
     execute: (plan, inputs, hooks = {}) => execute(def, plan, inputs, hooks),
     approvers,
     sandbox: def.sandbox,

@@ -27,6 +27,8 @@ function agent(options: {
   outputRetries?: number;
   subagents?: readonly (Agent<unknown, unknown>)[];
   handoffs?: readonly (Agent<unknown, unknown>)[];
+  team?: readonly (Agent<unknown, unknown>)[];
+  teamLimits?: { concurrent?: PosInt; mailbox?: PosInt };
   fallback?: readonly Model[];
   permissions?: Partial<Policy.permissions>;
   approvers?: readonly Principal[];
@@ -63,6 +65,8 @@ def agent(
     output_retries: int = 2,
     subagents: Sequence[Agent[object, object]] = (),
     handoffs: Sequence[Agent[object, object]] = (),
+    team: Sequence[Agent[object, object]] | None = None,
+    team_limits: {concurrent?: PosInt, mailbox?: PosInt} | None = None,
     fallback: Sequence[Model] = (),
     permissions: Policy.permissions | None = None,
     approvers: Sequence[Principal] | None = None,
@@ -138,6 +142,22 @@ def agent(
 
 <Field name="handoffs" type={"readonly (Agent<unknown, unknown>)[]"} default={"[]"}>
   Agents this one may hand the conversation to, pinned as policy.handoffs.
+</Field>
+
+<Field name="team" type={"readonly (Agent<unknown, unknown>)[]"}>
+  Agents this one may start as team members, with the start, send, ask, reply, wait, monitor and cancel tools. Passing it, even as [], makes agent() return a TeamAgent whose run() result carries team, the Team handle; [] is a team no model can grow (start is refused unknown_agent). A member whose definition lists handoffs is refused at setup (handoff_in_team), and so is an own tool named start, send, ask, reply, wait, monitor or cancel (duplicate_name). Omitted: no team, a plain Agent.
+</Field>
+
+<Field name="teamLimits / team_limits" type={"{ concurrent?: PosInt; mailbox?: PosInt }"}>
+  The team's limits. Omitted: 4 running members and 100 pending mails per member.
+</Field>
+
+<Field name="teamLimits.concurrent / team_limits.concurrent" type={"PosInt"} default={"4"}>
+  Most members running at once; a start past it is refused concurrency_cap. Default 4.
+</Field>
+
+<Field name="teamLimits.mailbox / team_limits.mailbox" type={"PosInt"} default={"100"}>
+  Most pending mails per member; a send past it is refused mailbox_full. Default 100.
 </Field>
 
 <Field name="fallback" type={"readonly Model[]"} default={"[]"}>

@@ -8,10 +8,10 @@ import {
   type StartResult,
   scriptedModel,
   sqlite,
-  type Team,
   type TeamAgent,
   tool,
 } from "../../src";
+import type { Team } from "../../src/agent/team/types";
 import { assertTeamReplays } from "./kit";
 import { logOf, say, start } from "./run-kit";
 
@@ -103,6 +103,17 @@ describe("agent({team})", () => {
       ok: true,
       value: undefined,
     });
+    // A listed member's own tool is refused at the lead's setup too.
+    const withMember = agent({
+      model: model(),
+      team: [agent({ name: "desk", model: model(), tools: [ask] })],
+    });
+    const member = await withMember.check();
+    expect(member).toMatchObject({
+      ok: false,
+      error: { code: "duplicate_name" },
+    });
+    expect(member.ok ? "" : member.error.message).toContain("agent desk");
   });
 
   test("check(): two agents of one name in a team tree are refused duplicate_name", async () => {

@@ -3,6 +3,7 @@ import type { TeamAgentPin, TeamRuntime } from "../../loop";
 import { knownEvents } from "../../reduce";
 import type { EventDraft, Writer } from "../../store";
 import { uuidv7 } from "../../store/encode";
+import { TEAM_TOOLS } from "../../team/constants";
 import { ConfigError } from "../errors";
 import { memberEntry } from "../registry";
 import type { Plan, Resolved } from "../run";
@@ -116,14 +117,23 @@ export function agentsOf(
 
 /**
  * Setup refusals of a team (spec/api.json agent.team): a listed agent that hands off
- * (handoff_in_team), and two agents of one name in the tree (duplicate_name).
+ * (handoff_in_team), a listed agent's own tool named like a team tool, and two agents of one
+ * name in the tree (duplicate_name).
  */
 export function checkTeam(team: readonly object[] | undefined): void {
   if (team === undefined) return;
-  for (const [name, agent] of agentsOf(team))
-    if (memberEntry(agent)?.handsOff === true)
+  for (const [name, agent] of agentsOf(team)) {
+    const entry = memberEntry(agent);
+    if (entry?.handsOff === true)
       throw new ConfigError(
         "handoff_in_team",
         `agent ${name} lists handoffs, and a team member can't hand off; remove its handoffs or its place in the team`,
       );
+    const taken = entry?.toolNames.find((t) => TEAM_TOOLS.includes(t));
+    if (taken !== undefined)
+      throw new ConfigError(
+        "duplicate_name",
+        `tool ${taken} of agent ${name}: an agent in a team can't have a tool named ${TEAM_TOOLS.join(", ")}; rename it`,
+      );
+  }
 }

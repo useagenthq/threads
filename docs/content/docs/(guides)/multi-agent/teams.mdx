@@ -1,113 +1,179 @@
 ---
 title: Teams
-description: A lead agent and its subagents coordinate through a shared task list and messages.
+description: A lead agent starts members from the agents its team lists, messages them, and wakes up when each one finishes.
 icon: Users
 ---
 
-import { History, Network } from "lucide-react";
+import { History, Network, Wallet } from "lucide-react";
 
-Any agent with `subagents` leads a team. The lead and every subagent it starts share one task list and one mailbox, so work can be split up, claimed, and reported on without the lead relaying every detail. There is nothing extra to configure: the team tools come with `subagents`.
+Give an agent a `team` and it becomes a lead. Its model can start members from the agents the team lists and send them messages. Each member runs in its own thread with its own model and tools. When a member finishes its task, the lead wakes up with the result and carries on, so `run()` returns the lead's answer after its members have reported.
 
-## The team tools
+Everything a team does is recorded in its logs: the lead's thread, one thread per member, and a team log. You can replay, fork and audit a team like any other thread.
 
-| Tool | Who has it | What it does |
-|---|---|---|
-| `team_task_create` | lead and members | Adds a task (`subject`, optional `description`, optional `blocked_by` task ids). Returns the new task id. |
-| `team_task_claim` | lead and members | Claims an open task whose blockers are all completed. Only one member can win a claim. |
-| `team_task_update` | lead and members | Marks a task you claimed `completed` or `failed`, or `released` to put it back in the pool. |
-| `send_message` | lead and members | Sends `text` to a member by agent name, or to `*` for everyone. A name that isn't on the team (the lead or one of its subagents) is refused, and the error lists the names that are. |
-| `spawn_agent` | lead | Starts a member. See [Subagents](/docs/multi-agent/subagents). |
+## A complete example
 
-A member is identified by its agent name. A message arrives as reference material just before the recipient's next model call, prefixed with the sender's name, and is delivered once.
-
-## Example
-
-The lead creates a task and starts a writer. The writer claims the task, finishes it and tells the lead.
+The lead starts one researcher and answers. When the researcher is done, the lead wakes with its result and gives the final answer. Scripted models stand in for real ones, so this runs offline as a test.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
 ```ts
-const writer = agent({
-  name: "writer",
-  instructions: "Claim an open task, do it, then mark it completed.",
-  model: scriptedModel({
-    responses: [
-      use("team_task_claim", { task_id: "lead/t1" }, "w1"),
-      use("team_task_update", { task_id: "lead/t1", status: "completed" }, "w2"),
-      use("send_message", { to: "lead", text: "Draft is ready." }, "w3"),
-      say("Done."),
-    ],
-  }),
+import { agent, scriptedModel, sqlite } from "@threads/core";
+
+const usage = { input_tokens: 10, output_tokens: 2 };
+const say = (text: string) => ({
+  content: [{ type: "text", text }],
+  stop_reason: "end_turn",
+  usage,
+});
+const start = (agentName: string, task: string) => ({
+  content: [
+    { type: "tool_use", call_id: "c1", name: "start", input: { agent: agentName, task } },
+  ],
+  stop_reason: "tool_use",
+  usage,
+});
+
+const researcher = agent({
+  name: "researcher",
+  instructions: "Research the topic you are given. Answer in one sentence.",
+  model: scriptedModel({ responses: [say("Battery pack prices fell this year.")] }),
 });
 
 const lead = agent({
   name: "lead",
-  instructions: "Plan the work as team tasks, then start your team.",
+  instructions: "Start a researcher on the topic, then report what it found.",
   model: scriptedModel({
     responses: [
-      use("team_task_create", { subject: "Write the release notes" }, "t1"),
-      use("spawn_agent", { agent: "writer", prompt: "Pick up the open task." }, "s1"),
-      say("The release notes are drafted."),
+      start("researcher", "Battery prices this year."),
+      say("I started a researcher."),
+      say("The researcher reports that battery pack prices fell this year."),
     ],
   }),
-  subagents: [writer],
+  team: [researcher],
 });
+
+const r = await lead.run("Report on battery prices.", { store: sqlite(":memory:") });
+if (r.status === "completed") console.log(r.output);
+// The team comes with every result, whatever the status.
+console.log(`team ${r.team.ref.id}`);
 ```
 
 </Tab>
 <Tab value="Python">
 
 ```python
-writer = agent(
-    name="writer",
-    instructions="Claim an open task, do it, then mark it completed.",
-    model=scripted_model({
-        "responses": [
-            use("team_task_claim", {"task_id": "lead/t1"}, "w1"),
-            use("team_task_update", {"task_id": "lead/t1", "status": "completed"}, "w2"),
-            use("send_message", {"to": "lead", "text": "Draft is ready."}, "w3"),
-            say("Done."),
-        ]
-    }),
+import asyncio
+
+from pydantic import JsonValue
+
+from threads import Completed, agent, scripted_model, sqlite
+
+USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
+
+
+def say(text: str) -> JsonValue:
+    return {"content": [{"type": "text", "text": text}], "stop_reason": "end_turn", "usage": USAGE}
+
+
+def start(agent_name: str, task: str) -> JsonValue:
+    call: JsonValue = {"agent": agent_name, "task": task}
+    return {
+        "content": [{"type": "tool_use", "call_id": "c1", "name": "start", "input": call}],
+        "stop_reason": "tool_use",
+        "usage": USAGE,
+    }
+
+
+researcher = agent(
+    name="researcher",
+    instructions="Research the topic you are given. Answer in one sentence.",
+    model=scripted_model({"responses": [say("Battery pack prices fell this year.")]}),
 )
 
-team_lead = agent(
+lead = agent(
     name="lead",
-    instructions="Plan the work as team tasks, then start your team.",
+    instructions="Start a researcher on the topic, then report what it found.",
     model=scripted_model({
         "responses": [
-            use("team_task_create", {"subject": "Write the release notes"}, "t1"),
-            use("spawn_agent", {"agent": "writer", "prompt": "Pick up the open task."}, "s1"),
-            say("The release notes are drafted."),
+            start("researcher", "Battery prices this year."),
+            say("I started a researcher."),
+            say("The researcher reports that battery pack prices fell this year."),
         ]
     }),
-    subagents=[writer],
+    team=[researcher],
 )
+
+
+async def main() -> None:
+    r = await lead.run("Report on battery prices.", store=sqlite(":memory:"))
+    if isinstance(r, Completed):
+        print(r.output)
+    # The team comes with every result, whatever the status.
+    print(f"team {r.team.ref.id}")
+
+
+asyncio.run(main())
 ```
 
 </Tab>
 </Tabs>
 
-The scripted model plays the calls a real model would make. With a real model, the task id (`lead/t1` here) comes back as the result of `team_task_create`.
+It prints the lead's last answer, `The researcher reports that battery pack prices fell this year.` Its first answer, `I started a researcher.`, stays in the lead's timeline.
 
-## How it behaves
+## The team tools
 
-- **The lead's thread holds the team.** Tasks, claims and messages are recorded in the lead's log, so you can see who did what in the lead's [timeline](/docs/evals/timeline).
-- **Claims are atomic.** Two members racing for one task: one wins, the other gets an error it can act on.
-- **Blockers are respected.** A task with `blocked_by` can't be claimed until every blocker is completed.
-- **Safe to retry.** If a member's process restarts and repeats a call, it gets the same answer. Nothing is claimed or sent twice.
-- **Run members in parallel** by starting them with `background: true`. Each result wakes the lead for another turn, and the lead's run returns once all of them have reported, with the lead's last answer. See [Background subagents](/docs/multi-agent/subagents#background-subagents).
+A lead and its members get these tools. Each call's result is a small JSON object the model reads.
+
+| Tool | What it does | Result |
+|---|---|---|
+| `start` | Starts a member from an agent the team lists, with `task` as its first input. The member's name is `<agent>-<k>`, such as `researcher-1`, counting that agent's members in the team. Only the lead can start members. | `{"status": "started", "member": {...}}`, or `{"status": "refused", "code": ...}` |
+| `send` | Sends `text` to a member by name. It arrives as the member's next input, and wakes the member if it is idle. Members can send to each other and to the lead. | `{"status": "sent", "id": ...}`, or `{"status": "refused", "code": ...}` |
+
+A refusal is a value the model can act on, never an error that stops the run. `start` is refused with `unknown_agent` for an agent the team doesn't list, `concurrency_cap` when the team already has its limit of members running, `budget_exceeded` when a budget covering the new member has no room for one of its model requests, and `team_closed` once the lead has ended. `send` is refused with `unknown_member`, `member_ended`, `self` or `mailbox_full`.
+
+A received message reaches the model as untrusted reference text, marked with its sender, never as an instruction.
+
+## How a team runs
+
+- **Members work in parallel.** Each member has its own thread and runs as soon as it starts. `run()` runs the members in the same process as the lead.
+- **The lead wakes for each member it started.** When a member finishes its task, the lead gets its result as a message and takes another turn. `run()` returns once no lead turn is open and every member this run started has reported. The result is the lead's last answer.
+- **A member that ends badly still reports.** If a member's model fails, runs out of budget, or its definition changed since it was started, it ends `failed` (or `budget_exhausted`), and the lead wakes with that result instead.
+- **A member that waits parks the lead.** If a member stops for an approval, the lead parks on it and `run()` returns `parked`, with the member in `pending`. Answer the approval on the member's thread (the lead's [timeline](/docs/evals/timeline) has the member's `member_started`, with its `thread_id`), then run the lead again: the member carries on, its result wakes the lead, and then your new input starts the next turn.
+- **A lead that ends closes its team.** If the lead's own turn fails, is cancelled or runs out of budget, the run returns that status and the team is closed: no member can be started and no message sent.
+- **Budgets cover the whole team.** A member's model requests count against its own budget, the lead's budget, and the budget of the run that started it. See [Budgets](/docs/control/budgets).
+- **Safe after a crash.** Every step is one atomic append. If the process dies, the next run of the lead picks up where the logs left off: a member is started once, gets its task once, and reports once.
+
+## Setting it up
+
+```ts
+const lead = agent({
+  model,
+  team: [researcher, writer],
+  teamLimits: { concurrent: 4, mailbox: 100 },
+});
+```
+
+- `team` lists the agents the lead may start. Passing it, even as `[]`, makes `agent()` return a `TeamAgent`, whose results carry `team`.
+- `teamLimits.concurrent` caps how many members are starting or running at once (default 4). `teamLimits.mailbox` caps how many messages can wait for one member (default 100).
+- An agent in a team can't hand off, so a listed agent with `handoffs` is refused when the lead is set up (`handoff_in_team`). A lead or member can't have its own tool named `start`, `send`, `ask`, `reply`, `wait`, `monitor` or `cancel` (`duplicate_name`).
 
 <Callout>
-  There is no API to read the task list directly today. It lives in the lead's log as `team_task_*` and `team_message` events.
+  More team tools are on the way in this phase: `ask` and `reply`, `wait`, `monitor` and `cancel` for the model, and methods on the team handle (`team.start`, `team.send`, `team.ask`, `team.wait`, `team.members`) for your own code. Until they land, `r.team` names the team: `r.team.ref`.
 </Callout>
+
+## The subagent task board
+
+Agents with `subagents` share a simpler task board: `team_task_create`, `team_task_claim`, `team_task_update` and `send_message`, recorded in the lead's log. It is separate from `team` and the two don't share anything. See [Subagents](/docs/multi-agent/subagents).
 
 ## Related
 
 <Cards>
   <Card title="Subagents" icon={<Network />} href="/docs/multi-agent/subagents">
-    How members start, what they may do, and how they report back.
+    Start a helper for one task and get its result back as a tool result.
+  </Card>
+  <Card title="Budgets" icon={<Wallet />} href="/docs/control/budgets">
+    Limit what a run, a thread and everything under it may spend.
   </Card>
   <Card title="Timeline" icon={<History />} href="/docs/evals/timeline">
     Read everything the team recorded, step by step.

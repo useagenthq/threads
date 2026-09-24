@@ -1,0 +1,38 @@
+---
+title: "assertNever / assert_never"
+description: "Ends a switch over a union, so a variant nobody handles is a type error."
+icon: "SquareFunction"
+---
+
+Python uses typing.assert_never, which threads does not re-export.
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function assertNever(value: never): never
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def assert_never(
+    value: typing.Never,
+) -> typing.NoReturn
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="value" type={"never"} required>
+  The value no case matched; the type checker proves none can.
+</Field>
+
+## Returns
+
+`never`

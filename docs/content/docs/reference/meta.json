@@ -18,6 +18,7 @@
     "functions/scriptedModel",
     "functions/fakeSandbox",
     "functions/host",
+    "functions/assertNever",
     "---[Plug]Providers---",
     "functions/supermemory",
     "functions/zep",
@@ -94,6 +95,15 @@
     "types/Inbound",
     "types/DeliveryOutcome",
     "---[Braces]Other types---",
-    "types/Principal"
+    "types/TeamAgent",
+    "types/TeamRunResult",
+    "types/TeamRunStream",
+    "types/Principal",
+    "types/TeamRef",
+    "types/MemberRef",
+    "types/StartRefusal",
+    "types/SendRefusal",
+    "types/StartResult",
+    "types/SendResult"
   ]
 }

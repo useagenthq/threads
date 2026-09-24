@@ -1304,5 +1304,34 @@
     "py": [
       "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[zep]"
     ]
+  },
+  "assertNever": {
+    "ts": [
+      "packages/core/test/team/agent.test.ts > agent({team}) > assertNever ends a switch over a tool result's statuses"
+    ]
+  },
+  "TeamAgent.check": {
+    "ts": [
+      "packages/core/test/team/agent.test.ts > agent({team}) > check(): a member that hands off is refused handoff_in_team"
+    ],
+    "py": [
+      "tests/team/test_agent.py::test_check_a_member_that_hands_off_is_refused_handoff_in_team"
+    ]
+  },
+  "TeamAgent.run": {
+    "ts": [
+      "packages/core/test/team/lead-run.test.ts > a team lead's run > first answer, the member settles, the lead wakes and gives the final answer"
+    ],
+    "py": [
+      "tests/team/test_lead_run.py::test_first_answer_the_member_settles_the_lead_wakes_and_gives_the_final_answer"
+    ]
+  },
+  "TeamAgent.stream": {
+    "ts": [
+      "packages/core/test/team/agent.test.ts > agent({team}) > stream(): the committed events, then a result with the team"
+    ],
+    "py": [
+      "tests/team/test_agent.py::test_stream_the_committed_events_then_a_result_with_the_team"
+    ]
   }
 }

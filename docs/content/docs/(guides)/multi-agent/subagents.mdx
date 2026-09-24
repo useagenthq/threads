@@ -156,6 +156,21 @@ A child's status is `running`, `completed`, `failed`, `cancelled` or `budget_exh
 
 Two hooks cover subagents. `subagentStart` (`subagent_start` in Python) can allow or deny a spawn. `subagentStop` (`subagent_stop`) sees the finished result and can send the subagent back to work with a reason. See [Hooks](/docs/control/hooks).
 
+## The task board
+
+The lead and every subagent it starts share one task list and one mailbox, so work can be split up, claimed and reported on without the lead relaying every detail. The tools come with `subagents`; there is nothing else to configure.
+
+| Tool | Who has it | What it does |
+|---|---|---|
+| `team_task_create` | lead and subagents | Adds a task (`subject`, optional `description`, optional `blocked_by` task ids). Returns the new task id. |
+| `team_task_claim` | lead and subagents | Claims an open task whose blockers are all completed. Only one subagent can win a claim. |
+| `team_task_update` | lead and subagents | Marks a task you claimed `completed` or `failed`, or `released` to put it back in the pool. |
+| `send_message` | lead and subagents | Sends `text` to a subagent by agent name, or to `*` for everyone. A name that isn't the lead or one of its subagents is refused, and the error lists the names that are. |
+
+A subagent is identified by its agent name. A message arrives as reference material just before the recipient's next model call, prefixed with the sender's name, and is delivered once. Tasks, claims and messages are recorded in the lead's log; claims are atomic, blockers are respected, and a call repeated after a restart gets the same answer, so nothing is claimed or sent twice.
+
+This board is separate from [Teams](/docs/multi-agent/teams) (`agent({team})`), whose members have their own threads and mail.
+
 ## Related
 
 <Cards>

@@ -1,0 +1,24 @@
+---
+title: "StartRefusal"
+description: "Why a start was refused."
+icon: "Braces"
+---
+
+team_closed: the lead ended, which closes the team.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+type StartRefusal = "forbidden" | "unknown_agent" | "concurrency_cap" | "budget_exceeded" | "team_closed";
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+type StartRefusal = Literal["forbidden", "unknown_agent", "concurrency_cap", "budget_exceeded", "team_closed"]
+```
+
+</Tab>
+</Tabs>

@@ -1,0 +1,24 @@
+---
+title: "SendRefusal"
+description: "Why a send was refused."
+icon: "Braces"
+---
+
+stale_member: the member was restarted under a newer generation.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+type SendRefusal = "forbidden" | "unknown_member" | "stale_member" | "member_ended" | "self" | "mailbox_full" | "team_closed";
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+type SendRefusal = Literal["forbidden", "unknown_member", "stale_member", "member_ended", "self", "mailbox_full", "team_closed"]
+```
+
+</Tab>
+</Tabs>

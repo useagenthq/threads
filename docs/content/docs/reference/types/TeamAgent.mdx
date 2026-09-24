@@ -1,0 +1,184 @@
+---
+title: "TeamAgent"
+description: "What agent() returns for a definition with team: an Agent with the same name, stream() and check(), whose run() result always carries the team."
+icon: "Box"
+---
+
+TS: the agent() overload selected by the team option; Python: the TeamAgent class, a subclass of Agent.
+
+<Callout>A handle returned by the library.</Callout>
+
+## Properties
+
+<Field name="name" type={"Name"} required>
+  The agent's name as given to agent(): lowercase letters, digits and underscores, up to 64 characters.
+</Field>
+
+## Methods
+
+### run
+
+Run one input as Agent.run does: it returns once the lead has reacted to every member this run started, and the result also carries the team.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+run(input: Input, options?: {
+  thread?: ThreadId | Thread;
+  store?: Store;
+  deps?: Deps;
+  budget?: Budget;
+  principal?: Principal;
+  ceiling?: Partial<Policy.permissions>;
+  signal?: AbortSignal;
+}): Promise<TeamRunResult<Output>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def run(
+    input: Input,
+    *,
+    thread: ThreadId | Thread | None = None,
+    store: Store | None = None,
+    deps: Deps | None = None,
+    budget: Budget | None = None,
+    principal: Principal | None = None,
+    ceiling: Policy.permissions | None = None,
+) -> TeamRunResult[Output]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="input" type={"Input"} required>
+  Text or ordered input parts.
+</Field>
+
+<Field name="thread" type={"ThreadId | Thread"}>
+  The thread to continue: a Thread handle continues its branch; in TypeScript a thread id also works (Python takes a handle only). Omitted: a new thread.
+</Field>
+
+<Field name="store" type={"Store"}>
+  Where the thread's log lives. Omitted: the handle's store when thread is a Thread handle, else sqlite(".threads") in the working directory. See [Store](/docs/reference/types/Store).
+</Field>
+
+<Field name="deps" type={"Deps"}>
+  Host-only dependencies your tools and hooks read as RunContext.deps; never serialized or logged. Required when the agent's Deps type is not null; omitted, tools see null (None in Python).
+</Field>
+
+<Field name="budget" type={"Budget"}>
+  Run budget, recorded on the user_input; it covers this thread and every subagent it starts. Omitted: only the agent's own budget option applies.
+</Field>
+
+<Field name="principal" type={"Principal"}>
+  The verified sender of this input, recorded on the user_input. Omitted: the local operator (issuer "api", tenant "local", subject "operator").
+</Field>
+
+<Field name="ceiling" type={"Partial<Policy.permissions>"}>
+  The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Omitted: no ceiling, so only the agent's own permissions apply.
+</Field>
+
+<Field name="signal" type={"AbortSignal"}>
+  TypeScript only. Local cancellation: aborting it stops the run in this process, and tools see it as RunContext.signal. Python uses task cancellation instead. Omitted: the run stops only through the durable Thread.cancel().
+</Field>
+
+**Throws** `ConfigError` for a definition that can't run.
+
+### stream
+
+Stream one run, as Agent.stream does; its result also carries the team.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+stream(input: Input, options?: {
+  thread?: ThreadId | Thread;
+  store?: Store;
+  deps?: Deps;
+  budget?: Budget;
+  principal?: Principal;
+  ceiling?: Partial<Policy.permissions>;
+  signal?: AbortSignal;
+}): TeamRunStream<Output>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def stream(
+    input: Input,
+    *,
+    thread: ThreadId | Thread | None = None,
+    store: Store | None = None,
+    deps: Deps | None = None,
+    budget: Budget | None = None,
+    principal: Principal | None = None,
+    ceiling: Policy.permissions | None = None,
+) -> TeamRunStream[Output]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="input" type={"Input"} required>
+  Text or ordered input parts.
+</Field>
+
+<Field name="thread" type={"ThreadId | Thread"}>
+  The thread to continue: a Thread handle continues its branch; in TypeScript a thread id also works (Python takes a handle only). Omitted: a new thread.
+</Field>
+
+<Field name="store" type={"Store"}>
+  Where the thread's log lives. Omitted: the handle's store when thread is a Thread handle, else sqlite(".threads") in the working directory. See [Store](/docs/reference/types/Store).
+</Field>
+
+<Field name="deps" type={"Deps"}>
+  Host-only dependencies your tools and hooks read as RunContext.deps; never serialized or logged. Required when the agent's Deps type is not null; omitted, tools see null (None in Python).
+</Field>
+
+<Field name="budget" type={"Budget"}>
+  Run budget, recorded on the user_input; it covers this thread and every subagent it starts. Omitted: only the agent's own budget option applies.
+</Field>
+
+<Field name="principal" type={"Principal"}>
+  The verified sender of this input, recorded on the user_input. Omitted: the local operator (issuer "api", tenant "local", subject "operator").
+</Field>
+
+<Field name="ceiling" type={"Partial<Policy.permissions>"}>
+  The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Omitted: no ceiling, so only the agent's own permissions apply.
+</Field>
+
+<Field name="signal" type={"AbortSignal"}>
+  TypeScript only. Local cancellation: aborting it stops the run in this process, and tools see it as RunContext.signal. Python uses task cancellation instead. Omitted: the run stops only through the durable Thread.cancel().
+</Field>
+
+**Throws** `ConfigError` for a definition that can't run.
+
+### check
+
+Validate the definition and resolve setup (secrets, MCP handshakes, capabilities) without starting a run. Returns every setup failure as an error value (it never throws them); a failed check can be retried on the same agent after fixing the environment. Connections it opens are closed before it returns.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+check(): Promise<Result<void>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def check() -> Ok[None] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+**Returns an error value** with one of these codes: `invalid_config`, `missing_secret`, `unknown_preset`, `duplicate_name`, `capability_missing`, `mcp_unreachable`, `budget_unenforceable`, `permission_rule_invalid`, `hosted_tool_unsupported`, `egress_policy_unsupported`, `transport_fence_unsupported`, `handoff_in_team`.

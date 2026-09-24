@@ -54,6 +54,7 @@ export function memberOf<Deps, Output>(
 ): MemberEntry {
   return {
     handsOff: def.handoffs.length > 0,
+    toolNames: def.tools.map((t) => t.name),
     team: def.team === undefined ? undefined : def.members,
     pinned: async () => {
       const { config, started } = await pinnedAfterSetup(def, true);

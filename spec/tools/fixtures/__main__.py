@@ -116,6 +116,7 @@ FAMILIES = (
     team_nested,
     legacy_run,
     legacy_wake_rows,
+    run_cases,
 )
 
 
@@ -143,11 +144,9 @@ def _build(out: pathlib.Path) -> None:
 
 
 # Staged families, by the phase whose build moves them into FAMILIES: the Teams Phase 1 read side
-# (lanes 21A and 21B). Phase 0 (the legacy wake) moved legacy_run and legacy_wake_rows.
-STAGED_PHASE_1 = (
-    team_cancel_rule.build,
-    run_cases.build,
-)
+# (lanes 21A and 21B). Phase 0 (the legacy wake) moved legacy_run and legacy_wake_rows; lane 21D
+# (team run completion) moved run_cases.
+STAGED_PHASE_1 = (team_cancel_rule.build,)
 
 
 def _build_staged(out: pathlib.Path) -> None:

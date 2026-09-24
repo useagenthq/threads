@@ -57,6 +57,8 @@ export type Enforcement = (covering: readonly z.infer<typeof Budget>[]) => void;
 export type MemberEntry = {
   /** Its handoffs: a member can't hand off (handoff_in_team). */
   readonly handsOff: boolean;
+  /** Its own tools' names: none may be a team tool's (duplicate_name). */
+  readonly toolNames: readonly string[];
   /** The agents of its own team, when it leads one (a nested lead). */
   readonly team: readonly object[] | undefined;
   /** Its pin as a team member, after setup: config_hash and the canonical config. */
