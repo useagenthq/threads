@@ -5,7 +5,7 @@ store, the principal and the deps.
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import AsyncExitStack
 from dataclasses import replace
 from functools import partial
@@ -32,6 +32,7 @@ from threads.agents.run import (
 )
 from threads.agents.setup import set_up
 from threads.agents.skills import Skill, checked
+from threads.agents.stream import RunStream
 from threads.agents.tool import Tool, json_schema
 from threads.hooks.extension import Extension
 from threads.log import Budget, Context, Permissions, Principal, Retry
@@ -125,31 +126,6 @@ class _Options[D](AgentOptions, total=False):
     output: object
 
 
-class RunStream[O]:
-    """spec/api.json `RunStream`: the run's committed events as they are appended, then its
-    result. A subscription to the log, not a second loop."""
-
-    def __init__(
-        self, queue: asyncio.Queue[StreamEvent | None], task: asyncio.Task[RunResult[O]]
-    ) -> None:
-        """`queue` receives the run's items; the run is done when its task is."""
-        self._queue: Final = queue
-        self._task: Final = task
-        task.add_done_callback(lambda _: queue.put_nowait(None))
-
-    @property
-    def result(self) -> asyncio.Task[RunResult[O]]:
-        """Await it for the `RunResult`."""
-        return self._task
-
-    def __aiter__(self) -> AsyncIterator[StreamEvent]:
-        return self._items()
-
-    async def _items(self) -> AsyncIterator[StreamEvent]:
-        while (item := await self._queue.get()) is not None:
-            yield item
-
-
 class Agent[D, O]:
     """spec/api.json `Agent`: reusable; every run is a separate thread unless `thread` is given.
     A completed run's output is an `O`: the final text, or the `output` model."""
@@ -195,6 +171,24 @@ class Agent[D, O]:
         """Runs one input to a terminal result. Needs no server. `deps` is required only when
         the agent's tools read deps; tools typed `RunContext[None]` see None."""
         return await self._run(input, options, self._deps(options), _drop)
+
+    @overload
+    def run_sync(
+        self: "Agent[None, O]", input: Input, **options: Unpack[RunOptions[None]]
+    ) -> RunResult[O]: ...
+    @overload
+    def run_sync(self, input: Input, **options: Unpack[RunOptionsWithDeps[D]]) -> RunResult[O]: ...
+    def run_sync[T](
+        self: "Agent[T, O]", input: Input, **options: Unpack[RunOptions[T]]
+    ) -> RunResult[O]:
+        """`run` for scripts: runs on a new event loop in this thread. Inside a running event
+        loop, await `run` instead."""
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self._run(input, options, self._deps(options), _drop))
+        why = "run_sync can't be called inside a running event loop; use await agent.run(...)"
+        raise ConfigError("invalid_config", why)
 
     @overload
     def stream(

@@ -14,6 +14,7 @@ import anthropic as sdk
 import httpx2
 from pydantic import JsonValue
 
+from threads.adapters.loop_resources import LoopResources
 from threads.adapters.models import transport
 from threads.adapters.models.anthropic.request import PROVIDER, build
 from threads.adapters.models.anthropic.stream import Assembler, ProviderStreamError
@@ -55,7 +56,7 @@ class AnthropicModel:
         self._info = info
         self._key = credential(ADAPTER, "api_key", api_key, API_KEY)
         self._base_url, self._http = base_url, http
-        self._client: sdk.AsyncAnthropic | None = None
+        self._clients: LoopResources[sdk.AsyncAnthropic] = LoopResources(ADAPTER, _close)
 
     @property
     def info(self) -> ModelInfo:
@@ -63,13 +64,11 @@ class AnthropicModel:
 
     async def setup(self) -> None:
         """Resolves the key on the host. The SDK client is made by the first send, on the
-        run's own event loop."""
+        run's own event loop, and closed when nothing holds that loop any more."""
         self._key()
 
     def _sdk(self) -> sdk.AsyncAnthropic:
-        if self._client is None:
-            self._client = client(self._key(), self._base_url, self._http)
-        return self._client
+        return self._clients.get(lambda: client(self._key(), self._base_url, self._http))
 
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         prepared = await prepare(request.body, ADAPTER, context, build)
@@ -158,3 +157,7 @@ def client(
         max_retries=0,
         http_client=transport.client(http),
     )
+
+
+async def _close(client: sdk.AsyncAnthropic) -> None:
+    await client.close()

@@ -68,9 +68,11 @@ coder = agent(
     sandbox=e2b(),  # E2B_API_KEY. Your keys never enter the sandbox.
 )
 
-result = await coder.run("Make the tests pass", store=sqlite(".threads"))
+result = coder.run_sync("Make the tests pass", store=sqlite(".threads"))
 print(result.status)  # "completed", or "parked" until you approve a command
 ```
+
+Inside async code, use `await coder.run(...)` instead.
 
 No API key yet? The [quickstart](https://threadsai.dev/docs/quickstart) runs the same kind of agent on a scripted model, offline.
 

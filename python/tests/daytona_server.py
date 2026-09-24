@@ -19,6 +19,7 @@ from aiohttp.test_utils import TestServer
 from pydantic import BaseModel, Field
 from sandbox_backend import Box, FakeBackend, LostAnswerError, Proc, UnavailableError
 
+from threads.adapters.loop_resources import holding
 from threads.adapters.sandboxes.daytona import DaytonaSandbox
 from threads.adapters.sandboxes.daytona.logs import STDERR, STDOUT
 from threads.adapters.sandboxes.daytona.toolbox import PREFIX, PREPARE_WORKSPACE
@@ -56,6 +57,10 @@ class DaytonaServer:
         """Sandboxes whose /workspace was made (with sudo) for the toolbox user."""
         self.fail_prepares = 0
         """How many more /workspace preparations fail (sudo refused)."""
+        self.kill_delay_s = 0.0
+        """How long a command kill takes to answer."""
+        self.kills: list[str] = []
+        """Every command kill that was answered."""
         self.app = web.Application(middlewares=[self._count])
         r = self.app.router
         r.add_post("/sandbox", self._create)
@@ -188,9 +193,11 @@ class DaytonaServer:
         return web.Response()
 
     async def _kill(self, request: web.Request) -> web.Response:
+        await asyncio.sleep(self.kill_delay_s)
         box = self._box(request, "box")
         if box is not None:
             self.backend.signal(box, request.match_info["sid"])
+        self.kills.append(request.match_info["sid"])
         return web.Response()
 
     async def _exec(self, request: web.Request) -> web.Response:
@@ -268,7 +275,5 @@ async def serve(backend: FakeBackend, name: str) -> AsyncGenerator[DaytonaSandbo
             wait_s=5.0,
             traces=[server.crash_trace()],
         )
-        try:
+        async with holding():
             yield sandbox
-        finally:
-            await sandbox.aclose()

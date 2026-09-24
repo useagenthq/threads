@@ -11,6 +11,7 @@ from threads._generated.host_api_v1 import (
     PendingApproval,
     SettingsChange,
 )
+from threads.adapters.loop_resources import holding
 from threads.agents.store import HOLDER, Store, now_ms, open_store
 from threads.log import (
     AgentFinishedEvent,
@@ -145,7 +146,8 @@ class Thread:
         child = BranchId(uuid7(now_ms()))
         at = ForkAt(self.branch, event_id, child, knowledge)
         sq = await open_store(self.store)
-        forked = await fork_branch(sq, self.sandbox, at, HOLDER, now_ms)
+        async with holding():  # the restore's sandbox connections are closed when it returns
+            forked = await fork_branch(sq, self.sandbox, at, HOLDER, now_ms)
         if isinstance(forked, Err):
             return forked
         # Done with the child: hand its lease back so a run (its own holder) takes it at once.

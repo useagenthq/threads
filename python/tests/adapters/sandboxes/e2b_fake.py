@@ -19,6 +19,7 @@ from protobuf import Oneof
 from pyqwest.testing import ASGITransport
 from sandbox_backend import Box, FakeBackend, LostAnswerError, UnavailableError
 
+from threads.adapters.loop_resources import holding
 from threads.adapters.sandboxes.e2b.control import KEY
 from threads.adapters.sandboxes.e2b.envd import Transports
 from threads.adapters.sandboxes.e2b.sandbox import E2BSandbox
@@ -38,6 +39,10 @@ class TracedTransport(httpx.AsyncBaseTransport):
     def __init__(self, backend: FakeBackend, handle: Handler) -> None:
         self.backend = backend
         self._handle = handle
+        self.closed = False
+
+    async def aclose(self) -> None:
+        self.closed = True
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         trace = request.extensions.get("trace")
@@ -196,14 +201,30 @@ def _response(event: _Event) -> process_pb.StartResponse:
     return process_pb.StartResponse(event=Event(event=event))
 
 
-def adapter(backend: FakeBackend, name: str, handle: Handler | None = None) -> E2BSandbox:
-    """The adapter over `backend`; `handle` replaces the REST API (for broken answers)."""
+def transports(backend: FakeBackend, handle: Handler | None = None) -> Transports:
+    """One event loop's transports to the mocked E2B over `backend`."""
     app = process_connect.ProcessASGIApplication(Processes(backend), codecs=[ENVD_JSON_CODEC])
-    rest = TracedTransport(backend, handle or control(backend))
-    transports = Transports(rest, ASGITransport(app))
+    return Transports(TracedTransport(backend, handle or control(backend)), ASGITransport(app))
+
+
+def adapter(
+    backend: FakeBackend,
+    name: str,
+    handle: Handler | None = None,
+    made: list[Transports] | None = None,
+) -> E2BSandbox:
+    """The adapter over `backend`; `handle` replaces the REST API (for broken answers); `made`
+    records the transports it makes, one pair per event loop."""
+
+    def make() -> Transports:
+        pair = transports(backend, handle)
+        if made is not None:
+            made.append(pair)
+        return pair
+
     return E2BSandbox(
         API_KEY,
-        transports,
+        make,
         template=TEMPLATE,
         lifetime_ms=600_000,
         internet=False,
@@ -215,4 +236,5 @@ def adapter(backend: FakeBackend, name: str, handle: Handler | None = None) -> E
 
 @asynccontextmanager
 async def make(backend: FakeBackend, name: str) -> AsyncGenerator[E2BSandbox]:
-    yield adapter(backend, name)
+    async with holding():
+        yield adapter(backend, name)

@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from threads.adapters.loop_resources import holding
 from threads.agents.store import Store, now_ms, open_store, scoped, sqlite
 from threads.cli.serve import load
 from threads.log import BranchId, ThreadId
@@ -99,9 +100,11 @@ async def gc(path: str, module: str | None, grace_days: float) -> int:
         tenants = await sq.run(
             lambda c: [str(t) for (t,) in c.execute("SELECT DISTINCT tenant_id FROM resources")]
         )
-        for sandbox in served.sandboxes():
-            for tenant in tenants:
-                await release(await open_store(scoped(root, tenant)), sandbox, now_ms)
+        # Holds the adapters' connections for the sweep; they are closed when it ends.
+        async with holding():
+            for sandbox in served.sandboxes():
+                for tenant in tenants:
+                    await release(await open_store(scoped(root, tenant)), sandbox, now_ms)
     keep = await sq.run(retention.referenced)
     removed = retention.sweep(Path(path) / "artifacts", keep, grace_days * 86_400)
     print(f"removed {len(removed)} unreferenced artifacts")

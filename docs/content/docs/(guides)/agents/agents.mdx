@@ -41,6 +41,21 @@ result = await support.run("Is my invoice paid?", store=store)
 
 `scriptedModel` plays back canned responses so these examples run with no API key. Swap in a real model from [Models](/docs/agents/models). Without `store`, runs use `sqlite(".threads")` in the working directory.
 
+### From a Python script
+
+A plain script has no event loop to `await` in. Call `run_sync` instead: it takes the same options as `run` and returns the same result.
+
+```python
+result = support.run_sync("Is my invoice paid?", store=sqlite(".threads"))
+print(result.status)
+```
+
+- **Inside async code, keep using `await support.run(...)`.** `run_sync` refuses to start inside a running event loop (async code, a Jupyter notebook) and raises `ConfigError` `invalid_config`.
+- **Each call opens and closes its own connections** to the model provider and the sandbox. Many short `run_sync` calls pay that each time; an async program that awaits `run` on one loop, or a [host](/docs/host/overview), keeps them between runs.
+- **Ctrl-C cancels the run cleanly,** then raises `KeyboardInterrupt`. A tool that ignores cancellation can keep the process alive until you kill it. The thread is usable again once its lease expires (30 seconds), and the next run closes the interrupted turn.
+- There is no blocking `stream`: stream from async code.
+- Use sandbox and model adapters through a run, a host, `threads gc` or `fork`. Each of those opens the adapter's connections and closes them when it ends. Calling an adapter's methods directly, outside all of them, raises an `AssertionError` saying there is "no hold" on the event loop.
+
 ## Handle the result
 
 A run never throws for an expected outcome. It returns one of six variants, keyed on `status`:

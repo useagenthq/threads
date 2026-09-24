@@ -16,6 +16,7 @@ from sandbox_deadline_kit import DEADLINE
 from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
+from threads.adapters.loop_resources import holding
 from threads.adapters.sandboxes import fence
 from threads.adapters.sandboxes.e2b.transport import FencedHttpx, http_transport
 from threads.loop.model import LookupUnknown
@@ -56,12 +57,13 @@ def test_invalid_provider_responses_are_typed_failures() -> None:
 
     async def main() -> None:
         sandbox = adapter(FakeBackend.scripted(), "e2b", garbage)
-        made = await sandbox.create("k", OPEN)
-        assert isinstance(made, Err)
-        assert made.error.code == "unavailable"
-        looked = await sandbox.lookup("k", OPEN)
-        assert isinstance(looked, Ok)
-        assert isinstance(looked.value, LookupUnknown)
+        async with holding():
+            made = await sandbox.create("k", OPEN)
+            assert isinstance(made, Err)
+            assert made.error.code == "unavailable"
+            looked = await sandbox.lookup("k", OPEN)
+            assert isinstance(looked, Ok)
+            assert isinstance(looked.value, LookupUnknown)
 
     asyncio.run(main())
 

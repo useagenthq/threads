@@ -38,7 +38,8 @@ class FencedHttpx(httpx.AsyncBaseTransport):
         return response
 
     async def aclose(self) -> None:
-        await self._inner.aclose()
+        """Leaves the inner transport open: the clients of one event loop share it, and that
+        loop's release closes it once, after them (envd.py `Transports`)."""
 
 
 class FencedPyqwest(pyqwest.Transport):

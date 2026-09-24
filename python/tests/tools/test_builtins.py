@@ -12,6 +12,7 @@ from pydantic import JsonValue
 from sandbox_kit import KitContext
 
 from threads._generated import tools_v1
+from threads.adapters.loop_resources import holding
 from threads.log import CallId, JsonObject, Spill, ToolSpec
 from threads.log.digest import sha256_hex
 from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
@@ -48,7 +49,8 @@ def run(tmp_path: Path, body: Callable[[Call, LocalSession, SqliteStore], Awaita
             assert tools.invalid(spec, input) is None
             return await tools.dispatch(Invocation(spec, CallId("call_1"), input, f"b:{name}"))
 
-        await body(call, session, opened.value)
+        async with holding():  # as a run holds its loop (a deadline's stop is owned by it)
+            await body(call, session, opened.value)
         await opened.value.close()
 
     asyncio.run(main())

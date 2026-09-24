@@ -10,6 +10,7 @@ import os
 import uuid
 
 import pytest
+from loop_kit import held
 from sandbox_kit import OPEN
 
 from threads.adapters.sandboxes.posix import collect
@@ -40,6 +41,5 @@ def test_a_real_sandbox_runs_a_command_and_keeps_a_file() -> None:
             assert await session.download("/workspace/a.txt", OPEN) == Ok(b"v1")
         finally:
             assert await session.close(OPEN) == Ok(None)
-            await sandbox.aclose()
 
-    asyncio.run(main())
+    asyncio.run(held(main()))  # the loop is held as a run holds it

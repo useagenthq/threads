@@ -15,11 +15,14 @@ What it declares, and why:
 - the sandbox dies on its own `lifetime_ms` after create (E2B's timeout): the declared expiry.
 """
 
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Literal
 
 from e2b.api import AsyncApiClient
 from e2b.connection_config import ConnectionConfig
 
+from threads.adapters.loop_resources import LoopResources, close_all
 from threads.adapters.sandboxes.e2b.control import Control
 from threads.adapters.sandboxes.e2b.envd import Envd, Transports
 from threads.adapters.sandboxes.e2b.session import E2BSession, Owner, call
@@ -48,7 +51,7 @@ class E2BSandbox:
     def __init__(  # noqa: PLR0913 - one provider's settings
         self,
         api_key: str | Secret | None,
-        transports: Transports,
+        transports: Callable[[], Transports],
         *,
         template: str,
         lifetime_ms: int,
@@ -60,8 +63,9 @@ class E2BSandbox:
         self._key = credential("e2b", "api_key", api_key, API_KEY)
         self._domain, self._api_url = domain, api_url
         self._name = name
-        self._plane: tuple[ConnectionConfig, Owner] | None = None
+        self._planes = LoopResources(name, _close)
         self._transports = transports
+        """Makes one event loop's transports."""
         self._template = template
         self._internet = internet
         self.lifetime_ms = lifetime_ms
@@ -81,22 +85,24 @@ class E2BSandbox:
         return self._info
 
     async def setup(self) -> None:
-        """Resolves the key on the host. The control-plane client is made on first use, in the
-        run."""
+        """Resolves the key on the host. The clients are made on first use, in the run and on
+        its event loop, and closed when nothing holds that loop any more."""
         self._key()
 
-    def _connection(self) -> tuple[ConnectionConfig, Owner]:
-        if self._plane is None:
+    def _plane(self) -> "_Plane":
+        def make() -> _Plane:
             config = ConnectionConfig(
                 api_key=self._key(), domain=self._domain, api_url=self._api_url, retries=0
             )
-            client = AsyncApiClient(config, transport=FencedHttpx(self._transports.http))
-            self._plane = (config, Owner(self._name, Control(client)))
-        return self._plane
+            transports = self._transports()
+            client = AsyncApiClient(config, transport=FencedHttpx(transports.http))
+            return _Plane(transports, config, client, Owner(self._name, Control(client)))
+
+        return self._planes.get(make)
 
     @property
     def _owner(self) -> Owner:
-        return self._connection()[1]
+        return self._plane().owner
 
     async def create(
         self, operation_key: str, context: SandboxContext
@@ -164,11 +170,31 @@ class E2BSandbox:
         return Ok(None if made.value is None else self._session(made.value))
 
     def _session(self, described: Described) -> E2BSession:
-        config = self._connection()[0]
-        domain = described.domain or config.domain
-        url = config.get_sandbox_url(described.sandbox_id, domain)
-        envd = Envd(described, url, self._transports)
-        return E2BSession(SandboxId(described.sandbox_id), envd, self._owner)
+        plane = self._plane()
+        domain = described.domain or plane.config.domain
+        url = plane.config.get_sandbox_url(described.sandbox_id, domain)
+        envd = Envd(described, url, plane.transports, plane.envds)
+        return E2BSession(SandboxId(described.sandbox_id), envd, plane.owner)
+
+
+@dataclass(frozen=True, slots=True)
+class _Plane:
+    """One event loop's E2B clients: the transports, the control client over them, and every
+    sandbox's envd clients opened on that loop."""
+
+    transports: Transports
+    config: ConnectionConfig
+    client: AsyncApiClient
+    owner: Owner
+    envds: set[Envd] = field(default_factory=set[Envd])
+
+
+async def _close(plane: _Plane) -> None:
+    """Every envd (its exec streams, then its clients), the control client, then the
+    transports they all share; each is attempted even if one before it fails."""
+    envds = [envd.aclose for envd in list(plane.envds)]
+    control = plane.client.get_async_httpx_client().aclose
+    await close_all([*envds, control, plane.transports.aclose])
 
 
 def e2b(  # noqa: PLR0913 - the provider's settings
@@ -184,10 +210,9 @@ def e2b(  # noqa: PLR0913 - the provider's settings
     `secret("E2B_API_KEY")`, resolved at setup; it authenticates the control plane only and
     never enters a sandbox.
     `template` must carry /bin/sh, sed, find, stat and sha256sum (E2B's base does)."""
-    transports = Transports(http_transport(), rpc_transport())
     return E2BSandbox(
         api_key,
-        transports,
+        lambda: Transports(http_transport(), rpc_transport()),
         domain=domain,
         template=template,
         lifetime_ms=lifetime_ms,

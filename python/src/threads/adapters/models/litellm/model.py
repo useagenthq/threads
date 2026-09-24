@@ -11,6 +11,7 @@ routes are refused at setup (`transport_fence_unsupported`), never run with a we
 """
 
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable, Mapping
+from dataclasses import dataclass
 from functools import partial
 from typing import Final, Protocol, TypeGuard, Unpack
 
@@ -18,6 +19,7 @@ import litellm as bridge
 import openai as sdk
 from litellm.exceptions import ContextWindowExceededError
 
+from threads.adapters.loop_resources import LoopResources
 from threads.adapters.models import transport
 from threads.adapters.models.litellm.request import build
 from threads.adapters.models.litellm.stream import Assembler
@@ -47,6 +49,18 @@ type Complete = Callable[..., Awaitable[object]]
 ACOMPLETION: Complete = getattr(bridge, "acompletion")  # noqa: B009
 
 
+async def _nothing() -> None:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class Connection:
+    """`acompletion` bound to a client for one event loop, and how to close that client."""
+
+    complete: Complete
+    close: Callable[[], Awaitable[None]] = _nothing
+
+
 class LiteLLMModel:
     """spec/api.json `Model` over LiteLLM's `openai/` route. No response lookup.
 
@@ -54,13 +68,13 @@ class LiteLLMModel:
     """
 
     def __init__(
-        self, info: ModelInfo, api_key: str | Secret | None, connect: Callable[[str], Complete]
+        self, info: ModelInfo, api_key: str | Secret | None, connect: Callable[[str], Connection]
     ) -> None:
         self._info = info
         self._key = credential(ADAPTER, "api_key", api_key, API_KEY)
         self._connect = connect
         """Makes `acompletion` bound to a client for the resolved key, on the first send."""
-        self._complete: Complete | None = None
+        self._connections: LoopResources[Connection] = LoopResources(ADAPTER, _disconnect)
 
     @property
     def info(self) -> ModelInfo:
@@ -68,13 +82,11 @@ class LiteLLMModel:
 
     async def setup(self) -> None:
         """Resolves the key on the host. The client is made by the first send, on the run's
-        own event loop."""
+        own event loop, and closed when nothing holds that loop any more."""
         self._key()
 
     def _completion(self) -> Complete:
-        if self._complete is None:
-            self._complete = self._connect(self._key())
-        return self._complete
+        return self._connections.get(lambda: self._connect(self._key())).complete
 
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         prepared = await prepare(request.body, ADAPTER, context, build)
@@ -167,11 +179,15 @@ def litellm(name: str, **options: Unpack[ExplicitOptions]) -> LiteLLMModel:
     )
     base_url = options.get("base_url")
 
-    def connect(key: str) -> Complete:
+    def connect(key: str) -> Connection:
         # LiteLLM sends this route through the OpenAI SDK client it is given: ours, fenced.
         client = sdk.AsyncOpenAI(
             api_key=key, base_url=base_url, max_retries=0, http_client=transport.client()
         )
-        return partial(ACOMPLETION, client=client)
+        return Connection(partial(ACOMPLETION, client=client), client.close)
 
     return LiteLLMModel(declared, options.get("api_key"), connect)
+
+
+async def _disconnect(connection: Connection) -> None:
+    await connection.close()

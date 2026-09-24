@@ -88,6 +88,53 @@ async def run(
 
 **Throws** `ConfigError` for a definition that can't run.
 
+### runSync / run_sync
+
+Python only. Blocking run for scripts: runs the agent on a new event loop in the calling thread, and the run's connections are opened and closed within the call. Inside a running event loop (async code, a notebook) it raises ConfigError invalid_config: use await run() there. On Ctrl-C the run is cancelled and cleaned up, then KeyboardInterrupt is raised; if a tool ignores cancellation, a later run closes the turn through recovery once the lease expires. There is no blocking stream.
+
+```python title="Python"
+def run_sync(
+    input: Input,
+    *,
+    thread: Thread | None = None,
+    store: Store | None = None,
+    deps: Deps | None = None,
+    budget: Budget | None = None,
+    principal: Principal | None = None,
+    ceiling: Policy.permissions | None = None,
+) -> RunResult[Output]
+```
+
+<Field name="input" type={"Input"} required>
+  Text or ordered input parts.
+</Field>
+
+<Field name="thread" type={"Thread"}>
+  The thread to continue: a Thread handle continues its branch. Omitted: a new thread. See [Thread](/docs/reference/types/Thread).
+</Field>
+
+<Field name="store" type={"Store"}>
+  Where the thread's log lives. Omitted: the handle's store when thread is a Thread handle, else sqlite(".threads") in the working directory. See [Store](/docs/reference/types/Store).
+</Field>
+
+<Field name="deps" type={"Deps"}>
+  Host-only dependencies your tools and hooks read as RunContext.deps; never serialized or logged. Required when the agent's Deps type is not null; omitted, tools see None.
+</Field>
+
+<Field name="budget" type={"Budget"}>
+  Run budget, recorded on the user_input; it covers this thread and every subagent it starts. Omitted: only the agent's own budget option applies.
+</Field>
+
+<Field name="principal" type={"Principal"}>
+  The verified sender of this input, recorded on the user_input. Omitted: the local operator (issuer "api", tenant "local", subject "operator").
+</Field>
+
+<Field name="ceiling" type={"Partial<Policy.permissions>"}>
+  The principal and host ceiling, exactly as for run(). Omitted: no ceiling, so only the agent's own permissions apply.
+</Field>
+
+**Throws** `ConfigError` for a definition that can't run.
+
 ### stream
 
 Same run, as a subscription to its log. Not a second loop.

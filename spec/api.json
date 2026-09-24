@@ -1139,6 +1139,68 @@
           "returns": {"$ref": "#/types/RunResult", "args": [{"generic": "Output"}]},
           "throws": ["ConfigError"]
         },
+        "runSync": {
+          "ts": "runSync",
+          "py": "run_sync",
+          "lang": "py",
+          "doc": "Blocking run for scripts: runs the agent on a new event loop in the calling thread, and the run's connections are opened and closed within the call. Inside a running event loop (async code, a notebook) it raises ConfigError invalid_config: use await run() there. On Ctrl-C the run is cancelled and cleaned up, then KeyboardInterrupt is raised; if a tool ignores cancellation, a later run closes the turn through recovery once the lease expires. There is no blocking stream.",
+          "async": false,
+          "params": [
+            {
+              "name": "input",
+              "kind": "positional",
+              "type": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Input"},
+              "required": true,
+              "doc": "Text or ordered input parts."
+            },
+            {
+              "name": "thread",
+              "kind": "option",
+              "type": {"$ref": "#/types/Thread"},
+              "required": false,
+              "doc": "The thread to continue: a Thread handle continues its branch. Omitted: a new thread."
+            },
+            {
+              "name": "store",
+              "kind": "option",
+              "type": {"$ref": "#/types/Store"},
+              "required": false,
+              "default_doc": "the handle's store when thread is a Thread, else sqlite(\".threads\")",
+              "doc": "Where the thread's log lives. Omitted: the handle's store when thread is a Thread handle, else sqlite(\".threads\") in the working directory."
+            },
+            {
+              "name": "deps",
+              "kind": "option",
+              "type": {"generic": "Deps"},
+              "required": false,
+              "doc": "Host-only dependencies your tools and hooks read as RunContext.deps; never serialized or logged. Required when the agent's Deps type is not null; omitted, tools see None."
+            },
+            {
+              "name": "budget",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Budget"},
+              "required": false,
+              "doc": "Run budget, recorded on the user_input; it covers this thread and every subagent it starts. Omitted: only the agent's own budget option applies."
+            },
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"},
+              "required": false,
+              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
+              "doc": "The verified sender of this input, recorded on the user_input. Omitted: the local operator (issuer \"api\", tenant \"local\", subject \"operator\")."
+            },
+            {
+              "name": "ceiling",
+              "kind": "option",
+              "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}},
+              "required": false,
+              "doc": "The principal and host ceiling, exactly as for run(). Omitted: no ceiling, so only the agent's own permissions apply."
+            }
+          ],
+          "returns": {"$ref": "#/types/RunResult", "args": [{"generic": "Output"}]},
+          "throws": ["ConfigError"]
+        },
         "stream": {
           "ts": "stream",
           "py": "stream",
