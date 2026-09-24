@@ -135,16 +135,16 @@ async def _call(rt: Runtime, state: CallState) -> Halt | None:
             reason = state.unknown_reason or "crash_after_begin"
             return await effects.settle(rt, state, spec, reason, "recovery")
         case None:
-            return await _dispatchable(rt, state, spec, began=False)
+            return await _close_gone_or_dispatch(rt, state, spec, began=False)
         case "safe_to_retry" | "not_sent" | "assume_not_done":
             # Settled as never performed: the loop may re-dispatch under the same key, after
             # the same cancellation and policy re-checks as a call that never began.
-            return await _dispatchable(rt, state, spec, began=True)
+            return await _close_gone_or_dispatch(rt, state, spec, began=True)
         case _:
             return await effects.close_settled(rt, state, "recovery")
 
 
-async def _dispatchable(
+async def _close_gone_or_dispatch(
     rt: Runtime, state: CallState, spec: ToolSpec | None, *, began: bool
 ) -> Halt | None:
     """A call the loop would dispatch never runs without a tool: one made to a tool not in the

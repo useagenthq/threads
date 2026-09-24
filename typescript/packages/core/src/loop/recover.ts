@@ -157,7 +157,7 @@ async function recoverCall(
     case "resolved":
       return resolved(s, callId);
     case undefined:
-      return dispatchable(s, callId, false);
+      return closeGoneOrDispatch(s, callId, false);
     default:
       return assertNever(status);
   }
@@ -179,7 +179,7 @@ function resolved(s: Session, callId: string): Halt | undefined {
     case "safe_to_retry":
     case "not_sent":
     case "assume_not_done":
-      return dispatchable(s, callId, true);
+      return closeGoneOrDispatch(s, callId, true);
     case "confirmed_success":
     case "interrupted":
     case "assume_done":
@@ -248,7 +248,7 @@ function notStarted(s: Session, callId: string): Halt | undefined {
  * closes not_executed, and so does one that never began whose tool a later tools_changed removed
  * (a removal is a policy change, so an earlier allow never dispatches a call past it).
  */
-function dispatchable(
+function closeGoneOrDispatch(
   s: Session,
   callId: string,
   began: boolean,
