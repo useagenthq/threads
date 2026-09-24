@@ -44,7 +44,54 @@ export type Created =
       readonly message: string;
     };
 
-export type SandboxDriver = {
+/** A lookup's answer that never proves absence: `not_found` is only a final lookup's. */
+export type NonfinalLookupResult = Exclude<
+  LookupResult<string>,
+  { readonly status: "not_found" }
+>;
+
+/**
+ * How a lost create is found by its operation key. Undeclared, a create in flight at the
+ * provider may appear later, so `find` can't answer `not_found`. A driver declares
+ * `createLookup: "final"` only with a `find` whose absence the provider's contract makes final.
+ */
+export type Finding =
+  | {
+      readonly createLookup?: "nonfinal";
+      readonly find: (operationKey: string) => Promise<NonfinalLookupResult>;
+    }
+  | {
+      readonly createLookup: "final";
+      readonly find: (operationKey: string) => Promise<LookupResult<string>>;
+    };
+
+/**
+ * How a process key's group is ended. Undeclared, `stopProcess` is best effort and every
+ * termination is unknown. A driver declares `termination: "confirmed"` only with a `terminate`
+ * that proves its answer, which the kit then uses instead.
+ */
+export type Stopping = BestEffortStop | ConfirmedTerminate;
+
+export type BestEffortStop = {
+  readonly termination?: "unconfirmed";
+  /**
+   * Best effort: kills the process the provider recorded under `processKey`. It proves
+   * nothing: a descendant can outlive it, and the provider's process table runs in the guest.
+   */
+  readonly stopProcess: (id: string, processKey: string) => Promise<void>;
+};
+
+export type ConfirmedTerminate = {
+  readonly termination: "confirmed";
+  readonly terminate: (
+    id: string,
+    processKey: string,
+  ) => Promise<"terminated" | "already_exited" | "unknown">;
+};
+
+export type SandboxDriver = Finding & Stopping & DriverOperations;
+
+type DriverOperations = {
   /**
    * Creates a sandbox that `find(operationKey)` can locate (a tag, label or unique name), from
    * the snapshot `ref` when given. Nothing from the host env is passed into it.
@@ -53,7 +100,6 @@ export type SandboxDriver = {
     operationKey: string,
     snapshot: string | undefined,
   ) => Promise<Created>;
-  readonly find: (operationKey: string) => Promise<LookupResult<string>>;
   /** Whether the sandbox `id` is still live at the provider. */
   readonly exists: (id: string) => Promise<boolean>;
   readonly kill: (id: string) => Promise<"killed" | "already_gone">;
@@ -68,11 +114,6 @@ export type SandboxDriver = {
     sinks: Sinks,
     processKey?: string,
   ) => Promise<Started>;
-  /**
-   * Best effort: kills the process the provider recorded under `processKey`. It proves
-   * nothing: a descendant can outlive it, and the provider's process table runs in the guest.
-   */
-  readonly stopProcess: (id: string, processKey: string) => Promise<void>;
   readonly write: (id: string, path: string, data: Uint8Array) => Promise<void>;
   readonly read: (id: string, path: string) => Promise<Uint8Array>;
   /** Absent when the provider has no snapshots. */

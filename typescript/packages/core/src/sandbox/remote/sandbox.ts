@@ -29,12 +29,11 @@ export function remoteSandbox(
   const quiescence = driver.snapshot?.quiescence ?? "none";
   const info: SandboxInfo = {
     ...declared,
-    // A lookup by tag or name can find a create, but a create still in flight at the provider
-    // may appear later, so absence is never proof. There's no snapshot lookup: its event data
-    // (manifest hash, quiescence) can't be recovered from the provider.
-    lookup: { create: "nonfinal", snapshot: "none" },
-    // A process kill happens inside the guest, so it never proves a whole group is gone.
-    termination: "unconfirmed",
+    // Declared by the driver, and only with its proof (driver.ts Finding, Stopping). There's
+    // no snapshot lookup: its event data (manifest hash, quiescence) can't be recovered from
+    // the provider.
+    lookup: { create: driver.createLookup ?? "nonfinal", snapshot: "none" },
+    termination: driver.termination ?? "unconfirmed",
     capture_classes:
       quiescence === "none" || quiescence === "unconfirmed"
         ? []

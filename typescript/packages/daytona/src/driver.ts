@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { Sandbox as SandboxDto } from "@daytona/api-client";
-import { quote, type SandboxDriver } from "@threads/core/adapter";
+import {
+  type BestEffortStop,
+  quote,
+  type SandboxDriver,
+} from "@threads/core/adapter";
 import { type Clients, statusOf } from "./clients";
 import { framed, unhex } from "./framing";
 import { follow, type OpenSocket } from "./logs";
@@ -229,7 +233,7 @@ const sessionOf = (processKey: string): string =>
 function sessions(
   options: DriverOptions,
   toolbox: Toolbox,
-): Pick<SandboxDriver, "run" | "stopProcess" | "write" | "read"> {
+): Pick<SandboxDriver, "run" | "write" | "read"> & BestEffortStop {
   const exitOf = async (
     box: Awaited<ReturnType<Toolbox>>,
     session: string,

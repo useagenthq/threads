@@ -84,8 +84,9 @@ export function remoteSession(
   id: string,
 ): SandboxSession {
   const sandboxId = SandboxId.parse(id);
-  // Kills best effort, and never claims it worked: a descendant can drop out of the process
-  // the provider tracks, so only an operator can settle it (termination: unconfirmed).
+  // A confirmed driver's answer. Otherwise a best-effort kill that never claims it worked: a
+  // descendant can drop out of the process the provider tracks, so only an operator can
+  // settle it (termination: unconfirmed).
   const terminate: SandboxSession["terminate"] = (processKey, context) =>
     guarded<
       "terminated" | "already_exited" | "unknown",
@@ -93,6 +94,8 @@ export function remoteSession(
     >(
       context,
       async () => {
+        if (driver.termination === "confirmed")
+          return ok(await driver.terminate(id, processKey));
         await driver.stopProcess(id, processKey);
         return ok("unknown");
       },
