@@ -91,6 +91,10 @@ class BudgetLedger:
 
         await self._worker.call(run)
 
+    async def spent(self, budget_id: str, limit: LimitName) -> int:
+        """What a budget's limit has spent and holds reserved: its ledger rows' sum."""
+        return await self._worker.call(lambda c: _sum(c, budget_id, limit))
+
     async def attempts(self, branch_id: str) -> Mapping[str, bool]:
         """This branch's attempt keys, and whether each is still (partly) reserved."""
 

@@ -32,7 +32,9 @@ from threads.loop import epoch
 from threads.loop.covering import Covering
 from threads.loop.drafts import draft
 from threads.loop.runtime import Failed, Runtime, lost
+from threads.loop.team_runtime import TeamAgentPin
 from threads.reduce.fold import Fold
+from threads.reduce.openers import turn_start
 from threads.reduce.projections import bound, dispositions, output_bound
 from threads.result import Err
 from threads.store import Draft
@@ -189,7 +191,7 @@ async def reserve(rt: Runtime, answer: Draft | None = None) -> Failed | Reservat
     thread_id = rt.writer.fold.thread_id
     if thread_id is None:
         raise AssertionError("an acquired branch has a thread")
-    covering = [*own(thread_id, rt.events), *rt.budgets]
+    covering = await covering_of(rt)
     key = f"{rt.writer.branch_id}:{rt.fold.seq + 1}"
     refused = await rt.store.budgets.reserve(key, _covers(covering), _reserve(rt.fold))
     if refused is None:
@@ -216,3 +218,42 @@ async def reserve(rt: Runtime, answer: Draft | None = None) -> Failed | Reservat
 async def settle(rt: Runtime) -> None:
     """Settles this branch's resolved attempts (after a response, an abandon, or recovery)."""
     await _sync(rt, rt.budgets)
+
+
+async def covering_of(rt: Runtime) -> list[Covering]:
+    """Every budget covering this thread: its own, then (a team member's turn) the run budget of
+    the request its turn belongs to, then its ancestors' (spec/schema/README.md, "Teams")."""
+    thread_id = rt.writer.fold.thread_id
+    if thread_id is None:
+        raise AssertionError("an acquired branch has a thread")
+    run: list[Covering] = []
+    team, start = rt.team, turn_start(rt.events)
+    if team is not None and team.run_covering is not None and start is not None:
+        found = await team.run_covering(rt.events[start])
+        run = [] if found is None else [found]
+    return [*own(thread_id, rt.events), *run, *rt.budgets]
+
+
+async def room_for(rt: Runtime, member: TeamAgentPin) -> bool:
+    """start's headroom: every budget that would cover the new member (the starter's, and the
+    member's own) has room for one request of its model. A limit it can't bound has none."""
+    covering = await covering_of(rt)
+    if member.budget is not None:
+        covering.append(Covering("member", member.budget, "thread"))
+    policy = member.policy
+    models: Sequence[Model] = () if policy is None or policy.models is MISSING else policy.models
+    ref = member.model
+    model = next((m for m in models if (m.provider, m.name) == (ref.provider, ref.name)), None)
+    amounts = bounds(model, member.params.get("max_tokens"))
+    for c in covering:
+        for limit in _LIMITS:
+            most = getattr(c.budget, limit)
+            if not isinstance(most, int):
+                continue
+            amount = amounts[limit]
+            spent = (
+                0 if c.budget_id == "member" else await rt.store.budgets.spent(c.budget_id, limit)
+            )
+            if amount is None or spent + amount > most:
+                return False
+    return True

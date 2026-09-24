@@ -17,6 +17,7 @@ from threads.agents.pin_change import pin_change
 from threads.agents.results import Failed, HandedOff, RunError, RunResult, Thread
 from threads.agents.scope import Scope
 from threads.agents.store import now_ms
+from threads.agents.teams import lead_started
 from threads.log import (
     Budget,
     HandoffEvent,
@@ -66,6 +67,7 @@ async def prepare[D](
         await rt.store.put_artifact(config)
         if launch is not None:
             started = {**started, "parent": launch.parent}
+        started = lead_started(definition, started, now_ms())
         before = () if launch is None else launch.before_input
         done = await rt.append(draft("thread_started", started), *before)
         return (

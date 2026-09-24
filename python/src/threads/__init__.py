@@ -8,9 +8,10 @@ VERSION: Final[str] = "0.0.0"
 __version__: Final[str] = VERSION
 
 # The public surface imports the store, which reads VERSION above: keep these after it.
-from threads.agents.agent import Agent, RunStream, agent  # noqa: E402
+from threads.agents.agent import Agent, RunStream  # noqa: E402
 from threads.agents.config import ConfigError, ConfigErrorCode, Failure  # noqa: E402
 from threads.agents.context import RunContext  # noqa: E402
+from threads.agents.factory import agent  # noqa: E402
 from threads.agents.results import (  # noqa: E402
     BudgetExhausted,
     Cancelled,
@@ -29,10 +30,18 @@ from threads.agents.results import (  # noqa: E402
 from threads.agents.setup import SetsUp  # noqa: E402
 from threads.agents.skills import Skill  # noqa: E402
 from threads.agents.store import Store, sqlite  # noqa: E402
+from threads.agents.team_agent import TeamAgent, TeamRunStream  # noqa: E402
+from threads.agents.team_results import TeamRef, TeamRunResult  # noqa: E402
+from threads.agents.team_tools import (  # noqa: E402
+    SendRefusal,
+    SendResult,
+    StartRefusal,
+    StartResult,
+)
 from threads.agents.tool import Reconcile, Tool, tool  # noqa: E402
 from threads.hooks.extension import Extension, extension  # noqa: E402
 from threads.hooks.types import Hooks  # noqa: E402
-from threads.log import Principal  # noqa: E402
+from threads.log import MemberRef, Principal  # noqa: E402
 from threads.loop.model import (  # noqa: E402
     LooksUp,
     LookupResult,
@@ -103,6 +112,7 @@ __all__ = [
     "LooksUpSandbox",
     "LooksUpSnapshot",
     "LookupResult",
+    "MemberRef",
     "MemoryHit",
     "MemoryProvider",
     "MemoryRecord",
@@ -129,11 +139,19 @@ __all__ = [
     "SearchBackend",
     "SearchHit",
     "Secret",
+    "SendRefusal",
+    "SendResult",
     "SetsUp",
     "Skill",
+    "StartRefusal",
+    "StartResult",
     "StatusItem",
     "Store",
     "StreamEvent",
+    "TeamAgent",
+    "TeamRef",
+    "TeamRunResult",
+    "TeamRunStream",
     "Thread",
     "Tool",
     "__version__",

@@ -87,7 +87,7 @@ def test_a_new_root_that_names_a_team_opens_its_team_log() -> None:
         started = draft_of(log.value.fold.events[0])
         root = new_root(TENANT, LEAD, BranchId(branch_of(LEAD)), started, 1_790_000_000_000)
         assert isinstance(root, Ok)
-        assert await store.run(lambda c: insert_root(c, root.value)) is None
+        assert await store.run(lambda c: insert_root(c, root.value, "import")) is None
         team_log = await store.read(branch_of(TEAM_LOG), 1_790_000_000_000)
         assert isinstance(team_log, Ok)
         assert team_log.value.segments[0].header.thread_id == ThreadId(TEAM_LOG)

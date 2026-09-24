@@ -18,6 +18,7 @@ from typing import Protocol, runtime_checkable
 from threads.agents.config import ConfigError, ConfigErrorCode
 from threads.agents.definition import Definition
 from threads.agents.lookups import check_lookups
+from threads.agents.team_check import check_team
 from threads.hooks.extension import Extension
 from threads.redaction import redact_secrets
 
@@ -127,5 +128,6 @@ async def set_up[D](definition: Definition[D]) -> None:
     for adapter in adapters:
         if isinstance(adapter, SetsUp):
             await _once(adapter, adapter.setup)
-    for child in (*definition.subagents, *definition.handoffs):
+    for child in (*definition.subagents, *definition.handoffs, *(definition.team or ())):
         await set_up(child)
+    check_team(definition)

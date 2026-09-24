@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Final
 from threads.agents import stops
 from threads.agents.background import Background, settle
 from threads.agents.handoff import handoff
+from threads.agents.members import send_call, start_call
 from threads.agents.results import Parked
 from threads.agents.scope import Scope
 from threads.agents.spawn import busy, once, spawn, start_background
@@ -23,21 +24,24 @@ from threads.reduce.handlers import to_json
 from threads.reduce.run_end import ended_otherwise
 from threads.result import Err
 from threads.tools import TEAM
+from threads.tools.specs import PINNED_MEMBERS
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-NAMES: Final = TEAM | {"spawn_agent", "handoff"}
+NAMES: Final = TEAM | PINNED_MEMBERS | {"spawn_agent", "handoff"}
 
 
 class Agents[D]:
-    def __init__(self, scope: Scope[D]) -> None:
+    def __init__(self, scope: Scope[D], *, team: bool = False) -> None:
         self._scope = scope
         self._bg = Background()
+        # Outside a team, send and start are free names: an app tool may take one.
+        self._names = NAMES if team else NAMES - PINNED_MEMBERS
 
     @property
     def names(self) -> frozenset[str]:
-        return NAMES
+        return self._names
 
     async def run(self, rt: Runtime, state: CallState) -> Halt | None:
         match state.call.data.name:
@@ -45,6 +49,10 @@ class Agents[D]:
                 return await spawn(self._scope, rt, state, self._bg)
             case "handoff":
                 return await handoff(self._scope, rt, state)
+            case "start":
+                return await start_call(rt, state)
+            case "send":
+                return await send_call(rt, state)
             case _:
                 scope = self._scope
                 team = (scope.lead(rt), scope.member(), scope.team_names())

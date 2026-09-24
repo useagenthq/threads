@@ -156,9 +156,9 @@ class Runner:
         return target
 
     async def authority(self, store: Store, thread_id: ThreadId) -> Checked:
-        """Approval authority on a thread: its root run's agent's approvers, through subagent
-        and handoff parents; a root no host agent owns has none."""
-        root = await tree.root_of(store, thread_id, through=("subagent", "handoff"))
+        """Approval authority on a thread: its root run's agent's approvers, through subagent,
+        handoff and team member parents; a root no host agent owns has none."""
+        root = await tree.root_of(store, thread_id, through=("subagent", "handoff", "team_member"))
         bound = None if root is None else await self.bound(store, root[0])
         return Checked(() if bound is None else bound.definition.approvers)
 

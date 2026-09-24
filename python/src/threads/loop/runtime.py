@@ -26,6 +26,7 @@ from threads.loop import epoch
 from threads.loop.covering import Covering
 from threads.loop.history import CallState, open_cancel
 from threads.loop.model import Model
+from threads.loop.team_runtime import TeamRuntime
 from threads.loop.tools import ToolRunner
 from threads.permissions import Decision
 from threads.redaction import SecretInProviderOutputError, SecretInStoredBytesError
@@ -202,6 +203,8 @@ class Runtime:
     concurrent: frozenset[str] = frozenset()
     """The bound tools declared `concurrent=True` (pinned by config_hash): their read-only calls
     of one response may run in a group (threads.loop.parallel). Never a built-in or MCP tool."""
+    team: TeamRuntime | None = None
+    """A team's lead or member: its team tools, settlements and mail (threads.loop.teams)."""
 
     @property
     def fold(self) -> Fold:
@@ -229,7 +232,11 @@ class Runtime:
         """`append`, with host rows bound to the same transaction. Every loop append passes the
         cancel barrier (`after_barrier`) under the writer's lock: a batch it changed comes back
         as `Barred`, never as a plain success, so a caller that opened work (or ended the
-        turn) knows it didn't."""
+        turn) knows it didn't. A team thread's turn end carries its settlement, and a member's
+        first park its notice to its starter (spec/schema/README.md, "Teams")."""
+        settles = any(d.type in ("turn_completed", "parked") for d in drafts)
+        if self.team is not None and settles and companion is None and build is None:
+            return await self.team.settle(self, drafts)
         changed: list[bool] = []
 
         def admit(fold: Fold, batch: Sequence[Draft]) -> Sequence[Draft]:

@@ -40,8 +40,10 @@ MODELS: Final[Mapping[str, type[StrictModel]]] = {
     "open_pull_request": tools_v1.OpenPullRequestInput,
     "read": tools_v1.ReadInput,
     "read_tool_result": tools_v1.ReadToolResultInput,
+    "send": tools_v1.SendInput,
     "send_message": tools_v1.SendMessageInput,
     "spawn_agent": tools_v1.SpawnAgentInput,
+    "start": tools_v1.StartInput,
     "team_task_claim": tools_v1.TeamTaskClaimInput,
     "team_task_create": tools_v1.TeamTaskCreateInput,
     "team_task_update": tools_v1.TeamTaskUpdateInput,
@@ -78,9 +80,11 @@ SKILL: Final = "load_skill"
 TEAM: Final = frozenset({"send_message", "team_task_claim", "team_task_create", "team_task_update"})
 """Offered to a team: an agent with subagents, and every child it spawns."""
 MEMBERS: Final = frozenset({"ask", "cancel", "monitor", "reply", "send", "start", "wait"})
-"""A team's model tools (spec/schema/README.md, Teams): catalog entries, neither pinned nor run
-until the Teams build, so a user tool may still take one of these names."""
-FRAMEWORK: Final = TEAM | {"todo_write", "handoff", "spawn_agent"}
+"""A team's model tools (spec/schema/README.md, Teams): pinned for a lead and its members, so no
+tool of a team's agent may take one of these names."""
+PINNED_MEMBERS: Final = frozenset({"send", "start"})
+"""The team tools pinned and run so far: lane 21E pins ask, reply, wait, monitor and cancel."""
+FRAMEWORK: Final = TEAM | PINNED_MEMBERS | {"todo_write", "handoff", "spawn_agent"}
 """Log-only tools: `read_only` is exact, since only log state changes."""
 WEB: Final = frozenset({"web_fetch", "web_search"})
 """Host tools through the host's fenced web transport."""
@@ -109,10 +113,15 @@ class Writes:
     dedup_window_ms: int | None = None
 
 
-def agent_tools(*, spawn: bool, team: bool, handoffs: bool) -> frozenset[str]:
-    """spawn_agent with subagents, the team tools in a team, handoff with handoff targets."""
+def agent_tools(
+    *, spawn: bool, team: bool, handoffs: bool, members: bool = False
+) -> frozenset[str]:
+    """spawn_agent with subagents, the task-board tools in a subagent team, handoff with handoff
+    targets, and the team tools for a lead (agent(team=...)) and its members."""
     wanted = (("spawn_agent", spawn), ("handoff", handoffs))
-    chosen = frozenset(n for n, on in wanted if on)
+    chosen = frozenset(n for n, on in wanted if on) | (
+        PINNED_MEMBERS if members else frozenset[str]()
+    )
     return chosen | TEAM if team else chosen
 
 

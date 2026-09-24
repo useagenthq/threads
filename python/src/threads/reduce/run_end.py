@@ -1,8 +1,9 @@
 """Run completion (spec/schema/README.md, "Run completion"; Gate 1 decision 27): a run spans its
 request's turn and every wake turn of the same request, and ends at the first point where no
 turn is open, nothing is parked and every background child it spawned has reported. Only the
-lead's own log decides it, so run(), the host's outcome and SSE, and replay agree. Team events
-are refused before the Teams build, so the openers here are user_input and woken."""
+lead's own log decides it, so run(), the host's outcome and SSE, and replay agree. A turn opens
+with a user_input, a woken (the run that spawned its children) or a received mail that opens a
+turn (its provenance's root request). Reference: spec/tools/fixtures/run_end.py."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -16,6 +17,8 @@ from threads.log import (
     CancelRequestedEvent,
     Event,
     EventId,
+    MemberStartedEvent,
+    MessageReceivedEvent,
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
     ParkAddress,
@@ -24,9 +27,11 @@ from threads.log import (
     ToolResultLateEvent,
     TurnCompletedEvent,
     UserInputEvent,
+    WaitStartedEvent,
     WokenEvent,
 )
 from threads.reduce.fold import Fold
+from threads.reduce.team_fold import NOTICES, mail_renders, monitor_id
 
 type RunStatus = Literal[
     "running", "parked", "completed", "failed", "cancelled", "budget_exhausted", "handed_off"
@@ -69,19 +74,20 @@ class _Run:
     late_runs: dict[EventId, EventId] = field(default_factory=dict[EventId, EventId])
     children: set[str] = field(default_factory=set[str])
     """This run's background children that have not reported."""
+    monitors: set[str] = field(default_factory=set[str])
+    """The task monitors of this run's members that have not reported."""
+    settle: set[str] = field(default_factory=set[str])
+    """The settle monitors of this log's waits: their notifications open no turn."""
     answered: tuple[Event, ...] | None = None
     decided: RunEnd | None = None
 
     def step(self, events: Sequence[Event], i: int) -> None:
         event = events[i]
-        if not self.open and isinstance(event, UserInputEvent | WokenEvent):
-            self.open, self.start = True, i
-            self.current = (
-                event.event_id
-                if isinstance(event, UserInputEvent)
-                else self.late_runs.get(event.data.causes[0])
-            )
+        opens = None if self.open else self._opens(event)
+        if opens is not None:
+            self.open, self.start, self.current = True, i, opens[0]
         self._helpers(event)
+        self._members(event)
         if isinstance(event, CancelRequestedEvent):
             self._idle_cancel(event.data.scope, i)
         elif isinstance(event, TurnCompletedEvent):
@@ -94,6 +100,33 @@ class _Run:
         mid_append = isinstance(event, AgentFinishedEvent | ToolResultLateEvent)
         if not mid_append and self.decided is None and self.ended():
             self.decided = RunEnd("completed", self.answered or (), i)
+
+    def _opens(self, event: Event) -> tuple[EventId | None] | None:
+        """The run of the turn `event` opens, or None when it opens none: an input, a woken (its
+        children's run) or a received mail that opens a turn (its root request)."""
+        if isinstance(event, UserInputEvent):
+            return (event.event_id,)
+        if isinstance(event, WokenEvent):
+            return (self.late_runs.get(event.data.causes[0]),)
+        if not isinstance(event, MessageReceivedEvent):
+            return None
+        env = event.data.envelope
+        resolved = all(p.kind == "member" and p.id == env.monitor_id for p in self.parks)
+        if not (mail_renders(env, self.settle) and resolved):
+            return None
+        return (env.provenance.root_request.event_id,)
+
+    def _members(self, event: Event) -> None:
+        """Run-owned members, by their task monitors, and the waits' settle monitors."""
+        if isinstance(event, MemberStartedEvent):
+            if event.data.provenance.root_request.event_id == self.request:
+                self.monitors.add(monitor_id(event, "task"))
+        elif isinstance(event, MessageReceivedEvent):
+            env = event.data.envelope
+            if env.kind in NOTICES and isinstance(env.monitor_id, str):
+                self.monitors.discard(env.monitor_id)
+        elif isinstance(event, WaitStartedEvent):
+            self.settle.update(monitor_id(event, m.name) for m in event.data.members)
 
     def _helpers(self, event: Event) -> None:
         if isinstance(event, AgentSpawnedEvent) and event.data.mode == "background":
@@ -127,7 +160,8 @@ class _Run:
 
     def ended(self) -> bool:
         """An answer, no turn open, nothing parked, every child of this run reported."""
-        return self.answered is not None and not self.open and not self.parks and not self.children
+        idle = not (self.open or self.parks or self.children or self.monitors)
+        return self.answered is not None and idle
 
     def unfinished(self, last: int) -> RunEnd:
         """Where the log leaves a run that has not ended."""

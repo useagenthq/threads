@@ -3,7 +3,7 @@ child branch, the thread_started that opens a root branch its creator writes its
 schedule's thread), and `branch.open` (a team log, a team member)."""
 
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
 
@@ -64,9 +64,10 @@ def new_root(
     return Ok(NewRoot(row, (event, line), admitted.value.content, admitted.value.opened))
 
 
-def insert_root(conn: sqlite3.Connection, root: NewRoot) -> ParseError | None:
+def insert_root(conn: sqlite3.Connection, root: NewRoot, holder: str) -> ParseError | None:
     """Inserts the branch and its first event, and runs the index hooks, in the caller's
-    transaction (which rolls back on an error)."""
+    transaction (which rolls back on an error). `holder` is the opener's: a team log the hooks
+    open is opened under it."""
     insert_branch(conn, root.row)
     insert_events(conn, (root.first,), root.row.head_hash)
     event, row = root.first[0], root.row
@@ -77,7 +78,7 @@ def insert_root(conn: sqlite3.Connection, root: NewRoot) -> ParseError | None:
         row.branch_id,
         indexing.known([event]),
         root.opened,
-        "",
+        holder,
         event.time,
     )
     return indexing.index_append(conn, appended)
@@ -104,6 +105,7 @@ class OpenedBranch:
 
     fold: Fold
     last_line: bytes
+    lease: lease.Lease
 
 
 def open_branch(
@@ -137,7 +139,7 @@ def open_branch(
         o.tenant_id, o.thread_id, o.branch_id, events, opened, o.lease.holder_id, now
     )
     error = indexing.index_append(conn, appended)
-    return error if error is not None else OpenedBranch(fold, last)
+    return error if error is not None else OpenedBranch(fold, last, o.lease)
 
 
 class _UndoError(Exception):
@@ -151,6 +153,26 @@ def open_alone(
     """`open_branch` in a transaction of its own."""
     try:
         with transaction(conn):
+            opened = open_branch(conn, o, now)
+            if isinstance(opened, ParseError):
+                raise _UndoError(opened)
+            return opened
+    except _UndoError as undo:
+        return undo.error
+
+
+def open_checked(
+    conn: sqlite3.Connection,
+    decide: Callable[[sqlite3.Connection, int], BranchOpening | None],
+    now: int,
+) -> OpenedBranch | Literal["already_open"] | ParseError | None:
+    """`branch.open` after a check in the same transaction: `decide` reads the store and returns
+    the opening, or None to commit nothing (materialize's row check)."""
+    try:
+        with transaction(conn):
+            o = decide(conn, now)
+            if o is None:
+                return None
             opened = open_branch(conn, o, now)
             if isinstance(opened, ParseError):
                 raise _UndoError(opened)

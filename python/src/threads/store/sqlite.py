@@ -6,6 +6,7 @@ with the default ":memory:" path is the in-memory store tests use: the same code
 
 import sqlite3
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -25,7 +26,7 @@ from threads.store.budgets import BudgetLedger
 from threads.store.context import CleanupContext, OwnerContext
 from threads.store.cursors import ObserverCursors
 from threads.store.lines import Draft, head_line, header_line, imported_bytes
-from threads.store.opening import ALREADY_OPEN, BranchOpening, open_alone
+from threads.store.opening import ALREADY_OPEN, BranchOpening, open_alone, open_checked
 from threads.store.resources import Ledger, Resource
 from threads.store.spill import Spill
 from threads.store.tables import Tables
@@ -161,6 +162,30 @@ class SqliteStore(BranchStore):
         if isinstance(opened, str):
             return Ok(ALREADY_OPEN)
         return Ok(Writer(self._worker, held, opened.fold, opened.last_line, clock))
+
+    async def open_checked(
+        self,
+        decide: Callable[[sqlite3.Connection, int], BranchOpening | None],
+        clock: Clock,
+    ) -> Ok[Writer | Literal["already_open"] | None] | Err[ParseError]:
+        """`branch.open` after a check in the same transaction: `decide` reads the store and
+        returns the opening (its tenant is this store's), or None to commit nothing."""
+        now = clock()
+
+        def scoped(conn: sqlite3.Connection, at: int) -> BranchOpening | None:
+            o = decide(conn, at)
+            return None if o is None else replace(o, tenant_id=self._tenant)
+
+        opened = await self._worker.call(
+            lambda c: published(b"", lambda: open_checked(c, scoped, now))
+        )
+        if isinstance(opened, ParseError):
+            return Err(opened)
+        if opened is None:
+            return Ok(None)
+        if isinstance(opened, str):
+            return Ok(ALREADY_OPEN)
+        return Ok(Writer(self._worker, opened.lease, opened.fold, opened.last_line, clock))
 
     async def import_log(self, log: VerifiedLog) -> Ok[None] | Err[ParseError]:
         """Stores a verified export's lines byte for byte: parents referenced, never copied.

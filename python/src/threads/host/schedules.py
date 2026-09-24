@@ -10,6 +10,7 @@ Operator config: the local tenant, and the schedule itself as the principal.
 """
 
 import asyncio
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import partial
@@ -124,7 +125,10 @@ class Scheduler:
             )
             for at in due
         ]
-        await reserve_due(p, await p.started(schedule.agent), found, self._clock())
+        refused = await reserve_due(p, await p.started(schedule.agent), found, self._clock())
+        if refused is not None:
+            why = refused.error.message
+            sys.stderr.write(f"threads host: schedule {schedule.id} can't open a thread: {why}\n")
 
     async def _resume_open(self, p: Pass) -> None:
         """A run whose input is durable but that never went (its host died, or the writer was

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, assert_never
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import CancelledEvent, EventId, ModelRequestEvent, SteerEvent, UserInputEvent
+from threads.log import CancelledEvent, EventId, ModelRequestEvent, SteerEvent
 from threads.loop import calls, effects
 from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
@@ -29,6 +29,7 @@ from threads.loop.model import (
     looked_up,
 )
 from threads.loop.runtime import Failed, Halt, Runtime, WriterContext, epoch_model, fence, lost
+from threads.reduce.openers import turn_start
 from threads.result import Err, Ok
 
 if TYPE_CHECKING:
@@ -69,8 +70,10 @@ def _open_turn_to_close(rt: Runtime) -> bool:
         return False
     if open_cancel(rt.events) is not None:
         return False
-    inputs = [i for i, e in enumerate(rt.events) if isinstance(e, UserInputEvent | SteerEvent)]
-    start = inputs[-1] if inputs else 0
+    # The turn's opener (an input, a woken, a receipt) or a later steer.
+    opened = turn_start(rt.events) or 0
+    steers = [i for i, e in enumerate(rt.events) if isinstance(e, SteerEvent) and i > opened]
+    start = steers[-1] if steers else opened
     # A requested compaction's side request is cut before the input, so it never sent it.
     return any(
         isinstance(e, ModelRequestEvent) and e.data.cause_event_id is MISSING

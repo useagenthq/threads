@@ -4,7 +4,7 @@ appends itself when it creates a thread (a schedule's), and what check() sets up
 from contextlib import AsyncExitStack
 
 from threads.agents.definition import Definition
-from threads.agents.run import with_servers
+from threads.agents.servers import with_servers
 from threads.agents.setup import set_up
 from threads.agents.store import Store, open_store
 from threads.loop.drafts import draft

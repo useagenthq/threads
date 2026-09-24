@@ -112,6 +112,8 @@ class Routed:
         self._sandbox = sandbox
         self._results = results
         self._app = app
+        # Outside a team, send and start are free names: an app tool may take one.
+        self._own = app.names if isinstance(app, AppTools) else frozenset[str]()
         self._provided = provided
         self._ext = ext
 
@@ -129,7 +131,7 @@ class Routed:
         return self._app
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
-        if spec.name in FRAMEWORK:
+        if spec.name in FRAMEWORK and spec.name not in self._own:
             parsed = parse(spec.name, input)
             return parsed.error if isinstance(parsed, Err) else None
         return self._for(spec.name).invalid(spec, input)

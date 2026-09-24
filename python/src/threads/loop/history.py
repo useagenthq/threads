@@ -34,8 +34,8 @@ from threads.log import (
     ToolCallEvent,
     ToolResultEvent,
     UserInputEvent,
-    WokenEvent,
 )
+from threads.reduce.openers import turn_start
 
 CONTINUE_TEXT: Final = (
     "Output limit reached. Continue exactly where you stopped. Do not repeat earlier output."
@@ -44,11 +44,10 @@ CONTINUE_TEXT: Final = (
 
 
 def turn_events(events: Sequence[Event]) -> Sequence[Event]:
-    """The open (or last) turn's events, from the `user_input` or `woken` that opened it."""
-    for index in range(len(events) - 1, -1, -1):
-        if isinstance(events[index], UserInputEvent | WokenEvent):
-            return events[index:]
-    return ()
+    """The open (or last) turn's events, from the event that opened it: a `user_input`, a
+    `woken` or a received mail (spec/schema/README.md, "Which events open a turn")."""
+    start = turn_start(events)
+    return () if start is None else events[start:]
 
 
 def _side(events: Sequence[Event]) -> frozenset[EventId]:

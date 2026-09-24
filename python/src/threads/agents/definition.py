@@ -1,6 +1,6 @@
 """An agent's definition and what it pins at thread start: `thread_started`."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import BaseModel, JsonValue
@@ -25,6 +25,7 @@ from threads.memory.setup import writes
 from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.sandbox.protocol import Sandbox
+from threads.team.ops import TeamLimits
 from threads.tools import specs
 from threads.tools.specs import agent_tools
 
@@ -52,7 +53,12 @@ class Definition[D]:
     handoffs: "tuple[Definition[None], ...]" = ()
     """What handoff may hand the conversation to, pinned as policy.handoffs."""
     member: bool = False
-    """Started as a subagent: a team member, offered the team tools."""
+    """Started as a subagent: a task-board member, offered its tools."""
+    team: "tuple[Definition[None], ...] | None" = None
+    """agent(team=...): the agents start may name. None: no team."""
+    team_limits: TeamLimits = field(default_factory=TeamLimits)
+    in_team: bool = False
+    """Pinned as a team's member: offered the team tools."""
     allowed: frozenset[str] | None = None
     """A subagent's tools are its own filtered to these, its parent's pinned names: a child only
     narrows. final_output is exempt."""
@@ -133,6 +139,7 @@ class Definition[D]:
                 spawn=bool(self.subagents),
                 team=bool(self.subagents) or self.member,
                 handoffs=bool(self.handoffs),
+                members=self.team is not None or self.in_team,
             ),
             gated=self.catalog.gated(),
             skills=bool(self.skills),

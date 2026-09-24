@@ -4,18 +4,17 @@ whatever a crash left, record the input, drive the loop, and read the result off
 import asyncio
 import contextlib
 import uuid
-from collections.abc import AsyncGenerator, Callable, Sequence
-from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
+from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import TypedDict
 
 from threads.adapters.loop_resources import holding
 from threads.agents import narrowing
-from threads.agents.bindings import AppTool, AppTools, Fence, ToolServer, capped
+from threads.agents.bindings import AppTools, capped
 from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
 from threads.agents.catalog import gateways
-from threads.agents.config import ConfigError
 from threads.agents.context import RunContext
 from threads.agents.definition import Definition
 from threads.agents.framework import Agents
@@ -32,7 +31,8 @@ from threads.agents.results import (
     Thread,
 )
 from threads.agents.scope import Execute, Scope
-from threads.agents.setup import redacted_error, set_up
+from threads.agents.servers import fenced, host_serving, with_servers
+from threads.agents.setup import set_up
 from threads.agents.skills import SkillLoader
 from threads.agents.start import (
     Recorded,
@@ -44,6 +44,9 @@ from threads.agents.start import (
 )
 from threads.agents.store import LIVE, Store, now_ms, open_store, sqlite
 from threads.agents.stubbed import stub_mode
+from threads.agents.team_run import covered, finish, notifying, team_side, unparked
+from threads.agents.team_worker import MemberRun
+from threads.agents.teams import team_of
 from threads.agents.tool import invalid
 from threads.hooks.extension import bind, extension_tools
 from threads.hooks.observers import ObserverPump
@@ -123,10 +126,11 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
     emit: Emit,
     launch: Launch | None = None,
     intake: Intake | None = None,
+    member: MemberRun | None = None,
 ) -> RunResult[str]:
     # The run holds its loop's adapter connections; the last holder on a loop closes them.
     async with holding():
-        return await _execute(definition, input, options, deps, emit, launch, intake)
+        return await _execute(definition, input, options, deps, emit, launch, intake, member)
 
 
 async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
@@ -137,22 +141,26 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
     emit: Emit,
     launch: Launch | None,
     intake: Intake | None,
+    member: MemberRun | None,
 ) -> RunResult[str]:
     await _set_up(definition, options.get("budget"))
     thread = options.get("thread")
     store = options.get("store") or (thread.store if thread is not None else sqlite(".threads"))
     sq = await open_store(store)
     # Each run is its own executor: a second run on a busy branch is branch_busy.
-    holder = uuid.uuid4().hex
+    holder = uuid.uuid4().hex if member is None else member.holder
     opened = await (_open(sq, thread, holder) if launch is None else launched(sq, launch, holder))
     if isinstance(opened, Err):
         handle = thread or Thread(ThreadId(uuid7(now_ms())), BranchId(uuid7(now_ms())), store)
         return Failed(RunError(_refusal(opened.error), opened.error.message), handle)
     writer, fresh = opened.value
     if intake is not None and intake.servers:
-        definition = _serving(definition, intake.servers)
+        definition = host_serving(definition, intake.servers)
     async with _held(writer), AsyncExitStack() as servers:
         definition = await with_servers(definition, servers, fenced(writer))
+        side = team_side(
+            servers, team_of(definition, member, writer, store, sq, _member_runner(store))
+        )
         thread_id = writer.fold.thread_id
         if thread_id is None:
             raise AssertionError("an acquired branch has a thread")
@@ -192,7 +200,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
             builtins,
             None if launch is None else launch.team,
         )
-        agents = Agents(frame)
+        agents = Agents(frame, team=side is not None)
         rt = Runtime(
             sq,
             writer,
@@ -203,17 +211,24 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
             stream.wait_until,
             # A final_output candidate is checked against the output model, strictly.
             None if definition.output is None else partial(invalid, definition.output),
-            observe=stream.observe,
+            observe=stream.observe if side is None else notifying(stream.observe, side.runtime),
             read_file=None if builtins is None else builtins.read_file,
             hooks=bind(definition.extensions, hook_ctx),
-            budgets=() if launch is None else launch.budgets,
+            budgets=covered(launch, member),
             framework=agents,
             concurrent=definition.concurrent_tools(),
+            team=None if side is None else side.runtime,
         )
         moved = rt.fold.handed_off
         recorded = Recorded(input, principal, options.get("budget"), launch, intake)
-        halt = await _turn(rt, definition, recorded, fresh=fresh)
-        halt = await agents.finish(rt, halt)
+        halt = await finish(
+            rt,
+            agents,
+            await _turn(
+                rt, definition, recorded, fresh=fresh, first=partial(unparked, rt, agents, side)
+            ),
+            side,
+        )
         if isinstance(halt, Idle) and box is not None and builtins is not None and shared is None:
             revision = None if provided is None else provided.knowledge_revision
             await snapshot_turn_end(sq, writer, box, builtins, now_ms, knowledge_revision=revision)
@@ -230,14 +245,22 @@ async def _set_up[D](definition: Definition[D], budget: Budget | None) -> None:
 
 
 async def _turn[D](
-    rt: Runtime, definition: Definition[D], recorded: Recorded, *, fresh: bool
+    rt: Runtime,
+    definition: Definition[D],
+    recorded: Recorded,
+    *,
+    fresh: bool,
+    first: Callable[[], Awaitable[Halt | None]],
 ) -> Halt:
-    """Pins or recovers the thread, records the input unless the branch can't take one, and
-    drives the loop to its halt; a host intake's after work runs at an idle or parked halt.
+    """Pins or recovers the thread, runs `first` (a lead parked on its members waits for
+    them), records the input unless the branch can't take one, and drives the loop to its
+    halt; a host intake's after work runs at an idle or parked halt.
     Without an input the run only continues what the log holds (a host resuming a thread)."""
     launch, intake = recorded.launch, recorded.intake
     after = None if intake is None else intake.after
     halt = await prepare(rt, definition, fresh=fresh, launch=launch)
+    if halt is None:
+        halt = await first()
     takes = recorded.input is not None and not rt.fold.handed_off and wants_input(rt, launch)
     if halt is None and takes:
         halt = await record_input(rt, recorded)
@@ -300,52 +323,6 @@ def _sandbox_tools[D](
     return sandbox_tools(sq, box, writer, now_ms, definition.catalog.servers())
 
 
-def fenced(writer: Writer) -> Fence:
-    """Whether this run still owns its branch, for a tool or provider transport's send point."""
-
-    async def fence() -> bool:
-        return isinstance(await writer.fence(), Ok)
-
-    return fence
-
-
-@asynccontextmanager
-async def _closed_quietly[T](session: AbstractAsyncContextManager[T]) -> AsyncGenerator[T]:
-    """`session`, closed best effort: a failed close never replaces the error, or the result, a
-    run or check ends with (and its message could hold a secret)."""
-    stack = AsyncExitStack()
-    entered = await stack.enter_async_context(session)
-    try:
-        yield entered
-    finally:
-        with contextlib.suppress(Exception):
-            await stack.aclose()
-
-
-async def with_servers[D](
-    definition: Definition[D], stack: AsyncExitStack, fence: Fence
-) -> Definition[D]:
-    """The definition with its tool servers' tools, on sessions `stack` closes: app tools in
-    declared order, then server tools sorted by name. A run fences them by its writer; check()
-    lists them outside any branch. A server tool named like another tool is duplicate_name."""
-    if not definition.servers:
-        return definition
-
-    found: list[AppTool[object]] = []
-    for server in definition.servers:
-        try:
-            found.extend(await stack.enter_async_context(_closed_quietly(server.connect(fence))))
-        except Exception as error:
-            # check() returns it and a run raises it: redacted, whatever it was (C5).
-            raise redacted_error(error, "mcp_unreachable", f"MCP server {server.name}") from None
-    extra = sorted(found, key=lambda t: t.name)
-    connected = replace(definition, tools=(*definition.tools, *extra))
-    names = [s.name for s in connected.specs()]
-    if len(set(names)) != len(names):
-        raise ConfigError("duplicate_name", f"tool names repeat: {names}")
-    return connected
-
-
 def _ceilings[D](options: RunOptions[D], launch: Launch | None) -> tuple[Permissions, ...]:
     """A launched thread's ceilings come with its launch; a run's own is its option."""
     if launch is not None:
@@ -376,11 +353,20 @@ def _child_runner(store: Store, stubs: tuple[Stub, ...] | None) -> Execute:
     return run
 
 
-def _serving[T](definition: Definition[T], servers: tuple[ToolServer, ...]) -> Definition[T]:
-    """A host's servers (a channel's send tool) go with the conversation: a handoff target
-    pins them too, so the host can run it on when the conversation moves there."""
-    handoffs = tuple(_serving(h, servers) for h in definition.handoffs)
-    return replace(definition, servers=(*definition.servers, *servers), handoffs=handoffs)
+def _member_runner(store: Store) -> Callable[[Definition[None], MemberRun], Awaitable[None]]:
+    """How the team worker runs a member branch: this pipeline, as a team member, under the
+    member's own lease holder and budgets, until the branch is idle, parked or ended."""
+
+    async def run(definition: Definition[None], m: MemberRun) -> None:
+        options: RunOptions[None] = {
+            "thread": Thread(m.thread, m.branch, store),
+            "store": store,
+            "principal": m.principal,
+        }
+        member = replace(definition, in_team=True)
+        await execute(member, None, options, None, _drop, member=m)
+
+    return run
 
 
 def _drop(_item: StreamEvent) -> None:

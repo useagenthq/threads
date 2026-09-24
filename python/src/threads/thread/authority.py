@@ -2,10 +2,10 @@
 answer a thread's challenges and settle its parked effects.
 
 A host handle carries `Checked`: decisions are taken under the approver set of the root run (the
-top of the thread's tree through subagent and handoff parents). Configured approvers are the only
-ones; unconfigured, the root run's originating principal (the root thread's latest user_input
-principal) is. The in-process `Thread` API has operator authority: no `Checked`, and it records
-the principal it is given.
+top of the thread's tree through subagent, handoff and team member parents). Configured
+approvers are the only ones; unconfigured, the root run's originating principal (the root
+thread's latest user_input principal) is. The in-process `Thread` API has operator authority: no
+`Checked`, and it records the principal it is given.
 """
 
 from dataclasses import dataclass
@@ -42,7 +42,7 @@ async def refused(
 
 
 async def _originator(store: Store, thread_id: ThreadId) -> Principal | None:
-    root = await root_of(store, thread_id, through=("subagent", "handoff"))
+    root = await root_of(store, thread_id, through=("subagent", "handoff", "team_member"))
     if root is None:
         return None
     read = await (await open_store(store)).read(root[1], 0)
