@@ -111,7 +111,7 @@ Every hook is optional, awaited and time-limited. Each gets the run context last
 
 | TypeScript | Python | When | Returns |
 |---|---|---|---|
-| `sessionStart` | `session_start` | A run starts, resumes or forks, or history was summarized | Text to add as context |
+| `sessionStart` | `session_start` | A run starts, resumes, or is the first run on a forked branch | Text to add as context |
 | `sessionEnd` | `session_end` | A run ends | Nothing |
 | `beforeInput` | `before_input` | Before new user input is accepted | `allow` (optional `injections`) or `deny` |
 | `beforeModel` | `before_model` | Before each model request | `proceed` (optional `injections`) or `deny` |

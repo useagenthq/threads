@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { agent, fakeSandbox, scriptedModel, sqlite } from "../../src";
+import {
+  agent,
+  extension,
+  fakeSandbox,
+  scriptedModel,
+  sqlite,
+} from "../../src";
 import { unwrap } from "../store/helpers";
 
 // RunResult.thread is the Thread handle (spec/api.json RunResult.thread: #/types/Thread), as in
@@ -66,6 +72,41 @@ describe("result.thread is a Thread handle", () => {
     const next = await bot.run("more", { store, thread: child });
     expect(next.status).toBe("completed");
     expect(next.thread.branch).toBe(child.branch);
+  });
+
+  test("session_start sees fork on a forked branch's first run, then resume", async () => {
+    const store = sqlite(":memory:");
+    const seen: string[] = [];
+    const bot = agent({
+      model: scriptedModel({
+        responses: [
+          use("write", { path: "a.txt", content: "A" }, "c1"),
+          say("done"),
+          say("again"),
+          say("more"),
+        ],
+      }),
+      sandbox: fakeSandbox(),
+      permissions: { mode: "accept_edits" },
+      extensions: [
+        extension({
+          name: "ops",
+          hooks: {
+            sessionStart: async (source) => {
+              seen.push(source);
+              return [];
+            },
+          },
+        }),
+      ],
+    });
+    const first = await bot.run("write", { store });
+    const [point] = await first.thread.forkPoints();
+    if (point === undefined) throw new Error("no fork point");
+    const child = unwrap(await first.thread.fork(point));
+    await bot.run("more", { store, thread: child });
+    await bot.run("again", { store, thread: child });
+    expect(seen).toEqual(["startup", "fork", "resume"]);
   });
 
   test("a handed-off result's target thread is a handle too", async () => {

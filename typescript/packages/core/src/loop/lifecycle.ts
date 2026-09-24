@@ -74,6 +74,17 @@ export async function finish(s: Session): Promise<Halt | undefined> {
   return endTurn(s, "end_turn");
 }
 
+/**
+ * Why a run starts: a forked branch that took no input since its fork is "fork", a branch with
+ * any input "resume", a new one "startup".
+ */
+export function sessionSource(events: readonly KnownEvent[]): SessionSource {
+  const forked = events.findLastIndex((e) => e.type === "fork");
+  const input = events.findLastIndex((e) => e.type === "user_input");
+  if (forked !== -1 && input < forked) return "fork";
+  return input === -1 ? "startup" : "resume";
+}
+
 /** session_start: a failure denies the session, so the run takes no input. */
 export async function sessionStart(
   s: Session,

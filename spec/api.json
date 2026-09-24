@@ -2862,7 +2862,7 @@
                   "kind": "positional",
                   "type": {"enum": ["startup", "resume", "fork", "compact"]},
                   "required": true,
-                  "doc": "Why the session started: \"startup\" for a thread's first run, \"resume\" for a later run on a thread that already has input, \"compact\" after the context was compacted. \"fork\" is in the contract but is not passed today."
+                  "doc": "Why the session started: \"startup\" for a thread's first run, \"fork\" for the first run on a forked branch (no input since its fork), \"resume\" for a later run on a thread that already has input. \"compact\" is in the contract but is not passed today."
                 },
                 {
                   "name": "ctx",

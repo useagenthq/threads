@@ -18,8 +18,10 @@ from threads.agents.results import Failed, HandedOff, RunError, RunResult, Threa
 from threads.agents.scope import Scope
 from threads.agents.store import now_ms
 from threads.agents.teams import lead_started
+from threads.hooks.types import Source
 from threads.log import (
     Budget,
+    ForkEvent,
     HandoffEvent,
     InputPart,
     ParseError,
@@ -82,8 +84,18 @@ async def prepare[D](
         halt = await drive(rt)
     # A turn that ended is out of the way; a park or a failure is this run's result.
     if halt is None or isinstance(halt, Idle):
-        return await gates.session_start(rt, "resume")
+        return await gates.session_start(rt, _started_as(rt.events))
     return halt
+
+
+def _started_as(events: Sequence[object]) -> Source:
+    """A forked branch that took no input since its fork starts as "fork", else "resume"."""
+    for event in reversed(events):
+        if isinstance(event, UserInputEvent):
+            return "resume"
+        if isinstance(event, ForkEvent):
+            return "fork"
+    return "resume"
 
 
 def pinned_config(events: Iterable[object]) -> str | None:

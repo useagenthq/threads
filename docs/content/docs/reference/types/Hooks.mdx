@@ -13,7 +13,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="sessionStart(source) / session_start(source)" type={"\"startup\" | \"resume\" | \"fork\" | \"compact\""} required>
-  Why the session started: "startup" for a thread's first run, "resume" for a later run on a thread that already has input, "compact" after the context was compacted. "fork" is in the contract but is not passed today.
+  Why the session started: "startup" for a thread's first run, "fork" for the first run on a forked branch (no input since its fork), "resume" for a later run on a thread that already has input. "compact" is in the contract but is not passed today.
 </Field>
 
 <Field name="sessionStart(ctx) / session_start(ctx)" type={"RunContext<Deps>"} required>

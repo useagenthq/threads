@@ -7,7 +7,7 @@ import { teamTurns } from "./agents/members";
 import { unparkChildren } from "./agents/park";
 import { runStatus, stopChildren } from "./agents/stop";
 import { observe } from "./hooks";
-import { sessionStart } from "./lifecycle";
+import { sessionSource, sessionStart } from "./lifecycle";
 import { expireQuestions } from "./questions";
 import { recover } from "./recover";
 import { type LoopEnd, runLoop } from "./run";
@@ -82,10 +82,7 @@ function refuseHostedStub(s: Session): void {
 }
 
 async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
-  const source = s.events.some((e) => e.type === "user_input")
-    ? "resume"
-    : "startup";
-  const denied = await sessionStart(s, source);
+  const denied = await sessionStart(s, sessionSource(s.events));
   if (denied !== undefined) return { kind: "halted", halt: denied };
   const unparked = await unparkChildren(s);
   if (unparked !== undefined) return { kind: "halted", halt: unparked };

@@ -8,7 +8,8 @@ from collections.abc import Callable
 import pytest
 from pydantic import JsonValue
 
-from threads import Completed, agent, fake_sandbox, scripted_model, sqlite
+from threads import Completed, RunContext, agent, extension, fake_sandbox, scripted_model, sqlite
+from threads.hooks.types import Source
 from threads.log import Permissions, SnapshotData, SnapshotEvent
 from threads.result import Ok
 from threads.sandbox.fake import FakeSandbox
@@ -76,6 +77,33 @@ def test_a_turn_that_used_the_sandbox_ends_at_a_verified_fork_point() -> None:
         assert isinstance(child, Ok), child
 
     asyncio.run(main())
+
+
+def test_session_start_sees_fork_on_a_forked_branchs_first_run_then_resume() -> None:
+    seen: list[str] = []
+
+    async def start(source: Source, _ctx: RunContext[None]) -> list[str]:
+        seen.append(source)
+        return []
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        bot = agent(
+            model=scripted_model({"responses": [write_a(), done(), done(), done()]}),
+            sandbox=fake_sandbox(),
+            permissions=BYPASS,
+            extensions=[extension(name="ops", hooks={"session_start": start})],
+        )
+        first = await bot.run("go", store=store)
+        points = await first.thread.fork_points()
+        assert isinstance(points, Ok)
+        child = await first.thread.fork(points.value[0])
+        assert isinstance(child, Ok), child
+        assert isinstance(await bot.run("more", store=store, thread=child.value), Completed)
+        assert isinstance(await bot.run("again", store=store, thread=child.value), Completed)
+
+    asyncio.run(main())
+    assert seen == ["startup", "fork", "resume"]
 
 
 def test_the_a_b_a_schedule_records_no_snapshot_and_no_fork_point() -> None:
