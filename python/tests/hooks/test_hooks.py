@@ -12,7 +12,7 @@ from pydantic import JsonValue
 
 from threads import Completed, ConfigError, Failed, RunContext, agent, scripted_model, sqlite
 from threads.agents.store import open_store
-from threads.hooks.extension import Extension, extension
+from threads.hooks.extension import extension
 from threads.hooks.types import (
     InputDecision,
     ModelGate,
@@ -157,7 +157,7 @@ def test_the_hook_set_is_pinned_and_a_changed_one_starts_no_run() -> None:
         canonical = canonicalize(json.loads(config.value))
         assert isinstance(canonical, Ok)
         assert canonical.value.encode() == config.value
-        changed: Extension[None] = extension(name="ops")
+        changed = extension(name="ops")
         with pytest.raises(ConfigError):
             await agent(model=scripted_model({"responses": [text("b")]}), extensions=[changed]).run(
                 "more", store=store, thread=first.thread, deps=None

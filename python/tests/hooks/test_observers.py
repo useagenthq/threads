@@ -9,7 +9,7 @@ from pydantic import JsonValue
 from threads import Completed, agent, scripted_model, sqlite
 from threads.agents.context import RunContext
 from threads.agents.store import open_store
-from threads.hooks.extension import Extension, Observer, extension
+from threads.hooks.extension import Observer, extension
 from threads.hooks.observers import ObserverPump
 from threads.log import Budget, Event
 from threads.result import Ok
@@ -55,7 +55,7 @@ def test_a_throwing_or_stuck_observer_changes_neither_execution_nor_the_log() ->
         await asyncio.Event().wait()
 
     async def run(on: dict[str, Observer] | None) -> tuple[bool, list[str]]:
-        ext: list[Extension[None]] = [] if on is None else [extension(name="o", on=on)]
+        ext = [] if on is None else [extension(name="o", on=on)]
         bot = agent(model=scripted_model({"responses": [text("ok")]}), extensions=ext)
         done = await bot.run("hi", store=sqlite(":memory:"), deps=None)
         timeline = await done.thread.timeline()

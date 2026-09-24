@@ -14,7 +14,7 @@ from threads import Agent, agent, scripted_model, sqlite
 from threads.agents.context import RunContext
 from threads.agents.run import execute
 from threads.agents.store import now_ms, open_store
-from threads.hooks.extension import Extension, extension
+from threads.hooks.extension import extension
 from threads.hooks.types import CompactGate
 from threads.log import (
     CompactedEvent,
@@ -205,12 +205,8 @@ def test_a_recorded_hook_decision_is_reused() -> None:
         return hook
 
     async def main() -> None:
-        first: Extension[None] = extension(
-            name="first", hooks={"before_compact": guide("first", "Keep A.")}
-        )
-        second: Extension[None] = extension(
-            name="second", hooks={"before_compact": guide("second", "Keep B.")}
-        )
+        first = extension(name="first", hooks={"before_compact": guide("first", "Keep A.")})
+        second = extension(name="second", hooks={"before_compact": guide("second", "Keep B.")})
         model = scripted_model({"responses": [text("Hi."), text(SUMMARY), text("Answer.")]})
         bot = agent(model=model, extensions=[first, second])
         recorded = draft(

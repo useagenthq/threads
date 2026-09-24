@@ -10,7 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, JsonValue
 
 from threads import Completed, RunContext, agent, scripted_model, sqlite, tool
-from threads.hooks.extension import Extension, extension
+from threads.hooks.extension import extension
 from threads.hooks.types import ToolGate
 from threads.log import Context, Permissions, ToolCallData
 from threads.loop.scripted import ScriptedModel
@@ -151,7 +151,7 @@ def test_hook_text_is_recorded_redacted(tmp_path: Path) -> None:
     async def noop(_args: NoInput, _ctx: RunContext[None]) -> str:
         return "ok"
 
-    hooked: Extension[None] = extension(
+    hooked = extension(
         name="audit",
         hooks={"session_start": started, "before_tool": gate},
     )

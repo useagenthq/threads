@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Final, Required, TypedDict, Unpack
 
 from pydantic import JsonValue
+from typing_extensions import TypeVar
 
 from threads.agents.bindings import AppTool
 from threads.agents.config import ConfigError
@@ -18,6 +19,11 @@ from threads.loop.model import LookupResult
 from threads.loop.tools import Dispatched
 
 type Observer = Callable[[Event], Awaitable[None]]
+
+D = TypeVar("D", default=None)
+"""The deps an extension's hooks and tools read. PEP 696's default (typing_extensions, which
+pydantic already depends on): an extension with no hooks or tools is Extension[None], never
+Extension[Unknown]."""
 
 _NAME: Final = re.compile(r"[a-z][a-z0-9_]{0,63}")
 DEFAULT_TIMEOUT_MS: Final = 5000
@@ -119,7 +125,7 @@ _ALL: Final[tuple[HookName, ...]] = (
 )
 
 
-def extension[D](**options: Unpack[ExtensionOptions[D]]) -> Extension[D]:
+def extension(**options: Unpack[ExtensionOptions[D]]) -> Extension[D]:
     """spec/api.json `extension`. Pure. Raises ConfigError for a name the wire can't hold or a
     non-positive timeout."""
     name = options["name"]
