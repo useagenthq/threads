@@ -1,0 +1,26 @@
+{
+  "name": "otel-subagent-parent-missing",
+  "description": "The same child with its parent thread gone: its turn keeps its own root and is marked threads.parent_missing.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000002"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000002",
+      "head_seq": 5,
+      "cursor_before": 0,
+      "cursor_after": 5,
+      "spans": 2,
+      "expected": "sync-1.otlp.json"
+    }
+  ]
+}

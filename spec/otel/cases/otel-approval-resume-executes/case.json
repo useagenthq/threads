@@ -1,0 +1,26 @@
+{
+  "name": "otel-approval-resume-executes",
+  "description": "The park closes the turn and the tool span (threads.parked). The approval opens the resumed turn in the same trace, linked to the parked turn; resumed opens a continuation of the call that carries effect_begin and effect_commit and links to the parked tool span.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 16,
+      "cursor_before": 0,
+      "cursor_after": 16,
+      "spans": 6,
+      "expected": "sync-1.otlp.json"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "otel-two-approvals-one-resume",
+  "description": "Two calls wait for approval and only the first is granted. resumed opens a continuation for it alone: the second is still waiting on its own approval, so its approval_requested lands on the resumed turn, which the second park closes.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 17,
+      "cursor_before": 0,
+      "cursor_after": 17,
+      "spans": 6,
+      "expected": "sync-1.otlp.json"
+    }
+  ]
+}

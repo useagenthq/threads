@@ -1,0 +1,42 @@
+{
+  "name": "otel-long-turn-once",
+  "description": "One turn with three model calls over three syncs: each span is sent once, by the first sync after it closes, and the turn span only by the last.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 4,
+      "cursor_before": 0,
+      "cursor_after": 4,
+      "spans": 1,
+      "expected": "sync-1.otlp.json"
+    },
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 9,
+      "cursor_before": 4,
+      "cursor_after": 9,
+      "spans": 2,
+      "expected": "sync-2.otlp.json"
+    },
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 15,
+      "cursor_before": 9,
+      "cursor_after": 15,
+      "spans": 3,
+      "expected": "sync-3.otlp.json"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "name": "otel-retry-tick-between",
+  "description": "A sync runs right after the abandonment, before retry_scheduled: the failed span is sent without the retry, which arrives with the retried attempt. Together the two syncs send exactly what one sync at the end sends.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 4,
+      "cursor_before": 0,
+      "cursor_after": 4,
+      "spans": 1,
+      "expected": "sync-1.otlp.json"
+    },
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 8,
+      "cursor_before": 4,
+      "cursor_after": 8,
+      "spans": 2,
+      "expected": "sync-2.otlp.json"
+    }
+  ]
+}

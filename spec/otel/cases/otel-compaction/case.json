@@ -1,0 +1,26 @@
+{
+  "name": "otel-compaction",
+  "description": "A compaction side request is a chat span with threads.model.purpose compaction, and the compacted event is a turn span event.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 18,
+      "cursor_before": 0,
+      "cursor_after": 18,
+      "spans": 7,
+      "expected": "sync-1.otlp.json"
+    }
+  ]
+}

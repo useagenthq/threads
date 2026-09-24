@@ -1,0 +1,2 @@
+{"adapter":{"name":"scripted","settings":{},"version":"1"},"model":{"name":"scripted-1","provider":"scripted"},"params":{"max_tokens":1024},"system":"You are a helpful agent.","tools":[{"description":"Send an email.","input_schema":{"additionalProperties":false,"properties":{"body":{"type":"string"},"to":{"type":"string"}},"required":["body","to"],"type":"object"},"name":"send_email"}]}
+{"content":[{"text":"Email bob.","type":"text"}],"role":"user"}

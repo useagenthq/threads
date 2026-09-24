@@ -88,7 +88,9 @@
         "cost_overflow",
         "handoff_in_team",
         "busy",
-        "thread_in_team"
+        "thread_in_team",
+        "collector_unavailable",
+        "collector_rejected"
       ]
     },
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },

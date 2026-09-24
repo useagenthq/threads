@@ -12,6 +12,13 @@
     "adapters": "Model, Sandbox, MemoryProvider, KnowledgeProvider, ChannelAdapter and SearchBackend are protocols. A provider factory is a function of an adapter package (packages kind adapter): it returns one of these protocols and lists the ConfigError codes it can raise in config_errors. Params whose doc starts with Seam: exist in one language to swap a transport or clock in tests. Factories not yet in this file are listed in spec/api-surface-factory-decisions.json. Credentials: a single-account adapter (model, sandbox, memory provider) takes its credential as an option that defaults to secret(\"<ENV>\"), with the env name documented per factory. It is resolved in the adapter's setup (check() or the first run), never by the factory. A missing value is missing_secret, and the message names the option and the env variable. An explicit value is registered for redaction exactly as a revealed Secret is, under the same rules (at least 8 characters, not a schema literal). Channel adapters, search backends and MCP servers take every secret explicitly; search backends also resolve theirs at setup. Credential values are never pinned, logged, rendered or passed into a sandbox (invariant 4). Model factories take the provider's exact model id first, then options (TS object, Python keywords). max_input_tokens (the maximum input tokens one request may carry; pinned as policy.models[].context_window) and max_output_tokens default from the adapter's exact-id catalog (spec/models/<provider>.v1.json); an id that isn't in the catalog, or is withdrawn, must be given both, otherwise ConfigError invalid_config naming each missing option. max_tokens, the per-request output cap, defaults to min(8192, max_output_tokens); above max_output_tokens it is ConfigError invalid_config. It is pinned as model_params.max_tokens (Render v1 line 0) for every adapter and sent under the provider's own field name; params can't set it. Limits are pinned in policy.models (config_hash). A released catalog entry's behavioral fields never change."
   },
   "packages": {
+    "otel": {
+      "kind": "adapter",
+      "ts": "@threads/otel",
+      "py": "threads.otel",
+      "provider": "OpenTelemetry",
+      "doc": "Exports traces derived from the log to an OTLP/HTTP collector as JSON (Python extra otel). No OpenTelemetry SDK: span ids are derived from event ids, so a re-send carries the same ids."
+    },
     "core": {
       "kind": "core",
       "ts": "@threads/core",
@@ -269,6 +276,85 @@
     {"id": "team-deletion-results", "open": "Gate 1 (v02 §4.15) makes deleting a team's threads a fixed point that can be busy or refused.", "choice": "Store deletion (TS deleteThread/deleteTenant, Python delete_thread/delete_tenant, and threads delete) returns a result: the number of threads deleted, or not_found, busy (a live lease or an effect in doubt in the deletion set; nothing written) or thread_in_team (a member thread or team log whose lead is not deleted with it). Python's delete_thread moves from a bare int to Ok[int] | Err[DeleteError].", "why": "A delete that would erase a live executor's only recovery log must refuse, and the caller must see why."}
   ],
   "functions": {
+    "otel": {
+      "ts": "otel",
+      "py": "otel",
+      "package": "otel",
+      "doc": "An Exporter that sends each span of every thread in the store once, when it closes, to an OpenTelemetry collector over OTLP/HTTP JSON (spec/otel/README.md). Pass it as host({telemetry: otel()}), or call sync() yourself. Settings not given as options come from the standard OTEL_EXPORTER_OTLP_* variables; semantic conventions core v1.41.1. Setup errors are thrown here: invalid_config names the option or variable.",
+      "async": false,
+      "params": [
+        {
+          "name": "store",
+          "kind": "option",
+          "type": {
+            "$ref": "#/types/Store"
+          },
+          "required": false,
+          "default_doc": "the host's store",
+          "doc": "The store whose threads are exported, every tenant. Omitted: the store of the host it is passed to; sync() outside a host without one is invalid_config."
+        },
+        {
+          "name": "endpoint",
+          "kind": "option",
+          "type": {
+            "prim": "string"
+          },
+          "required": false,
+          "default_doc": "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, else OTEL_EXPORTER_OTLP_ENDPOINT + /v1/traces",
+          "doc": "The collector's traces URL, used as is. Omitted: the traces variable as is, else the generic one with /v1/traces appended; neither set is invalid_config naming both."
+        },
+        {
+          "name": "headers",
+          "kind": "option",
+          "type": {
+            "map": {
+              "prim": "string"
+            }
+          },
+          "required": false,
+          "default_doc": "OTEL_EXPORTER_OTLP_TRACES_HEADERS, else OTEL_EXPORTER_OTLP_HEADERS",
+          "doc": "Request headers, such as a vendor's API key. Omitted: the variables (k=v,k=v, percent-decoded). They are credentials: never logged or put in an error."
+        },
+        {
+          "name": "service",
+          "kind": "option",
+          "type": {
+            "prim": "string"
+          },
+          "required": false,
+          "default_doc": "OTEL_SERVICE_NAME, else service.name in OTEL_RESOURCE_ATTRIBUTES, else threads",
+          "doc": "The resource's service.name. Omitted: OTEL_SERVICE_NAME, else service.name in OTEL_RESOURCE_ATTRIBUTES, else threads."
+        },
+        {
+          "name": "name",
+          "kind": "option",
+          "type": {
+            "prim": "string"
+          },
+          "required": false,
+          "default_doc": "the observer otel",
+          "doc": "Names this exporter's cursor (observer otel:<name>), so two exporters with different names each send every span, to different collectors. Omitted: the observer is otel."
+        },
+        {
+          "name": "content",
+          "kind": "option",
+          "type": {
+            "prim": "boolean"
+          },
+          "required": false,
+          "default": false,
+          "doc": "true: tool spans also carry the tool arguments and result preview, and model spans the response text, as logged (already redacted). Prompts are never exported."
+        }
+      ],
+      "returns": {
+        "$ref": "#/types/Exporter"
+      },
+      "config_errors": [
+        {
+          "code": "invalid_config"
+        }
+      ]
+    },
     "agent": {
       "ts": "agent",
       "py": "agent",
@@ -897,6 +983,15 @@
           "doc": "The host ceiling every run this host starts or resumes is also decided under (Agent.run ceiling). Omitted: no ceiling."
         },
         {
+          "name": "telemetry",
+          "kind": "option",
+          "type": {
+            "$ref": "#/types/Exporter"
+          },
+          "required": false,
+          "doc": "An exporter, such as otel(), that the host syncs every second and once more on stop() (bounded by 5 s). A failing collector is retried with back-off (1 s doubling to 60 s) and logged once per streak; runs never wait on it. Omitted: no telemetry."
+        },
+        {
           "name": "schedules",
           "kind": "option",
           "type": {"array": {"$ref": "#/types/Schedule"}},
@@ -1249,6 +1344,97 @@
     }
   },
   "types": {
+    "Exporter": {
+      "kind": "interface",
+      "role": "protocol",
+      "methods": {
+        "sync": {
+          "ts": "sync",
+          "py": "sync",
+          "async": true,
+          "params": [],
+          "returns": {
+            "result": {
+              "$ref": "#/types/SyncReport"
+            },
+            "errors": [
+              "collector_unavailable",
+              "collector_rejected"
+            ]
+          },
+          "throws": [
+            "ConfigError"
+          ],
+          "doc": "Sends every span that closed since the last acknowledged sync, then the unreported deletion losses, and moves each branch's cursor only after the collector accepted its spans. One sync runs at a time. collector_unavailable: a network error, timeout, 408, 429 or 5xx; collector_rejected: any other 4xx, with its status and the start of its body in the message. Nothing is dropped on an error: the next sync sends it again, with the same ids. Throws ConfigError invalid_config when the exporter has no store (made without one and not passed to a host)."
+        }
+      },
+      "doc": "A telemetry exporter (otel()). A host with telemetry calls sync() every second and once more, bounded by 5 s, on stop(); runs never wait on it."
+    },
+    "SyncReport": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "spans": {
+          "type": {
+            "prim": "integer"
+          },
+          "required": true,
+          "doc": "Spans the collector accepted in this sync."
+        },
+        "possibly_lost_events": {
+          "type": {
+            "prim": "integer"
+          },
+          "required": true,
+          "doc": "Events of deleted threads this exporter may never have sent (an upper bound), reported in this sync."
+        },
+        "skipped": {
+          "type": {
+            "array": {
+              "$ref": "#/types/SkippedBranch"
+            }
+          },
+          "required": true,
+          "doc": "Branches that could not be read this sync. Each is retried with back-off (1 s doubling to 1 h), sooner when its head moves; the others are exported as usual."
+        }
+      },
+      "doc": "What one Exporter.sync() sent."
+    },
+    "SkippedBranch": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "branch_id": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/BranchId"
+          },
+          "required": true,
+          "doc": "The branch that was not read."
+        },
+        "thread_id": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"
+          },
+          "required": true,
+          "doc": "Its thread."
+        },
+        "code": {
+          "type": {
+            "prim": "string"
+          },
+          "required": true,
+          "doc": "Why it didn't read: a log error code such as log_corrupt or unsupported_format."
+        },
+        "head_seq": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+          },
+          "required": true,
+          "doc": "The head it failed at. A new failure at the same head is the same back-off streak; the host logs a branch once per streak."
+        }
+      },
+      "doc": "A branch Exporter.sync() skipped."
+    },
     "Agent": {
       "kind": "interface",
       "role": "handle",

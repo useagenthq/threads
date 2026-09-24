@@ -17,7 +17,8 @@ Stdlib only, Python 3.12+. Checks:
   their failure codes;
 - every host API route's error responses allow exactly its x-error-codes, no more, no fewer;
 - api.json CaseExpectation and case.schema.json $defs/CaseExpectation stay the same shape;
-- every public entry has an explanation (api_docs.py); factories follow factory_decisions.py.
+- every public entry has an explanation (api_docs.py); factories follow factory_decisions.py;
+- no docs page, README or example mentions an internal entry (api_internal.py).
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from typing import TYPE_CHECKING
 
 from api_docs import check_docs
 from api_host import check_operations, check_route_errors
+from api_internal import check_internal_mentions
 from api_schema import Json, Validator, arr, obj, pointer, strs
 from factory_decisions import check_factory_contract
 
@@ -215,6 +217,7 @@ def main() -> int:
     problems += check_case_expectation(api, docs[SPEC / "conformance" / "case.schema.json"])
     problems += check_docs(api, by_id)
     problems += check_factory_contract(api, docs[META], SPEC)
+    problems += check_internal_mentions(SPEC.parent)
     for p in problems:
         print(p)
     print("api contract ok" if not problems else f"{len(problems)} problem(s)")

@@ -1,0 +1,26 @@
+{
+  "name": "otel-effect-unknown-resolved",
+  "description": "An unknown effect parks. The human's effect_resolved is the first event after the park, so it opens the resumed turn and is its first span event; the retried send is a continuation linked to the parked tool span.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 17,
+      "cursor_before": 0,
+      "cursor_after": 17,
+      "spans": 6,
+      "expected": "sync-1.otlp.json"
+    }
+  ]
+}

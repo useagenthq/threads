@@ -1,0 +1,26 @@
+{
+  "name": "otel-content-on",
+  "description": "The same turn with content: true: the tool span carries the canonical arguments and the result preview, and each chat span the response text.",
+  "tenant": "local",
+  "content": true,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 10,
+      "cursor_before": 0,
+      "cursor_after": 10,
+      "spans": 4,
+      "expected": "sync-1.otlp.json"
+    }
+  ]
+}

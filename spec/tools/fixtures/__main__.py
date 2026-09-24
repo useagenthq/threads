@@ -35,6 +35,7 @@ from . import (
     memory,
     models,
     open_turn,
+    otel,
     output_schemas,
     outputs,
     policy,
@@ -213,6 +214,8 @@ def main() -> int:
         _generate(out)
         staged = pathlib.Path(tmp) / "staged"
         _build_staged(staged)
+        traces = pathlib.Path(tmp) / "otel"
+        otel.build(traces)
         problems = coverage.check(out) + ref_team.ref_check(out, staged)
         if sys.argv[1:] == ["--check"]:
             problems += (
@@ -226,6 +229,8 @@ def main() -> int:
             return 1
         if sys.argv[1:] == ["--check"]:
             diffs = _diff(out, CASES) + [f"staged/{d}" for d in _diff(staged, STAGED)]
+            for part in otel.PARTS:
+                diffs += [f"otel/{part}/{d}" for d in _diff(traces / part, otel.OTEL / part)]
             for d in diffs:
                 print(d)
             print("fixtures up to date" if not diffs else f"{len(diffs)} difference(s)")
@@ -236,7 +241,8 @@ def main() -> int:
         team_ops.write()
         handoff_transcripts.write()
         anthropic_requests.write()
-        for built, dest in ((out, CASES), (staged, STAGED)):
+        otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
+        for built, dest in ((out, CASES), (staged, STAGED), *otel_parts):
             shutil.rmtree(dest, ignore_errors=True)
             shutil.copytree(built, dest)
         print(f"wrote {sum(1 for _ in CASES.iterdir())} cases")

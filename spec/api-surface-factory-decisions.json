@@ -1,6 +1,10 @@
 {
   "$comment": "Lane 15's factory decisions as data (plans/specs/lanes/15-adapter-factory-contract.md). packages: the source files scanned for the ConfigError codes each adapter package can raise (files, or directories scanned whole; spec/tools/factory_scan.py), and gaps: codes the scan finds that a factory can't declare yet, each with the lane that closes it and its pinned sites (file: count), so a new site is red and the gap is red once the code is declared. factories: every provider factory, contracted (in spec/api.json functions) or not yet, with the PR that installs its entry (owner) and, until then, a reader-facing summary (pending, listed in the reference as not yet in the contract); review_only lists defaults with no observable effect, which no behavior test can prove. decisions: every known cross-language difference, with its decision and owner. A factory entry can't be installed while a difference outside this list remains.",
   "packages": {
+    "otel": {
+      "ts": ["typescript/packages/otel/src"],
+      "py": ["python/src/threads/otel"]
+    },
     "search": {
       "ts": ["typescript/packages/core/src/tools/search-backends.ts"],
       "py": ["python/src/threads/search.py"]
@@ -51,6 +55,7 @@
     }
   },
   "factories": {
+    "otel": { "owner": "23" },
     "exa": { "owner": "15A", "review_only": { "transport": "Seam: the live transport is the network itself; tests pass a fake one." } },
     "tavily": { "owner": "15A", "review_only": { "transport": "Seam: the live transport is the network itself; tests pass a fake one." } },
     "brave": { "owner": "15A", "review_only": { "transport": "Seam: the live transport is the network itself; tests pass a fake one." } },

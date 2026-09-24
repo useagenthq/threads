@@ -1,0 +1,35 @@
+{
+  "name": "otel-fork-no-reexport",
+  "description": "A parent with two finished turns is exported, then forked at its snapshot, and the fork runs one turn. The fork's first sync starts at its fork point and sends only its own turn, whose span ids hash the fork's branch id, in its own trace.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001",
+    "0192b000-0000-7000-8000-000000000003"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 15,
+      "cursor_before": 0,
+      "cursor_after": 15,
+      "spans": 6,
+      "expected": "sync-1.otlp.json"
+    },
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000003",
+      "head_seq": 20,
+      "cursor_before": 15,
+      "cursor_after": 20,
+      "spans": 2,
+      "expected": "sync-2.otlp.json"
+    }
+  ]
+}

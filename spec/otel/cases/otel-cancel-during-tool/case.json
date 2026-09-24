@@ -1,0 +1,26 @@
+{
+  "name": "otel-cancel-during-tool",
+  "description": "main's cancel order: cancel_requested while the tool runs, a not_executed result for the pending call, cancelled, then turn_completed{cancelled}. The tool span closes at its own result with status ERROR and no threads.cut; the turn closes as cancelled.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 10,
+      "cursor_before": 0,
+      "cursor_after": 10,
+      "spans": 3,
+      "expected": "sync-1.otlp.json"
+    }
+  ]
+}

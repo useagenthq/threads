@@ -46,6 +46,8 @@ Both packages are checked against `../api.json` in CI. TypeScript: `tools/gen_ap
 - that a Python constructor stores its inputs as attributes;
 - **overload corner cases beyond the window** (an accepted scope limit): TypeScript's type system can't count overloads, so the gate reads a window of a function's last eight signatures (`this`, parameters and return type) and fails unless it can see all of them. Overloads it can't tell from the compiler's padding can hide an earlier one: four consecutive identical signatures followed by more, or any other variant past the eighth overload that differs from its neighbours only in ways the window doesn't compare. A contracted function with more than a handful of overloads is reviewed by hand.
 
+**Internal entries.** `@threads/core/internal/*` subpaths and underscore modules such as `threads.store._feed` are not public: they are not in `../api.json`, the gate never reads them, they are never documented (`check_api.py` fails on a docs page, README or example that names one), and they may change in any release. Adapter packages build on them (the telemetry exporter reads the store through `internal/feed`).
+
 **The gaps registry.** Anything either language lacks is listed in `../api-surface-gaps.json`, the one registry of what isn't built (the docs reference reads it too), one gap per member and language (a Python optional method may have two: its base protocol and its capability protocol), each with its owning lane. It only shrinks: a listed gap that is fixed fails until its entry is deleted, and a PR may add an entry only for a member its own contract change introduces (compared against the base commit's `api.json`). It must be empty at the release gate (`--release`).
 
 **Test evidence.** `../api-coverage.json` names, for every function, required method and required option in each language that has it, a test that must pass in the same CI run's JUnit report. That proves a named, reviewed test exists and passed; that it exercises the member is a reviewed claim, not something CI checks.
@@ -452,6 +454,17 @@ Text a tool server or provider chose reaches the model only inside the untrusted
 ## Deleting a thread
 
 Deleting a thread (`threads delete`, the host's thread deletion) also deletes every **subagent** thread spawned under it, recursively: each thread whose `thread_started.parent` has relation `subagent` and names a deleted thread. The same rules apply to each: same tenant only, a tombstone per thread, log rows and projections removed, live resources moved to `releasing`, and ledger rows released. **Handoff targets are independent threads** (relation `handoff`) and are not deleted, and neither are their own subagents. With teams, the deletion set is a fixed point: add every child whose parent relation is `subagent` or `team_member`, and for every lead in the set its team log and every row of its `team_id`, until nothing is added. A lead's team is found through `teams.lead_thread_id` in the deleting tenant, never through a team id a log names (an imported `team_opened` could name another tenant's team). It is deleted in one transaction, only when no branch in it holds an unexpired lease, has an effect in doubt, or has a log that doesn't verify (it can't be proved free of one: `threads repair` a torn branch first); else `busy`, nothing written. A member thread or a team log whose lead is not in the set is refused `thread_in_team`, unless its lead no longer exists. Deleting a background subagent also drops its parent's `pending_wakes` row for it. Tenant-wide deletion is one such set.
+
+## Telemetry
+
+OpenTelemetry traces are derived from the log and never written to it (`../otel/README.md`). An
+exporter reads committed events through an internal store reader, computes spans with a pure
+function of the chain (ids derived from event ids, so a re-send carries the same ids) and sends
+each span once, when it closes. Its `observer_cursors` row means "closed through": every span
+closing at or before the cursor was acknowledged, and open spans never hold it back. It never
+takes a lease and never appends. A deletion inserts one `observer_losses` row per registered
+`observers` row in the same transaction: an upper bound on the events that exporter may not have
+sent, exported later as a `threads.export.possibly_lost` span. No event changes. Store version 7.
 
 ## Semantic rules
 

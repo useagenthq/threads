@@ -1,0 +1,26 @@
+{
+  "name": "otel-cached-usage",
+  "description": "gen_ai.usage.input_tokens counts cached input too: 100 + 300 read + 50 written = 450, and the cache attributes are also sent on their own. In the second turn the cache write is null, so input_tokens is left out while every known part is sent.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 9,
+      "cursor_before": 0,
+      "cursor_after": 9,
+      "spans": 4,
+      "expected": "sync-1.otlp.json"
+    }
+  ]
+}

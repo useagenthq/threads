@@ -1,0 +1,523 @@
+{
+  "cases": [
+    {
+      "name": "generic endpoint gets /v1/traces",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "one slash before /v1/traces",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318/"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "traces endpoint is used as is",
+      "env": {
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://collector.example:4318/custom/traces"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/custom/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "traces beats generic",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://collector.example:4318/custom/traces"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/custom/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "the option beats both",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://collector.example:4318/custom/traces"
+      },
+      "options": {
+        "endpoint": "http://localhost:4318/v1/traces"
+      },
+      "expected": {
+        "endpoint": "http://localhost:4318/v1/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "no endpoint names both variables",
+      "env": {},
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+          "OTEL_EXPORTER_OTLP_ENDPOINT"
+        ]
+      }
+    },
+    {
+      "name": "an empty variable is unset",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": ""
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+          "OTEL_EXPORTER_OTLP_ENDPOINT"
+        ]
+      }
+    },
+    {
+      "name": "headers are split and percent-decoded",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_HEADERS": "x-honeycomb-team=abc%20def , x-b=1"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {
+          "x-honeycomb-team": "abc def",
+          "x-b": "1"
+        },
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "traces headers replace generic ones",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_HEADERS": "a=1",
+        "OTEL_EXPORTER_OTLP_TRACES_HEADERS": "b=2"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {
+          "b": "2"
+        },
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "the headers option beats both",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_TRACES_HEADERS": "b=2"
+      },
+      "options": {
+        "headers": {
+          "c": "3"
+        }
+      },
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {
+          "c": "3"
+        },
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "a header without = is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_HEADERS": "s3cret-token"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_HEADERS"
+        ]
+      }
+    },
+    {
+      "name": "an empty header key is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_TRACES_HEADERS": "=s3cret-token"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_TRACES_HEADERS"
+        ]
+      }
+    },
+    {
+      "name": "a bad percent escape is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_HEADERS": "a=%zz"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_HEADERS"
+        ]
+      }
+    },
+    {
+      "name": "a percent escape that is not UTF-8 is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_RESOURCE_ATTRIBUTES": "a=%C3"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_RESOURCE_ATTRIBUTES"
+        ]
+      }
+    },
+    {
+      "name": "empty entries are skipped",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_HEADERS": "a=1,, ,b="
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {
+          "a": "1",
+          "b": ""
+        },
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "http/json is accepted",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "grpc is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_PROTOCOL"
+        ]
+      }
+    },
+    {
+      "name": "traces protobuf is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
+        "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL": "http/protobuf"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"
+        ]
+      }
+    },
+    {
+      "name": "traces timeout beats generic",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_TIMEOUT": "5000",
+        "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT": "2500"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {},
+        "timeout_ms": 2500,
+        "compression": "none",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "a bad timeout is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_TIMEOUT": "10s"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_TIMEOUT"
+        ]
+      }
+    },
+    {
+      "name": "a zero timeout is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT": "0"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT"
+        ]
+      }
+    },
+    {
+      "name": "gzip",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_TRACES_COMPRESSION": "gzip"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "gzip",
+        "resource": {
+          "service.name": "threads",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "unknown compression",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_COMPRESSION": "br"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_COMPRESSION"
+        ]
+      }
+    },
+    {
+      "name": "a client key is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_CLIENT_KEY": "/k.pem"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_CLIENT_KEY"
+        ]
+      }
+    },
+    {
+      "name": "a certificate is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE": "/c.pem"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE"
+        ]
+      }
+    },
+    {
+      "name": "OTEL_SERVICE_NAME names the service",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_SERVICE_NAME": "support-bot"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "support-bot",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "the service option beats OTEL_SERVICE_NAME",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_SERVICE_NAME": "support-bot"
+      },
+      "options": {
+        "service": "billing"
+      },
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "billing",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "resource attributes are merged, and never override threads' own",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=prod,team=a%2Cb,telemetry.sdk.name=other,service.name=from-resource"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "from-resource",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1",
+          "deployment.environment": "prod",
+          "team": "a,b"
+        }
+      }
+    },
+    {
+      "name": "OTEL_SERVICE_NAME beats service.name in the resource",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_RESOURCE_ATTRIBUTES": "service.name=x",
+        "OTEL_SERVICE_NAME": "y"
+      },
+      "options": {},
+      "expected": {
+        "endpoint": "https://collector.example:4318/v1/traces",
+        "headers": {},
+        "timeout_ms": 10000,
+        "compression": "none",
+        "resource": {
+          "service.name": "y",
+          "telemetry.sdk.name": "threads",
+          "threads.otel.semconv": "1.41.1"
+        }
+      }
+    },
+    {
+      "name": "a resource entry without = is refused",
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+        "OTEL_RESOURCE_ATTRIBUTES": "prod"
+      },
+      "options": {},
+      "expected": {
+        "error": "invalid_config",
+        "names": [
+          "OTEL_RESOURCE_ATTRIBUTES"
+        ]
+      }
+    }
+  ]
+}

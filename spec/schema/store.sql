@@ -465,8 +465,34 @@ CREATE TABLE IF NOT EXISTS pending_wakes (
   PRIMARY KEY (branch_id, child_thread_id)
 ) STRICT;
 
+-- Telemetry exporters (spec/otel/README.md; store version 7). An exporter registers itself here
+-- on its first sync, so a deletion knows whose unsent spans it may drop.
+CREATE TABLE IF NOT EXISTS observers (
+  name TEXT PRIMARY KEY,
+  registered_at INTEGER NOT NULL
+) STRICT;
+
+-- What a deletion may have dropped before an exporter sent it: one row per registered observer,
+-- inserted in the delete transaction. unchecked_events counts the thread's committed events past
+-- that observer's cursor on each of its branches (every event of a branch without a cursor), an
+-- upper bound. reported_at is set once the row has been exported. Rows are never deleted: they
+-- are the audit of the deletion.
+CREATE TABLE IF NOT EXISTS observer_losses (
+  observer TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
+  unchecked_events INTEGER NOT NULL CHECK (unchecked_events >= 0),
+  deleted_at INTEGER NOT NULL,
+  reported_at INTEGER,
+  PRIMARY KEY (observer, thread_id, deleted_at)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS observer_losses_unreported
+  ON observer_losses (observer) WHERE reported_at IS NULL;
+
 -- Version 4: the team tables and pending_wakes. Version 5: lane 14C's schedule_threads,
 -- tenant-scoped schedule_occurrences with pending and retired rows, and questions (planned as
 -- version 2; the team tables took 4 first, so a version-4 store has the older schedule layout and
--- is refused).
-PRAGMA user_version = 5;
+-- is refused). Version 6 is claimed by lane 16C's snapshot_receipts, in flight. Version 7: lane
+-- 23's observers and observer_losses. If 16C merges after this, it takes 8.
+PRAGMA user_version = 7;

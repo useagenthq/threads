@@ -1,0 +1,34 @@
+{
+  "name": "otel-resumed-root",
+  "description": "After two parks the second resumed turn is still in the first user_input's trace, linked to the turn it resumes; the second call's continuation links to its parked tool span.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 17,
+      "cursor_before": 0,
+      "cursor_after": 17,
+      "spans": 6,
+      "expected": "sync-1.otlp.json"
+    },
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 25,
+      "cursor_before": 17,
+      "cursor_after": 25,
+      "spans": 3,
+      "expected": "sync-2.otlp.json"
+    }
+  ]
+}

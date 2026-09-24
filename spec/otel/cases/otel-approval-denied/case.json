@@ -1,0 +1,26 @@
+{
+  "name": "otel-approval-denied",
+  "description": "A denial is an event of the resumed turn span, which it opens. The denied call never runs, so no continuation opens, though the loop writes its result after resumed.",
+  "tenant": "local",
+  "content": false,
+  "resource": {
+    "service.name": "golden",
+    "telemetry.sdk.language": "golden",
+    "telemetry.sdk.name": "threads",
+    "threads.otel.semconv": "1.41.1"
+  },
+  "scope_version": "0.0.0",
+  "branches": [
+    "0192b000-0000-7000-8000-000000000001"
+  ],
+  "syncs": [
+    {
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "head_seq": 14,
+      "cursor_before": 0,
+      "cursor_after": 14,
+      "spans": 5,
+      "expected": "sync-1.otlp.json"
+    }
+  ]
+}
