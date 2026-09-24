@@ -232,7 +232,10 @@ async function remove(p: Parsed, io: Io): Promise<number> {
   }
   if (thread === undefined)
     return usage(io, "delete <thread_id> | --tenant <id>");
-  const done = deleteThread(db, p.tenant ?? "local", thread, Date.now());
+  const id = ThreadId.safeParse(thread);
+  if (!id.success)
+    return fail(io, { code: "not_found", message: `no thread ${thread}` });
+  const done = deleteThread(db, p.tenant ?? "local", id.data, Date.now());
   if (!done.ok) return fail(io, done.error);
   io.out(`deleted ${thread} (${done.value} threads)\n`);
   return 0;

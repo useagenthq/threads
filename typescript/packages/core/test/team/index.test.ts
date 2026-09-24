@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { type KnownEvent, TeamId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
+import type { SqliteDriver } from "../../src/store";
+import { openBunSqlite } from "../../src/store/bun-sqlite";
+import { TEAM_TABLES } from "../../src/store/deletion";
 import { checkTeamLogs } from "../../src/team/cross";
 import { changeRows, insertRows, turnOpeners } from "../../src/team/index";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
@@ -9,6 +12,7 @@ import { code, unwrap } from "../store/helpers";
 import {
   liftTeamRefusal,
   stagedLogs,
+  TENANT,
   type Team,
   teamIndexRows,
   teamStore,
@@ -34,7 +38,7 @@ const branches = (t: Team) =>
 function rowsOf(t: Team) {
   const { team_feed: _feed, ...rest } = teamIndexRows(
     t.db,
-    t.team,
+    [t.team],
     branches(t),
   );
   return rest;
@@ -68,7 +72,7 @@ function ready(t: Team, e: KnownEvent): boolean {
  * time, each event once the rows it moves exist, insertRows then changeRows.
  */
 function written(t: Team): void {
-  for (const table of TEAM_ROWS)
+  for (const table of TEAM_TABLES.filter((t) => t !== "team_feed"))
     t.db.run(`DELETE FROM ${table} WHERE team_id = ?`, [t.team]);
   const queues = [...t.logs.values()].map((chain) => {
     const header = chain.segments[0]?.header;
@@ -98,15 +102,6 @@ function written(t: Team): void {
   expect(queues.every((q) => q.events.length === 0)).toBe(true);
 }
 
-const TEAM_ROWS = [
-  "teams",
-  "team_members",
-  "mail",
-  "asks",
-  "monitors",
-  "operator_receipts",
-];
-
 describe("the replay rule", () => {
   for (const [name, labels] of Object.entries(CASES))
     test(`${name}: appends and a rebuild leave the same rows`, () => {
@@ -123,12 +118,39 @@ describe("the replay rule", () => {
         CASES["team-settle-wakes-lead"] ?? [],
       ),
     );
-    const first = teamIndexRows(t.db, t.team, branches(t));
+    const first = teamIndexRows(t.db, [t.team], branches(t));
     unwrap(rebuildTeamIndex(t.store, t.team));
-    expect(teamIndexRows(t.db, t.team, branches(t))).toEqual(first);
+    expect(teamIndexRows(t.db, [t.team], branches(t))).toEqual(first);
     expect(t.db.all("SELECT DISTINCT epoch FROM team_feed", [])).toEqual([
       { epoch: 2 },
     ]);
+  });
+
+  test("a rebuild reads the logs inside the transaction that refolds them", () => {
+    const base = openBunSqlite(":memory:");
+    let depth = 0;
+    const reads: boolean[] = [];
+    const spy: SqliteDriver = {
+      ...base,
+      transaction: (fn) =>
+        base.transaction(() => {
+          depth += 1;
+          try {
+            return fn();
+          } finally {
+            depth -= 1;
+          }
+        }),
+      all: (sql, params) => {
+        if (sql.includes("FROM events")) reads.push(depth > 0);
+        return base.all(sql, params);
+      },
+    };
+    const t = teamStore(stagedLogs(SETTLE, CASES[SETTLE] ?? []), TENANT, spy);
+    reads.length = 0;
+    unwrap(rebuildTeamIndex(t.store, t.team));
+    expect(reads.length).toBeGreaterThan(0);
+    expect(reads.every((inside) => inside)).toBe(true);
   });
 
   test("a team no lead names is not_found", () => {

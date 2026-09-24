@@ -77,13 +77,23 @@ function learn(
   }
 }
 
-/** The first break of rule 43, scanning `logs` in order and each log by seq. */
+/**
+ * The first break of rule 43, scanning `logs` in order and each log by seq. With `team`, only
+ * that team's mail is checked: a nested lead's log also holds its parent team's mail, whose
+ * other ends are not among one team's logs.
+ */
 export function checkTeamLogs(
   logs: readonly TeamLogEvents[],
+  team?: TeamId,
 ): CrossFailure | undefined {
   const known = facts(logs);
   for (const log of logs)
     for (const e of log.events) {
+      const mail =
+        e.type === "message_sent" || e.type === "message_received"
+          ? e.data.envelope.team
+          : undefined;
+      if (team !== undefined && mail !== undefined && mail !== team) continue;
       const why = check(e, log, known);
       if (why !== undefined)
         return { branchId: log.branchId, seq: e.seq, message: `43: ${why}` };

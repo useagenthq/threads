@@ -78,6 +78,58 @@ export function relinked(
   return utf8Out.encode(`${lines.join("\n")}\n`);
 }
 
+/**
+ * The export of a repair fork `child` of the branch `bytes` exports, at its line `atSeq`: the
+ * parent's lines through the fork point, the child's header, its fork event and its head.
+ */
+export function forkedAt(
+  bytes: Uint8Array,
+  atSeq: number,
+  child: string,
+): Uint8Array {
+  const [header = "", ...rest] = utf8.decode(bytes).split("\n");
+  const parent = Row.parse(JSON.parse(header));
+  const at = rest[atSeq - 1] ?? "";
+  const own = unwrap(
+    canonicalize(z.json().parse({ ...parent, branch_id: child })),
+  );
+  const fork = unwrap(
+    canonicalize(
+      z.json().parse({
+        actor: { kind: "host" },
+        branch_id: child,
+        critical: true,
+        data: {
+          at_hash: sha256Hex(utf8Out.encode(at)),
+          parent_branch_id: parent["branch_id"],
+          reason: "repair",
+        },
+        epoch: 2,
+        event_id: "0192e00f-0000-7000-8000-000000000001",
+        prev_hash: sha256Hex(utf8Out.encode(own)),
+        seq: atSeq + 1,
+        thread_id: parent["thread_id"],
+        time: 1_790_000_099_000,
+        type: "fork",
+        type_version: 1,
+      }),
+    ),
+  );
+  const head = unwrap(
+    canonicalize(
+      z.json().parse({
+        format: "threads.head",
+        format_version: 1,
+        branch_id: child,
+        seq: atSeq + 1,
+        hash: sha256Hex(utf8Out.encode(fork)),
+      }),
+    ),
+  );
+  const lines = [header, ...rest.slice(0, atSeq), own, fork, head];
+  return utf8Out.encode(`${lines.join("\n")}\n`);
+}
+
 /** Verifies an export; a test fails loudly when it doesn't. */
 export function verified(bytes: Uint8Array): VerifiedLog {
   return unwrap(verifyExport(bytes));
@@ -97,6 +149,9 @@ export function storeLogs(store: LogStore, logs: readonly VerifiedLog[]): void {
     );
 }
 
+/** The staged teams' tenant: a lead's team is indexed under its principal's tenant. */
+export const TENANT = "acme";
+
 /** A staged team, by label, stored and indexed as its appends would have left it. */
 export type Team = {
   readonly store: LogStore;
@@ -108,15 +163,17 @@ export type Team = {
 /** A store holding `logs` (label to bytes), with the team index rebuilt from them. */
 export function teamStore(
   logs: ReadonlyMap<string, Uint8Array>,
-  tenant?: string,
+  tenant: string = TENANT,
+  driver?: SqliteDriver,
 ): Team {
-  const { store, db } = fixture(tenant);
+  const { store, db } = fixture(tenant, driver);
   const read = new Map(
     [...logs].map(([label, bytes]) => [label, verified(bytes)]),
   );
   storeLogs(store, [...read.values()]);
   const team = teamOf([...read.values()]);
-  unwrap(rebuildTeamIndex(store, team));
+  for (const each of teamsOf([...read.values()]))
+    unwrap(rebuildTeamIndex(store, each));
   return { store, db, team, logs: read };
 }
 
@@ -137,17 +194,24 @@ export function stagedLogs(
   );
 }
 
-/** The lead's team id: the team its thread_started names. */
+/** Every team a lead among the logs leads, in log order. */
+export function teamsOf(logs: readonly VerifiedLog[]): readonly TeamId[] {
+  return logs.flatMap((log) =>
+    log.events.flatMap((line) =>
+      line.kind === "event" &&
+      line.event.type === "thread_started" &&
+      line.event.data.team !== undefined
+        ? [line.event.data.team.id]
+        : [],
+    ),
+  );
+}
+
+/** The first lead's team id: the team its thread_started names. */
 export function teamOf(logs: readonly VerifiedLog[]): TeamId {
-  for (const log of logs)
-    for (const line of log.events)
-      if (
-        line.kind === "event" &&
-        line.event.type === "thread_started" &&
-        line.event.data.team !== undefined
-      )
-        return line.event.data.team.id;
-  throw new Error("no lead among the logs");
+  const team = teamsOf(logs)[0];
+  if (team === undefined) throw new Error("no lead among the logs");
+  return team;
 }
 
 const Row = z.record(z.string(), z.unknown());
@@ -189,13 +253,16 @@ function rows(
  */
 export function teamIndexRows(
   db: SqliteDriver,
-  team: TeamId,
+  teams: readonly TeamId[],
   branches: readonly BranchId[],
 ): Record<string, unknown[]> {
+  const inTeams = `team_id IN (${teams.map(() => "?").join(", ")})`;
   const by = (table: string, order: string): unknown[] =>
-    rows(db, `SELECT * FROM ${table} WHERE team_id = ? ORDER BY ${order}`, [
-      team,
-    ]);
+    rows(
+      db,
+      `SELECT * FROM ${table} WHERE ${inTeams} ORDER BY ${order}`,
+      teams,
+    );
   const marks = branches.map(() => "?").join(", ");
   return {
     teams: by("teams", "team_id"),
@@ -209,8 +276,8 @@ export function teamIndexRows(
     ),
     team_feed: rows(
       db,
-      "SELECT branch_id, seq FROM team_feed WHERE team_id = ? ORDER BY branch_id, seq",
-      [team],
+      `SELECT DISTINCT branch_id, seq FROM team_feed WHERE ${inTeams} ORDER BY branch_id, seq`,
+      teams,
     ),
     pending_wakes: rows(
       db,

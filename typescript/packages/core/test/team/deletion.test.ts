@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { deleteTenant, deleteThread } from "../../src/store/deletion";
+import type { ThreadId } from "../../src/log";
+import {
+  deleteTenant,
+  deleteThread,
+  TEAM_TABLES,
+} from "../../src/store/deletion";
 import { caseStore, loadCase } from "../conformance/cases";
 import { code, T0, unwrap } from "../store/helpers";
 import { liftTeamRefusal, stagedLogs, type Team, teamStore } from "./kit";
@@ -13,15 +18,6 @@ liftTeamRefusal();
 
 const REBIND = "team-failed-rebind-bounces";
 const ALL = ["lead", "researcher", "team", "writer"];
-const TEAM_TABLES = [
-  "teams",
-  "team_members",
-  "mail",
-  "asks",
-  "monitors",
-  "operator_receipts",
-  "team_feed",
-];
 const Count = z.array(z.strictObject({ n: z.int() }));
 
 function count(t: Team, sql: string, params: readonly string[] = []): number {
@@ -30,7 +26,7 @@ function count(t: Team, sql: string, params: readonly string[] = []): number {
   );
 }
 
-function thread(t: Team, label: string): string {
+function thread(t: Team, label: string): ThreadId {
   const id = t.logs.get(label)?.segments[0]?.header.thread_id;
   if (id === undefined) throw new Error(`no log ${label}`);
   return id;
@@ -111,7 +107,7 @@ describe("deleting a team", () => {
 
   test("another tenant's lead is not_found", () => {
     const t = teamStore(stagedLogs(REBIND, ALL));
-    expect(code(deleteThread(t.db, "acme", thread(t, "lead"), T0))).toBe(
+    expect(code(deleteThread(t.db, "other", thread(t, "lead"), T0))).toBe(
       "not_found",
     );
     untouched(t, 4);
@@ -140,7 +136,8 @@ describe("deleting a thread with an effect in doubt", () => {
     const c = loadCase("effect-crash-after-begin-idempotent");
     const { db, store } = caseStore(c);
     const log = unwrap(store.importLog(c.log ?? new Uint8Array()));
-    const id = log.segments[0]?.header.thread_id ?? "";
+    const id = log.segments[0]?.header.thread_id;
+    if (id === undefined) throw new Error("no header");
     const refused = deleteThread(db, store.tenant, id, T0);
     expect(code(refused)).toBe("busy");
     expect(refused.ok ? "" : refused.error.message).toContain(

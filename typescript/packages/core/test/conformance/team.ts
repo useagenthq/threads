@@ -1,6 +1,6 @@
 import { expect } from "bun:test";
 import { z } from "zod";
-import type { BranchId, ThreadId } from "../../src/log";
+import { type BranchId, TeamId, type ThreadId } from "../../src/log";
 import { knownEvents, reduce } from "../../src/reduce";
 import type { LogStore } from "../../src/store";
 import { checkTeamLogs } from "../../src/team/cross";
@@ -8,7 +8,7 @@ import { teamMembers } from "../../src/team/members";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
 import { type VerifiedLog, verifyExport } from "../../src/verify";
 import { fixture } from "../store/helpers";
-import { storeLogs, teamIndexRows, teamOf } from "../team/kit";
+import { storeLogs, teamIndexRows } from "../team/kit";
 import { type Case, plain } from "./cases";
 
 // The `team` kind (spec/conformance/README.md): import and reduce every log, check rule 43
@@ -55,35 +55,60 @@ function imported(c: Case): readonly Labelled[] | Failure {
   return out;
 }
 
-/** The tree as cost and usage walk it: the lead's row counted, each member counted or pending. */
+/** A lead among the logs, and the team it leads. */
+type Lead = Labelled & { readonly team: TeamId };
+
+function leadsOf(logs: readonly Labelled[]): readonly Lead[] {
+  return logs.flatMap((l) => {
+    const started = knownEvents(l.log).find((e) => e.type === "thread_started");
+    const team =
+      started?.type === "thread_started" ? started.data.team?.id : undefined;
+    return team === undefined ? [] : [{ ...l, team }];
+  });
+}
+
+/** The tenant the team is indexed under: its lead principal's, as team_opened records it. */
+function tenantOf(logs: readonly Labelled[]): string {
+  for (const l of logs)
+    for (const e of knownEvents(l.log))
+      if (e.type === "team_opened") return e.data.lead.tenant;
+  throw new Error("no team log among the logs");
+}
+
+const Row = z.strictObject({
+  team_id: TeamId,
+  name: z.string(),
+  generation: z.int(),
+  role: z.enum(["lead", "member"]),
+});
+
+/**
+ * The tree as cost and usage walk it, over every team_members row in key order: a lead's row is
+ * where its walk starts (counted), a member's is counted or pending as its lead's walk finds it.
+ */
 function tree(
   store: LogStore,
-  logs: readonly Labelled[],
+  leads: readonly Lead[],
 ): { counted: string[]; pending: string[] } | Failure {
-  const lead = logs.find((l) =>
-    knownEvents(l.log).some(
-      (e) => e.type === "thread_started" && e.data.team !== undefined,
-    ),
-  );
-  if (lead === undefined) throw new Error("no lead among the logs");
-  const members = teamMembers(store, lead.log);
-  if (!members.ok) return failure(members.error, lead.label);
   const counted: string[] = [];
   const pending: string[] = [];
   const rows = z
     .array(Row)
     .parse(
       store.driver.all(
-        "SELECT name, generation, role FROM team_members WHERE team_id = ? ORDER BY name, generation",
-        [teamOf(logs.map((l) => l.log))],
+        "SELECT team_id, name, generation, role FROM team_members ORDER BY team_id, name, generation",
+        [],
       ),
     );
   for (const row of rows) {
-    // The lead's own row is where the walk starts: counted, never a child.
     if (row.role === "lead") {
       counted.push(row.name);
       continue;
     }
+    const lead = leads.find((l) => l.team === row.team_id);
+    if (lead === undefined) throw new Error(`no lead of ${row.team_id}`);
+    const members = teamMembers(store, lead.log);
+    if (!members.ok) return failure(members.error, lead.label);
     const member = members.value.find(
       (m) => m.name === row.name && m.generation === row.generation,
     );
@@ -94,12 +119,6 @@ function tree(
   }
   return { counted, pending };
 }
-
-const Row = z.strictObject({
-  name: z.string(),
-  generation: z.int(),
-  role: z.enum(["lead", "member"]),
-});
 
 function run(c: Case): Found | Failure {
   const logs = imported(c);
@@ -115,20 +134,22 @@ function run(c: Case): Found | Failure {
       { code: "invalid_transition", seq: broken.seq },
       logs.find((l) => l.branchId === broken.branchId)?.label,
     );
-  const { store, db } = fixture();
+  const { store, db } = fixture(tenantOf(logs));
   storeLogs(
     store,
     logs.map((l) => l.log),
   );
-  const team = teamOf(logs.map((l) => l.log));
-  const rebuilt = rebuildTeamIndex(store, team);
-  if (!rebuilt.ok) return failure(rebuilt.error, undefined);
+  const leads = leadsOf(logs);
+  for (const lead of leads) {
+    const rebuilt = rebuildTeamIndex(store, lead.team);
+    if (!rebuilt.ok) return failure(rebuilt.error, lead.label);
+  }
   const index = teamIndexRows(
     db,
-    team,
+    leads.map((l) => l.team),
     logs.map((l) => l.branchId),
   );
-  const walked = tree(store, logs);
+  const walked = tree(store, leads);
   db.close();
   return "code" in walked ? walked : { states, index, tree: walked };
 }

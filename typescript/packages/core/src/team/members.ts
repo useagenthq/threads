@@ -52,9 +52,11 @@ export function teamMembers(
   const rows = parseRows(
     MemberRow,
     store.driver.all(
-      `SELECT name, generation, thread_id, branch_id FROM team_members
-        WHERE team_id = ? AND role = 'member' ORDER BY name, generation`,
-      [team.id],
+      `SELECT m.name, m.generation, m.thread_id, m.branch_id FROM team_members m
+        JOIN teams t ON t.team_id = m.team_id
+        WHERE m.team_id = ? AND t.tenant_id = ? AND m.role = 'member'
+        ORDER BY m.name, m.generation`,
+      [team.id, store.tenant],
     ),
   );
   if (!rows.ok) return err(readError("log_corrupt", rows.error.message));

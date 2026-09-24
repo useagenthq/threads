@@ -60,32 +60,34 @@ export function teamChains(
 }
 
 /**
- * Checks rule 43 across the team's logs, then, in one transaction, wipes every index row of the
- * team (and the wake rows of its branches) and folds them again: every log's inserts, then every
- * log's changes, then the feed under a new epoch, offsets in (branch_id, seq) order.
+ * In one IMMEDIATE transaction, so no append lands between the read and the refold: reads the
+ * team's logs, checks rule 43 across them, wipes every index row of the team (and the wake rows
+ * of its branches) and folds them again: every log's inserts, then every log's changes, then the
+ * feed under a new epoch, offsets in (branch_id, seq) order.
  */
 export function rebuildTeamIndex(
   store: LogStore,
   teamId: TeamId,
 ): Result<void, LogError> {
-  const chains = teamChains(store, teamId);
-  if (!chains.ok) return chains;
-  const logs = chains.value.map((c) => ({
-    ...c,
-    events: knownEvents(c.chain),
-  }));
-  const broken = checkTeamLogs(logs);
-  if (broken !== undefined)
-    return err(
-      logError(
-        "invalid_transition",
-        `branch ${broken.branchId}: ${broken.message}`,
-        broken.seq,
-      ),
-    );
   const db = store.driver;
   return atomically(db, () => {
+    const chains = teamChains(store, teamId);
+    if (!chains.ok) return chains;
+    const logs = chains.value.map((c) => ({
+      ...c,
+      events: knownEvents(c.chain),
+    }));
+    const broken = checkTeamLogs(logs, teamId);
+    if (broken !== undefined)
+      return err(
+        logError(
+          "invalid_transition",
+          `branch ${broken.branchId}: ${broken.message}`,
+          broken.seq,
+        ),
+      );
     const epoch = nextEpoch(db, teamId);
+    if (!epoch.ok) return epoch;
     wipe(
       db,
       teamId,
@@ -100,7 +102,7 @@ export function rebuildTeamIndex(
     feed.forEach(([branch, seq], i) => {
       db.run(
         "INSERT INTO team_feed (team_id, epoch, feed_offset, branch_id, seq) VALUES (?, ?, ?, ?, ?)",
-        [teamId, epoch, i + 1, branch, seq],
+        [teamId, epoch.value, i + 1, branch, seq],
       );
     });
     return ok(undefined);
@@ -124,12 +126,12 @@ const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const Epoch = z.strictObject({ epoch: z.int().nullable() });
 
 /** A rebuilt feed starts a new epoch, so a cursor from an older one restarts. */
-function nextEpoch(db: SqliteDriver, teamId: TeamId): number {
+function nextEpoch(db: SqliteDriver, teamId: TeamId): Result<number, LogError> {
   const rows = parseRows(
     Epoch,
     db.all("SELECT MAX(epoch) AS epoch FROM team_feed WHERE team_id = ?", [
       teamId,
     ]),
   );
-  return (rows.ok ? (rows.value[0]?.epoch ?? 0) : 0) + 1;
+  return rows.ok ? ok((rows.value[0]?.epoch ?? 0) + 1) : rows;
 }

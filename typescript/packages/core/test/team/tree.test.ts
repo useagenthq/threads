@@ -3,6 +3,7 @@ import { treeCost } from "../../src/thread/cost-tree";
 import type { VerifiedLog } from "../../src/verify";
 import { code, unwrap } from "../store/helpers";
 import {
+  forkedAt,
   liftTeamRefusal,
   stagedLogs,
   storeLogs,
@@ -113,6 +114,35 @@ describe("tree cost walks a lead's members", () => {
       ]),
     );
     expect(code(cost(t))).toBe("log_corrupt");
+  });
+
+  test("from a fork of the lead, a member started on the main branch still counts", () => {
+    const logs = stagedLogs(
+      SETTLE,
+      ["lead", "researcher", "team"],
+      pricing(["lead", "researcher"]),
+    );
+    const t = teamStore(logs);
+    // Seq 10 is the start call's result, after the lead's member_started (seq 8).
+    const fork = verified(
+      forkedAt(
+        logs.get("lead") ?? new Uint8Array(),
+        10,
+        "0192b000-0000-7000-8000-0000000000f1",
+      ),
+    );
+    storeLogs(t.store, [fork]);
+    const thread = fork.segments[0]?.header.thread_id;
+    if (thread === undefined) throw new Error("no header");
+    const walked = unwrap(treeCost(t.store, thread, fork));
+    // The fork's own lead requests (540,000) and the researcher's (420,000).
+    expect(walked).toEqual({
+      currency: "USD",
+      known_nanos: 960_000,
+      upper_bound_nanos: 960_000,
+      complete: true,
+      bounded: true,
+    });
   });
 
   test("a forged backlink is log_corrupt", () => {
