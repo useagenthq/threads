@@ -206,7 +206,7 @@ class Runner:
             options["budget"] = budget
         how = bound.intake(intake, thread.store)
         branch = thread.branch
-        emit = self._emit(thread)
+        emit = _Emit(self, thread, self.tenant_of(thread.store) or "")
         run = execute(bound.definition, input, options, None, emit, None, how, on_delta=emit.delta)
         task = asyncio.get_running_loop().create_task(run)
         if self._stopping or (since is not None and since != self._generation):
@@ -289,9 +289,6 @@ class Runner:
         if cut_short or undelivered(fold, bound.channel):
             return await self.resume(store, thread_id, root.value)
         return None
-
-    def _emit(self, thread: Thread) -> "_Emit":
-        return _Emit(self, thread, self.tenant_of(thread.store) or "")
 
     def _ended(self, thread: Thread, task: RunTask) -> None:
         branch = thread.branch
