@@ -11,6 +11,7 @@ import httpx2
 from corpus import CASES
 from pydantic import JsonValue
 
+from threads.adapters.loop_resources import holding
 from threads.log import ArtifactRef, BranchId, ParseError
 from threads.log.digest import sha256_hex
 from threads.loop.model import ModelChunk, ModelContext, ModelRequest
@@ -91,7 +92,9 @@ async def collect(
     body: bytes,
     context: ModelContext,
 ) -> list[ModelChunk]:
-    return [c async for c in send(ModelRequest("b:e", body), context)]
+    """Everything `send` streams, with the loop held as a run holds it."""
+    async with holding():
+        return [c async for c in send(ModelRequest("b:e", body), context)]
 
 
 def golden(path: str, value: JsonValue) -> None:

@@ -19,12 +19,14 @@ What Modal 1.5.5 supports here, and nothing broader (#170):
   unenforced.
 """
 
+from dataclasses import dataclass, field
 from typing import Literal
 
 import grpclib.client
 from grpclib.const import Status
 from grpclib.exceptions import GRPCError
 
+from threads.adapters.loop_resources import LoopResources
 from threads.adapters.sandboxes.fence import dispatch
 from threads.adapters.sandboxes.modal.channel import Connect, classify, connect
 from threads.adapters.sandboxes.modal.control import Control, Settings
@@ -65,8 +67,7 @@ class ModalSandbox:
         self._token_secret = credential("modal", "token_secret", tokens[1], "MODAL_TOKEN_SECRET")
         self._server_url = server_url
         self._connect = connect
-        self._channels: dict[str, grpclib.client.Channel] = {}
-        self._control: Control | None = None
+        self._planes = LoopResources(name, _close)
         self.lifetime_ms: int = settings.lifetime_s * 1000
         """The declared provider expiry: Modal ends a sandbox this long after its create."""
         self._info = SandboxInfo(
@@ -155,28 +156,42 @@ class ModalSandbox:
                 "modal: set token_id/token_secret or MODAL_TOKEN_ID/MODAL_TOKEN_SECRET",
             ) from error
 
-    async def aclose(self) -> None:
-        for channel in self._channels.values():
-            channel.close()
-        self._channels.clear()
-
     def _session(self, ident: str) -> ModalSession:
-        return ModalSession(ident, self._control_plane(), self._router)
+        plane = self._plane()
+        return ModalSession(ident, plane.control, plane.router)
 
     def _control_plane(self) -> Control:
-        if self._control is None:
-            channel = self._channel(self._server_url)
-            self._control = Control(channel, self._settings, self._resolved())
-        return self._control
+        return self._plane().control
 
-    def _router(self, url: str, task_id: str, jwt: str) -> Router:
-        return Router(self._channel(url), task_id, jwt)
+    def _plane(self) -> "_Plane":
+        def make() -> _Plane:
+            channels = {self._server_url: self._connect(self._server_url)}
+            control = Control(channels[self._server_url], self._settings, self._resolved())
+            return _Plane(self._connect, control, channels)
 
-    def _channel(self, url: str) -> grpclib.client.Channel:
-        # One channel per URL, so its fence listener is registered once.
-        if url not in self._channels:
-            self._channels[url] = self._connect(url)
-        return self._channels[url]
+        return self._planes.get(make)
+
+
+@dataclass(frozen=True, slots=True)
+class _Plane:
+    """One event loop's channels (one per URL, so a fence listener is registered once) and the
+    control client over the API's."""
+
+    connect: Connect
+    control: Control
+    channels: dict[str, grpclib.client.Channel] = field(
+        default_factory=dict[str, grpclib.client.Channel]
+    )
+
+    def router(self, url: str, task_id: str, jwt: str) -> Router:
+        if url not in self.channels:
+            self.channels[url] = self.connect(url)
+        return Router(self.channels[url], task_id, jwt)
+
+
+async def _close(plane: _Plane) -> None:
+    for channel in plane.channels.values():
+        channel.close()
 
 
 def _name(operation_key: str) -> str:

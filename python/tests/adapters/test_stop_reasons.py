@@ -12,8 +12,9 @@ from fakes import Script, sse
 from kit import T0, Tools, open_store, start
 from pydantic import JsonValue
 
+from threads.adapters.loop_resources import holding
 from threads.adapters.models.anthropic.model import AnthropicModel
-from threads.adapters.models.litellm.model import LiteLLMModel
+from threads.adapters.models.litellm.model import Connection, LiteLLMModel
 from threads.adapters.models.openai.model import OpenAIModel
 from threads.anthropic import anthropic
 from threads.litellm import litellm
@@ -37,7 +38,8 @@ def drive_turn(model: Model) -> tuple[object, Runtime]:
     async def main() -> tuple[object, Runtime]:
         clock = Clock(T0)
         rt = await start(await open_store(), [], model, Tools({}, clock), clock)
-        return await drive(rt), rt
+        async with holding():  # as a run holds its loop's connections
+            return await drive(rt), rt
 
     return asyncio.run(main())
 
@@ -141,6 +143,6 @@ def test_a_litellm_finish_reason_it_cannot_name_ends_the_turn_with_error() -> No
     info = litellm(
         "openai/gpt-test", max_input_tokens=1000, max_output_tokens=8, api_key="sk-test-1"
     ).info
-    halt, rt = drive_turn(LiteLLMModel(info, "sk-test-litellm", lambda _key: complete))
+    halt, rt = drive_turn(LiteLLMModel(info, "sk-test-litellm", lambda _key: Connection(complete)))
     assert stops(rt) == ["other"]
     assert halt == Idle("error")

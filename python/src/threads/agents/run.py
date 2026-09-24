@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 from typing import TypedDict
 
+from threads.adapters.loop_resources import holding
 from threads.agents import narrowing
 from threads.agents.bindings import AppTool, AppTools, Fence, ToolServer, capped
 from threads.agents.builtins import Routed, sandbox_tools, snapshot_turn_end
@@ -111,6 +112,20 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
     emit: Emit,
     launch: Launch | None = None,
     intake: Intake | None = None,
+) -> RunResult[str]:
+    # The run holds its loop's adapter connections; the last holder on a loop closes them.
+    async with holding():
+        return await _execute(definition, input, options, deps, emit, launch, intake)
+
+
+async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
+    definition: Definition[D],
+    input: Input | None,
+    options: RunOptions[D],
+    deps: D,
+    emit: Emit,
+    launch: Launch | None,
+    intake: Intake | None,
 ) -> RunResult[str]:
     await _set_up(definition, options.get("budget"))
     thread = options.get("thread")

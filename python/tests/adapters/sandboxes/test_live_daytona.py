@@ -11,6 +11,7 @@ import uuid
 
 import aiohttp
 import pytest
+from loop_kit import held
 from sandbox_kit import OPEN
 
 from threads.adapters.sandboxes.posix import collect
@@ -64,6 +65,5 @@ def test_daytona_round_trip() -> None:
             assert isinstance(await sandbox.release(snap.value.snapshot_id, OPEN), Ok)
         finally:
             await s.close(OPEN)
-            await sandbox.aclose()
 
-    asyncio.run(main())
+    asyncio.run(held(main()))  # the loop is held as a run holds it

@@ -7,8 +7,10 @@ it to envd; envd's kill reaches the process it started, not descendants a comman
 it never proves a group gone.
 """
 
+import asyncio
 import base64
-from collections.abc import AsyncIterator, Mapping, Sequence
+import contextlib
+from collections.abc import AsyncGenerator, AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from http import HTTPStatus
 
@@ -41,14 +43,25 @@ class FileError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class Transports:
-    """The real (or, in tests, mocked) transports every envd client wraps with its fence."""
+    """The real (or, in tests, mocked) transports every envd client wraps with its fence: one
+    pair per event loop, shared by that loop's clients and closed once, after them."""
 
     http: httpx.AsyncBaseTransport
     rpc: pyqwest.Transport
 
+    async def aclose(self) -> None:
+        await self.http.aclose()
+        if isinstance(self.rpc, pyqwest.HTTPTransport):  # a test's in-process one holds nothing
+            await self.rpc.aclose()
+
 
 class Envd:
-    def __init__(self, sandbox: wire.Sandbox, url: str, transports: Transports) -> None:
+    """One sandbox's envd clients. It is listed in `opened`, its event loop's set, until it is
+    closed, so the loop's release closes it if its session never was."""
+
+    def __init__(
+        self, sandbox: wire.Sandbox, url: str, transports: Transports, opened: "set[Envd]"
+    ) -> None:
         user = base64.b64encode(f"{USER}:".encode()).decode()
         self._headers: dict[str, str] = {
             "E2b-Sandbox-Id": sandbox.sandbox_id,
@@ -67,7 +80,9 @@ class Envd:
             accept_compression=(),
             http_client=pyqwest.Client(FencedPyqwest(transports.rpc)),
         )
-        self._pumps: set[object] = set()
+        self._pumps: set[asyncio.Task[None]] = set()
+        self._opened = opened
+        opened.add(self)
 
     async def start(
         self, argv: Sequence[str], env: Mapping[str, str], cwd: str, tag: str | None
@@ -110,6 +125,12 @@ class Envd:
         return _checked(res, path)
 
     async def aclose(self) -> None:
+        """Stops its exec streams, then closes its clients (not the transports they share)."""
+        self._opened.discard(self)
+        for task in self._pumps:
+            task.cancel()
+        await asyncio.gather(*self._pumps, return_exceptions=True)
+        await self._rpc.close()
         await self._files.aclose()
 
 
@@ -129,16 +150,27 @@ async def _started(events: AsyncIterator[process_pb.StartResponse], pipe: Pipe) 
 
 
 async def _feed(events: AsyncIterator[process_pb.StartResponse], pipe: Pipe) -> int:
-    async for response in events:
-        event = response.event.event if response.event is not None else None
-        match event:
-            case Oneof(field="data", value=data):
-                await _data(data, pipe)
-            case Oneof(field="end", value=end):
-                return end.exit_code
-            case _:
-                pass
+    try:
+        async for response in events:
+            event = response.event.event if response.event is not None else None
+            match event:
+                case Oneof(field="data", value=data):
+                    await _data(data, pipe)
+                case Oneof(field="end", value=end):
+                    return end.exit_code
+                case _:
+                    pass
+    finally:
+        await _closed(events)
     raise StreamLostError("envd ended the process stream without its exit")
+
+
+async def _closed(events: AsyncIterator[process_pb.StartResponse]) -> None:
+    """Closes the RPC stream here, in the pump, rather than leaving it to garbage collection,
+    whose close task would report the cancelled request as an exception nobody retrieved."""
+    if isinstance(events, AsyncGenerator):
+        with contextlib.suppress(ConnectError):
+            await events.aclose()
 
 
 async def _data(data: process_pb.ProcessEvent.DataEvent, pipe: Pipe) -> None:

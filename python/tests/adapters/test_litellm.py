@@ -14,7 +14,8 @@ import pytest
 from fakes import FakeContext, Script, collect, golden, line, render_case
 from pydantic import JsonValue
 
-from threads.adapters.models.litellm.model import ACOMPLETION, Complete, LiteLLMModel
+from threads.adapters.loop_resources import holding
+from threads.adapters.models.litellm.model import ACOMPLETION, Complete, Connection, LiteLLMModel
 from threads.agents.config import ConfigError
 from threads.litellm import litellm
 from threads.log import CallId, TextPart, ToolUsePart, Usage
@@ -53,7 +54,7 @@ def one_turn() -> bytes:
 
 def bridged(complete: Complete) -> LiteLLMModel:
     """The model over `complete`, whatever key it is given."""
-    return LiteLLMModel(INFO, "sk-test-1", lambda _key: complete)
+    return LiteLLMModel(INFO, "sk-test-1", lambda _key: Connection(complete))
 
 
 def through_litellm(script: Script) -> LiteLLMModel:
@@ -237,11 +238,12 @@ def test_a_consumer_that_stops_early_closes_the_stream() -> None:
 
     async def main() -> None:
         # send is an async generator; its declared type (AsyncIterator) has no aclose.
-        sent = model.send(ModelRequest("b:e", one_turn()), FakeContext())
-        stream = cast("AsyncGenerator[ModelChunk]", sent)
-        assert await anext(stream) == Delta("Hi")
-        await stream.aclose()
-        assert body.closed
+        async with holding():
+            sent = model.send(ModelRequest("b:e", one_turn()), FakeContext())
+            stream = cast("AsyncGenerator[ModelChunk]", sent)
+            assert await anext(stream) == Delta("Hi")
+            await stream.aclose()
+            assert body.closed
 
     asyncio.run(main())
 

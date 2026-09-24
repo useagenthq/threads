@@ -17,6 +17,7 @@ from modal_proto import api_pb2
 from modal_proto import task_command_router_pb2 as pb
 from sandbox_backend import Box, FakeBackend, LostAnswerError, Proc, UnavailableError
 
+from threads.adapters.loop_resources import holding
 from threads.adapters.sandboxes.modal import ModalSandbox, channel, modal
 from threads.adapters.sandboxes.modal.sandbox import SERVER_URL
 from threads.adapters.sandboxes.modal.session import DOWNLOAD, UPLOAD
@@ -199,7 +200,9 @@ async def harness(
 ) -> AsyncGenerator[ModalSandbox]:
     """The adapter over `backend`, its control plane and router on in-memory channels."""
     service = fake or FakeModal(backend)
-    async with AsyncExitStack() as stack:
+    # The hold outlives the in-memory channels: ChannelFor closes its own first, then the
+    # loop's release closes them again, which does nothing.
+    async with holding(), AsyncExitStack() as stack:
         channels: dict[str, grpclib.client.Channel] = {
             SERVER_URL: await stack.enter_async_context(ChannelFor([service])),
             ROUTER_URL: await stack.enter_async_context(ChannelFor([service])),
@@ -216,4 +219,4 @@ async def harness(
             name=name,
             connect=connect,
         )
-        yield sandbox  # the channels are ChannelFor's to close
+        yield sandbox

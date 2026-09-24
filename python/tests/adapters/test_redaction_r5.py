@@ -23,6 +23,7 @@ from threads import (
     sqlite,
     tool,
 )
+from threads.adapters.loop_resources import holding
 from threads.adapters.models.openai.model import OpenAIModel
 from threads.agents.bindings import AppTool, Fence
 from threads.log import ArtifactRef, CitationPart, Permissions, Principal, TurnCompletedEvent
@@ -102,7 +103,8 @@ def _openai_turn(item: JsonValue) -> Runtime:
     async def main() -> Runtime:
         clock = Clock(T0)
         rt = await start(await open_store(), [], model, Tools({}, clock), clock)
-        await drive(rt)
+        async with holding():  # as a run holds its loop's connections
+            await drive(rt)
         return rt
 
     return asyncio.run(main())

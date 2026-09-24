@@ -7,6 +7,7 @@ import asyncio
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
 
+from threads.adapters.loop_resources import spawn_owned
 from threads.log import ArtifactRef, Spill
 from threads.result import Err, Ok
 from threads.sandbox.protocol import (
@@ -70,10 +71,6 @@ class _Preview:
         return head + _MARKER.format(n=self.total) + tail
 
 
-_stopping: set[asyncio.Task[object]] = set()
-"""Best-effort terminates still running after their exec answered timeout."""
-
-
 async def run_exec(
     session: SandboxSession, command: Command, context: SandboxContext, spill: Sink, limits: Spill
 ) -> Ok[ExecResult] | Err[SandboxError]:
@@ -96,9 +93,11 @@ async def run_exec(
             code = await started.value.exit_code
     except TimeoutError:
         await spill.discard()
-        stop = asyncio.create_task(_terminate(session, command.process_key, context))
-        _stopping.add(stop)
-        stop.add_done_callback(_stopping.discard)
+        # Owned by the loop: its release waits for the stop before closing the client it
+        # sends on, and a failed stop is logged there.
+        spawn_owned(
+            _terminate(session, command.process_key, context), f"terminate {command.process_key}"
+        )
         return Err(SandboxError("timeout", f"exec timed out after {command.timeout_ms} ms"))
     truncated = out.truncated or err.truncated
     full = None

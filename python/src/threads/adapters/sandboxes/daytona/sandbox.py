@@ -30,10 +30,12 @@ What this adapter declares (Daytona 0.216, container sandboxes):
 import asyncio
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import aiohttp
 
+from threads.adapters.loop_resources import LoopResources
 from threads.adapters.sandboxes import posix
 from threads.adapters.sandboxes.daytona import transport
 from threads.adapters.sandboxes.daytona.control import Control, Placement, classify, client
@@ -97,9 +99,7 @@ class DaytonaSandbox:
         self._key = credential("daytona", "api_key", api_key, API_KEY)
         self._api_url, self._base = api_url, snapshot
         self._name, self._poll_s, self._wait_s, self._traces = name, poll_s, wait_s, traces
-        self._session: aiohttp.ClientSession | None = None
-        self._control: Control | None = None
-        self._pumps: set[asyncio.Task[None]] = set()
+        self._clients = LoopResources(name, _close)
 
     @property
     def info(self) -> SandboxInfo:
@@ -115,20 +115,8 @@ class DaytonaSandbox:
 
     async def setup(self) -> None:
         """Resolves the key on the host. The HTTP session is opened on first use, in the run
-        and on its event loop."""
+        and on its event loop, and closed when nothing holds that loop any more."""
         self._key()
-
-    async def aclose(self) -> None:
-        """Closes the session, then the exec streams still reading it. The session goes first:
-        closing it closes every connection it holds or is opening, so a pump mid-request ends
-        with an error rather than being cancelled in a connect that leaves a socket behind."""
-        if self._session is not None:
-            await self._session.close()
-        if self._pumps:
-            _, stuck = await asyncio.wait(self._pumps, timeout=_PUMP_GRACE_S)
-            for pump in stuck:  # waiting on a reader that is gone, not on the network
-                pump.cancel()
-            await asyncio.gather(*stuck, return_exceptions=True)
 
     async def create(
         self, operation_key: str, context: SandboxContext
@@ -223,25 +211,47 @@ class DaytonaSandbox:
         return DaytonaSession(dto.id, self._name, self._controls(), self._toolbox(dto))
 
     def _toolbox(self, dto: SandboxDto) -> Toolbox:
+        clients = self._loop_clients()
         return Toolbox(
             dto.toolbox_proxy_url,
             dto.id,
-            session=self._http(),
+            session=clients.session,
             poll_s=self._poll_s,
             wait_s=self._wait_s,
-            tasks=self._pumps,
+            tasks=clients.pumps,
         )
 
-    def _http(self) -> aiohttp.ClientSession:
-        if self._session is None:
-            self._session = transport.session(self._key(), self._traces)
-        return self._session
-
     def _controls(self) -> Control:
-        if self._control is None:
-            api = client(self._api_url, self._http())
-            self._control = Control(api, self._poll_s, self._wait_s)
-        return self._control
+        return self._loop_clients().control
+
+    def _loop_clients(self) -> "_Clients":
+        def make() -> _Clients:
+            session = transport.session(self._key(), self._traces)
+            control = Control(client(self._api_url, session), self._poll_s, self._wait_s)
+            return _Clients(session, control, set())
+
+        return self._clients.get(make)
+
+
+@dataclass(frozen=True, slots=True)
+class _Clients:
+    """One event loop's session, the control client over it, and the exec streams reading it."""
+
+    session: aiohttp.ClientSession
+    control: Control
+    pumps: set[asyncio.Task[None]]
+
+
+async def _close(clients: _Clients) -> None:
+    """Closes the session, then the exec streams still reading it. The session goes first:
+    closing it closes every connection it holds or is opening, so a pump mid-request ends with
+    an error rather than being cancelled in a connect that leaves a socket behind."""
+    await clients.session.close()
+    if clients.pumps:
+        _, stuck = await asyncio.wait(clients.pumps, timeout=_PUMP_GRACE_S)
+        for pump in stuck:  # waiting on a reader that is gone, not on the network
+            pump.cancel()
+        await asyncio.gather(*stuck, return_exceptions=True)
 
 
 def daytona(  # noqa: PLR0913 - the provider's options

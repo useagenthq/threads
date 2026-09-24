@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Self
 from weakref import WeakKeyDictionary
 
 from threads._generated.host_api_v1 import RunAccepted, StartRunRequest
+from threads.adapters.loop_resources import holding
 from threads.agents.agent import Agent
 from threads.agents.config import ConfigError
 from threads.agents.store import Store, open_store
@@ -69,6 +70,9 @@ class Host:
         self._runner.on_end = self._intake.consume
         self._scheduler = Scheduler(self._runner, schedules)
         self._ticking: asyncio.Task[None] | None = None
+        self._held: contextlib.AsyncExitStack | None = None
+        """The host's hold on its loop's adapter connections, from ready() to stop(), so they
+        are kept between runs."""
         _RECOVERY[self] = (asyncio.Event(), [], self._runner)
         self._asgi: ASGIApp | None = None
 
@@ -105,6 +109,9 @@ class Host:
         self._runner.resolve_secrets()
         await open_store(self._store)
         self._runner.open()
+        if self._held is None:
+            self._held = contextlib.AsyncExitStack()
+            await self._held.enter_async_context(holding())
         if self._ticking is None:
             # Each start has its own pass; cleared, not replaced, so a wait begun before this
             # start still sees it.
@@ -151,6 +158,9 @@ class Host:
             # runs are ended and intake is drained.
             await self._runner.stop()
             await self._intake.drain()
+            if self._held is not None:
+                held, self._held = self._held, None
+                await held.aclose()
 
     async def __aenter__(self) -> Self:
         await self.ready()

@@ -176,6 +176,16 @@ class Agent[D, O]:
         """Runs one input to a terminal result. Needs no server."""
         return await self._run(input, options, self._deps(options), _drop)
 
+    def run_sync(self, input: Input, **options: Unpack[RunOptions[D]]) -> RunResult[O]:
+        """`run` for scripts: runs on a new event loop in this thread. Inside a running event
+        loop, await `run` instead."""
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self.run(input, **options))
+        why = "run_sync can't be called inside a running event loop; use await agent.run(...)"
+        raise ConfigError("invalid_config", why)
+
     def stream(self, input: Input, **options: Unpack[RunOptions[D]]) -> RunStream[O]:
         """The same run as `run`, streamed. Call it inside a running event loop."""
         queue: asyncio.Queue[StreamEvent | None] = asyncio.Queue()

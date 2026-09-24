@@ -185,10 +185,7 @@ def test_check_and_a_run_on_different_event_loops(monkeypatch: pytest.MonkeyPatc
         server = DaytonaServer(backend)
         async with TestServer(server.app, host="127.0.0.1", port=port) as test:
             server.base = str(test.make_url("")).rstrip("/")
-            try:
-                result = await bot.run("go", store=sqlite(":memory:"))
-            finally:
-                await sandbox.aclose()
+            result = await bot.run("go", store=sqlite(":memory:"))  # closes what it opened
         assert isinstance(result, Completed)
 
     asyncio.run(run())

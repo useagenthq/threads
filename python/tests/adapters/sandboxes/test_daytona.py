@@ -21,6 +21,7 @@ from sandbox_deadline_kit import DEADLINE
 from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
+from threads.adapters.loop_resources import holding
 from threads.adapters.sandboxes.daytona.logs import STDERR, STDOUT, Demux, Stream, Unbase64
 from threads.adapters.sandboxes.posix import collect
 from threads.agents.config import ConfigError
@@ -73,8 +74,8 @@ def test_a_refused_fence_writes_no_byte() -> None:
         async with raw(received) as url:
             sandbox = DaytonaSandbox(API_KEY, api_url=url, poll_s=0.0, wait_s=1.0)
             stale = KitContext(live=False)
-            got = await sandbox.create("k", stale)
-            await sandbox.aclose()
+            async with holding():  # released: the adapter's session closes
+                got = await sandbox.create("k", stale)
             await asyncio.sleep(0.05)
         assert isinstance(got, Err)
         assert got.error.code == "stale_epoch"
@@ -93,12 +94,12 @@ def test_a_refused_fence_after_a_request_leaves_no_socket_open() -> None:
         async with TestServer(server.app, host="127.0.0.1") as test:
             server.base = str(test.make_url("")).rstrip("/")
             sandbox = DaytonaSandbox(API_KEY, api_url=server.base, poll_s=0.0, wait_s=1.0)
-            assert isinstance(await sandbox.create("k", OPEN), Ok)
-            for _ in range(3):
-                refused = await sandbox.attach("sbx_1", KitContext(live=False))
-                assert isinstance(refused, Err)
-                assert refused.error.code == "stale_epoch"
-            await sandbox.aclose()
+            async with holding():  # released: the adapter's session closes
+                assert isinstance(await sandbox.create("k", OPEN), Ok)
+                for _ in range(3):
+                    refused = await sandbox.attach("sbx_1", KitContext(live=False))
+                    assert isinstance(refused, Err)
+                    assert refused.error.code == "stale_epoch"
             await asyncio.sleep(0.05)
             assert test.runner is not None
             assert test.runner.server is not None
@@ -133,8 +134,8 @@ def test_an_invalid_provider_answer_is_a_typed_error() -> None:
         async with TestServer(app, host="127.0.0.1") as test:
             url = str(test.make_url("")).rstrip("/")
             sandbox = DaytonaSandbox(API_KEY, api_url=url, poll_s=0.0, wait_s=1.0)
-            got = await sandbox.attach("sbx", OPEN)
-            await sandbox.aclose()
+            async with holding():
+                got = await sandbox.attach("sbx", OPEN)
         assert isinstance(got, Err)
         assert got.error.code == "unavailable"
 
@@ -199,8 +200,8 @@ def test_a_sandbox_is_private_and_cannot_outlive_a_leak() -> None:
                 sandbox = DaytonaSandbox(
                     API_KEY, api_url=server.base, poll_s=0.0, wait_s=1.0, auto_stop_minutes=minutes
                 )
-            assert isinstance(await sandbox.create("k", OPEN), Ok)
-            await sandbox.aclose()
+            async with holding():
+                assert isinstance(await sandbox.create("k", OPEN), Ok)
         return [(c.public, c.auto_stop_interval, c.auto_delete_interval) for c in server.created]
 
     assert asyncio.run(main(None)) == [(False, 60, 60)]
@@ -222,22 +223,26 @@ def test_a_failed_create_leaves_a_sandbox_lookup_finds_and_a_retry_reuses() -> N
         async with TestServer(server.app, host="127.0.0.1") as test:
             server.base = str(test.make_url("")).rstrip("/")
             sandbox = DaytonaSandbox(API_KEY, api_url=server.base, poll_s=0.0, wait_s=1.0)
-            failed = await sandbox.create("k", OPEN)
-            assert isinstance(failed, Err)
-            assert failed.error.code == "unavailable"
-            found = await sandbox.lookup("k", OPEN)
-            assert isinstance(found, Ok)
-            assert isinstance(found.value, Found)
-            again = await sandbox.create("k", OPEN)
-            assert isinstance(again, Ok)
-            assert again.value.id == found.value.value.id
-            assert backend.creates == 1
-            ran = await again.value.exec(["echo", "hi"], OPEN, process_key="p")
-            assert isinstance(ran, Ok)
-            assert await collect(ran.value) == (0, b"hi\n", b"")
-            await sandbox.aclose()
+            async with holding():
+                await _retried(sandbox, backend)
 
     asyncio.run(main())
+
+
+async def _retried(sandbox: DaytonaSandbox, backend: FakeBackend) -> None:
+    failed = await sandbox.create("k", OPEN)
+    assert isinstance(failed, Err)
+    assert failed.error.code == "unavailable"
+    found = await sandbox.lookup("k", OPEN)
+    assert isinstance(found, Ok)
+    assert isinstance(found.value, Found)
+    again = await sandbox.create("k", OPEN)
+    assert isinstance(again, Ok)
+    assert again.value.id == found.value.value.id
+    assert backend.creates == 1
+    ran = await again.value.exec(["echo", "hi"], OPEN, process_key="p")
+    assert isinstance(ran, Ok)
+    assert await collect(ran.value) == (0, b"hi\n", b"")
 
 
 def test_a_log_stream_the_proxy_drops_after_its_close_frame_ended_normally(
