@@ -22,10 +22,10 @@ def schemas() -> dict[str, Json]:
 
 
 def built(api: Obj) -> Obj:
-    """api.json without the functions and types NOT_BUILT lists whole."""
+    """api.json without the functions and types missing in both languages (a whole-member gap)."""
 
     def keep(section: str) -> Obj:
-        return {k: v for k, v in obj(api[section]).items() if (k, None) not in NOT_BUILT}
+        return {k: v for k, v in obj(api[section]).items() if ("", k) not in NOT_BUILT}
 
     return {**api, "functions": keep("functions"), "types": keep("types")}
 

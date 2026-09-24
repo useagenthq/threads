@@ -1,0 +1,9 @@
+{
+  "name": "woken-mixed-runs-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 32: one woken names late results of two runs (Alice's and Bob's): a wake turn has one principal and one root request.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

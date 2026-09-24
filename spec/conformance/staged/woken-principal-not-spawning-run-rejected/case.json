@@ -2,7 +2,7 @@
   "name": "woken-principal-not-spawning-run-rejected",
   "family": "agents_teams",
   "kind": "reduce",
-  "description": "Rule 45: a researcher's message (Alice's request) opens the lead's turn, which starts a background child; its late result's woken names Bob, not the spawning run's Alice.",
+  "description": "Rule 45: a researcher's message (Alice's request) opens the lead's turn, which starts a background child; its late result's woken names Bob, not the spawning run's Alice. woken-principal-spawning-run is the same log with Alice: the woken is the first event that breaks a rule.",
   "clock": {
     "now": 1790000060000
   }

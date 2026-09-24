@@ -297,7 +297,7 @@
           "default": [],
           "doc": "Agents this one may hand the conversation to, pinned as policy.handoffs."
         },
-        {"name": "team", "kind": "option", "type": {"array": {"$ref": "#/types/Agent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}}, "required": false, "default": [], "doc": "Agents this one may start as team members, with the start, send, ask, reply, wait, monitor and cancel tools. run() then returns team, the Team handle. A member whose definition lists handoffs is refused at setup (handoff_in_team). Default []: no team."},
+        {"name": "team", "kind": "option", "type": {"array": {"$ref": "#/types/Agent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}}, "required": false, "doc": "Agents this one may start as team members, with the start, send, ask, reply, wait, monitor and cancel tools. Passing it, even as [], makes agent() return a TeamAgent whose run() result carries team, the Team handle; [] is a team no model can grow (start is refused unknown_agent). A member whose definition lists handoffs is refused at setup (handoff_in_team). Omitted: no team, a plain Agent."},
         {"name": "team_limits", "kind": "option", "type": {"object": {"concurrent": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false, "default": 4, "doc": "Most members running at once; a start past it is refused concurrency_cap. Default 4."}, "mailbox": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false, "default": 100, "doc": "Most pending mails per member; a send past it is refused mailbox_full. Default 100."}}}, "required": false, "default_doc": "{concurrent: 4, mailbox: 100}", "doc": "The team's limits. Omitted: 4 running members and 100 pending mails per member."},
         {
           "name": "fallback",
@@ -411,7 +411,7 @@
         }
       ],
       "returns": {"$ref": "#/types/Agent", "args": [{"generic": "Deps"}, {"generic": "Output"}]},
-      "overloads": [{"when": "team", "returns": {"$ref": "#/types/TeamAgent", "args": [{"generic": "Deps"}, {"generic": "Output"}]}, "doc": "With team, agent() returns a TeamAgent: TS selects the overload by the team option, Python returns the TeamAgent class, so run().team is typed."}]
+      "overloads": [{"when": "team", "returns": {"$ref": "#/types/TeamAgent", "args": [{"generic": "Deps"}, {"generic": "Output"}]}, "doc": "With team, agent() returns a TeamAgent: TS selects the overload by the team option, Python returns the TeamAgent class, so run().team and stream().result.team are typed. An explicit team: [] is a team with no startable agents: it still returns a TeamAgent, whose team log opens and whose operator can still act; only omitting team returns a plain Agent."}]
     },
     "tool": {
       "ts": "tool",
@@ -1381,7 +1381,7 @@
         "stream": {
           "ts": "stream",
           "py": "stream",
-          "doc": "Same run, as a subscription to its log. Not a second loop.",
+          "doc": "Stream one run, as Agent.stream does; its result also carries the team.",
           "async": false,
           "params": [
             {
@@ -1472,7 +1472,7 @@
             }
           ],
           "returns": {
-            "$ref": "#/types/RunStream",
+            "$ref": "#/types/TeamRunStream",
             "args": [
               {
                 "generic": "Output"
@@ -1486,7 +1486,7 @@
         "check": {
           "ts": "check",
           "py": "check",
-          "doc": "Validate the definition and resolve setup (secrets, MCP handshakes, capabilities) without starting a run.",
+          "doc": "Validate the definition and resolve setup (secrets, MCP handshakes, capabilities) without starting a run. Returns every setup failure as an error value (it never throws them); a failed check can be retried on the same agent after fixing the environment. Connections it opens are closed before it returns.",
           "async": true,
           "params": [],
           "returns": {
@@ -1504,6 +1504,7 @@
               "permission_rule_invalid",
               "hosted_tool_unsupported",
               "egress_policy_unsupported",
+              "transport_fence_unsupported",
               "handoff_in_team"
             ]
           }
@@ -1733,6 +1734,38 @@
         }
       ],
       "doc": "What TeamAgent.run returns: a RunResult whose every variant also carries team."
+    },
+    "TeamRunStream": {
+      "kind": "interface",
+      "role": "handle",
+      "generics": [
+        {
+          "name": "Output",
+          "default": {
+            "prim": "string"
+          }
+        }
+      ],
+      "properties": {
+        "result": {
+          "type": {
+            "promise": {
+              "$ref": "#/types/TeamRunResult",
+              "args": [
+                {
+                  "generic": "Output"
+                }
+              ]
+            }
+          },
+          "required": true,
+          "doc": "The run's TeamRunResult, with the team."
+        }
+      },
+      "iterates": {
+        "$ref": "urn:threads:schema:host-api:v1#/$defs/StreamEvent"
+      },
+      "doc": "What TeamAgent.stream() returns: a RunStream whose result is a TeamRunResult."
     },
     "RunStream": {
       "kind": "interface",

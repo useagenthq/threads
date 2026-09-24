@@ -4,14 +4,14 @@
     "thread_id": "0192a000-0000-7000-8000-000000000001",
     "branch_id": "0192b000-0000-7000-8000-000000000001",
     "epoch": 1,
-    "turns_completed": 1,
+    "turns_completed": 3,
     "pending_calls": [],
     "effects": [],
     "parked": [],
     "fork_points": [],
     "usage": {
-      "input_tokens": 250,
-      "output_tokens": 50,
+      "input_tokens": 430,
+      "output_tokens": 70,
       "unknown_responses": 0
     },
     "transcript": [
@@ -32,22 +32,38 @@
         "event_id": "0192e000-0000-7000-8000-00000000000a"
       },
       {
-        "role": "tool",
-        "event_id": "0192e000-0000-7000-8000-00000000000e"
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-00000000000c"
       },
       {
         "role": "assistant",
-        "event_id": "0192e000-0000-7000-8000-000000000010"
+        "event_id": "0192e000-0000-7000-8000-00000000000e"
       },
       {
         "role": "tool",
-        "event_id": "0192e000-0000-7000-8000-000000000013"
+        "event_id": "0192e000-0000-7000-8000-000000000012"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000014"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000017"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-00000000001a"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-00000000001d"
       }
     ],
     "status": "in_turn",
     "head": {
-      "seq": 20,
-      "hash": "a64c9fe3707f90746b3d28425fb976fcf5d3cdf1258a1e527d7326a36a1db639"
+      "seq": 30,
+      "hash": "480f37eb2e7f6507dc38aa21cd739dd906687dfdaf597adb55135c18e55f9cf4"
     }
   },
   "projections": {
@@ -58,14 +74,9 @@
       },
       {
         "child_thread_id": "0192a000-0000-7000-8000-0000000000ca",
-        "status": "running"
+        "status": "completed"
       }
     ],
-    "pending_wakes": [
-      {
-        "branch_id": "0192b000-0000-7000-8000-000000000001",
-        "child_thread_id": "0192a000-0000-7000-8000-0000000000ca"
-      }
-    ]
+    "pending_wakes": []
   }
 }

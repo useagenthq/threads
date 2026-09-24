@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from factory_coverage import factory_evidence
 from factory_kit import Obj, api
+from surface_contract import Gap, Member
 from surface_coverage import Owed, check_coverage
 from surface_kit import PY_JUNIT, TS_JUNIT
 
@@ -64,3 +65,14 @@ def test_an_owed_test_must_have_passed(tmp_path: pathlib.Path) -> None:
         "api-coverage.json fetcher!invalid_config.py: test 'tests/test_a.py::test_missing' "
         "absent from the JUnit report"
     ]
+
+
+def test_a_type_built_nowhere_owes_no_method_tests() -> None:
+    """A method of a type missing in both languages has nothing to test; one missing in only
+    one language still owes its tests there (its members exist)."""
+    langs = frozenset({"ts", "py"})
+    method = Member("Team.start", "method", langs, True, "core", "start", "start", "Team")
+    contract = {"Team.start": method}
+    both = [Gap("Team", lang, "missing", "90-ma-p1") for lang in ("ts", "py")]
+    assert Owed(contract, both, {}).expected("py") == set()
+    assert Owed(contract, both[1:], {}).expected("py") == {"Team.start"}

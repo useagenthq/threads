@@ -14,13 +14,13 @@ import {
   checkToolResult,
 } from "./calls";
 import { checkModeChanged, checkOutput, checkToolsChanged } from "./config";
-import { checkNotYetTeam } from "./team";
 import {
   checkCause,
   checkCompactionRequested,
   checkOutputStyle,
   checkRequestedCompacted,
 } from "./requested";
+import { checkNotYetTeam } from "./team";
 import {
   checkCompacted,
   checkInput,

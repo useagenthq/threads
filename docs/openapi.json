@@ -1191,7 +1191,10 @@
           "sandbox_required",
           "cleanup_claim_lost",
           "transport_fence_unsupported",
-          "cost_overflow"
+          "cost_overflow",
+          "handoff_in_team",
+          "busy",
+          "thread_in_team"
         ]
       },
       "events_Actor": {
@@ -1291,6 +1294,10 @@
         ],
         "type": "object"
       },
+      "events_AskId": {
+        "$ref": "#/components/schemas/events_NonEmpty",
+        "description": "The MailId of the ask."
+      },
       "events_AudioPart": {
         "additionalProperties": false,
         "description": "Recorded (non-realtime) audio, e.g. a channel voice note. Only adapters that declare audio input accept it; others fail pre-dispatch with content_unsupported. Realtime sessions are out of scope.",
@@ -1336,6 +1343,13 @@
           }
         ]
       },
+      "events_BounceCode": {
+        "description": "Why a recipient refused pending mail: it was for an older generation, or the member ended.",
+        "enum": [
+          "stale_member",
+          "member_ended"
+        ]
+      },
       "events_BranchId": {
         "$ref": "#/components/schemas/events_Uuid"
       },
@@ -1369,6 +1383,22 @@
         "description": "Tool call id; may be provider-issued. The effect key is derived: <branch_id of the tool_call event>:<call_id>.",
         "pattern": "^[A-Za-z0-9_.-]{1,128}$",
         "type": "string"
+      },
+      "events_CancelledResult": {
+        "additionalProperties": false,
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/events_MemberRef"
+          },
+          "status": {
+            "const": "cancelled"
+          }
+        },
+        "required": [
+          "member",
+          "status"
+        ],
+        "type": "object"
       },
       "events_CitationPart": {
         "additionalProperties": false,
@@ -1408,6 +1438,27 @@
           "type",
           "source_kind",
           "source_id"
+        ],
+        "type": "object"
+      },
+      "events_CompletedResult": {
+        "additionalProperties": false,
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/events_MemberRef"
+          },
+          "output": {
+            "$ref": "#/components/schemas/events_TextBody",
+            "description": "The latest task's answer; structured output is its accepted value as RFC 8785 JSON text."
+          },
+          "status": {
+            "const": "completed"
+          }
+        },
+        "required": [
+          "member",
+          "status",
+          "output"
         ],
         "type": "object"
       },
@@ -1462,6 +1513,22 @@
           "idempotent",
           "reconcilable",
           "unguarded"
+        ]
+      },
+      "events_EndedResult": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/events_FailedResult"
+          },
+          {
+            "$ref": "#/components/schemas/events_CancelledResult"
+          },
+          {
+            "$ref": "#/components/schemas/events_ExhaustedResult"
+          },
+          {
+            "$ref": "#/components/schemas/events_HandedOffResult"
+          }
         ]
       },
       "events_Envelope": {
@@ -1741,6 +1808,54 @@
               },
               {
                 "$ref": "#/components/schemas/events_ev_compaction_requested"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_team_opened"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_member_started"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_member_idle"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_member_ended"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_member_observed"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_monitor_set"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_wait_started"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_wait_finished"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_woken"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_message_sent"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_message_received"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_mail_refused"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_ask_closed"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_operator_request"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_operator_refused"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_message_policy_decided"
               }
             ]
           }
@@ -1748,6 +1863,141 @@
       },
       "events_EventId": {
         "$ref": "#/components/schemas/events_Uuid"
+      },
+      "events_ExhaustedResult": {
+        "additionalProperties": false,
+        "properties": {
+          "budget": {
+            "additionalProperties": false,
+            "else": {
+              "not": {
+                "required": [
+                  "owner_thread_id"
+                ]
+              }
+            },
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "ancestor"
+                }
+              }
+            },
+            "properties": {
+              "limit": {
+                "enum": [
+                  "max_cost_nanos",
+                  "max_input_tokens",
+                  "max_output_tokens",
+                  "max_model_requests",
+                  "max_turns",
+                  "max_wall_ms"
+                ]
+              },
+              "limit_value": {
+                "$ref": "#/components/schemas/events_Int"
+              },
+              "observed": {
+                "$ref": "#/components/schemas/events_Int"
+              },
+              "observed_is_upper_bound": {
+                "description": "true when unknown usage was counted at its conservative upper bound.",
+                "type": "boolean"
+              },
+              "owner_thread_id": {
+                "$ref": "#/components/schemas/events_ThreadId",
+                "description": "Required exactly when scope is ancestor: the ancestor thread whose budget refused the reservation."
+              },
+              "scope": {
+                "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id.",
+                "enum": [
+                  "run",
+                  "thread",
+                  "ancestor"
+                ]
+              }
+            },
+            "required": [
+              "scope",
+              "limit",
+              "limit_value",
+              "observed",
+              "observed_is_upper_bound"
+            ],
+            "then": {
+              "required": [
+                "owner_thread_id"
+              ]
+            },
+            "type": "object"
+          },
+          "member": {
+            "$ref": "#/components/schemas/events_MemberRef"
+          },
+          "status": {
+            "const": "budget_exhausted"
+          }
+        },
+        "required": [
+          "member",
+          "status",
+          "budget"
+        ],
+        "type": "object"
+      },
+      "events_FailedResult": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/events_MemberErrorCode"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "member": {
+            "$ref": "#/components/schemas/events_MemberRef"
+          },
+          "status": {
+            "const": "failed"
+          }
+        },
+        "required": [
+          "member",
+          "status",
+          "error"
+        ],
+        "type": "object"
+      },
+      "events_HandedOffResult": {
+        "additionalProperties": false,
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/events_MemberRef"
+          },
+          "status": {
+            "const": "handed_off"
+          },
+          "to_thread": {
+            "$ref": "#/components/schemas/events_ThreadId",
+            "description": "The lead only: members can't hand off."
+          }
+        },
+        "required": [
+          "member",
+          "status",
+          "to_thread"
+        ],
+        "type": "object"
       },
       "events_HostedToolPart": {
         "additionalProperties": false,
@@ -1887,6 +2137,515 @@
           }
         ]
       },
+      "events_MailAddress": {
+        "description": "A member at one generation, or the team log (the operator's replies and notifications).",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "generation": {
+                "$ref": "#/components/schemas/events_PosInt"
+              },
+              "name": {
+                "$ref": "#/components/schemas/events_MemberName"
+              }
+            },
+            "required": [
+              "name",
+              "generation"
+            ],
+            "type": "object"
+          },
+          {
+            "const": "team_log"
+          }
+        ]
+      },
+      "events_MailEnvelope": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "body"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "message",
+                    "ask",
+                    "reply",
+                    "task"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "ask_id"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "ask",
+                    "reply",
+                    "bounce"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "deadline"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "ask"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "monitor_id"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "member_settled",
+                    "member_parked",
+                    "member_ended"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "reason"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "member_parked"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "result"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "member_settled",
+                    "member_ended",
+                    "bounce"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "code"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "bounce"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "message",
+                    "task"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "body"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "ask"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "body",
+                "ask_id",
+                "deadline"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "reply"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "body",
+                "ask_id"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "member_settled",
+                    "member_ended"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "monitor_id",
+                "result"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "member_parked"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "monitor_id",
+                "reason"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "bounce"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "code"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "bounce"
+                }
+              },
+              "required": [
+                "ask_id"
+              ]
+            },
+            "then": {
+              "required": [
+                "result"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "reply",
+                    "member_settled",
+                    "member_parked",
+                    "member_ended",
+                    "bounce"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "from": {
+                  "required": [
+                    "name"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "to": {
+                  "const": "team_log"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "reply",
+                    "member_settled",
+                    "member_parked",
+                    "member_ended",
+                    "bounce"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "member_settled"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "status": {
+                      "const": "completed"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "member_ended"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "not": {
+                    "properties": {
+                      "status": {
+                        "const": "completed"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "One mail, as the sender's message_sent records it and every receipt copies it byte for byte. member_parked is a one-time, non-consuming park notice.",
+        "properties": {
+          "ask_id": {
+            "$ref": "#/components/schemas/events_AskId",
+            "description": "ask: its own mail_id. reply: the ask it answers. bounce: the open ask it closes as member_ended."
+          },
+          "body": {
+            "$ref": "#/components/schemas/events_TextBody"
+          },
+          "causal": {
+            "$ref": "#/components/schemas/events_RequestRef",
+            "description": "The request or event that caused this mail: the call's tool_call, the operator_request, the member's idle or end event, or the refused mail's mail_refused."
+          },
+          "code": {
+            "$ref": "#/components/schemas/events_BounceCode"
+          },
+          "deadline": {
+            "$ref": "#/components/schemas/events_TimeMs",
+            "description": "ask: now + timeoutMs."
+          },
+          "from": {
+            "$ref": "#/components/schemas/events_MailSender"
+          },
+          "kind": {
+            "enum": [
+              "message",
+              "ask",
+              "reply",
+              "task",
+              "cancel",
+              "member_settled",
+              "member_parked",
+              "member_ended",
+              "bounce"
+            ]
+          },
+          "mail_id": {
+            "$ref": "#/components/schemas/events_MailId"
+          },
+          "monitor_id": {
+            "$ref": "#/components/schemas/events_MonitorId",
+            "description": "The monitor this notification fires; its row is deleted in the same append."
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/events_Provenance"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/events_ParkReason",
+            "description": "member_parked: the member's park reason."
+          },
+          "result": {
+            "$ref": "#/components/schemas/events_StoredMemberResult",
+            "description": "member_settled (completed), member_ended (terminal), or an ask's bounce (the ended member's result)."
+          },
+          "team": {
+            "$ref": "#/components/schemas/events_TeamId"
+          },
+          "to": {
+            "$ref": "#/components/schemas/events_MailAddress"
+          }
+        },
+        "required": [
+          "mail_id",
+          "kind",
+          "team",
+          "from",
+          "to",
+          "provenance",
+          "causal"
+        ],
+        "type": "object"
+      },
+      "events_MailId": {
+        "$ref": "#/components/schemas/events_NonEmpty",
+        "description": "<sender branch_id>:<call_id or request_id> for mail a call sends; <sender branch_id>:<event_id of the message_sent> for mail the runtime sends (notifications, bounces, lead-close cancels)."
+      },
+      "events_MailSender": {
+        "description": "The sending member, or the operator request. Written by the fenced writer; never an actor.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/events_MemberRef"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "operator": {
+                "$ref": "#/components/schemas/events_RequestId"
+              }
+            },
+            "required": [
+              "operator"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "events_MemberErrorCode": {
+        "description": "A failed member's code: the host API RunErrorCode, plus pin_unavailable and pin_mismatch for a failed rebind.",
+        "enum": [
+          "model_unavailable",
+          "context_exhausted",
+          "max_output",
+          "max_turns",
+          "output_invalid",
+          "input_denied",
+          "stop_hook_limit",
+          "model_error",
+          "content_unsupported",
+          "continuation_unsupported",
+          "transport_fence_unsupported",
+          "secret_in_provider_output",
+          "secret_in_stored_bytes",
+          "artifact_missing",
+          "artifact_corrupt",
+          "unmatched_external_op",
+          "branch_busy",
+          "branch_not_runnable",
+          "pin_unavailable",
+          "pin_mismatch"
+        ]
+      },
+      "events_MemberName": {
+        "description": "<agent>-<k>, k counting that agent's members in the team from 1. The lead's name is its agent name.",
+        "pattern": "^[a-z][a-z0-9_]{0,63}(-[1-9][0-9]*)?$",
+        "type": "string"
+      },
+      "events_MemberRef": {
+        "additionalProperties": false,
+        "description": "One member of one team. Immutable.",
+        "properties": {
+          "generation": {
+            "$ref": "#/components/schemas/events_PosInt",
+            "description": "Changes only through a supervised restart; 1 until then."
+          },
+          "name": {
+            "$ref": "#/components/schemas/events_MemberName"
+          },
+          "team": {
+            "$ref": "#/components/schemas/events_TeamId"
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/events_NonEmpty"
+          }
+        },
+        "required": [
+          "tenant",
+          "team",
+          "name",
+          "generation"
+        ],
+        "type": "object"
+      },
       "events_ModelRef": {
         "additionalProperties": false,
         "properties": {
@@ -1932,6 +2691,10 @@
         ],
         "type": "object"
       },
+      "events_MonitorId": {
+        "$ref": "#/components/schemas/events_NonEmpty",
+        "description": "<watcher branch_id>:<event_id of the registering event>:<target name>; the target name is task for a start's task monitor. Derived, never generated."
+      },
       "events_Name": {
         "pattern": "^[a-z][a-z0-9_]{0,63}$",
         "type": "string"
@@ -1964,7 +2727,7 @@
       },
       "events_ParkAddress": {
         "additionalProperties": false,
-        "description": "What a parked branch waits on; resumed must name the same address. For kind effect, id is the derived effect key; for kind child, the parked subagent's child_thread_id.",
+        "description": "What a parked branch waits on; resumed must name the same address. For kind effect, id is the derived effect key; for kind child, the parked subagent's child_thread_id; for kind ask, the AskId; for kind wait, the WaitId; for kind member, the task MonitorId of the parked member.",
         "properties": {
           "id": {
             "$ref": "#/components/schemas/events_NonEmpty"
@@ -1975,7 +2738,10 @@
               "effect",
               "input",
               "resource",
-              "child"
+              "child",
+              "ask",
+              "wait",
+              "member"
             ]
           }
         },
@@ -1984,6 +2750,16 @@
           "id"
         ],
         "type": "object"
+      },
+      "events_ParkReason": {
+        "description": "Why a branch is parked.",
+        "enum": [
+          "awaiting_approval",
+          "effect_unknown",
+          "awaiting_input",
+          "awaiting_resource",
+          "awaiting_member"
+        ]
       },
       "events_PermissionMode": {
         "enum": [
@@ -2401,6 +3177,33 @@
         ],
         "type": "object"
       },
+      "events_Provenance": {
+        "additionalProperties": false,
+        "description": "Causal, not structural: who originated the work and which request it belongs to. One turn's opening batch shares one (principal, root_request).",
+        "properties": {
+          "principal": {
+            "$ref": "#/components/schemas/events_Principal",
+            "description": "The verified originating principal: the root run's input principal, or the operator's."
+          },
+          "root_request": {
+            "$ref": "#/components/schemas/events_RequestRef",
+            "description": "The lead run's user_input, or the team log's operator_request. Budgets roll up to its run budget."
+          },
+          "via": {
+            "description": "The member hops. Provenance only: authority, credentials and grants never transfer.",
+            "items": {
+              "$ref": "#/components/schemas/events_MemberRef"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "principal",
+          "root_request",
+          "via"
+        ],
+        "type": "object"
+      },
       "events_ReasoningPart": {
         "additionalProperties": false,
         "description": "Opaque provider continuation material (Anthropic thinking or redacted_thinking with its signature, OpenAI reasoning items with encrypted content). ref holds the exact provider bytes/JSON. Never rendered as text and never required in a UI. Render v1 emits the part as recorded; an adapter that cannot send it back fails with continuation_unsupported, never drops it silently. Only settings_changed{reasoning_carryover: omit_prior} omits earlier parts.",
@@ -2431,6 +3234,27 @@
           "model",
           "format",
           "ref"
+        ],
+        "type": "object"
+      },
+      "events_RequestId": {
+        "$ref": "#/components/schemas/events_Uuid",
+        "description": "One operator request: a team.start, send, ask, wait or cancel call."
+      },
+      "events_RequestRef": {
+        "additionalProperties": false,
+        "description": "An event in another thread's log, by thread and event id.",
+        "properties": {
+          "event_id": {
+            "$ref": "#/components/schemas/events_EventId"
+          },
+          "thread_id": {
+            "$ref": "#/components/schemas/events_ThreadId"
+          }
+        },
+        "required": [
+          "thread_id",
+          "event_id"
         ],
         "type": "object"
       },
@@ -2470,6 +3294,64 @@
           "start",
           "end"
         ],
+        "type": "object"
+      },
+      "events_StoredMemberResult": {
+        "description": "What a settled member returned, as member_idle, member_ended, notifications and member_observed record it. Public result APIs hydrate a ref'd output (sha256 and length verified); the audit feed returns it as stored.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/events_CompletedResult"
+          },
+          {
+            "$ref": "#/components/schemas/events_FailedResult"
+          },
+          {
+            "$ref": "#/components/schemas/events_CancelledResult"
+          },
+          {
+            "$ref": "#/components/schemas/events_ExhaustedResult"
+          },
+          {
+            "$ref": "#/components/schemas/events_HandedOffResult"
+          }
+        ]
+      },
+      "events_TeamId": {
+        "$ref": "#/components/schemas/events_Uuid"
+      },
+      "events_TeamRefusal": {
+        "description": "A refusal an operator request records as operator_refused. A model call records its refusal in its own tool_result.",
+        "enum": [
+          "forbidden",
+          "unknown_agent",
+          "concurrency_cap",
+          "budget_exceeded",
+          "team_closed",
+          "unknown_member",
+          "stale_member",
+          "member_ended",
+          "self",
+          "mailbox_full",
+          "idempotency_key_reused",
+          "idempotency_key_principal_mismatch"
+        ]
+      },
+      "events_TextBody": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/events_TextOrRef"
+          }
+        ],
+        "description": "Inline text up to the inline cap, else a content-addressed artifact written before the append.",
+        "properties": {
+          "ref": {
+            "$ref": "#/components/schemas/events_ArtifactRef"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "events_TextOrContent": {
@@ -2682,6 +3564,10 @@
         "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
         "type": "string"
       },
+      "events_WaitId": {
+        "$ref": "#/components/schemas/events_NonEmpty",
+        "description": "<waiter branch_id>:<call_id or request_id>."
+      },
       "events_ev_agent_finished": {
         "description": "The child's one terminal result (F7.5). Exactly once per agent_spawned.",
         "properties": {
@@ -2879,6 +3765,102 @@
           },
           "type": {
             "const": "approval_requested"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_ask_closed": {
+        "description": "In the asker's log (a member, or the team log): closes the open ask. A member asker also appends resumed and the ask call's one tool_result.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "ask_id": {
+                "$ref": "#/components/schemas/events_AskId"
+              },
+              "outcome": {
+                "description": "Decided in order: a reply, then a member_ended bounce, then a cancel or team close, else the deadline.",
+                "oneOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "reply": {
+                        "$ref": "#/components/schemas/events_MailId",
+                        "description": "The reply mail, received in this same append; its text is the answer."
+                      },
+                      "status": {
+                        "const": "answered"
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "reply"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "status": {
+                        "const": "timed_out"
+                      }
+                    },
+                    "required": [
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "result": {
+                        "$ref": "#/components/schemas/events_EndedResult"
+                      },
+                      "status": {
+                        "const": "member_ended"
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "result"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "status": {
+                        "const": "cancelled"
+                      }
+                    },
+                    "required": [
+                      "status"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "ask_id",
+              "outcome"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "ask_closed"
           },
           "type_version": {
             "const": 1
@@ -4208,6 +5190,434 @@
         ],
         "type": "object"
       },
+      "events_ev_mail_refused": {
+        "description": "The recipient refused a pending mail (its row becomes stale for stale_member, returned for member_ended); a bounce to the sender goes in the same append.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/events_BounceCode"
+              },
+              "mail_id": {
+                "$ref": "#/components/schemas/events_MailId"
+              }
+            },
+            "required": [
+              "mail_id",
+              "code"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "mail_refused"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_member_ended": {
+        "description": "The member's terminal result (failed, cancelled, budget_exhausted, or a lead's handed_off). Its append fires every monitor on this generation and refuses every pending inbound mail with a bounce. A lead's also closes the team and cancels every live member.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "result": {
+                "$ref": "#/components/schemas/events_EndedResult"
+              }
+            },
+            "required": [
+              "result"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "member_ended"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_member_idle": {
+        "description": "In the member's log, with the turn_completed that ends its task: the row becomes idle with this result, and each settle monitor and an unfired task monitor fires in the same append.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "result": {
+                "$ref": "#/components/schemas/events_CompletedResult"
+              }
+            },
+            "required": [
+              "result"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "member_idle"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_member_observed": {
+        "description": "The waiter or monitor found its target already settled when it registered: recorded in the waiter's own log, with no mail and no monitor row.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "monitor_id": {
+                "$ref": "#/components/schemas/events_MonitorId"
+              },
+              "result": {
+                "$ref": "#/components/schemas/events_StoredMemberResult",
+                "description": "Byte for byte the target's committed member_idle or member_ended result at source."
+              },
+              "source": {
+                "additionalProperties": false,
+                "properties": {
+                  "branch_id": {
+                    "$ref": "#/components/schemas/events_BranchId"
+                  },
+                  "seq": {
+                    "$ref": "#/components/schemas/events_PosInt"
+                  },
+                  "thread_id": {
+                    "$ref": "#/components/schemas/events_ThreadId"
+                  }
+                },
+                "required": [
+                  "thread_id",
+                  "branch_id",
+                  "seq"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "monitor_id",
+              "result",
+              "source"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "member_observed"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_member_started": {
+        "description": "In the starter's log (the lead, or the team log for an operator start), with the task's message_sent: inserts the member's row (starting), its task mail and the starter's task monitor.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "agent": {
+                "$ref": "#/components/schemas/events_NonEmpty"
+              },
+              "budget": {
+                "$ref": "#/components/schemas/events_Budget",
+                "description": "The member's own budget: the minimum of start's budget and the matching messagePolicy rule's."
+              },
+              "config_hash": {
+                "$ref": "#/components/schemas/events_Sha256",
+                "description": "The pinned definition, whose canonical bytes are stored before this append; materialize rebinds against it."
+              },
+              "member": {
+                "$ref": "#/components/schemas/events_MemberRef"
+              },
+              "parent": {
+                "additionalProperties": false,
+                "description": "The structural parent the member's thread_started will carry: the lead's member_started, or the lead's thread_started for an operator start.",
+                "properties": {
+                  "branch_id": {
+                    "$ref": "#/components/schemas/events_BranchId"
+                  },
+                  "event_id": {
+                    "$ref": "#/components/schemas/events_EventId"
+                  },
+                  "relation": {
+                    "const": "team_member"
+                  },
+                  "thread_id": {
+                    "$ref": "#/components/schemas/events_ThreadId"
+                  }
+                },
+                "required": [
+                  "thread_id",
+                  "branch_id",
+                  "event_id",
+                  "relation"
+                ],
+                "type": "object"
+              },
+              "provenance": {
+                "$ref": "#/components/schemas/events_Provenance"
+              },
+              "thread_id": {
+                "$ref": "#/components/schemas/events_ThreadId",
+                "description": "The member's thread, opened at materialize (the starting window has no branch)."
+              }
+            },
+            "required": [
+              "member",
+              "agent",
+              "config_hash",
+              "thread_id",
+              "parent",
+              "provenance"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "member_started"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_message_policy_decided": {
+        "description": "Every team authorization decision, for model and operator alike, in the deciding writer's log.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "oneOf": [
+                  {
+                    "required": [
+                      "call_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "request_id"
+                    ]
+                  }
+                ]
+              },
+              {
+                "else": {
+                  "not": {
+                    "required": [
+                      "rule"
+                    ]
+                  }
+                },
+                "if": {
+                  "properties": {
+                    "source": {
+                      "const": "message_policy"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "rule"
+                  ]
+                }
+              }
+            ],
+            "properties": {
+              "call_id": {
+                "$ref": "#/components/schemas/events_CallId",
+                "description": "A model call's request key."
+              },
+              "decision": {
+                "enum": [
+                  "allow",
+                  "deny"
+                ]
+              },
+              "op": {
+                "description": "wait is decided as monitor.",
+                "enum": [
+                  "start",
+                  "send",
+                  "ask",
+                  "monitor",
+                  "cancel"
+                ]
+              },
+              "request_id": {
+                "$ref": "#/components/schemas/events_RequestId",
+                "description": "An operator request's key."
+              },
+              "rule": {
+                "$ref": "#/components/schemas/events_Int",
+                "description": "message_policy: the index of the matching rule."
+              },
+              "source": {
+                "description": "team: what the team grants (members send, ask, wait and monitor one another; the lead starts; a starter cancels). message_policy: a rule. default: default deny.",
+                "enum": [
+                  "team",
+                  "message_policy",
+                  "default"
+                ]
+              },
+              "target": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "The agent (start) or member name."
+              }
+            },
+            "required": [
+              "op",
+              "decision",
+              "source",
+              "target"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "message_policy_decided"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_message_received": {
+        "description": "The recipient consumed a mail (its row becomes consumed). Actor {host, provenance.principal}. It opens a turn only as the Teams rules say, and renders as an untrusted <message> user line.",
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/events_ActorWithPrincipal"
+          },
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "envelope": {
+                "$ref": "#/components/schemas/events_MailEnvelope",
+                "description": "Byte for byte the sender's message_sent envelope, provenance included, so every rule about received mail reads only this log."
+              },
+              "mail_id": {
+                "$ref": "#/components/schemas/events_MailId"
+              }
+            },
+            "required": [
+              "mail_id",
+              "envelope"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "message_received"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "actor",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_message_sent": {
+        "description": "Mail, in the sender's log: inserts its pending mail row (and for an ask, its open asks row).",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "envelope": {
+                "$ref": "#/components/schemas/events_MailEnvelope"
+              }
+            },
+            "required": [
+              "envelope"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "message_sent"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
       "events_ev_mode_changed": {
         "description": "Permission mode change. from must be the current mode; to bypass needs policy.permissions.allow_bypass. Never caused by the agent alone: an operator via the host API, or an approved exit_plan_mode call (cause_event_id).",
         "properties": {
@@ -4538,6 +5948,141 @@
         ],
         "type": "object"
       },
+      "events_ev_monitor_set": {
+        "description": "A model monitor on a member: an end monitor whose id is <branch_id>:<this event_id>:<member name>. Its member_ended mail opens a turn for an idle watcher.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "member": {
+                "$ref": "#/components/schemas/events_MemberRef"
+              }
+            },
+            "required": [
+              "member"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "monitor_set"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_operator_refused": {
+        "description": "An operator request refused under the team-log writer. busy is never logged: no writer was acquired.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/events_TeamRefusal"
+              },
+              "request_id": {
+                "$ref": "#/components/schemas/events_RequestId"
+              }
+            },
+            "required": [
+              "request_id",
+              "code"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "operator_refused"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_operator_request": {
+        "description": "One team.start/send/ask/wait/cancel call, in the team log, with the op's own events or its refusal in the same append.",
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/events_ActorWithPrincipal"
+          },
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "body_hash": {
+                "$ref": "#/components/schemas/events_Sha256",
+                "description": "sha256 of the request's canonical JSON body."
+              },
+              "idempotency_key": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "Scoped to this team and op; inserts the operator_receipts row."
+              },
+              "op": {
+                "enum": [
+                  "start",
+                  "send",
+                  "ask",
+                  "wait",
+                  "cancel"
+                ]
+              },
+              "principal": {
+                "$ref": "#/components/schemas/events_Principal"
+              },
+              "provenance": {
+                "$ref": "#/components/schemas/events_Provenance",
+                "description": "root_request is this event: it is the root request for budgets."
+              },
+              "request_id": {
+                "$ref": "#/components/schemas/events_RequestId"
+              }
+            },
+            "required": [
+              "request_id",
+              "op",
+              "principal",
+              "body_hash",
+              "provenance"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "operator_request"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "actor",
+          "data"
+        ],
+        "type": "object"
+      },
       "events_ev_output_validated": {
         "description": "Structured-output check of one candidate. source_event_id is the raw candidate: the final_output tool_call, or the model_response (native mode). accepted carries the validated value; rejected carries the errors shown to the model. schema_sha256 must equal policy.output.schema_sha256, and an accepted value must validate against that schema.",
         "properties": {
@@ -4679,13 +6224,8 @@
                 "$ref": "#/components/schemas/events_TimeMs"
               },
               "reason": {
-                "description": "awaiting_input: an ask_user question; the address is {kind: input, id: <call_id>}.",
-                "enum": [
-                  "awaiting_approval",
-                  "effect_unknown",
-                  "awaiting_input",
-                  "awaiting_resource"
-                ]
+                "$ref": "#/components/schemas/events_ParkReason",
+                "description": "awaiting_input: an ask_user question; the address is {kind: input, id: <call_id>}. awaiting_member: an open ask ({kind: ask}), a wait ({kind: wait}) or a parked run-owned member ({kind: member})."
               }
             },
             "required": [
@@ -4710,13 +6250,8 @@
         "type": "object"
       },
       "events_ev_parked_data_reason": {
-        "description": "awaiting_input: an ask_user question; the address is {kind: input, id: <call_id>}.",
-        "enum": [
-          "awaiting_approval",
-          "effect_unknown",
-          "awaiting_input",
-          "awaiting_resource"
-        ]
+        "$ref": "#/components/schemas/events_ParkReason",
+        "description": "awaiting_input: an ask_user question; the address is {kind: input, id: <call_id>}. awaiting_member: an open ask ({kind: ask}), a wait ({kind: wait}) or a parked run-owned member ({kind: member})."
       },
       "events_ev_permission_decision": {
         "description": "Precedence is deny > ask > allow.",
@@ -5452,6 +6987,47 @@
         ],
         "type": "object"
       },
+      "events_ev_team_opened": {
+        "description": "The team log's first event, in place of thread_started: opened in the lead's first append. The team log never renders to a model, never parks and never opens a turn.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "lead": {
+                "$ref": "#/components/schemas/events_MemberRef"
+              },
+              "lead_thread_id": {
+                "$ref": "#/components/schemas/events_ThreadId"
+              },
+              "team": {
+                "$ref": "#/components/schemas/events_TeamId"
+              }
+            },
+            "required": [
+              "team",
+              "lead",
+              "lead_thread_id"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "team_opened"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
       "events_ev_team_task_claimed": {
         "description": "Atomic claim: the task exists, is open and unclaimed, and every blocker is completed.",
         "properties": {
@@ -5609,7 +7185,7 @@
               },
               "parent": {
                 "additionalProperties": false,
-                "description": "Set on a child thread: the parent event that created it (agent_spawned or handoff).",
+                "description": "Set on a child thread: the parent event that created it (agent_spawned, handoff, or for a team member the lead's member_started, or the lead's thread_started for an operator-started member).",
                 "properties": {
                   "branch_id": {
                     "$ref": "#/components/schemas/events_BranchId"
@@ -5620,7 +7196,8 @@
                   "relation": {
                     "enum": [
                       "subagent",
-                      "handoff"
+                      "handoff",
+                      "team_member"
                     ]
                   },
                   "thread_id": {
@@ -5640,6 +7217,24 @@
               },
               "sandbox_provider": {
                 "$ref": "#/components/schemas/events_Name"
+              },
+              "team": {
+                "additionalProperties": false,
+                "description": "Set on the thread of an agent defined with team (a lead). Its first append also opens the team log and inserts the teams row and the lead's team_members row (role lead, generation 1).",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/events_TeamId"
+                  },
+                  "log_branch_id": {
+                    "$ref": "#/components/schemas/events_BranchId",
+                    "description": "The team log's branch, opened in this append's transaction with its team_opened."
+                  }
+                },
+                "required": [
+                  "id",
+                  "log_branch_id"
+                ],
+                "type": "object"
               },
               "tools": {
                 "items": {
@@ -6010,12 +7605,14 @@
             },
             "properties": {
               "code": {
-                "description": "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried); or the response held a registered secret in provider material that is replayed byte-exact and so can't be redacted (secret_in_provider_output: nothing of it is stored, never retried).",
+                "description": "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried); or the response held a registered secret in provider material that is replayed byte-exact and so can't be redacted (secret_in_provider_output: nothing of it is stored, never retried); or a team member's rebind failed before its first model request: its definition, a tool or a model is not registered here (pin_unavailable), or the rebuilt config_hash differs (pin_mismatch).",
                 "enum": [
                   "content_unsupported",
                   "continuation_unsupported",
                   "transport_fence_unsupported",
-                  "secret_in_provider_output"
+                  "secret_in_provider_output",
+                  "pin_unavailable",
+                  "pin_mismatch"
                 ]
               },
               "reason": {
@@ -6077,6 +7674,27 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/events_TextOrContent"
+              },
+              {
+                "else": {
+                  "not": {
+                    "required": [
+                      "mail_id"
+                    ]
+                  }
+                },
+                "if": {
+                  "properties": {
+                    "source": {
+                      "const": "team_task"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "mail_id"
+                  ]
+                }
               }
             ],
             "properties": {
@@ -6095,6 +7713,10 @@
                 "$ref": "#/components/schemas/events_EventId",
                 "description": "The channel_delivery or schedule_fired event this input came from."
               },
+              "mail_id": {
+                "$ref": "#/components/schemas/events_MailId",
+                "description": "Exactly with source team_task: the task mail this input consumes (its row becomes consumed in this append)."
+              },
               "source": {
                 "enum": [
                   "api",
@@ -6102,7 +7724,8 @@
                   "channel",
                   "schedule",
                   "parent_agent",
-                  "handoff"
+                  "handoff",
+                  "team_task"
                 ]
               },
               "text": {
@@ -6116,6 +7739,181 @@
           },
           "type": {
             "const": "user_input"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "actor",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_wait_finished": {
+        "description": "Closes a wait: deletes every remaining settle monitor with this wait_id. Settlement is by commit order, never by timestamps.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "finished": {
+                "items": {
+                  "$ref": "#/components/schemas/events_StoredMemberResult"
+                },
+                "type": "array"
+              },
+              "parked": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "member": {
+                      "$ref": "#/components/schemas/events_MemberRef"
+                    },
+                    "reason": {
+                      "$ref": "#/components/schemas/events_ParkReason"
+                    }
+                  },
+                  "required": [
+                    "member",
+                    "reason"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "pending": {
+                "items": {
+                  "$ref": "#/components/schemas/events_MemberRef"
+                },
+                "type": "array"
+              },
+              "timed_out": {
+                "description": "true only when the deadline passed with the mode unmet.",
+                "type": "boolean"
+              },
+              "wait_id": {
+                "$ref": "#/components/schemas/events_WaitId"
+              }
+            },
+            "required": [
+              "wait_id",
+              "finished",
+              "parked",
+              "pending",
+              "timed_out"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "wait_finished"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_wait_started": {
+        "description": "A wait on members, in a member's log or the team log. A member waiter also parks {kind: wait, id: wait_id}.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "deadline": {
+                "$ref": "#/components/schemas/events_TimeMs"
+              },
+              "members": {
+                "description": "Frozen at the call. Each gets a settle monitor <branch_id>:<this event_id>:<name>, or a member_observed.",
+                "items": {
+                  "$ref": "#/components/schemas/events_MemberRef"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "mode": {
+                "description": "all, any, or the number of members that must settle.",
+                "oneOf": [
+                  {
+                    "enum": [
+                      "all",
+                      "any"
+                    ]
+                  },
+                  {
+                    "$ref": "#/components/schemas/events_PosInt"
+                  }
+                ]
+              },
+              "wait_id": {
+                "$ref": "#/components/schemas/events_WaitId"
+              }
+            },
+            "required": [
+              "wait_id",
+              "members",
+              "mode",
+              "deadline"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "wait_started"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_woken": {
+        "description": "Opens a turn for background results that arrived while no turn was open and no cancel barrier stood. Written only in the append that records those results, never retroactively. Renders nothing: the late results render.",
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/events_ActorWithPrincipal"
+          },
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "causes": {
+                "description": "The tool_result_late events in this same append that woke the thread.",
+                "items": {
+                  "$ref": "#/components/schemas/events_EventId"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "causes"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "woken"
           },
           "type_version": {
             "const": 1

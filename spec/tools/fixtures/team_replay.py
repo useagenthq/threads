@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from .common import eid, text, tokens
 from .log import Log
-from .pieces import answer, call, reduce_case, result, started, user
+from .pieces import answer, call, reduce_case, reject, result, started, user
 from .projections import children
 from .team_index import pending_wakes
 from .team_pieces import (
@@ -34,17 +34,21 @@ if TYPE_CHECKING:
 
     from .jcs import Obj
 
+BOB: Obj = {"issuer": "api", "tenant": "acme", "subject": "bob"}
 KIDS = ("0192a000-0000-7000-8000-0000000000c9", "0192a000-0000-7000-8000-0000000000ca")
 
 
 def build(root: pathlib.Path) -> None:
     _legacy_wake(root)
+    _grouped_wakes(root, one_woken=False)
+    _grouped_wakes(root, one_woken=True)
     _settle(root)
     _receipt_mismatch(root)
 
 
 def _spawn(log: Log, cid: str, kid: str) -> None:
-    call(log, "spawn_agent", {"agent": "scanner", "prompt": "Do your part."}, cid)
+    spawn: Obj = {"agent": "scanner", "prompt": "Do your part.", "background": True}
+    call(log, "spawn_agent", spawn, cid)
     spawned: Obj = {
         "call_id": cid,
         "child_thread_id": kid,
@@ -83,6 +87,62 @@ def _legacy_wake(root: pathlib.Path) -> None:
             "woken naming it, and woken opens the lead's next turn (in_turn). The second child "
             "still runs, so its pending_wakes row stays. subagent-background-notify is a log "
             "written before woken existed: it stays idle, never woken retroactively.",
+        ),
+        log,
+        {"children": children(log), "pending_wakes": pending_wakes([log])},
+    )
+
+
+def _late(log: Log, cid: str, kid: str) -> Obj:
+    """A background child's end: its agent_finished and its call's late result."""
+    finished: Obj = {"child_thread_id": kid, "status": "completed", "usage": tokens(40, 8)}
+    log.add("agent_finished", finished)
+    late: Obj = {"call_id": cid, "is_error": False, "completeness": "complete", "preview": "Done."}
+    return log.add("tool_result_late", late)
+
+
+def _grouped_wakes(root: pathlib.Path, *, one_woken: bool) -> None:
+    """Alice's run and then Bob's each start a background child; both end at one boundary."""
+    log = Log()
+    started(log, catalog_specs(("spawn_agent",)))
+    user(log, "Scan the dependencies in the background.")
+    _spawn(log, "call_1", KIDS[0])
+    answer(log, "Alice's scan is running.")
+    log.add(
+        "user_input", {"source": "api", "text": "Scan the licenses."}, actor="user", principal=BOB
+    )
+    _spawn(log, "call_2", KIDS[1])
+    answer(log, "Bob's scan is running.")
+    if one_woken:
+        causes = [
+            _late(log, "call_1", KIDS[0])["event_id"],
+            _late(log, "call_2", KIDS[1])["event_id"],
+        ]
+        host(log, "woken", {"causes": causes})
+        reject(
+            root,
+            (
+                "woken-mixed-runs-rejected",
+                FAM,
+                "Rule 32: one woken names late results of two runs (Alice's and Bob's): a wake "
+                "turn has one principal and one root request.",
+            ),
+            log,
+        )
+        return
+    host(log, "woken", {"causes": [_late(log, "call_1", KIDS[0])["event_id"]]})
+    answer(log, "Alice's scan is clean.")
+    cause = _late(log, "call_2", KIDS[1])
+    log.add("woken", {"causes": [cause["event_id"]]}, actor="host", principal=BOB)
+    reduce_case(
+        root,
+        (
+            "legacy-wakes-grouped-by-run",
+            FAM,
+            "Two background children of two runs (Alice's, then Bob's) end at one boundary. "
+            "Their results are recorded by run, in spawn order: Alice's child's end and a woken "
+            "with her principal open one turn; only after it ends are Bob's child's end and his "
+            "woken recorded, opening the next turn. Nothing of Bob's enters Alice's turn.",
         ),
         log,
         {"children": children(log), "pending_wakes": pending_wakes([log])},

@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import ALICE, eid, text, tokens
-from .pieces import answer, call, reject, result, user
+from .pieces import answer, call, reduce_case, reject, result, user
 from .team_pieces import (
     DEADLINE,
     LEAD,
@@ -43,6 +43,17 @@ KID = "0192a000-0000-7000-8000-0000000000cb"
 def build(root: pathlib.Path) -> None:
     for name, desc, log in _cases():
         reject(root, (name, FAM, desc), log)
+    reduce_case(
+        root,
+        (
+            "woken-principal-spawning-run",
+            FAM,
+            "Rule 45's positive twin: the woken names Alice, whose request the mail that opened "
+            "the spawning turn belongs to. The wake opens the lead's next turn.",
+        ),
+        _woken_by_mail(ALICE),
+        {"pending_wakes": []},
+    )
 
 
 def _asked() -> tuple[Log, str]:
@@ -149,20 +160,26 @@ def _cases() -> list[tuple[str, str, Log]]:
         (
             "woken-principal-not-spawning-run-rejected",
             "Rule 45: a researcher's message (Alice's request) opens the lead's turn, which starts "
-            "a background child; its late result's woken names Bob, not the spawning run's Alice.",
-            _woken_by_mail(),
+            "a background child; its late result's woken names Bob, not the spawning run's Alice. "
+            "woken-principal-spawning-run is the same log with Alice: the woken is the first "
+            "event that breaks a rule.",
+            _woken_by_mail(BOB),
         )
     )
     return out
 
 
-def _woken_by_mail() -> Log:
+def _woken_by_mail(principal: Obj) -> Log:
+    """Alice's run asks a researcher, whose answer (mail of Alice's request) opens the lead's
+    next turn; that turn starts a background child. Its late result's woken names `principal`."""
     log = lead_log(("spawn_agent", *TEAM_TOOLS))
+    root = text(user(log, "Have the researcher find what to scan.")["event_id"])
+    answer(log, "Asked the researcher.")
     note = envelope(
         f"{MEMBER_BRANCH}:c1",
         "message",
-        Route(RESEARCHER, "lead", provenance(eid(9, LEAD_BRANCH))),
-        at(eid(9, LEAD_BRANCH), MEMBER_THREAD),
+        Route(RESEARCHER, "lead", provenance(root)),
+        at(root),
         body=body("Scan the dependencies."),
     )
     log.add(
@@ -171,7 +188,8 @@ def _woken_by_mail() -> Log:
         actor="host",
         principal=ALICE,
     )
-    call(log, "spawn_agent", {"agent": "scanner", "prompt": "Do your part."}, "call_1")
+    spawn: Obj = {"agent": "scanner", "prompt": "Do your part.", "background": True}
+    call(log, "spawn_agent", spawn, "call_1")
     spawned: Obj = {
         "call_id": "call_1",
         "child_thread_id": KID,
@@ -182,9 +200,8 @@ def _woken_by_mail() -> Log:
     log.add("agent_spawned", spawned)
     result(log, "call_1", "scanner started in the background", origin="deferred")
     answer(log, "The scan is running.")
-    log.add(
-        "agent_finished", {"child_thread_id": KID, "status": "completed", "usage": tokens(40, 8)}
-    )
+    finished: Obj = {"child_thread_id": KID, "status": "completed", "usage": tokens(40, 8)}
+    log.add("agent_finished", finished)
     late: Obj = {
         "call_id": "call_1",
         "is_error": False,
@@ -192,5 +209,5 @@ def _woken_by_mail() -> Log:
         "preview": "Clean.",
     }
     cause = log.add("tool_result_late", late)
-    log.add("woken", {"causes": [cause["event_id"]]}, actor="host", principal=BOB)
+    log.add("woken", {"causes": [cause["event_id"]]}, actor="host", principal=principal)
     return log
