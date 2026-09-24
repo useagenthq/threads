@@ -127,6 +127,17 @@ def test_a_parent_check_fails_on_its_subagents_setup() -> None:
     assert checked.error.code == "missing_secret"
 
 
+def test_a_fallback_model_is_set_up_and_its_failure_fails_check() -> None:
+    fallback = Counted([], failing=True)
+    bot = agent(model=Counted([]), fallback=[fallback])
+    assert asyncio.run(bot.check()) == Err(
+        Failure("missing_secret", "fake: set api_key or FAKE_KEY")
+    )
+    fallback.failing = False
+    assert asyncio.run(bot.check()) == Ok(None)
+    assert fallback.setups == FAILED_THEN_SET_UP
+
+
 def test_an_extension_setup_failure_is_invalid_config() -> None:
     async def broken() -> None:
         raise RuntimeError("no creds")

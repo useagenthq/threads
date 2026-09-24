@@ -97,6 +97,25 @@ describe("setup", () => {
     });
   });
 
+  test("a fallback model is set up, and its failure fails check()", async () => {
+    let broken = true;
+    const { model: fallback, calls } = counted([], () => broken);
+    const bot = agent({
+      model: scriptedModel({ responses: [] }),
+      fallback: [fallback],
+    });
+    expect(await bot.check()).toEqual({
+      ok: false,
+      error: {
+        code: "missing_secret",
+        message: "fake: set apiKey or FAKE_KEY",
+      },
+    });
+    broken = false;
+    expect(await bot.check()).toEqual({ ok: true, value: undefined });
+    expect(calls()).toBe(2);
+  });
+
   test("check() is a result, not void", async () => {
     const bot = agent({ model: scriptedModel({ responses: [] }) });
     // @ts-expect-error check() returns a result value, never void or undefined
