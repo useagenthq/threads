@@ -88,6 +88,10 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
   // A compaction side request the budget refused already recorded why.
   if (s.fold.budgetBlocked) return endTurn(s, "budget_exhausted");
   const got = await attempt(s, "turn", nextAttempt(s.events, s.fold));
+  // A cancel that landed during the attempt: its outcome is recorded, and nothing more happens
+  // in this step (no retry, fallback or sleep); the cancellation step is next.
+  if (got.kind !== "halt" && cancelRequested(s.events) !== undefined)
+    return undefined;
   switch (got.kind) {
     case "halt":
       return got.halt;
@@ -236,18 +240,12 @@ async function schedule(
  * again. A second rejection, an open breaker or a failed compaction ends the turn.
  */
 async function reactive(s: Session): Promise<Halt | undefined> {
-  // A cancel pending ends the turn cancelled, never context_exhausted: the cancellation step
-  // is next.
-  if (cancelRequested(s.events) !== undefined) return undefined;
   // Once per step, and never past an open breaker.
   if (reactiveSpent(s) || breakerOpen(s))
     return endTurn(s, "context_exhausted");
   const done = await compact(s, "reactive");
   if (done.kind === "halt") return done.halt;
-  // With a cancel pending the loop steps again: the cancellation step closes the turn.
-  return done.kind === "compacted" ||
-    done.kind === "ended" ||
-    cancelRequested(s.events) !== undefined
+  return done.kind === "compacted" || done.kind === "ended"
     ? undefined
     : endTurn(s, "context_exhausted");
 }

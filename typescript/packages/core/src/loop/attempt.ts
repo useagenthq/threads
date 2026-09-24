@@ -268,8 +268,7 @@ function record(
                 cause_event_id: cause,
               }),
             ];
-      // A cancel already in the log is the turn's end: the cancellation step records it.
-      const ended = cancelRequested(s.events) === undefined;
+      // With a cancel pending the end-of-turn barrier leaves the turn to the cancellation step.
       const stopped = s.append(
         draft.abandoned({
           request_event_id: requestId,
@@ -277,12 +276,10 @@ function record(
           reason: "provider_error",
         }),
         ...answered,
-        ...(ended
-          ? [draft.turnCompleted("error", "secret_in_provider_output")]
-          : []),
+        draft.turnCompleted("error", "secret_in_provider_output"),
       );
       return stopped === undefined
-        ? { kind: "leaked", ended }
+        ? { kind: "leaked", ended: !s.fold.turnOpen }
         : { kind: "halt", halt: stopped };
     }
     default:

@@ -6,14 +6,13 @@ The Render v1 bytes are a durable artifact before the `model_request` that names
 persist-before-dispatch guarantee for model calls.
 """
 
-import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import Literal
 
 from pydantic import JsonValue
 
-from threads.log import EventId, ModelRequestEvent, OutputPart, ParseError, ToolUsePart
+from threads.log import EventId, ModelRequestEvent, OutputPart, ToolUsePart
 from threads.log.digest import sha256_hex
 from threads.loop import budget, guard
 from threads.loop.calls import call_drafts
@@ -26,8 +25,6 @@ from threads.redaction import SecretInProviderOutputError
 from threads.reduce.handlers import to_json
 from threads.result import Err
 from threads.store import Draft, StoreError
-from threads.store.companion import Companion
-from threads.store.verify import StoredEvent
 
 type Purpose = Literal["turn", "compaction"]
 
@@ -50,9 +47,9 @@ async def request(
     refused = await _unsupported(rt, body, model, cause)
     if refused is not False:
         return refused
-    refused = await budget.reserve(rt, _answer(compaction, cause))
-    if refused is not None or not rt.fold.in_turn:
-        return refused
+    reserved = await budget.reserve(rt, _answer(compaction, cause))
+    if reserved != "reserved":
+        return reserved if isinstance(reserved, Failed) else None
     event = await _recorded(rt, attempt, body, line0, cause, compaction=compaction)
     if not isinstance(event, ModelRequestEvent):
         return event
@@ -98,12 +95,13 @@ async def _recorded(  # noqa: PLR0913 - the request's parts, each named
         data["purpose"] = "compaction"
     if cause is not None:
         data["cause_event_id"] = cause
-    appended = await rt.append_with([draft("model_request", data)], _unbarred(rt))
-    if isinstance(appended, Err) and appended.error is _BARRED:
-        await budget.settle(rt)
-        return await _barred(rt, compaction, cause)
+    appended = await rt.append(draft("model_request", data))
     if isinstance(appended, Err):
         return lost(appended.error)
+    if not appended.value:
+        # The barrier kept nothing: a cancel landed while the request was prepared.
+        await budget.settle(rt)
+        return await _barred(rt, compaction, cause)
     event = appended.value[0]
     if not isinstance(event, ModelRequestEvent):
         raise AssertionError("a model_request draft stored another type")
@@ -122,20 +120,6 @@ async def _unsupported(
         return Failed("model_error", f"the model can't take this request: {unsupported}")
     ended = await rt.append(draft("turn_completed", {"reason": "error", "code": unsupported}))
     return lost(ended.error) if isinstance(ended, Err) else None
-
-
-_BARRED: Final = ParseError("invalid_transition", "a cancel barrier is in the open turn")
-
-
-def _unbarred(rt: Runtime) -> Companion:
-    """The barrier again, in the request's own append: a cancel from another task can hold the
-    writer while this request waits for it (spec/schema/README.md, Nothing new after a
-    barrier). The fold then holds the new request after that cancel."""
-
-    def check(_conn: sqlite3.Connection, _events: Sequence[StoredEvent]) -> ParseError | None:
-        return _BARRED if open_cancel(rt.events) is not None else None
-
-    return check
 
 
 async def _barred(rt: Runtime, compaction: bool, cause: EventId | None) -> Failed | None:
@@ -249,8 +233,9 @@ def outcome_drafts(
             }
             ended = {"reason": "error", "code": "secret_in_provider_output"}
             answered = [] if cause is None else [_leak_answer(request_id, cause)]
-            closing = [draft("turn_completed", ended)] if _leak_ends_turn(rt) else []
-            return [draft("model_attempt_abandoned", data), *answered, *closing]
+            # With a cancel pending the barrier leaves the turn to the cancellation step.
+            closing = draft("turn_completed", ended)
+            return [draft("model_attempt_abandoned", data), *answered, closing]
         case None:
             data: dict[str, JsonValue] = {
                 "request_event_id": request_id,
@@ -271,21 +256,19 @@ def _leak_answer(request_id: EventId, cause: EventId) -> Draft:
     return draft("compaction_failed", data)
 
 
-def _leak_ends_turn(rt: Runtime) -> bool:
-    """A refused leak ends the turn itself, unless a cancel already did: the cancel is then
-    processed, and the turn ends cancelled."""
-    return open_cancel(rt.events) is None
-
-
 def _refused(rt: Runtime, outcome: Outcome) -> bool:
-    """A send-time refusal or a refused leak already ended the turn with its code."""
-    return (isinstance(outcome, Leaked) and _leak_ends_turn(rt)) or (
-        isinstance(outcome, Rejected)
-        and outcome.reason
-        in (
-            "content_unsupported",
-            "continuation_unsupported",
-            "transport_fence_unsupported",
+    """A send-time refusal or a refused leak ended the turn with its code (unless a cancel
+    was pending: the barrier left the turn open)."""
+    return not rt.fold.in_turn and (
+        isinstance(outcome, Leaked)
+        or (
+            isinstance(outcome, Rejected)
+            and outcome.reason
+            in (
+                "content_unsupported",
+                "continuation_unsupported",
+                "transport_fence_unsupported",
+            )
         )
     )
 

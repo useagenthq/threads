@@ -1,5 +1,6 @@
 import type { EventOf, Fold } from "../fold/state";
 import type { KnownEvent, ToolSpec } from "../log";
+import type { EventDraft } from "../store";
 import { maxPauseContinuations } from "./policy";
 
 // What the open turn looks like, read from the log. The loop decides every step from these,
@@ -117,4 +118,21 @@ function endsTurn(after: readonly KnownEvent[], fold: Fold): boolean {
       toolSpec(fold, call.data.name)?.ends_turn === true
     );
   });
+}
+
+/**
+ * The end-of-turn barrier: with a cancel pending in the open turn, a batch keeps what it owes
+ * (an abandonment, a side request's compaction_failed) but no turn_completed other than
+ * cancelled. The cancellation step closes the turn (spec/schema/README.md, "Nothing new after
+ * a barrier").
+ */
+export function afterBarrier(
+  fold: Fold,
+  events: readonly KnownEvent[],
+  drafts: readonly EventDraft[],
+): readonly EventDraft[] {
+  if (!fold.turnOpen || cancelRequested(events) === undefined) return drafts;
+  return drafts.filter(
+    (d) => d.type !== "turn_completed" || d.data.reason === "cancelled",
+  );
 }

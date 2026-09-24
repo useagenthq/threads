@@ -115,7 +115,7 @@ async function preflight(
     return s.append(draft.turnCompleted("context_exhausted")) ?? "ended";
   const got = await compact(s, "reactive");
   if (got.kind === "halt") return got.halt;
-  return got.kind === "compacted" || got.kind === "ended" || cancelled(s)
+  return got.kind === "compacted" || got.kind === "ended"
     ? "ended"
     : (s.append(draft.turnCompleted("context_exhausted")) ?? "ended");
 }

@@ -4,13 +4,23 @@ import { credential } from "../../src/agent/secret";
 import type { LoopExtension } from "../../src/hooks/types";
 import type { KnownEvent, Policy } from "../../src/log";
 import { type LoopConfig, resume } from "../../src/loop";
-import { CONTEXT_DEFAULTS } from "../../src/loop/policy";
+import { CONTEXT_DEFAULTS, RETRY_DEFAULTS } from "../../src/loop/policy";
 import type { Model } from "../../src/model";
 import type { Writer } from "../../src/store";
 import { ROOT, unwrap } from "../store/helpers";
 import { after, cancel, cancelAt } from "./cancel-kit";
 import { events, type Harness, harness, userInput } from "./harness";
-import { asked, fail, reply, SUMMARY_TEXT } from "./manual-kit";
+import {
+  asked,
+  crashed,
+  fail,
+  outcome,
+  reply,
+  resumeOnce,
+  SUMMARY_TEXT,
+  side,
+  sides,
+} from "./manual-kit";
 
 // Nothing is sent after a cancel barrier, and the turn it asks to stop ends cancelled: through a
 // compaction's fallback, a reactive compaction after prompt_too_long, and a lease lost right
@@ -91,7 +101,18 @@ describe("no side request is sent after the barrier", () => {
       () => writer,
     );
     await resume(writer, h.artifacts, h.config({ models: () => model }));
-    endsCancelled(events(writer));
+    const log = events(writer);
+    endsCancelled(log);
+    // No clearing after the barrier, and the fallback's own reason.
+    const barrier = log.findIndex((e) => e.type === "cancel_requested");
+    expect(log.slice(barrier).some((e) => e.type === "context_edited")).toBe(
+      false,
+    );
+    expect(log.find((e) => e.type === "compaction_failed")?.data).toMatchObject(
+      {
+        reason: "prompt_too_long",
+      },
+    );
   });
 });
 
@@ -270,6 +291,51 @@ describe("L5 with its compaction already spent (TS)", () => {
             e.data.reason === "context_exhausted",
         ),
     ).toBe(false);
+    expect(log.at(-1)?.data).toEqual({ reason: "cancelled" });
+  });
+});
+
+const retries = (max_retries: number): Policy => ({
+  retry: { ...RETRY_DEFAULTS, max_retries },
+});
+
+describe("a rejected turn request with a cancel pending (the end-of-turn barrier)", () => {
+  test("rate_limited past max_retries: the turn ends cancelled, not model_unavailable", async () => {
+    const h = harness([], [], [say("one", 10)], undefined, retries(0));
+    const log = await secondTurn(h, (w) =>
+      cancelAt([fail("rate_limited", 429), say("never", 10)], 1, w),
+    );
+    const barrier = log.findIndex((e) => e.type === "cancel_requested");
+    expect(log.slice(barrier).map((e) => e.type)).toEqual([
+      "cancel_requested",
+      "model_attempt_abandoned",
+      "cancelled",
+      "turn_completed",
+    ]);
+    expect(log.at(-1)?.data).toEqual({ reason: "cancelled" });
+  });
+
+  test("rate_limited with retries left: no retry is scheduled after the barrier", async () => {
+    const h = harness([], [], [say("one", 10)], undefined, retries(3));
+    const log = await secondTurn(h, (w) =>
+      cancelAt([fail("rate_limited", 429), say("never", 10)], 1, w),
+    );
+    const barrier = log.findIndex((e) => e.type === "cancel_requested");
+    expect(log.slice(barrier).some((e) => e.type === "retry_scheduled")).toBe(
+      false,
+    );
+    expect(log.at(-1)?.data).toEqual({ reason: "cancelled" });
+  });
+});
+
+describe("recovery of a requested compaction with a cancel pending", () => {
+  test("a crashed side request is answered failed, never re-sent later", async () => {
+    const h = asked([reply(SUMMARY_TEXT), reply("A.")]);
+    crashed(h, (log) => [side(h, log, 1)]);
+    crashed(h, () => [cancel]);
+    const log = await resumeOnce(h);
+    expect(sides(log)).toHaveLength(0);
+    expect(outcome(log)).toMatchObject({ type: "compaction_failed" });
     expect(log.at(-1)?.data).toEqual({ reason: "cancelled" });
   });
 });

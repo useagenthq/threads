@@ -24,7 +24,7 @@ from threads.log import (
 )
 from threads.loop import epoch
 from threads.loop.covering import Covering
-from threads.loop.history import CallState
+from threads.loop.history import CallState, open_cancel
 from threads.loop.model import Model
 from threads.loop.tools import ToolRunner
 from threads.permissions import Decision
@@ -205,11 +205,27 @@ class Runtime:
     async def append_with(
         self, drafts: Sequence[Draft], companion: Companion | None
     ) -> Ok[tuple[StoredEvent, ...]] | Err[ParseError]:
-        """`append`, with host rows bound to the same transaction."""
-        done = await self.writer.append(drafts, companion)
+        """`append`, with host rows bound to the same transaction. Every loop append passes
+        the cancel barrier (`after_barrier`)."""
+        done = await self.writer.append(drafts, companion, admit=after_barrier)
         if isinstance(done, Ok):
             self.observe(done.value)
         return done
+
+
+def after_barrier(fold: Fold, drafts: Sequence[Draft]) -> Sequence[Draft]:
+    """Nothing new after a cancel barrier (spec/schema/README.md): with a cancel pending in the
+    open turn a batch keeps what it owes (an abandonment, a side request's compaction_failed)
+    but no model_request and no turn_completed other than cancelled. The cancellation step
+    closes the turn."""
+    if not fold.in_turn or open_cancel(fold.events) is None:
+        return drafts
+    return [
+        d
+        for d in drafts
+        if d.type != "model_request"
+        and (d.type != "turn_completed" or d.data.get("reason") == "cancelled")
+    ]
 
 
 @dataclass(frozen=True, slots=True)

@@ -11,6 +11,7 @@ import { knownEvents, type ReducedState, reduce } from "../reduce";
 import { err, ok } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import type { Chain } from "../verify";
+import { afterBarrier } from "./turn";
 import type { ChildEnd, Halt, LoopConfig } from "./types";
 
 const encoder = new TextEncoder();
@@ -74,7 +75,9 @@ export class Session {
    * never append or dispatch again.
    */
   append(...drafts: readonly EventDraft[]): Halt | undefined {
-    const appended = this.#writer.append(drafts);
+    const admitted = afterBarrier(this.fold, this.events, drafts);
+    if (admitted.length === 0) return undefined;
+    const appended = this.#writer.append(admitted);
     if (!appended.ok) {
       const { code, message } = appended.error;
       return code === "secret_in_stored_bytes"
