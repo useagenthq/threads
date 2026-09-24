@@ -350,7 +350,10 @@ async def with_servers[D](
 async def pinned_start[D](definition: Definition[D], store: Store) -> Draft:
     """The thread_started a new thread of this agent opens with, its config durable first: what a
     host appends itself when it creates the thread (a schedule's). Its tool servers are connected
-    only to list their tools, which dispatches nothing, so no writer fences them."""
+    only to list their tools, which dispatches nothing, so no writer fences them. The agent is
+    set up first, as a run would be: a setup failure raises ConfigError before anything is
+    stored."""
+    await set_up(definition)
     async with AsyncExitStack() as stack:
         started, config = (await with_servers(definition, stack, outside_any_branch)).pin()
     await (await open_store(store)).put_artifact(config)

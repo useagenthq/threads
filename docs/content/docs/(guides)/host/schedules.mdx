@@ -86,7 +86,7 @@ A schedule keeps one thread, created at its first occurrence, for as long as its
 
 Each occurrence has the id `<schedule id>@<scheduled instant>`, for example `daily_digest@2026-09-23T07:00:00.000Z`, the same in both languages.
 
-A thread keeps the agent config it started with, so changing the schedule's agent, or that agent's instructions, tools or model, starts a new thread at the next occurrence once the old thread's run has finished. The old thread stays in the store with its history, and a run left open on it is still resumed after a restart; its `schedule_fired` and `schedule_skipped` events name the schedule. Changing only the cron, time zone or input keeps the thread.
+A thread keeps the agent config it started with, so changing the schedule's agent, or that agent's instructions, tools or model, starts a new thread at the next occurrence once the old thread's run has finished. The old thread stays in the store with its history, and a run left open on it is still resumed after a restart by a host that serves the config it was started with; its `schedule_fired` and `schedule_skipped` events name the schedule. Changing only the cron, time zone or input keeps the thread.
 
 A due occurrence is reserved with the agent, input and time zone it fires with. So an occurrence reserved before you remove or change its schedule still fires as it was reserved. If its agent is no longer on the host, or its config changed since the thread started, it is logged as skipped with reason `removed`. Deleting a schedule's thread drops the occurrences it had reserved but not yet decided: they are never logged. The next occurrence starts a new thread.
 

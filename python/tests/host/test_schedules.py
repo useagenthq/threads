@@ -2,12 +2,14 @@
 lifecycle is replayed from the shared vector in test_schedule_threads.py."""
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime
+from itertools import chain, repeat
 
 import pytest
 from pydantic import JsonValue
 
-from threads import ConfigError, agent, scripted_model, sqlite
+from threads import ConfigError, agent, extension, scripted_model, sqlite
 from threads.agents.run import pinned_start
 from threads.agents.store import Store, now_ms, open_store
 from threads.host import Schedule, host
@@ -175,6 +177,59 @@ def test_a_stored_pending_row_whose_input_is_not_an_input_is_reported_as_corrupt
             await sq.tables.schedules.pending()
 
     asyncio.run(main())
+
+
+def test_a_setup_failure_decides_nothing_and_writes_no_thread() -> None:
+    async def broken() -> None:
+        raise RuntimeError("no creds")
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        bot = agent(
+            name="bot",
+            model=scripted_model({"responses": [REPLY]}),
+            extensions=[extension(name="boot", setup=broken)],
+        )
+        runner = Runner(store, {"bot": bot}, {})
+        with pytest.raises(ConfigError, match="setup failed"):
+            await Scheduler(runner, [DAILY]).tick(NINE - 60_000, NINE + 1_000)
+        sq = await open_store(store)
+        counts = await sq.run(
+            lambda c: c.execute(
+                "SELECT (SELECT count(*) FROM schedule_threads),"
+                " (SELECT count(*) FROM schedule_occurrences), (SELECT count(*) FROM threads)"
+            ).fetchone()
+        )
+        assert counts == (0, 0, 0)
+        await runner.stop()
+
+    asyncio.run(main())
+
+
+def test_a_setup_failure_is_reported_and_the_scheduler_keeps_running(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def broken() -> None:
+        raise RuntimeError("no creds")
+
+    async def main() -> None:
+        bot = agent(
+            name="bot",
+            model=scripted_model({"responses": []}),
+            extensions=[extension(name="boot", setup=broken)],
+        )
+        runner = Runner(sqlite(":memory:"), {"bot": bot}, {})
+        # Ready a minute before 09:00, then every reading is just after it: the first pass is due.
+        times = chain([NINE - 60_000], repeat(NINE + 1_000))
+        running = asyncio.create_task(Scheduler(runner, [DAILY], lambda: next(times)).run())
+        await asyncio.sleep(0.2)
+        assert not running.done()
+        running.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await running
+
+    asyncio.run(main())
+    assert "schedule tick failed" in capsys.readouterr().err
 
 
 def test_ready_refuses_a_schedule_of_an_unknown_agent() -> None:

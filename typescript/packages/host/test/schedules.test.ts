@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { sqlite } from "@threads/core";
+import { agent, extension, scriptedModel, sqlite } from "@threads/core";
 import {
   deleteThread,
   openStore,
@@ -229,5 +229,44 @@ describe("scheduler", () => {
     ]);
     expect(db.all("SELECT 1 FROM schedule_occurrences", [])).toHaveLength(1);
     await a.ctx.stop();
+  });
+
+  test("a setup failure decides nothing and writes no thread", async () => {
+    const store = sqlite(":memory:");
+    const ctx = new HostContext(
+      store,
+      {
+        support: agent({
+          name: "support",
+          model: scriptedModel({ responses: [say("ok")] }),
+          extensions: [
+            extension({
+              name: "boot",
+              setup: async () => {
+                throw new Error("no creds");
+              },
+            }),
+          ],
+        }),
+      },
+      {},
+    );
+    const bound = bindSchedules(ctx, [
+      { id: "daily", agent: "support", cron: "0 9 * * *", input: "Report." },
+    ]);
+    if (typeof bound === "string") throw new Error(bound);
+    await expect(
+      tick(ctx, bound, nine - 60_000, nine + 1_000),
+    ).rejects.toThrow();
+    const { db } = await storeConnection(store);
+    expect(
+      db.all(
+        `SELECT (SELECT count(*) FROM schedule_threads) AS identities,
+          (SELECT count(*) FROM schedule_occurrences) AS occurrences,
+          (SELECT count(*) FROM threads) AS threads`,
+        [],
+      ),
+    ).toEqual([{ identities: 0, occurrences: 0, threads: 0 }]);
+    await ctx.stop();
   });
 });

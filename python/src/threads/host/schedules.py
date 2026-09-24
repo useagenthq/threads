@@ -10,6 +10,7 @@ Operator config: the local tenant, and the schedule itself as the principal.
 """
 
 import asyncio
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -160,7 +161,12 @@ class Scheduler:
         """Checks each minute boundary as it passes; runs until cancelled."""
         started_at = self._clock()
         while True:
-            await self.tick(started_at, self._clock())
+            try:
+                await self.tick(started_at, self._clock())
+            except ConfigError as error:
+                # An agent that can't be set up now (a secret, a server) is retried next minute:
+                # nothing was stored for it. Reported as the TS host reports a failed tick.
+                sys.stderr.write(f"threads host: schedule tick failed: {error.message}\n")
             now = self._clock()
             await asyncio.sleep((now - now % MINUTE_MS + MINUTE_MS - now) / 1000)
 
