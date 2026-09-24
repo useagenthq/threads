@@ -1,0 +1,29 @@
+{
+  "name": "refund",
+  "family": "log_fork_test",
+  "kind": "stub",
+  "description": "Saved case refund (lane 22 eval fixture).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json",
+  "stub_script": "stubs.json",
+  "input": {
+    "text": "Please refund order 42."
+  },
+  "expect": {
+    "must": [
+      {
+        "type": "tool_call",
+        "data": {
+          "name": "lookup_order"
+        }
+      }
+    ],
+    "expect": []
+  },
+  "line0": {
+    "sha256": "a9f55deaae9e35a1c3362aa44750cc68d0b9d506bec4b7a13aac5ec95a378160"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "results": [
+    {
+      "tool": "lookup_order",
+      "args_hash": "3af7b07f772e2c9249000504e65cb83f67a144732352e0f5427df34af7fb91ce",
+      "occurrence": 1,
+      "is_error": false,
+      "preview": "order 41: shipped"
+    }
+  ]
+}

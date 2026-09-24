@@ -1,0 +1,62 @@
+[
+  {
+    "started": {
+      "agent_name": "support",
+      "instructions": "You handle refunds.",
+      "model": {
+        "provider": "scripted",
+        "name": "scripted-1"
+      },
+      "model_params": {
+        "max_tokens": 1024
+      },
+      "adapter": {
+        "name": "scripted",
+        "version": "1",
+        "settings": {}
+      },
+      "tools": [
+        {
+          "name": "lookup_order",
+          "description": "Look up an order by id.",
+          "effect_class": "read_only",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "issue_refund",
+          "description": "Refund an order.",
+          "effect_class": "unguarded",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+    },
+    "mcp": [],
+    "setup_extensions": [
+      "crm"
+    ],
+    "setup_providers": []
+  }
+]

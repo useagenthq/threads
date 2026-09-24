@@ -1,0 +1,24 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [],
+    "status": "idle",
+    "head": {
+      "seq": 1,
+      "hash": "7944006a39cfc0638543a1c7d9d7071bbd813f8c109476005f4f5b7060349484"
+    }
+  }
+}

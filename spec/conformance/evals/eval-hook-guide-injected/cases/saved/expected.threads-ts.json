@@ -1,0 +1,396 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [],
+    "status": "idle",
+    "head": {
+      "seq": 1,
+      "hash": "d6a356bbb8742005ce7eea73d14955e43abb3a6a40d1db93669b43937081748f"
+    }
+  },
+  "appended": [
+    {
+      "seq": 2,
+      "event_id": "0192e000-0000-7000-8000-000000000002",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "user_input",
+      "type_version": 1,
+      "time": 1790000002000,
+      "actor": {
+        "kind": "user",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        }
+      },
+      "prev_hash": "d6a356bbb8742005ce7eea73d14955e43abb3a6a40d1db93669b43937081748f",
+      "critical": true,
+      "data": {
+        "source": "api",
+        "text": "Summarise the refund policy."
+      }
+    },
+    {
+      "seq": 3,
+      "event_id": "0192e000-0000-7000-8000-000000000003",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000003000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "970284458f9f6089e69c3f3d8e2855ad6908278054427bb79c532dccc29ef6d8",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "4a6b645d43f71e31dcb61c5e7fac0f3fbf8c35af3a1b014a4ef9325e965381cd",
+          "bytes": 621,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 539,
+          "sha256": "f644e8d26ed7f9cebc61c60785effe449cf0ca4943a33c218652008d06056a9d"
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "event_id": "0192e000-0000-7000-8000-000000000004",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000004000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "70869547fe6f471c4da7d3dbf5476ff5593adf013acfdafe6fc2cf183d364be5",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000003",
+        "content": [
+          {
+            "type": "text",
+            "text": "Draft."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 5,
+      "event_id": "0192e000-0000-7000-8000-000000000005",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "hook_decision",
+      "type_version": 1,
+      "time": 1790000005000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "a6d9197502cd1e72e63b2475ab6e23f4be9cbf7957221b6cdbb8eebf9d7713cb",
+      "critical": true,
+      "data": {
+        "extension": "style",
+        "hook": "after_model",
+        "decision": "guide",
+        "reason": "Cite the policy.",
+        "request_event_id": "0192e000-0000-7000-8000-000000000003"
+      }
+    },
+    {
+      "seq": 6,
+      "event_id": "0192e000-0000-7000-8000-000000000006",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "injected",
+      "type_version": 1,
+      "time": 1790000006000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "7abce8cdb8eb8b554bb79c0d296994fdfee531c8b6900ce044e2d7348ff37fa0",
+      "critical": true,
+      "data": {
+        "source": "hook",
+        "trust": "trusted_instruction",
+        "origin": {
+          "id": "style"
+        },
+        "text": "Cite the policy."
+      }
+    },
+    {
+      "seq": 7,
+      "event_id": "0192e000-0000-7000-8000-000000000007",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000007000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "13bc70d2130195992b528ccfda1fef15db0e1265ead32914f37219b1240951a1",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "e381d37fba65340e7c0b6b2a3f446299dc607f7f2eb0ad7462123a0c352afe78",
+          "bytes": 808,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 539,
+          "sha256": "f644e8d26ed7f9cebc61c60785effe449cf0ca4943a33c218652008d06056a9d"
+        }
+      }
+    },
+    {
+      "seq": 8,
+      "event_id": "0192e000-0000-7000-8000-000000000008",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000008000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "999af8503f3fdd6e01b24ff25680e74266f51f5d820340b3b9705f95baa11487",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000007",
+        "content": [
+          {
+            "type": "text",
+            "text": "Draft citing the policy."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 9,
+      "event_id": "0192e000-0000-7000-8000-000000000009",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "hook_decision",
+      "type_version": 1,
+      "time": 1790000009000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "6a2ad9b68fc0e163297975d4b71d99bd8c3840c6ecfa1f23ae289b901f855986",
+      "critical": true,
+      "data": {
+        "extension": "style",
+        "hook": "after_model",
+        "decision": "proceed",
+        "request_event_id": "0192e000-0000-7000-8000-000000000007"
+      }
+    },
+    {
+      "seq": 10,
+      "event_id": "0192e000-0000-7000-8000-00000000000a",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "hook_decision",
+      "type_version": 1,
+      "time": 1790000010000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "9594339d8f5d298ffe67764293e109bb311779aabb5fc897dfcdc845aeee95e6",
+      "critical": true,
+      "data": {
+        "extension": "style",
+        "hook": "on_stop",
+        "decision": "continue",
+        "reason": "Add the order id.",
+        "request_event_id": "0192e000-0000-7000-8000-000000000007"
+      }
+    },
+    {
+      "seq": 11,
+      "event_id": "0192e000-0000-7000-8000-00000000000b",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "injected",
+      "type_version": 1,
+      "time": 1790000011000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "aed7d4f22781d8e738337773720ed9d311ddcf0a391e9c99c8868abc04bfd108",
+      "critical": true,
+      "data": {
+        "source": "hook",
+        "trust": "trusted_instruction",
+        "origin": {
+          "id": "style"
+        },
+        "text": "Add the order id."
+      }
+    },
+    {
+      "seq": 12,
+      "event_id": "0192e000-0000-7000-8000-00000000000c",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000012000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "dd654af6f801516f39b2ddcfb369dcde1bf4af38198cde18453bed3b873a4571",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "0b22b9799c6bd90de1f5bc47b2b45de461ef66d2c82d23fd02df0c880e3951ea",
+          "bytes": 1014,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 539,
+          "sha256": "f644e8d26ed7f9cebc61c60785effe449cf0ca4943a33c218652008d06056a9d"
+        }
+      }
+    },
+    {
+      "seq": 13,
+      "event_id": "0192e000-0000-7000-8000-00000000000d",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000013000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "13d76ad804c6dd65ec7d9a0fa2c925e645d36be115207f307b75c6afe1a4ee0d",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-00000000000c",
+        "content": [
+          {
+            "type": "text",
+            "text": "Final, for order 42."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 14,
+      "event_id": "0192e000-0000-7000-8000-00000000000e",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "hook_decision",
+      "type_version": 1,
+      "time": 1790000014000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "7b46dd416b24d7baa63598eeaeff4440697383eca1e72e4558dbe6b054801409",
+      "critical": true,
+      "data": {
+        "extension": "style",
+        "hook": "after_model",
+        "decision": "proceed",
+        "request_event_id": "0192e000-0000-7000-8000-00000000000c"
+      }
+    },
+    {
+      "seq": 15,
+      "event_id": "0192e000-0000-7000-8000-00000000000f",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "hook_decision",
+      "type_version": 1,
+      "time": 1790000015000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "719a1c4398d2e5e930ba8522a4de6a18e3a45421440e5e6e0074379ae1a2cb46",
+      "critical": true,
+      "data": {
+        "extension": "style",
+        "hook": "on_stop",
+        "decision": "stop",
+        "request_event_id": "0192e000-0000-7000-8000-00000000000c"
+      }
+    },
+    {
+      "seq": 16,
+      "event_id": "0192e000-0000-7000-8000-000000000010",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "turn_completed",
+      "type_version": 1,
+      "time": 1790000016000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "116fa7dff3bc08806b006038ad100f7eb3452abd1ada3172ef5240c8593cd8e2",
+      "critical": true,
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "stubs": {
+    "consumed": 0,
+    "unmatched": 0
+  }
+}

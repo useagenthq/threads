@@ -1,0 +1,78 @@
+[
+  {
+    "started": {
+      "agent_name": "support",
+      "instructions": "You handle refunds and exchanges.",
+      "model": {
+        "provider": "scripted",
+        "name": "scripted-2"
+      },
+      "model_params": {
+        "max_tokens": 1024
+      },
+      "adapter": {
+        "name": "scripted",
+        "version": "1",
+        "settings": {}
+      },
+      "tools": [
+        {
+          "name": "lookup_order",
+          "description": "Look up an order by id.",
+          "effect_class": "read_only",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "issue_refund",
+          "description": "Refund an order.",
+          "effect_class": "unguarded",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "issue_exchange",
+          "description": "Exchange an order.",
+          "effect_class": "unguarded",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "sandbox_provider": "fake",
+      "config_hash": "94e959782135f5bfb97ba35cfa0a0469130223569c8e3cd78bd6033149770960"
+    },
+    "mcp": [],
+    "setup_extensions": [],
+    "setup_providers": []
+  }
+]

@@ -1,0 +1,258 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [],
+    "status": "idle",
+    "head": {
+      "seq": 1,
+      "hash": "26e1b0692856f2c8b7f394f79285b1f09d7bea9637ee04f24bfa2f15c16eee70"
+    }
+  },
+  "appended": [
+    {
+      "seq": 2,
+      "event_id": "0192e000-0000-7000-8000-000000000002",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "user_input",
+      "type_version": 1,
+      "time": 1790000002000,
+      "actor": {
+        "kind": "user",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        }
+      },
+      "prev_hash": "26e1b0692856f2c8b7f394f79285b1f09d7bea9637ee04f24bfa2f15c16eee70",
+      "critical": true,
+      "data": {
+        "source": "api",
+        "text": "Go."
+      }
+    },
+    {
+      "seq": 3,
+      "event_id": "0192e000-0000-7000-8000-000000000003",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000003000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "0b857345a2227da1a7bef7517c5861b66501787d60a79e13779c62e4568bdbb3",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "98689d62cb1fc5dc5bb8c125891a4afd748e9ac13a6a31f815acdec4af787ebb",
+          "bytes": 954,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 897,
+          "sha256": "062b89e085d00fc891383065b40974d166a146816b72e0d9ee9b8eaa3bd207c1"
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "event_id": "0192e000-0000-7000-8000-000000000004",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000004000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "40540702074d2a84f6b05d09bc3af22a65e61379afafce54f8d3c553c944c227",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000003",
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "c1",
+            "name": "send",
+            "input": {
+              "to": "researcher-1",
+              "text": "Check order 42."
+            }
+          }
+        ],
+        "stop_reason": "tool_use",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 5,
+      "event_id": "0192e000-0000-7000-8000-000000000005",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_call",
+      "type_version": 1,
+      "time": 1790000005000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "bfb17b2adf0f5bff4a5bc7f150cdb13a688b6b937f12c24671778d245b0de921",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "name": "send",
+        "input": {
+          "to": "researcher-1",
+          "text": "Check order 42."
+        },
+        "request_event_id": "0192e000-0000-7000-8000-000000000003"
+      }
+    },
+    {
+      "seq": 6,
+      "event_id": "0192e000-0000-7000-8000-000000000006",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "permission_decision",
+      "type_version": 1,
+      "time": 1790000006000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "5df0c3f4b4cd9522f174dd51dd73adef3d2ce060692f8de295c0bd98dfb6dc17",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "decision": "allow",
+        "source": "mode",
+        "mode": "default"
+      }
+    },
+    {
+      "seq": 7,
+      "event_id": "0192e000-0000-7000-8000-000000000007",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_result",
+      "type_version": 1,
+      "time": 1790000007000,
+      "actor": {
+        "kind": "tool"
+      },
+      "prev_hash": "a0ec0ecd713af13beb608377cc1af7a63f873e38b26a6d39698f964ec0cc56bf",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "is_error": false,
+        "completeness": "complete",
+        "preview": "ok",
+        "origin": "executed"
+      }
+    },
+    {
+      "seq": 8,
+      "event_id": "0192e000-0000-7000-8000-000000000008",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000008000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "a51ab3480b69aa6744fc8f39cabcec3349a82cd5ef4ba661fde9aebdd6152170",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "dba6e1ec9ca86fbe910ac3991801986f86e991b36d45c4751b2ab3e2750c2f88",
+          "bytes": 1179,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 897,
+          "sha256": "062b89e085d00fc891383065b40974d166a146816b72e0d9ee9b8eaa3bd207c1"
+        }
+      }
+    },
+    {
+      "seq": 9,
+      "event_id": "0192e000-0000-7000-8000-000000000009",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000009000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "7852878cdeaf889fb2757b61b1b80a02c5b718392638ea6ccc63e25eb615591d",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000008",
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 10,
+      "event_id": "0192e000-0000-7000-8000-00000000000a",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "turn_completed",
+      "type_version": 1,
+      "time": 1790000010000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "c15867ca5be6521d952b85e59319d6bb6dd370864a02bf4bc4aa2ca963086ca5",
+      "critical": true,
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "stubs": {
+    "consumed": 0,
+    "unmatched": 0
+  }
+}

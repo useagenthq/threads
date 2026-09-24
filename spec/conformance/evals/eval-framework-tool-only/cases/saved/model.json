@@ -1,0 +1,40 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "c1",
+          "name": "todo_write",
+          "input": {
+            "todos": [
+              {
+                "id": "1",
+                "content": "Refund order 42",
+                "status": "pending"
+              }
+            ]
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Planned."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2
+      }
+    }
+  ]
+}

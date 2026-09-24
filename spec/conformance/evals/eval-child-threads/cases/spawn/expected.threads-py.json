@@ -1,0 +1,258 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [],
+    "status": "idle",
+    "head": {
+      "seq": 1,
+      "hash": "dd973e8b10c85db095dff448563eaf8841fb9e3d7c8b74f856efb6b3c27c2a30"
+    }
+  },
+  "appended": [
+    {
+      "seq": 2,
+      "event_id": "0192e000-0000-7000-8000-000000000002",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "user_input",
+      "type_version": 1,
+      "time": 1790000002000,
+      "actor": {
+        "kind": "user",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        }
+      },
+      "prev_hash": "dd973e8b10c85db095dff448563eaf8841fb9e3d7c8b74f856efb6b3c27c2a30",
+      "critical": true,
+      "data": {
+        "source": "api",
+        "text": "Go."
+      }
+    },
+    {
+      "seq": 3,
+      "event_id": "0192e000-0000-7000-8000-000000000003",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000003000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "89401569a6d06dd75eef2e9eebe7cb2edcc556e035923886cd095e7fa03c0b19",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "f922c06b05d710d407543a449919c31461836b4842d0c89d9fcc367313bad14d",
+          "bytes": 1336,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 1279,
+          "sha256": "826f840561c015fda8b2d876536bd406be4f871e88df9dc7a691771b195f8e57"
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "event_id": "0192e000-0000-7000-8000-000000000004",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000004000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "d9a4ae1bc45c0fdff459cb129856393030864c4a240a59922ef732e3f15b1f78",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000003",
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "c1",
+            "name": "spawn_agent",
+            "input": {
+              "agent": "reviewer",
+              "prompt": "Review order 42."
+            }
+          }
+        ],
+        "stop_reason": "tool_use",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 5,
+      "event_id": "0192e000-0000-7000-8000-000000000005",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_call",
+      "type_version": 1,
+      "time": 1790000005000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "972055c4d9e9fbda42f522c4d32909690b5ee0b114e68d9bde869e423c6596df",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "name": "spawn_agent",
+        "input": {
+          "agent": "reviewer",
+          "prompt": "Review order 42."
+        },
+        "request_event_id": "0192e000-0000-7000-8000-000000000003"
+      }
+    },
+    {
+      "seq": 6,
+      "event_id": "0192e000-0000-7000-8000-000000000006",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "permission_decision",
+      "type_version": 1,
+      "time": 1790000006000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "a9a4c58626b08007692c582d16760ef6439411595548813a239cebac5973c0a0",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "decision": "allow",
+        "source": "mode",
+        "mode": "default"
+      }
+    },
+    {
+      "seq": 7,
+      "event_id": "0192e000-0000-7000-8000-000000000007",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_result",
+      "type_version": 1,
+      "time": 1790000007000,
+      "actor": {
+        "kind": "tool"
+      },
+      "prev_hash": "2c553790038d078272c1fe5f8b4dc8a5eb18ef89e32f513985e6052b320485be",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "is_error": false,
+        "completeness": "complete",
+        "preview": "ok",
+        "origin": "executed"
+      }
+    },
+    {
+      "seq": 8,
+      "event_id": "0192e000-0000-7000-8000-000000000008",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000008000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "7080d04718062febf045caa4b079298bce745f3405100ce7145180d69bc1f1a3",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "58e6b15576a618bc2b0fb77ccbe20da1244ad468835109f21a0dbff42ed80678",
+          "bytes": 1570,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 1279,
+          "sha256": "826f840561c015fda8b2d876536bd406be4f871e88df9dc7a691771b195f8e57"
+        }
+      }
+    },
+    {
+      "seq": 9,
+      "event_id": "0192e000-0000-7000-8000-000000000009",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000009000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "cc0188a9a2301a548d250aea45e456ccd52ce88043551ea5893868fdd58ba6dc",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000008",
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 10,
+      "event_id": "0192e000-0000-7000-8000-00000000000a",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "turn_completed",
+      "type_version": 1,
+      "time": 1790000010000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "c5d55bd19b4015f7776795292848d46b36cfc4d088f178218c8593878803bb7d",
+      "critical": true,
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "stubs": {
+    "consumed": 0,
+    "unmatched": 0
+  }
+}

@@ -25,6 +25,11 @@ from . import (
     coverage,
     dynamic,
     effects,
+    eval_vectors,
+    evals,
+    evals_drift,
+    evals_formats,
+    evals_hooks,
     extras,
     fallbacks,
     forks,
@@ -183,6 +188,16 @@ def _build_staged(out: pathlib.Path) -> None:
         build(out)
 
 
+EVALS = CASES.parent / "evals"
+
+
+def _build_evals(out: pathlib.Path) -> None:
+    """spec/conformance/evals: saved cases and the offline report runEvals gives for them."""
+    out.mkdir()
+    for build in (evals.build, evals_drift.build, evals_hooks.build, evals_formats.build):
+        build(out)
+
+
 APPENDING_KINDS = frozenset({"recover", "stub"})
 
 
@@ -241,6 +256,8 @@ def main() -> int:
         _build_staged(staged)
         traces = pathlib.Path(tmp) / "otel"
         otel.build(traces)
+        built_evals = pathlib.Path(tmp) / "evals"
+        _build_evals(built_evals)
         problems = coverage.check(out) + ref_team.ref_check(out, staged)
         if sys.argv[1:] == ["--check"]:
             problems += (
@@ -259,6 +276,7 @@ def main() -> int:
             diffs = _diff(out, CASES) + [f"staged/{d}" for d in _diff(staged, STAGED)]
             for part in otel.PARTS:
                 diffs += [f"otel/{part}/{d}" for d in _diff(traces / part, otel.OTEL / part)]
+            diffs += [f"evals/{d}" for d in _diff(built_evals, EVALS)] + eval_vectors.check()
             for d in diffs:
                 print(d)
             print("fixtures up to date" if not diffs else f"{len(diffs)} difference(s)")
@@ -275,7 +293,9 @@ def main() -> int:
         questions.write()
         ui_vectors.write()
         otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
-        for built, dest in ((out, CASES), (staged, STAGED), *otel_parts):
+        eval_vectors.write()
+        evals_out = (built_evals, EVALS)
+        for built, dest in ((out, CASES), (staged, STAGED), evals_out, *otel_parts):
             shutil.rmtree(dest, ignore_errors=True)
             shutil.copytree(built, dest)
         print(f"wrote {sum(1 for _ in CASES.iterdir())} cases")

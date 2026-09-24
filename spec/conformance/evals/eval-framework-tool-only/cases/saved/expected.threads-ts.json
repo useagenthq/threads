@@ -1,0 +1,293 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [],
+    "status": "idle",
+    "head": {
+      "seq": 1,
+      "hash": "15328cec7d71e16e586cae829fa5bc476622d005b79dbb1e3807aecfe9ee4775"
+    }
+  },
+  "appended": [
+    {
+      "seq": 2,
+      "event_id": "0192e000-0000-7000-8000-000000000002",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "user_input",
+      "type_version": 1,
+      "time": 1790000002000,
+      "actor": {
+        "kind": "user",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        }
+      },
+      "prev_hash": "15328cec7d71e16e586cae829fa5bc476622d005b79dbb1e3807aecfe9ee4775",
+      "critical": true,
+      "data": {
+        "source": "api",
+        "text": "Plan the refund."
+      }
+    },
+    {
+      "seq": 3,
+      "event_id": "0192e000-0000-7000-8000-000000000003",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000003000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "448b2fb6bf4b36d12826dfc9c4a3427471c1e17de41282d21fcdb85ab8508c46",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "8c32e8624ef70b765e7b171ee5d8672774c1530deed39ca5e29b95a518e06641",
+          "bytes": 1271,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 1201,
+          "sha256": "b0797abdcfb858b530a08c5c03557dab707e3d38536f4647606e3e0ca7b48470"
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "event_id": "0192e000-0000-7000-8000-000000000004",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000004000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "adf8e5c842300c2cba4655b742ecd3acff4dd416e9f804f047f81fa362b5d1f0",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000003",
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "c1",
+            "name": "todo_write",
+            "input": {
+              "todos": [
+                {
+                  "id": "1",
+                  "content": "Refund order 42",
+                  "status": "pending"
+                }
+              ]
+            }
+          }
+        ],
+        "stop_reason": "tool_use",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 5,
+      "event_id": "0192e000-0000-7000-8000-000000000005",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_call",
+      "type_version": 1,
+      "time": 1790000005000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "afc341fd4689fa4f5e937198ec8d5d074913649fcbb56bdd97138f4e32d9fd93",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "name": "todo_write",
+        "input": {
+          "todos": [
+            {
+              "id": "1",
+              "content": "Refund order 42",
+              "status": "pending"
+            }
+          ]
+        },
+        "request_event_id": "0192e000-0000-7000-8000-000000000003"
+      }
+    },
+    {
+      "seq": 6,
+      "event_id": "0192e000-0000-7000-8000-000000000006",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "permission_decision",
+      "type_version": 1,
+      "time": 1790000006000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "fb90c4cc57878059dedd291ec3d9efeeefa8d596cc938e7deed3fb15d7feb24a",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "decision": "allow",
+        "source": "mode",
+        "mode": "default"
+      }
+    },
+    {
+      "seq": 7,
+      "event_id": "0192e000-0000-7000-8000-000000000007",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "todos_updated",
+      "type_version": 1,
+      "time": 1790000007000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "eedcb72128634cc9bb40e49856c3afa5a21f394f67ebc872d0d0be587cf0be3c",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "todos": [
+          {
+            "id": "1",
+            "content": "Refund order 42",
+            "status": "pending"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 8,
+      "event_id": "0192e000-0000-7000-8000-000000000008",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_result",
+      "type_version": 1,
+      "time": 1790000008000,
+      "actor": {
+        "kind": "tool"
+      },
+      "prev_hash": "5078fc634dffbf1b2b073ab3c46cda4263087820300f6bd3fad25844c93c366c",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "is_error": false,
+        "completeness": "complete",
+        "preview": "ok",
+        "origin": "executed"
+      }
+    },
+    {
+      "seq": 9,
+      "event_id": "0192e000-0000-7000-8000-000000000009",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000009000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "31992fed1f236a0999623f777b19ed7579c7b8f45801502fa15fe3cd4f2ddc9f",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "643c40f7ef055e9c10517ab0dc8b8a8096d37b1a96d599c7a0c7d877c7959c2f",
+          "bytes": 1525,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 1201,
+          "sha256": "b0797abdcfb858b530a08c5c03557dab707e3d38536f4647606e3e0ca7b48470"
+        }
+      }
+    },
+    {
+      "seq": 10,
+      "event_id": "0192e000-0000-7000-8000-00000000000a",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000010000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "a4cfe3fd41568d7e42301013111eda53ff563a07a69f5989da93f62e3d3238c5",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000009",
+        "content": [
+          {
+            "type": "text",
+            "text": "Planned."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 11,
+      "event_id": "0192e000-0000-7000-8000-00000000000b",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "turn_completed",
+      "type_version": 1,
+      "time": 1790000011000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "e5ba4cff8cffa95a80e8bab8c14fc7c4ea182f8a644641237a37b2a5cb1acd83",
+      "critical": true,
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "stubs": {
+    "consumed": 0,
+    "unmatched": 0
+  }
+}

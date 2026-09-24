@@ -1,0 +1,43 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Draft."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Draft citing the policy."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Final, for order 42."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2
+      }
+    }
+  ]
+}

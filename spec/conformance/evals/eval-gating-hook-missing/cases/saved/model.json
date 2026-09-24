@@ -1,0 +1,51 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "c1",
+          "name": "lookup_order",
+          "input": {
+            "id": "41"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "c2",
+          "name": "lookup_order",
+          "input": {
+            "id": "42"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Both shipped."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2
+      }
+    }
+  ]
+}

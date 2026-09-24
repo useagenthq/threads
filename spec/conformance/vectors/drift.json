@@ -1,0 +1,1810 @@
+{
+  "vectors": [
+    {
+      "name": "the same config",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "kinds": []
+      }
+    },
+    {
+      "name": "changed instructions",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle exchanges.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "329c8e4f50dc2316b10ce9caf936280da79934b4e1e38a81dcb1ee8c8496ac42"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "kinds": [
+          "prompt"
+        ]
+      }
+    },
+    {
+      "name": "a tool added, one removed",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_exchange",
+                "description": "Exchange an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "cee4cd05367dfad096aa29a64d5e89d56b87865b2dc7a0637d301f69442012f3"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "kinds": [
+          "tools"
+        ],
+        "tools": {
+          "added": [
+            "issue_exchange"
+          ],
+          "removed": [
+            "issue_refund"
+          ],
+          "changed": []
+        }
+      }
+    },
+    {
+      "name": "a changed effect class",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "reconcilable",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "6619f42fbbf21c388db3e627d4e52f0fb9c5b85b890c72a4b5b599f4147b9c4b"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "kinds": [
+          "tools"
+        ],
+        "tools": {
+          "added": [],
+          "removed": [],
+          "changed": [
+            "issue_refund"
+          ]
+        }
+      }
+    },
+    {
+      "name": "another model",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-2"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "bdcf114a4bb364db429240dd4f725ece04accc3d6aa402ef08d30ff138f05b4d"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "kinds": [
+          "model"
+        ]
+      }
+    },
+    {
+      "name": "other params",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 2048
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "afbe337c2e13128e6118cd1b25759c065d6501c2fee25d28f6460d1f529fe45e"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "kinds": [
+          "model"
+        ]
+      }
+    },
+    {
+      "name": "only a hashed setting",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "kinds": [
+          "config"
+        ]
+      }
+    },
+    {
+      "name": "an MCP server's tools are unchecked",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "mcp__jira__create_issue",
+              "description": "Create a Jira issue.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "1ac4c8a55d4b92fdb5e95dbeda17730e59595109b35c85d4a2a0f1399d0d6e99"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"},{\"description\":\"Create a Jira issue.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"title\":{\"type\":\"string\"}},\"required\":[\"title\"],\"type\":\"object\"},\"name\":\"mcp__jira__create_issue\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+          },
+          "mcp": [
+            "jira"
+          ],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "kinds": [],
+        "unchecked": [
+          "mcp:jira"
+        ]
+      }
+    },
+    {
+      "name": "a setup-bearing extension: its tools and the prompt are unchecked",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "crm__crm_lookup",
+              "description": "Look a customer up.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  }
+                }
+              },
+              "origin": {
+                "extension": "crm"
+              }
+            }
+          ],
+          "config_hash": "db0d3029158f99bef3d454ca94dcf6b733e09ceb63f8f1f1f26ff899ba9b0629"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"},{\"description\":\"Look a customer up.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"email\":{\"type\":\"string\"}},\"required\":[\"email\"],\"type\":\"object\"},\"name\":\"crm__crm_lookup\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "Also: CRM.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "738dbe147a1c6d4b6a0bf5ec9421bb2a7e6af51e7d301830aa8c9356502efaa9"
+          },
+          "mcp": [],
+          "setup_extensions": [
+            "crm"
+          ],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "kinds": [],
+        "unchecked": [
+          "extension:crm"
+        ]
+      }
+    },
+    {
+      "name": "a case saved before tool origins: its tools are unchecked",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "crm__crm_lookup",
+              "description": "Look a customer up.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "f0e39ea48846199a2e8357555000221bb571137fd9121c710135e8d588e033ed"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"},{\"description\":\"Look a customer up.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"email\":{\"type\":\"string\"}},\"required\":[\"email\"],\"type\":\"object\"},\"name\":\"crm__crm_lookup\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "c814ba3a25a5e790b91f997469cac3c662006d93c3fa144042a1891ada8e093d"
+          },
+          "mcp": [],
+          "setup_extensions": [
+            "crm"
+          ],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "kinds": [],
+        "unchecked": [
+          "extension:crm"
+        ]
+      }
+    },
+    {
+      "name": "a setup-bearing memory provider: the prompt is unchecked",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "Remember.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "50c837aec299b61930194e31420bd37ae0159762edb80be34476a6f41736e19f"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": [
+            "memory"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "kinds": [],
+        "unchecked": [
+          "memory"
+        ]
+      }
+    },
+    {
+      "name": "a handoff target is unchecked",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "parent": {
+            "thread_id": "0192a000-0000-7000-8000-000000000009",
+            "branch_id": "0192b000-0000-7000-8000-000000000009",
+            "event_id": "0192e000-0000-7000-8000-000000000009",
+            "relation": "handoff"
+          },
+          "config_hash": "cf333be7fd0619e90912e82898af5940816d61bc1911478f9930da430fa06777"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "kinds": [],
+        "unchecked": [
+          "relation:handoff"
+        ]
+      }
+    },
+    {
+      "name": "the agent is not given",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+        },
+        "line0": "{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"scripted-1\",\"provider\":\"scripted\"},\"params\":{\"max_tokens\":1024},\"system\":\"You handle refunds.\",\"tools\":[{\"description\":\"Look up an order by id.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"lookup_order\"},{\"description\":\"Refund an order.\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"},\"name\":\"issue_refund\"}]}"
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "billing",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "1364628a949ae6a23c24d5757d7890d9fbf5a9fd2fb39c8bd1ffb4bb1d6320ac"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "kinds": [],
+        "agents": [
+          "billing"
+        ]
+      }
+    },
+    {
+      "name": "no recorded prefix: the prompt is unchecked, the model still compared",
+      "recorded": {
+        "started": {
+          "agent_name": "support",
+          "instructions": "You handle refunds.",
+          "model": {
+            "provider": "scripted",
+            "name": "scripted-1"
+          },
+          "model_params": {
+            "max_tokens": 1024
+          },
+          "adapter": {
+            "name": "scripted",
+            "version": "1",
+            "settings": {}
+          },
+          "tools": [
+            {
+              "name": "lookup_order",
+              "description": "Look up an order by id.",
+              "effect_class": "read_only",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "name": "issue_refund",
+              "description": "Refund an order.",
+              "effect_class": "unguarded",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "config_hash": "31002cbb58e97afb79b221326aba9f36eb61f4d47240f03a9d4dc7f3d610d196"
+        }
+      },
+      "pins": [
+        {
+          "started": {
+            "agent_name": "support",
+            "instructions": "You handle refunds.",
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-1"
+            },
+            "model_params": {
+              "max_tokens": 2048
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "tools": [
+              {
+                "name": "lookup_order",
+                "description": "Look up an order by id.",
+                "effect_class": "read_only",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "issue_refund",
+                "description": "Refund an order.",
+                "effect_class": "unguarded",
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ],
+            "config_hash": "afbe337c2e13128e6118cd1b25759c065d6501c2fee25d28f6460d1f529fe45e"
+          },
+          "mcp": [],
+          "setup_extensions": [],
+          "setup_providers": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "kinds": [
+          "model"
+        ],
+        "unchecked": [
+          "no_recorded_prefix"
+        ]
+      }
+    }
+  ]
+}

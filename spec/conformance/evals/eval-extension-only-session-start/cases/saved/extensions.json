@@ -1,0 +1,12 @@
+{
+  "hooks": [
+    {
+      "extension": "boot",
+      "hook": "session_start",
+      "occurrence": 1,
+      "decision": "proceed",
+      "injected": []
+    }
+  ],
+  "recall": []
+}

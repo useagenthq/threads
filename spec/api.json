@@ -1402,6 +1402,79 @@
         ]
       }
     },
+    "runEvals": {
+      "ts": "runEvals",
+      "py": "run_evals",
+      "package": "core",
+      "doc": "Runs every saved case under cases through the checks, cheapest first: replay (the recorded requests re-render byte for byte with the code running now), rerun (the recorded turn reruns offline to the same events, with no model call and every effect stubbed), drift (with agents: the case's recorded config against each agent as it is pinned now, by a dry pin that runs no setup, reads no secret and connects to no MCP server) and, only with live, a judged run of the current agent. Without agents the free checks prove the threads code, not your agent. Per-case outcomes, and a model-request guard abort, are values in the report; a setup mistake is ConfigError invalid_config naming the option. `threads eval` runs it.",
+      "async": true,
+      "params": [
+        {
+          "name": "cases",
+          "kind": "option",
+          "type": {
+            "prim": "string"
+          },
+          "required": false,
+          "default": "cases",
+          "doc": "The directory of saved cases (thread.saveCase dir). A missing directory is invalid_config."
+        },
+        {
+          "name": "only",
+          "kind": "option",
+          "type": {
+            "array": {
+              "prim": "string"
+            }
+          },
+          "required": false,
+          "doc": "Run only the cases with these names. Omitted: every case."
+        },
+        {
+          "name": "agents",
+          "kind": "option",
+          "type": {
+            "array": {
+              "$ref": "#/types/Agent"
+            }
+          },
+          "required": false,
+          "doc": "Your current agents, matched to each case by agent name: adds the free drift check. A case whose agent is missing is stale with agent_not_found. Omitted: no drift check; the free checks then test the threads code, not your agents."
+        },
+        {
+          "name": "live",
+          "kind": "option",
+          "type": {
+            "$ref": "#/types/Live"
+          },
+          "required": false,
+          "doc": "Grade the current agents with a judge model: real model calls, each run under live.budget. Needs agents. Omitted: no model call is made."
+        },
+        {
+          "name": "store",
+          "kind": "option",
+          "type": {
+            "$ref": "#/types/Store"
+          },
+          "required": false,
+          "default_doc": "a private in-memory store",
+          "doc": "Keeps the live and judge threads (tenant evals) so they can be inspected; the report then carries their thread ids. Omitted: a private in-memory store, and the threads are not kept."
+        },
+        {
+          "name": "strict",
+          "kind": "option",
+          "type": {
+            "prim": "boolean"
+          },
+          "required": false,
+          "default": false,
+          "doc": "Also fail the run on stale and skipped cases."
+        }
+      ],
+      "returns": {
+        "$ref": "#/types/EvalReport"
+      }
+    },
     "assertNever": {
       "ts": "assertNever",
       "py": "assert_never",
@@ -2496,7 +2569,7 @@
         "saveCase": {
           "ts": "saveCase",
           "py": "save_case",
-          "doc": "Writes a conformance case directory in exactly the spec/conformance layout, so the same runners replay it: case.json (with expect and input.text), log.threads-ts.jsonl and log.threads-py.jsonl with matching expected.<impl>.json, artifacts/, model.json and stubs.json. The kind is stub: external effects replay from stubs.json and unmatched invocations fail closed. The case is built from typed values, so it is valid against case.schema.json by construction; core carries no JSON Schema evaluator, and both languages' tests validate every saved case against case.schema.json.",
+          "doc": "Saves one completed turn, the first included, as a case in the spec/conformance layout: case.json (with expect, input.text and rubric), log.threads-ts.jsonl and log.threads-py.jsonl (the branch through the event before the turn) with matching expected.<impl>.json (the recorded turn's events), artifacts/, model.json, stubs.json (effects), sandbox.json (read-only results by tool, args_hash and occurrence), extensions.json (hook decisions and recall) and line0.json (the recorded prompt prefix, for drift). No sandbox snapshot is needed: runEvals reruns it from recorded results only, so a case from any sandbox provider is portable. The case is built from typed values, valid against case.schema.json by construction; both languages' tests validate every saved case against it.",
           "async": true,
           "params": [
             {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The case's directory name under dir: lowercase letters, digits and hyphens, starting with a letter or digit. Anything else is invalid_request."},
@@ -2513,9 +2586,10 @@
               "kind": "option",
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EventId"},
               "required": false,
-              "default_doc": "the latest fork point of the branch",
-              "doc": "The snapshot event the case restores. Omitted: the branch's latest fork point; a branch without one is no_snapshot_boundary."
+              "default_doc": "the last completed turn",
+              "doc": "The user_input of the turn to save; default the last completed turn; a snapshot event id means the turn after it. A turn that isn't completed is invalid_request."
             },
+            {"name": "rubric", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false, "doc": "Criteria a live eval's judge checks the current agent's work against; each passes or fails, and the case passes only when all do. 1 to 20 criteria of 1 to 500 characters, else invalid_request. Omitted: the case has no criteria of its own."},
             {
               "name": "dir",
               "kind": "option",
@@ -2527,7 +2601,7 @@
           ],
           "returns": {
             "result": {"$ref": "#/types/SavedCase"},
-            "errors": ["invalid_request", "no_snapshot_boundary", "case_missing_dependency", "egress_policy_unsupported"]
+            "errors": ["invalid_request", "case_missing_dependency", "egress_policy_unsupported"]
           }
         },
         "replay": {
@@ -2852,10 +2926,83 @@
         "portable": {
           "type": {"prim": "boolean"},
           "required": true,
-          "doc": "false when the case depends on a named provider."
+          "doc": "true when the case reruns offline from its directory alone."
+        },
+        "reason": {
+          "type": {
+            "$ref": "urn:threads:schema:eval:v1#/$defs/OfflineReason"
+          },
+          "required": false,
+          "doc": "Why the case can't rerun offline, when it can't: artifact_missing, unsettled_effect, content_input, child_threads, team_calls or extension_events (reserved). It is still written, and runEvals skips it offline with this reason."
         }
       },
-      "doc": "What saveCase returns: where the case was written and whether it replays anywhere."
+      "doc": "What saveCase returns: where the case was written and whether it reruns offline."
+    },
+    "Live": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "judge": {
+          "type": {
+            "$ref": "#/types/Model"
+          },
+          "required": true,
+          "doc": "The model that grades each case against its rubric (judge.v1 instructions, one call per case)."
+        },
+        "budget": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Budget"
+          },
+          "required": true,
+          "doc": "The run budget of every agent run and every judge run, subagents included. A run it stops is an error with budget_exhausted."
+        },
+        "rubric": {
+          "type": {
+            "array": {
+              "prim": "string"
+            }
+          },
+          "required": false,
+          "default": [],
+          "doc": "Criteria added after each case's own."
+        }
+      },
+      "doc": "What a live eval costs money with: the judge and a required budget. Live evals need agents too."
+    },
+    "EvalReport": {
+      "kind": "alias",
+      "type": {
+        "$ref": "urn:threads:schema:eval:v1#/$defs/EvalReport"
+      },
+      "doc": "What runEvals returns and `threads eval --out` writes: per-case results, counts, the one-line summary, model calls and cost. No timestamps, so an offline report is byte-stable in both languages."
+    },
+    "EvalCaseResult": {
+      "kind": "alias",
+      "type": {
+        "$ref": "urn:threads:schema:eval:v1#/$defs/EvalCaseResult"
+      },
+      "doc": "One case's status (passed, failed, stale, skipped, error, not_run), its reason and each check that ran."
+    },
+    "Verdict": {
+      "kind": "alias",
+      "type": {
+        "$ref": "urn:threads:schema:eval:v1#/$defs/Verdict"
+      },
+      "doc": "The judge's verdict on one rubric criterion, numbered from 1."
+    },
+    "ModelBlockedError": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "model": {
+          "type": {
+            "prim": "string"
+          },
+          "required": true,
+          "doc": "provider/name of the model the guard blocked."
+        }
+      },
+      "doc": "Raised by the test model-request guard before dispatch: TS class ModelBlockedError extends Error, Python exception ModelBlockedError(RuntimeError), so existing catch blocks behave the same. runEvals catches exactly this type and returns a report with aborted."
     },
     "Hooks": {
       "kind": "object",
@@ -6638,6 +6785,11 @@
       "usage": "threads gc [--grace-days <n>]",
       "via": "the resource ledger's collect and the artifact sweep",
       "doc": "Explicit only, never on startup."
+    },
+    {
+      "usage": "threads eval [--agent <module>] [--cases <dir>] [--case <name>] [--live] [--store <dir>] [--strict] [--out <file>]",
+      "via": "runEvals()",
+      "doc": "Without --agent it loads no user code and runs the free framework checks; --agent adds drift (the module's default export in TS, its agents or agent attribute in Python); --live grades with the module's judge and budget exports. Exit 0 when the run passed, 1 when it failed or was aborted, 2 for a usage or config error."
     }
   ]
 }

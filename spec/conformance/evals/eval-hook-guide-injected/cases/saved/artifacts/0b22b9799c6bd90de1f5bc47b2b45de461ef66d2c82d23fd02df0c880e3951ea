@@ -1,0 +1,6 @@
+{"adapter":{"name":"scripted","settings":{},"version":"1"},"model":{"name":"scripted-1","provider":"scripted"},"params":{"max_tokens":1024},"system":"You handle refunds.","tools":[{"description":"Look up an order by id.","input_schema":{"additionalProperties":false,"properties":{"id":{"type":"string"}},"required":["id"],"type":"object"},"name":"lookup_order"},{"description":"Refund an order.","input_schema":{"additionalProperties":false,"properties":{"id":{"type":"string"}},"required":["id"],"type":"object"},"name":"issue_refund"}]}
+{"content":[{"text":"Summarise the refund policy.","type":"text"}],"role":"user"}
+{"content":[{"text":"Draft.","type":"text"}],"role":"assistant"}
+{"content":[{"text":"<context source=\"hook\" id=\"style\">\nCite the policy.\n</context>","type":"text"}],"role":"user"}
+{"content":[{"text":"Draft citing the policy.","type":"text"}],"role":"assistant"}
+{"content":[{"text":"<context source=\"hook\" id=\"style\">\nAdd the order id.\n</context>","type":"text"}],"role":"user"}

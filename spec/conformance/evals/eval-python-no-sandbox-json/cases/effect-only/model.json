@@ -1,0 +1,34 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "c1",
+          "name": "issue_refund",
+          "input": {
+            "id": "42"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Refunded."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2
+      }
+    }
+  ]
+}

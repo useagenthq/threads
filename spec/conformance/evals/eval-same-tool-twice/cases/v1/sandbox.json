@@ -1,0 +1,12 @@
+{
+  "tools": {
+    "lookup_order": {
+      "output": "order 41: in transit",
+      "is_error": false
+    },
+    "order_photo": {
+      "output": "[image: parcel 42]",
+      "is_error": false
+    }
+  }
+}

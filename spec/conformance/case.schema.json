@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:threads:schema:conformance:v1",
   "title": "threads conformance fixture files",
-  "description": "Schemas for case.json, expected.json, model.json, sandbox.json and stubs.json. Event shapes come from ../schema/events.v1.schema.json.",
+  "description": "Schemas for case.json, expected.json, model.json, sandbox.json, stubs.json and extensions.json. Event shapes come from ../schema/events.v1.schema.json; the saved-case files the eval runner reads (sandbox.json v2, extensions.json and the case.json fields for them) from ../schema/eval.v1.schema.json.",
   "$defs": {
     "Case": {
       "type": "object",
@@ -231,6 +231,24 @@
         "expect": {
           "description": "stub, written by saveCase: the case's assertion over the events the run appends. Each `must` matcher matches at least one appended event, else the case fails; `expect` matchers are only reported.",
           "$ref": "#/$defs/CaseExpectation"
+        },
+        "extension_script": {
+          "const": "extensions.json",
+          "description": "stub, written by saveCase: the turn's recorded hook decisions and recall, which the offline rerun replays through stand-in extensions."
+        },
+        "rubric": {
+          "$ref": "urn:threads:schema:eval:v1#/$defs/Rubric",
+          "description": "Criteria a live eval's judge checks the current agent's work against."
+        },
+        "snapshot": {
+          "$ref": "urn:threads:schema:eval:v1#/$defs/CaseSnapshot"
+        },
+        "offline": {
+          "$ref": "urn:threads:schema:eval:v1#/$defs/CaseOffline",
+          "description": "Written when the case can't rerun offline from its directory alone; the runner skips it offline with this reason."
+        },
+        "line0": {
+          "$ref": "urn:threads:schema:eval:v1#/$defs/CaseLine0"
         }
       }
     },
@@ -276,10 +294,17 @@
           "minimum": 0
         },
         "appended": {
-          "description": "Exactly the events the runner must append, in order.",
+          "description": "Exactly the events the runner must append, in order: matchers (the corpus), or the recorded events themselves (a saved case), compared after normalizing event ids, time, epoch and the hash chain.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/EventMatcher"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EventMatcher"
+              },
+              {
+                "$ref": "urn:threads:schema:events:v1#/$defs/Event"
+              }
+            ]
           }
         },
         "sandbox": {
@@ -902,144 +927,15 @@
       }
     },
     "SandboxScript": {
-      "description": "A fake sandbox/provider. A dispatch whose effect key is in executed_keys returns that output with no new execution (provider dedup); any other dispatch is a new execution returning output. lookup answers reconciliation; process answers termination checks.",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "tools": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "output"
-            ],
-            "properties": {
-              "output": {
-                "type": "string"
-              },
-              "is_error": {
-                "type": "boolean"
-              },
-              "executed_keys": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "lookup": {
-                "description": "Adapter lookup answers per derived effect key. final says whether the adapter contract makes the answer final.",
-                "type": "object",
-                "additionalProperties": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "result",
-                    "final"
-                  ],
-                  "properties": {
-                    "result": {
-                      "enum": [
-                        "found",
-                        "not_found"
-                      ]
-                    },
-                    "final": {
-                      "type": "boolean"
-                    },
-                    "output": {
-                      "type": "string"
-                    }
-                  }
-                }
-              },
-              "concurrent": {
-                "description": "The tool is declared concurrent (spec/schema/README.md, Parallel tool calls). Absent means false.",
-                "type": "boolean"
-              },
-              "decision": {
-                "description": "The conformance policy's decision for this tool's calls, recorded as permission_decision{decision, source: policy, rule_id: conformance_<decision>}. Absent means allow (rule_id conformance_allow).",
-                "enum": [
-                  "allow",
-                  "ask",
-                  "deny"
-                ]
-              },
-              "process": {
-                "description": "What the sandbox reports about the call's process group during recovery.",
-                "enum": [
-                  "running",
-                  "terminated",
-                  "unknown"
-                ]
-              }
-            }
-          }
+      "description": "A saved case's recorded read-only results (sandbox.json v2, keyed by tool, args_hash and occurrence), or the fake sandbox the corpus scripts (the v1 shape: one entry per tool name; a v1 file saveCase wrote has only output and is_error).",
+      "anyOf": [
+        {
+          "$ref": "urn:threads:schema:eval:v1#/$defs/SandboxResults"
         },
-        "snapshots": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "restore_sandbox_id",
-              "manifest"
-            ],
-            "properties": {
-              "restore_sandbox_id": {
-                "type": "string"
-              },
-              "restore_response": {
-                "description": "ok (default): the restore create returns normally. lost: the provider creates the sandbox but the response never arrives. crash: the restore succeeds, then the host dies before the child's fork event is appended; the runner restarts and runs recovery.",
-                "enum": [
-                  "ok",
-                  "lost",
-                  "crash"
-                ]
-              },
-              "create_lookup": {
-                "description": "What the adapter can do with the operation_key after a lost response: found (lookup finds the resource) or unsupported (no idempotent create and no lookup).",
-                "enum": [
-                  "found",
-                  "unsupported"
-                ]
-              },
-              "manifest": {
-                "description": "The captured file tree: one entry per file, sorted by path. The snapshot event's manifest_hash is its canonical hash (Domain A); restore verifies the restored tree against it (snapshot_manifest_mismatch otherwise).",
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "path",
-                    "mode",
-                    "size",
-                    "sha256"
-                  ],
-                  "properties": {
-                    "path": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "mode": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "size": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "sha256": {
-                      "type": "string",
-                      "pattern": "^[0-9a-f]{64}$"
-                    }
-                  }
-                }
-              }
-            }
-          }
+        {
+          "$ref": "#/$defs/ScriptedSandbox"
         }
-      }
+      ]
     },
     "Webhook": {
       "type": "object",
@@ -1531,6 +1427,149 @@
           }
         }
       ]
+    },
+    "ScriptedSandbox": {
+      "description": "A fake sandbox/provider. A dispatch whose effect key is in executed_keys returns that output with no new execution (provider dedup); any other dispatch is a new execution returning output. lookup answers reconciliation; process answers termination checks.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tools": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "output"
+            ],
+            "properties": {
+              "output": {
+                "type": "string"
+              },
+              "is_error": {
+                "type": "boolean"
+              },
+              "executed_keys": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "lookup": {
+                "description": "Adapter lookup answers per derived effect key. final says whether the adapter contract makes the answer final.",
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "result",
+                    "final"
+                  ],
+                  "properties": {
+                    "result": {
+                      "enum": [
+                        "found",
+                        "not_found"
+                      ]
+                    },
+                    "final": {
+                      "type": "boolean"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "concurrent": {
+                "description": "The tool is declared concurrent (spec/schema/README.md, Parallel tool calls). Absent means false.",
+                "type": "boolean"
+              },
+              "decision": {
+                "description": "The conformance policy's decision for this tool's calls, recorded as permission_decision{decision, source: policy, rule_id: conformance_<decision>}. Absent means allow (rule_id conformance_allow).",
+                "enum": [
+                  "allow",
+                  "ask",
+                  "deny"
+                ]
+              },
+              "process": {
+                "description": "What the sandbox reports about the call's process group during recovery.",
+                "enum": [
+                  "running",
+                  "terminated",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        },
+        "snapshots": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "restore_sandbox_id",
+              "manifest"
+            ],
+            "properties": {
+              "restore_sandbox_id": {
+                "type": "string"
+              },
+              "restore_response": {
+                "description": "ok (default): the restore create returns normally. lost: the provider creates the sandbox but the response never arrives. crash: the restore succeeds, then the host dies before the child's fork event is appended; the runner restarts and runs recovery.",
+                "enum": [
+                  "ok",
+                  "lost",
+                  "crash"
+                ]
+              },
+              "create_lookup": {
+                "description": "What the adapter can do with the operation_key after a lost response: found (lookup finds the resource) or unsupported (no idempotent create and no lookup).",
+                "enum": [
+                  "found",
+                  "unsupported"
+                ]
+              },
+              "manifest": {
+                "description": "The captured file tree: one entry per file, sorted by path. The snapshot event's manifest_hash is its canonical hash (Domain A); restore verifies the restored tree against it (snapshot_manifest_mismatch otherwise).",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "mode",
+                    "size",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "mode": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ExtensionScript": {
+      "$ref": "urn:threads:schema:eval:v1#/$defs/ExtensionScript"
     }
   }
 }

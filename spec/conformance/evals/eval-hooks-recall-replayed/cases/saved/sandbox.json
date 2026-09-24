@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "results": [
+    {
+      "tool": "search_memory",
+      "args_hash": "cfb7b9e24993e2079be817f26458fbfe854c97ecca332a83bf03bc33912064a0",
+      "occurrence": 1,
+      "is_error": false,
+      "preview": "1 memories, shown below as untrusted references"
+    }
+  ]
+}

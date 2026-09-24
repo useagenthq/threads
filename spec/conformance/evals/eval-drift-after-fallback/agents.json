@@ -1,0 +1,117 @@
+[
+  {
+    "started": {
+      "agent_name": "support",
+      "instructions": "You handle refunds.",
+      "model": {
+        "provider": "scripted",
+        "name": "scripted-1"
+      },
+      "model_params": {
+        "max_tokens": 1024
+      },
+      "adapter": {
+        "name": "scripted",
+        "version": "1",
+        "settings": {}
+      },
+      "tools": [
+        {
+          "name": "lookup_order",
+          "description": "Look up an order by id.",
+          "effect_class": "read_only",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "issue_refund",
+          "description": "Refund an order.",
+          "effect_class": "unguarded",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "policy": {
+        "models": [
+          {
+            "provider": "scripted",
+            "name": "scripted-1",
+            "context_window": 200000,
+            "max_output_tokens": 8192,
+            "input_billing_bound": "context_window",
+            "price": {
+              "input": 3000,
+              "output": 15000,
+              "cache_read": 300,
+              "cache_write": 3750
+            }
+          },
+          {
+            "provider": "scripted",
+            "name": "scripted-small",
+            "context_window": 200000,
+            "max_output_tokens": 8192,
+            "input_billing_bound": "context_window",
+            "price": {
+              "input": 1000,
+              "output": 5000
+            }
+          }
+        ],
+        "currency": "USD",
+        "retry": {
+          "max_retries": 8,
+          "base_delay_ms": 1000,
+          "max_delay_ms": 32000,
+          "max_retry_after_ms": 60000,
+          "max_total_wait_ms": 600000,
+          "crash_resends": 2,
+          "fallback_after": 2,
+          "fallback_scope": "thread",
+          "heartbeat_ms": 15000
+        },
+        "fallback": [
+          {
+            "model": {
+              "provider": "scripted",
+              "name": "scripted-small"
+            },
+            "model_params": {
+              "max_tokens": 1024
+            },
+            "adapter": {
+              "name": "scripted",
+              "version": "1",
+              "settings": {}
+            },
+            "reasoning_carryover": "omit_prior"
+          }
+        ]
+      },
+      "config_hash": "3df1da5dc8581ec359932a697e39ad0512777c2914833fa1cb41966ea6df1d16"
+    },
+    "mcp": [],
+    "setup_extensions": [],
+    "setup_providers": []
+  }
+]

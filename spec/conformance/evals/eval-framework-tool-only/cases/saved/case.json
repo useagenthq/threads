@@ -1,0 +1,25 @@
+{
+  "name": "saved",
+  "family": "log_fork_test",
+  "kind": "stub",
+  "description": "Saved case saved (lane 22 eval fixture).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "stub_script": "stubs.json",
+  "input": {
+    "text": "Plan the refund."
+  },
+  "expect": {
+    "must": [
+      {
+        "type": "todos_updated"
+      }
+    ],
+    "expect": []
+  },
+  "line0": {
+    "sha256": "63a19da3f106d2be6a0a998c25d2d05ce3b3e014d823528d2bf1293b616b4787"
+  }
+}

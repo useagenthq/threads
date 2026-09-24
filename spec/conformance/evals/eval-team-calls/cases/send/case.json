@@ -1,0 +1,29 @@
+{
+  "name": "send",
+  "family": "log_fork_test",
+  "kind": "stub",
+  "description": "Saved case send (lane 22 eval fixture).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "stub_script": "stubs.json",
+  "input": {
+    "text": "Go."
+  },
+  "expect": {
+    "must": [
+      {
+        "type": "tool_call"
+      }
+    ],
+    "expect": []
+  },
+  "offline": {
+    "runnable": false,
+    "reason": "team_calls"
+  },
+  "line0": {
+    "sha256": "4c7f7a08cf63275ea99e3b6c00064f69905985d66a6dea1e523b0cea97a06ef8"
+  }
+}

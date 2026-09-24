@@ -1,0 +1,60 @@
+{
+  "hooks": [
+    {
+      "extension": "style",
+      "hook": "after_model",
+      "occurrence": 1,
+      "decision": "guide",
+      "reason": "Cite the policy.",
+      "injected": [
+        {
+          "source": "hook",
+          "trust": "trusted_instruction",
+          "origin": {
+            "id": "style"
+          },
+          "text": "Cite the policy."
+        }
+      ]
+    },
+    {
+      "extension": "style",
+      "hook": "after_model",
+      "occurrence": 2,
+      "decision": "proceed",
+      "injected": []
+    },
+    {
+      "extension": "style",
+      "hook": "on_stop",
+      "occurrence": 1,
+      "decision": "continue",
+      "reason": "Add the order id.",
+      "injected": [
+        {
+          "source": "hook",
+          "trust": "trusted_instruction",
+          "origin": {
+            "id": "style"
+          },
+          "text": "Add the order id."
+        }
+      ]
+    },
+    {
+      "extension": "style",
+      "hook": "after_model",
+      "occurrence": 3,
+      "decision": "proceed",
+      "injected": []
+    },
+    {
+      "extension": "style",
+      "hook": "on_stop",
+      "occurrence": 2,
+      "decision": "stop",
+      "injected": []
+    }
+  ],
+  "recall": []
+}

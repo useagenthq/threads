@@ -1,0 +1,22 @@
+{
+  "name": "send-old-python",
+  "family": "log_fork_test",
+  "kind": "stub",
+  "description": "Saved case send-old-python (lane 22 eval fixture).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "stub_script": "stubs.json",
+  "input": {
+    "text": "Go."
+  },
+  "expect": {
+    "must": [
+      {
+        "type": "tool_call"
+      }
+    ],
+    "expect": []
+  }
+}

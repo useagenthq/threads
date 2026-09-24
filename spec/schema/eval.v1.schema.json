@@ -1,0 +1,1183 @@
+{
+  "$defs": {
+    "CaseLine0": {
+      "additionalProperties": false,
+      "description": "sha256 of line0.json: the recorded Render v1 line 0 bytes.",
+      "properties": {
+        "sha256": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Sha256"
+        }
+      },
+      "required": [
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "CaseOffline": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/OfflineReason"
+        },
+        "runnable": {
+          "const": false
+        },
+        "types": {
+          "description": "extension_events: the event types the rerun can't script.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "runnable",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "CaseSnapshot": {
+      "additionalProperties": false,
+      "description": "A sandbox snapshot at the case's restore point; only a live run restores it.",
+      "properties": {
+        "event_id": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/EventId"
+        },
+        "provider": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Name"
+        }
+      },
+      "required": [
+        "event_id",
+        "provider"
+      ],
+      "type": "object"
+    },
+    "ChildThreadSource": {
+      "enum": [
+        "agent",
+        "handoff"
+      ]
+    },
+    "EvalCaseResult": {
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "additionalProperties": false,
+          "properties": {
+            "drift": {
+              "additionalProperties": false,
+              "properties": {
+                "agents": {
+                  "description": "agent_not_found: the agent names that were given.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "kinds": {
+                  "items": {
+                    "enum": [
+                      "prompt",
+                      "tools",
+                      "model",
+                      "config"
+                    ]
+                  },
+                  "type": "array"
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "tools": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "added": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "changed": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "removed": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "added",
+                    "removed",
+                    "changed"
+                  ],
+                  "type": "object"
+                },
+                "unchecked": {
+                  "description": "What the dry pin couldn't compare (mcp:<server>, extension:<name>, ...).",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "ok",
+                "kinds"
+              ],
+              "type": "object"
+            },
+            "judge": {
+              "additionalProperties": false,
+              "properties": {
+                "answer": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/JsonValue"
+                },
+                "fresh_sandbox": {
+                  "type": "boolean"
+                },
+                "judge_thread_id": {
+                  "type": "string"
+                },
+                "score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "thread_id": {
+                  "type": "string"
+                },
+                "transcript_items": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+                },
+                "verdicts": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "criterion": {
+                        "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+                      },
+                      "pass": {
+                        "type": "boolean"
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "criterion",
+                      "text",
+                      "pass",
+                      "reason"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "answer",
+                "transcript_items",
+                "score",
+                "fresh_sandbox",
+                "verdicts"
+              ],
+              "type": "object"
+            },
+            "replay": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "const": false
+                    },
+                    "seq": {
+                      "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "rerun": {
+              "additionalProperties": false,
+              "properties": {
+                "mismatch": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "got": {
+                      "description": "The rerun's event type.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "index": {
+                      "$ref": "urn:threads:schema:events:v1#/$defs/Int",
+                      "description": "The first appended event that differs, from 0."
+                    },
+                    "want": {
+                      "description": "The recorded event's type.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "want",
+                    "got"
+                  ],
+                  "type": "object"
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "script_left": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+                },
+                "stubs_unmatched": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+                },
+                "unmatched": {
+                  "items": {
+                    "$ref": "#/$defs/EventMatcher"
+                  },
+                  "type": "array"
+                },
+                "unrecorded_calls": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+                },
+                "unrecorded_hooks": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+                }
+              },
+              "required": [
+                "ok",
+                "unmatched",
+                "script_left",
+                "stubs_unmatched",
+                "unrecorded_calls",
+                "unrecorded_hooks"
+              ],
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "name": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "stale",
+            "skipped",
+            "error",
+            "not_run"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "checks"
+      ],
+      "type": "object"
+    },
+    "EvalReport": {
+      "additionalProperties": false,
+      "properties": {
+        "aborted": {
+          "additionalProperties": false,
+          "description": "The model-request guard blocked a live model: the run stopped, the rest are not_run.",
+          "properties": {
+            "case": {
+              "type": "string"
+            },
+            "code": {
+              "const": "model_blocked"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "case",
+            "model"
+          ],
+          "type": "object"
+        },
+        "cases": {
+          "items": {
+            "$ref": "#/$defs/EvalCaseResult"
+          },
+          "type": "array"
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "$ref": "urn:threads:schema:events:v1#/$defs/Cost"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null: some live usage had no price."
+        },
+        "errors": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+        },
+        "failed": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+        },
+        "format": {
+          "const": "threads-eval"
+        },
+        "format_version": {
+          "const": 1
+        },
+        "model_calls": {
+          "additionalProperties": false,
+          "properties": {
+            "agent": {
+              "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+            },
+            "judge": {
+              "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+            }
+          },
+          "required": [
+            "agent",
+            "judge"
+          ],
+          "type": "object"
+        },
+        "not_run": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+        },
+        "ok": {
+          "description": "The run passed: no case failed, errored or went unrun, and under strict none is stale or skipped. `threads eval` exits 1 when false.",
+          "type": "boolean"
+        },
+        "passed": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+        },
+        "skipped": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+        },
+        "stale": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+        },
+        "summary": {
+          "description": "The one line the CLI prints last.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "format_version",
+        "summary",
+        "ok",
+        "passed",
+        "failed",
+        "stale",
+        "skipped",
+        "errors",
+        "not_run",
+        "model_calls",
+        "cost",
+        "cases"
+      ],
+      "type": "object"
+    },
+    "EventMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_kind": {
+          "type": "string"
+        },
+        "branch_id": {
+          "type": "string"
+        },
+        "critical": {
+          "type": "boolean"
+        },
+        "data": {
+          "additionalProperties": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/JsonValue"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "epoch": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "seq": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "ExtensionScript": {
+      "additionalProperties": false,
+      "properties": {
+        "hooks": {
+          "items": {
+            "$ref": "#/$defs/HookRecord"
+          },
+          "type": "array"
+        },
+        "recall": {
+          "items": {
+            "$ref": "#/$defs/RecallRecord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "hooks",
+        "recall"
+      ],
+      "type": "object"
+    },
+    "FrameworkEvent": {
+      "enum": [
+        "thread_started",
+        "tools_changed",
+        "user_input",
+        "steer",
+        "heartbeat",
+        "model_request",
+        "model_response",
+        "model_response_recovered",
+        "model_attempt_abandoned",
+        "tool_call",
+        "permission_decision",
+        "approval_requested",
+        "approval_granted",
+        "approval_denied",
+        "effect_begin",
+        "effect_commit",
+        "effect_unknown",
+        "effect_resolved",
+        "tool_result",
+        "tool_result_late",
+        "snapshot",
+        "fork",
+        "parked",
+        "park_escalated",
+        "resumed",
+        "compacted",
+        "cancel_requested",
+        "cancelled",
+        "stop_when_idle",
+        "turn_completed",
+        "schedule_fired",
+        "schedule_skipped",
+        "channel_delivery",
+        "log_repaired",
+        "settings_changed",
+        "retry_scheduled",
+        "budget_exceeded",
+        "output_validated",
+        "context_edited",
+        "compaction_failed",
+        "mode_changed",
+        "permission_rule_added",
+        "agent_spawned",
+        "agent_finished",
+        "handoff",
+        "todos_updated",
+        "team_task_created",
+        "team_task_claimed",
+        "team_task_updated",
+        "team_message",
+        "context_preflight_blocked",
+        "compaction_requested",
+        "team_opened",
+        "member_started",
+        "member_idle",
+        "member_ended",
+        "member_observed",
+        "monitor_set",
+        "wait_started",
+        "wait_finished",
+        "woken",
+        "message_sent",
+        "message_received",
+        "mail_refused",
+        "ask_closed",
+        "operator_request",
+        "operator_refused",
+        "message_policy_decided",
+        "answer_rejected",
+        "tools_loaded"
+      ]
+    },
+    "FrameworkSource": {
+      "enum": [
+        "skill",
+        "attachment",
+        "recovery",
+        "todo",
+        "mode",
+        "output_style"
+      ]
+    },
+    "HookRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "call_id": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/CallId"
+                }
+              },
+              "required": [
+                "call_id"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "occurrence": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+                }
+              },
+              "required": [
+                "occurrence"
+              ],
+              "type": "object"
+            }
+          ],
+          "description": "Observation records only: the call this record belongs to (call_id), or the occurrence of its trigger within the turn."
+        },
+        "decision": {
+          "enum": [
+            "proceed",
+            "deny",
+            "guide",
+            "retry",
+            "allow",
+            "ask",
+            "annotate",
+            "stop",
+            "continue",
+            "failed",
+            "redact"
+          ]
+        },
+        "extension": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Name"
+        },
+        "hook": {
+          "enum": [
+            "before_model",
+            "after_model",
+            "before_tool",
+            "after_tool",
+            "on_stop",
+            "before_input",
+            "after_tool_batch",
+            "before_tool_result",
+            "permission_request",
+            "permission_denied",
+            "before_compact",
+            "after_compact",
+            "stop_failure",
+            "session_start",
+            "session_end",
+            "subagent_start",
+            "subagent_stop",
+            "before_model_switch",
+            "after_model_switch",
+            "notification"
+          ]
+        },
+        "injected": {
+          "description": "The injected{source: hook} events the decision produced, in order.",
+          "items": {
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "$ref": "urn:threads:schema:events:v1#/$defs/TextOrRef"
+              },
+              {
+                "if": {
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "memory",
+                        "knowledge",
+                        "attachment",
+                        "todo",
+                        "agent",
+                        "handoff"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "trust": {
+                      "const": "untrusted_reference"
+                    }
+                  }
+                }
+              }
+            ],
+            "properties": {
+              "origin": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "$ref": "urn:threads:schema:events:v1#/$defs/NonEmpty"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "ref": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"
+              },
+              "source": {
+                "enum": [
+                  "memory",
+                  "knowledge",
+                  "skill",
+                  "hook",
+                  "attachment",
+                  "recovery",
+                  "todo",
+                  "mode",
+                  "output_style",
+                  "agent",
+                  "handoff"
+                ]
+              },
+              "text": {
+                "type": "string"
+              },
+              "trust": {
+                "enum": [
+                  "untrusted_reference",
+                  "trusted_instruction"
+                ]
+              }
+            },
+            "required": [
+              "source",
+              "trust",
+              "origin"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "occurrence": {
+          "allOf": [
+            {
+              "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+            },
+            {
+              "minimum": 1
+            }
+          ],
+          "description": "Counts from 1 per (extension, hook).",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "spans": {
+          "description": "before_tool_result redact: the spans the decision redacted.",
+          "items": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Span"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "extension",
+        "hook",
+        "occurrence",
+        "decision",
+        "injected"
+      ],
+      "type": "object"
+    },
+    "JudgeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "answer": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/JsonValue"
+        },
+        "rubric": {
+          "$ref": "#/$defs/Rubric"
+        },
+        "task": {
+          "type": "string"
+        },
+        "transcript": {
+          "items": {
+            "$ref": "#/$defs/TranscriptItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "answer",
+        "rubric",
+        "task",
+        "transcript"
+      ],
+      "type": "object"
+    },
+    "ObservationHook": {
+      "description": "Appends a hook_decision only when it fails or annotates; a saved record is keyed by the call it belongs to.",
+      "enum": [
+        "after_tool",
+        "after_model_switch",
+        "permission_denied",
+        "stop_failure",
+        "session_end",
+        "notification"
+      ]
+    },
+    "OfflineReason": {
+      "enum": [
+        "artifact_missing",
+        "unsettled_effect",
+        "content_input",
+        "child_threads",
+        "team_calls",
+        "extension_events"
+      ]
+    },
+    "RecallRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "$ref": "urn:threads:schema:events:v1#/$defs/TextOrRef"
+              },
+              {
+                "if": {
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "memory",
+                        "knowledge",
+                        "attachment",
+                        "todo",
+                        "agent",
+                        "handoff"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "trust": {
+                      "const": "untrusted_reference"
+                    }
+                  }
+                }
+              }
+            ],
+            "properties": {
+              "origin": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "$ref": "urn:threads:schema:events:v1#/$defs/NonEmpty"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              },
+              "ref": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"
+              },
+              "source": {
+                "enum": [
+                  "memory",
+                  "knowledge",
+                  "skill",
+                  "hook",
+                  "attachment",
+                  "recovery",
+                  "todo",
+                  "mode",
+                  "output_style",
+                  "agent",
+                  "handoff"
+                ]
+              },
+              "text": {
+                "type": "string"
+              },
+              "trust": {
+                "enum": [
+                  "untrusted_reference",
+                  "trusted_instruction"
+                ]
+              }
+            },
+            "required": [
+              "source",
+              "trust",
+              "origin"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "occurrence": {
+          "allOf": [
+            {
+              "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+            },
+            {
+              "minimum": 1
+            }
+          ],
+          "description": "Counts from 1 per source.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "enum": [
+            "memory",
+            "knowledge"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "occurrence",
+        "items"
+      ],
+      "type": "object"
+    },
+    "RecordedHook": {
+      "description": "Always appends a hook_decision, proceed included, so a saved case records every call.",
+      "enum": [
+        "before_input",
+        "before_model",
+        "before_tool",
+        "before_tool_result",
+        "before_compact",
+        "before_model_switch",
+        "on_stop",
+        "permission_request",
+        "after_model",
+        "after_tool_batch",
+        "after_compact",
+        "session_start",
+        "subagent_start",
+        "subagent_stop"
+      ]
+    },
+    "Rubric": {
+      "items": {
+        "maxLength": 500,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 20,
+      "minItems": 1,
+      "type": "array"
+    },
+    "SandboxResult": {
+      "additionalProperties": false,
+      "properties": {
+        "args_hash": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/Sha256",
+          "description": "sha256 of the RFC 8785 input."
+        },
+        "content": {
+          "items": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/ResultPart"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "is_error": {
+          "type": "boolean"
+        },
+        "occurrence": {
+          "allOf": [
+            {
+              "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+            },
+            {
+              "minimum": 1
+            }
+          ],
+          "description": "Counts from 1 per (tool, args_hash).",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "preview": {
+          "type": "string"
+        },
+        "ref": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef",
+          "description": "The spilled full output; its bytes are in the case's artifacts/."
+        },
+        "tool": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "args_hash",
+        "occurrence",
+        "is_error",
+        "preview"
+      ],
+      "type": "object"
+    },
+    "SandboxResults": {
+      "additionalProperties": false,
+      "properties": {
+        "results": {
+          "items": {
+            "$ref": "#/$defs/SandboxResult"
+          },
+          "type": "array"
+        },
+        "version": {
+          "const": 2
+        }
+      },
+      "required": [
+        "version",
+        "results"
+      ],
+      "type": "object"
+    },
+    "ScriptableEvent": {
+      "enum": [
+        "hook_decision",
+        "injected"
+      ]
+    },
+    "ScriptableSource": {
+      "enum": [
+        "hook",
+        "memory",
+        "knowledge"
+      ]
+    },
+    "TranscriptItem": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "input": {
+              "$ref": "urn:threads:schema:events:v1#/$defs/JsonValue",
+              "description": "The call's input, or its canonical JSON cut at 4,000 code points when longer."
+            },
+            "kind": {
+              "const": "tool_call"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "input"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "is_error": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "tool_result"
+            },
+            "name": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "is_error",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "assistant"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+            },
+            "kind": {
+              "const": "omitted"
+            }
+          },
+          "required": [
+            "kind",
+            "count"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Verdict": {
+      "additionalProperties": false,
+      "properties": {
+        "criterion": {
+          "allOf": [
+            {
+              "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+            },
+            {
+              "minimum": 1
+            }
+          ],
+          "description": "The rubric criterion, numbered from 1.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pass": {
+          "type": "boolean"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "criterion",
+        "pass",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "Verdicts": {
+      "additionalProperties": false,
+      "properties": {
+        "verdicts": {
+          "items": {
+            "$ref": "#/$defs/Verdict"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "verdicts"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:threads:schema:eval:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The judge's verdicts and input, the eval report, the saved-case files the runner reads (sandbox.json v2, extensions.json and the case.json fields they add), and the closed hook-kind and user-event lists.",
+  "title": "threads eval runner shapes"
+}

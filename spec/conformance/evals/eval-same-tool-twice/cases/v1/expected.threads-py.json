@@ -1,0 +1,525 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [],
+    "status": "idle",
+    "head": {
+      "seq": 1,
+      "hash": "8b2d6692a0631e156034a1b1d473fb8c65335e8a34415cd157d505ffdc27703e"
+    }
+  },
+  "appended": [
+    {
+      "seq": 2,
+      "event_id": "0192e000-0000-7000-8000-000000000002",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "user_input",
+      "type_version": 1,
+      "time": 1790000002000,
+      "actor": {
+        "kind": "user",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        }
+      },
+      "prev_hash": "8b2d6692a0631e156034a1b1d473fb8c65335e8a34415cd157d505ffdc27703e",
+      "critical": true,
+      "data": {
+        "source": "api",
+        "text": "Where are orders 41 and 42?"
+      }
+    },
+    {
+      "seq": 3,
+      "event_id": "0192e000-0000-7000-8000-000000000003",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000003000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "d1d4032f07dd70c39daca74553f306f67bebafa45ace91117ae172fb13a2ae51",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "c26cf051456dbf7ccf8772f60408c05dcba5a7796206983b9a79912e704c9cbf",
+          "bytes": 800,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 719,
+          "sha256": "d354ae5cac6dc74d1c41c80de726802f69177d83b2a730c6084d44e0172631db"
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "event_id": "0192e000-0000-7000-8000-000000000004",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000004000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "dcda2410f3cf03fe110cd9bf667d022ab96386eb2e4e3c0aa0a95e6c099779e3",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000003",
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "c1",
+            "name": "lookup_order",
+            "input": {
+              "id": "41"
+            }
+          }
+        ],
+        "stop_reason": "tool_use",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 5,
+      "event_id": "0192e000-0000-7000-8000-000000000005",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_call",
+      "type_version": 1,
+      "time": 1790000005000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "71e82b1c3c751fbb305613c83dd55cdc5800d115f49f8d50cc4c8874054f4919",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "name": "lookup_order",
+        "input": {
+          "id": "41"
+        },
+        "request_event_id": "0192e000-0000-7000-8000-000000000003"
+      }
+    },
+    {
+      "seq": 6,
+      "event_id": "0192e000-0000-7000-8000-000000000006",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "permission_decision",
+      "type_version": 1,
+      "time": 1790000006000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "c2f777d094b187db5eded465616a7bc72ab07523c7d50ea4ab128ff156731969",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "decision": "allow",
+        "source": "policy",
+        "rule_id": "conformance_allow",
+        "mode": "default"
+      }
+    },
+    {
+      "seq": 7,
+      "event_id": "0192e000-0000-7000-8000-000000000007",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_result",
+      "type_version": 1,
+      "time": 1790000007000,
+      "actor": {
+        "kind": "tool"
+      },
+      "prev_hash": "ccbca7991f281f3dd0888812cd36e15e9efbb94ec30b76e7ffce18e7551fdcf9",
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "is_error": false,
+        "completeness": "complete",
+        "preview": "order 41: in transit",
+        "origin": "executed"
+      }
+    },
+    {
+      "seq": 8,
+      "event_id": "0192e000-0000-7000-8000-000000000008",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000008000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "baecf2be4bfc6c7d19527bdabb9d031506ad2db68fec7a66c6b1efa42b12d42b",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "5d44be464cf1ff31405acf8641702a4b89eb1e340e06426436dbbbce82d1d6e6",
+          "bytes": 1016,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 719,
+          "sha256": "d354ae5cac6dc74d1c41c80de726802f69177d83b2a730c6084d44e0172631db"
+        }
+      }
+    },
+    {
+      "seq": 9,
+      "event_id": "0192e000-0000-7000-8000-000000000009",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000009000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "bed2f7b50c6a377eacb4c2f6a22a8bc71b71def4ed6c97c993a43844089586b7",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000008",
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "c2",
+            "name": "lookup_order",
+            "input": {
+              "id": "42"
+            }
+          }
+        ],
+        "stop_reason": "tool_use",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 10,
+      "event_id": "0192e000-0000-7000-8000-00000000000a",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_call",
+      "type_version": 1,
+      "time": 1790000010000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "01b978640d5bf53f5a47279e062ff8230e915c857acc922eccd4ef19ab2c056d",
+      "critical": true,
+      "data": {
+        "call_id": "c2",
+        "name": "lookup_order",
+        "input": {
+          "id": "42"
+        },
+        "request_event_id": "0192e000-0000-7000-8000-000000000008"
+      }
+    },
+    {
+      "seq": 11,
+      "event_id": "0192e000-0000-7000-8000-00000000000b",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "permission_decision",
+      "type_version": 1,
+      "time": 1790000011000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "ca5bffd65c10294c384e9d0a1c0de653010a15763248fe39451052d373cc24af",
+      "critical": true,
+      "data": {
+        "call_id": "c2",
+        "decision": "allow",
+        "source": "policy",
+        "rule_id": "conformance_allow",
+        "mode": "default"
+      }
+    },
+    {
+      "seq": 12,
+      "event_id": "0192e000-0000-7000-8000-00000000000c",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_result",
+      "type_version": 1,
+      "time": 1790000012000,
+      "actor": {
+        "kind": "tool"
+      },
+      "prev_hash": "e055dfe15c19f9ec32a969f7c075d78b8dc86727b909c31ac8a4c8310b03a485",
+      "critical": true,
+      "data": {
+        "call_id": "c2",
+        "is_error": false,
+        "completeness": "complete",
+        "preview": "order 42: in transit",
+        "origin": "executed"
+      }
+    },
+    {
+      "seq": 13,
+      "event_id": "0192e000-0000-7000-8000-00000000000d",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000013000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "1bc9c99c1e9b3176062e8e0b23c465ad72221f7bd2d8269ec524d673f5af8f56",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "ab85ac284a0ab26e44a85b960af8b57b3fec6858bc67c7a35d5c4805688b5b9f",
+          "bytes": 1232,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 719,
+          "sha256": "d354ae5cac6dc74d1c41c80de726802f69177d83b2a730c6084d44e0172631db"
+        }
+      }
+    },
+    {
+      "seq": 14,
+      "event_id": "0192e000-0000-7000-8000-00000000000e",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000014000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "66f7184c9abfda110f6cbac5b0eb16691d1c63b28b7f769f3e17b038ef4a414f",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-00000000000d",
+        "content": [
+          {
+            "type": "tool_use",
+            "call_id": "c3",
+            "name": "order_photo",
+            "input": {
+              "id": "42"
+            }
+          }
+        ],
+        "stop_reason": "tool_use",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 15,
+      "event_id": "0192e000-0000-7000-8000-00000000000f",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_call",
+      "type_version": 1,
+      "time": 1790000015000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "7d0c0dac2b639c74edbdafdcf0cf371aae09e93ad1838a44e60b9772da1fe4bc",
+      "critical": true,
+      "data": {
+        "call_id": "c3",
+        "name": "order_photo",
+        "input": {
+          "id": "42"
+        },
+        "request_event_id": "0192e000-0000-7000-8000-00000000000d"
+      }
+    },
+    {
+      "seq": 16,
+      "event_id": "0192e000-0000-7000-8000-000000000010",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "permission_decision",
+      "type_version": 1,
+      "time": 1790000016000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "3c97b0bf8ef7990c30088ab55b39705d92d2ac7524b3c9c35054bb90393cd15f",
+      "critical": true,
+      "data": {
+        "call_id": "c3",
+        "decision": "allow",
+        "source": "policy",
+        "rule_id": "conformance_allow",
+        "mode": "default"
+      }
+    },
+    {
+      "seq": 17,
+      "event_id": "0192e000-0000-7000-8000-000000000011",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "tool_result",
+      "type_version": 1,
+      "time": 1790000017000,
+      "actor": {
+        "kind": "tool"
+      },
+      "prev_hash": "01c8d78215b2820cd9f7d77fc643d69924bff2751d27456a14122fad59f054ec",
+      "critical": true,
+      "data": {
+        "call_id": "c3",
+        "is_error": false,
+        "completeness": "complete",
+        "preview": "[image: parcel 42]",
+        "origin": "executed",
+        "content": [
+          {
+            "type": "image_ref",
+            "ref": {
+              "sha256": "a2f62f1da796303f7e95be0f2fd672df6f8e0d1f43da0106f669acad200aac2d",
+              "bytes": 17,
+              "media_type": "image/png"
+            },
+            "width": 640,
+            "height": 480
+          }
+        ]
+      }
+    },
+    {
+      "seq": 18,
+      "event_id": "0192e000-0000-7000-8000-000000000012",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_request",
+      "type_version": 1,
+      "time": 1790000018000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "52cb816439ae2e40a6da2a14576c9574e73f0f10bf7a7006b6c0f55ac1299c84",
+      "critical": true,
+      "data": {
+        "attempt": 1,
+        "request_ref": {
+          "sha256": "7bd203ca279d5483fdac08edbc4f22fbf8a73579dbe5041a65f614aa9a9bb4e5",
+          "bytes": 1567,
+          "media_type": "application/x-ndjson"
+        },
+        "declared_prefix": {
+          "bytes": 719,
+          "sha256": "d354ae5cac6dc74d1c41c80de726802f69177d83b2a730c6084d44e0172631db"
+        }
+      }
+    },
+    {
+      "seq": 19,
+      "event_id": "0192e000-0000-7000-8000-000000000013",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "model_response",
+      "type_version": 1,
+      "time": 1790000019000,
+      "actor": {
+        "kind": "model"
+      },
+      "prev_hash": "4e53c3e8a1cf7dba74e63f8e96de5dbc1b2360625a8431d5f28fc4275a4fdedf",
+      "critical": true,
+      "data": {
+        "request_event_id": "0192e000-0000-7000-8000-000000000012",
+        "content": [
+          {
+            "type": "text",
+            "text": "Both are in transit; here is the parcel."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2
+        },
+        "completeness": "complete"
+      }
+    },
+    {
+      "seq": 20,
+      "event_id": "0192e000-0000-7000-8000-000000000014",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "epoch": 1,
+      "type": "turn_completed",
+      "type_version": 1,
+      "time": 1790000020000,
+      "actor": {
+        "kind": "host"
+      },
+      "prev_hash": "eb3ec523f348dff7d04e709b2d9ec7376d552338b2e77c176b130b061f882b73",
+      "critical": true,
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "stubs": {
+    "consumed": 0,
+    "unmatched": 0
+  }
+}

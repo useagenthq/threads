@@ -1,0 +1,25 @@
+{
+  "name": "added-by-tools-changed",
+  "family": "log_fork_test",
+  "kind": "stub",
+  "description": "Saved case added-by-tools-changed (lane 22 eval fixture).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "stub_script": "stubs.json",
+  "input": {
+    "text": "Where is order 41?"
+  },
+  "expect": {
+    "must": [
+      {
+        "type": "tool_call",
+        "data": {
+          "name": "lookup_order"
+        }
+      }
+    ],
+    "expect": []
+  }
+}

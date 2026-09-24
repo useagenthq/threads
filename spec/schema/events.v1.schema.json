@@ -2652,6 +2652,19 @@
         "name": {
           "$ref": "#/$defs/Name"
         },
+        "origin": {
+          "additionalProperties": false,
+          "description": "The extension that contributed this tool, static or from its setup. Not model-visible (not in Render v1 line 0); covered by config_hash.",
+          "properties": {
+            "extension": {
+              "$ref": "#/$defs/Name"
+            }
+          },
+          "required": [
+            "extension"
+          ],
+          "type": "object"
+        },
         "output_schema": {
           "$ref": "#/$defs/JsonObject",
           "description": "Optional JSON Schema for the tool's result value. A result that fails it is recorded as an error result; the effect still happened."

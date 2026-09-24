@@ -1,0 +1,167 @@
+{
+  "vectors": [
+    {
+      "name": "one verdict per criterion in order",
+      "rubric": [
+        "Quotes the 30-day refund window",
+        "Looks up the order first"
+      ],
+      "output": {
+        "verdicts": [
+          {
+            "criterion": 1,
+            "pass": true,
+            "reason": "It does."
+          },
+          {
+            "criterion": 2,
+            "pass": false,
+            "reason": "It never looked the order up."
+          }
+        ]
+      },
+      "expect": "accept"
+    },
+    {
+      "name": "a missing criterion",
+      "rubric": [
+        "Quotes the 30-day refund window",
+        "Looks up the order first"
+      ],
+      "output": {
+        "verdicts": [
+          {
+            "criterion": 1,
+            "pass": true,
+            "reason": "It does."
+          }
+        ]
+      },
+      "expect": "judge_invalid"
+    },
+    {
+      "name": "an extra criterion",
+      "rubric": [
+        "Quotes the 30-day refund window",
+        "Looks up the order first"
+      ],
+      "output": {
+        "verdicts": [
+          {
+            "criterion": 1,
+            "pass": true,
+            "reason": "It does."
+          },
+          {
+            "criterion": 2,
+            "pass": false,
+            "reason": "It never looked the order up."
+          },
+          {
+            "criterion": 3,
+            "pass": true,
+            "reason": "It does."
+          }
+        ]
+      },
+      "expect": "judge_invalid"
+    },
+    {
+      "name": "out of order",
+      "rubric": [
+        "Quotes the 30-day refund window",
+        "Looks up the order first"
+      ],
+      "output": {
+        "verdicts": [
+          {
+            "criterion": 2,
+            "pass": false,
+            "reason": "It never looked the order up."
+          },
+          {
+            "criterion": 1,
+            "pass": true,
+            "reason": "It does."
+          }
+        ]
+      },
+      "expect": "judge_invalid"
+    },
+    {
+      "name": "criterion zero",
+      "rubric": [
+        "Quotes the 30-day refund window",
+        "Looks up the order first"
+      ],
+      "output": {
+        "verdicts": [
+          {
+            "criterion": 0,
+            "pass": true,
+            "reason": "It does."
+          },
+          {
+            "criterion": 1,
+            "pass": true,
+            "reason": "It does."
+          }
+        ]
+      },
+      "expect": "judge_invalid"
+    },
+    {
+      "name": "an empty reason",
+      "rubric": [
+        "Quotes the 30-day refund window",
+        "Looks up the order first"
+      ],
+      "output": {
+        "verdicts": [
+          {
+            "criterion": 1,
+            "pass": true,
+            "reason": ""
+          },
+          {
+            "criterion": 2,
+            "pass": false,
+            "reason": "It never looked the order up."
+          }
+        ]
+      },
+      "expect": "judge_invalid"
+    },
+    {
+      "name": "a pass that is not a boolean",
+      "rubric": [
+        "Quotes the 30-day refund window",
+        "Looks up the order first"
+      ],
+      "output": {
+        "verdicts": [
+          {
+            "criterion": 1,
+            "pass": "yes",
+            "reason": "It does."
+          },
+          {
+            "criterion": 2,
+            "pass": false,
+            "reason": "It never looked the order up."
+          }
+        ]
+      },
+      "expect": "judge_invalid"
+    },
+    {
+      "name": "not an object",
+      "rubric": [
+        "Quotes the 30-day refund window",
+        "Looks up the order first"
+      ],
+      "output": "PASS",
+      "expect": "judge_invalid"
+    }
+  ]
+}

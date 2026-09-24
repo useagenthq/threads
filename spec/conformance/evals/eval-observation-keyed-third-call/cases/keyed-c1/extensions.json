@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "extension": "notes",
+      "hook": "after_tool",
+      "occurrence": 1,
+      "at": {
+        "call_id": "c1"
+      },
+      "decision": "annotate",
+      "reason": "checked",
+      "injected": []
+    }
+  ],
+  "recall": []
+}

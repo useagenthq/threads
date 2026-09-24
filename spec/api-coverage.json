@@ -356,6 +356,30 @@
       "tests/web/test_web.py::test_search_backends_send_the_key_on_the_host_and_parse_hits"
     ]
   },
+  "TeamAgent.check": {
+    "ts": [
+      "packages/core/test/team/agent.test.ts > agent({team}) > check(): a member that hands off is refused handoff_in_team"
+    ],
+    "py": [
+      "tests/team/test_agent.py::test_check_a_member_that_hands_off_is_refused_handoff_in_team"
+    ]
+  },
+  "TeamAgent.run": {
+    "ts": [
+      "packages/core/test/team/lead-run.test.ts > a team lead's run > first answer, the member settles, the lead wakes and gives the final answer"
+    ],
+    "py": [
+      "tests/team/test_lead_run.py::test_first_answer_the_member_settles_the_lead_wakes_and_gives_the_final_answer"
+    ]
+  },
+  "TeamAgent.stream": {
+    "ts": [
+      "packages/core/test/team/agent.test.ts > agent({team}) > stream(): the committed events, then a result with the team"
+    ],
+    "py": [
+      "tests/team/test_agent.py::test_stream_the_committed_events_then_a_result_with_the_team"
+    ]
+  },
   "Thread.answer": {
     "ts": [
       "packages/core/test/thread/questions.test.ts > ask_user answers > only the principal whose input opened the turn answers"
@@ -470,26 +494,26 @@
   },
   "Thread.saveCase": {
     "ts": [
-      "packages/core/test/thread/save-case.test.ts > saveCase > writes a stub case valid against case.schema.json that the runner replays"
+      "packages/core/test/thread/save-case.test.ts > saveCase > writes every file, each valid against case.schema.json"
     ],
     "py": [
-      "tests/thread/test_handle.py::test_save_case_writes_a_stub_case_the_runner_replays"
+      "tests/evals/test_save_case.py::test_writes_every_file_each_valid_against_the_case_schema"
     ]
   },
   "Thread.saveCase.expect": {
     "ts": [
-      "packages/core/test/thread/save-case.test.ts > saveCase > writes a stub case valid against case.schema.json that the runner replays"
+      "packages/core/test/thread/save-case.test.ts > saveCase > writes every file, each valid against case.schema.json"
     ],
     "py": [
-      "tests/thread/test_handle.py::test_save_case_writes_a_stub_case_the_runner_replays"
+      "tests/evals/test_save_case.py::test_writes_every_file_each_valid_against_the_case_schema"
     ]
   },
   "Thread.saveCase.external_effects": {
     "ts": [
-      "packages/core/test/thread/save-case.test.ts > saveCase > writes a stub case valid against case.schema.json that the runner replays"
+      "packages/core/test/thread/save-case.test.ts > saveCase > writes every file, each valid against case.schema.json"
     ],
     "py": [
-      "tests/thread/test_handle.py::test_save_case_writes_a_stub_case_the_runner_replays"
+      "tests/evals/test_save_case.py::test_writes_every_file_each_valid_against_the_case_schema"
     ]
   },
   "Thread.setMode": {
@@ -596,6 +620,14 @@
       "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[anthropic]"
     ]
   },
+  "anthropic.citations=default": {
+    "ts": [
+      "packages/anthropic/test/caching.test.ts > promptCache pins line 0 and declares the cache lifetime > the default is \"5m\": pinned, and a 5-minute lifetime"
+    ],
+    "py": [
+      "tests/adapters/test_anthropic_caching.py::test_the_default_pins_5m_and_declares_a_5_minute_lifetime"
+    ]
+  },
   "anthropic.max_input_tokens=default": {
     "ts": [
       "packages/anthropic/test/catalog.test.ts > anthropic(id) > a listed id needs no options: verified limits and the default cap"
@@ -612,14 +644,6 @@
       "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
     ]
   },
-  "anthropic.citations=default": {
-    "ts": [
-      "packages/anthropic/test/caching.test.ts > promptCache pins line 0 and declares the cache lifetime > the default is \"5m\": pinned, and a 5-minute lifetime"
-    ],
-    "py": [
-      "tests/adapters/test_anthropic_caching.py::test_the_default_pins_5m_and_declares_a_5_minute_lifetime"
-    ]
-  },
   "anthropic.max_tokens=default": {
     "ts": [
       "packages/anthropic/test/catalog.test.ts > anthropic(id) > a listed id needs no options: verified limits and the default cap"
@@ -634,6 +658,11 @@
     ],
     "py": [
       "tests/adapters/test_anthropic_caching.py::test_the_default_pins_5m_and_declares_a_5_minute_lifetime"
+    ]
+  },
+  "assertNever": {
+    "ts": [
+      "packages/core/test/team/agent.test.ts > agent({team}) > assertNever ends a switch over a tool result's statuses"
     ]
   },
   "brave": {
@@ -713,6 +742,22 @@
   "daytona.name=default": {
     "py": [
       "tests/adapters/sandboxes/test_factory_defaults.py::test_daytona_defaults"
+    ]
+  },
+  "dynamicAgent": {
+    "ts": [
+      "packages/core/test/team/dynamic-start.test.ts > a lead defines a member of a dynamic agent > the choice is recorded on member_started and bound by the member's pin"
+    ],
+    "py": [
+      "tests/team/test_dynamic.py::test_a_dynamic_start_records_define_and_label_and_the_member_runs_its_pin"
+    ]
+  },
+  "dynamicAgent.models": {
+    "ts": [
+      "packages/core/test/team/dynamic-start.test.ts > dynamicAgent setup > models are required, non-empty and keyed by names"
+    ],
+    "py": [
+      "tests/team/test_dynamic.py::test_setup_refusals_name_the_option"
     ]
   },
   "e2b": {
@@ -1156,6 +1201,14 @@
       "tests/otel/test_otel_host.py::test_a_host_exports_on_its_tick"
     ]
   },
+  "runEvals": {
+    "ts": [
+      "packages/core/test/evals/round-trip.test.ts > saveCase then runEvals > a first turn with no sandbox saves portable and passes offline"
+    ],
+    "py": [
+      "tests/evals/test_round_trip.py::test_a_first_turn_with_no_sandbox_saves_portable_and_passes_offline"
+    ]
+  },
   "scriptedModel": {
     "ts": [
       "packages/core/test/agent/agent.test.ts > the README example > two lines: agent() and run()"
@@ -1300,6 +1353,14 @@
       "tests/agents/test_api.py::test_a_tool_call_parses_through_its_input_model_and_runs"
     ]
   },
+  "usd": {
+    "ts": [
+      "packages/core/test/agent/usd.test.ts > usd() > dollars as integer nano-dollars, rounded half up"
+    ],
+    "py": [
+      "tests/team/test_dynamic.py::test_usd_is_nano_dollars"
+    ]
+  },
   "whatsapp": {
     "ts": [
       "packages/whatsapp/test/inbound.test.ts > verify > a good signature names the phone number as the installation"
@@ -1386,59 +1447,6 @@
     ],
     "py": [
       "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[zep]"
-    ]
-  },
-  "assertNever": {
-    "ts": [
-      "packages/core/test/team/agent.test.ts > agent({team}) > assertNever ends a switch over a tool result's statuses"
-    ]
-  },
-  "TeamAgent.check": {
-    "ts": [
-      "packages/core/test/team/agent.test.ts > agent({team}) > check(): a member that hands off is refused handoff_in_team"
-    ],
-    "py": [
-      "tests/team/test_agent.py::test_check_a_member_that_hands_off_is_refused_handoff_in_team"
-    ]
-  },
-  "TeamAgent.run": {
-    "ts": [
-      "packages/core/test/team/lead-run.test.ts > a team lead's run > first answer, the member settles, the lead wakes and gives the final answer"
-    ],
-    "py": [
-      "tests/team/test_lead_run.py::test_first_answer_the_member_settles_the_lead_wakes_and_gives_the_final_answer"
-    ]
-  },
-  "TeamAgent.stream": {
-    "ts": [
-      "packages/core/test/team/agent.test.ts > agent({team}) > stream(): the committed events, then a result with the team"
-    ],
-    "py": [
-      "tests/team/test_agent.py::test_stream_the_committed_events_then_a_result_with_the_team"
-    ]
-  },
-  "dynamicAgent": {
-    "ts": [
-      "packages/core/test/team/dynamic-start.test.ts > a lead defines a member of a dynamic agent > the choice is recorded on member_started and bound by the member's pin"
-    ],
-    "py": [
-      "tests/team/test_dynamic.py::test_a_dynamic_start_records_define_and_label_and_the_member_runs_its_pin"
-    ]
-  },
-  "dynamicAgent.models": {
-    "ts": [
-      "packages/core/test/team/dynamic-start.test.ts > dynamicAgent setup > models are required, non-empty and keyed by names"
-    ],
-    "py": [
-      "tests/team/test_dynamic.py::test_setup_refusals_name_the_option"
-    ]
-  },
-  "usd": {
-    "ts": [
-      "packages/core/test/agent/usd.test.ts > usd() > dollars as integer nano-dollars, rounded half up"
-    ],
-    "py": [
-      "tests/team/test_dynamic.py::test_usd_is_nano_dollars"
     ]
   }
 }

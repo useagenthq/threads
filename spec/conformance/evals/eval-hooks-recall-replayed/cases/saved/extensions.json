@@ -1,0 +1,28 @@
+{
+  "hooks": [
+    {
+      "extension": "audit",
+      "hook": "before_tool",
+      "occurrence": 1,
+      "decision": "allow",
+      "injected": []
+    }
+  ],
+  "recall": [
+    {
+      "source": "memory",
+      "occurrence": 1,
+      "items": [
+        {
+          "source": "memory",
+          "trust": "untrusted_reference",
+          "origin": {
+            "id": "m1",
+            "version": "1"
+          },
+          "text": "Refunds are allowed within 30 days."
+        }
+      ]
+    }
+  ]
+}

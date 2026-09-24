@@ -1,0 +1,82 @@
+[
+  {
+    "started": {
+      "agent_name": "support",
+      "instructions": "You handle refunds.",
+      "model": {
+        "provider": "scripted",
+        "name": "scripted-1"
+      },
+      "model_params": {
+        "max_tokens": 1024
+      },
+      "adapter": {
+        "name": "scripted",
+        "version": "1",
+        "settings": {}
+      },
+      "tools": [
+        {
+          "name": "lookup_order",
+          "description": "Look up an order by id.",
+          "effect_class": "read_only",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "issue_refund",
+          "description": "Refund an order.",
+          "effect_class": "unguarded",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "export_orders",
+          "description": "Export orders.",
+          "effect_class": "read_only",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "since",
+              "until"
+            ],
+            "properties": {
+              "since": {
+                "type": "string"
+              },
+              "until": {
+                "type": "string"
+              }
+            }
+          },
+          "defer_loading": true
+        }
+      ],
+      "config_hash": "d6617dc0fa3ac178fc95b00b4c3ef5b8032eec75749535658ccb16c182444835"
+    },
+    "mcp": [],
+    "setup_extensions": [],
+    "setup_providers": []
+  }
+]

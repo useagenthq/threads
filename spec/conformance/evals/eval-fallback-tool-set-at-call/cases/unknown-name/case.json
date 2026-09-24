@@ -1,0 +1,25 @@
+{
+  "name": "unknown-name",
+  "family": "log_fork_test",
+  "kind": "stub",
+  "description": "Saved case unknown-name (lane 22 eval fixture).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "stub_script": "stubs.json",
+  "input": {
+    "text": "Where is order 41?"
+  },
+  "expect": {
+    "must": [
+      {
+        "type": "tool_call",
+        "data": {
+          "name": "lookup_order"
+        }
+      }
+    ],
+    "expect": []
+  }
+}

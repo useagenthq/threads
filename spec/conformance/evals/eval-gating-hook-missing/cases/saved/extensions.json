@@ -1,0 +1,12 @@
+{
+  "hooks": [
+    {
+      "extension": "audit",
+      "hook": "before_tool",
+      "occurrence": 1,
+      "decision": "allow",
+      "injected": []
+    }
+  ],
+  "recall": []
+}

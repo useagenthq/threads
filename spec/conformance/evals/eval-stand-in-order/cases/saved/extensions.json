@@ -1,0 +1,41 @@
+{
+  "hooks": [
+    {
+      "extension": "alpha",
+      "hook": "before_tool",
+      "occurrence": 1,
+      "decision": "allow",
+      "injected": []
+    },
+    {
+      "extension": "beta",
+      "hook": "before_tool",
+      "occurrence": 1,
+      "decision": "allow",
+      "injected": []
+    },
+    {
+      "extension": "beta",
+      "hook": "after_tool",
+      "occurrence": 1,
+      "at": {
+        "call_id": "c1"
+      },
+      "decision": "annotate",
+      "reason": "beta",
+      "injected": []
+    },
+    {
+      "extension": "alpha",
+      "hook": "after_tool",
+      "occurrence": 1,
+      "at": {
+        "call_id": "c1"
+      },
+      "decision": "annotate",
+      "reason": "alpha",
+      "injected": []
+    }
+  ],
+  "recall": []
+}

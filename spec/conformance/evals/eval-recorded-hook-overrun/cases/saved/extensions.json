@@ -1,0 +1,12 @@
+{
+  "hooks": [
+    {
+      "extension": "gate",
+      "hook": "before_model",
+      "occurrence": 1,
+      "decision": "proceed",
+      "injected": []
+    }
+  ],
+  "recall": []
+}

@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "results": [
+    {
+      "tool": "lookup_order",
+      "args_hash": "8aa5b6751d68bd72901cea96bbbddca8624efa387d5442a63197d5fedb2b693d",
+      "occurrence": 1,
+      "is_error": false,
+      "preview": "order 42: shipped 12 days ago"
+    }
+  ]
+}
