@@ -3848,9 +3848,10 @@
         "write_effect": {
           "type": {"$ref": "urn:threads:schema:events:v1#/$defs/EffectClass"},
           "required": false,
-          "doc": "The effect class of save_memory and forget_memory with this provider. Absent: unguarded. idempotent requires dedup_window_ms: the provider dedups on the key within it."
+          "capability": "DeclaresWrites",
+          "doc": "The effect class of save_memory and forget_memory with this provider. Absent: unguarded. idempotent requires dedup_window_ms: the provider dedups on the key within it. Python declares it with dedup_window_ms (the DeclaresWrites protocol); a provider that declares neither is unguarded."
         },
-        "dedup_window_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false, "doc": "How long, in milliseconds, the provider dedups a write on its key. Required when write_effect is idempotent; otherwise leave it out. local_memory keeps keys forever."}
+        "dedup_window_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false, "capability": "DeclaresWrites", "doc": "How long, in milliseconds, the provider dedups a write on its key. Required when write_effect is idempotent; otherwise leave it out (Python: None). local_memory keeps keys forever."}
       },
       "doc": "Long-term memory storage behind save_memory, search_memory and forget_memory. A provider only stores and searches: the framework issues bindings, checks scope, bounds and logs every call, and presents hits as untrusted reference. Build one with local_memory() or an adapter factory."
     },

@@ -116,9 +116,11 @@ def _type(name: str, t: dict[str, Json]) -> Iterator[Member]:
     yield Member(name, "type", LANGS, True, package, name, name, generics=count)
     wire = t.get("casing") == "wire"
     for role, key, f in _members_of(t):
+        cap = f.get("capability")
         yield Member(
             f"{name}.{key}", role, _langs(f), f.get("required") is True, package,
             key if wire else camel(key), key, parent=name,
+            capability=cap if isinstance(cap, str) else None,
         )  # fmt: skip
 
 

@@ -38,6 +38,7 @@ Both packages are checked against `../api.json` in CI. TypeScript: `tools/gen_ap
 - every field of a data type exists and can be omitted exactly when the contract marks it optional: in TypeScript a `?` property; in Python the type's constructor inputs (a parameter with a default is optional) or its TypedDict keys (a top-level `Required`/`NotRequired` counts even in a postponed annotation);
 - every property of a handle or protocol exists; TypeScript also checks its `?` (a Python protocol has no optional attributes);
 - an `optional` method is an optional property of the base type in TypeScript, and in Python a `@runtime_checkable` protocol named by `capability` that declares it, never a member of the base protocol.
+- an optional interface property with a `capability` is the same in Python: the named `@runtime_checkable` protocol declares it (a Protocol member can't be optional), for example `MemoryProvider.write_effect` and `dedup_window_ms` on `DeclaresWrites`.
 
 **What it doesn't check:**
 

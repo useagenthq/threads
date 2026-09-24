@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import ClassVar, Protocol, TypedDict, Unpack, runtime_checkable
 
-from check_api import check_names
+from check_api import Json, check_names
 from surface_contract import Gap, obj
 from surface_kit import (
     AgentOptions,
@@ -140,6 +140,50 @@ def test_optional_method_without_capability_in_contract_fails() -> None:
     del lookup["capability"]
     assert check_names(contract) == [
         "api.json Model.lookup: an optional method needs capability (Python protocol)"
+    ]
+
+
+@runtime_checkable
+class Windowed(Protocol):
+    @property
+    def window(self) -> int: ...
+
+
+def windowed() -> dict[str, Json]:
+    """The fixture contract with an optional Model.window declared by the Windowed protocol."""
+    contract = api()
+    model = obj(obj(contract["types"])["Model"])
+    window: dict[str, Json] = {"type": {"prim": "integer"}, "required": False}
+    obj(model["properties"])["window"] = window | {"capability": "Windowed"}
+    return contract
+
+
+def test_py_optional_property_on_its_capability_protocol_passes() -> None:
+    assert problems(core=core_members() | {"Windowed": Windowed}, contract=windowed()) == []
+
+
+def test_py_optional_property_on_the_base_protocol_fails() -> None:
+    class WithWindow(Model, Protocol):
+        window: int
+
+    core = core_members() | {"Windowed": Windowed, "Model": WithWindow}
+    found = problems(core=core, contract=windowed())
+    assert found[0].startswith("surface gate: Model.window (py) is required_mismatch")
+
+
+def test_py_optional_property_its_capability_protocol_lacks_fails() -> None:
+    found = problems(core=core_members() | {"Windowed": LooksUp}, contract=windowed())
+    assert found[0].startswith("surface gate: Model.window (py) is missing")
+
+
+def test_capability_only_on_optional_interface_properties() -> None:
+    contract = windowed()
+    obj(obj(obj(obj(contract["types"])["Model"])["properties"])["window"])["required"] = True
+    note = obj(obj(obj(obj(contract["types"])["Skill"])["fields"])["note"])
+    note["capability"] = "Windowed"
+    assert check_names(contract) == [
+        "api.json Model.window: capability is for optional interface properties only",
+        "api.json Skill.note: capability is for optional interface properties only",
     ]
 
 

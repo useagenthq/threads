@@ -241,6 +241,7 @@
         "default": {},
         "default_doc": { "$ref": "#/$defs/Doc" },
         "lang": { "enum": ["ts", "py"] },
+        "capability": { "description": "Optional interface properties only (check_api.py): the Python capability protocol that declares the property, as for an optional method. TypeScript spells it as an optional property of the base type.", "$ref": "#/$defs/TypeName" },
         "doc": { "$ref": "#/$defs/Doc" }
       }
     },

@@ -194,7 +194,17 @@ class PythonSurface:
 
     def property(self, m: Member) -> Found:
         owner = self._type(m.parent)
-        return [] if owner is None or _declares(owner, m.py) else MISSING
+        if owner is None:
+            return []
+        if m.capability is None:
+            return [] if _declares(owner, m.py) else MISSING
+        # As for an optional method: the runtime-checkable capability protocol declares it, and
+        # the base protocol must not (a Protocol member can't be optional).
+        cap, gap = self._capability(m)
+        runtime = getattr(cap, "_is_runtime_protocol", False) is True
+        if not (runtime and cap is not None and _declares(cap, m.py)) and MISSING[0] not in gap:
+            gap = gap + MISSING
+        return (MISMATCH if _declares(owner, m.py) else []) + gap
 
     def field(self, m: Member) -> Found:
         owner = self._type(m.parent)

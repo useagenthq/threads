@@ -46,7 +46,7 @@ from threads.loop.model import (  # noqa: E402
 from threads.loop.scripted import scripted_model  # noqa: E402
 from threads.memory.local_knowledge import local_knowledge  # noqa: E402
 from threads.memory.local_memory import local_memory  # noqa: E402
-from threads.memory.protocol import KnowledgeProvider, MemoryProvider  # noqa: E402
+from threads.memory.protocol import DeclaresWrites, KnowledgeProvider, MemoryProvider  # noqa: E402
 from threads.memory.types import (  # noqa: E402
     Binding,
     Doc,
@@ -84,6 +84,7 @@ __all__ = [
     "Completed",
     "ConfigError",
     "ConfigErrorCode",
+    "DeclaresWrites",
     "DeltaItem",
     "Doc",
     "DocVersion",

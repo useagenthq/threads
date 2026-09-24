@@ -17,8 +17,6 @@
   {"name": "Inbound", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
   {"name": "LookupCapability", "lang": "py", "kind": "placement", "lane": "01-api-surface-gate", "at": "host"},
   {"name": "McpServer", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
-  {"name": "MemoryProvider.dedup_window_ms", "lang": "py", "kind": "missing", "lane": "15-adapter-factory-contract"},
-  {"name": "MemoryProvider.write_effect", "lang": "py", "kind": "missing", "lane": "15-adapter-factory-contract"},
   {"name": "MemberRef", "lang": "py", "kind": "missing", "lane": "90-ma-p1"},
   {"name": "MemberRef", "lang": "ts", "kind": "missing", "lane": "90-ma-p1"},
   {"name": "MemberResult", "lang": "py", "kind": "missing", "lane": "90-ma-p1"},

@@ -10,12 +10,12 @@ A provider only stores and searches: the framework issues bindings, checks scope
 
 ## Properties
 
-<Field name="writeEffect" type={"EffectClass"}>
-  TypeScript only. The effect class of save_memory and forget_memory with this provider. Absent: unguarded. idempotent requires dedup_window_ms: the provider dedups on the key within it.
+<Field name="writeEffect / write_effect" type={"EffectClass"}>
+  The effect class of save_memory and forget_memory with this provider. Absent: unguarded. idempotent requires dedup_window_ms: the provider dedups on the key within it. Python declares it with dedup_window_ms (the DeclaresWrites protocol); a provider that declares neither is unguarded.
 </Field>
 
-<Field name="dedupWindowMs" type={"PosInt"}>
-  TypeScript only. How long, in milliseconds, the provider dedups a write on its key. Required when write_effect is idempotent; otherwise leave it out. local_memory keeps keys forever.
+<Field name="dedupWindowMs / dedup_window_ms" type={"PosInt"}>
+  How long, in milliseconds, the provider dedups a write on its key. Required when write_effect is idempotent; otherwise leave it out (Python: None). local_memory keeps keys forever.
 </Field>
 
 ## Methods

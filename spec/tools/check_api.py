@@ -105,6 +105,14 @@ def check_names(api: Json) -> list[str]:
         kinds = [str(obj(p).get("kind")) for p in arr(f.get("params"))]
         if kinds != sorted(kinds, key=lambda k: k != "positional"):
             errs.append(f"api.json {where}: positional params must come before options")
+    for tname, t in obj(obj(api).get("types")).items():
+        members = {**obj(obj(t).get("fields")), **obj(obj(t).get("properties"))}
+        errs += [
+            f"api.json {tname}.{key}: capability is for optional interface properties only"
+            for key, m in members.items()
+            if "capability" in obj(m)
+            and (key not in obj(obj(t).get("properties")) or obj(m).get("required") is not False)
+        ]
     return errs
 
 
