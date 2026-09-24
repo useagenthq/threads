@@ -77,6 +77,8 @@ export type Fold = {
   readonly knownTools: Map<string, ToolSpec>;
   model: ModelRef | undefined;
   mode: PermissionMode;
+  /** Rules remembered on the thread (permission_rule_added), in log order. */
+  readonly threadRules: EventOf<"permission_rule_added">["data"][];
   turnOpen: boolean;
   /** The seq of the event that opened the open (or last) turn: a user_input, woken or receipt. */
   turnStart: number | undefined;
@@ -145,6 +147,7 @@ export function emptyFold(): Fold {
     knownTools: new Map(),
     model: undefined,
     mode: "default",
+    threadRules: [],
     turnOpen: false,
     turnStart: undefined,
     turns: 0,

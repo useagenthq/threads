@@ -1,6 +1,11 @@
 import type { z } from "zod";
 import { assertNever } from "../assert-never";
-import type { EffectClass, PermissionMode, PermissionsPolicy } from "../log";
+import type {
+  EffectClass,
+  PermissionMode,
+  PermissionRuleAddedData,
+  PermissionsPolicy,
+} from "../log";
 import {
   allMatch,
   anyMatch,
@@ -10,11 +15,14 @@ import {
   workspacePath,
 } from "./match";
 
-// the evaluation order. Thread rules come later, with
-// permission_rule_added.
-
 type Policy = z.infer<typeof PermissionsPolicy>;
 type Mode = z.infer<typeof PermissionMode>;
+
+/** A rule remembered on the thread (permission_rule_added), in log order. */
+export type ThreadRule = Pick<
+  z.infer<typeof PermissionRuleAddedData>,
+  "rule" | "decision"
+>;
 
 export type Category = "read_only" | "edit" | "other";
 
@@ -72,11 +80,16 @@ export function category(
   return effectClass === "read_only" && !web ? "read_only" : "other";
 }
 
-/** The first decisive step wins; in dont_ask every ask from steps 4-7 becomes deny. */
+/**
+ * The first decisive step wins; in dont_ask every ask from steps 4-7 becomes deny. Thread rules
+ * follow the policy's: thread deny rules right after its deny rules, thread allow rules right
+ * after its allow rules.
+ */
 export function decide(
   permissions: Policy,
   workspace: string,
   call: PermissionCall,
+  threadRules: readonly ThreadRule[] = [],
 ): Decision {
   if (writesSelfConfig(call))
     return { decision: "deny", source: "self_config_guard" };
@@ -84,15 +97,30 @@ export function decide(
   const denied = anyMatch(permissions.deny, call, workspace, shell);
   if (denied !== undefined)
     return { decision: "deny", source: "policy", rule: denied };
+  const threadDenied = anyMatch(
+    ruleTexts(threadRules, "deny"),
+    call,
+    workspace,
+    shell,
+  );
+  if (threadDenied !== undefined)
+    return { decision: "deny", source: "thread_rule", rule: threadDenied };
   if (call.mode === "plan" && call.category !== "read_only")
     return {
       decision: PLAN_TOOLS.has(call.tool) ? "allow" : "deny",
       source: "mode",
     };
-  const later = laterSteps(permissions, workspace, call);
+  const later = laterSteps(permissions, workspace, call, threadRules);
   return call.mode === "dont_ask" && later.decision === "ask"
     ? { ...later, decision: "deny" }
     : later;
+}
+
+function ruleTexts(
+  threadRules: readonly ThreadRule[],
+  decision: ThreadRule["decision"],
+): readonly string[] {
+  return threadRules.filter((r) => r.decision === decision).map((r) => r.rule);
 }
 
 // Step 1: config, skills, hooks and schedules load only from the host store,
@@ -125,6 +153,7 @@ function laterSteps(
   permissions: Policy,
   workspace: string,
   call: PermissionCall,
+  threadRules: readonly ThreadRule[],
 ): Decision {
   const shell = shellOf(call);
   const path = isFileTool(call.tool)
@@ -139,6 +168,14 @@ function laterSteps(
   const allowed = allMatch(permissions.allow, call, workspace, shell);
   if (allowed !== undefined)
     return { decision: "allow", source: "policy", rule: allowed };
+  const threadAllowed = allMatch(
+    ruleTexts(threadRules, "allow"),
+    call,
+    workspace,
+    shell,
+  );
+  if (threadAllowed !== undefined)
+    return { decision: "allow", source: "thread_rule", rule: threadAllowed };
   const inside = !isFileTool(call.tool) || path !== undefined;
   return {
     decision: modeDefault(call.mode, call.category, inside),

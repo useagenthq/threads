@@ -6,4 +6,5 @@ export {
   decide,
   decideCapped,
   type PermissionCall,
+  type ThreadRule,
 } from "./engine";

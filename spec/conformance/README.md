@@ -39,7 +39,7 @@ A case's log is exactly what `threads export` writes (`../schema/README.md`, "On
 | `kind` | `reduce`, `render`, `recover`, `fork`, `stub`, `intake`, `host`, `policy`, `team`, `security` or `parity` |
 | `clock.now` | The injected clock. Runners never read wall time |
 | `model_script`, `sandbox_script`, `stub_script` | Present when the case needs them |
-| `input` | Kind-specific input: `logs` (team: the labels of the team's logs, each at `logs/<label>.jsonl`), `fork_at_event_id`, `new_branch_id` and optional `knowledge_policy` (fork; absent means `pinned`), `text` (stub: the user_input sent once the log is imported), `webhooks` (intake), `requests` (host), `workspace`, `permissions` and `calls` (policy) |
+| `input` | Kind-specific input: `logs` (team: the labels of the team's logs, each at `logs/<label>.jsonl`), `fork_at_event_id`, `new_branch_id` and optional `knowledge_policy` (fork; absent means `pinned`), `text` (stub: the user_input sent once the log is imported), `webhooks` (intake), `requests` (host), `workspace`, `permissions`, `calls` and optional `ceiling` and `thread_rules` (policy; `thread_rules` are `{rule, decision}` in log order and apply to the thread's own decision only) |
 | `expect` | stub, written by `saveCase`: `{must, expect}` `EventMatcher` lists. Each `must` matcher matches at least one appended event, else the case fails; `expect` is only reported. `appended` in expected.json still means exactly the events appended |
 
 ### expected.json

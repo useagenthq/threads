@@ -1,7 +1,8 @@
 """Conformance runner for the `policy` kind (spec/conformance/README.md).
 
 Builds the engine from `input.permissions`, decides each call under its own mode and, with
-`input.ceiling`, under the ceiling too. Unknown keys in any fixture file fail the case.
+`input.ceiling`, under the ceiling too. `input.thread_rules` apply to the thread's own decision
+only. Unknown keys in any fixture file fail the case.
 """
 
 import json
@@ -11,11 +12,13 @@ from typing import ClassVar, Literal
 import pytest
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from threads.log import PermissionMode, Permissions
+from threads.log import PermissionMode, PermissionRuleAddedData, Permissions
 from threads.permissions import Call, Category, Decision, Source, Verdict, decide, decide_capped
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 MIN_POLICY_CASES = 4
+# Stands in for the challenge a remembered rule was granted on; no decision reads it.
+CHALLENGE = "0192c000-0000-7000-8000-000000000001"
 
 
 class _Model(BaseModel):
@@ -29,11 +32,17 @@ class PolicyCall(_Model):
     input: dict[str, JsonValue]
 
 
+class ThreadRule(_Model):
+    rule: str
+    decision: Literal["allow", "deny"]
+
+
 class PolicyInput(_Model):
     workspace: str
     permissions: Permissions
     calls: list[PolicyCall]
     ceiling: Permissions | None = None
+    thread_rules: list[ThreadRule] = []
 
 
 class PolicyCase(_Model):
@@ -70,8 +79,14 @@ def test_policy_cases_exist() -> None:
 
 def _decide(given: PolicyInput, call: PolicyCall) -> Decision:
     request = Call(call.tool, call.category, call.input)
+    remembered = [
+        PermissionRuleAddedData.model_validate({**r.model_dump(), "challenge_id": CHALLENGE})
+        for r in given.thread_rules
+    ]
     if given.ceiling is None:
-        return decide(given.permissions, given.workspace, call.mode, request)
+        return decide(
+            given.permissions, given.workspace, call.mode, request, thread_rules=remembered
+        )
     return decide_capped(given.permissions, given.ceiling, given.workspace, call.mode, request)
 
 

@@ -1,5 +1,5 @@
 # pyright: strict
-"""Shell compound and nested-command policy cases (ADR 0022 amendment 2026-09-24)."""
+"""Shell compound, nested-command and thread-rule policy cases (ADR 0022 amendment 2026-09-24)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .policy import Row, write_policy_case
 if TYPE_CHECKING:
     import pathlib
 
-    from .jcs import Obj
+    from .jcs import JsonValue, Obj
 
 STATUS, NPM, RM, PUSH = "bash(git status:*)", "bash(npm test)", "bash(rm:*)", "bash(git push:*)"
 D = "default"
@@ -110,6 +110,44 @@ def _nested(root: pathlib.Path) -> None:
     )
 
 
+def _thread_rules(root: pathlib.Path) -> None:
+    make, curl = "bash(make:*)", "bash(curl:*)"
+    remembered: list[JsonValue] = [
+        {"rule": make, "decision": "allow"},
+        {"rule": curl, "decision": "deny"},
+        {"rule": PUSH, "decision": "allow"},
+        {"rule": "edit", "decision": "allow"},
+    ]
+    rows: list[Row] = [
+        _sh("make build", "allow", "thread_rule", make),
+        _sh("make build && make test", "allow", "thread_rule", make),
+        _sh("npm test", "allow", "policy", NPM),
+        _sh("curl https://x.test", "deny", "thread_rule", curl),
+        _sh("make build; curl https://x.test", "deny", "thread_rule", curl),
+        _sh("make clean; rm -rf build", "deny", "policy", RM),
+        _sh("git push origin main", "ask", "policy", PUSH),
+        # Policy allow rules and thread allow rules each have to cover the whole command.
+        _sh("npm test && make build", "ask", "mode"),
+        (D, "edit", "edit", {"path": "src/a.ts"}, "allow", "thread_rule", "edit"),
+        (D, "edit", "edit", {"path": ".git/config"}, "ask", "protected_path", ""),
+        (D, "edit", "edit", {"path": ".threads/agents.ts"}, "deny", "self_config_guard", ""),
+        _sh("make build", "deny", "mode", mode="plan"),
+        _sh("make build", "allow", "thread_rule", make, mode="dont_ask"),
+        _sh("ls", "deny", "mode", mode="dont_ask"),
+    ]
+    write_policy_case(
+        root,
+        "permission-thread-rules",
+        "Rules remembered on the thread (permission_rule_added) fold in after the policy's: "
+        "thread deny rules right after policy deny rules, thread allow rules right after policy "
+        "allow rules, reported as source thread_rule. They never beat a policy deny or ask "
+        "rule, plan mode, a protected path or the self-config guard.",
+        {"permissions": _perms(NPM), "thread_rules": remembered},
+        rows,
+    )
+
+
 def build(root: pathlib.Path) -> None:
     _compound(root)
     _nested(root)
+    _thread_rules(root)

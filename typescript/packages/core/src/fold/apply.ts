@@ -98,6 +98,9 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "injected":
       if (e.data.source === "output_style") fold.outputStyle = e;
       return;
+    case "permission_rule_added":
+      fold.threadRules.push(e.data);
+      return;
     case "steer":
     case "heartbeat":
     case "hook_decision":
@@ -106,7 +109,6 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "log_repaired":
     case "retry_scheduled":
     case "context_edited":
-    case "permission_rule_added":
     case "context_preflight_blocked":
     case "team_opened":
     case "member_started":

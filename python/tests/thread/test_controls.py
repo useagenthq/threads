@@ -27,6 +27,7 @@ from threads.log import (
     ModeChangedEvent,
     ModelRef,
     ParseError,
+    PermissionDecisionEvent,
     Principal,
     ResumedEvent,
     SettingsChangedEvent,
@@ -44,8 +45,8 @@ def text(reply: str) -> JsonValue:
     return {"content": [{"type": "text", "text": reply}], "stop_reason": "end_turn", "usage": USAGE}
 
 
-def use(name: str, args: JsonValue) -> JsonValue:
-    part: JsonValue = {"type": "tool_use", "call_id": "call_1", "name": name, "input": args}
+def use(name: str, args: JsonValue, call_id: str = "call_1") -> JsonValue:
+    part: JsonValue = {"type": "tool_use", "call_id": call_id, "name": name, "input": args}
     return {"content": [part], "stop_reason": "tool_use", "usage": USAGE}
 
 
@@ -57,13 +58,13 @@ def _drop(_item: object) -> None:
     pass
 
 
-async def _parked(sent: list[str]) -> tuple[Thread, Agent[None, str]]:
+async def _parked(sent: list[str], *more: JsonValue) -> tuple[Thread, Agent[None, str]]:
     async def send(args: Note, _ctx: RunContext[None]) -> str:
         sent.append(args.text)
         return "sent"
 
     send_tool = tool(name="send", description="Send.", input=Note, runs="host", execute=send)
-    script: JsonValue = {"responses": [use("send", {"text": "x"}), text("Done.")]}
+    script: JsonValue = {"responses": [use("send", {"text": "x"}), *more, text("Done.")]}
     bot = agent(model=scripted_model(script), tools=[send_tool])
     result = await bot.run("send it", store=sqlite(":memory:"), deps=None)
     assert isinstance(result, Parked)
@@ -215,3 +216,31 @@ def test_bash_any_is_never_a_suggested_rule() -> None:
     # bash(*) allows every command: only configured policy may hold it.
     assert suggested_rules("bash", {"command": "*"}) == ()
     assert suggested_rules("bash", {"command": "ls"}) == ("bash(ls)", "bash(ls:*)")
+
+
+def test_a_remembered_rule_allows_the_next_call_on_the_thread() -> None:
+    sent: list[str] = []
+
+    async def main() -> None:
+        thread, bot = await _parked(sent, use("send", {"text": "y"}, "call_2"))
+        pending = await thread.pending_approvals()
+        assert isinstance(pending, Ok)
+        (challenge,) = pending.value
+        remembered = await thread.approve(
+            challenge.challenge_id, LOCAL_OPERATOR, remember_rule="send"
+        )
+        assert isinstance(remembered, Ok)
+        resumed = await execute(bot.definition, None, {"thread": thread}, None, _drop)
+        assert isinstance(resumed, Completed)
+        read = await (await open_store(thread.store)).read(thread.branch, 0)
+        assert isinstance(read, Ok)
+        events = read.value.fold.events
+        decided = [
+            (e.data.decision, e.data.source)
+            for e in events
+            if isinstance(e, PermissionDecisionEvent)
+        ]
+        assert decided == [("ask", "mode"), ("allow", "thread_rule")]
+
+    asyncio.run(main())
+    assert sent == ["x", "y"]

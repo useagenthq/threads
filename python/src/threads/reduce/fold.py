@@ -19,6 +19,7 @@ from threads.log import (
     ParkAddress,
     ParseError,
     PermissionMode,
+    PermissionRuleAddedData,
     Policy,
     ThreadId,
     ThreadStartedData,
@@ -163,6 +164,10 @@ class Fold:
     unique_keys: set[tuple[str, str]] = field(default_factory=set[tuple[str, str]])
     """Branch-unique values tagged by kind: item keys, occurrence ids, message ids."""
     mode: PermissionMode = "default"
+    thread_rules: list[PermissionRuleAddedData] = field(
+        default_factory=list[PermissionRuleAddedData]
+    )
+    """Rules remembered on the thread (permission_rule_added), in log order."""
     children: dict[ThreadId, bool] = field(default_factory=dict[ThreadId, bool])
     tasks: dict[str, Task] = field(default_factory=dict[str, Task])
     input_tokens: int = 0

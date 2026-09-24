@@ -17,6 +17,7 @@ from threads.log import (
     ModelResponseRecoveredEvent,
     OutputValidatedEvent,
     ParseError,
+    PermissionRuleAddedEvent,
     Policy,
     SettingsChangedEvent,
     SteerEvent,
@@ -160,6 +161,10 @@ def _allows_bypass(pinned: Policy | None) -> bool:
     return pinned.permissions.allow_bypass
 
 
+def _permission_rule_added(fold: Fold, event: PermissionRuleAddedEvent) -> None:
+    fold.thread_rules.append(event.data)
+
+
 def _output_validated(fold: Fold, event: OutputValidatedEvent) -> ParseError | None:
     pinned = policy(fold)
     if pinned is None or pinned.output is MISSING:
@@ -188,6 +193,7 @@ HANDLERS: Mapping[type, Handler] = dict(
         on(BudgetExceededEvent, _budget_exceeded),
         on(HandoffEvent, _handoff),
         on(ModeChangedEvent, _mode_changed),
+        on(PermissionRuleAddedEvent, _permission_rule_added),
         on(OutputValidatedEvent, _output_validated),
     ]
 )

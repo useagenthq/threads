@@ -118,12 +118,17 @@ export function loopConfig<Deps, Output>(
 export const authorize: LoopConfig["authorize"] = (call, fold, spec) => {
   const permissions = fold.policy?.permissions;
   if (permissions === undefined) return { decision: "ask", source: "default" };
-  const d = decide(permissions, WORKSPACE, {
-    tool: call.data.name,
-    category: category(call.data.name, spec.effect_class),
-    input: call.data.input,
-    mode: fold.mode,
-  });
+  const d = decide(
+    permissions,
+    WORKSPACE,
+    {
+      tool: call.data.name,
+      category: category(call.data.name, spec.effect_class),
+      input: call.data.input,
+      mode: fold.mode,
+    },
+    fold.threadRules,
+  );
   return {
     decision: d.decision,
     source: d.source,

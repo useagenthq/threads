@@ -121,6 +121,29 @@
               "description": "policy: the principal/host ceiling a handoff target is intersected with. Each call is decided under both; the stricter decision wins (deny > ask > allow), the target's on a tie.",
               "$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"
             },
+            "thread_rules": {
+              "description": "policy: rules remembered on the thread, as permission_rule_added carries them ({rule, decision}), in log order. They apply to the thread's own decision, never to a ceiling's.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "rule",
+                  "decision"
+                ],
+                "properties": {
+                  "rule": {
+                    "$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule"
+                  },
+                  "decision": {
+                    "enum": [
+                      "allow",
+                      "deny"
+                    ]
+                  }
+                }
+              }
+            },
             "text": {
               "description": "stub: the user_input the runner sends once the log is imported (a saved case's next input after its snapshot). saveCase always writes it.",
               "type": "string"

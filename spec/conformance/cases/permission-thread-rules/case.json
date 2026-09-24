@@ -1,0 +1,169 @@
+{
+  "name": "permission-thread-rules",
+  "family": "permissions_approvals",
+  "kind": "policy",
+  "description": "Rules remembered on the thread (permission_rule_added) fold in after the policy's: thread deny rules right after policy deny rules, thread allow rules right after policy allow rules, reported as source thread_rule. They never beat a policy deny or ask rule, plan mode, a protected path or the self-config guard.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "workspace": "/workspace",
+    "permissions": {
+      "mode": "default",
+      "allow": [
+        "bash(npm test)"
+      ],
+      "ask": [
+        "bash(git push:*)"
+      ],
+      "deny": [
+        "bash(rm:*)"
+      ],
+      "protected_paths": [
+        ".git/**",
+        ".threads/**",
+        ".claude/**",
+        ".mcp.json",
+        "**/.bashrc",
+        "**/.zshrc",
+        "**/.profile",
+        "**/.gitconfig",
+        "**/.ssh/**"
+      ],
+      "allow_bypass": false,
+      "plan_exit_mode": "default"
+    },
+    "thread_rules": [
+      {
+        "rule": "bash(make:*)",
+        "decision": "allow"
+      },
+      {
+        "rule": "bash(curl:*)",
+        "decision": "deny"
+      },
+      {
+        "rule": "bash(git push:*)",
+        "decision": "allow"
+      },
+      {
+        "rule": "edit",
+        "decision": "allow"
+      }
+    ],
+    "calls": [
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "make build"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "make build && make test"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "curl https://x.test"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "make build; curl https://x.test"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "make clean; rm -rf build"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "git push origin main"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test && make build"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": ".git/config"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "edit",
+        "category": "edit",
+        "input": {
+          "path": ".threads/agents.ts"
+        }
+      },
+      {
+        "mode": "plan",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "make build"
+        }
+      },
+      {
+        "mode": "dont_ask",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "make build"
+        }
+      },
+      {
+        "mode": "dont_ask",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "ls"
+        }
+      }
+    ]
+  }
+}

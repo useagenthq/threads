@@ -126,9 +126,10 @@ def permissions(fold: Fold) -> Permissions:
 
 
 def authorize(fold: Fold, call: ToolCallData, spec: ToolSpec) -> Decision:
-    """the fold against the pinned permissions and the current mode."""
+    """the fold against the pinned permissions, the current mode and the thread's remembered
+    rules."""
     request = Call(spec.name, category(spec), dict(call.input))
-    return decide(permissions(fold), WORKSPACE, fold.mode, request)
+    return decide(permissions(fold), WORKSPACE, fold.mode, request, thread_rules=fold.thread_rules)
 
 
 def capped(ceilings: Sequence[Permissions]) -> Authorize:
@@ -139,7 +140,7 @@ def capped(ceilings: Sequence[Permissions]) -> Authorize:
 
     def decide_all(fold: Fold, call: ToolCallData, spec: ToolSpec) -> Decision:
         request = Call(spec.name, category(spec), dict(call.input))
-        decided = decide(permissions(fold), WORKSPACE, fold.mode, request)
+        decided = authorize(fold, call, spec)
         for ceiling in ceilings:
             cap = decide(ceiling, WORKSPACE, ceiling.mode, request)
             decided = cap if _RANK[cap.decision] > _RANK[decided.decision] else decided

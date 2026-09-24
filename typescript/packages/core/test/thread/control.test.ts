@@ -37,7 +37,7 @@ const use = (name: string, input: Record<string, unknown>, id: string) => ({
 const alice = { issuer: "api", tenant: "local", subject: "alice" };
 const mallory = { issuer: "api", tenant: "evil", subject: "mallory" };
 
-function mailer(sent: string[]) {
+function mailer(sent: string[], more: readonly unknown[] = []) {
   const send = tool({
     name: "send_email",
     description: "Send an email.",
@@ -50,19 +50,26 @@ function mailer(sent: string[]) {
   });
   return agent({
     model: scriptedModel({
-      responses: [use("send_email", { to: "bob" }, "c1"), say("Done.")],
+      responses: [
+        use("send_email", { to: "bob" }, "c1"),
+        ...more,
+        say("Done."),
+      ],
     }),
     tools: [send],
   });
 }
 
-async function parked(sent: string[]): Promise<{
+async function parked(
+  sent: string[],
+  more: readonly unknown[] = [],
+): Promise<{
   readonly store: Store;
   readonly thread: Thread;
   readonly resume: () => Promise<RunResult<unknown>>;
 }> {
   const store = sqlite(":memory:");
-  const bot = mailer(sent);
+  const bot = mailer(sent, more);
   const result = await bot.run("mail bob", { store });
   expect(result.status).toBe("parked");
   const thread = unwrap(await openThread(store, result.thread.id));
@@ -174,6 +181,30 @@ describe("approvals", () => {
         challenge_id: pending.challenge_id,
       },
     });
+  });
+
+  test("a remembered rule allows the next matching call on the thread", async () => {
+    const sent: string[] = [];
+    const next = use("send_email", { to: "carol" }, "c2");
+    const { store, thread, resume } = await parked(sent, [next]);
+    const [pending] = await thread.pendingApprovals();
+    if (pending === undefined) throw new Error("one open challenge");
+    unwrap(
+      await thread.approve(pending.challenge_id, alice, {
+        rememberRule: "send_email",
+      }),
+    );
+    expect((await resume()).status).toBe("completed");
+    const decided = (await events(store, thread)).flatMap((e) =>
+      e.type === "permission_decision"
+        ? [[e.data.decision, e.data.source, e.data.rule_id]]
+        : [],
+    );
+    expect(decided).toEqual([
+      ["ask", "mode", undefined],
+      ["allow", "thread_rule", "send_email"],
+    ]);
+    expect(sent).toEqual(["bob", "carol"]);
   });
 });
 

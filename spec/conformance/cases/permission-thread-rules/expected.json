@@ -1,0 +1,70 @@
+{
+  "outcome": "ok",
+  "decisions": [
+    {
+      "decision": "allow",
+      "source": "thread_rule",
+      "rule": "bash(make:*)"
+    },
+    {
+      "decision": "allow",
+      "source": "thread_rule",
+      "rule": "bash(make:*)"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(npm test)"
+    },
+    {
+      "decision": "deny",
+      "source": "thread_rule",
+      "rule": "bash(curl:*)"
+    },
+    {
+      "decision": "deny",
+      "source": "thread_rule",
+      "rule": "bash(curl:*)"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
+    },
+    {
+      "decision": "ask",
+      "source": "policy",
+      "rule": "bash(git push:*)"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "allow",
+      "source": "thread_rule",
+      "rule": "edit"
+    },
+    {
+      "decision": "ask",
+      "source": "protected_path"
+    },
+    {
+      "decision": "deny",
+      "source": "self_config_guard"
+    },
+    {
+      "decision": "deny",
+      "source": "mode"
+    },
+    {
+      "decision": "allow",
+      "source": "thread_rule",
+      "rule": "bash(make:*)"
+    },
+    {
+      "decision": "deny",
+      "source": "mode"
+    }
+  ]
+}

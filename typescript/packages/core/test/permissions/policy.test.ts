@@ -20,6 +20,14 @@ const PolicyCase = z.object({
     workspace: z.string(),
     permissions: PermissionsPolicy,
     ceiling: PermissionsPolicy.optional(),
+    thread_rules: z
+      .array(
+        z.strictObject({
+          rule: z.string(),
+          decision: z.enum(["allow", "deny"]),
+        }),
+      )
+      .default([]),
     calls: z.array(
       z.strictObject({
         mode: PermissionMode,
@@ -60,7 +68,7 @@ describe("policy conformance", () => {
       const { decisions } = Expected.parse(read(name, "expected.json"));
       const got = input.calls.map((call) =>
         input.ceiling === undefined
-          ? decide(input.permissions, input.workspace, call)
+          ? decide(input.permissions, input.workspace, call, input.thread_rules)
           : decideCapped(
               input.permissions,
               input.ceiling,
