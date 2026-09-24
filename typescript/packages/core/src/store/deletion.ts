@@ -77,7 +77,7 @@ function deleteSet(
   if (inTeam !== undefined) return err(inTeam);
   const quiet = running(db, doomed, now);
   if (!quiet.ok) return quiet;
-  const teams = doomedTeams(db, tenantId, opened.value, doomed);
+  const teams = doomedTeams(db, tenantId, doomed);
   if (!teams.ok) return teams;
   for (const team of teams.value) deleteTeam(db, tenantId, team);
   for (const thread of all.filter((t) => doomed.has(t))) {

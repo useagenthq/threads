@@ -7,14 +7,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import eid, text
+from .common import ALICE, eid, sha, text
+from .jcs import canonical
+from .log import Log
 from .pieces import user
+from .team_nested import INNER, INNER_LOG
 from .team_pieces import (
     LEAD,
     LEAD_BRANCH,
     MEMBER_BRANCH,
     MEMBER_THREAD,
     RESEARCHER,
+    TENANT,
     Route,
     at,
     body,
@@ -24,7 +28,7 @@ from .team_pieces import (
     provenance,
     team_log,
 )
-from .team_steps import idle, materialize, received, start, tool, write_team
+from .team_steps import host, idle, materialize, received, start, tool, write_team
 
 if TYPE_CHECKING:
     import pathlib
@@ -41,6 +45,7 @@ def build(root: pathlib.Path) -> None:
     _settle(root)
     _receipt_mismatch(root)
     _other_run(root)
+    _nested_other_run(root)
 
 
 def _settle(root: pathlib.Path) -> None:
@@ -127,6 +132,71 @@ def _other_run(root: pathlib.Path) -> None:
         "is the same; the task envelope in the lead's log holds the first run's root request: "
         "invalid_transition at the receipt, in the researcher's log.",
         {"lead": lead, "researcher": member, "team": team_log()},
+        {"code": "invalid_transition", "seq": mixed["seq"], "log": "researcher"},
+    )
+
+
+def _nested_other_run(root: pathlib.Path) -> None:
+    """researcher-1 leads its own team; an operator's message to it through that team's log, a
+    run of its own, is received inside the task turn its outer lead's run gave it."""
+    lead = lead_log()
+    first = text(user(lead, "Research batteries.")["event_id"])
+    started_id, task = start(lead, first, RESEARCHER, "c1")
+    inner: Obj = {"id": INNER, "log_branch_id": INNER_LOG[0]}
+    member = materialize(started_id, task, team=inner)
+    own = Log(INNER_LOG[0], thread=INNER_LOG[1])
+    nested_lead: Obj = {"tenant": TENANT, "team": INNER, "name": "researcher", "generation": 1}
+    own.add("team_opened", {"team": INNER, "lead": nested_lead, "lead_thread_id": MEMBER_THREAD})
+    request = "0192d000-0000-7000-8000-0000000000e1"
+    here = eid(own.seq + 1, INNER_LOG[0])
+    prov: Obj = {
+        "principal": ALICE,
+        "root_request": {"thread_id": INNER_LOG[1], "event_id": here},
+        "via": [],
+    }
+    note_body = body("Check prices too.")
+    host(
+        own,
+        "operator_request",
+        {
+            "request_id": request,
+            "op": "send",
+            "principal": ALICE,
+            "body_hash": sha(canonical({"to": "researcher", "text": "Check prices too."})),
+            "provenance": prov,
+        },
+    )
+    own.add(
+        "message_policy_decided",
+        {
+            "op": "send",
+            "decision": "allow",
+            "source": "team",
+            "target": "researcher",
+            "request_id": request,
+        },
+    )
+    note: Obj = {
+        "mail_id": f"{INNER_LOG[0]}:{request}",
+        "kind": "message",
+        "team": INNER,
+        "from": {"operator": request},
+        "to": {"name": "researcher", "generation": 1},
+        "provenance": prov,
+        "causal": at(here, INNER_LOG[1]),
+        "body": note_body,
+    }
+    own.add("message_sent", {"envelope": note})
+    mixed = received(member, note)
+    write_team(
+        root,
+        "team-nested-task-turn-other-run-rejected",
+        "Rule 43, for a nested lead: researcher-1's task turn belongs to the outer lead's run, "
+        "and an operator's message through researcher-1's own team, a run of its own, is "
+        "received inside it. The mail is the inner team's, the task envelope the outer team's; "
+        "the task-turn clause is checked whatever team the mail belongs to: invalid_transition "
+        "at the receipt, in the researcher's log.",
+        {"inner": own, "lead": lead, "researcher": member, "team": team_log()},
         {"code": "invalid_transition", "seq": mixed["seq"], "log": "researcher"},
     )
 

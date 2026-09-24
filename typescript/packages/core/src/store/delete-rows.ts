@@ -3,7 +3,6 @@ import { BranchId, TeamId, type ThreadId } from "../log";
 import { ok, type Result } from "../result";
 import type { LogError } from "../verify/error";
 import type { SqliteDriver } from "./driver";
-import type { Opened } from "./started";
 import { parseRows } from "./tables";
 
 // The rows a deletion removes, once deletion.ts has decided the set may go. A row that fails its
@@ -37,12 +36,12 @@ const TeamRow = z.strictObject({ team_id: TeamId, lead_thread_id: z.string() });
 
 /**
  * The teams the set takes (Gate 1 §4.15 rule 2): those whose `teams.lead_thread_id` is doomed,
- * in this tenant, and those whose team log is doomed.
+ * in this tenant. A team id is never taken from a log: an imported team_opened could name
+ * another tenant's team.
  */
 export function doomedTeams(
   db: SqliteDriver,
   tenantId: string,
-  opened: readonly Opened[],
   doomed: ReadonlySet<string>,
 ): Result<ReadonlySet<TeamId>, LogError> {
   const rows = parseRows(
@@ -52,15 +51,13 @@ export function doomedTeams(
     ]),
   );
   if (!rows.ok) return rows;
-  const teams = new Set<TeamId>(
-    rows.value.flatMap((r) =>
-      doomed.has(r.lead_thread_id) ? [r.team_id] : [],
+  return ok(
+    new Set(
+      rows.value.flatMap((r) =>
+        doomed.has(r.lead_thread_id) ? [r.team_id] : [],
+      ),
     ),
   );
-  for (const o of opened)
-    if (o.event.type === "team_opened" && doomed.has(o.threadId))
-      teams.add(o.event.data.team);
-  return ok(teams);
 }
 
 /** Every index row of `team`: its teams row only in this tenant. */

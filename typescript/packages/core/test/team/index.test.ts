@@ -8,9 +8,10 @@ import { TEAM_TABLES } from "../../src/store/deletion";
 import { checkTeamLogs } from "../../src/team/cross";
 import { changeRows, insertRows, turnOpeners } from "../../src/team/index";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
-import { code, unwrap } from "../store/helpers";
+import { code, fixture, unwrap } from "../store/helpers";
 import {
   caseLogs,
+  storeLogs,
   TENANT,
   type Team,
   teamIndexRows,
@@ -118,6 +119,27 @@ describe("the replay rule", () => {
     expect(t.db.all("SELECT DISTINCT epoch FROM team_feed", [])).toEqual([
       { epoch: 2 },
     ]);
+  });
+
+  test("a rebuild refuses a bounce of another run, and nested own-team mail in a task turn", () => {
+    for (const [name, labels] of [
+      [
+        "team-bounce-provenance-rejected",
+        ["lead", "researcher", "team", "writer"],
+      ],
+      [
+        "team-nested-task-turn-other-run-rejected",
+        ["inner", "lead", "researcher", "team"],
+      ],
+    ] as const) {
+      const { store } = fixture(TENANT);
+      storeLogs(
+        store,
+        [...caseLogs(name, labels).values()].map((b) => verified(b)),
+      );
+      const outer = TeamId.parse("0192c000-0000-7000-8000-000000000001");
+      expect(code(rebuildTeamIndex(store, outer))).toBe("invalid_transition");
+    }
   });
 
   test("a rebuild reads the logs inside the transaction that refolds them", () => {

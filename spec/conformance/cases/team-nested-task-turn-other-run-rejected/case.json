@@ -1,0 +1,17 @@
+{
+  "name": "team-nested-task-turn-other-run-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 43, for a nested lead: researcher-1's task turn belongs to the outer lead's run, and an operator's message through researcher-1's own team, a run of its own, is received inside it. The mail is the inner team's, the task envelope the outer team's; the task-turn clause is checked whatever team the mail belongs to: invalid_transition at the receipt, in the researcher's log.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "inner",
+      "lead",
+      "researcher",
+      "team"
+    ]
+  }
+}

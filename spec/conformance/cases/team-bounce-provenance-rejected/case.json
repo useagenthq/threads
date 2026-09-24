@@ -1,0 +1,17 @@
+{
+  "name": "team-bounce-provenance-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 43: researcher-1 refuses the lead's message, but its bounce carries another run's provenance than the refused mail's, so the bounce's mail row would name the wrong root request. Only the sender's mail shows it: invalid_transition at that bounce, in the researcher's log.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "researcher",
+      "team",
+      "writer"
+    ]
+  }
+}

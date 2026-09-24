@@ -1,13 +1,14 @@
 # pyright: strict
 """Staged `team` cases for a failed rebind (spec/schema/README.md, "Teams", "A failed rebind"):
 the member's one end-of-member append, its bounces, and a parked member asker taking the ask's
-bounce as control mail. The forged variant drops the ask from that bounce (rule 43)."""
+bounce as control mail. The forged variants drop the ask from that bounce, or give the message's
+bounce another run's provenance (rule 43)."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from .common import eid, text
+from .common import eid, obj, text
 from .pieces import user
 from .team_pieces import (
     DEADLINE,
@@ -37,9 +38,13 @@ if TYPE_CHECKING:
     from .log import Log
 
 
+type Forge = Literal["none", "ask", "provenance"]
+
+
 def build(root: pathlib.Path) -> None:
-    _case(root, forge=False)
-    _case(root, forge=True)
+    _case(root, forge="none")
+    _case(root, forge="ask")
+    _case(root, forge="provenance")
 
 
 def _writer_asks(writer: Log, prov: Obj) -> Obj:
@@ -63,7 +68,7 @@ def _writer_asks(writer: Log, prov: Obj) -> Obj:
 
 
 def _fails(
-    member: Log, prov: Obj, monitor: str, pending: list[tuple[Obj, Obj]], forge: bool
+    member: Log, prov: Obj, monitor: str, pending: list[tuple[Obj, Obj]], forge: Forge
 ) -> tuple[Obj, list[Obj]]:
     """The rebind fails: turn_completed{error}, member_ended{failed}, the task monitor's
     notification, and a mail_refused plus a bounce for each pending mail, in one append."""
@@ -88,9 +93,12 @@ def _fails(
     for mail, sender in pending:
         why = member.add("mail_refused", {"mail_id": mail["mail_id"], "code": "member_ended"})
         extra: dict[str, JsonValue] = {}
-        if mail["kind"] == "ask" and not forge:
+        if mail["kind"] == "ask" and forge != "ask":
             extra = {"ask_id": mail["ask_id"], "result": ended}
-        back = Route(RESEARCHER, text(sender["name"]), prov)
+        # A bounce carries its refused mail's provenance; the forgery names another run.
+        other = forge == "provenance" and mail["kind"] == "message"
+        own = provenance(text(at(end_id, MEMBER_THREAD)["event_id"]), thread=MEMBER_THREAD)
+        back = Route(RESEARCHER, text(sender["name"]), own if other else prov)
         bounce = envelope(
             mail_id(),
             "bounce",
@@ -104,7 +112,7 @@ def _fails(
     return notice, bounces
 
 
-def _case(root: pathlib.Path, *, forge: bool) -> None:
+def _case(root: pathlib.Path, *, forge: Forge) -> None:
     lead = lead_log()
     root_event = text(user(lead, "Research batteries, then write it up.")["event_id"])
     prov = provenance(root_event)
@@ -128,8 +136,25 @@ def _case(root: pathlib.Path, *, forge: bool) -> None:
     researcher = materialize(researcher_started, researcher_task)
     monitor = f"{LEAD_BRANCH}:{researcher_started}:task"
     notice, bounces = _fails(researcher, prov, monitor, [(note, LEAD), (ask, WRITER)], forge)
+    bounce_seqs = [
+        e["seq"]
+        for e in researcher.events
+        if e["type"] == "message_sent" and obj(obj(e["data"])["envelope"])["kind"] == "bounce"
+    ]
     logs = {"lead": lead, "researcher": researcher, "team": team_log(), "writer": writer}
-    if forge:
+    if forge == "provenance":
+        write_team(
+            root,
+            "team-bounce-provenance-rejected",
+            "Rule 43: researcher-1 refuses the lead's message, but its bounce carries another "
+            "run's provenance than the refused mail's, so the bounce's mail row would name the "
+            "wrong root request. Only the sender's mail shows it: invalid_transition at that "
+            "bounce, in the researcher's log.",
+            logs,
+            {"code": "invalid_transition", "seq": bounce_seqs[0], "log": "researcher"},
+        )
+        return
+    if forge == "ask":
         bounce_seq = researcher.seq
         write_team(
             root,

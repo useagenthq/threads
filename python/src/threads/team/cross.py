@@ -63,12 +63,12 @@ class _Team:
 def check_team_logs(
     logs: Sequence[TeamLogEvents], team_id: str | None = None
 ) -> CrossFailure | None:
-    """The first failure, in the given log order, then seq. With `team_id`, only that team's
-    mail is checked: a nested lead's log also carries its parent team's mail, whose other ends
-    are not among its own team's logs."""
+    """The first failure, in the given log order, then seq. With `team_id`, the clauses about one
+    mail check only that team's mail: a nested lead's log also carries its parent team's mail,
+    whose other ends are not among its own team's logs. The task-turn clause checks all."""
     team = _team(logs)
     for log in logs:
-        found = _first_break(log, team, team_id) or _task_turn(log, team, team_id)
+        found = _first_break(log, team, team_id) or _task_turn(log, team)
         if found is not None:
             return found
     return None
@@ -85,10 +85,12 @@ def _first_break(log: TeamLogEvents, team: _Team, team_id: str | None) -> CrossF
     return None
 
 
-def _task_turn(log: TeamLogEvents, team: _Team, team_id: str | None) -> CrossFailure | None:
+def _task_turn(log: TeamLogEvents, team: _Team) -> CrossFailure | None:
     """Mail that renders inside a member's task turn belongs to the task's run: one log shows
     only the task turn's principal (rule 34), and the task envelope, in the starter's log, holds
-    its root request. The log is re-folded with the reducer to know its turns."""
+    its root request. The log is re-folded with the reducer to know its turns. Never limited to
+    one team's mail: a nested lead's own-team mail can arrive in the task turn its outer team
+    gave it, and only the outer team's rebuild knows that task."""
     fold = Fold(now=0, thread_id=log.thread_id)
     root: tuple[str, str] | None = None
     for e in log.events:
@@ -98,7 +100,6 @@ def _task_turn(log: TeamLogEvents, team: _Team, team_id: str | None) -> CrossFai
             and turn is not None
             and turn.root is None
             and root is not None
-            and not (team_id is not None and _mail_of_another(e, team_id))
             and mail_renders(e.data.envelope, fold.team.settle)
             and _root(e.data.envelope) != root
         ):
@@ -188,8 +189,12 @@ def _sent(
 ) -> str | None:
     if _from(env) not in mine:
         return "a mail is not in the log its from names"
-    if env.kind != "bounce":
-        return None
+    return _bounce(env, log, team) if env.kind == "bounce" else None
+
+
+def _bounce(env: MailEnvelope, log: TeamLogEvents, team: _Team) -> str | None:
+    """A bounce's causal is its refuser's mail_refused; it carries the refused mail's provenance,
+    and names an ask exactly when it refused one."""
     cause = env.causal.event_id
     refusal = next((e for e in log.events if e.event_id == cause), None)
     if not isinstance(refusal, MailRefusedEvent):
@@ -197,6 +202,8 @@ def _sent(
     refused = team.sent.get(refusal.data.mail_id)
     if refused is None:
         return None
+    if env.provenance != refused.provenance:
+        return "a bounce's provenance is not its refused mail's"
     if refused.kind == "ask":
         ok = env.ask_id == refused.ask_id and env.result is not MISSING
         return None if ok else "an ask's bounce must name the ask and carry the result"
