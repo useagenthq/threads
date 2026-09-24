@@ -1,6 +1,6 @@
 import { assertNever } from "../assert-never";
 import type { EventOf } from "../fold/state";
-import { monitorId } from "../fold/team";
+import { mailRenders, monitorId } from "../fold/team";
 import { type KnownEvent, principalKey } from "../log";
 
 /** The events that render a conversational line (Render v1 table, spec/schema/README.md). */
@@ -86,14 +86,7 @@ function silentMail(events: readonly KnownEvent[]): ReadonlySet<string> {
   return new Set(
     events.flatMap((e) => {
       if (e.type !== "message_received") return [];
-      const { kind, ask_id: ask, monitor_id: monitor } = e.data.envelope;
-      const silent =
-        kind === "reply" ||
-        kind === "cancel" ||
-        kind === "member_parked" ||
-        (kind === "bounce" && ask !== undefined) ||
-        (monitor !== undefined && settle.has(monitor));
-      return silent ? [e.event_id] : [];
+      return mailRenders(e.data.envelope, settle) ? [] : [e.event_id];
     }),
   );
 }

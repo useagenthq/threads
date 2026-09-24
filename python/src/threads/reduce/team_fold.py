@@ -1,9 +1,12 @@
 """Teams (spec/schema/README.md, "Teams"): which received mail opens a turn, and the fold step
 for the team bookkeeping semantic rules 31 and 33-45 read (rules_team)."""
 
+from collections.abc import Set as AbstractSet
+
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import (
+    AgentSpawnedEvent,
     AskClosedEvent,
     Event,
     MailEnvelope,
@@ -15,30 +18,54 @@ from threads.log import (
     MessageSentEvent,
     MonitorSetEvent,
     OperatorRequestEvent,
+    Principal,
     TeamOpenedEvent,
     ThreadStartedEvent,
     TurnCompletedEvent,
     UserInputEvent,
     WaitFinishedEvent,
     WaitStartedEvent,
+    WokenEvent,
 )
-from threads.reduce.fold import Fold, Run, Team
+from threads.reduce.fold import Fold, PrincipalKey, Run, Team, TurnRun
 
 NOTICES = frozenset({"member_settled", "member_ended"})
 
 
+def mail_renders(env: MailEnvelope, settle: AbstractSet[str]) -> bool:
+    """The mail kinds that render as a `<message>` line and would open a turn: a message, an
+    ask, a bounce naming no ask, or a task or end monitor's notification (reference:
+    turn_open.py). A reply, an ask's bounce and a wait's notification answer their call; a
+    cancel and a park notice reach no model."""
+    if env.kind in NOTICES:
+        return env.monitor_id is not MISSING and env.monitor_id not in settle
+    return env.kind in ("message", "ask") or (env.kind == "bounce" and env.ask_id is MISSING)
+
+
 def mail_opens_turn(fold: Fold, env: MailEnvelope) -> bool:
-    """Only in a member's log (the lead's included) with no turn open: a message, an ask, a
-    bounce naming no ask, or a task or end monitor's notification, once no park is left but the
-    one it resolves. A reply, an ask's bounce and a wait's notification resume their call instead
-    (spec/schema/README.md, "Which events open a turn"; reference: turn_open.py)."""
+    """In a member's log (the lead's included) with no turn open, mail that renders, once no
+    park is left but the one it resolves (spec/schema/README.md, "Which events open a turn")."""
     if fold.in_turn or fold.team.team_log:
         return False
-    if env.kind in NOTICES:
-        opens = env.monitor_id is not MISSING and env.monitor_id not in fold.team.settle
-    else:
-        opens = env.kind in ("message", "ask") or (env.kind == "bounce" and env.ask_id is MISSING)
-    return opens and all(p.kind == "member" and p.id == env.monitor_id for p in fold.parked)
+    resolved = all(p.kind == "member" and p.id == env.monitor_id for p in fold.parked)
+    return mail_renders(env, fold.team.settle) and resolved
+
+
+def principal_key(p: Principal) -> PrincipalKey:
+    return (p.issuer, p.tenant, p.subject)
+
+
+def mail_run(env: MailEnvelope) -> TurnRun:
+    """The run a mail belongs to: its provenance's principal and root request."""
+    root = env.provenance.root_request
+    return TurnRun(principal_key(env.provenance.principal), (root.thread_id, root.event_id))
+
+
+def joins_turn(turn: TurnRun | None, run: TurnRun) -> bool:
+    """Whether mail of `run` shares the open turn's run (rule 34)."""
+    if turn is None or turn.principal != run.principal:
+        return False
+    return turn.root is None or turn.root == run.root
 
 
 def monitor_id(event: Event, target: str) -> str:
@@ -49,6 +76,7 @@ def monitor_id(event: Event, target: str) -> str:
 def advance(fold: Fold, event: Event) -> None:
     """The team bookkeeping after an event passed validate_next."""
     _log(fold.team, event)
+    _turn(fold, event)
     _mail(fold, event)
     _monitors(fold.team, event)
 
@@ -63,12 +91,27 @@ def _log(team: Team, event: Event) -> None:
         team.had_input = True
         if event.data.mail_id is not MISSING:
             team.mail_done.add(event.data.mail_id)
-    elif isinstance(event, TurnCompletedEvent):
-        team.last_end = event.data.reason
     elif isinstance(event, MemberEndedEvent):
         team.ended = True
     elif isinstance(event, OperatorRequestEvent):
         team.requests.add(event.data.request_id)
+        team.request_events.add(event.event_id)
+
+
+def _turn(fold: Fold, event: Event) -> None:
+    """Which run the open turn belongs to. A woken runs before rules_wake clears its causes."""
+    team = fold.team
+    if isinstance(event, UserInputEvent):
+        task = event.data.source == "team_task"
+        root = None if task else (event.thread_id, event.event_id)
+        team.turn = TurnRun(principal_key(event.actor.principal), root)
+    elif isinstance(event, WokenEvent):
+        call = fold.wake.trailing.get(event.data.causes[0])
+        team.turn = None if call is None else team.spawns.get(call)
+    elif isinstance(event, TurnCompletedEvent):
+        team.turn, team.last_end = None, event.data.reason
+    elif isinstance(event, AgentSpawnedEvent) and event.data.mode == "background" and team.turn:
+        team.spawns[event.data.call_id] = team.turn
 
 
 def _mail(fold: Fold, event: Event) -> None:
@@ -94,9 +137,9 @@ def _received(fold: Fold, env: MailEnvelope) -> None:
     root request (spec/schema/README.md, "Background wakes")."""
     team = fold.team
     if mail_opens_turn(fold, env):
-        p = env.provenance.principal
-        fold.in_turn = True
-        fold.wake.run = Run((p.issuer, p.tenant, p.subject), env.provenance.root_request.event_id)
+        run = mail_run(env)
+        fold.in_turn, team.turn = True, run
+        fold.wake.run = Run(run.principal, env.provenance.root_request.event_id)
     team.mail_done.add(env.mail_id)
     if env.kind == "ask" and env.ask_id is not MISSING:
         team.asks_in.add(env.ask_id)

@@ -8,8 +8,8 @@ from pydantic.experimental.missing_sentinel import MISSING
 from threads.log import (
     AskClosedEvent,
     Event,
+    ForkEvent,
     MailRefusedEvent,
-    MailSender1,
     MemberEndedEvent,
     MemberIdleEvent,
     MemberObservedEvent,
@@ -19,18 +19,24 @@ from threads.log import (
     MessageSentEvent,
     OperatorRefusedEvent,
     OperatorRequestEvent,
+    OperatorSender,
     ParkedEvent,
     ParseError,
-    Principal,
     TeamOpenedEvent,
     UserInputEvent,
     WaitFinishedEvent,
     WaitStartedEvent,
     WokenEvent,
 )
-from threads.reduce.fold import Fold, PrincipalKey, reject
+from threads.reduce.fold import Fold, reject
 from threads.reduce.handlers import Handler, on
-from threads.reduce.team_fold import mail_opens_turn
+from threads.reduce.team_fold import (
+    joins_turn,
+    mail_opens_turn,
+    mail_renders,
+    mail_run,
+    principal_key,
+)
 
 TEAM_LOG = frozenset(
     {
@@ -50,15 +56,12 @@ TEAM_LOG = frozenset(
 _ENDED = "an ended member's log opens a turn"
 
 
-def _key(p: Principal) -> PrincipalKey:
-    return (p.issuer, p.tenant, p.subject)
-
-
 def check(fold: Fold, event: Event) -> ParseError | None:
     """Rule 33 for every event, then the team rules of its type."""
     if isinstance(event, TeamOpenedEvent) and fold.event_ids:
-        return reject(event, "team_opened after the branch's first event")
-    if fold.team.team_log and event.type not in TEAM_LOG:
+        return reject(event, "team_opened after the resolved chain's first event")
+    repair = isinstance(event, ForkEvent) and event.data.reason == "repair"
+    if fold.team.team_log and event.type not in TEAM_LOG and not repair:
         return reject(event, f"a team log takes no {event.type}")
     handler = _CHECKS.get(type(event))
     return None if handler is None else handler(fold, event)
@@ -74,7 +77,7 @@ def _received(fold: Fold, event: MessageReceivedEvent) -> ParseError | None:
         why = f"mail {env.mail_id} is received twice"
     elif env.kind == "task":
         why = "a task arrives as user_input{team_task}, not as mail"
-    elif _key(event.actor.principal) != _key(env.provenance.principal):
+    elif principal_key(event.actor.principal) != principal_key(env.provenance.principal):
         why = "a receipt's actor is not its provenance principal"
     else:
         why = _joins(fold, event)
@@ -82,13 +85,9 @@ def _received(fold: Fold, event: MessageReceivedEvent) -> ParseError | None:
 
 
 def _joins(fold: Fold, event: MessageReceivedEvent) -> str | None:
-    env = event.data.envelope
-    run = fold.wake.run
-    joins = run is not None and (run.principal, run.root) == (
-        _key(env.provenance.principal),
-        env.provenance.root_request.event_id,
-    )
-    if env.kind in ("message", "ask") and fold.in_turn and not joins:
+    env, team = event.data.envelope, fold.team
+    joins = joins_turn(team.turn, mail_run(env)) or not mail_renders(env, team.settle)
+    if fold.in_turn and not joins:
         return "mail of another request joins the open turn"
     return _ENDED if fold.team.ended and mail_opens_turn(fold, env) else None
 
@@ -108,7 +107,11 @@ def _sent(fold: Fold, event: MessageSentEvent) -> ParseError | None:
     if env.kind == "reply" and (env.ask_id is MISSING or env.ask_id not in team.asks_in):
         return reject(event, "a reply names no ask this log received and left unreplied")
     sender = env.from_
-    if team.team_log and isinstance(sender, MailSender1) and sender.operator not in team.requests:
+    if (
+        team.team_log
+        and isinstance(sender, OperatorSender)
+        and sender.operator not in team.requests
+    ):
         return reject(event, "operator mail before its operator_request")
     return None
 
@@ -133,10 +136,17 @@ def _member_end(fold: Fold, event: MemberEndedEvent | MemberIdleEvent) -> ParseE
     return None
 
 
-def _wait_started(_fold: Fold, event: WaitStartedEvent) -> ParseError | None:
-    """Rule 39: a wait's members are a set."""
-    keys = [(m.name, m.generation) for m in event.data.members]
-    return None if len(set(keys)) == len(keys) else reject(event, "a wait lists a member twice")
+def _wait_started(fold: Fold, event: WaitStartedEvent) -> ParseError | None:
+    """Rules 39 and 42: a wait names each member once, and an operator wait follows its
+    request."""
+    names = [m.name for m in event.data.members]
+    if len(set(names)) != len(names):
+        return reject(event, "a wait lists a member twice")
+    prefix, _, request = event.data.wait_id.partition(":")
+    ours = prefix == event.branch_id and request in fold.team.requests
+    if fold.team.team_log and not ours:
+        return reject(event, "an operator wait before its operator_request")
+    return None
 
 
 def _wait_finished(fold: Fold, event: WaitFinishedEvent) -> ParseError | None:
@@ -186,10 +196,13 @@ def _woken(fold: Fold, event: WokenEvent) -> ParseError | None:
 def _request(_fold: Fold, event: OperatorRequestEvent) -> ParseError | None:
     """Rule 45: one principal, and the request is its own root request."""
     prov = event.data.provenance
-    who = {_key(event.actor.principal), _key(event.data.principal)}
-    if who != {_key(prov.principal)}:
+    who = {principal_key(event.actor.principal), principal_key(event.data.principal)}
+    if who != {principal_key(prov.principal)}:
         return reject(event, "an operator_request's principals differ")
-    if prov.root_request.event_id != event.event_id:
+    if (prov.root_request.thread_id, prov.root_request.event_id) != (
+        event.thread_id,
+        event.event_id,
+    ):
         return reject(event, "an operator_request's root request is not itself")
     return None
 
@@ -213,12 +226,16 @@ def _decided(fold: Fold, event: MessagePolicyDecidedEvent) -> ParseError | None:
 
 
 def _started(fold: Fold, event: MemberStartedEvent) -> ParseError | None:
-    """Rule 45: a lead's member_started is its member's parent; a team log's names the lead."""
-    parent = event.data.parent
-    if fold.team.team_log:
-        if parent.thread_id == fold.team.lead_thread:
+    """Rules 42 and 45: a lead's member_started is its member's parent; a team log's names the
+    lead and follows its operator_request."""
+    parent, team = event.data.parent, fold.team
+    if team.team_log:
+        if parent.thread_id != team.lead_thread:
+            return reject(event, "an operator start's parent is not the lead's thread")
+        root = event.data.provenance.root_request
+        if root.thread_id == event.thread_id and root.event_id in team.request_events:
             return None
-        return reject(event, "an operator start's parent is not the lead's thread")
+        return reject(event, "an operator start before its operator_request")
     itself = (parent.thread_id, parent.branch_id, parent.event_id) == (
         event.thread_id,
         event.branch_id,

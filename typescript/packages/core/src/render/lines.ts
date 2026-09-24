@@ -191,7 +191,11 @@ function mailText(
   seq: number,
 ): Result<string, LogError> {
   if (env.body !== undefined) return bodyText(read, env.body, seq);
-  if (env.result === undefined) return ok(`bounced: ${env.code ?? ""}`);
+  if (env.result === undefined) {
+    if (env.code === undefined)
+      throw new Error("the schema requires a bounce's code");
+    return ok(`bounced: ${env.code}`);
+  }
   if (env.result.status !== "completed") return ok(jcs(env.result));
   const output = bodyText(read, env.result.output, seq);
   return output.ok ? ok(jcs({ ...env.result, output: output.value })) : output;

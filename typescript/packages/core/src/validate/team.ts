@@ -1,6 +1,6 @@
 import { assertNever } from "../assert-never";
 import type { EventOf, Fold } from "../fold/state";
-import { mailOpensTurn } from "../fold/team";
+import { joinsTurn, mailOpensTurn, mailRenders, mailRun } from "../fold/team";
 import { type KnownEvent, principalKey } from "../log";
 import { invalid, type Violation } from "./violation";
 
@@ -21,11 +21,15 @@ const TEAM_LOG: ReadonlySet<KnownEvent["type"]> = new Set([
   "wait_finished",
 ]);
 
-/** Rule 33: team_opened starts a branch, and a team log takes only the operator's side. */
+/**
+ * Rule 33: team_opened is the resolved chain's first event, and a team log takes only the
+ * operator's side, or a repair fork (an inspection-only child).
+ */
 export function checkTeamLog(fold: Fold, e: KnownEvent): Violation {
   if (e.type === "team_opened" && fold.eventIds.size > 0)
-    return invalid("team_opened after the branch's first event");
-  return fold.team.teamLog && !TEAM_LOG.has(e.type)
+    return invalid("team_opened after the resolved chain's first event");
+  const repair = e.type === "fork" && e.data.reason === "repair";
+  return fold.team.teamLog && !TEAM_LOG.has(e.type) && !repair
     ? invalid(`a team log takes no ${e.type}`)
     : undefined;
 }
@@ -42,15 +46,12 @@ export function checkReceived(
     return invalid(`mail ${env.mail_id} is received twice`);
   if (env.kind === "task")
     return invalid("a task arrives as user_input{team_task}, not as mail");
-  const principal = principalKey(env.provenance.principal);
-  if (principalKey(e.actor.principal) !== principal)
+  const run = mailRun(env);
+  if (principalKey(e.actor.principal) !== run.principal)
     return invalid("a receipt's actor is not its provenance principal");
-  const { run } = fold.wake;
-  const ordinary = env.kind === "message" || env.kind === "ask";
-  const joins =
-    run?.principal === principal &&
-    run.root === env.provenance.root_request.event_id;
-  if (ordinary && fold.turnOpen && !joins)
+  const { team } = fold;
+  const joins = joinsTurn(team.turn, run) || !mailRenders(env, team.settle);
+  if (fold.turnOpen && !joins)
     return invalid("mail of another request joins the open turn");
   return fold.team.ended && mailOpensTurn(fold, env)
     ? invalid("an ended member's log opens a turn")
@@ -120,12 +121,8 @@ export function checkWaits(
 ): Violation {
   const { team } = fold;
   switch (e.type) {
-    case "wait_started": {
-      const keys = e.data.members.map((m) => `${m.name}#${m.generation}`);
-      return new Set(keys).size === keys.length
-        ? undefined
-        : invalid("a wait lists a member twice");
-    }
+    case "wait_started":
+      return checkWaitStarted(fold, e);
     case "wait_finished":
       return team.waits.has(e.data.wait_id)
         ? undefined
@@ -137,6 +134,20 @@ export function checkWaits(
     default:
       return assertNever(e);
   }
+}
+
+/** Rules 39 and 42: a wait names each member once, and an operator wait follows its request. */
+function checkWaitStarted(fold: Fold, e: EventOf<"wait_started">): Violation {
+  const names = e.data.members.map((m) => m.name);
+  if (new Set(names).size !== names.length)
+    return invalid("a wait lists a member twice");
+  const { team } = fold;
+  const request = e.data.wait_id.slice(e.branch_id.length + 1);
+  const ours =
+    e.data.wait_id.startsWith(`${e.branch_id}:`) && team.requests.has(request);
+  return team.teamLog && !ours
+    ? invalid("an operator wait before its operator_request")
+    : undefined;
 }
 
 /** Rule 40: a team park names an open ask, an unfinished wait or a start of this log. */
@@ -194,7 +205,8 @@ export function checkOperator(
         principalKey(e.actor.principal) === who &&
         principalKey(e.data.principal) === who;
       if (!same) return invalid("an operator_request's principals differ");
-      return provenance.root_request.event_id === e.event_id
+      const root = provenance.root_request;
+      return root.thread_id === e.thread_id && root.event_id === e.event_id
         ? undefined
         : invalid("an operator_request's root request is not itself");
     }
@@ -223,16 +235,26 @@ function checkDecision(
     : invalid("message_policy_decided names no pending tool_call");
 }
 
-/** Rule 45: a lead's member_started is its member's parent; a team log's names the lead. */
+/**
+ * Rules 42 and 45: a lead's member_started is its member's parent; a team log's names the lead
+ * and follows its operator_request.
+ */
 export function checkStarted(
   fold: Fold,
   e: EventOf<"member_started">,
 ): Violation {
   const { parent } = e.data;
-  if (fold.team.teamLog)
-    return parent.thread_id === fold.team.leadThread
+  const { team } = fold;
+  if (team.teamLog) {
+    if (parent.thread_id !== team.leadThread)
+      return invalid("an operator start's parent is not the lead's thread");
+    const root = e.data.provenance.root_request;
+    const ours =
+      root.thread_id === e.thread_id && team.requestEvents.has(root.event_id);
+    return ours
       ? undefined
-      : invalid("an operator start's parent is not the lead's thread");
+      : invalid("an operator start before its operator_request");
+  }
   const itself =
     parent.thread_id === e.thread_id &&
     parent.branch_id === e.branch_id &&

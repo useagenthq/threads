@@ -18,7 +18,7 @@ from threads.log import (
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
     SteerEvent,
-    ThreadStartedEvent,
+    TeamOpenedEvent,
     ToolResultEvent,
     ToolResultLateEvent,
     UserInputEvent,
@@ -54,7 +54,7 @@ def _role(view: RenderView, event: Event) -> Role | None:
 
 
 def transcript(events: Sequence[Event]) -> tuple[TranscriptEntry, ...]:
-    if not any(isinstance(e, ThreadStartedEvent) for e in events):
+    if events and isinstance(events[0], TeamOpenedEvent):
         return ()  # a team log never renders
     view = render_view(events)
     entries: list[TranscriptEntry] = []

@@ -20,8 +20,8 @@ export type TranscriptEntry = {
 export function transcript(
   events: readonly KnownEvent[],
 ): readonly TranscriptEntry[] {
-  // A team log has no thread_started: it never renders.
-  if (!events.some((e) => e.type === "thread_started")) return [];
+  // A team log never renders.
+  if (events[0]?.type === "team_opened") return [];
   const v = view(events);
   const out: TranscriptEntry[] = [];
   for (const entry of walk(v, events)) {

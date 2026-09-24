@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from .common import arr, num, obj, text
 from .jcs import JsonValue, Obj, canonical
+from .turn_open import mail_renders
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -211,10 +212,7 @@ class _View:
         notice render nothing."""
         env = obj(obj(e["data"])["envelope"])
         kind = text(env["kind"])
-        if kind in ("reply", "cancel", "member_parked") or (kind == "bounce" and "ask_id" in env):
-            return None
-        settle = env.get("monitor_id") in _settle_monitors(self.events)
-        if kind in ("member_settled", "member_ended") and settle:
+        if not mail_renders(env, _settle_monitors(self.events)):
             return None
         sender = obj(env["from"])
         who = 'operator="true"' if "operator" in sender else f'from="{esc(text(sender["name"]))}"'

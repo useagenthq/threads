@@ -65,6 +65,16 @@ class Wake:
     nor an agent_finished: the late results of one append."""
 
 
+@dataclass(frozen=True, slots=True)
+class TurnRun:
+    """A turn's run: its opener's principal and the whole root request. A member's task turn has
+    no root request in its own log (it is in the lead's): None, and only its principal counts."""
+
+    principal: PrincipalKey
+    root: tuple[str, str] | None
+    """(thread_id, event_id) of the root request."""
+
+
 @dataclass(slots=True)
 class Team:
     """What one log's events leave for semantic rules 31 and 33-45 (team_fold, rules_team). Ids
@@ -79,6 +89,10 @@ class Team:
     ended: bool = False
     last_end: str | None = None
     """The reason of the last turn_completed (rule 38)."""
+    turn: TurnRun | None = None
+    """The run of the open turn (rule 34)."""
+    spawns: dict[str, TurnRun] = field(default_factory=dict[str, TurnRun])
+    """The run that spawned each background spawn_agent call: a woken turn's run (rule 34)."""
     mail_done: set[str] = field(default_factory=set[str])
     """Mail received, refused or taken as a task (rule 31)."""
     asks_in: set[str] = field(default_factory=set[str])
@@ -97,6 +111,8 @@ class Team:
     """The task monitor of each member_started in this log (rule 40)."""
     requests: set[str] = field(default_factory=set[str])
     """operator_request ids in this log (rule 42)."""
+    request_events: set[str] = field(default_factory=set[str])
+    """operator_request event ids in this log (rule 42)."""
 
 
 @dataclass(slots=True)

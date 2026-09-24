@@ -1,0 +1,9 @@
+{
+  "name": "member-ended-then-user-input-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 37: an ended member takes input.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

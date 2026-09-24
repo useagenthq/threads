@@ -13,10 +13,10 @@ from threads.log import (
     HeartbeatEvent,
     InjectedEvent,
     MailEnvelope,
-    MailSender1,
     MessageReceivedEvent,
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
+    OperatorSender,
     ParseError,
     Span,
     SteerEvent,
@@ -83,7 +83,7 @@ def _mail(read: ReadArtifact, event: MessageReceivedEvent) -> Ok[Line | None] | 
         return body
     sender = env.from_
     # No member name can produce operator="true".
-    who = 'operator="true"' if isinstance(sender, MailSender1) else f'from="{esc(sender.name)}"'
+    who = 'operator="true"' if isinstance(sender, OperatorSender) else f'from="{esc(sender.name)}"'
     ask = f' ask_id="{esc(env.ask_id)}"' if env.kind == "ask" and env.ask_id is not MISSING else ""
     head = f'<message {who} kind="{env.kind}"{ask} untrusted="true">'
     return Ok(Line(user_line(f"{head}\n{esc(body.value)}\n</message>")))
@@ -94,7 +94,9 @@ def _mail_text(read: ReadArtifact, env: MailEnvelope, seq: int) -> Ok[str] | Err
     if env.body is not MISSING:
         return _body_text(read, env.body, seq)
     if env.result is MISSING:
-        return Ok(f"bounced: {'' if env.code is MISSING else env.code}")
+        if env.code is MISSING:
+            raise AssertionError("the schema requires a bounce's code")
+        return Ok(f"bounced: {env.code}")
     value = to_json(env.result)
     if isinstance(env.result, CompletedResult) and isinstance(value, dict):
         output = _body_text(read, env.result.output, seq)

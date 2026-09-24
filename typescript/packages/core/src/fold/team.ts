@@ -2,8 +2,20 @@ import { type KnownEvent, type MailEnvelope, principalKey } from "../log";
 import type { EventOf, Fold, ParkAddress } from "./state";
 
 // Teams (spec/schema/README.md, "Teams"): what one log's events leave for semantic rules 31 and
-// 33-45, and which received mail opens a turn. Ids are the wire's: MailId, AskId, WaitId and
-// MonitorId strings.
+// 33-45, and which received mail renders and opens a turn. Ids are the wire's: MailId, AskId,
+// WaitId and MonitorId strings.
+
+/**
+ * A turn's run: its opener's principal and the whole root request (thread and event id). A
+ * member's task turn has no root request in its own log (it is in the lead's): undefined, and
+ * only its principal is compared.
+ */
+export type TurnRun = {
+  readonly principal: string | undefined;
+  readonly root:
+    | { readonly thread: string; readonly event: string }
+    | undefined;
+};
 
 export type TeamFold = {
   /** The log starts with team_opened: it takes only operator-side events (rule 33). */
@@ -18,6 +30,10 @@ export type TeamFold = {
   ended: boolean;
   /** The reason of the last turn_completed (rule 38). */
   lastEnd: EventOf<"turn_completed">["data"]["reason"] | undefined;
+  /** The run of the open turn (rule 34). */
+  turn: TurnRun | undefined;
+  /** The run that spawned each background spawn_agent call: a woken turn's run (rule 34). */
+  readonly spawns: Map<string, TurnRun>;
   /** Mail received, refused or taken as a task (rule 31). */
   readonly mailDone: Set<string>;
   /** Asks this log received and has not replied to (rule 35). */
@@ -36,6 +52,8 @@ export type TeamFold = {
   readonly taskMonitors: Set<string>;
   /** operator_request ids in this log (rule 42). */
   readonly requests: Set<string>;
+  /** operator_request event ids in this log (rule 42). */
+  readonly requestEvents: Set<string>;
 };
 
 export function emptyTeam(): TeamFold {
@@ -46,6 +64,8 @@ export function emptyTeam(): TeamFold {
     hadInput: false,
     ended: false,
     lastEnd: undefined,
+    turn: undefined,
+    spawns: new Map(),
     mailDone: new Set(),
     asksIn: new Set(),
     asksOut: new Set(),
@@ -55,6 +75,7 @@ export function emptyTeam(): TeamFold {
     settle: new Set(),
     taskMonitors: new Set(),
     requests: new Set(),
+    requestEvents: new Set(),
   };
 }
 
@@ -64,22 +85,53 @@ const NOTICES: ReadonlySet<MailEnvelope["kind"]> = new Set([
 ]);
 
 /**
- * Whether a received mail opens a turn (spec/schema/README.md, "Which events open a turn";
- * reference: turn_open.py). Only in a member's log (the lead's included) with no turn open: a
- * message, an ask, a bounce naming no ask, or a task or end monitor's notification, once no park
- * is left but the one it resolves. A reply, an ask's bounce and a wait's notification resume
- * their call instead.
+ * The mail kinds that render as a `<message>` line and would open a turn: a message, an ask, a
+ * bounce naming no ask, or a task or end monitor's notification (reference: turn_open.py). A
+ * reply, an ask's bounce and a wait's notification answer their call; a cancel and a park
+ * notice reach no model.
+ */
+export function mailRenders(
+  env: MailEnvelope,
+  settle: ReadonlySet<string>,
+): boolean {
+  if (NOTICES.has(env.kind))
+    return env.monitor_id !== undefined && !settle.has(env.monitor_id);
+  return (
+    env.kind === "message" ||
+    env.kind === "ask" ||
+    (env.kind === "bounce" && env.ask_id === undefined)
+  );
+}
+
+/**
+ * Whether a received mail opens a turn (spec/schema/README.md, "Which events open a turn"): in a
+ * member's log (the lead's included) with no turn open, mail that renders, once no park is left
+ * but the one it resolves.
  */
 export function mailOpensTurn(fold: Fold, env: MailEnvelope): boolean {
   if (fold.turnOpen || fold.team.teamLog) return false;
-  const opens = NOTICES.has(env.kind)
-    ? env.monitor_id !== undefined && !fold.team.settle.has(env.monitor_id)
-    : env.kind === "message" ||
-      env.kind === "ask" ||
-      (env.kind === "bounce" && env.ask_id === undefined);
   const resolves = (p: ParkAddress): boolean =>
     p.kind === "member" && p.id === env.monitor_id;
-  return opens && fold.parked.every(resolves);
+  return mailRenders(env, fold.team.settle) && fold.parked.every(resolves);
+}
+
+/** The run a mail belongs to: its provenance's principal and root request. */
+export function mailRun(env: MailEnvelope): TurnRun {
+  const { principal, root_request: root } = env.provenance;
+  return {
+    principal: principalKey(principal),
+    root: { thread: root.thread_id, event: root.event_id },
+  };
+}
+
+/** Whether mail of `run` shares the open turn's run (rule 34). */
+export function joinsTurn(turn: TurnRun | undefined, run: TurnRun): boolean {
+  if (turn === undefined || turn.principal !== run.principal) return false;
+  return (
+    turn.root === undefined ||
+    (turn.root.thread === run.root?.thread &&
+      turn.root.event === run.root.event)
+  );
 }
 
 /** `<watcher branch_id>:<registering event_id>:<target name>`. */
@@ -90,6 +142,7 @@ export function monitorId(e: KnownEvent, target: string): string {
 /** Advances the team bookkeeping past one event that passed validate_next. */
 export function applyTeam(fold: Fold, e: KnownEvent): void {
   applyLog(fold.team, e);
+  applyTurn(fold, e);
   applyMail(fold, e);
   applyMonitors(fold.team, e);
 }
@@ -102,10 +155,38 @@ function applyLog(team: TeamFold, e: KnownEvent): void {
     team.member = e.data.parent?.relation === "team_member";
   else if (e.type === "user_input") {
     team.hadInput = true;
-    if (e.data.source === "team_task") team.mailDone.add(e.data.mail_id);
-  } else if (e.type === "turn_completed") team.lastEnd = e.data.reason;
-  else if (e.type === "member_ended") team.ended = true;
-  else if (e.type === "operator_request") team.requests.add(e.data.request_id);
+    if (e.data.mail_id !== undefined) team.mailDone.add(e.data.mail_id);
+  } else if (e.type === "member_ended") team.ended = true;
+  else if (e.type === "operator_request") {
+    team.requests.add(e.data.request_id);
+    team.requestEvents.add(e.event_id);
+  }
+}
+
+/** Which run the open turn belongs to. A woken runs before applyWake clears its causes. */
+function applyTurn(fold: Fold, e: KnownEvent): void {
+  const { team } = fold;
+  if (e.type === "user_input") {
+    const p = e.actor.principal;
+    const task = e.data.source === "team_task";
+    team.turn = {
+      principal: p === undefined ? undefined : principalKey(p),
+      root: task ? undefined : { thread: e.thread_id, event: e.event_id },
+    };
+  } else if (e.type === "woken") {
+    const [first] = e.data.causes;
+    const call =
+      first === undefined ? undefined : fold.wake.trailingLate.get(first);
+    team.turn = call === undefined ? undefined : team.spawns.get(call);
+  } else if (e.type === "turn_completed") {
+    team.turn = undefined;
+    team.lastEnd = e.data.reason;
+  } else if (
+    e.type === "agent_spawned" &&
+    e.data.mode === "background" &&
+    team.turn !== undefined
+  )
+    team.spawns.set(e.data.call_id, team.turn);
 }
 
 function applyMail(fold: Fold, e: KnownEvent): void {
@@ -122,12 +203,14 @@ function applyMail(fold: Fold, e: KnownEvent): void {
   }
 }
 
-/** A turn-opening receipt starts a turn of the mail's run: its provenance's principal and root
- * request (spec/schema/README.md, "Background wakes"). */
+/** A turn-opening receipt starts a turn of the mail's run (spec/schema/README.md, "Background
+ * wakes"). */
 function received(fold: Fold, env: MailEnvelope): void {
   const { team } = fold;
   if (mailOpensTurn(fold, env)) {
+    const run = mailRun(env);
     fold.turnOpen = true;
+    team.turn = run;
     fold.wake.run = {
       principal: principalKey(env.provenance.principal),
       root: env.provenance.root_request.event_id,

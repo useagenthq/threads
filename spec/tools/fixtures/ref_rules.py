@@ -1,5 +1,5 @@
 # pyright: strict
-"""Reference `validate_next` for semantic rules 31-32 and 34-45 on one log (spec/schema/README.md,
+"""Reference `validate_next` for semantic rules 31-42, 44 and 45 on one log (spec/schema/README.md,
 "Semantic rules"). Stdlib only, like the reference reducer: `ref_check` runs it over every case,
 so a new rule that contradicts an accepted case fails `gen_fixtures.py --check`."""
 
@@ -8,13 +8,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import arr, obj, text
-from .ref_fold import advance
-from .turn_open import mail_opens_turn
+from .ref_fold import advance, joins, mail_run
+from .turn_open import mail_opens_turn, mail_renders
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from .jcs import JsonValue, Obj
+    from .ref_fold import Run
 
 TEAM_LOG = frozenset(
     {
@@ -23,7 +24,6 @@ TEAM_LOG = frozenset(
         "member_observed", "wait_finished",
     }
 )  # fmt: skip
-type Run = tuple[str, str]  # (principal key, root request event id)
 
 
 def principal(p: JsonValue) -> str:
@@ -52,7 +52,8 @@ class Check:
         self.monitors: set[str] = set()
         self.task_monitors: set[str] = set()
         self.requests: set[str] = set()
-        self.calls: set[str] = set()
+        self.request_events: set[str] = set()
+        self.pending: set[str] = set()
         self.spawn_runs: dict[str, Run] = {}
         self.trailing: dict[str, str] = {}
         self.ended = self.idle_ok = self.inputs = False
@@ -62,14 +63,20 @@ class Check:
         d, t = obj(e["data"]), text(e["type"])
         why = self._check(e, d, t)
         if why is None:
+            before = self.turn
             self._fold(e, d, t)
+            opened = before is None and self.turn is not None
+            self.idle_ok = (t == "turn_completed" and d.get("reason") == "end_turn") or (
+                self.idle_ok and not opened
+            )
         self.first = False
         return why
 
     def _check(self, e: Obj, d: Obj, t: str) -> str | None:
         if t == "team_opened" and not self.first:
             return "33: team_opened after a branch's first event"
-        if self.team_log and t not in TEAM_LOG:
+        repair = t == "fork" and d.get("reason") == "repair"
+        if self.team_log and t not in TEAM_LOG and not repair:
             return f"33: a team log takes no {t}"
         handler = CHECKS.get(t)
         return handler(self, e, d) if handler else None
@@ -86,16 +93,17 @@ class Check:
         return self._receipt_run(e, env)
 
     def _receipt_run(self, e: Obj, env: Obj) -> str | None:
-        prov = obj(env["provenance"])
-        run = (principal(prov["principal"]), text(obj(prov["root_request"])["event_id"]))
+        run = mail_run(env)
         if principal(obj(e["actor"])["principal"]) != run[0]:
             return "45: a receipt's actor is not its provenance principal"
-        ordinary = env["kind"] in ("message", "ask")
-        if ordinary and self.turn is not None and self.turn != run:
+        if self.turn is not None and not joins(self.turn, run) and mail_renders(env, self.settle):
             return "34: mail of another request joins an open turn"
         if self.ended and self.opens(env):
             return "37: an ended member's log opens a turn"
         return None
+
+    def rule_mail_refused(self, _e: Obj, d: Obj) -> str | None:
+        return "31: a mail refused after it was taken" if d["mail_id"] in self.mail_done else None
 
     def opens(self, env: Obj) -> bool:
         if self.turn is not None or self.team_log:
@@ -134,9 +142,14 @@ class Check:
         return None if self.idle_ok else "38: member_idle without its task's turn end"
 
     # rules 39-40: waits, monitors and parks
-    def rule_wait(self, _e: Obj, d: Obj) -> str | None:
-        members = [(obj(m)["name"], obj(m)["generation"]) for m in arr(d["members"])]
-        return "39: a wait lists a member twice" if len(set(members)) < len(members) else None
+    def rule_wait(self, e: Obj, d: Obj) -> str | None:
+        names = [obj(m)["name"] for m in arr(d["members"])]
+        if len(set(names)) < len(names):
+            return "39: a wait lists a member twice"
+        waits = {f"{e['branch_id']}:{r}" for r in self.requests}
+        if self.team_log and d["wait_id"] not in waits:
+            return "42: an operator wait before its operator_request"
+        return None
 
     def rule_wait_finished(self, _e: Obj, d: Obj) -> str | None:
         return None if d["wait_id"] in self.waits else "39: wait_finished names no open wait"
@@ -153,7 +166,11 @@ class Check:
         return None
 
     # rules 41, 45: inputs
-    def rule_input(self, e: Obj, d: Obj) -> str | None:
+    def rule_input(self, _e: Obj, d: Obj) -> str | None:
+        if self.ended:
+            return "37: an ended member's log opens a turn"
+        if d.get("mail_id") in self.mail_done:
+            return "31: a task taken twice"
         task = d["source"] == "team_task"
         if self.member and task == self.inputs:
             return "41: a member's task is its first input, and only it"
@@ -167,7 +184,7 @@ class Check:
         who = {principal(obj(e["actor"])["principal"]), principal(d["principal"])}
         if who != {principal(prov["principal"])}:
             return "45: an operator_request's principals differ"
-        if obj(prov["root_request"])["event_id"] != e["event_id"]:
+        if prov["root_request"] != {"thread_id": e["thread_id"], "event_id": e["event_id"]}:
             return "45: an operator_request's root request is not itself"
         return None
 
@@ -179,18 +196,24 @@ class Check:
     def rule_policy(self, _e: Obj, d: Obj) -> str | None:
         if "request_id" in d:
             return None if d["request_id"] in self.requests else "42: decision before its request"
-        return None if d["call_id"] in self.calls else "42: decision names no pending call"
+        return None if d["call_id"] in self.pending else "42: decision names no pending call"
 
     def rule_started(self, e: Obj, d: Obj) -> str | None:
         parent = obj(d["parent"])
         if self.team_log:
-            return None if parent["thread_id"] == self.lead_thread else "45: parent is not the lead"
+            if parent["thread_id"] != self.lead_thread:
+                return "45: parent is not the lead"
+            root = obj(obj(d["provenance"])["root_request"])
+            ours = root["thread_id"] == e["thread_id"] and root["event_id"] in self.request_events
+            return None if ours else "42: an operator start before its operator_request"
         own = (parent["thread_id"], parent["branch_id"], parent["event_id"])
         me = (e["thread_id"], e["branch_id"], e["event_id"])
         return None if own == me else "45: a lead's member_started parent is not itself"
 
     # rules 32, 45: background wakes
     def rule_woken(self, e: Obj, d: Obj) -> str | None:
+        if self.ended:
+            return "37: an ended member's log opens a turn"
         causes = [text(c) for c in arr(d["causes"])]
         runs = [self.spawn_runs.get(self.trailing.get(c, "")) for c in causes]
         if self.turn is not None or len(set(causes)) < len(causes):
@@ -210,14 +233,12 @@ class Check:
             self.trailing[text(e["event_id"])] = text(d["call_id"])
         elif t != "agent_finished":
             self.trailing.clear()
-        self.idle_ok = (t == "turn_completed" and d.get("reason") == "end_turn") or (
-            self.idle_ok and t not in ("user_input", "woken", "message_received")
-        )
 
 
 CHECKS: dict[str, Callable[[Check, Obj, Obj], str | None]] = {
     "message_received": Check.rule_received,
     "message_sent": Check.rule_sent,
+    "mail_refused": Check.rule_mail_refused,
     "ask_closed": Check.rule_ask_closed,
     "member_ended": Check.rule_ended,
     "member_idle": Check.rule_idle,

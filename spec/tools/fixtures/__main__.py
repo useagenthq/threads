@@ -44,6 +44,7 @@ from . import (
     styles,
     summaries,
     team_bindings,
+    team_edges,
     team_operator,
     team_rebind,
     team_replay,
@@ -95,6 +96,7 @@ FAMILIES = (
     wakes,
     team_rules,
     team_bindings,
+    team_edges,
 )
 
 

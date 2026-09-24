@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import arr, obj, text
+from .turn_open import NOTICES
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -20,6 +21,23 @@ def _key(p: JsonValue) -> str:
     return "/".join(text(q[k]) for k in ("issuer", "tenant", "subject"))
 
 
+# (principal key, root request thread_id, event_id). A member's task turn has no root request
+# in its own log (it is in the lead's): None, and only its principal is compared (rule 34).
+type Run = tuple[str, str | None, str | None]
+
+
+def joins(turn: Run, run: Run) -> bool:
+    """Whether mail of `run` shares the open turn's run (rule 34)."""
+    return turn[0] == run[0] and (turn[1] is None or turn[1:] == run[1:])
+
+
+def mail_run(env: Obj) -> Run:
+    """The run a mail belongs to: its provenance's principal and full root request."""
+    prov = obj(env["provenance"])
+    root = obj(prov["root_request"])
+    return (_key(prov["principal"]), text(root["thread_id"]), text(root["event_id"]))
+
+
 def _first(c: Check, e: Obj, d: Obj, t: str) -> None:
     c.branch = text(e["branch_id"])
     if t == "team_opened":
@@ -30,13 +48,14 @@ def _first(c: Check, e: Obj, d: Obj, t: str) -> None:
 
 def _received(c: Check, e: Obj, env: Obj) -> None:
     if c.opens(env):
-        prov = obj(env["provenance"])
-        c.turn = (_key(prov["principal"]), text(obj(prov["root_request"])["event_id"]))
+        c.turn = mail_run(env)
     c.mail_done.add(text(env["mail_id"]))
     if env["kind"] == "ask":
         c.asks_in.add(text(env["ask_id"]))
     elif env["kind"] == "reply":
         c.replies_in[text(env["mail_id"])] = text(env["ask_id"])
+    elif env["kind"] in NOTICES:
+        c.monitors.discard(text(env["monitor_id"]))
 
 
 def _registered(c: Check, e: Obj, d: Obj, t: str) -> None:
@@ -57,7 +76,9 @@ def _registered(c: Check, e: Obj, d: Obj, t: str) -> None:
 
 
 def _input(c: Check, e: Obj, d: Obj) -> None:
-    c.turn = (_key(obj(e["actor"])["principal"]), text(e["event_id"]))
+    who = _key(obj(e["actor"])["principal"])
+    task = d["source"] == "team_task"
+    c.turn = (who, None, None) if task else (who, text(e["thread_id"]), text(e["event_id"]))
     c.inputs = True
     if d["source"] == "team_task":
         c.mail_done.add(text(d["mail_id"]))
@@ -92,6 +113,11 @@ def _set(field: str, key: str) -> Callable[[Check, Obj, Obj], None]:
     return add
 
 
+def _request(c: Check, e: Obj, d: Obj) -> None:
+    c.requests.add(text(d["request_id"]))
+    c.request_events.add(text(e["event_id"]))
+
+
 def _end_turn(c: Check, _e: Obj, _d: Obj) -> None:
     c.turn = None
 
@@ -109,8 +135,9 @@ FOLDS: dict[str, Callable[[Check, Obj, Obj], None]] = {
     "message_sent": _sent,
     "ask_closed": lambda c, _e, d: c.asks_out.discard(text(d["ask_id"])),
     "member_ended": _member_ended,
-    "operator_request": _set("requests", "request_id"),
-    "tool_call": _set("calls", "call_id"),
+    "operator_request": _request,
+    "tool_call": _set("pending", "call_id"),
+    "tool_result": lambda c, _e, d: c.pending.discard(text(d["call_id"])),
     "agent_spawned": _spawned,
     "parked": lambda c, _e, d: c.parks.append(d["address"]),
     "resumed": _resumed,

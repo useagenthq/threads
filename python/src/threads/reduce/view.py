@@ -36,7 +36,7 @@ from threads.log import (
     UserInputEvent,
     WaitStartedEvent,
 )
-from threads.reduce.team_fold import monitor_id
+from threads.reduce.team_fold import mail_renders, monitor_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,15 +113,10 @@ class _Builder:
     def _mail(self, event: Event) -> None:
         if isinstance(event, WaitStartedEvent):
             self.settle.update(monitor_id(event, m.name) for m in event.data.members)
-        elif isinstance(event, MessageReceivedEvent):
-            env = event.data.envelope
-            silent = (
-                env.kind in ("reply", "cancel", "member_parked")
-                or (env.kind == "bounce" and env.ask_id is not MISSING)
-                or (env.monitor_id is not MISSING and env.monitor_id in self.settle)
-            )
-            if silent:
-                self.silent_mail.add(event.event_id)
+        elif isinstance(event, MessageReceivedEvent) and not mail_renders(
+            event.data.envelope, self.settle
+        ):
+            self.silent_mail.add(event.event_id)
 
     def _hook(self, event: HookDecisionEvent) -> None:
         d = event.data

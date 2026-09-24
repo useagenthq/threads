@@ -1,0 +1,9 @@
+{
+  "name": "policy-decision-after-result-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 42: message_policy_decided names a call whose result is recorded.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

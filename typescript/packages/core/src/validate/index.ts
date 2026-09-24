@@ -76,7 +76,7 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "tools_changed":
       return checkToolsChanged(e);
     case "user_input":
-      return checkInput(fold, e) ?? checkTeamInput(fold, e);
+      return checkTeamInput(fold, e) ?? checkInput(fold, e);
     case "steer":
       return checkInput(fold, e);
     case "model_request":
@@ -156,7 +156,7 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "parked":
       return checkTeamPark(fold, e);
     case "woken":
-      return checkWoken(fold, e) ?? checkNotEnded(fold);
+      return checkNotEnded(fold) ?? checkWoken(fold, e);
     case "team_opened":
     case "monitor_set":
       return undefined;

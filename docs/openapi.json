@@ -2579,16 +2579,7 @@
             "$ref": "#/components/schemas/events_MemberRef"
           },
           {
-            "additionalProperties": false,
-            "properties": {
-              "operator": {
-                "$ref": "#/components/schemas/events_RequestId"
-              }
-            },
-            "required": [
-              "operator"
-            ],
-            "type": "object"
+            "$ref": "#/components/schemas/events_OperatorSender"
           }
         ]
       },
@@ -2705,6 +2696,18 @@
       "events_NonEmpty": {
         "minLength": 1,
         "type": "string"
+      },
+      "events_OperatorSender": {
+        "additionalProperties": false,
+        "properties": {
+          "operator": {
+            "$ref": "#/components/schemas/events_RequestId"
+          }
+        },
+        "required": [
+          "operator"
+        ],
+        "type": "object"
       },
       "events_OutputPart": {
         "oneOf": [
