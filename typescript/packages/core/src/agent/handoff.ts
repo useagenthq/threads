@@ -3,8 +3,9 @@ import type { LoopConfig } from "../loop";
 import { inheritedFrom } from "../loop/ledger";
 import { knownEvents } from "../reduce";
 import type { EventDraft, Writer } from "../store";
+import type { Thread } from "../thread/handle";
 import { type ChildEnv, type TargetFactory, targetFactory } from "./registry";
-import type { RunResult, ThreadRef } from "./result";
+import type { RunResult } from "./result";
 import {
   ceilingsOf,
   execute,
@@ -67,7 +68,7 @@ export async function handedOff<Deps, Output>(
   def: Resolved<Deps, Output>,
   plan: Plan<Deps>,
   writer: Writer,
-  thread: ThreadRef,
+  thread: Thread,
   authorize: LoopConfig["authorize"],
 ): Promise<RunResult<Output>> {
   const events = knownEvents(writer.chain);

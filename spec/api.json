@@ -77,6 +77,12 @@
       "why": "Keeps the thread handle pure data and control; one run path."
     },
     {
+      "id": "result-thread-handle",
+      "open": "Whether a run's result carries a thread id to open later or the Thread handle itself.",
+      "choice": "RunResult.thread (and handed_off.to_thread) is the Thread handle in both languages, made without I/O and carrying the agent's sandbox for fork(). openThread(store, id) gets one later from a stored id. In TypeScript, ThreadRef ({id, branch, store}) stays the plain type run({thread}) accepts.",
+      "why": "A finished run's thread reads in one line (result.thread.usage()), the same in both languages."
+    },
+    {
       "id": "deny-method",
       "open": "The draft design lists approve() but no way to refuse a challenge.",
       "choice": "Thread.deny(challengeId, principal, {reason}).",
@@ -1244,7 +1250,7 @@
           "casing": "api"
         }
       ],
-      "doc": "The HTTP form is host-api RunOutcome (ids instead of handles)."
+      "doc": "What a run ended with. thread is the Thread handle in both languages: read it (usage(), timeline(), fork()) or pass it back to run() to continue. The HTTP form is host-api RunOutcome (ids instead of handles)."
     },
     "TeamAgent": {
       "kind": "interface",

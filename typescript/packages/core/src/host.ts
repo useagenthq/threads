@@ -57,5 +57,6 @@ export { parseRows } from "./store/tables";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control } from "./thread/control";
 export { decide } from "./thread/decide";
+export { type Thread, threadHandle } from "./thread/handle";
 export { cancel, stopWhenIdle } from "./thread/settings";
 export type { ChainEvent, LogError, VerifiedLog } from "./verify";

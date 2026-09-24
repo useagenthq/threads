@@ -76,8 +76,6 @@ NOTES: dict[Member, str] = {
     ("Thread", "forkPoints"): "TypeScript returns the list itself; Python returns Ok or Err.",
     ("Thread", "todos"): "TypeScript returns the list itself; Python returns Ok or Err.",
     ("Thread", "children"): "TypeScript returns the list itself; Python returns Ok or Err.",
-    ("RunResult", None): "In TypeScript, thread is a ThreadRef (id, branch, store): pass it to "
-    "openThread for the full Thread handle. In Python it is the Thread handle.",
 }
 
 # Contract text that only makes sense next to the spec, rewritten for readers.
