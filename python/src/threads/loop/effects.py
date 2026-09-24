@@ -25,6 +25,8 @@ if TYPE_CHECKING:
 DAY_MS: Final = 86_400_000
 """Default TTL of a parked effect."""
 SKEW_MS: Final = 1000
+MAX_SENDS: Final = 3
+"""Attempts in total for a channel send refused rate_limited or transient (as TypeScript)."""
 """The adapter's declared clock skew margin for dedup windows; doubled on the host clock."""
 
 
@@ -66,8 +68,8 @@ async def _dispatched(rt: Runtime, inv: Invocation, spec: ToolSpec) -> Halt | No
             # Settle on the state as recorded now, with this attempt's effect_begin in it.
             fresh = call_state(rt.events, inv.call_id)
             return await settle(rt, fresh, spec, reason, "host")
-        case NotSent(unmatched=unmatched):
-            return await _not_sent(rt, inv, unmatched=unmatched)
+        case NotSent(unmatched=unmatched, refused=refused):
+            return await _not_sent(rt, inv, unmatched=unmatched, refused=refused)
 
 
 async def _commit(rt: Runtime, inv: Invocation, output: Output) -> Halt | None:
@@ -93,7 +95,9 @@ async def _settled(record: Coroutine[object, object, Halt | None]) -> Halt | Non
         raise
 
 
-async def _not_sent(rt: Runtime, inv: Invocation, *, unmatched: bool) -> Halt | None:
+async def _not_sent(
+    rt: Runtime, inv: Invocation, *, unmatched: bool, refused: str | None = None
+) -> Halt | None:
     resolved = draft(
         "effect_resolved", {"call_id": inv.call_id, "outcome": "not_sent", "by": "adapter"}
     )
@@ -103,7 +107,16 @@ async def _not_sent(rt: Runtime, inv: Invocation, *, unmatched: bool) -> Halt | 
         if isinstance(done, Err):
             return lost(done.error)
         return Failed("unmatched_external_op", f"no recorded stub for {inv.spec.name}")
-    text = "not sent: the provider never received the request"
+    attempts = len(call_state(rt.events, inv.call_id).begins)
+    if refused in ("rate_limited", "transient") and attempts < MAX_SENDS:
+        # Nothing reached the provider: settled, then sent again under the same key after a
+        # backoff, as TypeScript's host does.
+        done = await rt.append(resolved)
+        if isinstance(done, Err):
+            return lost(done.error)
+        await rt.wait_until(rt.clock() + min(5000, 250 * 2**attempts))
+        return await dispatch(rt, call_state(rt.events, inv.call_id), inv.spec)
+    text = "not sent: " + (refused or "the provider never received the request")
     result = await result_draft(rt, inv.call_id, text, As("not_executed", True))
     done = await rt.append(resolved, result)
     return lost(done.error) if isinstance(done, Err) else None

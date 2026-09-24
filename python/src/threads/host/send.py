@@ -102,8 +102,8 @@ class ChannelSend:
         match outcome:
             case Sent(platform_ref=ref):
                 return Output(ref)
-            case DeliveryError(sent="definite_not_sent"):
-                return NotSent()
+            case DeliveryError(sent="definite_not_sent", kind=kind):
+                return NotSent(refused=kind)
             case DeliveryError():
                 # Whatever its kind, an unknown outcome is never re-sent on a backoff.
                 return Uncertain("transport_error")

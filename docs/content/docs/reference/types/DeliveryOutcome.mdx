@@ -23,7 +23,7 @@ A union discriminated by `status`.
 </Field>
 
 <Field name="kind" type={"\"rate_limited\" | \"transient\" | \"permanent\""} required>
-  rate_limited, transient or permanent. When nothing was sent, the TypeScript host retries rate_limited and transient up to 3 attempts in total; the Python host, and either host on permanent, records the reply as not sent.
+  rate_limited, transient or permanent. When nothing was sent, the host sends rate_limited and transient again under the same key, up to 3 attempts in total; on permanent, or after the last attempt, it records the reply as not sent.
 </Field>
 
 <Field name="sent" type={"\"definite_not_sent\" | \"outcome_unknown\""} required>

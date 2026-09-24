@@ -63,6 +63,8 @@ class NotSent:
     """Proven never sent. In stub mode, an invocation no recorded stub matches."""
 
     unmatched: bool = False
+    refused: Literal["rate_limited", "transient", "permanent"] | None = None
+    """A channel's refusal: rate_limited and transient are sent again under the same key."""
 
 
 type Dispatched = Output | Uncertain | NotSent
