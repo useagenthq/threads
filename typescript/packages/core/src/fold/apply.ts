@@ -9,6 +9,7 @@ import {
   type EventOf,
   effectKey,
   type Fold,
+  hostCall,
   responseText,
 } from "./state";
 import { applyTeam } from "./team";
@@ -252,6 +253,12 @@ function applyResponse(
   }
   const requestId = e.data.request_event_id;
   fold.awaiting.delete(requestId);
+  fold.toolUses.set(
+    requestId,
+    new Set(
+      e.data.content.flatMap((p) => (p.type === "tool_use" ? [p.call_id] : [])),
+    ),
+  );
   if (fold.requests.get(requestId)?.compaction === true) {
     fold.summaries.set(requestId, responseText(e.data.content));
   }
@@ -267,24 +274,28 @@ type CallEvent = EventOf<
   | "tool_result_late"
 >;
 
+function applyToolCall(fold: Fold, e: EventOf<"tool_call">): void {
+  fold.calls.set(e.data.call_id, {
+    branchId: e.branch_id,
+    spec: fold.tools.find((tool) => tool.name === e.data.name),
+    allowed: false,
+    barrier: false,
+    result: undefined,
+    deferred: false,
+    late: false,
+  });
+  fold.pending.add(e.data.call_id);
+  if (hostCall(fold, e)) fold.hostCalls.add(e.data.call_id);
+  if (e.data.name === "ask_user")
+    fold.asks.set(e.data.call_id, askOf(e.data.input) ?? "invalid");
+}
+
 function applyCall(fold: Fold, e: CallEvent): void {
   const call = fold.calls.get(e.data.call_id);
   switch (e.type) {
-    case "tool_call": {
-      fold.calls.set(e.data.call_id, {
-        branchId: e.branch_id,
-        spec: fold.tools.find((tool) => tool.name === e.data.name),
-        allowed: false,
-        barrier: false,
-        result: undefined,
-        deferred: false,
-        late: false,
-      });
-      fold.pending.add(e.data.call_id);
-      if (e.data.name === "ask_user")
-        fold.asks.set(e.data.call_id, askOf(e.data.input) ?? "invalid");
+    case "tool_call":
+      applyToolCall(fold, e);
       return;
-    }
     case "permission_decision":
       if (call !== undefined) call.allowed = e.data.decision === "allow";
       return;

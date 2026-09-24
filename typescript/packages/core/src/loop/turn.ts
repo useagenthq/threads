@@ -1,4 +1,9 @@
-import type { EventOf, Fold } from "../fold/state";
+import {
+  type EventOf,
+  type Fold,
+  loopParked,
+  loopPending,
+} from "../fold/state";
 import type { KnownEvent, ToolSpec } from "../log";
 import type { EventDraft } from "../store";
 import { maxPauseContinuations } from "./policy";
@@ -81,7 +86,7 @@ export function cancelRequested(
 
 export function nextStep(events: readonly KnownEvent[], fold: Fold): Step {
   if (!fold.turnOpen) return { kind: "idle" };
-  if (fold.parked.length > 0) return { kind: "parked" };
+  if (loopParked(fold).length > 0) return { kind: "parked" };
   const cancel = cancelRequested(events, fold);
   if (cancel !== undefined) return { kind: "cancel", request: cancel };
   const turn = turnEvents(events, fold);
@@ -92,7 +97,7 @@ export function nextStep(events: readonly KnownEvent[], fold: Fold): Step {
   const owed = owedCalls(events, fold);
   if (owed !== undefined && owed.parts.length > 0)
     return { kind: "respond", response: owed.response };
-  if (fold.pending.size > 0) return { kind: "calls" };
+  if (loopPending(fold).length > 0) return { kind: "calls" };
   if (response === undefined || !isTurnResponse(response, fold))
     return { kind: "request" };
   if (after.some(isTurnRequest)) return { kind: "request" };

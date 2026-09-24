@@ -139,6 +139,10 @@ export type Fold = {
   readonly occurrenceIds: Set<string>;
   /** Each ask_user call's input, or invalid when rule 46 refuses it (rules 25, 46, 47). */
   readonly asks: Map<string, Ask | "invalid">;
+  /** Calls the host issued itself (its channel sends): never the loop's (hostCall). */
+  readonly hostCalls: Set<string>;
+  /** The call_ids of each response's tool_use parts, by request event id. */
+  readonly toolUses: Map<string, Set<string>>;
   readonly wake: WakeFold;
   readonly team: TeamFold;
 };
@@ -196,6 +200,8 @@ export function emptyFold(): Fold {
     itemKeys: new Set(),
     occurrenceIds: new Set(),
     asks: new Map(),
+    hostCalls: new Set(),
+    toolUses: new Map(),
     wake: emptyWake(),
     team: emptyTeam(),
   };
@@ -207,6 +213,33 @@ export function isDeferred(
   spec: ToolSpec,
 ): boolean {
   return spec.defer_loading === true && !fold.loaded.has(spec.name);
+}
+
+/** The tool of the host's own channel sends: replies, approval cards, questions. */
+export const HOST_SEND = "channel_send";
+
+/**
+ * Whether a tool_call is the host's own send: named channel_send, and no tool_use part of the
+ * response to its request. Such a call is reconciled only by the host's outbound path, never by
+ * the agent's loop, even where the model may call a channel_send tool itself.
+ */
+export function hostCall(fold: Fold, call: EventOf<"tool_call">): boolean {
+  const { name, call_id: callId, request_event_id: request } = call.data;
+  return name === HOST_SEND && fold.toolUses.get(request)?.has(callId) !== true;
+}
+
+/** The pending calls the loop runs, recovers and closes: the host's own sends are not among them. */
+export function loopPending(fold: Fold): readonly string[] {
+  return [...fold.pending].filter((id) => !fold.hostCalls.has(id));
+}
+
+/** What the turn waits on: a host send parked for a human never holds the agent's turn. */
+export function loopParked(fold: Fold): readonly ParkAddress[] {
+  return fold.parked.filter((a) => {
+    if (a.kind !== "effect") return true;
+    const callId = fold.effects.get(a.id)?.callId;
+    return callId === undefined || !fold.hostCalls.has(callId);
+  });
 }
 
 export function sameAddress(a: ParkAddress, b: ParkAddress): boolean {

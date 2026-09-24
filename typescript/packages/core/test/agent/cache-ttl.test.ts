@@ -143,7 +143,8 @@ describe("the default cache TTL comes from the models' declared lifetimes", () =
     const started = (await logOf(result.thread)).find(
       (e) => e.type === "thread_started",
     );
-    if (started?.type !== "thread_started") throw new Error("no thread_started");
+    if (started?.type !== "thread_started")
+      throw new Error("no thread_started");
     expect(started.data.policy?.context).toMatchObject({
       cache_ttl_ms: 3_600_000,
       reserve_tokens: 1234,

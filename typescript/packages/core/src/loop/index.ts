@@ -1,4 +1,5 @@
 import { ConfigError } from "../agent/errors";
+import { loopParked } from "../fold/state";
 import { isTestKit } from "../model/guard";
 import { endedOtherwise } from "../reduce/run-end";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
@@ -56,7 +57,7 @@ export async function resume(
   const stopped = await recover(s);
   if (stopped !== undefined) return { kind: "halted", halt: stopped };
   if (options.loop === false)
-    return { kind: s.fold.parked.length > 0 ? "parked" : "idle" };
+    return { kind: loopParked(s.fold).length > 0 ? "parked" : "idle" };
   const end = await session(s, options.input);
   // session_end observes; its failure is recorded and changes nothing.
   if (end.kind !== "halted") await observe(s, "session_end", []);

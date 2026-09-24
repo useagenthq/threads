@@ -1,4 +1,4 @@
-import type { EventOf } from "../../fold/state";
+import { type EventOf, loopPending } from "../../fold/state";
 import { ThreadId } from "../../log";
 import { uuidv7 } from "../../store/encode";
 import { HandoffInput } from "../../tools/agent-inputs";
@@ -31,7 +31,7 @@ export function handOff(s: Session, call: Call): Halt | undefined {
       ),
     );
   // The turn ends here: calls after the handoff in the same response never run.
-  const others = [...s.fold.pending].filter((id) => id !== call_id);
+  const others = loopPending(s.fold).filter((id) => id !== call_id);
   const done = s.appendWork(
     {
       type: "handoff",

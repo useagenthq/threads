@@ -1,4 +1,4 @@
-import type { EventOf } from "../fold/state";
+import { type EventOf, loopParked, loopPending } from "../fold/state";
 import { afterTool, body, recordRead, runAlone } from "./dispatch";
 import { frameworkTool } from "./framework";
 import { type Candidate, groups } from "./groups";
@@ -16,7 +16,7 @@ type Call = EventOf<"tool_call">;
 
 /** The step over the pending calls, in call order: each group, then each call alone. */
 export async function runCalls(s: Session): Promise<Halt | undefined> {
-  const pending = [...s.fold.pending].flatMap((callId) => {
+  const pending = loopPending(s.fold).flatMap((callId) => {
     const call = s.events.findLast(
       (e) => e.type === "tool_call" && e.data.call_id === callId,
     );
@@ -31,7 +31,11 @@ export async function runCalls(s: Session): Promise<Halt | undefined> {
     const stopped =
       calls.length > 1 ? await runGroup(s, calls) : await runAlone(s, first);
     // A step that parked or ended the turn (a handoff) dispatches nothing more.
-    if (stopped !== undefined || s.fold.parked.length > 0 || !s.fold.turnOpen)
+    if (
+      stopped !== undefined ||
+      loopParked(s.fold).length > 0 ||
+      !s.fold.turnOpen
+    )
       return stopped;
   }
   return undefined;

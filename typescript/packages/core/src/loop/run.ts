@@ -1,5 +1,5 @@
 import { assertNever } from "../assert-never";
-import type { EventOf } from "../fold/state";
+import { type EventOf, loopPending } from "../fold/state";
 import { settleBackground } from "./agents/background";
 import { parkOn } from "./agents/park";
 import { finish as record, runChild, spawnedFor } from "./agents/spawn";
@@ -79,7 +79,7 @@ async function cancel(
   s: Session,
   request: EventOf<"cancel_requested">,
 ): Promise<Halt | undefined> {
-  for (const callId of [...s.fold.pending]) {
+  for (const callId of loopPending(s.fold)) {
     const spawned = spawnedFor(s, callId);
     if (
       spawned !== undefined &&

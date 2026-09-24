@@ -13,6 +13,7 @@ import {
 import type { HostContext } from "./context";
 import { sendOp } from "./deliver";
 import { type Conversation, conversationOf } from "./inbox";
+import { leftovers, settleLeftover } from "./leftovers";
 
 // A channel thread's replies are derived from its log, whatever ran it (spec/schema/README.md,
 // "Channel replies"): each end_turn reply and each open approval card is a host-issued
@@ -48,20 +49,33 @@ export async function reply(
   const main = log.mainBranch(threadId);
   const read = main.ok ? log.read(main.value) : undefined;
   if (!main.ok || read?.ok !== true) return "done";
-  const todo = missing(
+  const derived = calls(
+    adapter,
+    conversation,
+    knownEvents(read.value),
+    read.value.fold,
+  );
+  const due = new Set(derived.map((c) => c.callId));
+  const todo = missing(main.value, read.value.fold, derived);
+  const left = leftovers(
     main.value,
     read.value.fold,
-    calls(adapter, conversation, knownEvents(read.value), read.value.fold),
+    knownEvents(read.value),
+    due,
   );
-  if (todo.length > 0) {
+  if (todo.length > 0 || left.length > 0) {
     const writer = log.acquire(main.value, `send-${crypto.randomUUID()}`);
     if (!writer.ok) return "busy";
     // Renewed while the sends are in flight: one past the fence may take longer than the TTL,
     // and a lapsed lease would let another host look it up as not sent and send it again.
     const release = keepLease(writer.value);
     try {
-      for (const call of missing(main.value, writer.value.chain.fold, todo))
-        await sendOp(adapter, writer.value, artifacts, call, ctx.stopping);
+      const w = writer.value;
+      for (const call of missing(main.value, w.chain.fold, todo))
+        await sendOp(adapter, w, artifacts, call, ctx.stopping);
+      const events = knownEvents(w.chain);
+      for (const l of leftovers(main.value, w.chain.fold, events, due))
+        await settleLeftover(adapter, w, artifacts, l, ctx.stopping);
     } finally {
       release();
     }

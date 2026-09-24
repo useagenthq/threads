@@ -62,7 +62,7 @@ async function parkedTeam(leadAnswers: readonly string[]) {
     );
     if (row === undefined) throw new Error("the member has a row");
     const handle = unwrap(await openThread(store, row.thread_id));
-    const [pending] = await handle.pendingApprovals();
+    const [pending] = unwrap(await handle.pendingApprovals());
     if (pending === undefined) throw new Error("the member waits on approval");
     unwrap(await handle.approve(pending.challenge_id, operator));
   };

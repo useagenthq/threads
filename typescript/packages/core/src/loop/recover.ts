@@ -1,5 +1,10 @@
 import { assertNever } from "../assert-never";
-import { type EventOf, effectKey } from "../fold/state";
+import {
+  type EventOf,
+  effectKey,
+  loopParked,
+  loopPending,
+} from "../fold/state";
 import { ok } from "../result";
 import { draft, RECOVERY } from "./drafts";
 import { lookedUp } from "./lookup";
@@ -42,8 +47,8 @@ export async function recover(s: Session): Promise<Halt | undefined> {
     fold.turnOpen &&
     answered &&
     fold.awaiting.size === 0 &&
-    fold.pending.size === 0 &&
-    fold.parked.length === 0 &&
+    loopPending(fold).length === 0 &&
+    loopParked(fold).length === 0 &&
     !cancelOpen(s) &&
     !answeredSinceRequest(s) &&
     // A response's calls are recorded next, never left without results.
@@ -60,7 +65,7 @@ export async function recover(s: Session): Promise<Halt | undefined> {
     const stopped = await recoverRequest(s, requestId);
     if (stopped !== undefined) return stopped;
   }
-  for (const callId of [...s.fold.pending]) {
+  for (const callId of loopPending(s.fold)) {
     const stopped = await recoverCall(s, callId);
     if (stopped !== undefined) return stopped;
   }

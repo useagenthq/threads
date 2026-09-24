@@ -2,6 +2,7 @@ import {
   type BranchId,
   dueQuestions,
   knownEvents,
+  loopParked,
   type Principal,
   pendingWakes,
   StoreError,
@@ -107,7 +108,9 @@ export class Recovery {
     const waiting = pendingWakes(events, branch).length > 0;
     // A question past its expiry is closed by the next run, so a parked branch with one runs on.
     const expired = dueQuestions(events, fold, Date.now()).length > 0;
-    if ((!fold.turnOpen && !waiting) || (fold.parked.length > 0 && !expired))
+    // A host send parked for a human never holds the agent's turn (loopParked).
+    const parked = loopParked(fold).length > 0;
+    if ((!fold.turnOpen && !waiting) || (parked && !expired))
       return this.#ctx.replies(tenant, thread);
     const hosted = this.#ctx.agentOf(events);
     const who = events.findLast((e) => e.type === "user_input")?.actor

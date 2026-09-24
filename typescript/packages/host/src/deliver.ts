@@ -4,6 +4,7 @@ import {
   dispatched,
   type EventDraft,
   type Fence,
+  HOST_SEND,
   type JsonObject,
   redactSecrets,
   type Writer,
@@ -31,7 +32,6 @@ type Send = {
   readonly stopping: AbortSignal;
 };
 
-export const SEND_TOOL = "channel_send";
 const MAX_ATTEMPTS = 3;
 const HOST = { kind: "host" } as const;
 const base = { type_version: 1, critical: true } as const;
@@ -69,7 +69,7 @@ export async function sendOp(
         actor: HOST,
         data: {
           call_id: call.callId,
-          name: SEND_TOOL,
+          name: HOST_SEND,
           input: call.op,
           request_event_id: call.requestId,
         },

@@ -274,7 +274,7 @@ describe("lane 21D review regressions", () => {
     );
     if (row?.branch_id == null) throw new Error("the member has a branch");
     const member = unwrap(await openThread(store, row.thread_id));
-    const [pending] = await member.pendingApprovals();
+    const [pending] = unwrap(await member.pendingApprovals());
     if (pending === undefined) throw new Error("the member waits on approval");
     unwrap(await member.approve(pending.challenge_id, operator));
     // A process crashed right after the email's effect_begin was durable.
