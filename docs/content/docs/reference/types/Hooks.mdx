@@ -433,7 +433,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="notification" type={"(event: Event, ctx: RunContext<Deps>) => Promise<void>"}>
-  Observes notable events as they are recorded: the branch parked or a retry wait began, and in TypeScript also a budget was exceeded or a child agent finished. It can't change anything; a failure is recorded and ignored. Omit it and those events are only in the log.
+  Observes notable events as they are recorded: the branch parked, a retry wait began, a budget was exceeded or a child agent finished. It can't change anything; a failure is recorded and ignored. Omit it and those events are only in the log.
 </Field>
 
 <Field name="notification(event)" type={"Event"} required>

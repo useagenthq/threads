@@ -10,6 +10,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
+    BudgetExceededEvent,
     CancelRequestedEvent,
     CompactionFailedEvent,
     ContextEditedEvent,
@@ -56,6 +57,7 @@ if TYPE_CHECKING:
 _NEUTRAL = (
     AgentSpawnedEvent,
     AgentFinishedEvent,
+    BudgetExceededEvent,
     ToolResultLateEvent,
     TeamTaskCreatedEvent,
     TeamTaskClaimedEvent,
@@ -78,8 +80,10 @@ async def drive(rt: Runtime) -> Halt:
     """Runs until the open turn ends (`Idle`), the branch parks, or the run fails. The run keeps
     the lease renewed meanwhile (threads.agents.run)."""
     while True:
+        seen = len(rt.events)
         flushed = None if rt.framework is None else await rt.framework.flush(rt)
         halt = flushed or await _step(rt)
+        halt = halt or await _notify_new(rt, seen)
         if halt is not None:
             if isinstance(halt, Parked):
                 await _notify_parked(rt)
@@ -112,6 +116,17 @@ async def _still_parked(rt: Runtime) -> Halt | None:
     if halt is not None or len(rt.fold.parked) < waiting:
         return halt
     return parked(rt.events, rt.fold.parked)
+
+
+async def _notify_new(rt: Runtime, seen: int) -> Halt | None:
+    """notification observers: a budget was exceeded or a child finished in this step (parks and
+    retry waits are told where they happen)."""
+    for event in rt.events[seen:]:
+        if isinstance(event, (BudgetExceededEvent, AgentFinishedEvent)):
+            halt = await gates.observe(rt, "notification", event)
+            if halt is not None:
+                return halt
+    return None
 
 
 async def _notify_parked(rt: Runtime) -> None:

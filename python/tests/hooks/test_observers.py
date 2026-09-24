@@ -7,10 +7,11 @@ import asyncio
 from pydantic import JsonValue
 
 from threads import Completed, agent, scripted_model, sqlite
+from threads.agents.context import RunContext
 from threads.agents.store import open_store
 from threads.hooks.extension import Observer, extension
 from threads.hooks.observers import ObserverPump
-from threads.log import Event
+from threads.log import Budget, Event
 from threads.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
@@ -104,3 +105,29 @@ def test_delivery_is_in_order_resumes_from_the_durable_cursor_and_retries_a_fail
         assert await cursors.get("audit", branch) == events[-1].seq
 
     asyncio.run(main())
+
+
+def test_notification_fires_when_a_budget_is_exceeded_as_in_typescript() -> None:
+    """The notification hook sees parked, retry_scheduled, budget_exceeded and agent_finished."""
+    seen: list[str] = []
+
+    async def notify(event: Event, _ctx: RunContext[None]) -> None:
+        seen.append(event.type)
+
+    async def main() -> None:
+        use: JsonValue = {
+            "content": [
+                {"type": "tool_use", "call_id": "c1", "name": "todo_write", "input": {"todos": []}}
+            ],
+            "stop_reason": "tool_use",
+            "usage": USAGE,
+        }
+        bot = agent(
+            model=scripted_model({"responses": [use, text("ok")]}),
+            budget=Budget(max_model_requests=1),
+            extensions=[extension(name="ops", hooks={"notification": notify})],
+        )
+        await bot.run("hi", store=sqlite(":memory:"), deps=None)
+
+    asyncio.run(main())
+    assert seen == ["budget_exceeded"]

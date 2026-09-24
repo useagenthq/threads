@@ -3569,7 +3569,7 @@
             }
           },
           "required": false,
-          "doc": "Observes notable events as they are recorded: the branch parked or a retry wait began, and in TypeScript also a budget was exceeded or a child agent finished. It can't change anything; a failure is recorded and ignored. Omit it and those events are only in the log."
+          "doc": "Observes notable events as they are recorded: the branch parked, a retry wait began, a budget was exceeded or a child agent finished. It can't change anything; a failure is recorded and ignored. Omit it and those events are only in the log."
         }
       },
       "doc": "Every hook is optional, awaited and bounded by hook_timeout_ms. Decisions are {decision: <hook_decision.decision>, ...} objects. Injections are strings rendered as injected{source: hook}. A gating hook that throws or times out denies."
