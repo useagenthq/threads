@@ -13,8 +13,8 @@ from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
 from team.team_kit import STAGED, holding, index_rows, lift_refusal, team_cases, verified
 
-from threads.agents.store import open_store
-from threads.log import ParseError, ThreadStartedEvent
+from threads.agents.store import Store, open_store
+from threads.log import ParseError, TeamOpenedEvent, ThreadStartedEvent
 from threads.result import Err
 from threads.store import LOCAL_TENANT, VerifiedLog
 from threads.team.cross import TeamLogEvents, check_team_logs
@@ -40,18 +40,27 @@ def _failure(error: ParseError, log: str | None) -> Found:
     return out
 
 
-def _lead(logs: dict[str, VerifiedLog]) -> tuple[str, VerifiedLog, str]:
+def _leads(logs: dict[str, VerifiedLog]) -> dict[str, tuple[str, VerifiedLog]]:
+    """Every team a lead among the logs names, with that lead's label and log."""
+    out: dict[str, tuple[str, VerifiedLog]] = {}
     for label, log in logs.items():
         started = next((e for e in log.fold.events if isinstance(e, ThreadStartedEvent)), None)
         if started is not None and started.data.team is not MISSING:
-            return label, log, started.data.team.id
-    raise AssertionError("no lead among the logs")
+            out[started.data.team.id] = (label, log)
+    return out
 
 
-async def run(case: Path) -> Found:
-    """The case's outcome: {states, index, tree}, or its first failure."""
-    meta = _load(case / "case.json")
-    inputs = meta["input"]
+def _tenant(logs: dict[str, VerifiedLog]) -> str:
+    """The team's tenant, as its team_opened records it."""
+    opened = (e for log in logs.values() for e in log.fold.events)
+    return next(
+        (e.data.lead.tenant for e in opened if isinstance(e, TeamOpenedEvent)), LOCAL_TENANT
+    )
+
+
+def _imported(case: Path) -> tuple[dict[str, bytes], dict[str, VerifiedLog]] | Found:
+    """Step 1: every log of input.logs read-only, in order; the first failure is the result."""
+    inputs = _load(case / "case.json")["input"]
     assert isinstance(inputs, dict)
     labels_in = inputs["logs"]
     assert isinstance(labels_in, list)
@@ -62,6 +71,15 @@ async def run(case: Path) -> Found:
         if isinstance(read, Err):
             return _failure(read.error, label)
         logs[label] = read.value
+    return raw, logs
+
+
+async def run(case: Path) -> Found:
+    """The case's outcome: {states, index, tree}, or its first failure."""
+    imported = _imported(case)
+    if isinstance(imported, dict):
+        return imported
+    raw, logs = imported
     labels = {log.segments[-1].header.branch_id: label for label, log in logs.items()}
     broken = check_team_logs(
         [
@@ -73,32 +91,40 @@ async def run(case: Path) -> Found:
     if broken is not None:
         return {"code": "invalid_transition", "seq": broken.seq, "log": labels[broken.branch_id]}
     states: Found = {label: log.state.to_json() for label, log in logs.items()}
-    store = await holding(raw, LOCAL_TENANT)
+    store = await holding(raw, _tenant(logs))
     sq = await open_store(store)
-    label, lead, team = _lead(logs)
-    rebuilt = await rebuild_team_index(sq, team)
-    if isinstance(rebuilt, Err):
-        return _failure(rebuilt.error, None)
-    index = await sq.run(lambda c: index_rows(c, team))
-    members = {(m.name, m.generation): m for m in await team_members(store, lead)}
-    counted: list[JsonValue] = []
-    pending: list[JsonValue] = []
-    rows: list[tuple[str, int, str]] = await sq.run(
+    leads = _leads(logs)
+    for team in leads:
+        rebuilt = await rebuild_team_index(sq, team)
+        if isinstance(rebuilt, Err):
+            return _failure(rebuilt.error, None)
+    index = await sq.run(index_rows)
+    tree = await _tree(store, leads)
+    return tree if "code" in tree else {"states": states, "index": index, "tree": tree}
+
+
+async def _tree(store: Store, leads: dict[str, tuple[str, VerifiedLog]]) -> Found:
+    """Step 4: every team_members row in key order, a lead row counted, a member row counted or
+    pending as its own lead's walk finds it."""
+    rows: list[tuple[str, str, int, str]] = await (await open_store(store)).run(
         lambda c: c.execute(
-            "SELECT name, generation, role FROM team_members WHERE team_id = ?"
-            " ORDER BY name, generation",
-            (team,),
+            "SELECT team_id, name, generation, role FROM team_members"
+            " ORDER BY team_id, name, generation"
         ).fetchall()
     )
-    for name, generation, role in rows:
-        if role == "lead":  # where the walk starts: counted, never a child
+    counted: list[JsonValue] = []
+    pending: list[JsonValue] = []
+    for team, name, generation, role in rows:
+        if role == "lead":  # where a walk starts: counted, never a child
             counted.append(name)
             continue
+        label, lead = leads[team]
+        members = {(m.name, m.generation): m for m in await team_members(store, lead)}
         opened = await open_member(store, lead, members[(name, generation)])
         if isinstance(opened, Err):
             return _failure(opened.error, label)
         (pending if opened.value == PENDING else counted).append(name)
-    return {"states": states, "index": index, "tree": {"counted": counted, "pending": pending}}
+    return {"counted": counted, "pending": pending}
 
 
 def _cases() -> list[object]:

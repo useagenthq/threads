@@ -44,6 +44,6 @@ def owner_of(opened: Opened) -> ThreadId | None:
     if isinstance(e, TeamOpenedEvent):
         return e.data.lead_thread_id
     parent = e.data.parent
-    if parent is MISSING or parent.relation == "handoff":
+    if parent is MISSING or parent.relation not in ("subagent", "team_member"):
         return None
     return parent.thread_id

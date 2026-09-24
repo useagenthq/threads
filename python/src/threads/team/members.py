@@ -53,9 +53,11 @@ async def team_members(store: Store, lead: VerifiedLog) -> tuple[Member, ...]:
     team = started.data.team.id
     rows: list[tuple[object, object, object, object]] = await (await open_store(store)).run(
         lambda c: c.execute(
-            "SELECT name, generation, thread_id, branch_id FROM team_members"
-            " WHERE team_id = ? AND role = 'member' ORDER BY name, generation",
-            (team,),
+            "SELECT m.name, m.generation, m.thread_id, m.branch_id FROM team_members m"
+            " JOIN teams t ON t.team_id = m.team_id"
+            " WHERE m.team_id = ? AND t.tenant_id = ? AND m.role = 'member'"
+            " ORDER BY m.name, m.generation",
+            (team, store.tenant),
         ).fetchall()
     )
     return tuple(
@@ -83,14 +85,15 @@ async def open_member(
     lead_started = _started(lead)
     parent = _started(read.value)
     link = MISSING if parent is None else parent.data.parent
-    expected = start if start is not None else lead_started
-    header = lead.segments[-1].header
+    # The event that started it, on the branch it was appended to: a walk from a fork of the
+    # lead still finds the member_started its main branch holds.
+    by = start if start is not None else lead_started
     backlinked = (
         link is not MISSING
-        and expected is not None
+        and by is not None
         and link.relation == "team_member"
-        and (link.thread_id, link.branch_id) == (header.thread_id, header.branch_id)
-        and link.event_id == expected.event_id
+        and (link.thread_id, link.branch_id, link.event_id)
+        == (by.thread_id, by.branch_id, by.event_id)
     )
     if not backlinked:
         why = "its thread_started doesn't name the member_started that started it"
@@ -125,7 +128,7 @@ async def _without_branch(
         start = _member_started(starter.fold.events, member)
     if start is None:
         return Err(ParseError("log_corrupt", f"no member_started for {member.name}"))
-    monitor = f"{starter.segments[-1].header.branch_id}:{start.event_id}:task"
+    monitor = f"{start.branch_id}:{start.event_id}:task"
     notified = any(
         isinstance(e, MessageReceivedEvent)
         and e.data.envelope.kind in _NOTICES

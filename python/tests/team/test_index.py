@@ -14,6 +14,7 @@ from team.team_kit import (
     TEAM,
     index_rows,
     lift_refusal,
+    rebuild_all,
     rechain,
     staged,
     stored,
@@ -22,6 +23,7 @@ from team.team_kit import (
 )
 
 from threads.log import (
+    BranchId,
     Event,
     MailRefusedEvent,
     MessageReceivedEvent,
@@ -30,6 +32,8 @@ from threads.log import (
     UserInputEvent,
 )
 from threads.result import Err, Ok
+from threads.store import sql
+from threads.team import rebuild
 from threads.team.index import TeamLog, change_rows, insert_rows, turn_openers
 from threads.team.rebuild import rebuild_team_index
 
@@ -61,8 +65,8 @@ def test_rebuild_equals_the_reference_fold(case: str, monkeypatch: pytest.Monkey
 
     async def main() -> dict[str, JsonValue]:
         store = await stored(staged(case))
-        assert await rebuild_team_index(store, TEAM) == Ok(None)
-        return await store.run(lambda c: index_rows(c, TEAM))
+        await rebuild_all(store, staged(case))
+        return await store.run(index_rows)
 
     assert asyncio.run(main()) == _expected(case)
 
@@ -85,9 +89,9 @@ def test_append_time_writes_equal_the_rebuild(case: str, monkeypatch: pytest.Mon
             team_log = TeamLog(fold.thread_id, branch)
             queues.append((team_log, list(fold.events), turn_openers(log.value)))
         await store.run(lambda c: _append_all(c, queues))
-        written = await store.run(lambda c: index_rows(c, TEAM))
-        assert await rebuild_team_index(store, TEAM) == Ok(None)
-        rebuilt = await store.run(lambda c: index_rows(c, TEAM))
+        written = await store.run(index_rows)
+        await rebuild_all(store, staged(case))
+        rebuilt = await store.run(index_rows)
         return _without_feed(written), _without_feed(rebuilt)
 
     written, rebuilt = asyncio.run(main())
@@ -195,3 +199,25 @@ def _dict(value: JsonValue) -> dict[str, JsonValue]:
 def _without_feed(rows: JsonValue) -> JsonValue:
     assert isinstance(rows, dict)
     return {k: v for k, v in rows.items() if k != "team_feed"}
+
+
+def test_a_rebuild_reads_the_logs_inside_its_own_transaction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reads, the rule 43 check and the refold share one IMMEDIATE transaction, so no append
+    lands between the read and the wipe."""
+    lift_refusal(monkeypatch)
+    seen: list[bool] = []
+
+    def export(conn: sqlite3.Connection, branch: BranchId) -> bytes:
+        seen.append(conn.in_transaction)
+        return sql.export(conn, branch)
+
+    monkeypatch.setattr(rebuild, "export", export)
+
+    async def main() -> None:
+        store = await stored(staged("team-settle-wakes-lead"))
+        assert await rebuild_team_index(store, TEAM) == Ok(None)
+
+    asyncio.run(main())
+    assert seen == [True, True, True]

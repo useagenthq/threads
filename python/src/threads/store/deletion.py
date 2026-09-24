@@ -9,7 +9,7 @@ from typing import Final, Literal
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import BranchId, ThreadId, ThreadStartedEvent
+from threads.log import BranchId, TeamOpenedEvent, ThreadId, ThreadStartedEvent
 from threads.result import Err, Ok
 from threads.store.sql import export, text_of, transaction
 from threads.store.started import Opened, opened_threads, owner_of
@@ -70,18 +70,41 @@ def _delete_set(
     refused = _outside_its_team(opened, doomed) or _running(conn, doomed, now)
     if refused is not None:
         return Err(refused)  # decided before any write, so the refusal writes nothing
-    for o in opened:
-        e = o.event
-        if (
-            o.thread_id in doomed
-            and isinstance(e, ThreadStartedEvent)
-            and e.data.team is not MISSING
-        ):
-            for table in TEAM_TABLES:
-                conn.execute(f"DELETE FROM {table} WHERE team_id = ?", (e.data.team.id,))  # noqa: S608
+    _delete_teams(conn, tenant_id, _doomed_teams(conn, tenant_id, opened, doomed))
     for thread in doomed:
         _delete_one(conn, tenant_id, thread, now)
     return Ok(len(doomed))
+
+
+def _doomed_teams(
+    conn: sqlite3.Connection, tenant_id: str, opened: Sequence[Opened], doomed: Collection[ThreadId]
+) -> set[str]:
+    """The teams a doomed lead leads, by `teams.lead_thread_id` in this tenant, and every doomed
+    team log's own team."""
+    leads = list(doomed)
+    marks = ", ".join("?" for _ in leads)
+    rows: list[tuple[object]] = conn.execute(
+        f"SELECT team_id FROM teams WHERE tenant_id = ? AND lead_thread_id IN ({marks})",  # noqa: S608
+        (tenant_id, *leads),
+    ).fetchall()
+    teams = {text_of(t) for (t,) in rows}
+    teams |= {
+        o.event.data.team
+        for o in opened
+        if o.thread_id in doomed and isinstance(o.event, TeamOpenedEvent)
+    }
+    return teams
+
+
+def _delete_teams(conn: sqlite3.Connection, tenant_id: str, teams: Collection[str]) -> None:
+    ids = list(teams)
+    marks = ", ".join("?" for _ in ids)
+    for table in TEAM_TABLES:
+        scope = " AND tenant_id = ?" if table == "teams" else ""
+        conn.execute(
+            f"DELETE FROM {table} WHERE team_id IN ({marks}){scope}",  # noqa: S608
+            (*ids, *([tenant_id] if scope else [])),
+        )
 
 
 def _fixed_point(opened: Sequence[Opened], start: Sequence[ThreadId]) -> set[ThreadId]:
@@ -99,9 +122,11 @@ def _fixed_point(opened: Sequence[Opened], start: Sequence[ThreadId]) -> set[Thr
 
 
 def _outside_its_team(opened: Sequence[Opened], doomed: Collection[ThreadId]) -> DeleteError | None:
-    """A team member or team log goes only with its lead."""
+    """A team member or team log goes only with its lead, unless that lead no longer exists."""
+    alive = {o.thread_id for o in opened}
     for o in opened:
-        if o.thread_id not in doomed or owner_of(o) in doomed:
+        owner = owner_of(o)
+        if o.thread_id not in doomed or owner in doomed or owner not in alive:
             continue
         e = o.event
         if isinstance(e, ThreadStartedEvent):
@@ -120,10 +145,9 @@ def _outside_its_team(opened: Sequence[Opened], doomed: Collection[ThreadId]) ->
 def _running(
     conn: sqlite3.Connection, doomed: Collection[ThreadId], now: int
 ) -> DeleteError | None:
-    """busy when a branch of the set has an unexpired lease (a live executor) or an effect in
-    doubt (begun or unknown): deleting its log would erase the only record recovery settles it
-    from. A branch whose log no longer verifies can't be resumed by anyone, so only its lease
-    counts."""
+    """busy when a branch of the set has an unexpired lease (a live executor), an effect in
+    doubt (begun or unknown), or a log that doesn't verify, which can't be proved free of one:
+    deleting it would erase the only record recovery settles an effect from."""
     for thread in doomed:
         live = conn.execute(
             "SELECT l.branch_id FROM leases l JOIN branches b ON b.branch_id = l.branch_id"
@@ -132,16 +156,16 @@ def _running(
         ).fetchone()
         if live is not None:
             return _busy(thread, f"branch {text_of(live[0])} holds a live lease")
-        doubt = next((b for b in _branches(conn, thread) if _in_doubt(conn, b, now)), None)
-        if doubt is not None:
-            return _busy(thread, f"branch {doubt} has an effect in doubt")
+        why = next((w for b in _branches(conn, thread) if (w := _unsettled(conn, b, now))), None)
+        if why is not None:
+            return _busy(thread, why)
     return None
 
 
 def _busy(thread: ThreadId, why: str) -> DeleteError:
     return DeleteError(
         "busy",
-        f"thread {thread} is still running ({why}): cancel it, wait for it to stop, resolve any"
+        f"thread {thread} can't be deleted yet ({why}): cancel it, wait for it to stop, resolve any"
         " parked effect, then delete",
     )
 
@@ -153,11 +177,16 @@ def _branches(conn: sqlite3.Connection, thread: ThreadId) -> list[BranchId]:
     return [BranchId(text_of(b)) for (b,) in rows]
 
 
-def _in_doubt(conn: sqlite3.Connection, branch: BranchId, now: int) -> bool:
+def _unsettled(conn: sqlite3.Connection, branch: BranchId, now: int) -> str | None:
+    """Why `branch` may still hold an effect only its log can settle, if it may."""
     log = verify_export(export(conn, branch), now)
-    return isinstance(log, Ok) and any(
-        status in ("begun", "unknown") for _, status in log.value.fold.effects.values()
-    )
+    if isinstance(log, Err):
+        return (
+            f"branch {branch} doesn't verify ({log.error.code}): run `threads repair {branch}`"
+            " if its tail is torn, or delete it with the version that wrote it"
+        )
+    doubt = any(status in ("begun", "unknown") for _, status in log.value.fold.effects.values())
+    return f"branch {branch} has an effect in doubt" if doubt else None
 
 
 def _delete_one(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, now: int) -> None:
@@ -183,6 +212,8 @@ def _delete_one(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, n
         " WHERE thread_id = ? AND tenant_id = ? AND state = 'pending'",
         (thread_id, tenant_id),
     )
+    # A background child's wake row lives on its parent's branch, which may outlive it.
+    conn.execute("DELETE FROM pending_wakes WHERE child_thread_id = ?", (thread_id,))
     conn.execute("DELETE FROM branches WHERE thread_id = ?", (thread_id,))
     conn.execute("DELETE FROM threads WHERE thread_id = ?", (thread_id,))
     conn.execute(

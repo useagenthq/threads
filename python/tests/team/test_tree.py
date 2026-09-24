@@ -20,8 +20,9 @@ from team.team_kit import (
 from thread.rewrite_log import rewrite_log
 
 from threads.agents.store import Store, open_store
-from threads.log import Cost, ParseError
+from threads.log import BranchId, Cost, ParseError
 from threads.result import Err, Ok
+from threads.store import ForkRequest
 from threads.team.members import PENDING, open_member, team_members
 from threads.team.rebuild import rebuild_team_index
 from threads.thread.read import read_log
@@ -153,6 +154,31 @@ def test_a_forged_backlink_is_corrupt(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(found, Err)
     assert found.error.code == "log_corrupt"
     assert "member researcher-1" in found.error.message
+
+
+def test_a_fork_of_the_lead_still_counts_its_member(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The member's backlink names the branch its member_started is on (main), not the fork the
+    walk starts from. A repair fork at seq 10 (the start call's result): the fork's own 540,000
+    plus the researcher's 420,000, as TypeScript pins."""
+    lift_refusal(monkeypatch)
+    fork = BranchId("0192b000-0000-7000-8000-0000000000f1")
+
+    async def main() -> Ok[Cost | None] | Err[ParseError]:
+        logs = {
+            k: v if k == "team" else rechain(v, _priced)
+            for k, v in staged("team-settle-wakes-lead").items()
+        }
+        store = await holding(logs)
+        sq = await open_store(store)
+        assert await rebuild_team_index(sq, TEAM) == Ok(None)
+        request = ForkRequest(branch_of(LEAD), 10, fork, {"reason": "repair"})
+        assert isinstance(await sq.fork(request, "test", lambda: 0), Ok)
+        forked = await read_log(store, fork)
+        assert isinstance(forked, Ok)
+        return await tree_cost(store, LEAD, forked.value)
+
+    known = {"known_nanos": 960000, "upper_bound_nanos": 960000}
+    assert _cost(asyncio.run(main())) == {**_as_dict(SETTLE_TREE), **known}
 
 
 async def _run(logs: dict[str, bytes]) -> Ok[Cost | None] | Err[ParseError]:

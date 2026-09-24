@@ -58,16 +58,28 @@ class _Team:
     identities: Mapping[ThreadId, frozenset[Identity]]
 
 
-def check_team_logs(logs: Sequence[TeamLogEvents]) -> CrossFailure | None:
-    """The first failure, in the given log order, then seq."""
+def check_team_logs(
+    logs: Sequence[TeamLogEvents], team_id: str | None = None
+) -> CrossFailure | None:
+    """The first failure, in the given log order, then seq. With `team_id`, only that team's
+    mail is checked: a nested lead's log also carries its parent team's mail, whose other ends
+    are not among its own team's logs."""
     team = _team(logs)
     for log in logs:
         mine = team.identities.get(log.thread_id, frozenset[Identity]())
         for e in log.events:
+            if team_id is not None and _mail_of_another(e, team_id):
+                continue
             why = _check(e, log, mine, team)
             if why is not None:
                 return CrossFailure(log.branch_id, e.seq, f"43: {why}")
     return None
+
+
+def _mail_of_another(e: Event, team_id: str) -> bool:
+    return (
+        isinstance(e, MessageSentEvent | MessageReceivedEvent) and e.data.envelope.team != team_id
+    )
 
 
 def _team(logs: Sequence[TeamLogEvents]) -> _Team:

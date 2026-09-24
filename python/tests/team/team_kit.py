@@ -14,15 +14,16 @@ from pathlib import Path
 
 import pytest
 from pydantic import JsonValue, TypeAdapter
+from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.store import Store, open_store
-from threads.log import BranchId, Event, ParseError, ThreadId
+from threads.log import BranchId, Event, ParseError, ThreadId, ThreadStartedEvent
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.reduce import rules_team
 from threads.result import Err, Ok
 from threads.store import SqliteStore, VerifiedLog, sql, verify_export
-from threads.team.rebuild import TEAM_TABLES
+from threads.team.rebuild import rebuild_team_index
 
 STAGED = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "staged"
 TEAM = "0192c000-0000-7000-8000-000000000001"
@@ -116,13 +117,12 @@ async def add(store: SqliteStore, logs: Mapping[str, bytes], tenant: str = TENAN
         assert found is None, (label, found)
 
 
-def index_rows(conn: sqlite3.Connection, team_id: str) -> dict[str, JsonValue]:
-    """The team's rows as the conformance `index` holds them: each table by primary key, JSON
-    columns parsed, mail's claim columns left out, the feed as (branch_id, seq)."""
-    out: dict[str, JsonValue] = {t: _rows(conn, t, team_id) for t in TEAM_TABLES}
+def index_rows(conn: sqlite3.Connection) -> dict[str, JsonValue]:
+    """Every team's rows as the conformance `index` holds them: each table by primary key, JSON
+    columns parsed, mail's claim columns left out, the feed as the (branch_id, seq) it holds."""
+    out: dict[str, JsonValue] = {t: _rows(conn, t) for t in _PKS}
     feed = conn.execute(
-        "SELECT branch_id, seq FROM team_feed WHERE team_id = ? ORDER BY branch_id, seq",
-        (team_id,),
+        "SELECT DISTINCT branch_id, seq FROM team_feed ORDER BY branch_id, seq"
     ).fetchall()
     out["team_feed"] = [{"branch_id": b, "seq": s} for b, s in feed]
     wakes = conn.execute(
@@ -132,17 +132,35 @@ def index_rows(conn: sqlite3.Connection, team_id: str) -> dict[str, JsonValue]:
     return out
 
 
-def _rows(conn: sqlite3.Connection, table: str, team_id: str) -> JsonValue:
-    cursor = conn.execute(
-        f"SELECT * FROM {table} WHERE team_id = ? ORDER BY {_PKS[table]}",  # noqa: S608
-        (team_id,),
-    )
+def _rows(conn: sqlite3.Connection, table: str) -> JsonValue:
+    cursor = conn.execute(f"SELECT * FROM {table} ORDER BY {_PKS[table]}")  # noqa: S608
     names = [d[0] for d in cursor.description]
     rows: list[JsonValue] = []
     for values in cursor.fetchall():
         row = {n: _cell(n, v) for n, v in zip(names, values, strict=True)}
         rows.append({n: v for n, v in row.items() if n not in ("claim_token", "claim_expires_at")})
     return rows
+
+
+async def rebuild_all(store: SqliteStore, logs: Mapping[str, bytes]) -> None:
+    """Rebuilds every team a lead among the logs names."""
+    for team in teams_of(logs):
+        found = await rebuild_team_index(store, team)
+        assert found == Ok(None), found
+
+
+def teams_of(logs: Mapping[str, bytes]) -> dict[str, str]:
+    """Every team a lead among the logs names, with that lead's label."""
+    out: dict[str, str] = {}
+    for label, raw in logs.items():
+        read = verified(raw)
+        assert isinstance(read, Ok), label
+        started = next(
+            (e for e in read.value.fold.events if isinstance(e, ThreadStartedEvent)), None
+        )
+        if started is not None and started.data.team is not MISSING:
+            out[started.data.team.id] = label
+    return out
 
 
 def _cell(name: str, value: object) -> JsonValue:
