@@ -1,4 +1,5 @@
 import type {
+  ArtifactRef,
   BranchId,
   EventId,
   KnownEvent,
@@ -75,6 +76,8 @@ export type Fold = {
   tools: readonly ToolSpec[];
   /** Each tool name's spec as pinned by thread_started or first added (rule 17). */
   readonly knownTools: Map<string, ToolSpec>;
+  /** Reference-form tools a tools_loaded loaded, by name, with their spec_ref (rule 46). */
+  readonly loaded: Map<string, ArtifactRef>;
   model: ModelRef | undefined;
   mode: PermissionMode;
   /** Rules remembered on the thread (permission_rule_added), in log order. */
@@ -153,6 +156,7 @@ export function emptyFold(): Fold {
     policy: undefined,
     tools: [],
     knownTools: new Map(),
+    loaded: new Map(),
     model: undefined,
     mode: "default",
     threadRules: [],
@@ -191,6 +195,14 @@ export function emptyFold(): Fold {
     wake: emptyWake(),
     team: emptyTeam(),
   };
+}
+
+/** A spec still deferred on the chain: flagged, and no tools_loaded has loaded it. */
+export function isDeferred(
+  fold: Pick<Fold, "loaded">,
+  spec: ToolSpec,
+): boolean {
+  return spec.defer_loading === true && !fold.loaded.has(spec.name);
 }
 
 export function sameAddress(a: ParkAddress, b: ParkAddress): boolean {

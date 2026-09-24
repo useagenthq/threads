@@ -12,6 +12,7 @@ export type VisibleEvent = EventOf<
   | "model_response"
   | "model_response_recovered"
   | "tools_changed"
+  | "tools_loaded"
   | "tool_result"
   | "tool_result_late"
   | "message_received"
@@ -142,7 +143,8 @@ function deniedInput(e: KnownEvent): readonly string[] {
 
 /**
  * The render steps in order. A compacted range yields its summary at the range's first event,
- * then the range's last `tools_changed`, so loaded tools survive (reference: render.py `walk`).
+ * then the range's last `tools_changed`, then one `tools_loaded` holding every load in the range
+ * after it, so loaded tools survive (reference: render.py `walk`).
  */
 export function* walk(
   v: View,
@@ -153,15 +155,46 @@ export function* walk(
     if (range === undefined) {
       const shown = hidden(v, e) ? undefined : visible(e);
       if (shown !== undefined) yield { kind: "event", event: shown };
-    } else if (e.seq === range.data.from_seq) {
-      yield { kind: "summary", compacted: range };
-      const tools = events.findLast(
-        (x) => x.type === "tools_changed" && covers(range, x.seq),
-      );
-      if (tools?.type === "tools_changed")
-        yield { kind: "event", event: tools };
-    }
+    } else if (e.seq === range.data.from_seq)
+      yield* rangeEntries(range, events);
   }
+}
+
+/** A compacted range: its summary, its last tools_changed, then its later loads as one line. */
+function* rangeEntries(
+  range: Compacted,
+  events: readonly KnownEvent[],
+): Generator<Entry, void, undefined> {
+  yield { kind: "summary", compacted: range };
+  const tools = events.findLast(
+    (x) => x.type === "tools_changed" && covers(range, x.seq),
+  );
+  if (tools?.type === "tools_changed") yield { kind: "event", event: tools };
+  const loaded = mergedLoads(range, events, tools?.seq ?? 0);
+  if (loaded !== undefined) yield { kind: "event", event: loaded };
+}
+
+/**
+ * The range's loads after `after`, as one line: the last load carrying every loaded tool in
+ * load order (a view of the events, never appended).
+ */
+function mergedLoads(
+  range: Compacted,
+  events: readonly KnownEvent[],
+  after: number,
+): EventOf<"tools_loaded"> | undefined {
+  const loads = events.flatMap((x) =>
+    x.type === "tools_loaded" && covers(range, x.seq) && x.seq > after
+      ? [x]
+      : [],
+  );
+  const last = loads.at(-1);
+  return last === undefined
+    ? undefined
+    : {
+        ...last,
+        data: { ...last.data, tools: loads.flatMap((x) => x.data.tools) },
+      };
 }
 
 /** A response's parts after omit_prior; a compaction side response renders none. */
@@ -195,6 +228,7 @@ function visible(e: KnownEvent): VisibleEvent | undefined {
     case "model_response":
     case "model_response_recovered":
     case "tools_changed":
+    case "tools_loaded":
     case "tool_result":
     case "tool_result_late":
     case "message_received":

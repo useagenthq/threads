@@ -134,14 +134,14 @@ exports[`golden: Render v1 conformance cases → Responses API request render-de
       {
         "content": [
           {
-            "text": "Deploy to staging.",
+            "text": "File a bug about the login page.",
             "type": "input_text",
           },
         ],
         "role": "user",
       },
       {
-        "arguments": "{"query":"deploy"}",
+        "arguments": "{"query":"mcp__jira__create_issue"}",
         "call_id": "call_1",
         "name": "tool_search",
         "type": "function_call",
@@ -150,7 +150,7 @@ exports[`golden: Render v1 conformance cases → Responses API request render-de
         "call_id": "call_1",
         "output": [
           {
-            "text": "mcp__ops__deploy: Deploy the app.",
+            "text": "mcp__jira__create_issue: Create a Jira issue in a project.",
             "type": "input_text",
           },
         ],
@@ -166,6 +166,37 @@ exports[`golden: Render v1 conformance cases → Responses API request render-de
     "store": false,
     "stream": true,
     "tools": [
+      {
+        "description": 
+"Load deferred tools so you can call them. Pass exact tool names, separated by commas, to load those tools; otherwise the query's words are matched against each deferred tool's name and description, and the best matches are loaded. A loaded tool stays available for the rest of the conversation.
+
+Deferred tools (search to load): mcp__jira__create_issue"
+,
+        "name": "tool_search",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "default": 5,
+              "description": "How many keyword matches to load.",
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+            },
+            "query": {
+              "description": "Exact tool names separated by commas, or keywords. At most 200 characters.",
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+          "required": [
+            "query",
+          ],
+          "type": "object",
+        },
+        "strict": false,
+        "type": "function",
+      },
       {
         "description": "Read a file from the sandbox workspace.",
         "name": "read_file",
@@ -185,35 +216,24 @@ exports[`golden: Render v1 conformance cases → Responses API request render-de
         "type": "function",
       },
       {
-        "description": "Find deferred tools by keyword.",
-        "name": "tool_search",
+        "description": 
+"Create a Jira issue in a project.
+Returns the new issue key."
+,
+        "name": "mcp__jira__create_issue",
         "parameters": {
           "additionalProperties": false,
           "properties": {
-            "query": {
+            "project": {
+              "type": "string",
+            },
+            "summary": {
               "type": "string",
             },
           },
           "required": [
-            "query",
-          ],
-          "type": "object",
-        },
-        "strict": false,
-        "type": "function",
-      },
-      {
-        "description": "Deploy the app.",
-        "name": "mcp__ops__deploy",
-        "parameters": {
-          "additionalProperties": false,
-          "properties": {
-            "env": {
-              "type": "string",
-            },
-          },
-          "required": [
-            "env",
+            "project",
+            "summary",
           ],
           "type": "object",
         },

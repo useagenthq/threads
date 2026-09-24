@@ -31,6 +31,8 @@ export function scriptedTools(
   for (const spec of specs) {
     // The case's tools exist only as pinned JSON Schemas; the test kit compiles them. The
     // framework itself never evaluates a pinned schema.
+    if (spec.input_schema === undefined)
+      throw new Error(`${spec.name}: resolve a reference form first`);
     const input = z.fromJSONSchema(spec.input_schema);
     const t = tools[spec.name];
     if (t === undefined) {

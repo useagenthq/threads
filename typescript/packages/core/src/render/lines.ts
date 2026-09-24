@@ -10,6 +10,7 @@ import type {
 import { err, ok, type Result } from "../result";
 import type { LogError } from "../verify/error";
 import { jcs, toolLine } from "./prefix";
+import { loadedLine } from "./tool-specs";
 import {
   assistantParts,
   type Compacted,
@@ -158,6 +159,8 @@ export function eventLine(ctx: LineContext, e: VisibleEvent): Line {
     }
     case "tools_changed":
       return ok({ role: "tools", tools: e.data.tools.map(toolLine) });
+    case "tools_loaded":
+      return loadedLine(ctx.read, e);
     case "tool_result":
     case "tool_result_late":
       return result(ctx, e);

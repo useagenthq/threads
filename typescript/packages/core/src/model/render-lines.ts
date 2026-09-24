@@ -67,9 +67,13 @@ type ToolResultLine = Strict<{
   late: Opt<Lit<true>>;
 }>;
 type ToolsLine = Strict<{ role: Lit<"tools">; tools: Arr<typeof ToolLine> }>;
+type ToolsLoadedLine = Strict<{
+  role: Lit<"tools_loaded">;
+  tools: Arr<LoadedTool>;
+}>;
 
 const Line: z.ZodDiscriminatedUnion<
-  [UserLine, AssistantLine, ToolResultLine, ToolsLine],
+  [UserLine, AssistantLine, ToolResultLine, ToolsLine, ToolsLoadedLine],
   "role"
 > = z.discriminatedUnion("role", [
   z.strictObject({ role: z.literal("user"), content: z.array(InputPart) }),
@@ -85,6 +89,10 @@ const Line: z.ZodDiscriminatedUnion<
     late: z.literal(true).optional(),
   }),
   z.strictObject({ role: z.literal("tools"), tools: z.array(ToolLine) }),
+  z.strictObject({
+    role: z.literal("tools_loaded"),
+    tools: z.array(LoadedTool),
+  }),
 ]);
 export type RenderLine = z.infer<typeof Line>;
 
@@ -110,14 +118,19 @@ export function parseRender(body: Uint8Array): RenderRequest {
 }
 
 /**
- * The tools a request offers: line 0's, replaced by each later `tools` line. Deferred stubs are
- * left out: they have no schema until tool_search loads them.
+ * The tools a request offers (Render v1, "Provider tools"): the latest complete set (line 0's,
+ * replaced by each later `tools` line) without its stubs, which have no schema, then every spec
+ * of the `tools_loaded` lines after it.
  */
 export function loadedTools(
   request: RenderRequest,
 ): readonly z.infer<typeof LoadedTool>[] {
-  let tools = request.head.tools;
+  let tools: z.infer<typeof LoadedTool>[] = request.head.tools.flatMap(full);
   for (const line of request.lines)
-    if (line.role === "tools") tools = line.tools;
-  return tools.flatMap((t) => ("input_schema" in t ? [t] : []));
+    if (line.role === "tools") tools = line.tools.flatMap(full);
+    else if (line.role === "tools_loaded") tools = [...tools, ...line.tools];
+  return tools;
 }
+
+const full = (t: ToolLine): z.infer<typeof LoadedTool>[] =>
+  "input_schema" in t ? [t] : [];

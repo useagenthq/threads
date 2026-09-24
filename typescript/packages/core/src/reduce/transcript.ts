@@ -51,6 +51,7 @@ function roleOf(v: View, e: VisibleEvent): TranscriptEntry["role"] | undefined {
     case "tool_result_late":
       return "tool";
     case "tools_changed":
+    case "tools_loaded":
       return undefined;
     default:
       return assertNever(e);

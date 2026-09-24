@@ -113,6 +113,7 @@ async function lineMessage(
     case "tool":
       return toolResult(line, ctx);
     case "tools":
+    case "tools_loaded":
       return undefined;
     default:
       return assertNever(line);

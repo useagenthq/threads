@@ -219,7 +219,7 @@ exports[`golden: Render v1 conformance cases → AI SDK prompt render-deferred-t
     {
       "content": [
         {
-          "text": "Deploy to staging.",
+          "text": "File a bug about the login page.",
           "type": "text",
         },
       ],
@@ -229,7 +229,7 @@ exports[`golden: Render v1 conformance cases → AI SDK prompt render-deferred-t
       "content": [
         {
           "input": {
-            "query": "deploy",
+            "query": "mcp__jira__create_issue",
           },
           "toolCallId": "call_1",
           "toolName": "tool_search",
@@ -243,7 +243,7 @@ exports[`golden: Render v1 conformance cases → AI SDK prompt render-deferred-t
         {
           "output": {
             "type": "text",
-            "value": "mcp__ops__deploy: Deploy the app.",
+            "value": "mcp__jira__create_issue: Create a Jira issue in a project.",
           },
           "toolCallId": "call_1",
           "toolName": "tool_search",
@@ -254,6 +254,36 @@ exports[`golden: Render v1 conformance cases → AI SDK prompt render-deferred-t
     },
   ],
   "tools": [
+    {
+      "description": 
+"Load deferred tools so you can call them. Pass exact tool names, separated by commas, to load those tools; otherwise the query's words are matched against each deferred tool's name and description, and the best matches are loaded. A loaded tool stays available for the rest of the conversation.
+
+Deferred tools (search to load): mcp__jira__create_issue"
+,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 5,
+            "description": "How many keyword matches to load.",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer",
+          },
+          "query": {
+            "description": "Exact tool names separated by commas, or keywords. At most 200 characters.",
+            "minLength": 1,
+            "type": "string",
+          },
+        },
+        "required": [
+          "query",
+        ],
+        "type": "object",
+      },
+      "name": "tool_search",
+      "type": "function",
+    },
     {
       "description": "Read a file from the sandbox workspace.",
       "inputSchema": {
@@ -272,37 +302,27 @@ exports[`golden: Render v1 conformance cases → AI SDK prompt render-deferred-t
       "type": "function",
     },
     {
-      "description": "Find deferred tools by keyword.",
+      "description": 
+"Create a Jira issue in a project.
+Returns the new issue key."
+,
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "query": {
+          "project": {
+            "type": "string",
+          },
+          "summary": {
             "type": "string",
           },
         },
         "required": [
-          "query",
+          "project",
+          "summary",
         ],
         "type": "object",
       },
-      "name": "tool_search",
-      "type": "function",
-    },
-    {
-      "description": "Deploy the app.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "env": {
-            "type": "string",
-          },
-        },
-        "required": [
-          "env",
-        ],
-        "type": "object",
-      },
-      "name": "mcp__ops__deploy",
+      "name": "mcp__jira__create_issue",
       "type": "function",
     },
   ],

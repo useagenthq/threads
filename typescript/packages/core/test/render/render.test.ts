@@ -20,13 +20,13 @@ function caseEvents(name: string) {
 const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
 describe("golden: the declared prefix and tool schemas the model sees", () => {
-  test("line 0 and a tools_changed line (deferred spec as a stub, then loaded)", () => {
+  test("line 0 and a tools_loaded line (deferred spec as a stub, then loaded)", () => {
     const { events, artifacts } = caseEvents("render-deferred-tool-loaded");
     const next = unwrap(render(events, refReader(artifacts)));
     const lines = text(next.bytes).split("\n");
     expect(text(next.prefix)).toMatchSnapshot();
     expect(
-      lines.filter((l) => l.startsWith('{"role":"tools"')),
+      lines.filter((l) => l.startsWith('{"role":"tools')),
     ).toMatchSnapshot();
   });
 

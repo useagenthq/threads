@@ -196,6 +196,7 @@ async function lineMessage(
       };
     }
     case "tools":
+    case "tools_loaded":
       return undefined;
     default:
       return assertNever(line);

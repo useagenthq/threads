@@ -120,6 +120,7 @@ async function items(line: RenderLine, bytes: Bytes): Promise<Item[]> {
       ];
     }
     case "tools":
+    case "tools_loaded":
       return [];
     default:
       return assertNever(line);

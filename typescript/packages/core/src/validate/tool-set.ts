@@ -3,7 +3,7 @@ import { canonicalize, JsonValue, type ToolSpec } from "../log";
 import { isLoopTool } from "../tools/loop-tools";
 import { invalid, type Violation } from "./violation";
 
-// Rule 17, points 1-5: a new tool set never makes dispatch less safe (invariant 3).
+// Rule 17, points 1-6: a new tool set never makes dispatch less safe (invariant 3).
 
 /** Checks every spec of a tools_changed against the one pinned or first added under its name. */
 export function checkToolSet(
@@ -53,6 +53,7 @@ function checkKept(
   spec: ToolSpec,
   searched: boolean,
 ): Violation {
+  if (first.spec_ref !== undefined) return checkRefForm(fold, first, spec);
   if (!sameSpec(first, spec))
     return invalid(`tools_changed changes the spec of ${spec.name}`);
   const before = fold.tools.find((t) => t.name === spec.name) ?? first;
@@ -63,6 +64,41 @@ function checkKept(
   return searched
     ? undefined
     : invalid(`tools_changed loads ${spec.name} without a tool_search`);
+}
+
+/**
+ * Point 6: a tool pinned in reference form appears as that form byte for byte while not loaded,
+ * or, once its tools_loaded is on the chain, as a full form with the stub's fields. Import checks
+ * the full form's bytes against the artifact (render/tool-specs.ts).
+ */
+function checkRefForm(fold: Fold, pin: ToolSpec, spec: ToolSpec): Violation {
+  const loaded = fold.loaded.has(pin.name);
+  if (spec.spec_ref !== undefined || spec.defer_loading === true)
+    return fullText(spec) === fullText(pin) && !loaded
+      ? undefined
+      : invalid(`tools_changed restates ${spec.name} in reference form`);
+  if (!loaded)
+    return invalid(`tools_changed loads ${spec.name} without a tools_loaded`);
+  return sameStub(pin, spec)
+    ? undefined
+    : invalid(`tools_changed changes the spec of ${spec.name}`);
+}
+
+/** The fields a reference-form stub fixes: equal in its full form and its artifact (rule 46). */
+export function sameStub(stub: ToolSpec, full: ToolSpec): boolean {
+  return (
+    stub.name === full.name &&
+    stub.description === full.description &&
+    stub.effect_class === full.effect_class &&
+    stub.dedup_window_ms === full.dedup_window_ms &&
+    stub.ends_turn === full.ends_turn
+  );
+}
+
+function fullText(spec: ToolSpec): string | undefined {
+  const json = JsonValue.safeParse(spec);
+  const text = json.success ? canonicalize(json.data) : undefined;
+  return text?.ok === true ? text.value : undefined;
 }
 
 function sameSpec(a: ToolSpec, b: ToolSpec): boolean {

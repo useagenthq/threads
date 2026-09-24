@@ -12,6 +12,7 @@ const CAUSES = [
   "compacted",
   "context_edited",
   "tools_changed",
+  "tools_loaded",
 ] as const satisfies readonly CacheBreak["likely_cause"][];
 type Cause = (typeof CAUSES)[number];
 

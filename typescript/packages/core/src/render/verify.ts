@@ -1,3 +1,4 @@
+import type { EventOf } from "../fold/state";
 import { sha256Hex } from "../hash";
 import type { ArtifactRef, KnownEvent } from "../log";
 import { err, ok, type Result } from "../result";
@@ -6,6 +7,7 @@ import { type LogError, logError } from "../verify/error";
 import type { ReadRef } from "./lines";
 import { line0 } from "./prefix";
 import { compactionSide, render } from "./render";
+import { checkSpecs, pinnedSpecs } from "./tool-specs";
 
 /**
  * Artifact reads that name the event carrying the ref when they fail. The store verifies the
@@ -39,38 +41,49 @@ export function verifyRequests(
   events: readonly KnownEvent[],
   read: ReadRef,
 ): Result<void, LogError> {
+  const pinned = pinnedSpecs(events);
   for (const [i, e] of events.entries()) {
+    // Spec artifacts (rules 17 and 46) are checked in seq order with the requests.
+    const specs = checkSpecs(pinned, e, read);
+    if (!specs.ok) return specs;
     if (e.type !== "model_request") continue;
-    const before = events.slice(0, i);
-    const side =
-      e.data.purpose === "compaction"
-        ? compactionSide(before, e.data.cause_event_id)
-        : undefined;
-    const prefix = new TextEncoder().encode(`${line0(before)}\n`);
-    const declared = e.data.declared_prefix;
-    if (
-      declared.bytes !== prefix.length ||
-      declared.sha256 !== sha256Hex(prefix)
-    )
-      return err(
-        logError(
-          "prefix_changed",
-          "declared prefix is not line 0 of its settings epoch",
-          e.seq,
-        ),
-      );
-    const recorded = read(e.data.request_ref, e.seq);
-    if (!recorded.ok) return recorded;
-    const rendered = render(before, read, side);
-    if (!rendered.ok) return rendered;
-    if (e.data.request_ref.sha256 !== sha256Hex(rendered.value.bytes))
-      return err(
-        logError(
-          "request_hash_mismatch",
-          "request_ref is not Render v1 of the events before it",
-          e.seq,
-        ),
-      );
+    const request = verifyRequest(events.slice(0, i), e, read);
+    if (!request.ok) return request;
   }
+  return ok(undefined);
+}
+
+/** One request: C7, then its request_ref artifact, then its re-rendered bytes. */
+function verifyRequest(
+  before: readonly KnownEvent[],
+  e: EventOf<"model_request">,
+  read: ReadRef,
+): Result<void, LogError> {
+  const side =
+    e.data.purpose === "compaction"
+      ? compactionSide(before, e.data.cause_event_id)
+      : undefined;
+  const prefix = new TextEncoder().encode(`${line0(before)}\n`);
+  const declared = e.data.declared_prefix;
+  if (declared.bytes !== prefix.length || declared.sha256 !== sha256Hex(prefix))
+    return err(
+      logError(
+        "prefix_changed",
+        "declared prefix is not line 0 of its settings epoch",
+        e.seq,
+      ),
+    );
+  const recorded = read(e.data.request_ref, e.seq);
+  if (!recorded.ok) return recorded;
+  const rendered = render(before, read, side);
+  if (!rendered.ok) return rendered;
+  if (e.data.request_ref.sha256 !== sha256Hex(rendered.value.bytes))
+    return err(
+      logError(
+        "request_hash_mismatch",
+        "request_ref is not Render v1 of the events before it",
+        e.seq,
+      ),
+    );
   return ok(undefined);
 }

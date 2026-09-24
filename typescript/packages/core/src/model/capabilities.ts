@@ -22,7 +22,7 @@ export function unsupported(
   const accepts = new Set<string>(info.accepts);
   const provider = info.model.provider;
   for (const line of request.lines) {
-    if (line.role === "tools") continue;
+    if (line.role === "tools" || line.role === "tools_loaded") continue;
     for (const part of line.content) {
       if (
         line.role !== "assistant" &&

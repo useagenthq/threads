@@ -34,6 +34,7 @@ import {
   checkTeamPark,
   checkWaits,
 } from "./team";
+import { checkToolsLoaded } from "./tools-loaded";
 import {
   checkCompacted,
   checkInput,
@@ -45,7 +46,7 @@ import { checkWoken } from "./wake";
 
 /**
  * The semantic rules that need earlier events (spec/schema/README.md, "Semantic rules" 6-13
- * and 17-45, but 43), checked against the fold before `line` is applied. Rules 1-4 are the chain's,
+ * and 17-46, but 43), checked against the fold before `line` is applied. Rules 1-4 are the chain's,
  * 5 is the parser's, and 14-16 need rendering or a fork request.
  */
 export function validateNext(
@@ -75,6 +76,8 @@ function check(fold: Fold, e: KnownEvent): Violation {
   switch (e.type) {
     case "tools_changed":
       return checkToolsChanged(fold, e);
+    case "tools_loaded":
+      return checkToolsLoaded(fold, e);
     case "user_input":
       return checkTeamInput(fold, e) ?? checkInput(fold, e);
     case "steer":

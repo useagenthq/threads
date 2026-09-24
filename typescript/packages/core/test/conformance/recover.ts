@@ -9,6 +9,8 @@ import {
 } from "../../src/loop";
 import { scriptedModel } from "../../src/model";
 import { knownEvents } from "../../src/reduce";
+import { refReader } from "../../src/render";
+import { readSpec } from "../../src/render/tool-specs";
 import type { ArtifactStore, Writer } from "../../src/store";
 import { verifyExport } from "../../src/verify";
 import { unwrap } from "../store/helpers";
@@ -75,10 +77,16 @@ async function run(
   clock: Clock,
 ): Promise<{ readonly end: LoopEnd }> {
   const model = scriptedModel(c.scripts.model ?? { responses: [] });
+  const read = refReader(artifacts);
   const sandbox = scriptedTools(
     c.scripts.sandbox,
-    // The host binds every tool its config pinned or added, whatever the latest set holds.
-    [...writer.chain.fold.knownTools.values()],
+    // The host binds every tool its config pinned or added, whatever the latest set holds; a
+    // deferred tool by the full spec its spec_ref artifact holds.
+    [...writer.chain.fold.knownTools.values()].map((spec) =>
+      spec.spec_ref === undefined
+        ? spec
+        : unwrap(readSpec(read, spec.spec_ref, 0)),
+    ),
     () => clock.now,
   );
   const stubs =
