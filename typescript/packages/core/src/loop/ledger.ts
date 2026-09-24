@@ -1,7 +1,7 @@
 import type { EventOf, Fold, ModelRef } from "../fold/state";
 import type { JsonObject, KnownEvent, Policy, ThreadId } from "../log";
 import { reservation, settlement, tokenBounds } from "../reduce/cost";
-import type { Claim, LimitName } from "../store";
+import type { BudgetLedger, Claim, LimitName } from "../store";
 import type { Session } from "./session";
 import type { Covering, TeamAgentPin, TeamRecipient } from "./types";
 
@@ -74,14 +74,33 @@ export function covering(s: Session): readonly Covering[] {
  * member's own) has room for one request of its model. A limit the model can't bound has none.
  */
 export function roomFor(s: Session, member: TeamAgentPin): boolean {
+  const budgets = s.config.budgets;
+  return (
+    budgets === undefined || startRoom(budgets.ledger, covering(s), member)
+  );
+}
+
+/**
+ * Whether `starter` (every budget covering whoever starts the member) and the member's own
+ * budget have room for one request of its model. An operator start's starter is the lead.
+ */
+export function startRoom(
+  ledger: BudgetLedger,
+  starter: readonly Covering[],
+  member: TeamAgentPin,
+): boolean {
   const own = member.budget;
   const all: readonly Covering[] = [
-    ...covering(s),
+    ...starter,
     ...(own === undefined
       ? []
       : [{ budgetId: "member", budget: own, scope: "thread" as const }]),
   ];
-  return fits(s, all, boundsFor(member.policy, member.model, member.params));
+  return fits(
+    ledger,
+    all,
+    boundsFor(member.policy, member.model, member.params),
+  );
 }
 
 /**
@@ -89,25 +108,23 @@ export function roomFor(s: Session, member: TeamAgentPin): boolean {
  * turn's request (its turn belongs to that request), have room for one request of its model.
  */
 export function roomIn(s: Session, to: TeamRecipient): boolean {
+  const budgets = s.config.budgets;
+  if (budgets === undefined) return true;
   const run = covering(s).filter((c) => c.scope === "run");
   const all = [...to.covering, ...run];
-  return fits(s, all, boundsFor(to.policy, to.model, to.params));
+  return fits(budgets.ledger, all, boundsFor(to.policy, to.model, to.params));
 }
 
 /** Every limit of `all` has room for `amounts` (a new member's own budget starts empty). */
 function fits(
-  s: Session,
+  ledger: BudgetLedger,
   all: readonly Covering[],
   amounts: ReadonlyMap<LimitName, number>,
 ): boolean {
-  const budgets = s.config.budgets;
-  if (budgets === undefined) return true;
   return claimsOf(all, amounts).every(
     (c) =>
       c.amount !== undefined &&
-      (c.budgetId === "member"
-        ? 0
-        : budgets.ledger.spent(c.budgetId, c.limit)) +
+      (c.budgetId === "member" ? 0 : ledger.spent(c.budgetId, c.limit)) +
         c.amount <=
         c.max,
   );

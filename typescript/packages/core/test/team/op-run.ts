@@ -1,17 +1,19 @@
 import { z } from "zod";
 import type { EventOf } from "../../src/fold/state";
-import { EndedResult, ThreadId } from "../../src/log";
+import { EndedResult, MemberRef, Principal, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { ok } from "../../src/result";
 import type { EventDraft, Writer } from "../../src/store";
 import { ask, reply } from "../../src/team/ask";
 import { Batch } from "../../src/team/batch";
-import type { CallContext } from "../../src/team/call";
+import { type CallContext, callRequest, named } from "../../src/team/call";
 import { type ConsumeContext, consume } from "../../src/team/consume";
 import { deadline } from "../../src/team/deadline";
 import { resolveDefinition } from "../../src/team/dynamic";
-import { send, start } from "../../src/team/ops";
+import { openOperator, refTarget } from "../../src/team/operator";
+import { type StartPlan, send, start } from "../../src/team/ops";
 import { turnProvenance } from "../../src/team/provenance";
+import { teamOfLog } from "../../src/team/rows";
 import { type Settlement, settle } from "../../src/team/settle";
 import { monitor, wait } from "../../src/team/watch";
 import { StartInput } from "../../src/tools/team-inputs";
@@ -75,17 +77,13 @@ function callOp(w: Writer, v: Op): unknown {
 function modelOp(c: CallContext, v: Op): unknown {
   const args = v.input["args"];
   switch (v.op) {
-    case "send":
-      return send(c, Args.send.parse(args), limits(v));
+    case "send": {
+      const parsed = Args.send.parse(args);
+      return send(callRequest(c), named(c, parsed.to), parsed.text, limits(v));
+    }
     case "start": {
       const parsed = StartInput.parse(args);
-      return start(c, parsed, {
-        agents: agents(v),
-        resolved: resolveDefinition(v.given.templates?.[parsed.agent], parsed),
-        limits: limits(v),
-        headroom: () => v.given.headroom ?? true,
-        threadId: ThreadId.parse(v.input["thread_id"]),
-      });
+      return start(callRequest(c), parsed, startPlan(v, parsed));
     }
     case "ask":
       return ask(c, Args.ask.parse(args), {
@@ -99,6 +97,53 @@ function modelOp(c: CallContext, v: Op): unknown {
     default:
       return wait(c, Args.wait.parse(args));
   }
+}
+
+function startPlan(v: Op, args: z.infer<typeof StartInput>): StartPlan {
+  return {
+    agents: agents(v),
+    resolved: resolveDefinition(v.given.templates?.[args.agent], args),
+    limits: limits(v),
+    headroom: () => v.given.headroom ?? true,
+    threadId: ThreadId.parse(v.input["thread_id"]),
+  };
+}
+
+const Body = {
+  send: z.object({ to: MemberRef, text: z.string() }),
+  any: z.record(z.string(), z.json()),
+};
+
+/** An operator request's outcome: what the op returns, or what its key replays. */
+function operatorOp(w: Writer, v: Op): unknown {
+  let out: unknown;
+  decided(w, (ctx) => {
+    const team = teamOfLog(ctx.db, ctx.branchId);
+    if (team === undefined) throw new Error("not a team log");
+    const opened = openOperator(
+      { ...ctx, put, team },
+      {
+        requestId: z.string().parse(v.input["request_id"]),
+        op: z.enum(["start", "send"]).parse(v.op),
+        principal: Principal.parse(v.input["principal"]),
+        body: Body.any.parse(v.input["body"]),
+        idempotencyKey: z.string().optional().parse(v.input["idempotency_key"]),
+      },
+    );
+    if (opened.kind === "recorded") {
+      out = opened.outcome;
+      return;
+    }
+    if (v.op === "send") {
+      const body = Body.send.parse(v.input["body"]);
+      const to = refTarget(ctx.db, team, body.to);
+      out = send(opened.request, to, body.text, limits(v));
+    } else {
+      const body = StartInput.parse(v.input["body"]);
+      out = start(opened.request, body, startPlan(v, body));
+    }
+  });
+  return out;
 }
 
 const limits = (v: Op) => ({
@@ -220,6 +265,7 @@ export function runOn(w: Writer, v: Op): unknown {
   switch (v.op) {
     case "send":
     case "start":
+      return "request_id" in v.input ? operatorOp(w, v) : callOp(w, v);
     case "ask":
     case "reply":
     case "wait":

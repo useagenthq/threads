@@ -5,13 +5,8 @@ import { uuidv7 } from "../../store/encode";
 import { isRefusal } from "../../store/writer";
 import { ask, reply } from "../../team/ask";
 import { Batch } from "../../team/batch";
-import type { CallContext } from "../../team/call";
+import { type CallContext, callRequest, named } from "../../team/call";
 import { readerOf } from "../../team/close";
-import {
-  KEPT_TOOLS,
-  resolveDefinition,
-  type Template,
-} from "../../team/dynamic";
 import { send, start } from "../../team/ops";
 import { monitor, wait } from "../../team/watch";
 import {
@@ -24,20 +19,14 @@ import {
 } from "../../tools/team-inputs";
 import { roomFor, roomIn } from "../ledger";
 import type { Session } from "../session";
-import {
-  BARRED,
-  type Halt,
-  type TeamAgentPin,
-  type TeamRuntime,
-} from "../types";
+import { BARRED, type Halt, type TeamRuntime } from "../types";
+import { listedOf, startPin } from "./start-pin";
 
 // The team tools (spec/schema/README.md, "Teams", Model tools), run by the loop like any framework
 // tool: each is one decided append under the caller's writer, holding the policy decision, the
 // op's events and the call's one result, so a call re-dispatched after a crash either finds that
 // append or makes it now, never twice. An ask or a wait stays a pending call: its re-dispatch only
 // parks, and the writer's close records its one result.
-
-const utf8 = new TextEncoder();
 
 export function teamOf(s: Session): TeamRuntime {
   const team = s.config.team;
@@ -80,24 +69,15 @@ export async function startTool(
 ): Promise<Halt | undefined> {
   const team = teamOf(s);
   const args = StartInput.parse(call.data.input);
-  const listed = await team.pin(args.agent);
-  const resolved = resolveDefinition(templateOf(listed), args);
-  const define = resolved.ok ? resolved.value.define : undefined;
-  const pinned =
-    define === undefined
-      ? listed
-      : await team.pin(args.agent, { define, starter: starterOf(s) });
-  if (pinned !== undefined) {
-    s.artifacts.put(utf8.encode(pinned.config));
-    for (const bytes of pinned.artifacts) s.artifacts.put(bytes);
-  }
+  const { pinned, resolved } = await startPin(
+    team.pin,
+    s.artifacts,
+    args,
+    starterOf(s),
+  );
   return decided(s, call, (ctx) =>
-    start(ctx, args, {
-      agents: new Map(
-        pinned === undefined
-          ? []
-          : [[args.agent, { configHash: pinned.configHash }]],
-      ),
+    start(callRequest(ctx), args, {
+      agents: listedOf(args.agent, pinned),
       resolved,
       limits: team.limits,
       headroom: () => pinned !== undefined && roomFor(s, pinned),
@@ -116,22 +96,15 @@ function starterOf(s: Session): string {
   return name;
 }
 
-/** A dynamic agent as a start sees it: its pin's tools but F, and its model keys. */
-function templateOf(pin: TeamAgentPin | undefined): Template | undefined {
-  if (pin?.models === undefined) return undefined;
-  return {
-    tools: pin.tools.filter((t) => !KEPT_TOOLS.has(t)),
-    models: pin.models,
-  };
-}
-
 export function sendTool(
   s: Session,
   call: EventOf<"tool_call">,
 ): Halt | undefined {
   const team = teamOf(s);
   const args = SendInput.parse(call.data.input);
-  return decided(s, call, (ctx) => send(ctx, args, team.limits));
+  return decided(s, call, (ctx) =>
+    send(callRequest(ctx), named(ctx, args.to), args.text, team.limits),
+  );
 }
 
 /** ask.open; headroom is on the recipient's budgets, read from its log. */

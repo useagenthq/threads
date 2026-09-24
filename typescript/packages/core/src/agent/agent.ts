@@ -23,7 +23,7 @@ import { target } from "./handoff";
 import { hosted } from "./hosted";
 import { checkLookups } from "./lookups";
 import type { MemoryWrite, PinOptions } from "./pin";
-import { register } from "./registry";
+import { register, registerLead } from "./registry";
 import type { RunResult } from "./result";
 import { pinnedAfterSetup, type Resolved, type RunOptions, run } from "./run";
 import { isMcp, type McpServer, setUp } from "./setup";
@@ -181,6 +181,7 @@ function build<Deps, Output>(
   const { def, plain } = resolve(options, decode);
   const handle = options.team === undefined ? plain : teamAgent(plain);
   registerAs(handle, def, options.approvers);
+  if (options.team !== undefined) registerLead(def.name, handle);
   return handle;
 }
 

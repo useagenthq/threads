@@ -1,25 +1,15 @@
 import type { z } from "zod";
-import type { Budget, ThreadId } from "../log";
+import { type Budget, MemberName, type MemberRef, type ThreadId } from "../log";
 import type { Result } from "../result";
-import {
-  addressed,
-  type CallContext,
-  type Caller,
-  callerOf,
-  callMailId,
-  causalOf,
-  decide,
-  type Refusal,
-  recorded,
-  refusal,
-} from "./call";
+import { type Refusal, type Refused, refusal } from "./call";
 import type { InvalidDefinition, Resolved } from "./dynamic";
 import { bodyOf, sent } from "./mail";
-import { memberRows, pendingTo } from "./rows";
+import type { Request, Target } from "./request";
+import { type MemberRow, memberRows, pendingTo } from "./rows";
 
-// The model tools start and send (spec/schema/README.md, "Teams"; design §4.5 and §4.10), each
-// decided inside the caller's append: the policy decision, then the op's checks in the order the
-// op vectors pin, then its events and the call's one result. Reference:
+// start and send (spec/schema/README.md, "Teams"; design §4.5 and §4.10) for a model call or an
+// operator request, each decided inside the request's append: the policy decision, then the op's
+// checks in the order the op vectors pin, then its events and the recorded outcome. Reference:
 // spec/tools/fixtures/ops_member.py and ops_send.py.
 
 /** The team's limits: agent({teamLimits}). */
@@ -49,38 +39,39 @@ export type StartPlan = {
   readonly threadId: ThreadId;
 };
 
+export type Started = {
+  readonly member: MemberRef;
+  readonly status: "started";
+};
+export type Sent = { readonly id: string; readonly status: "sent" };
+
 const LIVE: ReadonlySet<string> = new Set(["starting", "running"]);
 
 /** member.start: member_started and its task mail, which insert the starting row, the pending
  * task and the starter's task monitor. */
 export function start(
-  ctx: CallContext,
+  req: Request,
   args: { readonly agent: string; readonly task: string },
   plan: StartPlan,
-): void {
-  const caller = callerOf(ctx);
-  if (caller === undefined) throw new Error("a team tool call outside a team");
-  const refused = startChecks(ctx, caller, args.agent, plan);
-  if (refused !== undefined) {
-    recorded(ctx, refused);
-    return;
-  }
+): Started | Refused {
+  const refused = startChecks(req, args.agent, plan);
+  if (refused !== undefined) return req.refuse(refused);
   const listed = plan.agents.get(args.agent);
   if (listed === undefined) throw new Error("startChecks lists the agent");
-  const team = caller.team.team_id;
+  const team = req.team.team_id;
   const k =
     1 +
-    memberRows(ctx.db, team).filter(
+    memberRows(req.db, team).filter(
       (r) => r.role === "member" && r.agent === args.agent,
     ).length;
   const member = {
-    tenant: caller.team.tenant_id,
+    tenant: req.team.tenant_id,
     team,
-    name: `${args.agent}-${k}`,
+    name: MemberName.parse(`${args.agent}-${k}`),
     generation: 1,
   };
-  const startedId = ctx.batch.nextId();
-  ctx.batch.add({
+  const startedId = req.batch.nextId();
+  req.batch.add({
     type: "member_started",
     type_version: 1,
     critical: true,
@@ -90,49 +81,43 @@ export function start(
       agent: args.agent,
       config_hash: listed.configHash,
       thread_id: plan.threadId,
-      parent: {
-        thread_id: ctx.call.thread_id,
-        branch_id: ctx.call.branch_id,
-        event_id: startedId,
-        relation: "team_member",
-      },
-      provenance: caller.provenance,
+      parent: req.parent(startedId),
+      provenance: req.provenance,
       ...(listed.budget === undefined ? {} : { budget: listed.budget }),
       ...(plan.resolved.ok ? plan.resolved.value : {}),
     },
   });
-  ctx.batch.add(
+  req.batch.add(
     sent({
-      mail_id: callMailId(ctx),
+      mail_id: req.mailId,
       kind: "task",
       team,
-      from: caller.ref,
+      from: req.from,
       to: { name: member.name, generation: 1 },
-      provenance: caller.provenance,
-      causal: causalOf(ctx),
+      provenance: req.provenance,
+      causal: req.causal,
       body: { text: args.task },
     }),
   );
-  recorded(ctx, { member, status: "started" });
+  return req.done({ member, status: "started" } satisfies Started);
 }
 
 /**
- * Policy (only a lead starts), team open, the agent listed, the start's chosen fields, the
- * concurrent cap, headroom.
+ * Policy (a lead, or the operator of the team's tenant, starts), team open, the agent listed, the
+ * start's chosen fields, the concurrent cap, headroom.
  */
 function startChecks(
-  ctx: CallContext,
-  caller: Caller,
+  req: Request,
   agent: string,
   plan: StartPlan,
 ): Refusal | undefined {
-  const denied = decide(ctx, "start", agent, caller.row.role === "lead");
+  const denied = req.decide("start", agent);
   if (denied !== undefined) return denied;
-  if (caller.team.closed_at !== null) return refusal("team_closed");
+  if (req.team.closed_at !== null) return refusal("team_closed");
   if (!plan.agents.has(agent)) return refusal("unknown_agent");
   if (!plan.resolved.ok)
     return refusal("invalid_definition", plan.resolved.error);
-  const live = memberRows(ctx.db, caller.team.team_id).filter(
+  const live = memberRows(req.db, req.team.team_id).filter(
     (r) => r.role === "member" && LIVE.has(r.state),
   );
   if (live.length >= plan.limits.concurrent) return refusal("concurrency_cap");
@@ -141,49 +126,43 @@ function startChecks(
 
 /** mail.send: a message to a member, pending until its writer consumes it. */
 export function send(
-  ctx: CallContext,
-  args: { readonly to: string; readonly text: string },
+  req: Request,
+  to: Target,
+  text: string,
   limits: TeamLimits,
-): void {
-  const caller = callerOf(ctx);
-  if (caller === undefined) throw new Error("a team tool call outside a team");
-  const row = deliverable(ctx, caller, "send", args.to, limits);
-  if ("refused" in row) {
-    recorded(ctx, row);
-    return;
-  }
-  const id = callMailId(ctx);
-  ctx.batch.add(
+): Sent | Refused {
+  const row = deliverable(req, "send", to, limits);
+  if ("refused" in row) return req.refuse(row);
+  req.batch.add(
     sent({
-      mail_id: id,
+      mail_id: req.mailId,
       kind: "message",
-      team: caller.team.team_id,
-      from: caller.ref,
+      team: req.team.team_id,
+      from: req.from,
       to: { name: row.name, generation: row.generation },
-      provenance: caller.provenance,
-      causal: causalOf(ctx),
-      body: bodyOf(args.text, ctx.put),
+      provenance: req.provenance,
+      causal: req.causal,
+      body: bodyOf(text, req.put),
     }),
   );
-  recorded(ctx, { id, status: "sent" });
+  return req.done({ id: req.mailId, status: "sent" } satisfies Sent);
 }
 
 /** send and ask, after the policy: team open, the member known at its generation, not ended, not
  * the sender, and its mailbox not full. */
 export function deliverable(
-  ctx: CallContext,
-  caller: Caller,
+  req: Request,
   op: "send" | "ask",
-  to: string,
+  to: Target,
   limits: TeamLimits,
-): ReturnType<typeof addressed> {
-  const denied = decide(ctx, op, to, true);
+): MemberRow | Refusal {
+  const denied = req.decide(op, to.name);
   if (denied !== undefined) return denied;
-  if (caller.team.closed_at !== null) return refusal("team_closed");
-  const row = addressed(ctx, caller, to);
+  if (req.team.closed_at !== null) return refusal("team_closed");
+  const row = to.row();
   if ("refused" in row) return row;
   if (row.state === "ended") return refusal("member_ended");
-  if (row.name === caller.row.name) return refusal("self");
-  const pending = pendingTo(ctx.db, row.team_id, row.name).length;
+  if (row.name === req.self?.name) return refusal("self");
+  const pending = pendingTo(req.db, row.team_id, row.name).length;
   return pending >= limits.mailbox ? refusal("mailbox_full") : row;
 }

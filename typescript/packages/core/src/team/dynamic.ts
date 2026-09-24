@@ -1,5 +1,8 @@
 import type { z } from "zod";
-import type { MemberDefine } from "../log";
+import type {
+  InvalidDefinition as InvalidDefinitionSchema,
+  MemberDefine,
+} from "../log";
 import { err, ok, type Result } from "../result";
 import { TEAM_CONSTANTS, TEAM_TOOLS } from "./constants";
 
@@ -33,12 +36,8 @@ export type Template = {
   readonly models: readonly string[];
 };
 
-/** spec/api.json InvalidDefinition. */
-export type InvalidDefinition = {
-  readonly field: "label" | "instructions" | "tools" | "model";
-  readonly reason: "not_allowed" | "invalid";
-  readonly allowed?: readonly string[];
-};
+/** spec/api.json InvalidDefinition, as operator_refused records it. */
+export type InvalidDefinition = z.infer<typeof InvalidDefinitionSchema>;
 
 /** A start's fields besides its agent and task. */
 export type Chosen = {
@@ -129,7 +128,11 @@ const bad = (
   reason: InvalidDefinition["reason"],
   allowed?: readonly string[],
 ): Result<never, InvalidDefinition> =>
-  err({ field, reason, ...(allowed === undefined ? {} : { allowed }) });
+  err({
+    field,
+    reason,
+    ...(allowed === undefined ? {} : { allowed: [...allowed] }),
+  });
 
 /**
  * A start's label and, for a dynamic agent (`template`), its define; undefined `template` is a

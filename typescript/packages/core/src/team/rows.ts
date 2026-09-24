@@ -88,6 +88,18 @@ export function teamRow(db: SqliteDriver, team: string): TeamRow | undefined {
     .parse(db.all("SELECT * FROM teams WHERE team_id = ?", [team]))[0];
 }
 
+/** The team whose log is `branch`, if it is a team log. */
+export function teamOfLog(
+  db: SqliteDriver,
+  branch: string,
+): TeamRow | undefined {
+  return z
+    .array(TeamRow)
+    .parse(
+      db.all("SELECT * FROM teams WHERE team_log_branch_id = ?", [branch]),
+    )[0];
+}
+
 /** Every member row of the team, the lead's included, in (name, generation) order. */
 export function memberRows(
   db: SqliteDriver,
@@ -150,6 +162,18 @@ export function pendingTo(
       [team, name],
     ),
   );
+}
+
+/** Pending mail to a writer: its thread's own rows, or the team log when it is one. */
+export function pendingHere(
+  db: SqliteDriver,
+  thread: ThreadId,
+  branch: string,
+): readonly MailEnvelope[] {
+  const rows = ownRows(db, thread);
+  if (rows.length > 0) return pendingFor(db, rows);
+  const team = teamOfLog(db, branch);
+  return team === undefined ? [] : pendingTo(db, team.team_id, null);
 }
 
 /** Pending mail to any of a thread's own rows (a nested lead has two), in one order. */

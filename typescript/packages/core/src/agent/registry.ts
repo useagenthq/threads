@@ -74,6 +74,11 @@ export type MemberEntry = {
   readonly toolNames: readonly string[];
   /** The agents of its own team, when it leads one (a nested lead). */
   readonly team: readonly object[] | undefined;
+  /** agent({teamLimits}), defaults filled in: what its team's starts and sends are capped by. */
+  readonly teamLimits: {
+    readonly concurrent: number;
+    readonly mailbox: number;
+  };
   /** A dynamic agent (lane 26): its model keys, and the choosable tools a lead's listing shows. */
   readonly template?: {
     readonly models: readonly string[];
@@ -153,6 +158,21 @@ const AGENTS = new WeakMap<object, Entry>();
 
 export function register(agent: object, entry: Entry): void {
   AGENTS.set(agent, entry);
+}
+
+/**
+ * The team leads this process defined, by name: openTeam resolves a team's agents against the
+ * lead of its name, as a rebind does. ponytail: the latest definition of a name wins; key it by
+ * the lead's config_hash if one process ever defines two leads of one name.
+ */
+const LEADS = new Map<string, object>();
+
+export function registerLead(name: string, lead: object): void {
+  LEADS.set(name, lead);
+}
+
+export function leadNamed(name: string): object | undefined {
+  return LEADS.get(name);
 }
 
 export function setupOf(

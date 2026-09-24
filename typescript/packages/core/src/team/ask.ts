@@ -5,7 +5,9 @@ import {
   type Caller,
   callerOf,
   callMailId,
+  callRequest,
   causalOf,
+  named,
   type Refused,
   recorded,
   refusal,
@@ -63,7 +65,12 @@ export function ask(
   const askId = callMailId(ctx);
   const opened = sentAs(ctx, askId);
   if (opened !== undefined) return reopened(ctx, caller, opened);
-  const row = deliverable(ctx, caller, "ask", args.to, plan.limits);
+  const row = deliverable(
+    callRequest(ctx),
+    "ask",
+    named(ctx, args.to),
+    plan.limits,
+  );
   if ("refused" in row) return recorded(ctx, row);
   if (!plan.headroom(row)) return recorded(ctx, refusal("budget_exceeded"));
   const cap = TEAM_CONSTANTS.askWaitDefaultMs;

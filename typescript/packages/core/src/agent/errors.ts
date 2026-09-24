@@ -1,3 +1,5 @@
+import type { ArtifactRef } from "../log";
+
 /** spec/api.json ConfigErrorCode: setup errors, the only failures that throw. */
 export type ConfigErrorCode =
   | "invalid_config"
@@ -21,5 +23,27 @@ export class ConfigError extends Error {
     super(message);
     this.name = "ConfigError";
     this.code = code;
+  }
+}
+
+/**
+ * Thrown by the result reads (Team.members; lane 21E adds wait, ask and askStatus) when a result
+ * the verified log names is missing or corrupt in the artifact store: a broken store invariant,
+ * never an expected failure.
+ */
+export class StoreCorruptError extends Error {
+  readonly code: "artifact_missing" | "artifact_corrupt";
+  /** The verified ref that failed. */
+  readonly ref: ArtifactRef;
+
+  constructor(
+    code: "artifact_missing" | "artifact_corrupt",
+    ref: ArtifactRef,
+    message: string,
+  ) {
+    super(message);
+    this.name = "StoreCorruptError";
+    this.code = code;
+    this.ref = ref;
   }
 }

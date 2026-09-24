@@ -26,6 +26,7 @@ import type { DeferTools } from "../defer";
 import { memberEntry } from "../registry";
 import type { Store } from "../sqlite";
 import { ancestorsOf } from "./budgets";
+import { takeTeamLogMail } from "./log-mail";
 import { closed, pinnedOrUnavailable, principalOf, teamsUnder } from "./scan";
 import { endUnbound, refuseEnded } from "./units";
 
@@ -122,12 +123,14 @@ export class TeamWorker {
 
   #pass(recovering: boolean): void {
     const db = this.#env.log.driver;
-    for (const team of teamsUnder(db, this.#env.team))
+    for (const team of teamsUnder(db, this.#env.team)) {
+      takeTeamLogMail(this.#env.log, this.#env.artifacts, team, this.#env.mint);
       for (const row of memberRows(db, team)) {
         if (row.role !== "member" || this.#running.has(row.thread_id)) continue;
         const work = this.#work(db, row, recovering);
         if (work !== undefined) this.#launch(row.thread_id, work);
       }
+    }
   }
 
   /** What a member needs now, if anything. */

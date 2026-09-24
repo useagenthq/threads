@@ -6,7 +6,11 @@ export {
   type RunStream,
   type StreamEvent,
 } from "./agent";
-export { ConfigError, type ConfigErrorCode } from "./errors";
+export {
+  ConfigError,
+  type ConfigErrorCode,
+  StoreCorruptError,
+} from "./errors";
 export {
   type Extension,
   type ExtensionOptions,
@@ -21,6 +25,18 @@ export type { McpServer } from "./setup";
 export type { Skill } from "./skills";
 export { type Store, sqlite } from "./sqlite";
 export { type DynamicAgentOptions, dynamicAgent } from "./team/dynamic";
+export type {
+  MemberState,
+  OperatorRefusal,
+  Team,
+  TeamCursor,
+  TeamItem,
+  TeamMember,
+  TeamSendResult,
+  TeamSource,
+  TeamStartResult,
+} from "./team/handle-types";
+export { openTeam } from "./team/open";
 export type {
   AskOutcome,
   AskRefusal,

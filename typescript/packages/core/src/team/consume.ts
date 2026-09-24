@@ -5,7 +5,14 @@ import { type CloseContext, takeAnswer, takeWaitNotice } from "./close";
 import { received } from "./mail";
 import { takeParkNotice } from "./park";
 import { turnProvenance } from "./provenance";
-import { type MemberRow, ownRows, pendingFor, teamRow } from "./rows";
+import {
+  type MemberRow,
+  ownRows,
+  pendingFor,
+  pendingTo,
+  teamOfLog,
+  teamRow,
+} from "./rows";
 import { refuseAll } from "./settle";
 import { parkedOn } from "./view";
 
@@ -67,6 +74,7 @@ export function mayResume(env: MailEnvelope): boolean {
 
 /** Consumes this writer's pending mail into the batch. */
 export function consume(ctx: ConsumeContext): Consumed {
+  if (ctx.chain.fold.team.teamLog) return consumeTeamLog(ctx);
   const rows = ownRows(ctx.db, ctx.threadId);
   const pending = pendingFor(ctx.db, rows);
   if (pending.length === 0) return { status: "nothing_pending" };
@@ -82,6 +90,27 @@ export function consume(ctx: ConsumeContext): Consumed {
   const mailIds = pending.flatMap((env) =>
     take(ctx, pass, env) ? [env.mail_id] : [],
   );
+  return { status: "consumed", mailIds };
+}
+
+/**
+ * The team log takes every pending row and never parks or opens a turn (design §4.3): its asks'
+ * answers and its waits' notices close them, and anything else (a park notice, a task
+ * notification, a returned message) is recorded only.
+ */
+function consumeTeamLog(ctx: ConsumeContext): Consumed {
+  const team = teamOfLog(ctx.db, ctx.branchId);
+  const pending =
+    team === undefined ? [] : pendingTo(ctx.db, team.team_id, null);
+  if (pending.length === 0) return { status: "nothing_pending" };
+  const mailIds = pending.flatMap((env) => {
+    if (ctx.batch.taken().has(env.mail_id)) return [env.mail_id];
+    const control = controlOf(ctx, env);
+    if (control === "later") return [];
+    if (control === "park") takeParkNotice(ctx, env, true);
+    else if (control === "ordinary") ctx.batch.add(received(env));
+    return [env.mail_id];
+  });
   return { status: "consumed", mailIds };
 }
 

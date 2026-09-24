@@ -8,7 +8,7 @@ import {
   type Waiting,
 } from "./close";
 import type { AskOutcome, Waited, Wire } from "./results";
-import { askRow, dueAsks } from "./rows";
+import { askRow, dueAsks, teamOfLog } from "./rows";
 import { askOpen, openWaits } from "./view";
 
 // The team worker's deadline step for one ask or wait, under the asker's or waiter's writer
@@ -45,7 +45,12 @@ export function deadline(ctx: CloseContext, id: string): DeadlineOutcome {
   const ask = askRow(ctx.db, id);
   if (ask !== undefined) {
     const open = askOpen(ctx.db, ctx.branchId, id, ctx.batch);
-    if (!open || ctx.batch.now < ask.deadline) return NOT_DUE;
+    if (!open) return NOT_DUE;
+    // Team close is a trigger of its own: the team log's next step closes its open asks.
+    const closed = teamOfLog(ctx.db, ctx.branchId)?.closed_at ?? null;
+    if (closed !== null)
+      return completeAsk(ctx, id, { cancelled: true, due: false }) ?? NOT_DUE;
+    if (ctx.batch.now < ask.deadline) return NOT_DUE;
     return completeAsk(ctx, id, { cancelled: false, due: true }) ?? NOT_DUE;
   }
   const started = startedOf(ctx.chain, id);

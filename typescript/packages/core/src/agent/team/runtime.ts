@@ -62,7 +62,7 @@ export function teamOf<Deps, Output>(
   // Members inherit the lead's resolved defer_tools unless they set their own.
   const deferTools = writer.chain.fold.policy?.context?.defer_tools;
   const base = {
-    pin: pins(def, deferTools),
+    pin: pins(def.members, deferTools),
     limits: def.teamLimits,
     recipient: recipientOf(opened.log, opened.artifacts),
   };
@@ -108,13 +108,13 @@ export function teamOf<Deps, Output>(
  * time, for its starter's choice. Each inherits the lead's resolved defer_tools unless it sets
  * its own.
  */
-function pins<Deps, Output>(
-  def: Resolved<Deps, Output>,
+export function pins(
+  members: readonly object[],
   deferTools: DeferTools | undefined,
 ): TeamRuntime["pin"] {
   const made = new Map<string, Promise<TeamAgentPin | undefined>>();
   const entryOf = (agent: string) => {
-    const handle = def.members.find((a) => a.name === agent);
+    const handle = members.find((a) => nameOf(a) === agent);
     return handle === undefined ? undefined : memberEntry(handle);
   };
   return (agent, choice) => {
@@ -140,7 +140,7 @@ export function agentsOf(
   into: Map<string, object> = new Map(),
 ): Map<string, object> {
   for (const agent of team) {
-    const name = z.object({ name: z.string() }).parse(agent).name;
+    const name = nameOf(agent);
     const known = into.get(name);
     if (known === agent) continue;
     if (known !== undefined)
@@ -161,7 +161,7 @@ const OPERATOR = "operator";
 export function checkNotTemplates(agents: readonly object[]): void {
   for (const agent of agents)
     if (memberEntry(agent)?.template !== undefined) {
-      const { name } = z.object({ name: z.string() }).parse(agent);
+      const name = nameOf(agent);
       throw new ConfigError(
         "invalid_config",
         `dynamic agents run as team members; put ${name} in team`,
@@ -200,3 +200,7 @@ export function checkTeam(
       );
   }
 }
+
+/** An agent handle's name. */
+const nameOf = (agent: object): string =>
+  z.object({ name: z.string() }).parse(agent).name;

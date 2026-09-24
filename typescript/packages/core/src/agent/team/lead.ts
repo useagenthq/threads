@@ -6,10 +6,11 @@ import type { Agent } from "../agent";
 import { ConfigError } from "../errors";
 import { execute } from "../execute";
 import { pin } from "../pin";
-import type { MemberEntry } from "../registry";
+import { type MemberEntry, memberEntry } from "../registry";
 import type { RunResult } from "../result";
 import { pinnedAfterSetup, type Resolved } from "../run";
 import { openStore } from "../sqlite";
+import { teamHandle } from "./handle";
 import type { Team, TeamAgent, TeamRunResult } from "./types";
 
 // A lead's handle and what a team needs of each agent it lists.
@@ -20,34 +21,46 @@ const utf8 = new TextEncoder();
 export function teamAgent<Deps, Output>(
   plain: Agent<Deps, Output>,
 ): TeamAgent<Deps, Output> {
-  return {
+  const handle: TeamAgent<Deps, Output> = {
     name: plain.name,
     check: plain.check,
-    run: async (input, options) => withTeam(await plain.run(input, options)),
+    run: async (input, options) =>
+      withTeam(handle, await plain.run(input, options)),
     stream: (input, options) => {
       const inner = plain.stream(input, options);
       return {
         [Symbol.asyncIterator]: () => inner[Symbol.asyncIterator](),
-        result: (async () => withTeam(await inner.result))(),
+        result: (async () => withTeam(handle, await inner.result))(),
       };
     },
   };
+  return handle;
 }
 
-/** The result with the lead's team: the team its thread_started names, in the store's tenant. */
+/**
+ * The result with the lead's team: the team its thread_started names, in the store's tenant,
+ * acting as the principal of the run's request (its latest user_input).
+ */
 async function withTeam<Output>(
+  lead: object,
   result: RunResult<Output>,
 ): Promise<TeamRunResult<Output>> {
-  const { log } = await openStore(result.thread.store);
+  const { log, artifacts } = await openStore(result.thread.store);
   const read = log.read(result.thread.branch);
-  const started = read.ok
-    ? knownEvents(read.value).find((e) => e.type === "thread_started")
-    : undefined;
+  const events = read.ok ? knownEvents(read.value) : [];
+  const started = events.find((e) => e.type === "thread_started");
+  const input = events.findLast((e) => e.type === "user_input");
   const id =
     started?.type === "thread_started" ? started.data.team?.id : undefined;
-  if (id === undefined)
+  if (id === undefined || input?.type !== "user_input")
     throw new Error(`thread ${result.thread.id} leads no team`);
-  const team: Team = { ref: { tenant: log.tenant, id } };
+  const team: Team = teamHandle({
+    log,
+    artifacts,
+    ref: { tenant: log.tenant, id },
+    principal: input.actor.principal,
+    lead: memberEntry(lead),
+  });
   return { ...result, team };
 }
 
@@ -60,6 +73,7 @@ export function memberOf<Deps, Output>(
     handsOff: def.handoffs.length > 0,
     toolNames: def.tools.map((t) => t.name),
     team: def.team === undefined ? undefined : def.members,
+    teamLimits: def.teamLimits,
     ...(keys === undefined
       ? {}
       : {

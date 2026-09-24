@@ -12,7 +12,7 @@ import type { Chain } from "../verify";
 import { toolResult } from "./call";
 import { received } from "./mail";
 import type { AskOutcome, MemberResult, Waited, Wire } from "./results";
-import { mailEnvelope, memberNamed, ownRows, pendingFor } from "./rows";
+import { mailEnvelope, memberNamed, pendingHere } from "./rows";
 import type { AppendContext } from "./settle";
 import {
   askOpen,
@@ -84,7 +84,7 @@ export function publicResult(
 
 /** This writer's pending mail the batch hasn't taken. */
 export function mine(ctx: CloseContext): readonly MailEnvelope[] {
-  return untaken(pendingFor(ctx.db, ownRows(ctx.db, ctx.threadId)), ctx.batch);
+  return untaken(pendingHere(ctx.db, ctx.threadId, ctx.branchId), ctx.batch);
 }
 
 const HOST = {

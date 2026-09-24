@@ -14,6 +14,7 @@ import type { ReadText } from "./close";
 import type { InvalidDefinition } from "./dynamic";
 import type { PutText } from "./mail";
 import { turnProvenance } from "./provenance";
+import type { Request, Target } from "./request";
 import {
   type MemberRow,
   memberNamed,
@@ -164,15 +165,62 @@ export function recorded<T extends object>(
   ctx: CallContext,
   value: T | Refusal,
 ): T | Refused {
-  const out: T | Refused = isRefusal(value)
-    ? {
-        code: value.refused,
-        ...(value.detail === undefined ? {} : { detail: value.detail }),
-        status: "refused",
-      }
-    : value;
+  const out = isRefusal(value) ? refusedOf(value) : value;
   ctx.batch.add(answer(ctx, out));
   return out;
+}
+
+/** A refusal's recorded value. */
+export function refusedOf(value: Refusal): Refused {
+  return {
+    status: "refused",
+    code: value.refused,
+    ...(value.detail === undefined ? {} : { detail: value.detail }),
+  };
+}
+
+/** The call as a team request: its caller sends, and its tool_result records the outcome. */
+export function callRequest(ctx: CallContext): Request {
+  const caller = callerOf(ctx);
+  if (caller === undefined) throw new Error("a team tool call outside a team");
+  return {
+    db: ctx.db,
+    batch: ctx.batch,
+    put: ctx.put,
+    team: caller.team,
+    from: caller.ref,
+    provenance: caller.provenance,
+    causal: causalOf(ctx),
+    mailId: callMailId(ctx),
+    self: caller.row,
+    // Phase 1: only a lead starts; members send to one another.
+    decide: (op, target) =>
+      decide(ctx, op, target, op !== "start" || caller.row.role === "lead"),
+    parent: (startedId) => ({
+      thread_id: ctx.call.thread_id,
+      branch_id: ctx.call.branch_id,
+      event_id: startedId,
+      relation: "team_member",
+    }),
+    refuse: (value) => recorded(ctx, value),
+    done: (value) => {
+      ctx.batch.add(answer(ctx, value));
+      return value;
+    },
+  };
+}
+
+/** A model's target: the member it names, at the generation its own log last recorded. */
+export function named(ctx: CallContext, name: string): Target {
+  return {
+    name,
+    row: () => {
+      const caller = callerOf(ctx);
+      if (caller === undefined)
+        throw new Error("a team tool call outside a team");
+      return addressed(ctx, caller, name);
+    },
+  };
 }
 
 /**

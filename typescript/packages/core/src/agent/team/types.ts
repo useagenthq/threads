@@ -1,28 +1,16 @@
-import type { MailId, MemberRef, TeamId } from "../../log";
+import type { MailId, MemberRef } from "../../log";
 import type { InvalidDefinition } from "../../team/dynamic";
 import type { SendRefusal } from "../../team/results";
 import type { Agent, RunInput, StreamEvent } from "../agent";
 import type { RunResult } from "../result";
 import type { RunOptions } from "../run";
+import type { Team } from "./handle-types";
 
-// The public face of a team lead (spec/api.json TeamAgent, TeamRunResult, Team): agent({team})
+// The public face of a team lead (spec/api.json TeamAgent, TeamRunResult): agent({team})
 // returns a TeamAgent, whose run() result also carries the team's handle.
 
-/** Which team: team.ref, for openTeam in another process. */
-export type TeamRef = {
-  readonly tenant: string;
-  readonly id: TeamId;
-};
-
-/**
- * A team's handle. Phase 1 lane 21F adds its operator methods (start, send, ask, wait, cancel,
- * members, events, askStatus); until then it names the team.
- */
-export type Team = {
-  readonly ref: TeamRef;
-};
-
 export type { MemberRef } from "../../log";
+export type { Team, TeamRef } from "./handle-types";
 
 /**
  * Why a start was refused. team_closed: the lead ended, which closes the team.
