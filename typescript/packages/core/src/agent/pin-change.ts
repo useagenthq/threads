@@ -1,12 +1,17 @@
 // Why a continued thread's pin differs from the agent's, in words that say how to continue it.
 // Two pin changes came with prompt caching (lane 10), and every thread started before it meets
-// them on upgrade; any other change starts a new thread.
+// them on upgrade. A Python thread pinned before configs recorded their resolved settings can't
+// continue; any other change starts a new thread.
 
 /** What both a stored thread_started and a draft one carry, as far as this check reads. */
 type Started = {
   readonly adapter: { readonly settings: { readonly [key: string]: unknown } };
   readonly policy?:
-    | { readonly context?: { readonly cache_ttl_ms: number } | undefined }
+    | {
+        readonly context?: { readonly cache_ttl_ms: number } | undefined;
+        readonly permissions?: unknown;
+        readonly retry?: unknown;
+      }
     | undefined;
 };
 
@@ -14,6 +19,13 @@ const DEFAULT_TTL_MS = 300_000;
 
 /** The refusal for continuing `stored` with an agent that pins `next`. */
 export function pinChange(stored: Started, next: Started): string {
+  const p = stored.policy;
+  if (
+    p?.permissions === undefined ||
+    p.retry === undefined ||
+    p.context === undefined
+  )
+    return "this thread was started by a Python threads that left the default permissions, retry and context settings out of its pinned config, so its config_hash can't match any agent now; start a new thread";
   if (
     next.adapter.settings["prompt_cache"] !== undefined &&
     stored.adapter.settings["prompt_cache"] === undefined

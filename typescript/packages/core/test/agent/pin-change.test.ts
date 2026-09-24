@@ -2,14 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { pinChange } from "../../src/agent/pin-change";
 
 // The refusal for a continued thread whose pin changed says how to continue it when the change
-// is one prompt caching introduced (lane 10).
+// is one prompt caching introduced (lane 10), and says a pin from before resolved settings can't
+// be continued.
 
 const started = (
   settings: { readonly [key: string]: unknown },
-  ttl?: number,
+  ttl = 300_000,
 ) => ({
   adapter: { settings },
-  ...(ttl === undefined ? {} : { policy: { context: { cache_ttl_ms: ttl } } }),
+  policy: { permissions: {}, retry: {}, context: { cache_ttl_ms: ttl } },
 });
 
 describe("pinChange", () => {
@@ -22,6 +23,13 @@ describe("pinChange", () => {
   test("a newly declared cache lifetime names the value that continues it", () => {
     expect(pinChange(started({}), started({}, 86_400_000))).toBe(
       "this thread judges cache breaks by a 300000 ms cache lifetime, and the agent's models declare 86400000 ms: set cache_ttl_ms in the agent's context to 300000 to continue it",
+    );
+  });
+
+  test("a Python pin without its resolved settings starts a new thread", () => {
+    const legacy = { adapter: { settings: {} }, policy: {} };
+    expect(pinChange(legacy, started({}))).toBe(
+      "this thread was started by a Python threads that left the default permissions, retry and context settings out of its pinned config, so its config_hash can't match any agent now; start a new thread",
     );
   });
 
