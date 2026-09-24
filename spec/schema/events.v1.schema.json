@@ -1639,6 +1639,31 @@
         }
       ]
     },
+    "MemberDefine": {
+      "additionalProperties": false,
+      "properties": {
+        "instructions": {
+          "$ref": "#/$defs/NonEmpty",
+          "description": "The written instructions, byte for byte: the member's line 0 ends with them in the delimited block. Absent: the preamble alone."
+        },
+        "model": {
+          "$ref": "#/$defs/NonEmpty",
+          "description": "The chosen key of the template's models."
+        },
+        "tools": {
+          "description": "The chosen tools, unique, in the template's pinned order; none of the framework set. The member pins exactly these and the framework tools.",
+          "items": {
+            "$ref": "#/$defs/Name"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "tools",
+        "model"
+      ],
+      "type": "object"
+    },
     "MemberErrorCode": {
       "description": "A failed member's code: the host API RunErrorCode, plus pin_unavailable and pin_mismatch for a failed rebind.",
       "enum": [
@@ -4405,6 +4430,14 @@
             "config_hash": {
               "$ref": "#/$defs/Sha256",
               "description": "The pinned definition, whose canonical bytes are stored before this append; materialize rebinds against it."
+            },
+            "define": {
+              "$ref": "#/$defs/MemberDefine",
+              "description": "Present exactly when the agent is a dynamic agent: what its starter chose. config_hash binds it."
+            },
+            "label": {
+              "$ref": "#/$defs/NonEmpty",
+              "description": "A display name the starter gave (1-64 code points, no control or format characters; semantic rule 46). Never hashed, never rendered to a model."
             },
             "member": {
               "$ref": "#/$defs/MemberRef"

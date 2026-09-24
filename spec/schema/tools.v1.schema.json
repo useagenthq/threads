@@ -698,10 +698,33 @@
           "minLength": 1,
           "type": "string"
         },
+        "instructions": {
+          "description": "A dynamic agent only: instructions you write for this member, added after its own. Omitted: its own alone.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "label": {
+          "description": "A short display name for the member, up to 64 characters. Any start; never shown to a model.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "model": {
+          "description": "A dynamic agent only: one of its model keys. Omitted: its default.",
+          "minLength": 1,
+          "type": "string"
+        },
         "task": {
           "description": "The member's first input; it sees nothing else.",
           "minLength": 1,
           "type": "string"
+        },
+        "tools": {
+          "description": "A dynamic agent only: the tools it may use, a subset of those your instructions list for it. Omitted: all of them.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [

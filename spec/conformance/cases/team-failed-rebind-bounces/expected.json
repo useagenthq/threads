@@ -60,7 +60,7 @@
       "status": "in_turn",
       "head": {
         "seq": 32,
-        "hash": "fe09574262dbe06a6377e72bc538f82be13501929757d0cbc3c6974d99d5f3fe"
+        "hash": "30171986d8fc293a3a6f89fcdb89dac522bc7c95fec31a7bf73bc5185c9fc6f1"
       }
     },
     "researcher": {
@@ -86,7 +86,7 @@
       "status": "idle",
       "head": {
         "seq": 9,
-        "hash": "0247a2438dc235eeff9eabdc69b4d2bc3ebac380280e0fa7f16bc468d73e056d"
+        "hash": "5dd9135026742509263f9773847829c2f6e6c2fa43042c444b55c1c277064620"
       }
     },
     "team": {
@@ -141,7 +141,7 @@
       "status": "in_turn",
       "head": {
         "seq": 13,
-        "hash": "204f904f50f6b023c5249f73143a0982e86de7233abd09fdd58d9fefb0b618e6"
+        "hash": "326aa06459292b197eecc1c2587f7cef8cdbddd6ff771ed00f43260c43e59216"
       }
     }
   },
@@ -162,7 +162,7 @@
         "generation": 1,
         "role": "lead",
         "agent": "lead",
-        "config_hash": "bfe90dd30a179b4b086c27c247f828b44d52b196df761f185dd234ce54a10ee1",
+        "config_hash": "e8a9d5e86f7721ef86a9ff587e879bf60f0ce7ac1358c601b48210c2fcfad801",
         "thread_id": "0192a000-0000-7000-8000-0000000000b1",
         "branch_id": "0192b000-0000-7000-8000-0000000000b1",
         "provenance": null,
@@ -187,7 +187,7 @@
         "generation": 1,
         "role": "member",
         "agent": "researcher",
-        "config_hash": "66f5255887dece1271d2dfa9bedb5c3e4faf71de4d33464555b256ba93ffc446",
+        "config_hash": "b311ed218c5a9d883ff1d2208f22b6b7939e1ab3b15c3c5a733732f698f1dd7c",
         "thread_id": "0192a000-0000-7000-8000-0000000000b2",
         "branch_id": "0192b000-0000-7000-8000-0000000000b2",
         "provenance": {
@@ -224,7 +224,7 @@
         "generation": 1,
         "role": "member",
         "agent": "writer",
-        "config_hash": "f09febb8846e1928979f4d62cd9d75b45d780ccba678ab0468c301c0187bf68f",
+        "config_hash": "c7c8a3b65717c17e2d722696a05c7f899ad28b17c9c4f6f7109103b4f75ff8bd",
         "thread_id": "0192a000-0000-7000-8000-0000000000b4",
         "branch_id": "0192b000-0000-7000-8000-0000000000b4",
         "provenance": {

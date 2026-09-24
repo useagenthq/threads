@@ -271,7 +271,18 @@
         "args_hash": { "$ref": "urn:threads:schema:events:v1#/$defs/Sha256" },
         "expires_at": { "$ref": "urn:threads:schema:events:v1#/$defs/TimeMs" },
         "suggested_rules": { "description": "Rules the approver may keep for this thread.", "type": "array", "items": { "$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule" } },
-        "reason": { "description": "Why the call asks, copied from its permission_decision: a hook's rule, or the memory_write option to change.", "type": "string" }
+        "reason": { "description": "Why the call asks, copied from its permission_decision: a hook's rule, or the memory_write option to change.", "type": "string" },
+        "member": {
+          "description": "In a team member's thread: which member, as its starter's member_started records it, with the label and, for a dynamic agent, what the starter chose (define). Absent in any other thread.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": { "$ref": "urn:threads:schema:events:v1#/$defs/MemberName" },
+            "label": { "$ref": "urn:threads:schema:events:v1#/$defs/NonEmpty" },
+            "define": { "$ref": "urn:threads:schema:events:v1#/$defs/MemberDefine" }
+          }
+        }
       }
     },
     "ApprovalDecision": {

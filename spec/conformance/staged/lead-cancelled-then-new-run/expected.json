@@ -28,7 +28,7 @@
       "status": "cancelled",
       "head": {
         "seq": 6,
-        "hash": "862fc0141204a55f68f01b7271c398f7ceda725cb04efd53ea18ee15382e6bdb"
+        "hash": "1e639f956f1b72c4a68e62a7df62aed9436ebef2f440cd90961bb5bf69b04ba5"
       }
     },
     "team": {
@@ -70,7 +70,7 @@
         "generation": 1,
         "role": "lead",
         "agent": "lead",
-        "config_hash": "bfe90dd30a179b4b086c27c247f828b44d52b196df761f185dd234ce54a10ee1",
+        "config_hash": "e8a9d5e86f7721ef86a9ff587e879bf60f0ce7ac1358c601b48210c2fcfad801",
         "thread_id": "0192a000-0000-7000-8000-0000000000b1",
         "branch_id": "0192b000-0000-7000-8000-0000000000b1",
         "provenance": null,

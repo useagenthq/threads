@@ -51,8 +51,10 @@ class Request:
         if not allow:
             raise Refused("forbidden")
 
-    def refuse(self, code: str) -> Obj:
+    def refuse(self, code: str, detail: Obj | None = None) -> Obj:
         value: Obj = {"code": code, "status": "refused"}
+        if detail is not None:
+            value["detail"] = detail
         if self.operator:
             data: Obj = {"request_id": self.key["request_id"], "code": code}
             self.w.add(self.label, "operator_refused", data)

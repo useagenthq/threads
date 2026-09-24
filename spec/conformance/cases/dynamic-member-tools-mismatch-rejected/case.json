@@ -1,0 +1,16 @@
+{
+  "name": "dynamic-member-tools-mismatch-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 46 across logs: the member pins bash, which define didn't choose: invalid_transition at its thread_started.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "specialist",
+      "team"
+    ]
+  }
+}

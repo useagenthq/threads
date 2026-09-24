@@ -1,5 +1,5 @@
 # pyright: strict
-"""Reference `validate_next` for semantic rules 31-42, 44 and 45 on one log (spec/schema/README.md,
+"""Reference `validate_next` for semantic rules 31-42 and 44-46 on one log (spec/schema/README.md,
 "Semantic rules"). Stdlib only, like the reference reducer: `ref_check` runs it over every case,
 so a new rule that contradicts an accepted case fails `gen_fixtures.py --check`."""
 
@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import arr, obj, text
+from .dynamic_rules import rule_46
 from .ref_fold import advance, joins, mail_run
 from .turn_open import mail_opens_turn, mail_renders
 
@@ -202,6 +203,9 @@ class Check:
         return None if d["call_id"] in self.pending else "42: decision names no pending call"
 
     def rule_started(self, e: Obj, d: Obj) -> str | None:
+        why = rule_46(d)
+        if why is not None:
+            return why
         parent = obj(d["parent"])
         if self.team_log:
             if parent["thread_id"] != self.lead_thread:

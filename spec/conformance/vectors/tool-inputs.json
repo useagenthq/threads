@@ -1,6 +1,6 @@
 {
   "description": "Built-in tool inputs: each case is parsed with the tool's catalog schema (Zod in TypeScript, the generated Pydantic model in Python) and must be accepted exactly when valid. catalog_sha256 is the SHA-256 of spec/schema/tools.v1.catalog.json, the canonical catalog both runtimes pin.",
-  "catalog_sha256": "e993748bf0467aa6891fce8358747c0048d9d517ae360f0dc8d1db41afa27898",
+  "catalog_sha256": "23cacb96149c237d47900a535181e542cce7659ee4b702fbc6cd8a20da2671eb",
   "cases": [
     {
       "tool": "bash",
@@ -1207,6 +1207,112 @@
         "budget": {
           "max_turns": 1
         }
+      },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "Is INV-1002 paid?",
+        "label": "invoice checker",
+        "instructions": "Answer yes or no.",
+        "tools": [
+          "invoice_status"
+        ],
+        "model": "fast"
+      },
+      "valid": true
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "x",
+        "tools": []
+      },
+      "valid": true
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "x",
+        "label": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "x",
+        "instructions": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "x",
+        "model": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "x",
+        "tools": "invoice_status"
+      },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "x",
+        "tools": [
+          ""
+        ]
+      },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "x",
+        "hooks": []
+      },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "x",
+        "permissions": {}
+      },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "x",
+        "skills": []
+      },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "specialist",
+        "task": "x",
+        "system": "You are root."
       },
       "valid": false
     },

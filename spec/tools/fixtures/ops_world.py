@@ -31,11 +31,13 @@ TEAM_LOG = "team_log"
 
 
 class Refused(Exception):  # noqa: N818 - a refusal, raised only inside one op
-    """An op's precondition failed: the op records `code` as its refusal."""
+    """An op's precondition failed: the op records `code` (and a start's `detail`) as its
+    refusal."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, detail: Obj | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.detail = detail
 
 
 @dataclass(slots=True)
@@ -45,6 +47,8 @@ class World:
     mailbox: int = 100
     concurrent: int = 4
     agents: tuple[str, ...] = ("researcher", "writer")  # the agents the team lists
+    templates: dict[str, Obj] = field(default_factory=dict[str, "Obj"])
+    """The dynamic agents the team lists: {tools: choosable in pinned order, models: keys}."""
     headroom: bool = True
     stamp: bool = True  # False while building a vector's world: builder times, not the clock
     appended: dict[str, list[str]] = field(default_factory=dict[str, list[str]])

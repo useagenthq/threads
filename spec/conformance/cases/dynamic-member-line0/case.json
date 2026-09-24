@@ -1,0 +1,9 @@
+{
+  "name": "dynamic-member-line0",
+  "family": "agents_teams",
+  "kind": "render",
+  "description": "A dynamic member's first request (a template with an extension and a skill): line 0 is the preamble, the extension's instructions, the skill listing, then the block the lead wrote, last, followed by the precedence sentence. Only invoice_status and the framework tools are pinned. The start's label appears in no request.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

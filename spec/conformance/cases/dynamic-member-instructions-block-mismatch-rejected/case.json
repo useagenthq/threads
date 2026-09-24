@@ -1,0 +1,16 @@
+{
+  "name": "dynamic-member-instructions-block-mismatch-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 46 across logs: the member's line 0 ends with another text than define's.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "specialist",
+      "team"
+    ]
+  }
+}

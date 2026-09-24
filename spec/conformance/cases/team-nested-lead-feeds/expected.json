@@ -53,7 +53,7 @@
       "status": "in_turn",
       "head": {
         "seq": 10,
-        "hash": "e2a4dc40ae7aa844e39f4755df13cf4779ca8dfe403563a91c5718c6974eb6f8"
+        "hash": "2b248d1f0922ec3c6b9f2f8529d531d107a819460228b5fbefac93f8af7c815d"
       }
     },
     "researcher": {
@@ -79,7 +79,7 @@
       "status": "in_turn",
       "head": {
         "seq": 2,
-        "hash": "b84b79e929b51265ba4391f227400795942c001f4af420ad0cba3dcb315ce6d0"
+        "hash": "5e7b0e41a90dbf89b1fdb37cfcfb9c49a3668122180a310ab73c18c0c941ef5f"
       }
     },
     "team": {
@@ -128,7 +128,7 @@
         "generation": 1,
         "role": "lead",
         "agent": "lead",
-        "config_hash": "bfe90dd30a179b4b086c27c247f828b44d52b196df761f185dd234ce54a10ee1",
+        "config_hash": "e8a9d5e86f7721ef86a9ff587e879bf60f0ce7ac1358c601b48210c2fcfad801",
         "thread_id": "0192a000-0000-7000-8000-0000000000b1",
         "branch_id": "0192b000-0000-7000-8000-0000000000b1",
         "provenance": null,
@@ -142,7 +142,7 @@
         "generation": 1,
         "role": "member",
         "agent": "researcher",
-        "config_hash": "66f5255887dece1271d2dfa9bedb5c3e4faf71de4d33464555b256ba93ffc446",
+        "config_hash": "b311ed218c5a9d883ff1d2208f22b6b7939e1ab3b15c3c5a733732f698f1dd7c",
         "thread_id": "0192a000-0000-7000-8000-0000000000b2",
         "branch_id": "0192b000-0000-7000-8000-0000000000b2",
         "provenance": {
@@ -167,7 +167,7 @@
         "generation": 1,
         "role": "lead",
         "agent": "researcher",
-        "config_hash": "66f5255887dece1271d2dfa9bedb5c3e4faf71de4d33464555b256ba93ffc446",
+        "config_hash": "b311ed218c5a9d883ff1d2208f22b6b7939e1ab3b15c3c5a733732f698f1dd7c",
         "thread_id": "0192a000-0000-7000-8000-0000000000b2",
         "branch_id": "0192b000-0000-7000-8000-0000000000b2",
         "provenance": null,

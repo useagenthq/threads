@@ -1,0 +1,16 @@
+{
+  "name": "dynamic-member-tools-match-define",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 46 across logs: the lead chose invoice_status and wrote instructions; the member's thread_started pins exactly invoice_status and F, and its line 0 ends with the block.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "specialist",
+      "team"
+    ]
+  }
+}

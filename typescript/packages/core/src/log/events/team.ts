@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ActorWithPrincipal, Budget } from "../common";
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { BranchId, EventId, MonitorId, TeamId, ThreadId, WaitId } from "../ids";
-import { NonEmpty, PosInt, Sha256, TimeMs } from "../primitives";
+import { Name, NonEmpty, PosInt, Sha256, TimeMs } from "../primitives";
 import {
   CompletedResult,
   EndedResult,
@@ -46,6 +46,25 @@ const TeamMemberParent: Strict<{
   event_id: EventId,
   relation: z.literal("team_member"),
 });
+/** What a lead (or the operator) chose for a member of a dynamic agent (lane 26). */
+export const MemberDefine: Strict<{
+  instructions: Opt<typeof NonEmpty>;
+  tools: Arr<typeof Name>;
+  model: typeof NonEmpty;
+}> = z
+  .strictObject({
+    instructions: NonEmpty.describe(
+      "The written instructions, byte for byte: the member's line 0 ends with them in the delimited block. Absent: the preamble alone.",
+    ).optional(),
+    tools: z
+      .array(Name)
+      .describe(
+        "The chosen tools, unique, in the template's pinned order; none of the framework set. The member pins exactly these and the framework tools.",
+      ),
+    model: NonEmpty.describe("The chosen key of the template's models."),
+  })
+  .meta({ id: "MemberDefine" });
+
 export const MemberStartedData: Strict<{
   member: typeof MemberRef;
   agent: typeof NonEmpty;
@@ -54,6 +73,8 @@ export const MemberStartedData: Strict<{
   parent: typeof TeamMemberParent;
   provenance: typeof Provenance;
   budget: Opt<typeof Budget>;
+  define: Opt<typeof MemberDefine>;
+  label: Opt<typeof NonEmpty>;
 }> = z.strictObject({
   member: MemberRef,
   agent: NonEmpty,
@@ -69,6 +90,12 @@ export const MemberStartedData: Strict<{
   provenance: Provenance,
   budget: Budget.describe(
     "The member's own budget: the minimum of start's budget and the matching messagePolicy rule's.",
+  ).optional(),
+  define: MemberDefine.describe(
+    "Present exactly when the agent is a dynamic agent: what its starter chose. config_hash binds it.",
+  ).optional(),
+  label: NonEmpty.describe(
+    "A display name the starter gave (1-64 code points, no control or format characters; semantic rule 46). Never hashed, never rendered to a model.",
   ).optional(),
 });
 export const MemberStarted: EventDef<

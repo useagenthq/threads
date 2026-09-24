@@ -106,6 +106,7 @@ def run(world: Obj, vector: Obj) -> tuple[Obj, list[str]]:
         mailbox=num(given.get("mailbox", 100)),
         concurrent=num(given.get("concurrent", 4)),
         headroom=given.get("headroom", True) is True,
+        templates={k: obj(v) for k, v in obj(given.get("templates", {})).items()},
     )
     problems = _validate(w, "world")
     before = rows(w)

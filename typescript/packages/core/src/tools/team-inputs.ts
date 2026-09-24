@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Arr, Strict } from "../log/zod-types";
+import type { Arr, Opt, Strict } from "../log/zod-types";
 import type { CatalogEntry } from "./catalog";
 
 // The model tools of a team (spec/schema/README.md, "Teams"). A member is addressed by its
@@ -11,11 +11,32 @@ const Member: z.ZodString = Text.describe(
   "A member's name, such as researcher-1.",
 );
 
-export const StartInput: Strict<{ agent: z.ZodString; task: z.ZodString }> =
-  z.strictObject({
-    agent: Text.describe("An agent your team lists."),
-    task: Text.describe("The member's first input; it sees nothing else."),
-  });
+export const StartInput: Strict<{
+  agent: z.ZodString;
+  task: z.ZodString;
+  label: Opt<z.ZodString>;
+  instructions: Opt<z.ZodString>;
+  tools: Opt<Arr<z.ZodString>>;
+  model: Opt<z.ZodString>;
+}> = z.strictObject({
+  agent: Text.describe("An agent your team lists."),
+  task: Text.describe("The member's first input; it sees nothing else."),
+  label: Text.describe(
+    "A short display name for the member, up to 64 characters. Any start; never shown to a model.",
+  ).optional(),
+  instructions: Text.describe(
+    "A dynamic agent only: instructions you write for this member, added after its own. Omitted: its own alone.",
+  ).optional(),
+  tools: z
+    .array(Text)
+    .describe(
+      "A dynamic agent only: the tools it may use, a subset of those your instructions list for it. Omitted: all of them.",
+    )
+    .optional(),
+  model: Text.describe(
+    "A dynamic agent only: one of its model keys. Omitted: its default.",
+  ).optional(),
+});
 
 export const SendInput: Strict<{ to: z.ZodString; text: z.ZodString }> =
   z.strictObject({ to: Member, text: Text });
@@ -74,7 +95,7 @@ export const TEAM_ENTRIES: readonly CatalogEntry[] = [
   {
     name: "start",
     description:
-      "Start a team member from an agent your team lists. Returns its name; when it finishes, its result arrives as a message.",
+      "Start a team member from an agent your team lists. Returns its name; when it finishes, its result arrives as a message. label works on any start. instructions, tools and model are optional and apply only to dynamic agents.",
     input: StartInput,
   },
   {

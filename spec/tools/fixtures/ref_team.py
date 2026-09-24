@@ -1,8 +1,8 @@
 # pyright: strict
 """Runs the reference validator (ref_rules.py) over every generated case, corpus and staged: an
-accepted case must pass rules 31-45, and a rejected one must not break them before its expected
-seq; a case of one of these rules must break it exactly there. Rule 43 is checked across a
-`team` case's logs."""
+accepted case must pass rules 31-46, and a rejected one must not break them before its expected
+seq; a case of one of these rules must break it exactly there. Rules 43 and 46 are checked across
+a `team` case's logs."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import re
 from typing import TYPE_CHECKING
 
 from .common import obj, text
+from .dynamic_rules import member_matches
 from .ref_rules import Check
 from .turn_open import mail_renders
 
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 
     from .jcs import JsonValue, Obj
 
-OURS = re.compile(r"^Rule (3[1-9]|4[0-5])\b")
+OURS = re.compile(r"^Rule (3[1-9]|4[0-6])\b")
 type Found = tuple[str, int, str] | None  # (log label, seq, why)
 
 
@@ -137,6 +138,7 @@ def _cross_one(
         for e in es
         if e["type"] == "member_started"
     }
+    defined = _defined(logs)
     for e in events:
         d, t = obj(e["data"]), e["type"]
         why = None
@@ -152,6 +154,8 @@ def _cross_one(
             and d.get("parent") != started[e["thread_id"]]
         ):
             why = "43: a member's parent is not its member_started's"
+        elif t == "thread_started" and e["thread_id"] in defined:
+            why = member_matches(*defined[text(e["thread_id"])], d)
         elif t == "user_input" and d.get("mail_id") in sent:
             principal = obj(sent[text(d["mail_id"])]["provenance"])["principal"]
             if obj(e["actor"]).get("principal") != principal:
@@ -159,6 +163,20 @@ def _cross_one(
         if why is not None:
             return (int(str(e["seq"])), why)
     return None
+
+
+def _defined(logs: dict[str, list[Obj]]) -> dict[str, tuple[Obj, str]]:
+    """Each dynamic member's member_started and its starter's name: `operator` in a team log,
+    else the starting lead's agent name."""
+    out: dict[str, tuple[Obj, str]] = {}
+    for es in logs.values():
+        first = obj(es[0]["data"]) if es else {}
+        starter = "operator" if es and es[0]["type"] == "team_opened" else first.get("agent_name")
+        for e in es:
+            d = obj(e["data"])
+            if e["type"] == "member_started" and "define" in d:
+                out[text(d["thread_id"])] = (d, text(starter))
+    return out
 
 
 def _task_turn(events: list[Obj], sent: dict[str, Obj]) -> tuple[int, str] | None:

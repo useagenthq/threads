@@ -16,6 +16,7 @@ from .ops_run import dump_log, rows, run
 from .ops_world import CONSTANTS
 from .pieces import dump
 from .team_ops_ask import ask_vectors
+from .team_ops_dynamic import dynamic_vectors
 from .team_ops_life import life_vectors
 from .team_ops_mail import consume_vectors
 from .team_ops_send import cancel_vectors, send_vectors
@@ -55,6 +56,7 @@ def _vectors() -> list[Vec]:
         *cancel_vectors(),
         *consume_vectors(),
         *start_vectors(),
+        *dynamic_vectors(),
         *materialize_vectors(),
         *life_vectors(),
         *woken_vectors(),

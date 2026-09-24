@@ -22,6 +22,7 @@ from . import (
     context,
     cost_usage,
     coverage,
+    dynamic,
     effects,
     extras,
     fallbacks,
@@ -124,6 +125,7 @@ FAMILIES = (
     legacy_run,
     legacy_wake_rows,
     run_cases,
+    dynamic,
 )
 
 
@@ -228,7 +230,7 @@ def main() -> int:
                 tool_inputs.check() + tool_groups.check() + team_wire.check() + team_ops.check()
             )
             problems += handoff_transcripts.check()
-            problems += anthropic_requests.check()
+            problems += anthropic_requests.check() + dynamic.check()
         for p in problems:
             print(f"coverage.json: {p}")
         if problems:
@@ -247,6 +249,7 @@ def main() -> int:
         team_ops.write()
         handoff_transcripts.write()
         anthropic_requests.write()
+        dynamic.write()
         otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
         for built, dest in ((out, CASES), (staged, STAGED), *otel_parts):
             shutil.rmtree(dest, ignore_errors=True)
