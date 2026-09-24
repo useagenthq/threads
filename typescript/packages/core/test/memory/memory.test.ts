@@ -161,7 +161,7 @@ describe("write authority (F3.3)", () => {
     expect(result.status).toBe("parked");
     // The park names the option to change.
     const thread = unwrap(await openThread(store, result.thread.id));
-    const [pending] = await thread.pendingApprovals();
+    const [pending] = unwrap(await thread.pendingApprovals());
     expect(pending?.reason).toBe(
       'memory_write is "ask": approve this call, or set memory_write to "allow_principal" or "allow"',
     );
