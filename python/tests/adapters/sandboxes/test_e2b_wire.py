@@ -20,11 +20,14 @@ from sandbox_kit import OPEN
 
 from threads.adapters.sandboxes.e2b import wire
 from threads.adapters.sandboxes.e2b.control import MAX_PAGES, Control
+from threads.adapters.sandboxes.e2b.driver import classify
 from threads.adapters.sandboxes.e2b.envd import Envd, Transports
-from threads.adapters.sandboxes.e2b.session import call
 from threads.adapters.sandboxes.e2b.transport import FencedHttpx
+from threads.adapters.sandboxes.fence import dispatch
 from threads.adapters.sandboxes.streams import StreamLostError
-from threads.result import Err
+from threads.result import Err, Ok
+from threads.sandbox.protocol import SandboxContext, SandboxError
+from threads.sandbox.remote.driver import FileError
 
 VECTOR_PATH = Path(__file__).resolve().parents[4] / "spec/conformance/vectors/e2b-wire/cases.json"
 type Obj = dict[str, JsonValue]
@@ -43,6 +46,20 @@ def _str(value: JsonValue) -> str:
 
 CASES = [_obj(c) for c in cast("list[JsonValue]", VECTOR["cases"])]
 API_KEY = _str(VECTOR["api_key"])
+
+
+async def call[T](
+    context: SandboxContext, op: Callable[[], Awaitable[T]]
+) -> Ok[T] | Err[SandboxError]:
+    """One E2B operation under `context`, its failures as the remote kit names them: a file
+    refusal by its code, anything else as the driver classifies it."""
+
+    def named(error: Exception) -> SandboxError | None:
+        return error.error if isinstance(error, FileError) else classify(error)
+
+    return await dispatch(context, op, named)
+
+
 DOMAIN = _str(VECTOR["domain"])
 
 
@@ -171,7 +188,7 @@ async def _run(case: Obj) -> JsonValue:
     control = Control(client)
     sandbox = wire.Sandbox.model_validate(VECTOR["envd_sandbox"])
     url = config.get_sandbox_url(sandbox.sandbox_id, sandbox.domain or DOMAIN)
-    envd = Envd(sandbox, url, transports, set())
+    envd = Envd(sandbox, url, transports, {})
     op = _obj(case["call"])
     ops: dict[str, Callable[[], Awaitable[object]]] = {
         "create": lambda: control.create(

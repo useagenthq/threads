@@ -28,17 +28,10 @@ from threads.adapters.sandboxes.e2b import wire
 from threads.adapters.sandboxes.e2b.transport import FencedHttpx, FencedPyqwest
 from threads.adapters.sandboxes.streams import Pipe, StreamLostError, pump
 from threads.sandbox.protocol import ExecOutput, SandboxError, SandboxErrorCode
+from threads.sandbox.remote.driver import FileError
 
 USER = "root"
 ENVD_PORT = 49983
-
-
-class FileError(Exception):
-    """envd refused a file operation with a status that names why."""
-
-    def __init__(self, error: SandboxError) -> None:
-        super().__init__(error.message)
-        self.error = error
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,11 +49,11 @@ class Transports:
 
 
 class Envd:
-    """One sandbox's envd clients. It is listed in `opened`, its event loop's set, until it is
-    closed, so the loop's release closes it if its session never was."""
+    """One sandbox's envd clients. It is listed in `opened`, its event loop's by sandbox id,
+    until it is closed, so the loop's release closes it if its sandbox never was."""
 
     def __init__(
-        self, sandbox: wire.Sandbox, url: str, transports: Transports, opened: "set[Envd]"
+        self, sandbox: wire.Sandbox, url: str, transports: Transports, opened: "dict[str, Envd]"
     ) -> None:
         user = base64.b64encode(f"{USER}:".encode()).decode()
         self._headers: dict[str, str] = {
@@ -81,8 +74,8 @@ class Envd:
             http_client=pyqwest.Client(FencedPyqwest(transports.rpc)),
         )
         self._pumps: set[asyncio.Task[None]] = set()
-        self._opened = opened
-        opened.add(self)
+        self._id, self._opened = sandbox.sandbox_id, opened
+        opened[self._id] = self
 
     async def start(
         self, argv: Sequence[str], env: Mapping[str, str], cwd: str, tag: str | None
@@ -126,7 +119,7 @@ class Envd:
 
     async def aclose(self) -> None:
         """Stops its exec streams, then closes its clients (not the transports they share)."""
-        self._opened.discard(self)
+        self._opened.pop(self._id, None)
         for task in self._pumps:
             task.cancel()
         await asyncio.gather(*self._pumps, return_exceptions=True)
