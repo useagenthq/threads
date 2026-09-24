@@ -74,6 +74,8 @@ app = host(
 
 <Field name="channels" type="Record<string, ChannelAdapter>">
   Chat channels by name. Each one gets a webhook at `/channels/<name>/events`. See [Slack](/docs/host/slack), [WhatsApp](/docs/host/whatsapp) and [GitHub](/docs/host/github).
+
+  A channel adapter you write yourself must also implement `renderText(text)` (`render_text` in Python): the ops for a plain message the host sends on its own, an `ask_user` question or the correction after a reply that isn't one of its options. The bundled adapters have it. Without it, TypeScript doesn't compile and Python's `ready()` fails with `invalid_config`.
 </Field>
 
 <Field name="schedules" type="Schedule[]">
