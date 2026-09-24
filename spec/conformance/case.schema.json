@@ -1341,7 +1341,7 @@
           }
         }
       },
-      "description": "Every store.sql team table rebuilt from the logs, sorted by key. team_feed rows carry only branch_id and seq: a rebuilt feed starts a new epoch and assigns offsets in delivery order."
+      "description": "Every store.sql team table rebuilt from the logs, sorted by key. team_feed rows carry only team_id, branch_id and seq: a rebuilt feed starts a new epoch and assigns offsets in delivery order, and a nested lead's events have a row under each of its two teams."
     }
   }
 }

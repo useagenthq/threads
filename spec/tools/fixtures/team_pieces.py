@@ -118,9 +118,11 @@ def member_log(
     parent_event: str,
     agent: str = "researcher",
     where: tuple[str, str] = (MEMBER_BRANCH, MEMBER_THREAD),
+    team: Obj | None = None,
 ) -> Log:
     """A member's log, opened at materialize: its parent is the lead's member_started (or the
-    lead's thread_started for an operator start). where is its (branch, thread)."""
+    lead's thread_started for an operator start). where is its (branch, thread); a team makes it
+    a nested lead."""
     log = Log(where[0], thread=where[1])
     parent: Obj = {
         "thread_id": LEAD_THREAD,
@@ -128,7 +130,7 @@ def member_log(
         "event_id": parent_event,
         "relation": "team_member",
     }
-    _pin(log, agent, {"parent": parent})
+    _pin(log, agent, {"parent": parent} if team is None else {"parent": parent, "team": team})
     return log
 
 

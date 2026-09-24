@@ -1,0 +1,17 @@
+{
+  "name": "team-nested-lead-feeds",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "researcher-1 is a member of the lead's team and, because its definition has a team, the lead of its own: its thread_started carries both the team_member parent and the team, and its first append opens the inner team log. The index holds both of its rows (member researcher-1 in the outer team, lead researcher in the inner), both running on its branch. Every event of its log has a team_feed row under both team_ids; the inner team log's events are only in the inner feed, and the outer team log's only in the outer. The tree counts its thread once.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "inner",
+      "lead",
+      "researcher",
+      "team"
+    ]
+  }
+}

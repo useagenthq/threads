@@ -43,7 +43,11 @@ def tree(logs: list[Log]) -> Obj:
     by_thread = {log.thread: log for log in logs}
     counted: list[JsonValue] = []
     pending: list[JsonValue] = []
+    seen: set[str] = set()
     for row in rows:
+        if text(row["thread_id"]) in seen:
+            continue  # a nested lead has two rows and one thread: counted once
+        seen.add(text(row["thread_id"]))
         if row["role"] == "lead" or text(row["thread_id"]) in by_thread:
             counted.append(row["name"])
             continue

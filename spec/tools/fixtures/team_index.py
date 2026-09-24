@@ -145,22 +145,27 @@ class _Index:
 
     # ---------- pass 2: what each recipient and member changes in its own log ----------
     def change(self, log: Log) -> None:
-        row = self._own_row(log)
+        rows = self.own_rows(log)
         opened = turn_openers(log.events)
         for e in log.events:
             d, t, seq = obj(e["data"]), text(e["type"]), e["seq"]
             self._moves(d, t, seq)
-            if row is None:
-                continue
-            state = "running" if text(e["event_id"]) in opened else STATES.get(t)
-            if t == "thread_started" and "parent" in d:
-                row.update(branch_id=log.branch, state="running", updated_seq=seq)
-            elif state is not None:
-                row.update(state=state, updated_seq=seq)
-            if t in ("member_idle", "member_ended"):
-                row["result"] = d["result"]
-            if t == "member_ended" and row["role"] == "lead":
-                self.teams[text(row["team_id"])]["closed_at"] = e["time"]
+            for row in rows:
+                self._state(row, log, e, opened)
+
+    def _state(self, row: Obj, log: Log, e: Obj, opened: set[str]) -> None:
+        """One of the log's own rows follows its events (a nested lead has two: its member row
+        in the parent team and its lead row in its own)."""
+        d, t, seq = obj(e["data"]), text(e["type"]), e["seq"]
+        state = "running" if text(e["event_id"]) in opened else STATES.get(t)
+        if t == "thread_started" and "parent" in d:
+            row.update(branch_id=log.branch, state="running", updated_seq=seq)
+        elif state is not None:
+            row.update(state=state, updated_seq=seq)
+        if t in ("member_idle", "member_ended"):
+            row["result"] = d["result"]
+        if t == "member_ended" and row["role"] == "lead":
+            self.teams[text(row["team_id"])]["closed_at"] = e["time"]
 
     def _moves(self, d: Obj, t: str, seq: JsonValue) -> None:
         if t == "message_received" or (t == "user_input" and d["source"] == "team_task"):
@@ -180,13 +185,17 @@ class _Index:
             for mid in [k for k, m in self.monitors.items() if m["wait_id"] == d["wait_id"]]:
                 del self.monitors[mid]
 
-    def _own_row(self, log: Log) -> Obj | None:
-        first = obj(log.events[0]["data"])
-        if log.events[0]["type"] == "team_opened":
-            return None
-        if "team" in first:
-            return self.members[(text(obj(first["team"])["id"]), text(first["agent_name"]), 1)]
-        return next((r for r in self.members.values() if r["thread_id"] == log.thread), None)
+    def own_rows(self, log: Log) -> list[Obj]:
+        """The rows whose thread this log is: a lead's own row, a member's row, or both for a
+        nested lead. A team log has none."""
+        return [r for r in self.members.values() if r["thread_id"] == log.thread]
+
+    def feed_teams(self, log: Log) -> list[str]:
+        """Every team whose feed holds this log's events: the teams its rows belong to, or the
+        team whose log it is."""
+        teams = {text(r["team_id"]) for r in self.own_rows(log)}
+        teams |= {k for k, t in self.teams.items() if t["team_log_branch_id"] == log.branch}
+        return sorted(teams)
 
 
 def team_index(logs: list[Log]) -> Obj:
@@ -204,16 +213,22 @@ def team_index(logs: list[Log]) -> Obj:
         "asks": list[JsonValue](ix.asks[k] for k in sorted(ix.asks)),
         "monitors": list[JsonValue](ix.monitors[k] for k in sorted(ix.monitors)),
         "operator_receipts": list[JsonValue](ix.receipts[k] for k in sorted(ix.receipts)),
-        "team_feed": feed_members(logs),
+        "team_feed": feed_members(logs, ix),
         "pending_wakes": pending_wakes(logs),
     }
 
 
-def feed_members(logs: list[Log]) -> list[JsonValue]:
+def feed_members(logs: list[Log], ix: _Index) -> list[JsonValue]:
     """The team feed's rows without their epoch and offset: a rebuilt feed starts a new epoch and
-    assigns offsets in delivery order, so only which events it holds is replayable."""
-    rows = sorted((log.branch, num(e["seq"])) for log in logs for e in log.events)
-    return [{"branch_id": b, "seq": q} for b, q in rows]
+    assigns offsets in delivery order, so only which events each team's feed holds is replayable.
+    A nested lead's events are in both teams' feeds."""
+    rows = sorted(
+        (team, log.branch, num(e["seq"]))
+        for log in logs
+        for team in ix.feed_teams(log)
+        for e in log.events
+    )
+    return [{"team_id": t, "branch_id": b, "seq": q} for t, b, q in rows]
 
 
 def pending_wakes(logs: list[Log]) -> list[JsonValue]:

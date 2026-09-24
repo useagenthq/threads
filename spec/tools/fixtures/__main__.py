@@ -47,6 +47,7 @@ from . import (
     summaries,
     team_bindings,
     team_edges,
+    team_nested,
     team_operator,
     team_ops,
     team_rebind,
@@ -134,6 +135,7 @@ STAGED_PHASE_1 = (
     team_replay.build,
     team_rebind.build,
     team_operator.build,
+    team_nested.build,
     run_cases.build,
 )
 
