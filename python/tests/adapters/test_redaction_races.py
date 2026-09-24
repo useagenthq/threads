@@ -19,7 +19,7 @@ from threads.memory.types import Binding, KnowledgeSource
 from threads.redaction import SecretInStoredBytesError, register
 from threads.result import Err, Ok
 from threads.store import Draft, ForkRequest, SqliteStore, verify_export
-from threads.store import sqlite as store_sqlite
+from threads.store import branches as store_branches
 from threads.store.forking import ChildStart, Forking
 from threads.store.worker import Worker
 
@@ -114,7 +114,7 @@ def test_a_value_registered_before_a_fork_event_publishes_is_refused(
             "quiesced": {"frozen": [], "stopped": [], "excluded": []},
         },
     )
-    built = store_sqlite.start_child
+    built = store_branches.start_child
 
     def racing(
         started: Forking, data: Mapping[str, JsonValue], now: int
@@ -128,7 +128,7 @@ def test_a_value_registered_before_a_fork_event_publishes_is_refused(
         w = await writer(store)
         done = Draft("turn_completed", {"reason": "end_turn"})
         assert isinstance(await w.append([started({}), user("hi"), done, snapshot]), Ok)
-        monkeypatch.setattr(store_sqlite, "start_child", racing)
+        monkeypatch.setattr(store_branches, "start_child", racing)
         data: dict[str, JsonValue] = {
             "reason": "snapshot",
             "sandbox_id": RACED,

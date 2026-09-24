@@ -8,10 +8,10 @@ import sqlite3
 
 import pytest
 from pydantic import JsonValue, TypeAdapter
-from pydantic.experimental.missing_sentinel import MISSING
 from team.team_kit import (
     CASES,
     TEAM,
+    appendable,
     case_logs,
     index_rows,
     rebuild_all,
@@ -24,11 +24,6 @@ from team.team_kit import (
 from threads.log import (
     BranchId,
     Event,
-    MailRefusedEvent,
-    MessageReceivedEvent,
-    MessageSentEvent,
-    ThreadStartedEvent,
-    UserInputEvent,
 )
 from threads.result import Err, Ok
 from threads.store import sql
@@ -92,28 +87,11 @@ def _append_all(
     first log whose next event finds the row it changes; a receipt whose sender is not among the
     logs goes last."""
     while any(events for _, events, _ in queues):
-        ready = [q for q in queues if q[1] and _ready(conn, q[1][0])]
+        ready = [q for q in queues if q[1] and appendable(conn, q[1][0])]
         log, events, opened = ready[0] if ready else next(q for q in queues if q[1])
         event = events.pop(0)
         insert_rows(conn, log, [event])
         change_rows(conn, log, [event], opened)
-
-
-def _ready(conn: sqlite3.Connection, e: Event) -> bool:
-    """Whether the row this event changes, if any, exists yet."""
-    if isinstance(e, MessageReceivedEvent | UserInputEvent | MailRefusedEvent):
-        mail = e.data.mail_id
-        return mail is MISSING or _exists(conn, "SELECT 1 FROM mail WHERE mail_id = ?", mail)
-    if isinstance(e, ThreadStartedEvent) and e.data.parent is not MISSING:
-        return _exists(conn, "SELECT 1 FROM team_members WHERE thread_id = ?", e.thread_id)
-    if isinstance(e, MessageSentEvent) and e.data.envelope.monitor_id is not MISSING:
-        monitor = e.data.envelope.monitor_id
-        return _exists(conn, "SELECT 1 FROM monitors WHERE monitor_id = ?", monitor)
-    return True
-
-
-def _exists(conn: sqlite3.Connection, query: str, key: object) -> bool:
-    return conn.execute(query, (key,)).fetchone() is not None
 
 
 def test_rebuild_of_an_unknown_team_is_not_found() -> None:

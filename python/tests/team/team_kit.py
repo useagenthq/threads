@@ -14,12 +14,25 @@ from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.store import Store, open_store
-from threads.log import BranchId, ParseError, ThreadId, ThreadStartedEvent
+from threads.log import (
+    AskClosedEvent,
+    BranchId,
+    Event,
+    MailRefusedEvent,
+    MessageReceivedEvent,
+    MessageSentEvent,
+    OperatorRequestEvent,
+    ParseError,
+    ThreadId,
+    ThreadStartedEvent,
+    UserInputEvent,
+)
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.result import Err, Ok
 from threads.store import SqliteStore, VerifiedLog, sql, verify_export
-from threads.team.rebuild import rebuild_team_index
+from threads.team.cross import TeamLogEvents, check_team_logs
+from threads.team.rebuild import rebuild_team_index, team_branches
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 TEAM = "0192c000-0000-7000-8000-000000000001"
@@ -160,3 +173,44 @@ def _cell(name: str, value: object) -> JsonValue:
 def branch_of(thread: ThreadId) -> BranchId:
     """The team cases number a thread's branch like the thread."""
     return BranchId(thread.replace("0192a000", "0192b000"))
+
+
+def appendable(conn: sqlite3.Connection, e: Event) -> bool:
+    """Whether `e`'s append could have happened yet: the rows it moves exist (causal order)."""
+    if isinstance(e, MessageReceivedEvent | UserInputEvent | MailRefusedEvent):
+        mail = e.data.mail_id
+        return mail is MISSING or _exists(conn, "SELECT 1 FROM mail WHERE mail_id = ?", mail)
+    if isinstance(e, ThreadStartedEvent) and e.data.parent is not MISSING:
+        return _exists(conn, "SELECT 1 FROM team_members WHERE thread_id = ?", e.thread_id)
+    if isinstance(e, MessageSentEvent) and e.data.envelope.monitor_id is not MISSING:
+        monitor = e.data.envelope.monitor_id
+        return _exists(conn, "SELECT 1 FROM monitors WHERE monitor_id = ?", monitor)
+    if isinstance(e, AskClosedEvent):
+        return _exists(conn, "SELECT 1 FROM asks WHERE ask_id = ?", e.data.ask_id)
+    if isinstance(e, OperatorRequestEvent):
+        return _exists(conn, "SELECT 1 FROM teams WHERE team_log_branch_id = ?", e.branch_id)
+    return True
+
+
+def _exists(conn: sqlite3.Connection, query: str, key: object) -> bool:
+    return conn.execute(query, (key,)).fetchone() is not None
+
+
+async def assert_team_replays(store: SqliteStore, team: str) -> None:
+    """The replay rule, checked on a live store: every log of the team verifies, rule 43 holds
+    across them, and wiping and rebuilding the index leaves the rows the appends wrote, byte
+    for byte (mail's claim columns aside; the feed compared as its (branch_id, seq) rows)."""
+    tenant = store.tables.tenant_id
+
+    def logs(conn: sqlite3.Connection) -> list[TeamLogEvents]:
+        out: list[TeamLogEvents] = []
+        for log in team_branches(conn, tenant, team):
+            read = verify_export(sql.export(conn, log.branch_id), 0)
+            assert isinstance(read, Ok), (log, read)
+            out.append(TeamLogEvents(log.thread_id, log.branch_id, read.value.fold.events))
+        return out
+
+    assert check_team_logs(await store.run(logs), team) is None
+    live = await store.run(index_rows)
+    assert await rebuild_team_index(store, team) == Ok(None)
+    assert await store.run(index_rows) == live

@@ -2,28 +2,18 @@
 child of a branch, inserted in the append of its agent_spawned and deleted in the append of its
 agent_finished, or of the parent's parked{kind: child} for it (a parked child is resumed by the
 control path). A host resumes a branch with rows, so a child a crash stopped still reports and
-wakes its parent. The rows follow the replay rule: `threads.reduce.wakes.pending_wakes` is the
+wakes its parent. Every append writes them through the index hooks (`threads.store.indexing`,
+with the team index's insert_rows/change_rows); `threads.reduce.wakes.pending_wakes` is the
 fold that rebuilds them."""
 
 import sqlite3
 from collections.abc import Callable, Sequence
 
 from threads.log import BranchId, Event, ThreadId
-from threads.reduce.wakes import change, pending_wakes
+from threads.reduce.wakes import pending_wakes
 from threads.store.sql import text_of
-from threads.store.verify import StoredEvent
 
 _INSERT = "INSERT OR IGNORE INTO pending_wakes (branch_id, child_thread_id) VALUES (?, ?)"
-_DELETE = "DELETE FROM pending_wakes WHERE branch_id = ? AND child_thread_id = ?"
-
-
-def record(conn: sqlite3.Connection, events: Sequence[StoredEvent]) -> None:
-    """Runs inside an append's transaction, after its events are inserted."""
-    for event in events:
-        found = change(event)
-        if found is not None:
-            added, child = found
-            conn.execute(_INSERT if added else _DELETE, (event.branch_id, child))
 
 
 def branches(conn: sqlite3.Connection) -> tuple[tuple[str, ThreadId, BranchId], ...]:

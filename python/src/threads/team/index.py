@@ -46,7 +46,7 @@ from threads.log.keys import principal_key
 from threads.reduce import Fold, apply, enter_segment
 from threads.reduce.handlers import to_json
 from threads.result import Err
-from threads.store import VerifiedLog
+from threads.store.verify import VerifiedLog
 
 _SCOPED: Final = "(? IS NULL OR team_id = ?)"
 """A rebuild of one team writes only that team's rows (a nested lead's log also names its own)."""

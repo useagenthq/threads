@@ -2,9 +2,10 @@
 and the single writer per branch."""
 
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
+from threads.store.forking import ForkRequest
 from threads.store.lines import Draft
 from threads.store.sql import LOCAL_TENANT
-from threads.store.sqlite import ForkRequest, SqliteStore
+from threads.store.sqlite import SqliteStore
 from threads.store.verify import Segment, StoredEvent, VerifiedLog, verify_export
 from threads.store.worker import Clock, StoreError
 from threads.store.writer import Writer
