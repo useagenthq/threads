@@ -226,6 +226,7 @@ export const TeamRefusal: EnumOf<typeof TEAM_REFUSALS> = z
     description:
       "A refusal an operator request records as operator_refused. A model call records its refusal in its own tool_result.",
   });
+export type TeamRefusal = z.infer<typeof TeamRefusal>;
 
 const BOUNCE_CODES = ["stale_member", "member_ended"] as const;
 export const BounceCode: EnumOf<typeof BOUNCE_CODES> = z

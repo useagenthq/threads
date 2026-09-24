@@ -76,7 +76,8 @@ export async function attempt(
 ): Promise<Attempted> {
   // The one barrier check for every model request: from here to the append nothing awaits, so
   // no cancel can land in between (spec/schema/README.md, "Nothing new after a barrier").
-  if (cancelRequested(s.events) !== undefined) return barred(s, purpose, cause);
+  if (cancelRequested(s.events, s.fold) !== undefined)
+    return barred(s, purpose, cause);
   const model = s.fold.model && s.config.models(s.fold.model);
   if (model === undefined)
     return halt("model_error", "no adapter for this settings epoch's model");

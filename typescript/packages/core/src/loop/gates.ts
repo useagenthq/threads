@@ -22,7 +22,7 @@ const encoder = new TextEncoder();
 
 /** before_input on the turn's input, before the turn's first request. */
 export async function inputGate(s: Session): Promise<Gated> {
-  const turn = turnEvents(s.events);
+  const turn = turnEvents(s.events, s.fold);
   const input = turn[0];
   if (input?.type !== "user_input") return undefined;
   if (turn.some((e) => e.type === "model_request")) return undefined;

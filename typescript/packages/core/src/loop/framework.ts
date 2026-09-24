@@ -1,5 +1,6 @@
 import type { EventOf } from "../fold/state";
 import { handOff } from "./agents/handoff";
+import { sendTool, startTool } from "./agents/members";
 import { spawnAgent } from "./agents/spawn";
 import { teamTool } from "./agents/team";
 import { FINAL_OUTPUT, validateCandidate } from "./output";
@@ -24,8 +25,14 @@ const HANDLERS: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ["team_task_claim", teamTool],
   ["team_task_create", teamTool],
   ["team_task_update", teamTool],
+  ["start", startTool],
+  ["send", sendTool],
 ]);
 
-export function frameworkTool(name: string): Handler | undefined {
+const TEAM_HANDLERS: ReadonlySet<string> = new Set(["start", "send"]);
+
+/** A framework tool's handler; a team tool is one only in a team thread. */
+export function frameworkTool(s: Session, name: string): Handler | undefined {
+  if (TEAM_HANDLERS.has(name) && s.config.team === undefined) return undefined;
   return HANDLERS.get(name);
 }

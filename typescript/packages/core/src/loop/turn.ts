@@ -17,13 +17,15 @@ export type Step =
   | { readonly kind: "respond"; readonly response: Response }
   | { readonly kind: "end_turn" };
 
-/** The events of the open (or last) turn, from the user_input or woken that opened it. */
+/**
+ * The events of the open (or last) turn, from the event that opened it: a user_input, a woken or
+ * a received mail (spec/schema/README.md, "Which events open a turn").
+ */
 export function turnEvents(
   events: readonly KnownEvent[],
+  fold: Pick<Fold, "turnStart">,
 ): readonly KnownEvent[] {
-  const start = events.findLastIndex(
-    (e) => e.type === "user_input" || e.type === "woken",
-  );
+  const start = events.findLastIndex((e) => e.seq === fold.turnStart);
   return start === -1 ? [] : events.slice(start);
 }
 
@@ -43,7 +45,7 @@ export function stepEvents(
   events: readonly KnownEvent[],
   fold: Fold,
 ): readonly KnownEvent[] {
-  const turn = turnEvents(events);
+  const turn = turnEvents(events, fold);
   const last = turn.findLastIndex((e) => isTurnResponse(e, fold));
   return turn.slice(last + 1);
 }
@@ -69,8 +71,9 @@ export function callSpec(
 /** A cancel_requested barrier in the open turn: nothing new starts after it. */
 export function cancelRequested(
   events: readonly KnownEvent[],
+  fold: Pick<Fold, "turnStart">,
 ): EventOf<"cancel_requested"> | undefined {
-  const cancel = turnEvents(events).findLast(
+  const cancel = turnEvents(events, fold).findLast(
     (e) => e.type === "cancel_requested",
   );
   return cancel?.type === "cancel_requested" ? cancel : undefined;
@@ -79,9 +82,9 @@ export function cancelRequested(
 export function nextStep(events: readonly KnownEvent[], fold: Fold): Step {
   if (!fold.turnOpen) return { kind: "idle" };
   if (fold.parked.length > 0) return { kind: "parked" };
-  const cancel = cancelRequested(events);
+  const cancel = cancelRequested(events, fold);
   if (cancel !== undefined) return { kind: "cancel", request: cancel };
-  const turn = turnEvents(events);
+  const turn = turnEvents(events, fold);
   if (fold.pending.size > 0) return { kind: "calls" };
   const at = turn.findLastIndex((e) => isTurnResponse(e, fold));
   const response = turn[at];
@@ -140,7 +143,8 @@ export function afterBarrier(
   events: readonly KnownEvent[],
   drafts: readonly EventDraft[],
 ): readonly EventDraft[] {
-  if (!fold.turnOpen || cancelRequested(events) === undefined) return drafts;
+  if (!fold.turnOpen || cancelRequested(events, fold) === undefined)
+    return drafts;
   // Refused whole, but the hooks that ran for it stay on record.
   if (drafts.some(opensWork))
     return drafts.filter((d) => d.type === "hook_decision");

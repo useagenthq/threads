@@ -3,6 +3,7 @@ import { assertNever } from "../assert-never";
 import { type EventOf, type ParkAddress, responseText } from "../fold/state";
 import type { BranchId, KnownEvent, ThreadId } from "../log";
 import type { LoopEnd, RunErrorCode } from "../loop";
+import { failureOf } from "../loop/failure";
 import { type RunEnd, runEnd } from "../reduce/run-end";
 import type { Thread } from "../thread/handle";
 import type { Store } from "./sqlite";
@@ -89,11 +90,9 @@ export function endedRun<Output>(
   if (done?.type !== "turn_completed")
     throw new Error("an ended run ended its turn");
   // A typed error end (the capability pre-check) reports its own code.
-  const { code } = done.data;
-  // Only a team member's rebind ends a turn this way, and a member's result is a MemberResult.
-  if (code === "pin_unavailable" || code === "pin_mismatch")
-    throw new Error(`a run's turn can't end ${code}: only a member rebinds`);
-  if (code !== undefined) return failed(code, done.data.reason, thread);
+  const failure = failureOf(done.data);
+  if (failure !== undefined)
+    return { status: "failed", error: failure, thread };
   return ended(done.data.reason, run.turn, thread, decode);
 }
 
@@ -119,7 +118,6 @@ function ended<Output>(
       throw new Error("a handoff's result names its target thread");
     case "error":
     case "interrupted":
-      return failed("model_error", reason, thread);
     case "max_turns":
     case "stop_hook_limit":
     case "max_output":
@@ -127,51 +125,10 @@ function ended<Output>(
     case "output_invalid":
     case "input_denied":
     case "model_unavailable":
-      return failed(reason, reason, thread);
+      throw new Error("failureOf reports every failed end");
     default:
       return assertNever(reason);
   }
-}
-
-// What went wrong and what to do next; the same text as Python's `FAILED_MESSAGES`.
-const MESSAGES = {
-  error:
-    "the model request failed; the thread's timeline has the provider's error",
-  interrupted:
-    "the model's reply was cut off before it finished; run the thread again to continue",
-  model_unavailable:
-    "no model could be reached, including any fallbacks; check the provider's status and your API key",
-  context_exhausted:
-    "the conversation no longer fits the model's context window, even after compaction; start a new thread or use a model with a larger window",
-  max_output:
-    "the model hit its output token cap; raise the model's max output tokens or ask for a shorter answer",
-  max_turns:
-    "the run reached the agent's turn limit; raise max turns or split the task",
-  output_invalid:
-    "the model's answer failed the output schema on every retry; raise output retries or loosen the schema",
-  input_denied:
-    "a hook or policy refused the input, so the model was not called",
-  stop_hook_limit:
-    "a stop hook kept the run going past its limit; check when the hook asks to continue",
-} as const;
-
-function isFailedReason(reason: Reason): reason is keyof typeof MESSAGES {
-  return Object.hasOwn(MESSAGES, reason);
-}
-
-function failed<Output>(
-  code: RunErrorCode,
-  reason: Reason,
-  thread: Thread,
-): RunResult<Output> {
-  return {
-    status: "failed",
-    error: {
-      code,
-      message: isFailedReason(reason) ? MESSAGES[reason] : MESSAGES.error,
-    },
-    thread,
-  };
 }
 
 function output<Output>(

@@ -11,6 +11,7 @@ import type {
 import type { KnowledgeProvider, MemoryProvider } from "../memory/protocol";
 import type { Model } from "../model";
 import type { Sandbox } from "../sandbox";
+import { TEAM_LIMITS } from "../team/constants";
 import type { Capabilities, Egress } from "../tools";
 import type { GitOptions } from "../tools/git/host";
 import { subagent } from "./child";
@@ -26,6 +27,10 @@ import type { RunResult } from "./result";
 import { pinnedAfterSetup, type Resolved, type RunOptions, run } from "./run";
 import { isMcp, type McpServer, setUp } from "./setup";
 import type { Skill } from "./skills";
+import { stream } from "./stream";
+import { memberOf, teamAgent } from "./team/lead";
+import { checkTeam } from "./team/runtime";
+import type { TeamAgent, TeamLimits } from "./team/types";
 import type { Tool } from "./tool";
 
 // agent() (spec/api.json): pure. It does no I/O, reads no env and opens no sockets; its setup
@@ -76,6 +81,13 @@ export type AgentOptions<Deps, Output> = {
   readonly subagents?: readonly Agent<never, unknown>[];
   /** Agents this one may hand the conversation to, pinned as policy.handoffs. */
   readonly handoffs?: readonly Agent<never, unknown>[];
+  /**
+   * Agents this one may start as team members, with the team tools. Passing it, even as [],
+   * makes agent() return a TeamAgent.
+   */
+  readonly team?: readonly Agent<never, unknown>[];
+  /** The team's limits: 4 running members and 100 pending mails per member by default. */
+  readonly teamLimits?: TeamLimits;
   /** Saved cross-run memory: localMemory() or an adapter. */
   readonly memory?: MemoryProvider;
   /** Write authority for save_memory and forget_memory. */
@@ -131,6 +143,20 @@ export type Agent<Deps = undefined, Output = string> = {
   >;
 };
 
+type Listed = readonly Agent<never, unknown>[];
+
+export function agent<Deps = undefined>(
+  options: AgentOptions<Deps, string> & {
+    readonly output?: undefined;
+    readonly team: Listed;
+  },
+): TeamAgent<Deps, string>;
+export function agent<Deps, Output>(
+  options: AgentOptions<Deps, Output> & {
+    readonly output: z.ZodType<Output>;
+    readonly team: Listed;
+  },
+): TeamAgent<Deps, Output>;
 export function agent<Deps = undefined>(
   options: AgentOptions<Deps, string> & { readonly output?: undefined },
 ): Agent<Deps, string>;
@@ -145,10 +171,11 @@ export function agent<Deps, Output>(
   return build(options, (_text, accepted) => schema.parse(accepted));
 }
 
+/** The handle: a TeamAgent for an agent with a team (its runs carry the team), else an Agent. */
 function build<Deps, Output>(
   options: AgentOptions<Deps, Output>,
   decode: Resolved<Deps, Output>["decode"],
-): Agent<Deps, Output> {
+): Agent<Deps, Output> | TeamAgent<Deps, Output> {
   const tools = (options.tools ?? []).flatMap((t) => (isMcp(t) ? [] : [t]));
   const servers = (options.tools ?? []).filter(isMcp);
   const def: Resolved<Deps, Output> = {
@@ -190,15 +217,20 @@ function build<Deps, Output>(
           options.knowledge,
           options.web?.search,
         ],
-        [...(options.subagents ?? []), ...(options.handoffs ?? [])],
+        [
+          ...(options.subagents ?? []),
+          ...(options.handoffs ?? []),
+          ...(options.team ?? []),
+        ],
         walked,
       );
+      checkTeam(options.team);
     },
     servers,
     decode,
     ...agentsOf(options),
   };
-  const handle: Agent<Deps, Output> = {
+  const plain: Agent<Deps, Output> = {
     name: def.name,
     run: (input, runOptions = {}) => run(def, input, runOptions),
     stream: (input, runOptions = {}) => stream(def, input, runOptions),
@@ -216,12 +248,14 @@ function build<Deps, Output>(
       }
     },
   };
+  const handle = options.team === undefined ? plain : teamAgent(plain);
   register(handle, {
     setup: def.setup,
     child: subagent(def),
     target: target(def),
     enforce: (covering) => checkTree(def, covering),
     host: hosted(def, options.approvers),
+    member: memberOf(def),
   });
   return handle;
 }
@@ -237,64 +271,30 @@ function capabilitiesOf<Deps, Output>(
   };
 }
 
-/** The agents spawn_agent and handoff may name, and their names as pinned. */
+/** The agents spawn_agent, handoff and start may name, and their names as pinned. */
 function agentsOf<Deps, Output>(
   options: AgentOptions<Deps, Output>,
 ): Pick<
   Resolved<Deps, Output>,
-  "subagents" | "handoffs" | "agents" | "targets"
+  | "subagents"
+  | "handoffs"
+  | "agents"
+  | "targets"
+  | "team"
+  | "members"
+  | "teamLimits"
 > {
   // Copies: a list the caller changes later can't change the pinned agents, or form a cycle.
   const agents = [...(options.subagents ?? [])];
   const targets = [...(options.handoffs ?? [])];
+  const members = [...(options.team ?? [])];
   return {
     subagents: agents.map((a) => a.name),
     handoffs: targets.map((a) => a.name),
     agents,
     targets,
-  };
-}
-
-function stream<Deps, Output>(
-  def: Resolved<Deps, Output>,
-  input: RunInput,
-  options: RunOptions<Deps>,
-): RunStream<Output> {
-  const queue: StreamEvent[] = [];
-  let wake: (() => void) | undefined;
-  let done = false;
-  const push = (item: StreamEvent): void => {
-    queue.push(item);
-    wake?.();
-  };
-  const result = run(def, input, options, {
-    onEvent: (event) => push({ kind: "event", event }),
-    onDelta: (id, text) => push({ kind: "delta", request_event_id: id, text }),
-  });
-  const finished = async (): Promise<void> => {
-    try {
-      await result;
-    } catch {
-      // The caller sees the failure through `result`; the iterator just ends.
-    } finally {
-      done = true;
-      wake?.();
-    }
-  };
-  void finished();
-  return {
-    result,
-    async *[Symbol.asyncIterator]() {
-      for (;;) {
-        const next = queue.shift();
-        if (next !== undefined) yield next;
-        else if (done) return;
-        else {
-          const { promise, resolve } = Promise.withResolvers<void>();
-          wake = resolve;
-          await promise;
-        }
-      }
-    },
+    team: options.team === undefined ? undefined : members.map((a) => a.name),
+    members,
+    teamLimits: { ...TEAM_LIMITS, ...options.teamLimits },
   };
 }

@@ -1,9 +1,9 @@
-import type { EventOf, Fold } from "../fold/state";
-import type { KnownEvent, ThreadId } from "../log";
+import type { EventOf, Fold, ModelRef } from "../fold/state";
+import type { JsonObject, KnownEvent, Policy, ThreadId } from "../log";
 import { reservation, settlement, tokenBounds } from "../reduce/cost";
 import type { Claim, LimitName } from "../store";
 import type { Session } from "./session";
-import type { Covering } from "./types";
+import type { Covering, TeamAgentPin } from "./types";
 
 // Tree-wide budgets: before every model_request in any thread of a tree, its
 // bound is reserved against every budget covering the thread (its own thread and run budgets and
@@ -54,9 +54,45 @@ export function ownCovering(s: View): readonly Covering[] {
   ];
 }
 
-/** Every budget covering this thread: its own, then its ancestors'. */
+/**
+ * Every budget covering this thread: its own, then its ancestors'; a team member's turn is also
+ * under the run budget of the request it belongs to (spec/schema/README.md, "Teams").
+ */
 export function covering(s: Session): readonly Covering[] {
-  return [...ownCovering(s), ...(s.config.budgets?.inherited ?? [])];
+  const opener = s.events.find((e) => e.seq === s.fold.turnStart);
+  const run =
+    opener === undefined ? undefined : s.config.team?.runCovering?.(opener);
+  return [
+    ...ownCovering(s),
+    ...(run === undefined ? [] : [run]),
+    ...(s.config.budgets?.inherited ?? []),
+  ];
+}
+
+/**
+ * start's headroom: every budget that would cover the new member (the starter's, and the
+ * member's own) has room for one request of its model. A limit the model can't bound has none.
+ */
+export function roomFor(s: Session, member: TeamAgentPin): boolean {
+  const budgets = s.config.budgets;
+  if (budgets === undefined) return true;
+  const own = member.budget;
+  const all: readonly Covering[] = [
+    ...covering(s),
+    ...(own === undefined
+      ? []
+      : [{ budgetId: "member", budget: own, scope: "thread" as const }]),
+  ];
+  const amounts = boundsFor(member.policy, member.model, member.params);
+  return claimsOf(all, amounts).every(
+    (c) =>
+      c.amount !== undefined &&
+      (c.budgetId === "member"
+        ? 0
+        : budgets.ledger.spent(c.budgetId, c.limit)) +
+        c.amount <=
+        c.max,
+  );
 }
 
 /**
@@ -169,7 +205,16 @@ function nextAmounts(
       : epoch?.type === "thread_started"
         ? [epoch.data.model, epoch.data.model_params]
         : [undefined, {}];
-  const model = s.fold.policy?.models?.find(
+  return boundsFor(s.fold.policy, ref, params);
+}
+
+/** The bound per limit of one request of `ref` under `policy`; an unbounded limit is absent. */
+function boundsFor(
+  policy: Policy | undefined,
+  ref: ModelRef | undefined,
+  params: JsonObject,
+): ReadonlyMap<LimitName, number> {
+  const model = policy?.models?.find(
     (m) => m.provider === ref?.provider && m.name === ref.name,
   );
   const bounds = tokenBounds(model, params, undefined);

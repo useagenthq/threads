@@ -1,9 +1,10 @@
 import type { Principal } from "../log";
 import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
+import { execute } from "./execute";
 import type { RunResult, ThreadRef } from "./result";
 import type { Hooks, RunOptions } from "./run";
-import { execute, pinnedAfterSetup, type Resolved } from "./run";
+import { pinnedAfterSetup, type Resolved } from "./run";
 import type { Store } from "./sqlite";
 
 // What the host (@threads/host) needs from an agent handle beyond run(): the thread_started a new

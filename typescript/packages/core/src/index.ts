@@ -1,4 +1,5 @@
 export * from "./agent";
+export { assertNever } from "./assert-never";
 export {
   type ChannelAdapter,
   type ChannelCapabilities,

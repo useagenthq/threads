@@ -90,7 +90,7 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
   const got = await attempt(s, "turn", nextAttempt(s.events, s.fold));
   // A cancel that landed during the attempt: its outcome is recorded, and nothing more happens
   // in this step (no retry, fallback or sleep); the cancellation step is next.
-  if (got.kind !== "halt" && cancelRequested(s.events) !== undefined)
+  if (got.kind !== "halt" && cancelRequested(s.events, s.fold) !== undefined)
     return undefined;
   switch (got.kind) {
     case "halt":

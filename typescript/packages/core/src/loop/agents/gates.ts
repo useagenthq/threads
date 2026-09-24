@@ -118,6 +118,6 @@ function final(
   return (
     finished.status === "cancelled" ||
     (s.fold.turnOpen &&
-      turnEvents(s.events).some((e) => e.type === "cancel_requested"))
+      turnEvents(s.events, s.fold).some((e) => e.type === "cancel_requested"))
   );
 }

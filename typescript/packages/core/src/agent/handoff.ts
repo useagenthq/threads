@@ -4,15 +4,10 @@ import { inheritedFrom } from "../loop/ledger";
 import { knownEvents } from "../reduce";
 import type { EventDraft, Writer } from "../store";
 import type { Thread } from "../thread/handle";
+import { execute } from "./execute";
 import { type ChildEnv, type TargetFactory, targetFactory } from "./registry";
 import type { RunResult } from "./result";
-import {
-  ceilingsOf,
-  execute,
-  inheritedOf,
-  type Plan,
-  type Resolved,
-} from "./run";
+import { ceilingsOf, inheritedOf, type Plan, type Resolved } from "./run";
 
 // A handoff's target: a new thread of the listed agent with its own pinned
 // line 0 and policy, under the originating principal. The forwarded history arrives as

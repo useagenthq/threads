@@ -30,7 +30,7 @@ export const MAX_STOP_CONTINUATIONS = 3;
  * on_stop stops the run: a gate failure never continues it.
  */
 export async function finish(s: Session): Promise<Halt | undefined> {
-  const turn = turnEvents(s.events);
+  const turn = turnEvents(s.events, s.fold);
   const last = turn.findLast(
     (e) =>
       (e.type === "model_response" || e.type === "model_response_recovered") &&

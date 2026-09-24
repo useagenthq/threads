@@ -22,9 +22,11 @@ export function apply(fold: Fold, line: EventLine): void {
   // The restore slot is open for one event only.
   fold.restoreStyle = undefined;
   if (line.kind === "event") {
+    const open = fold.turnOpen;
     applyKnown(fold, line.event);
     applyTeam(fold, line.event);
     applyWake(fold, line.event);
+    if (!open && fold.turnOpen) fold.turnStart = event.seq;
   }
   fold.boundaries[event.seq] =
     fold.pending.size === 0 && fold.awaiting.size === 0;

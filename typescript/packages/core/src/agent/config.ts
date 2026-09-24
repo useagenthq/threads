@@ -6,6 +6,7 @@ import {
   type Covering,
   FINAL_OUTPUT,
   type LoopConfig,
+  type TeamRuntime,
   type ToolImpl,
 } from "../loop";
 import { toolSpec } from "../loop/turn";
@@ -42,6 +43,8 @@ export type RunEnv<Deps> = {
   readonly chain?: ChildRun["ceiling"];
   /** Budgets covering this thread as an ancestor's: a child's parent's, a target's source's. */
   readonly inherited: readonly Covering[];
+  /** A team's lead or member: what its team tools and settlements need. */
+  readonly team?: TeamRuntime;
 };
 
 type Permissions = NonNullable<Policy["permissions"]>;
@@ -104,6 +107,7 @@ export function loopConfig<Deps, Output>(
     agents: agents(def, env),
     budgets: { ledger: env.ledger, inherited: env.inherited },
     ...(readFile === undefined ? {} : { readFile }),
+    ...(env.team === undefined ? {} : { team: env.team }),
     ...(def.output === undefined ? {} : { output: def.output }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(hooks.onEvent === undefined ? {} : { onEvent: hooks.onEvent }),

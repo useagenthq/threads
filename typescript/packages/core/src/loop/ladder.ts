@@ -125,7 +125,7 @@ async function preflight(
  * cancellation step closes the turn before anything else is sent or recorded.
  */
 function cancelled(s: Session): boolean {
-  return cancelRequested(s.events) !== undefined;
+  return cancelRequested(s.events, s.fold) !== undefined;
 }
 
 /** consecutive failures since the last compacted reach max_failures. */

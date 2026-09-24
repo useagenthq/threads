@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { EventOf } from "../fold/state";
 import type {
   ArtifactRef,
   Budget,
@@ -7,7 +8,7 @@ import type {
   Principal,
   ThreadId,
 } from "../log";
-import type { ChildRun, Covering, Subagent } from "../loop";
+import type { ChildRun, Covering, Subagent, TeamAgentPin } from "../loop";
 import type { Thread } from "../thread/handle";
 import type { HostRunner } from "./hosted";
 import type { ThreadRef } from "./result";
@@ -52,6 +53,33 @@ export type TargetFactory = (
 /** Setup's check of an agent's tree under the limits covering it. */
 export type Enforcement = (covering: readonly z.infer<typeof Budget>[]) => void;
 
+/** What a team needs of an agent it lists (agent({team})). */
+export type MemberEntry = {
+  /** Its handoffs: a member can't hand off (handoff_in_team). */
+  readonly handsOff: boolean;
+  /** The agents of its own team, when it leads one (a nested lead). */
+  readonly team: readonly object[] | undefined;
+  /** Its pin as a team member, after setup: config_hash and the canonical config. */
+  readonly pinned: () => Promise<TeamAgentPin>;
+  /** Runs one member branch of it until the branch is idle, parked or ended. */
+  readonly run: (env: MemberEnv) => Promise<void>;
+};
+
+/** One member branch, as the team worker runs it. */
+export type MemberEnv = {
+  readonly store: Store;
+  readonly thread: ThreadRef;
+  /** The member's parent: the lead's member_started (or thread_started). */
+  readonly parent: EventOf<"member_started">["data"]["parent"];
+  /** The principal of the member's task: its turns' actor. */
+  readonly principal: Principal;
+  readonly holder: string;
+  readonly notify: () => void;
+  /** Every ancestor thread's budget, which covers the member too. */
+  readonly covering: readonly Covering[];
+  readonly signal?: AbortSignal;
+};
+
 type Entry = {
   /** The agent's setup (agent/setup.ts), run by a parent's setup too, with the agents it walked. */
   readonly setup: (walked?: Set<object>) => Promise<void>;
@@ -59,6 +87,7 @@ type Entry = {
   readonly target: TargetFactory;
   readonly enforce: Enforcement;
   readonly host?: HostRunner;
+  readonly member: MemberEntry;
 };
 
 const AGENTS = new WeakMap<object, Entry>();
@@ -80,6 +109,11 @@ export function childFactory(agent: object): ChildFactory | undefined {
 /** The host's view of an agent handle (@threads/host), or undefined for a foreign object. */
 export function hostRunner(agent: object): HostRunner | undefined {
   return AGENTS.get(agent)?.host;
+}
+
+/** What a team needs of an agent it lists, or undefined for a foreign object. */
+export function memberEntry(agent: object): MemberEntry | undefined {
+  return AGENTS.get(agent)?.member;
 }
 
 export function enforcement(agent: object): Enforcement | undefined {

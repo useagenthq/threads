@@ -29,8 +29,9 @@ export async function recover(s: Session): Promise<Halt | undefined> {
       actor: RECOVERY,
       data: { reason: "cancelled" },
     });
+  // The turn's opener (an input, a woken, a receipt) or a later steer.
   const last = s.events.findLastIndex(
-    (e) => e.type === "user_input" || e.type === "steer",
+    (e) => e.seq === fold.turnStart || e.type === "steer",
   );
   const answered = s.events
     .slice(Math.max(last, 0))
@@ -65,7 +66,7 @@ export async function recover(s: Session): Promise<Halt | undefined> {
 
 /** A cancel_requested in the open turn that no cancelled has answered yet. */
 function cancelOpen(s: Session): boolean {
-  const cancel = cancelRequested(s.events);
+  const cancel = cancelRequested(s.events, s.fold);
   return (
     cancel !== undefined &&
     !s.events.some(

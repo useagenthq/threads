@@ -20,6 +20,18 @@ export { type Secret, secret } from "./secret";
 export type { McpServer } from "./setup";
 export type { Skill } from "./skills";
 export { type Store, sqlite } from "./sqlite";
+export type {
+  MemberRef,
+  SendRefusal,
+  SendResult,
+  StartRefusal,
+  StartResult,
+  Team,
+  TeamAgent,
+  TeamRef,
+  TeamRunResult,
+  TeamRunStream,
+} from "./team/types";
 export {
   type RunContext,
   type Tool,

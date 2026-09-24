@@ -3,6 +3,7 @@ import { isTestKit } from "../model/guard";
 import { endedOtherwise } from "../reduce/run-end";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import { resumeBackground } from "./agents/background";
+import { teamTurns } from "./agents/members";
 import { unparkChildren } from "./agents/park";
 import { runStatus, stopChildren } from "./agents/stop";
 import { observe } from "./hooks";
@@ -31,6 +32,8 @@ export type {
   StubGateway,
   Subagent,
   Team,
+  TeamAgentPin,
+  TeamRuntime,
   ToolContext,
   ToolImpl,
   ToolRun,
@@ -86,7 +89,9 @@ async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
   const unparked = await unparkChildren(s);
   if (unparked !== undefined) return { kind: "halted", halt: unparked };
   resumeBackground(s);
-  return waitForChildren(s, await turns(s, input));
+  const end = await waitForChildren(s, await turns(s, input));
+  if (s.config.team === undefined) return end;
+  return teamTurns(s, end, async () => waitForChildren(s, await runLoop(s)));
 }
 
 /**

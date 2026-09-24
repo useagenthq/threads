@@ -348,8 +348,9 @@ export const AGENT_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * A team's model tools (spec/schema/README.md, Teams): catalog entries, neither pinned nor run
- * until the Teams build, so a user tool may still take one of these names.
+ * A team's model tools (spec/schema/README.md, Teams): pinned for a lead and its members and run
+ * by the loop there, so no tool of a team's agent may take one of these names; elsewhere the
+ * names are free. start and send are pinned today; lane 21E pins and runs the rest.
  */
 export const MEMBER_TOOLS: ReadonlySet<string> = new Set(
   TEAM_ENTRIES.map((e) => e.name),

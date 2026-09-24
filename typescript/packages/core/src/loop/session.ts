@@ -11,10 +11,14 @@ import { knownEvents, type ReducedState, reduce } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import { type DecideTx, isRefusal, type Refusal } from "../store/writer";
+import { Batch } from "../team/batch";
+import { turnProvenance } from "../team/provenance";
+import { settle } from "../team/settle";
+import { settlementOf } from "../team/turn-end";
 import type { Chain, ChainEvent } from "../verify";
 import type { LogError } from "../verify/error";
 import { afterBarrier, opensWork } from "./turn";
-import type { ChildEnd, Halt, LoopConfig } from "./types";
+import type { ChildEnd, Halt, LoopConfig, TeamRuntime } from "./types";
 import { BARRED, type Barred } from "./types";
 
 const encoder = new TextEncoder();
@@ -123,7 +127,43 @@ export class Session {
   #admit(drafts: readonly EventDraft[]): Halt | undefined {
     const admitted = afterBarrier(this.fold, this.events, drafts);
     if (admitted.length === 0) return undefined;
+    const team = this.config.team;
+    if (team !== undefined && admitted.some((d) => d.type === "turn_completed"))
+      return this.#settled(team, admitted);
     return this.#committed(this.#writer.append(admitted));
+  }
+
+  /**
+   * A team thread's turn end carries its settlement in the same append (spec/schema/README.md,
+   * "Teams", Settling): member_idle or member_ended with the notifications, refusals and, for a
+   * lead, the cancels they send, decided from the rows in the append's transaction.
+   */
+  #settled(team: TeamRuntime, drafts: readonly EventDraft[]): Halt | undefined {
+    const events = this.events;
+    const turn = events.slice(
+      events.findLastIndex((e) => e.type === "turn_completed") + 1,
+    );
+    const how = settlementOf(turn, drafts);
+    const appended = this.#writer.appendDecided((tx) => {
+      const batch = new Batch(tx.chain.fold.seq, tx.now, team.mint);
+      for (const d of drafts) batch.add(d);
+      const provenance = turnProvenance(tx.db, tx.chain);
+      if (how !== undefined && provenance !== undefined)
+        settle(
+          {
+            db: tx.db,
+            batch,
+            threadId: this.threadId,
+            branchId: this.branchId,
+            provenance,
+            put: (text) => this.store(text, "text/plain"),
+          },
+          how,
+        );
+      return ok(batch.drafts);
+    });
+    if (isRefusal(appended)) throw new Error("a settlement never refuses");
+    return this.#committed(appended);
   }
 
   /** A lost lease or head halts the run; committed events go to `onEvent`. */
@@ -139,6 +179,7 @@ export class Session {
     const events = this.events;
     for (const e of events.slice(events.length - appended.value.length))
       this.config.onEvent?.(e);
+    this.config.team?.notify();
     return undefined;
   }
 

@@ -126,7 +126,7 @@ async function dispatch(
   call: EventOf<"tool_call">,
 ): Promise<Halt | undefined> {
   const { name, call_id: callId } = call.data;
-  const framework = frameworkTool(name);
+  const framework = frameworkTool(s, name);
   if (framework !== undefined) return framework(s, call);
   const spec = callSpec(s.fold, call);
   if (spec?.effect_class === "read_only") {

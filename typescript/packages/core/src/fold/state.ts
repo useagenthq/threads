@@ -78,6 +78,8 @@ export type Fold = {
   model: ModelRef | undefined;
   mode: PermissionMode;
   turnOpen: boolean;
+  /** The seq of the event that opened the open (or last) turn: a user_input, woken or receipt. */
+  turnStart: number | undefined;
   turns: number;
   readonly calls: Map<string, CallState>;
   /** call_ids with a tool_call and no result yet, in call order. */
@@ -144,6 +146,7 @@ export function emptyFold(): Fold {
     model: undefined,
     mode: "default",
     turnOpen: false,
+    turnStart: undefined,
     turns: 0,
     calls: new Map(),
     pending: new Set(),

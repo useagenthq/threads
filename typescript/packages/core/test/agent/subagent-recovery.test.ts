@@ -9,6 +9,7 @@ import {
 import {
   childFactory,
   enforcement,
+  memberEntry,
   register,
   setupOf,
   targetFactory,
@@ -82,17 +83,20 @@ describe("recovery after a crash mid-subagent", () => {
     const target = targetFactory(crashing);
     const enforce = enforcement(crashing);
     const setup = setupOf(crashing);
+    const member = memberEntry(crashing);
     if (
       real === undefined ||
       target === undefined ||
       enforce === undefined ||
-      setup === undefined
+      setup === undefined ||
+      member === undefined
     )
       throw new Error("agent() registers every handle");
     register(crashing, {
       setup,
       target,
       enforce,
+      member,
       child: (env) => ({
         ...real(env),
         run: async () => {
@@ -135,17 +139,20 @@ describe("recovery after a crash mid-subagent", () => {
     const target = targetFactory(reviewer);
     const enforce = enforcement(reviewer);
     const setup = setupOf(reviewer);
+    const member = memberEntry(reviewer);
     if (
       real === undefined ||
       target === undefined ||
       enforce === undefined ||
-      setup === undefined
+      setup === undefined ||
+      member === undefined
     )
       throw new Error("agent() registers every handle");
     register(reviewer, {
       setup,
       target,
       enforce,
+      member,
       child: (env) => {
         const sub = real(env);
         return {
@@ -169,7 +176,7 @@ describe("recovery after a crash mid-subagent", () => {
     await first.catch(() => undefined);
     await expect(first).rejects.toThrow("process killed");
 
-    register(reviewer, { setup, child: real, target, enforce });
+    register(reviewer, { setup, child: real, target, enforce, member });
     const again = await lead.run("Thanks.", { store, thread });
     expect(again.status).toBe("completed");
     const { parent, child } = await logs(store, again.thread);

@@ -47,7 +47,7 @@ export function writeTodos(
 export function todoReminder(s: Session): Halt | undefined {
   const open = s.fold.todos.filter((t) => t.status !== "completed");
   if (open.length === 0) return undefined;
-  const turn = turnEvents(s.events);
+  const turn = turnEvents(s.events, s.fold);
   if (turn.some((e) => e.type === "model_request")) return undefined;
   const since = s.events.findLastIndex(
     (e) =>

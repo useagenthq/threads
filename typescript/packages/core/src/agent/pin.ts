@@ -9,22 +9,19 @@ import {
   type RetryPolicy,
   type ToolSpec,
 } from "../log";
-import { FINAL_OUTPUT, RETRY_DEFAULTS } from "../loop";
-import { CONTEXT_DEFAULTS } from "../loop/policy";
 import type { KnowledgeProvider, MemoryProvider } from "../memory/protocol";
 import { knowledgeSpecs, memorySpecs } from "../memory/tools";
 import type { Model } from "../model";
-import { DEFAULT_PERMISSIONS } from "../permissions";
 import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
+import { TEAM_TOOLS, TEAM_TOOLS_PINNED } from "../team/constants";
 import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
-import { unchecked } from "../validate/json-schema";
-import { agreedCacheTtl } from "./cache-ttl";
 import { checkEnforceable } from "./enforceable";
 import { ConfigError } from "./errors";
 import { type Extension, hookNames } from "./extension";
+import { checkRetries, checkStyles, finalOutput, policy } from "./policy";
 import {
   checkSkills,
   type Skill,
@@ -32,7 +29,7 @@ import {
   skillPins,
   skillSpecs,
 } from "./skills";
-import { jsonSchema, type Tool } from "./tool";
+import type { Tool } from "./tool";
 
 // The resolved, secret-free config an agent pins in thread_started: line 0's
 // system, tools, model and adapter, plus the policy, hashed as config_hash.
@@ -62,6 +59,8 @@ export type PinOptions = {
   readonly subagents: readonly string[];
   /** Agent names handoff may target, pinned as policy.handoffs. */
   readonly handoffs: readonly string[];
+  /** agent({team}): the agents start may name. Undefined: no team. */
+  readonly team: readonly string[] | undefined;
   /** The MCP servers' tools, resolved at setup. */
   readonly mcp: readonly Tool<unknown, unknown, unknown>[];
   readonly memory: MemoryProvider | undefined;
@@ -88,13 +87,18 @@ export type MemoryWrite = "deny" | "ask" | "allow_principal" | "allow";
 const byName = (a: { readonly name: string }, b: { readonly name: string }) =>
   a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
 
-/** The pinned tool specs and the thread_started draft. Throws ConfigError on a bad setup. */
+/**
+ * The pinned tool specs, the thread_started draft and the canonical config its config_hash names
+ * (stored before a team member's start). Throws ConfigError on a bad setup.
+ */
 export function pin(
   options: PinOptions,
   child?: ChildPin,
+  member: boolean = child?.parent.relation === "team_member",
 ): {
   readonly specs: readonly ToolSpec[];
   readonly started: EventDraft;
+  readonly config: string;
 } {
   const within = child?.tools;
   const o = within === undefined ? options : { ...options, sandbox: undefined };
@@ -108,7 +112,11 @@ export function pin(
   const all = [
     ...[
       ...builtins(o.sandbox, o.egress, o.capabilities).map((b) => b.spec),
-      ...agentTools(o, within !== undefined).map(frameworkSpec),
+      ...agentTools(
+        o,
+        within !== undefined,
+        o.team !== undefined || member,
+      ).map(frameworkSpec),
       ...(o.memory === undefined ? [] : memorySpecs(o.memory)),
       ...(o.knowledge === undefined ? [] : knowledgeSpecs()),
       ...skillSpecs(o.skills),
@@ -128,6 +136,7 @@ export function pin(
       "duplicate_name",
       `two extensions are named ${again}`,
     );
+  if (o.team !== undefined || member) checkTeamNames(o);
   const names = specs.map((s) => s.name);
   const twice = names.find((n, i) => names.indexOf(n) !== i);
   if (twice !== undefined)
@@ -161,6 +170,7 @@ export function pin(
   if (!text.ok) throw new ConfigError("invalid_config", text.error.message);
   return {
     specs,
+    config: text.value,
     started: {
       type: "thread_started",
       type_version: 1,
@@ -232,14 +242,35 @@ const TEAM = [
   "team_task_update",
 ];
 
-/** todo_write always; spawn and team tools with agents; handoff with targets. */
-function agentTools(o: PinOptions, member: boolean): readonly string[] {
+/**
+ * todo_write always; spawn and task-board tools with subagents; handoff with targets; the team
+ * tools for a lead (agent({team})) and for a team's members.
+ */
+function agentTools(
+  o: PinOptions,
+  subagent: boolean,
+  team: boolean,
+): readonly string[] {
   return [
     "todo_write",
     ...(o.subagents.length > 0 ? ["spawn_agent"] : []),
-    ...(o.subagents.length > 0 || member ? TEAM : []),
+    ...(o.subagents.length > 0 || subagent ? TEAM : []),
     ...(o.handoffs.length > 0 ? ["handoff"] : []),
+    ...(team ? TEAM_TOOLS_PINNED : []),
   ];
+}
+
+/** A team thread's own tools can't take a team tool's name, pinned yet or not. */
+function checkTeamNames(o: PinOptions): void {
+  const own = [...o.tools, ...extensionTools(o.extensions, o.mcp)].map(
+    (t) => t.name,
+  );
+  const taken = own.find((n) => TEAM_TOOLS.includes(n));
+  if (taken !== undefined)
+    throw new ConfigError(
+      "duplicate_name",
+      `tool ${taken}: an agent in a team can't have a tool named ${TEAM_TOOLS.join(", ")}; rename it`,
+    );
 }
 
 /**
@@ -271,106 +302,5 @@ function namespaced<Deps>(
       const impl = t.bind(env);
       return { ...impl, spec: { ...impl.spec, name } };
     },
-  };
-}
-
-/** Tool mode: final_output takes the output schema and ends the turn. */
-function finalOutput(output: z.ZodType | undefined): readonly ToolSpec[] {
-  if (output === undefined) return [];
-  return [
-    {
-      name: FINAL_OUTPUT,
-      description: "Return the final structured result.",
-      input_schema: jsonSchema(FINAL_OUTPUT, output),
-      effect_class: "read_only",
-      ends_turn: true,
-    },
-  ];
-}
-
-function policy(o: PinOptions): Policy {
-  const models = [o.model, ...o.fallback].map((m) => m.info.limits);
-  return {
-    models: models.filter(
-      (m, i) =>
-        models.findIndex(
-          (x) => x.provider === m.provider && x.name === m.name,
-        ) === i,
-    ),
-    // Prices are nano-USD (spec/schema/README.md); without a currency cost() would be null.
-    ...(models.some((m) => m.price !== undefined) ? { currency: "USD" } : {}),
-    permissions: { ...DEFAULT_PERMISSIONS, ...o.permissions },
-    retry: { ...RETRY_DEFAULTS, ...o.retry },
-    context: { ...CONTEXT_DEFAULTS, ...cacheTtl(o), ...o.context },
-    ...(o.fallback.length === 0
-      ? {}
-      : {
-          fallback: o.fallback.map((m) => ({
-            model: m.info.model,
-            model_params: m.info.params,
-            adapter: m.info.adapter,
-            reasoning_carryover: "keep" as const,
-          })),
-        }),
-    ...(o.budget === undefined ? {} : { budget: o.budget }),
-    ...(o.onUnknownUsage === undefined
-      ? {}
-      : { on_unknown_usage: o.onUnknownUsage }),
-    ...(o.handoffs.length === 0 ? {} : { handoffs: [...o.handoffs] }),
-    // Absent when none is defined, so agents without styles keep their config_hash.
-    ...(Object.keys(o.outputStyles).length === 0
-      ? {}
-      : { output_styles: { ...o.outputStyles } }),
-    ...(o.output === undefined
-      ? {}
-      : { output: outputPolicy(o.output, o.outputRetries) }),
-  };
-}
-
-/** The models' agreed cache lifetime, checked only when the agent leaves cache_ttl_ms unset. */
-function cacheTtl(o: PinOptions): { readonly cache_ttl_ms?: number } {
-  if (o.context.cache_ttl_ms !== undefined) return {};
-  const ttl = agreedCacheTtl([o.model, ...o.fallback]);
-  return ttl === undefined ? {} : { cache_ttl_ms: ttl };
-}
-
-/** Every output style has a name and a text: an empty one could never be switched to. */
-function checkStyles(styles: Readonly<Record<string, unknown>>): void {
-  for (const [name, text] of Object.entries(styles))
-    if (name === "" || typeof text !== "string" || text === "")
-      throw new ConfigError(
-        "invalid_config",
-        `outputStyles: style ${JSON.stringify(name)} needs a non-empty name and text`,
-      );
-}
-
-/** outputRetries counts failed candidates: a non-negative integer. */
-function checkRetries(n: number): void {
-  if (!Number.isSafeInteger(n) || n < 0)
-    throw new ConfigError(
-      "invalid_config",
-      `outputRetries must be an integer from 0 to 2**53 - 1, got ${n}`,
-    );
-}
-
-function outputPolicy(
-  schema: z.ZodType,
-  maxRetries: number,
-): NonNullable<Policy["output"]> {
-  const exported = jsonSchema("output", schema);
-  // Refused here, never by a run that has an answer to record: the log checks every keyword.
-  const why = unchecked(exported);
-  if (why !== undefined)
-    throw new ConfigError(
-      "invalid_config",
-      `output: ${why}; use a bound, a length, a pattern, an enum or a format the log checks`,
-    );
-  const text = canonicalize(exported);
-  if (!text.ok) throw new ConfigError("invalid_config", text.error.message);
-  return {
-    schema: exported,
-    schema_sha256: sha256Hex(text.value),
-    mode: "tool",
-    max_retries: maxRetries,
   };
 }

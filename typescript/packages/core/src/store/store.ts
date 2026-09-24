@@ -1,7 +1,7 @@
 import type { BranchId, SandboxId, ThreadId } from "../log";
 import { err, ok, type Result } from "../result";
 import { indexImported } from "../team/imported";
-import { type VerifiedLog, verifyExport } from "../verify";
+import { type Chain, type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import type { ArtifactStore } from "./artifacts";
 import { HostBindings } from "./bindings";
@@ -100,19 +100,51 @@ export class LogStore {
   openBranch(
     opening: Omit<BranchOpening, "tenantId">,
   ): Result<Writer | typeof ALREADY_OPEN, LogError> {
-    const opened = openBranch(this.#db, this.#now(), {
-      ...opening,
-      tenantId: this.tenant,
+    const opened = this.openBranchChecked(() => ok(opening));
+    if (!opened.ok) return opened;
+    if (opened.value === undefined) throw new Error("an opening always opens");
+    return ok(opened.value);
+  }
+
+  /**
+   * `branch.open` after a check in the same transaction: `decide` reads the store and returns
+   * the opening, or undefined to commit nothing (materialize's row check).
+   */
+  openBranchChecked(
+    decide: (
+      db: SqliteDriver,
+      now: number,
+    ) => Result<Omit<BranchOpening, "tenantId"> | undefined, LogError>,
+  ): Result<Writer | typeof ALREADY_OPEN | undefined, LogError> {
+    const now = this.#now();
+    const opened = atomically<
+      | {
+          opening: Omit<BranchOpening, "tenantId">;
+          chain: Chain | typeof ALREADY_OPEN;
+        }
+      | undefined
+    >(this.#db, () => {
+      const opening = decide(this.#db, now);
+      if (!opening.ok) return opening;
+      const { value } = opening;
+      if (value === undefined) return ok(undefined);
+      const chain = openBranch(this.#db, now, {
+        ...value,
+        tenantId: this.tenant,
+      });
+      return chain.ok ? ok({ opening: value, chain: chain.value }) : chain;
     });
     if (!opened.ok) return opened;
-    if (opened.value === ALREADY_OPEN) return ok(ALREADY_OPEN);
+    if (opened.value === undefined) return ok(undefined);
+    const { opening, chain } = opened.value;
+    if (chain === ALREADY_OPEN) return ok(ALREADY_OPEN);
     const { branchId, lease } = opening;
     return ok(
       new Writer(
         this.#db,
         this.#now,
         { branchId, holderId: lease.holderId, epoch: 1, ttlMs: lease.ttlMs },
-        opened.value,
+        chain,
       ),
     );
   }

@@ -158,6 +158,8 @@ export type LoopConfig = {
   readonly readFile?: (path: string) => Promise<Uint8Array | undefined>;
   /** Subagents and the team; absent: spawn_agent and team tools have no agents. */
   readonly agents?: Agents;
+  /** A team's lead or member (agent({team})); absent for any other thread. */
+  readonly team?: TeamRuntime;
   /** The tree-wide budget ledger; absent: no cost, token or request budget. */
   readonly budgets?: {
     readonly ledger: BudgetLedger;
@@ -258,6 +260,40 @@ export type Agents = {
   readonly subagents: readonly string[];
   /** Present when this thread is a member: its parent's team. */
   readonly team?: Team;
+};
+
+/** An agent a lead's team lists, pinned as a member (spec/schema/README.md, "Teams"). */
+export type TeamAgentPin = {
+  readonly configHash: string;
+  /** The canonical config config_hash names, stored before the start that pins it. */
+  readonly config: string;
+  /** What one request of it reserves: its model, settings and pinned policy (start's headroom). */
+  readonly model: EventOf<"thread_started">["data"]["model"];
+  readonly params: EventOf<"thread_started">["data"]["model_params"];
+  readonly policy: Policy | undefined;
+  /** Its own budget: it covers the member. */
+  readonly budget: NonNullable<Policy["budget"]> | undefined;
+};
+
+/** What the loop of a team's lead or member needs from its team. */
+export type TeamRuntime = {
+  /** The agents start may name, pinned on first use; undefined for an agent the team lacks. */
+  readonly pin: (agent: string) => Promise<TeamAgentPin | undefined>;
+  readonly limits: { readonly concurrent: number; readonly mailbox: number };
+  /**
+   * A member's turn is under the run budget of its request: the root request the turn's opener
+   * belongs to (its receipt's provenance, or its task's). Absent for a lead, whose run is its own.
+   */
+  readonly runCovering?: (opener: KnownEvent) => Covering | undefined;
+  /** Called after each append of a team thread: the team worker looks for work. */
+  readonly notify: () => void;
+  /**
+   * The lead of an in-process run waits here for its members' progress until its run ends;
+   * absent, a thread takes its pending mail and stops once idle (a member run by the worker).
+   */
+  readonly progress?: () => Promise<void>;
+  /** The event ids of team appends; tests inject deterministic ones. */
+  readonly mint?: (seq: number, now: number) => string;
 };
 
 /** A batch the cancel barrier refused: nothing of the work it would start was recorded. */

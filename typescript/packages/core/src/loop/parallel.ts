@@ -24,7 +24,7 @@ export async function runCalls(s: Session): Promise<Halt | undefined> {
   });
   for (const group of groups(pending.map((c) => candidate(s, c)))) {
     // Nothing new starts after a cancel: the loop's next step closes the rest.
-    if (cancelRequested(s.events) !== undefined) return undefined;
+    if (cancelRequested(s.events, s.fold) !== undefined) return undefined;
     const calls = group.flatMap((i) => pending[i] ?? []);
     const [first] = calls;
     if (first === undefined) continue;
@@ -43,7 +43,7 @@ function candidate(s: Session, call: Call): Candidate {
   return {
     concurrent: s.config.tools.get(name)?.concurrent === true,
     effectClass: spec?.effect_class ?? "unguarded",
-    framework: frameworkTool(name) !== undefined,
+    framework: frameworkTool(s, name) !== undefined,
     endsTurn: spec?.ends_turn === true,
     decision: decision(s, callId),
   };
@@ -104,7 +104,7 @@ function start(
 ): Halt | undefined {
   while (started.length < limit) {
     const next = calls[started.length];
-    if (next === undefined || cancelRequested(s.events) !== undefined)
+    if (next === undefined || cancelRequested(s.events, s.fold) !== undefined)
       return undefined;
     const fenced = s.fence();
     if (fenced !== undefined) return fenced;

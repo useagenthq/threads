@@ -5,9 +5,10 @@ import type { ChildDone, ChildEnd, Halt, Subagent } from "../loop";
 import { reduce } from "../reduce";
 import { type EventDraft, liveWriter } from "../store";
 import { cancelTree } from "../thread/cancel";
+import { execute } from "./execute";
 import type { ChildEnv, ChildFactory } from "./registry";
 import type { RunResult } from "./result";
-import { execute, type Resolved } from "./run";
+import type { Resolved } from "./run";
 import { openStore } from "./sqlite";
 
 // An agent run as a subagent: a child thread in the same store, under the

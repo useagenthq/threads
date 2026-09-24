@@ -75,7 +75,7 @@ export function stage(
   const count = abandons.filter((a) => a.data.reason === reason).length;
   const next = last.data.attempt + 1;
   // Nothing is sent again after a cancel barrier, live or at recovery: the request is answered.
-  if (cancelRequested(events) !== undefined)
+  if (cancelRequested(events, fold) !== undefined)
     return {
       kind: "failed",
       reason: reason === "prompt_too_long" ? "prompt_too_long" : "model_error",

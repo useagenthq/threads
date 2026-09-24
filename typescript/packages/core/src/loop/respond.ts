@@ -121,7 +121,7 @@ function decide(
     case "guide":
       return ["guide", v.text];
     case "retry": {
-      const retries = turnEvents(s.events).filter(
+      const retries = turnEvents(s.events, s.fold).filter(
         (e) =>
           e.type === "hook_decision" &&
           e.data.hook === "after_model" &&
@@ -186,7 +186,7 @@ function withheld(
 
 /** ask to continue, up to max_output_continuations per turn, then max_output. */
 function continuation(s: Session): Halt | undefined {
-  const asked = turnEvents(s.events).filter(
+  const asked = turnEvents(s.events, s.fold).filter(
     (e) => e.type === "injected" && e.data.text === CONTINUE,
   ).length;
   if (asked >= contextPolicy(s.fold.policy).max_output_continuations)

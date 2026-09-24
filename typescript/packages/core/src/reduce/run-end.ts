@@ -1,11 +1,13 @@
 import { type ParkAddress, sameAddress } from "../fold/state";
-import type { KnownEvent } from "../log";
+import { mailRenders } from "../fold/team";
+import type { KnownEvent, MailEnvelope } from "../log";
 
 // Run completion (spec/schema/README.md, "Run completion"; Gate 1 decision 27): a run spans its
 // request's turn and every wake turn of the same request, and ends at the first point where no
 // turn is open, nothing is parked and every background child it spawned has reported. Only the
-// lead's own log decides it, so run(), the host's outcome and SSE, and replay agree. Team events
-// are refused before the Teams build, so the openers here are user_input and woken.
+// lead's own log decides it, so run(), the host's outcome and SSE, and replay agree. A turn opens
+// with a user_input, a woken (the run that spawned its children) or a received mail that opens a
+// turn (its provenance's root request). Reference: spec/tools/fixtures/run_end.py.
 
 export type RunStatus =
   | "running"
@@ -52,6 +54,10 @@ class Run {
   readonly #lateRuns = new Map<string, string>();
   /** This run's background children that have not reported. */
   readonly #children = new Set<string>();
+  /** The task monitors of this run's members that have not reported. */
+  readonly #monitors = new Set<string>();
+  /** The settle monitors of this log's waits: their notifications open no turn. */
+  readonly #settle = new Set<string>();
   #answered: readonly KnownEvent[] | undefined;
   decided: RunEnd | undefined;
 
@@ -62,21 +68,56 @@ class Run {
   step(events: readonly KnownEvent[], i: number): void {
     const e = events[i];
     if (e === undefined) return;
-    if (!this.#open && (e.type === "user_input" || e.type === "woken")) {
+    const opens = this.#open ? undefined : this.#opens(e);
+    if (opens !== undefined) {
       this.#open = true;
       this.#start = i;
-      this.#current =
-        e.type === "user_input"
-          ? e.event_id
-          : this.#lateRuns.get(e.data.causes[0] ?? "");
+      this.#current = opens.run;
     }
     this.#helpers(e);
+    this.#members(e);
     this.#control(events, i, e);
     // A late result and the woken naming it are one append: the end is never between them.
     const midAppend =
       e.type === "agent_finished" || e.type === "tool_result_late";
     if (!midAppend && this.decided === undefined && this.ended())
       this.decided = this.#completed(i);
+  }
+
+  /** The run of the turn `e` opens, or undefined when it opens none. */
+  #opens(e: KnownEvent): { readonly run: string | undefined } | undefined {
+    if (e.type === "user_input") return { run: e.event_id };
+    if (e.type === "woken")
+      return { run: this.#lateRuns.get(e.data.causes[0] ?? "") };
+    if (e.type !== "message_received" || !this.#mailOpens(e.data.envelope))
+      return undefined;
+    return { run: e.data.envelope.provenance.root_request.event_id };
+  }
+
+  /** A received mail opens a turn once it renders and no park is left but the one it
+   * resolves (reference: turn_open.py). */
+  #mailOpens(env: MailEnvelope): boolean {
+    const resolves = (p: ParkAddress): boolean =>
+      p.kind === "member" && p.id === env.monitor_id;
+    return mailRenders(env, this.#settle) && this.#parks.every(resolves);
+  }
+
+  /** Run-owned members, by their task monitors, and the waits' settle monitors. */
+  #members(e: KnownEvent): void {
+    if (
+      e.type === "member_started" &&
+      e.data.provenance.root_request.event_id === this.#request
+    )
+      this.#monitors.add(`${e.branch_id}:${e.event_id}:task`);
+    else if (
+      e.type === "message_received" &&
+      (e.data.envelope.kind === "member_settled" ||
+        e.data.envelope.kind === "member_ended")
+    )
+      this.#monitors.delete(e.data.envelope.monitor_id ?? "");
+    else if (e.type === "wait_started")
+      for (const m of e.data.members)
+        this.#settle.add(`${e.branch_id}:${e.event_id}:${m.name}`);
   }
 
   /** Turn ends, parks and idle cancels. */
@@ -127,7 +168,8 @@ class Run {
       this.#answered !== undefined &&
       !this.#open &&
       this.#parks.length === 0 &&
-      this.#children.size === 0
+      this.#children.size === 0 &&
+      this.#monitors.size === 0
     );
   }
 

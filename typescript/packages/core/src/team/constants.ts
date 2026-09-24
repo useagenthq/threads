@@ -15,3 +15,23 @@ export const TEAM_CONSTANTS = {
   wakePollInProcessMs: 250,
   wakePollCrossProcessMs: 1_000,
 } as const;
+
+/** The team tools (tools.v1.catalog.json): no tool of a team's agent may take one's name. */
+export const TEAM_TOOLS: readonly string[] = [
+  "ask",
+  "cancel",
+  "monitor",
+  "reply",
+  "send",
+  "start",
+  "wait",
+];
+
+/**
+ * The team tools pinned for a lead and its members so far: lane 21E pins ask, reply, wait,
+ * monitor and cancel with their handlers.
+ */
+export const TEAM_TOOLS_PINNED: readonly string[] = ["send", "start"];
+
+/** agent({teamLimits}) when omitted. */
+export const TEAM_LIMITS = { concurrent: 4, mailbox: 100 } as const;

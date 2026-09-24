@@ -93,7 +93,7 @@ export function validateCandidate(
 
 /** After max_retries failed candidates the turn ends output_invalid. */
 function giveUp(s: Session, maxRetries: number): Halt | undefined {
-  const turn = turnEvents(s.events);
+  const turn = turnEvents(s.events, s.fold);
   const failures =
     turn.filter(
       (e) => e.type === "output_validated" && e.data.outcome === "rejected",
