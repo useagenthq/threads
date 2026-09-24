@@ -15,6 +15,7 @@ import { type Authenticate, api } from "./http";
 import { channelThreads } from "./inbox";
 import { challenge, receive } from "./intake";
 import { unfinishedRuns } from "./receipts";
+import { Recovery } from "./recovery";
 import { type RunAccepted, type StartRunCode, startRun } from "./runs";
 import { bindSchedules, type Schedule, tick } from "./schedules";
 import type { StartRunRequest } from "./schemas";
@@ -106,6 +107,12 @@ export function host(options: HostOptions): Host {
   let ticking: Promise<void> | undefined;
   let tickWaiters: (() => void)[] = [];
   const watch = new Watch();
+  const recovery = new Recovery(ctx);
+  // A run of this host that meets a store outage is run on by recovery, with backoff.
+  ctx.onStoreOutage = (tenant, thread, error) => {
+    recovery.failed(thread.branch, error);
+    watch.add(tenant, thread.id, thread.branch);
+  };
   let seeded = false;
 
   /** One consumer per thread in this process; a kick while one runs is picked up by it. */
@@ -164,13 +171,8 @@ export function host(options: HostOptions): Host {
     // Side by side: one thread's slow reply never holds up another's recovery.
     await Promise.all(
       watch.entries().map(async ({ thread: t, settled }) => {
-        const { log } = await ctx.open(t.tenant);
-        const main = log.mainBranch(t.id);
-        const branch = t.branch ?? (main.ok ? main.value : undefined);
-        const done =
-          branch === undefined ||
-          (await ctx.recover(t.tenant, { id: t.id, branch })) === "done";
-        if (done) settled();
+        if ((await recovery.look(t.tenant, t.id, t.branch)) === "done")
+          settled();
       }),
     );
   };

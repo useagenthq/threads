@@ -1,3 +1,4 @@
+import { AssertionError } from "node:assert";
 import { assertNever } from "../assert-never";
 import { type EventOf, responseText } from "../fold/state";
 import { sha256Hex } from "../hash";
@@ -8,6 +9,7 @@ import type { ProviderRejection } from "../model/protocol";
 import { parseRender } from "../model/render-lines";
 import { redactStream, SecretInProviderOutput } from "../redact";
 import { compactionSide, refReader, render } from "../render";
+import { StoreError } from "../store/driver";
 import { draft } from "./drafts";
 import { reserve, settleOpen } from "./ledger";
 import type { Session } from "./session";
@@ -168,6 +170,10 @@ async function collect(
       }
     }
   } catch (error) {
+    // A broken invariant, or the store's outage: the request stays open, for recovery (as in
+    // Python's `_collect`), never a resend under the crash budget.
+    if (error instanceof AssertionError || error instanceof StoreError)
+      throw error;
     if (error instanceof SecretInProviderOutput) return { kind: "leaked" };
     // A transport failure after dispatch: the attempt may have been billed.
     return { kind: "broken" };

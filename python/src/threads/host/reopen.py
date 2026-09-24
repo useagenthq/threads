@@ -15,9 +15,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from threads.agents.results import Failed
+from threads.agents.store import open_store
 from threads.host.runs import Runner, RunTask
 from threads.log import BranchId, ThreadId
+from threads.result import Ok
 from threads.store import StoreError
+from threads.thread.handle import Thread
 
 type OpenRun = tuple[str, ThreadId, BranchId]
 """(tenant, thread, branch) of an API run a crash may have left open."""
@@ -44,7 +47,7 @@ class _Streak:
 
 
 class Reopening:
-    """One host start's open API runs."""
+    """One host start's open API runs, and any run of this host that meets a store outage."""
 
     def __init__(self, runner: Runner) -> None:
         self._runner = runner
@@ -59,9 +62,16 @@ class Reopening:
                 self._open[row] = run
         return list(self._open.values())
 
+    def watch(self, thread: Thread, run: RunTask) -> None:
+        """A run of this host that met a store outage: looked at again, with backoff."""
+        tenant = self._runner.tenant_of(thread.store)
+        if tenant is not None:
+            self._open.setdefault((tenant, thread.id, thread.branch), run)
+
     async def run(self) -> None:
-        """Looks again each second until every run closed or parked, or was given up on."""
-        while self._open:
+        """Looks again each second at every run not yet closed, parked or given up on, until the
+        host stops."""
+        while True:
             await asyncio.sleep(REOPEN_S)
             for row, run in tuple(self._open.items()):
                 again = await self._look(row, run)
@@ -100,8 +110,24 @@ class Reopening:
             return None
 
     async def _reopen(self, row: OpenRun) -> RunTask | None:
+        """An open, unparked turn runs on from the log. What it left in doubt is settled by the
+        loop's recovery, which never dispatches a begun effect again. Returns the run that
+        carries it (the one already in flight here, if any); None once closed or parked."""
         tenant, thread, branch = row
-        return await self._runner.reopen(self._runner.store(tenant), thread, branch)
+        live = self._runner.live(branch)
+        if live is not None:
+            return live
+        store = self._runner.store(tenant)
+        read = await (await open_store(store)).read(branch, 0)
+        if not isinstance(read, Ok):
+            code, message = read.error.code, read.error.message
+            _log.warning(
+                "threads host: API run on %s not recovered (%s: %s)", branch, code, message
+            )
+            return None
+        if not read.value.fold.in_turn or read.value.fold.parked:
+            return None
+        return await self._runner.resume(store, thread, branch)
 
     def _fail(self, row: OpenRun, error: StoreError, counted: RunTask) -> None:
         """One more store error in the row's streak: the next look waits twice as long."""

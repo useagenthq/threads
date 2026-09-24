@@ -40,19 +40,21 @@ def test_a_failed_look_is_tried_again_and_the_turn_completes(
         model = answering(text("done"))
         second = support(store, model)
         runner = second._runner  # pyright: ignore[reportPrivateUsage] - one failing look
-        look = runner.reopen
+        look = runner.resume
         failed = asyncio.Event()
 
-        async def flaky(given: Store, thread: ThreadId, branch: BranchId) -> RunTask | None:
-            if failed.is_set() or runner.running(branch):
-                return await look(given, thread, branch)
+        async def flaky(
+            given: Store, thread: ThreadId, branch: BranchId, since: int | None = None
+        ) -> RunTask | None:
+            if failed.is_set():
+                return await look(given, thread, branch, since)
             failed.set()
             raise StoreError("the store blinked")
 
         async with second:
             # The first pass loses to the live lease; then one look fails; then the lease runs out.
             await recovered(second)
-            monkeypatch.setattr(runner, "reopen", flaky)
+            monkeypatch.setattr(runner, "resume", flaky)
             await asyncio.wait_for(failed.wait(), 5)
             await expire_leases(store)
             await until(has(store, ALICE, run, TurnCompletedEvent))

@@ -8,7 +8,6 @@ in flight is one task per branch; a resume starts one only when none is in fligh
 
 import asyncio
 import contextlib
-import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from weakref import WeakKeyDictionary
@@ -34,12 +33,10 @@ from threads.log import (
 )
 from threads.result import Ok
 from threads.secrets import resolve
-from threads.store import SqliteStore
+from threads.store import SqliteStore, StoreError
 from threads.thread import tree
 from threads.thread.authority import Checked
 from threads.thread.handle import Thread
-
-_log = logging.getLogger(__name__)
 
 type RunTask = asyncio.Task[RunResult[str]]
 """One run of a branch, as a task of this host."""
@@ -94,6 +91,8 @@ class Runner:
         self._generation = 0
         """Bumped by each stop: work a caller began before it never launches a run after it."""
         self.on_end: Callable[[Store, ThreadId], None] | None = None
+        self.on_store_error: Callable[[Thread, RunTask], None] | None = None
+        """Called when a run here meets a store outage: the host's recovery runs it on."""
         """Called when a run of a thread ends here: the channel intake drains what waited."""
         self.last: dict[BranchId, Failed] = {}
         """Each branch's latest failure in this process: a run that failed with nothing in the
@@ -164,8 +163,16 @@ class Runner:
         return Checked(() if bound is None else bound.definition.approvers)
 
     def running(self, branch: BranchId) -> bool:
+        return self.live(branch) is not None
+
+    def live(self, branch: BranchId) -> RunTask | None:
+        """The branch's run in flight here, if any."""
         task = self._tasks.get(branch)
-        return task is not None and not task.done()
+        return None if task is None or task.done() else task
+
+    def tenant_of(self, store: Store) -> str | None:
+        """The tenant whose view of the host store `store` is."""
+        return next((t for t, s in self._stores.items() if s is store), None)
 
     def launch(  # noqa: PLR0913 - one run and how it came
         self,
@@ -271,27 +278,6 @@ class Runner:
             return await self.resume(store, thread_id, root.value)
         return None
 
-    async def reopen(self, store: Store, thread_id: ThreadId, branch: BranchId) -> RunTask | None:
-        """A restarted host: an API run a crash cut short (its turn still open, not parked) runs
-        on from the log. What it left in doubt is settled by the loop's recovery, which never
-        dispatches a begun effect again. Returns the run that carries it (the one already in
-        flight here, if any); None once the turn is closed or parked."""
-        live = self._tasks.get(branch)
-        if live is not None and not live.done():
-            return live
-        read = await (await open_store(store)).read(branch, 0)
-        if not isinstance(read, Ok):
-            _log.warning(
-                "threads host: API run on %s not recovered (%s: %s)",
-                branch,
-                read.error.code,
-                read.error.message,
-            )
-            return None
-        if not read.value.fold.in_turn or read.value.fold.parked:
-            return None
-        return await self.resume(store, thread_id, branch)
-
     def _emit(self, branch: BranchId) -> Emit:
         def emit(_item: StreamEvent) -> None:
             self.wake(branch)
@@ -313,6 +299,8 @@ class Runner:
         self.wake(branch)
         if task.cancelled():
             return
+        if isinstance(task.exception(), StoreError) and self.on_store_error is not None:
+            self.on_store_error(thread, task)
         if branch in self._again:
             self._again.discard(branch)
             # Bound to this generation: a stop before it launches leaves it nothing to start.

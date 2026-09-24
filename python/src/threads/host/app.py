@@ -114,6 +114,7 @@ class Host:
 
     async def _tick(self) -> None:
         reopening = Reopening(self._runner)
+        self._runner.on_store_error = reopening.watch
         try:
             sq = await open_store(self._runner.store(LOCAL_TENANT))
             waiting = await sq.tables.unconsumed_threads()

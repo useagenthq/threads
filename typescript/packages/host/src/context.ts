@@ -6,7 +6,6 @@ import {
   JsonValue,
   type KnownEvent,
   knownEvents,
-  type LogStore,
   openStore,
   type Principal,
   principalKey,
@@ -45,14 +44,13 @@ export class HostContext {
   readonly #pending = new Map<string, number>();
   /** A run's in-process result, by run_id, for a halt the log can't show. */
   readonly results: Map<string, RunResult<Json>> = new Map();
-  /** Each branch's last run that threw here, with its error: why recovery gives up on it. */
-  readonly #thrown = new Map<BranchId, unknown>();
-  /** Branches recovery ran that failed another way than losing the lease: not run again. */
-  readonly #notRetried = new Set<BranchId>();
-  /** Branches whose recovery runs meet a store error in a row: when to look again. */
-  readonly #streaks = new Map<BranchId, Streak>();
-  /** Branches a recovery run is on now: its store error is said by the streak, not per run. */
-  readonly #rerunning = new Set<BranchId>();
+  /**
+   * Told when a run of this process meets a store outage: the host watches the thread, so its
+   * recovery runs it on with backoff. Unset, the outage is logged like any failure.
+   */
+  onStoreOutage:
+    | ((tenant: string, thread: Thread, error: StoreError) => void)
+    | undefined;
   readonly #stop = new AbortController();
   /** Aborted once the host stops: every run and every send not yet settled gives up on it. */
   readonly stopping: AbortSignal = this.#stop.signal;
@@ -109,17 +107,37 @@ export class HostContext {
    * Runs the branch until idle or parked, after any execution this process already has on it.
    * The log decides what runs: the inputs are already durable.
    */
-  resume(
+  async resume(
     hosted: HostedAgent,
     tenant: string,
     principal: Principal,
-    thread: { readonly id: ThreadId; readonly branch: BranchId },
+    thread: Thread,
     runId?: string,
   ): Promise<RunResult<Json> | undefined> {
-    return this.#queued(thread.branch, async () => {
-      if (this.stopping.aborted) return undefined;
+    const ran = await this.attempt(hosted, tenant, principal, thread, runId);
+    if (ran.kind === "threw") {
+      if (ran.error instanceof StoreError && this.onStoreOutage !== undefined)
+        this.onStoreOutage(tenant, thread, ran.error);
+      else
+        console.error(
+          `threads host: run on ${thread.branch} failed`,
+          ran.error,
+        );
+    }
+    return ran.kind === "ran" ? ran.result : undefined;
+  }
+
+  /** `resume` without its failure log: how the run ended, for recovery to judge. */
+  attempt(
+    hosted: HostedAgent,
+    tenant: string,
+    principal: Principal,
+    thread: Thread,
+    runId?: string,
+  ): Promise<Attempt> {
+    return this.#queued(thread.branch, async (): Promise<Attempt> => {
+      if (this.stopping.aborted) return { kind: "stopped" };
       const store = this.storeFor(tenant);
-      this.#thrown.delete(thread.branch);
       try {
         // A reply begun before a crash is reconciled through the channel's lookup first: the
         // agent's recovery has no channel_send tool and would park it.
@@ -140,16 +158,16 @@ export class HostContext {
           json.status === "failed" && json.error.code === "branch_busy";
         if (runId !== undefined && !lost) this.results.set(runId, json);
         await this.#reply(tenant, thread);
-        return json;
+        return { kind: "ran", result: json };
       } catch (error) {
-        if (
-          !(error instanceof StoreError && this.#rerunning.has(thread.branch))
-        )
-          console.error(`threads host: run on ${thread.branch} failed`, error);
-        this.#thrown.set(thread.branch, error);
-        return undefined;
+        return { kind: "threw", error };
       }
     });
+  }
+
+  /** Whether this process has a job queued or running on the branch. */
+  busy(branch: BranchId): boolean {
+    return this.#pending.has(branch);
   }
 
   /** The thread's missing replies, issued after any job this process has on its branch. */
@@ -178,117 +196,6 @@ export class HostContext {
     })();
     this.#lanes.set(branch, next);
     return next;
-  }
-
-  /**
-   * A pass over a channel thread no job of this process is on: a turn left open with no run
-   * (a crash, or a lease lost to another host) runs on from the log, then the thread's missing
-   * replies are issued. "busy" when it must be looked at again on a later tick. It never waits
-   * on a run: a live one replies as it ends, and a slow one must not hold up other threads or
-   * stop().
-   */
-  async recover(
-    tenant: string,
-    thread: { readonly id: ThreadId; readonly branch: BranchId },
-  ): Promise<"done" | "busy"> {
-    const verdict = await this.#recover(tenant, thread);
-    // A branch the watch drops leaves no streak behind.
-    if (verdict === "done") this.#streaks.delete(thread.branch);
-    return verdict;
-  }
-
-  async #recover(
-    tenant: string,
-    thread: { readonly id: ThreadId; readonly branch: BranchId },
-  ): Promise<"done" | "busy"> {
-    if (this.#pending.has(thread.branch)) return "busy";
-    const streak = this.#streaks.get(thread.branch);
-    if (streak !== undefined && Date.now() < streak.atMs) return "busy";
-    // Said once when it failed; the watch drops it now.
-    if (this.#notRetried.delete(thread.branch)) return "done";
-    const read = await this.#read(tenant, thread.branch);
-    if (read === undefined) return "busy";
-    if (!read.ok) {
-      console.error(
-        `threads host: run on ${thread.branch} not recovered (${read.error.code}: ${read.error.message})`,
-      );
-      return "done";
-    }
-    const { fold } = read.value;
-    if (!fold.turnOpen || fold.parked.length > 0)
-      return this.replies(tenant, thread);
-    const events = knownEvents(read.value);
-    const hosted = this.agentOf(events);
-    const who = events.findLast((e) => e.type === "user_input")?.actor
-      .principal;
-    if (hosted === undefined || who === undefined) return "done";
-    // The run issues its replies as it ends; a later tick confirms the turn closed.
-    void this.#rerun(hosted, tenant, who, thread);
-    return "busy";
-  }
-
-  /**
-   * A recovery run. A lost lease is worth another try on the next tick, and a store error one
-   * after a wait that doubles while it lasts (said once per streak). Any other failure is logged
-   * with its reason and not retried, and the turn stays open in the log for a control, a new
-   * input or the next start. A provider's lookup failing never gets here: the loop settles it.
-   */
-  async #rerun(
-    hosted: HostedAgent,
-    tenant: string,
-    who: Principal,
-    thread: { readonly id: ThreadId; readonly branch: BranchId },
-  ): Promise<void> {
-    this.#rerunning.add(thread.branch);
-    const result = await this.resume(hosted, tenant, who, thread);
-    this.#rerunning.delete(thread.branch);
-    const thrown = this.#thrown.get(thread.branch);
-    if (result === undefined && thrown instanceof StoreError) {
-      this.#failed(thread.branch, thrown);
-      return;
-    }
-    this.#streaks.delete(thread.branch);
-    const why =
-      result === undefined
-        ? thrown
-        : result.status === "failed" && result.error.code !== "branch_busy"
-          ? `${result.error.code}: ${result.error.message}`
-          : undefined;
-    if (why === undefined) return;
-    this.#notRetried.add(thread.branch);
-    console.error(
-      `threads host: run on ${thread.branch} not retried (${why instanceof Error ? why.message : String(why)})`,
-    );
-  }
-
-  /** The branch's log; undefined after a store error, which joins the branch's streak. */
-  async #read(
-    tenant: string,
-    branch: BranchId,
-  ): Promise<ReturnType<LogStore["read"]> | undefined> {
-    try {
-      const { log } = await this.open(tenant);
-      return log.read(branch);
-    } catch (error) {
-      if (!(error instanceof StoreError)) throw error;
-      this.#failed(branch, error);
-      return undefined;
-    }
-  }
-
-  /** One more store error in the branch's streak: the next look waits twice as long. */
-  #failed(branch: BranchId, error: StoreError): void {
-    const streak = this.#streaks.get(branch);
-    if (streak === undefined)
-      console.error(
-        `threads host: run on ${branch} hit a store error; looking again with backoff`,
-        error,
-      );
-    const waitMs =
-      streak === undefined
-        ? STORE_RETRY_MS
-        : Math.min(streak.waitMs * 2, STORE_BACKOFF_MAX_MS);
-    this.#streaks.set(branch, { waitMs, atMs: Date.now() + waitMs });
   }
 
   async #reply(
@@ -360,11 +267,13 @@ export class HostContext {
   }
 }
 
-/** A store error's first wait before the next look, doubling while it lasts up to the max. */
-const STORE_RETRY_MS = 1_000;
-const STORE_BACKOFF_MAX_MS = 60_000;
+type Thread = { readonly id: ThreadId; readonly branch: BranchId };
 
-type Streak = { readonly waitMs: number; readonly atMs: number };
+/** How one run of this process ended: its result, what it threw, or the host was stopping. */
+export type Attempt =
+  | { readonly kind: "ran"; readonly result: RunResult<Json> }
+  | { readonly kind: "threw"; readonly error: unknown }
+  | { readonly kind: "stopped" };
 
 /** A pin never changes in place: continuing a thread needs the config it started with. */
 export async function samePin(

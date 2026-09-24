@@ -82,10 +82,11 @@ describe("API run recovery edges", () => {
       );
       expect(gaveUp).toHaveLength(1);
       expect(JSON.stringify(gaveUp[0])).toContain("another config");
+      // Recovery says the failure once, itself: no generic per-attempt line.
       const attempts = logged.mock.calls.filter((c) =>
         String(c[0]).includes("failed"),
       );
-      expect(attempts).toHaveLength(1);
+      expect(attempts).toHaveLength(0);
       expect(
         (await fold(store, alice.tenant, run.branch_id)).fold.turnOpen,
       ).toBe(true);
