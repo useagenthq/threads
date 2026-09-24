@@ -24,6 +24,7 @@ function tool(options: {
   reconcile?: { lookup: (effectKey: string, ctx: RunContext<Deps>) => Promise<LookupResult<Output>>; finality: "final" | "nonfinal" };
   concurrent?: boolean;
   endsTurn?: boolean;
+  defer?: boolean;
 }): Tool<Input, Output, Deps>
 ```
 
@@ -43,6 +44,7 @@ def tool(
     reconcile: Reconcile[Output, Deps] | None = None,
     concurrent: bool = False,
     ends_turn: bool = False,
+    defer: bool = False,
 ) -> Tool[Input, Output, Deps]
 ```
 
@@ -117,6 +119,10 @@ def tool(
 
 <Field name="endsTurn / ends_turn" type={"boolean"} default={"false"}>
   true: a successful result from this tool ends the turn with no further model call; an error result doesn't. Default false.
+</Field>
+
+<Field name="defer" type={"boolean"} default={"false"}>
+  true: the model doesn't see this tool's schema until it finds it with tool_search; can't be combined with ends_turn (setup error invalid_config). The model sees the tool's name and description until then. context.defer_tools decides whether the flag is honoured. Default false.
 </Field>
 
 ## Returns

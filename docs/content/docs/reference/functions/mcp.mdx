@@ -22,6 +22,7 @@ function mcp(options: {
   runs?: "host" | "sandbox";
   tools?: { allow?: readonly string[]; deny?: readonly string[] };
   effect?: EffectClass;
+  defer?: boolean;
 }): McpServer
 ```
 
@@ -40,6 +41,7 @@ def mcp(
     runs: Literal["host", "sandbox"] = "host",
     tools: {allow?: Sequence[str], deny?: Sequence[str]} | None = None,
     effect: EffectClass = "unguarded",
+    defer: bool = False,
 ) -> McpServer
 ```
 
@@ -90,6 +92,10 @@ def mcp(
 
 <Field name="effect" type={"EffectClass"} default={"unguarded"}>
   The effect class every tool from this server is pinned with. Use read_only for a server whose tools change nothing; the default unguarded means an uncertain call parks and is never retried. idempotent is refused in Python and needs a dedup window in TypeScript.
+</Field>
+
+<Field name="defer" type={"boolean"} default={"false"}>
+  true: the model doesn't see this server's tool schemas until it finds them with tool_search; it sees their names and descriptions until then. Use it for a server with many tools. context.defer_tools decides whether the flag is honoured. Default false.
 </Field>
 
 ## Returns
