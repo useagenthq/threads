@@ -61,6 +61,7 @@ async def main(script: dict[str, JsonValue]) -> None:
     served = host(store=sqlite(":memory:"), agents={"support": bot}, authenticate=authenticate)
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
+    listener.listen()
     async with served:
         server = uvicorn.Server(uvicorn.Config(served.asgi, log_level="warning"))
         print(listener.getsockname()[1], flush=True)
