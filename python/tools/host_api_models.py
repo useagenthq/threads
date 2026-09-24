@@ -29,6 +29,16 @@ HOST_SHAPES = (
     "SettingsChange",
     "ModeChange",
     "Appended",
+    "ChatKey",
+    "ClientMessageId",
+    "AiSdkChatRequest",
+    "AiSdkMessage",
+    "AiSdkPart",
+    "AiSdkApproval",
+    "AgUiRunInput",
+    "AgUiMessage",
+    "AgUiContentPart",
+    "AgUiResumeEntry",
 )
 """The boundary shapes: request bodies the host parses and the receipts it returns. Projections
 that reference other schemas' nested paths (RunOutcome, Timeline) are built from core types."""
@@ -103,6 +113,24 @@ def keep_host_shapes(source: str, event_names: frozenset[str]) -> str:
     return text.replace(
         "from threads._strict_model import", imports + "from threads._strict_model import", 1
     )
+
+
+def open_shapes(source: str) -> str:
+    """The host shapes whose schema says `additionalProperties: true` (the UI request bodies)
+    ignore extra fields instead of refusing them: the stock web clients send many fields threads
+    doesn't read. The generator's global --extra-fields=forbid would refuse every one of them."""
+    host = as_obj(as_obj(json.loads(HOST_SCHEMA.read_text(encoding="utf-8")))["$defs"])
+    for name in HOST_SHAPES:
+        if as_obj(host[name]).get("additionalProperties") is not True:
+            continue
+        start = source.index(f"class {name}(")
+        end = source.find("\nclass ", start)
+        end = len(source) if end == -1 else end
+        block = source[start:end]
+        if 'extra="forbid"' not in block:
+            raise SystemExit(f"regen: {name} has no extra config; generator output changed")
+        source = source[:start] + block.replace('extra="forbid"', 'extra="ignore"') + source[end:]
+    return source
 
 
 def _names(source: str) -> set[str]:

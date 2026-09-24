@@ -15,15 +15,18 @@ from weakref import WeakKeyDictionary
 from threads.agents.agent import Agent
 from threads.agents.definition import Definition
 from threads.agents.intake import Intake
-from threads.agents.results import Failed, RunResult, StreamEvent
-from threads.agents.run import Emit, Input, RunOptions, execute
+from threads.agents.results import EventItem, Failed, RunResult, StreamEvent
+from threads.agents.run import Input, RunOptions, execute
 from threads.agents.store import Store, open_store, scoped
 from threads.host.channel import ChannelAdapter
 from threads.host.deliver import deliver, undelivered
 from threads.host.send import Conversation, SendServer
+from threads.host.ui.hub import LiveHub
+from threads.host.ui.live import Delta
 from threads.log import (
     BranchId,
     Budget,
+    EventId,
     HandoffEvent,
     Permissions,
     Principal,
@@ -97,6 +100,8 @@ class Runner:
         self.on_store_error: Callable[[Thread, RunTask], None] | None = None
         """Called when a run here meets a store outage: the host's recovery runs it on."""
         """Called when a run of a thread ends here: the channel intake drains what waited."""
+        self.hub: LiveHub = LiveHub()
+        """Live text of the runs this process executes, for the UI streams on their threads."""
         self.last: dict[BranchId, Failed] = {}
         """Each branch's latest failure in this process: a run that failed with nothing in the
         log to say so (a refusal, an unavailable model) is answered from here. Every other
@@ -201,7 +206,8 @@ class Runner:
             options["budget"] = budget
         how = bound.intake(intake, thread.store)
         branch = thread.branch
-        run = execute(bound.definition, input, options, None, self._emit(branch), None, how)
+        emit = self._emit(thread)
+        run = execute(bound.definition, input, options, None, emit, None, how, on_delta=emit.delta)
         task = asyncio.get_running_loop().create_task(run)
         if self._stopping or (since is not None and since != self._generation):
             # A stopping host, or a request from before its last stop, starts nothing: cancelled
@@ -284,11 +290,8 @@ class Runner:
             return await self.resume(store, thread_id, root.value)
         return None
 
-    def _emit(self, branch: BranchId) -> Emit:
-        def emit(_item: StreamEvent) -> None:
-            self.wake(branch)
-
-        return emit
+    def _emit(self, thread: Thread) -> "_Emit":
+        return _Emit(self, thread)
 
     def _ended(self, thread: Thread, task: RunTask) -> None:
         branch = thread.branch
@@ -367,6 +370,22 @@ class Runner:
             for task in tasks:
                 task.cancel()
             await asyncio.wait(tasks)
+
+
+@dataclass(frozen=True, slots=True)
+class _Emit:
+    """A run's appends wake its branch's subscribers and thread's live hub; deltas go there."""
+
+    runner: Runner
+    thread: Thread
+
+    def __call__(self, item: StreamEvent) -> None:
+        if isinstance(item, EventItem):
+            self.runner.hub.appended(self.thread.id, item.event)
+        self.runner.wake(self.thread.branch)
+
+    def delta(self, request: EventId, part: int, text: str) -> None:
+        self.runner.hub.delta(self.thread.id, Delta(request, part, text))
 
 
 async def _pinned(sq: SqliteStore, thread_id: ThreadId) -> tuple[str, bool] | None:

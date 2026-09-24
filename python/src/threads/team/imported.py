@@ -4,12 +4,13 @@ belongs to, rebuilt whole. A team whose lead is not stored yet has no rows until
 imported (that import rebuilds it). A log that breaks rule 43 with the stored team is refused."""
 
 import sqlite3
+import time
 
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import ParseError, TeamOpenedEvent, ThreadStartedEvent
 from threads.result import Err
-from threads.store import sql, wakes
+from threads.store import receipts, sql, wakes
 from threads.store.indexing import known
 from threads.store.started import opened_threads
 from threads.store.verify import VerifiedLog
@@ -36,8 +37,11 @@ def import_indexed(
 
 
 def _index(conn: sqlite3.Connection, log: VerifiedLog, tenant: str) -> ParseError | None:
+    now = int(time.time() * 1000)
     for s in log.segments:
-        wakes.refold(conn, s.header.branch_id, known([e for e, _ in s.events]))
+        events = known([e for e, _ in s.events])
+        wakes.refold(conn, s.header.branch_id, events)
+        receipts.rebuild_ui(conn, tenant, events, now)
     for team in _teams_of(conn, log, tenant):
         rebuilt = refold_team(conn, tenant, team)
         if isinstance(rebuilt, Err) and rebuilt.error.code != "not_found":

@@ -29,7 +29,7 @@ def event(kind: str, **data: JsonValue) -> Ev:
 
 
 def text(value: str) -> Ev:
-    return event("response.output_text.delta", delta=value)
+    return event("response.output_text.delta", content_index=0, delta=value)
 
 
 def item(value: dict[str, JsonValue]) -> Ev:
@@ -129,7 +129,7 @@ def test_the_stream_maps_to_deltas_parts_and_usage() -> None:
     assert isinstance(first.part, ReasoningPart)
     assert json.loads(context.artifacts[first.part.ref.sha256]) == reasoning
     assert first.part.summary == "Look first."
-    assert delta == Delta("Hi")
+    assert delta == Delta(1, "Hi")  # the committed index: after the reasoning part
     assert reply == PartChunk(TextPart(type="text", text="Hi"))
     args: dict[str, JsonValue] = {"path": "a"}
     expected = ToolUsePart(type="tool_use", call_id=CallId("call_9"), name="read_file", input=args)

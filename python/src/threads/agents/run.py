@@ -23,6 +23,7 @@ from threads.agents.intake import Intake
 from threads.agents.launch import Launch
 from threads.agents.outcome import result
 from threads.agents.results import (
+    DeltaItem,
     EventItem,
     Failed,
     RunError,
@@ -54,6 +55,7 @@ from threads.hooks.observers import ObserverPump
 from threads.log import (
     BranchId,
     Budget,
+    EventId,
     InputPart,
     ParseError,
     Permissions,
@@ -80,6 +82,8 @@ RENEW_EVERY_S = 10.0
 
 type Input = str | Sequence[InputPart]
 type Emit = Callable[[StreamEvent], None]
+type OnDelta = Callable[[EventId, int, str], None]
+"""Internal: each redacted delta with its part index (the host's live hub; DeltaItem has none)."""
 
 
 class _RunOptions(TypedDict, total=False):
@@ -109,6 +113,12 @@ class RunOptionsWithDeps[D](_RunOptions):
 class _Stream:
     emit: Emit
     pump: ObserverPump
+    on_delta: OnDelta | None = None
+
+    def delta(self, request: EventId, part: int, text: str) -> None:
+        self.emit(DeltaItem(request, text))
+        if self.on_delta is not None:
+            self.on_delta(request, part, text)
 
     def observe(self, events: Sequence[StoredEvent]) -> None:
         for event in events:
@@ -129,10 +139,13 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
     launch: Launch | None = None,
     intake: Intake | None = None,
     member: MemberRun | None = None,
+    on_delta: OnDelta | None = None,
 ) -> RunResult[str]:
     # The run holds its loop's adapter connections; the last holder on a loop closes them.
     async with holding():
-        return await _execute(definition, input, options, deps, emit, launch, intake, member)
+        return await _execute(
+            definition, input, options, deps, emit, on_delta, launch, intake, member
+        )
 
 
 async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
@@ -141,6 +154,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
     options: RunOptions[D],
     deps: D,
     emit: Emit,
+    on_delta: OnDelta | None,
     launch: Launch | None,
     intake: Intake | None,
     member: MemberRun | None,
@@ -171,7 +185,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
         observers = {e.name: e.on for e in definition.extensions}
         pump = ObserverPump(sq.cursors, writer.branch_id, lambda: writer.fold.events, observers)
         pump.poke()
-        stream = _Stream(emit, pump)
+        stream = _Stream(emit, pump, on_delta)
         box = definition.sandbox
         shared = None if launch is None else launch.shared
         builtins = shared or (None if box is None else _sandbox_tools(sq, box, writer, definition))
@@ -212,6 +226,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
             # A final_output candidate is checked against the output model, strictly.
             None if definition.output is None else partial(invalid, definition.output),
             observe=stream.observe if side is None else notifying(stream.observe, side.runtime),
+            delta=stream.delta,
             read_file=None if builtins is None else builtins.read_file,
             hooks=bind(definition.extensions, ctx),
             budgets=covered(launch, member),

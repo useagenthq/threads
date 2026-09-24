@@ -89,6 +89,10 @@ class ModelResponse:
 
 @dataclass(frozen=True, slots=True)
 class Delta:
+    """Streamed text of the part at index `part` of the committed content. An adapter that can't
+    name the index sends no deltas; the parts still arrive whole."""
+
+    part: int
     text: str
     kind: Literal["delta"] = "delta"
 

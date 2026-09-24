@@ -65,13 +65,20 @@ class Assembler:
     model: str
     called: bool = False
     refused: bool = False
+    yielded: int = 0
+    """Parts yielded so far. Items arrive one at a time, so a message's first text is the next
+    part; a later content's index depends on the citations before it, so it sends no deltas."""
 
     async def feed(self, event: Event) -> Sequence[ModelChunk]:
         match event:
-            case TextDelta(delta=text):
-                return (Delta(text),)
+            case TextDelta(content_index=0, delta=text):
+                return (Delta(self.yielded, text),)
+            case TextDelta():
+                return ()
             case ItemDone(item=item):
-                return [PartChunk(p) for p in await self._item(item)]
+                parts = await self._item(item)
+                self.yielded += len(parts)
+                return [PartChunk(p) for p in parts]
             case Finished(type="response.failed", response=response):
                 failure = response.error
                 raise ProviderStreamError(

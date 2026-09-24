@@ -15,6 +15,7 @@ from threads.log import (
     ArtifactRef,
     BranchId,
     Event,
+    EventId,
     ModelRef,
     ParkAddress,
     ParkReason,
@@ -191,6 +192,9 @@ class Runtime:
     every candidate is rejected (fail closed)."""
     observe: Callable[[Sequence[StoredEvent]], None] = lambda _events: None
     """Receives each committed batch: the stream's subscription to the log."""
+    delta: Callable[[EventId, int, str], None] = lambda _request, _part, _text: None
+    """Receives each redacted text delta of an attempt: its model_request, the part's index in
+    the committed content, the text. Transient, never logged."""
     hooks: HookRunner = field(default_factory=HookRunner)
     """The run's extension hooks; none by default."""
     read_file: Callable[[str], Awaitable[bytes | None]] | None = None

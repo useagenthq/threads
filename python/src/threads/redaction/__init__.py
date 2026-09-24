@@ -15,7 +15,7 @@ from threads.redaction.stored import (
     redact_bytes,
     unchanged_since,
 )
-from threads.redaction.text import redact_json, redact_secrets
+from threads.redaction.text import redact_json, redact_secrets, text_stream
 
 __all__ = [
     "SecretInProviderOutputError",
@@ -29,5 +29,6 @@ __all__ = [
     "redact_json",
     "redact_secrets",
     "register",
+    "text_stream",
     "unchanged_since",
 ]

@@ -27,7 +27,7 @@ class Blinks(ScriptedModel):
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
         self.sends += 1
         if self.sends == 1:
-            yield Delta("partial")
+            yield Delta(0, "partial")
             raise StoreError("disk I/O error")
         async for chunk in super().send(request, context):
             yield chunk

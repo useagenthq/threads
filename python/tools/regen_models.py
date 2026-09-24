@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 from host_api_models import HEADER as HOST_HEADER
-from host_api_models import combined_schema, defined_names, keep_host_shapes
+from host_api_models import combined_schema, defined_names, keep_host_shapes, open_shapes
 from schema_normalize import Obj, as_obj, normalize
 
 PYTHON_DIR = Path(__file__).resolve().parent.parent
@@ -151,7 +151,7 @@ def generate_host_api(workdir: Path, events_source: str) -> str:
     schema: Obj = as_obj(json.loads(SCHEMA.read_text(encoding="utf-8")))
     combined.write_text(json.dumps(combined_schema(schema), indent=2), encoding="utf-8")
     raw = annotate_config(brand_ids(codegen(combined, workdir / "host.py", HOST_HEADER)))
-    source = add_exports(keep_host_shapes(raw, defined_names(events_source)))
+    source = add_exports(open_shapes(keep_host_shapes(raw, defined_names(events_source))))
     # The dropped event models leave some of the generator's imports unused.
     source = ruff(source, "check", "--fix", "--select=I,F401")
     return ruff(source, "format")

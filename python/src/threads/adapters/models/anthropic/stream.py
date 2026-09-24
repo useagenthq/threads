@@ -80,7 +80,7 @@ class Assembler:
             case BlockStart(index=index, content_block=block):
                 self.open[index] = _Block(block)
             case BlockDelta(index=index, delta=delta):
-                return self._delta(self.open[index], delta)
+                return self._delta(index, delta)
             case BlockStop(index=index):
                 self.parts.append(await self._finish(self.open.pop(index)))
             case MessageDelta(delta=delta, usage=usage):
@@ -96,13 +96,18 @@ class Assembler:
 
     def _delta(
         self,
-        block: _Block,
+        index: int,
         delta: TextDelta | JsonDelta | ThinkingDelta | SignatureDelta | CitationsDelta,
     ) -> Sequence[ModelChunk]:
+        block = self.open[index]
         match delta:
             case TextDelta(text=text):
                 block.text.append(text)
-                return (Delta(text),)
+                # Blocks close in order, so the text is the next part; with another block open
+                # its index isn't known, and it arrives whole at commit.
+                if len(self.open) > 1:
+                    return ()
+                return (Delta(sum(len(p) for p in self.parts), text),)
             case JsonDelta(partial_json=text) | ThinkingDelta(thinking=text):
                 block.text.append(text)
             case SignatureDelta(signature=signature):

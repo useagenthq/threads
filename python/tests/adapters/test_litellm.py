@@ -131,7 +131,7 @@ def test_chunks_through_litellm_map_to_deltas_parts_and_usage() -> None:
     script = Script([chat(*stream)])
     chunks = run(through_litellm(script), one_turn())
     args: dict[str, JsonValue] = {"a": 1}
-    assert chunks[0] == Delta("Hi")
+    assert chunks[0] == Delta(0, "Hi")
     assert chunks[1:3] == [
         PartChunk(TextPart(type="text", text="Hi")),
         PartChunk(ToolUsePart(type="tool_use", call_id=CallId("call_1"), name="ls", input=args)),
@@ -241,7 +241,7 @@ def test_a_consumer_that_stops_early_closes_the_stream() -> None:
         async with holding():
             sent = model.send(ModelRequest("b:e", one_turn()), FakeContext())
             stream = cast("AsyncGenerator[ModelChunk]", sent)
-            assert await anext(stream) == Delta("Hi")
+            assert await anext(stream) == Delta(0, "Hi")
             await stream.aclose()
             assert body.closed
 
@@ -283,5 +283,5 @@ def test_a_failing_close_never_replaces_the_stream_error() -> None:
 def test_a_failing_close_never_turns_a_completed_stream_into_an_error() -> None:
     done: list[JsonValue] = [{"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]}]
     chunks = run(closing(Closing(done)), one_turn())
-    assert chunks[0] == Delta("ok")
+    assert chunks[0] == Delta(0, "ok")
     assert isinstance(chunks[-1], Done)

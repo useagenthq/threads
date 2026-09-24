@@ -3,11 +3,17 @@
 from pydantic import JsonValue
 
 from threads.redaction.registry import holds
-from threads.redaction.scan import replacements, scan
+from threads.redaction.scan import Stream, replacements, scan
 
 
 def _same(text: str) -> str:
     return text
+
+
+def text_stream() -> Stream:
+    """Streamed text (model deltas) redacted as it arrives, a value split across chunks
+    included: `feed` each chunk, then `end` for the held tail."""
+    return Stream(_same)
 
 
 def redact_secrets(text: str) -> str:

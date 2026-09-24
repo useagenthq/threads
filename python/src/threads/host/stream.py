@@ -60,7 +60,7 @@ async def _follow(
             if event.seq > seen:
                 seen = event.seq
                 yield Message({"kind": "event", "event": to_json(event)}, event.seq)
-        end = logged(events, start, loop_parked(read.fold), thread) or _unlogged(
+        end = logged(events, start, loop_parked(read.fold), thread) or unlogged(
             runner, thread.branch
         )
         if end is not None:
@@ -69,7 +69,7 @@ async def _follow(
         await runner.wait(thread.branch)
 
 
-def _unlogged(runner: Runner, branch: BranchId) -> JsonValue | None:
+def unlogged(runner: Runner, branch: BranchId) -> JsonValue | None:
     """A run of this host that ended with nothing in the log to say so (refused before its
     first append): its returned result."""
     if runner.running(branch):

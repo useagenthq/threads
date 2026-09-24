@@ -8,7 +8,7 @@ persist-before-dispatch guarantee for model calls.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, assert_never
 
 from pydantic import JsonValue
 
@@ -18,8 +18,17 @@ from threads.loop import budget, guard
 from threads.loop.capabilities import mismatch
 from threads.loop.drafts import draft
 from threads.loop.history import open_cancel
-from threads.loop.model import Done, Model, ModelRequest, ModelResponse, PartChunk, Rejected
+from threads.loop.model import (
+    Delta,
+    Done,
+    Model,
+    ModelRequest,
+    ModelResponse,
+    PartChunk,
+    Rejected,
+)
 from threads.loop.runtime import Barred, Failed, Runtime, WriterContext, epoch_model, fence, lost
+from threads.loop.shown import Shown
 from threads.redaction import SecretInProviderOutputError
 from threads.reduce.handlers import to_json
 from threads.result import Err
@@ -150,7 +159,7 @@ async def _dispatch(
     if stale is not None:
         return stale
     req = ModelRequest(f"{rt.writer.branch_id}:{event.event_id}", body)
-    outcome = await _collect(rt, model, req)
+    outcome = await _collect(rt, model, req, Shown(event.event_id, rt.delta))
     if isinstance(outcome, Rejected) and outcome.reason == "stale_epoch":
         # The adapter's fence refused at its send point: this writer can't append anything.
         return Failed("branch_busy", "the lease moved before the send")
@@ -171,19 +180,22 @@ type Outcome = ModelResponse | Rejected | Leaked | None
 unknown."""
 
 
-async def _collect(rt: Runtime, model: Model, req: ModelRequest) -> Outcome:
+async def _collect(rt: Runtime, model: Model, req: ModelRequest, shown: Shown) -> Outcome:
     parts: list[OutputPart] = []
     try:
         async for chunk in model.send(req, WriterContext(rt)):
             match chunk:
+                case Delta(part=index, text=text):
+                    shown.feed(index, text)
                 case PartChunk(part=part):
                     parts.append(part)
                 case Done(stop_reason=stop, usage=usage):
+                    shown.end()
                     return ModelResponse(tuple(parts), stop, usage, None)
                 case Rejected():
                     return chunk
                 case _:
-                    pass
+                    assert_never(chunk)
     except (AssertionError, StoreError):
         # A broken invariant, or the store's outage: the request stays open, for recovery.
         raise

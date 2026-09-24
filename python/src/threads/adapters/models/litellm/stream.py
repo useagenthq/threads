@@ -102,7 +102,8 @@ class Assembler:
                 continue
             if delta.content:
                 self.text.append(delta.content)
-                out.append(Delta(delta.content))
+                # The text is always the response's first part.
+                out.append(Delta(0, delta.content))
             for call in delta.tool_calls or ():
                 self._call(call)
         return out

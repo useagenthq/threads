@@ -160,6 +160,8 @@ async def record_input(rt: Runtime, recorded: Recorded) -> Halt | None:
         data["budget"] = to_json(budget)
     if intake is not None and intake.delivery_event_id is not None:
         data["delivery_event_id"] = intake.delivery_event_id
+    if intake is not None and intake.client_message_id is not None:
+        data["client_message_id"] = intake.client_message_id
     actor: dict[str, JsonValue] = {"kind": "user", "principal": to_json(principal)}
     drafts = [
         *(() if intake is None else intake.before),

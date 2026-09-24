@@ -30,6 +30,11 @@ class Tables:
     async def receipt(self, key: receipts.Key) -> receipts.Receipt | None:
         return await self._worker.call(lambda c: receipts.find(c, key))
 
+    async def ui_messages(self, thread_id: ThreadId) -> dict[str, str]:
+        """The thread's `ui` receipts: each run's client message id by run id."""
+        tenant = self.tenant_id
+        return await self._worker.call(lambda c: receipts.ui_messages(c, tenant, thread_id))
+
     async def challenge(self, challenge_id: str) -> approvals.Challenge | None:
         return await self._worker.call(lambda c: approvals.find(c, self.tenant_id, challenge_id))
 

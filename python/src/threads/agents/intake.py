@@ -32,6 +32,8 @@ class Intake:
     before: tuple[Draft, ...] = ()
     """Appended with the user_input: the delivery it names."""
     delivery_event_id: str | None = None
+    client_message_id: str | None = None
+    """A web UI's id for the message (user_input.client_message_id)."""
     companion: Companion | None = None
     servers: tuple[ToolServer, ...] = ()
     """Host tool servers this run connects (a channel's send tool), pinned like MCP tools."""

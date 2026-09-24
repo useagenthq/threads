@@ -95,9 +95,9 @@ class ScriptedModel:
         if isinstance(entry, Rejected):
             yield entry
             return
-        for part in entry.content:
-            if isinstance(part, TextPart):
-                yield Delta(part.text)
+        for index, part in enumerate(entry.content):
+            if isinstance(part, TextPart) and part.text:
+                yield Delta(index, part.text)
             yield PartChunk(part)
         yield Done(entry.stop_reason, entry.usage)
 

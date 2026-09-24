@@ -22,6 +22,7 @@ _STATUS: Final = {
     "forbidden": 403,
     "not_found": 404,
     "invalid_request": 400,
+    "invalid_cursor": 400,
 }
 
 type Handler = Callable[[Request], Awaitable[Response]]

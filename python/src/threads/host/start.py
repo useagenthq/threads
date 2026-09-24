@@ -8,6 +8,8 @@ idempotency_key_principal_mismatch and never sees the receipt.
 """
 
 import asyncio
+from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Final
 
 from pydantic.experimental.missing_sentinel import MISSING
@@ -18,7 +20,7 @@ from threads.agents.intake import Intake
 from threads.agents.results import Failed
 from threads.agents.store import Store, now_ms, open_store
 from threads.host.runs import Bound, Runner
-from threads.log import BranchId, ParseError, Principal, ThreadId
+from threads.log import BranchId, Budget, InputPart, ParseError, Principal, ThreadId
 from threads.log.digest import canonical_sha256
 from threads.log.keys import principal_key
 from threads.reduce.handlers import to_json
@@ -56,19 +58,46 @@ async def start_run(
     if isinstance(target, Err):
         return target
     thread, bound = target.value
-    recorded: asyncio.Future[StoredEvent] = asyncio.get_running_loop().create_future()
-    intake = Intake("api", recorded, companion=receipts.insert(key, now_ms()))
     budget = None if request.budget is MISSING else request.budget
+    return await recorded_run(
+        runner, key, Launched(bound, request.input, thread, principal, budget), since
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class Launched:
+    """One run a host request starts: its binding, input, branch and sender."""
+
+    bound: Bound
+    input: str | Sequence[InputPart]
+    thread: Thread
+    principal: Principal
+    budget: Budget | None = None
+    client_message_id: str | None = None
+
+
+async def recorded_run(runner: Runner, key: receipts.Key, run: Launched, since: int) -> Started:
+    """Launches the run with its receipt bound to its user_input's append, and answers once the
+    input is durable, or why it recorded none."""
+    recorded: asyncio.Future[StoredEvent] = asyncio.get_running_loop().create_future()
+    receipt = receipts.insert(key, now_ms())
+    intake = Intake("api", recorded, companion=receipt, client_message_id=run.client_message_id)
     task = runner.launch(
-        bound, request.input, thread, principal, intake=intake, budget=budget, since=since
+        run.bound,
+        run.input,
+        run.thread,
+        run.principal,
+        intake=intake,
+        budget=run.budget,
+        since=since,
     )
     await asyncio.wait({recorded, task}, return_when=asyncio.FIRST_COMPLETED)
     if recorded.done():
-        run = recorded.result()
+        done = recorded.result()
         return Ok(
-            RunAccepted(thread_id=run.thread_id, branch_id=run.branch_id, run_id=run.event_id)
+            RunAccepted(thread_id=done.thread_id, branch_id=done.branch_id, run_id=done.event_id)
         )
-    return await _refused(store, key, task)
+    return await _refused(run.thread.store, key, task)
 
 
 async def _refused(store: Store, key: receipts.Key, task: "asyncio.Task[object]") -> Started:

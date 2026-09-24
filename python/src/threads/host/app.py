@@ -83,6 +83,11 @@ class Host:
             bind_telemetry(telemetry, store)
 
     @property
+    def runner(self) -> Runner:
+        """Internal: the host's run executor, for its own HTTP layer (the UI routes)."""
+        return self._runner
+
+    @property
     def channels(self) -> tuple[str, ...]:
         """The host(channels=...) keys; each is served at /channels/<key>/events."""
         return tuple(self._channels)
@@ -224,11 +229,14 @@ class Host:
         authority = await self._runner.authority(store, thread_id)
         return Ok(Thread(thread.id, thread.branch, store, sandbox=sandbox, authority=authority))
 
-    async def resume(self, thread: Thread) -> None:
+    async def resume(self, thread: Thread, *, wait: bool = False) -> None:
         """After a control: continue the thread if it can move on. A resume a stop overtook
-        starts nothing."""
+        starts nothing. With `wait`, until that run has stopped (a cancel closing the turn
+        before a new input)."""
         since = self._runner.generation
-        await self._runner.resume(thread.store, thread.id, thread.branch, since)
+        run = await self._runner.resume(thread.store, thread.id, thread.branch, since)
+        if wait and run is not None:
+            await self._runner.through(run)
 
     def challenge(
         self, channel: str, query: Mapping[str, str]

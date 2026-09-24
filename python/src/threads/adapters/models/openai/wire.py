@@ -43,6 +43,7 @@ class Response(Wire):
 
 class TextDelta(Wire):
     type: Literal["response.output_text.delta"]
+    content_index: int
     delta: str
 
 

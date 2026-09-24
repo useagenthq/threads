@@ -148,7 +148,7 @@ def test_text_streams_as_deltas_and_missing_usage_stays_unknown() -> None:
         END,
     ]
     chunks = run(Script([reply(*events)]), one_turn())
-    assert chunks[:3] == [Delta("a"), Delta("b"), PartChunk(TextPart(type="text", text="ab"))]
+    assert chunks[:3] == [Delta(0, "a"), Delta(0, "b"), PartChunk(TextPart(type="text", text="ab"))]
     unknown = Usage(
         input_tokens=4, output_tokens=None, cache_read_tokens=None, cache_write_tokens=None
     )
@@ -234,3 +234,22 @@ def test_the_client_uses_the_key_setup_resolved(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.delenv("ANTHROPIC_API_KEY")
     asyncio.run(collect(claude.send, one_turn(), FakeContext()))
     assert script.sent[0].headers["x-api-key"] == "sk-lane09-at-setup"
+
+
+def test_a_delta_names_its_committed_part_index() -> None:
+    events = [
+        begin({"input_tokens": 4}),
+        start(0, {"type": "thinking", "thinking": ""}),
+        delta(0, "thinking", "Plan."),
+        stop(0),
+        start(1, TEXT),
+        delta(1, "text", "Hi"),
+        stop(1),
+        finish("end_turn", {}),
+        END,
+    ]
+    chunks = run(Script([reply(*events)]), one_turn(), FakeContext())
+    parts = [c.part for c in chunks if isinstance(c, PartChunk)]
+    deltas = [c for c in chunks if isinstance(c, Delta)]
+    assert deltas == [Delta(1, "Hi")]
+    assert parts[1] == TextPart(type="text", text="Hi")
