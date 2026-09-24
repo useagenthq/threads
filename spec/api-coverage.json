@@ -784,11 +784,6 @@
       "tests/adapters/test_credentials.py::test_a_missing_key_fails_check_as_a_value_and_the_run_before_any_append[e2b]"
     ]
   },
-  "e2b!transport_fence_unsupported": {
-    "ts": [
-      "packages/e2b/test/e2b.test.ts > e2b transport > on a runtime whose SDK sends through undici (Node), e2b() is transport_fence_unsupported"
-    ]
-  },
   "e2b.allow_internet=default": {
     "ts": [
       "packages/e2b/test/e2b.test.ts > e2b declarations > defaults: template base, a one-hour lifetime and no internet"

@@ -30,10 +30,6 @@ e2b_sandbox = e2b(template="base", lifetime_ms=10 * 60_000)
 </Tab>
 </Tabs>
 
-<Callout type="warn">
-In TypeScript, `@threads/e2b` runs on **Bun** only. On Node, the E2B SDK sends requests through a client threads can't safely wrap, so `e2b()` throws `ConfigError` `transport_fence_unsupported` instead of running with weaker crash safety.
-</Callout>
-
 ## Options
 
 | TypeScript | Python | Default | What it does |

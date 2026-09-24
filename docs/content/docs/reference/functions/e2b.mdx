@@ -4,7 +4,7 @@ description: "A Sandbox on an E2B cloud VM."
 icon: "Plug"
 ---
 
-Pass it as agent(&#123;sandbox: e2b()&#125;). Each sandbox starts from a template with no environment and no internet; the API key authenticates the host's requests only. TypeScript: runs on Bun (on Node the E2B SDK sends through undici, which threads can't fence).
+Pass it as agent(&#123;sandbox: e2b()&#125;). Each sandbox starts from a template with no environment and no internet; the API key authenticates the host's requests only. TypeScript runs it on Bun and Node alike: it speaks E2B's API and each sandbox's envd directly, every request through the fenced fetch.
 
 Import from `@threads/e2b` (TypeScript) or `threads.e2b` (Python).
 
@@ -63,7 +63,7 @@ def e2b(
 </Field>
 
 <Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
-  TypeScript only. Seam: the fetch the SDK sends through (a proxy, a test server); the run's fence wraps it either way. Omitted: the process's fetch.
+  TypeScript only. Seam: the fetch every E2B request goes through (a proxy, a test server); the run's fence wraps it either way, and redirects are never followed. Omitted: the runtime's fetch.
 </Field>
 
 <Field name="name" type={"str"} default={"e2b"}>
@@ -74,4 +74,4 @@ def e2b(
 
 [`Sandbox`](/docs/reference/types/Sandbox)
 
-**Throws** `ConfigError` with one of these codes: `invalid_config`, `missing_secret`, `transport_fence_unsupported` (TypeScript only).
+**Throws** `ConfigError` with one of these codes: `invalid_config`, `missing_secret`.

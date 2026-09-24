@@ -197,7 +197,7 @@ Limits for listed model ids come from a catalog verified against each provider (
 import { e2b } from "@threads/e2b";
 import { daytona } from "@threads/daytona";
 
-sandbox: e2b({ template: "base" }),                          // E2B_API_KEY (runs on Bun)
+sandbox: e2b({ template: "base" }),                          // E2B_API_KEY
 sandbox: daytona(),                                          // DAYTONA_API_KEY
 // Modal: Python only for now (its JS SDK's transport can't be fenced yet)
 ```

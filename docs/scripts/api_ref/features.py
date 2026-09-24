@@ -77,7 +77,7 @@ AREAS: tuple[tuple[str, tuple[Row, ...]], ...] = (
     (
         "Sandboxes",
         (
-            ("E2B", "/docs/sandboxes/e2b", ("factory:e2b",), "TypeScript runs it on Bun."),
+            ("E2B", "/docs/sandboxes/e2b", ("factory:e2b",), ""),
             ("Daytona", "/docs/sandboxes/daytona", ("factory:daytona",), ""),
             ("Modal", "/docs/sandboxes/modal", ("factory:modal",), ""),
             ("Fake sandbox for tests", "/docs/evals/testing", ("fakeSandbox",), ""),
