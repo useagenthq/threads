@@ -6,7 +6,7 @@ that goes wrong after the attempt may have reached the provider is uncertainty: 
 the attempt abandoned as unknown.
 """
 
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -15,6 +15,7 @@ from pydantic import JsonValue
 from threads.log import AdapterRef, ArtifactRef, BranchId, ModelRef, OutputPart, ParseError, Usage
 from threads.log import Model as ModelLimits
 from threads.result import Err, Ok
+from threads.store.worker import StoreError
 
 type StopReason = Literal[
     "end_turn",
@@ -127,6 +128,18 @@ class LookupUnknown:
 
 
 type LookupResult[T] = Found[T] | NotFound | NotFoundNonfinal | LookupUnknown
+
+
+async def looked_up[T](pending: Awaitable[LookupResult[T]]) -> LookupResult[T]:
+    """An adapter's lookup, where raising answers unknown: recovery then settles or parks under
+    its own rules, and the run is never retried for a provider's error. A store error or a
+    broken invariant still raises."""
+    try:
+        return await pending
+    except (AssertionError, StoreError):
+        raise
+    except Exception as error:
+        return LookupUnknown(f"the lookup failed: {type(error).__name__}")
 
 
 class ModelContext(Protocol):

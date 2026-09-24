@@ -4,7 +4,6 @@ whose model or tool never answers and is never stopped; its lease is expired, as
 and a new host starts on the same store."""
 
 import asyncio
-import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
 from pydantic import BaseModel, JsonValue
@@ -13,7 +12,7 @@ from threads import RunContext, Store, agent, scripted_model, sqlite, tool
 from threads._generated.host_api_v1 import RunAccepted, StartRunRequest
 from threads.agents.results import Completed, Failed, RunError, RunResult
 from threads.agents.store import open_store, scoped
-from threads.host import Host, app, host
+from threads.host import Host, host, reopen
 from threads.host.app import recovered
 from threads.log import (
     BranchId,
@@ -36,6 +35,7 @@ from threads.loop.runtime import RunErrorCode
 from threads.loop.scripted import ScriptedModel
 from threads.reduce import Fold
 from threads.result import Ok
+from threads.store import StoreError
 from threads.thread.handle import Thread
 
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
@@ -360,7 +360,7 @@ def test_an_earlier_runs_late_failure_never_answers_for_the_run_after_it() -> No
 
 def test_only_a_lost_lease_or_a_store_error_is_retried() -> None:
     async def main() -> None:
-        gave_up = app._gave_up  # pyright: ignore[reportPrivateUsage] - the retry rule
+        gave_up = reopen._gave_up  # pyright: ignore[reportPrivateUsage] - the retry rule
         thread = Thread(ThreadId("t"), BranchId("b"), sqlite(":memory:"))
         row = ("acme", thread.id, thread.branch)
 
@@ -379,13 +379,12 @@ def test_only_a_lost_lease_or_a_store_error_is_retried() -> None:
         busy, down, done = (
             asyncio.ensure_future(ended(c)) for c in ("branch_busy", "model_unavailable", None)
         )
-        locked = asyncio.ensure_future(raising(sqlite3.OperationalError("database is locked")))
+        locked = asyncio.ensure_future(raising(StoreError("database is locked")))
         bug = asyncio.ensure_future(raising(ValueError("a bug")))
         live = asyncio.ensure_future(pending())
         await asyncio.wait({busy, down, done, locked, bug})
         tasks = (busy, down, done, locked, bug, live)
-        noted: set[app.OpenRun] = set()
-        assert [gave_up(row, t, noted) for t in tasks] == [False, True, False, False, True, False]
+        assert [gave_up(row, t) for t in tasks] == [False, True, False, False, True, False]
         live.cancel()
 
     asyncio.run(main())

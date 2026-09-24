@@ -48,6 +48,7 @@ export {
   type LogStore,
   type SqliteDriver,
   type SqlValue,
+  StoreError,
   type Writer,
 } from "./store";
 export { uuidv7 } from "./store/encode";

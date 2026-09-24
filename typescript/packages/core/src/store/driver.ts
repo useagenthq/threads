@@ -1,6 +1,14 @@
 export type SqlValue = string | number | Uint8Array | null;
 
 /**
+ * A failure of the store itself (SQLite, the disk), thrown by the driver where it meets SQLite:
+ * a later try may not meet it again, unlike a bug or an adapter's error.
+ */
+export class StoreError extends Error {
+  override readonly name = "StoreError";
+}
+
+/**
  * The few SQLite calls the store makes. Core depends on no SQLite binding: `bun-sqlite.ts`
  * implements this with `bun:sqlite`, and a `node:sqlite` driver can be added beside it.
  */

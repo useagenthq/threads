@@ -5,7 +5,6 @@ ending the host's runs."""
 
 import asyncio
 import logging
-import sqlite3
 
 import pytest
 from host.test_api_recovery import (
@@ -25,10 +24,10 @@ from host.test_api_recovery import (
 from threads import Store, agent, sqlite
 from threads.agents import run as run_module
 from threads.agents.store import open_store
-from threads.host import app, host
+from threads.host import host, reopen
 from threads.host.app import recovered
 from threads.log import ModelRequestEvent, TurnCompletedEvent
-from threads.store import SqliteStore
+from threads.store import SqliteStore, StoreError
 from threads.store.tables import Tables
 
 LOGGER = "threads"
@@ -61,6 +60,7 @@ def test_a_corrupt_receipt_row_is_skipped_and_the_valid_ones_recover(
         skipped = [r for r in caplog.records if "run_receipts" in r.getMessage()]
         assert len(skipped) == 1
         assert bad.branch_id in skipped[0].getMessage()
+        assert "bad field thread_id" in skipped[0].getMessage()
         late.held.set()
         await first.stop()
 
@@ -70,7 +70,7 @@ def test_a_corrupt_receipt_row_is_skipped_and_the_valid_ones_recover(
 def test_a_run_that_fails_another_way_is_not_retried_and_stays_open(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    monkeypatch.setattr(app, "REOPEN_S", 0.05)
+    monkeypatch.setattr(reopen, "REOPEN_S", 0.05)
 
     async def main() -> None:
         store = sqlite(":memory:")
@@ -120,7 +120,7 @@ def test_stop_ends_the_runs_after_a_store_error_in_the_first_pass(
 def test_a_store_error_inside_a_resumed_run_is_retried_and_the_turn_completes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(app, "REOPEN_S", 0.05)
+    monkeypatch.setattr(reopen, "REOPEN_S", 0.05)
 
     async def main() -> None:
         store = sqlite(":memory:")
@@ -140,7 +140,7 @@ def test_a_store_error_inside_a_resumed_run_is_retried_and_the_turn_completes(
                 if blinked.is_set():
                     return await opened(given)
                 blinked.set()
-                raise sqlite3.OperationalError("database is locked")
+                raise StoreError("database is locked")
 
             monkeypatch.setattr(run_module, "open_store", flaky)
             await asyncio.wait_for(blinked.wait(), 5)

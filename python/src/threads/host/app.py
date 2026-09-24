@@ -9,8 +9,6 @@ entering calls `ready` and leaving calls `stop`. Mount `asgi` in any ASGI server
 
 import asyncio
 import contextlib
-import logging
-import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from types import TracebackType
 from typing import TYPE_CHECKING, Self
@@ -19,11 +17,11 @@ from weakref import WeakKeyDictionary
 from threads._generated.host_api_v1 import RunAccepted, StartRunRequest
 from threads.agents.agent import Agent
 from threads.agents.config import ConfigError
-from threads.agents.results import Failed
 from threads.agents.store import Store, open_store
 from threads.host import start, stream
 from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
 from threads.host.intake import ChannelIntake
+from threads.host.reopen import Reopening
 from threads.host.runs import Runner, RunTask
 from threads.host.schedules import Schedule, Scheduler
 from threads.host.stream import Message
@@ -37,17 +35,6 @@ from threads.thread.handle import Thread, open_thread
 if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.types import ASGIApp
-
-type OpenRun = tuple[str, ThreadId, BranchId]
-"""(tenant, thread, branch) of an API run a crash may have left open."""
-
-_log = logging.getLogger(__name__)
-
-STORE_ERRORS = (sqlite3.Error, OSError)
-"""Errors a later look may not meet again: the store's and the system's."""
-
-REOPEN_S = 1.0
-"""How often a host looks again at an API run it could not resume yet."""
 
 type Authenticate = Callable[["Request"], Awaitable[Principal | None]]
 """Maps an HTTP API request to its principal, or None for 401."""
@@ -126,7 +113,7 @@ class Host:
             self._ticking = asyncio.get_running_loop().create_task(self._tick())
 
     async def _tick(self) -> None:
-        still_open: dict[OpenRun, RunTask] = {}
+        reopening = Reopening(self._runner)
         try:
             sq = await open_store(self._runner.store(LOCAL_TENANT))
             waiting = await sq.tables.unconsumed_threads()
@@ -140,46 +127,10 @@ class Host:
                     if run is not None:
                         _RECOVERY[self][1].append(run)
             # ponytail: API runs are found at start only; a live peer's crash waits for a restart.
-            for row in await sq.tables.unfinished_runs():
-                run = await self._reopen(row)
-                if run is not None:
-                    _RECOVERY[self][1].append(run)
-                    still_open[row] = run
+            _RECOVERY[self][1].extend(await reopening.first(await sq.tables.unfinished_runs()))
         finally:
             _RECOVERY[self][0].set()
-        await asyncio.gather(self._scheduler.run(), self._reopening(still_open))
-
-    async def _reopen(self, row: OpenRun) -> RunTask | None:
-        tenant, thread, branch = row
-        return await self._runner.reopen(self._runner.store(tenant), thread, branch)
-
-    async def _reopening(self, still_open: dict[OpenRun, RunTask]) -> None:
-        """Looks at each API run left open again every second until it closes or parks: a
-        crashed host's lease refuses a resume until it runs out, and a store error may pass.
-        A run that failed any other way is logged and left for a control or the next start."""
-        noted: set[OpenRun] = set()
-        while still_open:
-            await asyncio.sleep(REOPEN_S)
-            for row, run in tuple(still_open.items()):
-                again = await self._look(row, run, noted)
-                if again is None:
-                    del still_open[row]
-                else:
-                    still_open[row] = again
-
-    async def _look(self, row: OpenRun, run: RunTask, noted: set[OpenRun]) -> RunTask | None:
-        """The run carrying the row after one more look, or None to stop looking."""
-        if _gave_up(row, run, noted):
-            return None
-        try:
-            return await self._reopen(row)
-        except STORE_ERRORS as error:
-            _note(row, error, noted)
-            return run
-        except Exception:
-            # A bug, not a passing fault: said with its traceback, once.
-            _log.exception("threads host: API run on %s not retried", row[2])
-            return None
+        await asyncio.gather(self._scheduler.run(), reopening.run())
 
     async def stop(self) -> None:
         """Aborts first: every run and follow-on resume is cancelled and none starts, so no
@@ -283,40 +234,8 @@ async def recovered(served: Host) -> None:
     to redeliver replies or reopen API runs have ended, with each follow-on resume one of them
     queued, so a test asserts what recovery did or didn't do without sleeping. It covers that
     first pass only: an API run another lease refused then is looked at again each second
-    (`_reopening`), which this doesn't wait for. Internal: not exported."""
+    (`Reopening.run`), which this doesn't wait for. Internal: not exported."""
     done, runs, runner = _RECOVERY[served]
     await done.wait()
     for run in runs:
         await runner.through(run)
-
-
-def _gave_up(row: OpenRun, run: RunTask, noted: set[OpenRun]) -> bool:
-    """The last run ended in a way another look won't change: anything but a lost lease or a
-    store error."""
-    if not run.done() or run.cancelled():
-        return False
-    error = run.exception()
-    if isinstance(error, STORE_ERRORS):
-        _note(row, error, noted)
-        return False
-    result = None if error is not None else run.result()
-    if isinstance(result, Failed) and result.error.code == "branch_busy":
-        return False
-    if error is not None:
-        why = f"{type(error).__name__}: {error}"
-    elif isinstance(result, Failed):
-        why = f"{result.error.code}: {result.error.message}"
-    else:
-        return False
-    # The turn stays open in the log, for a control, a new input or the next start.
-    _log.warning("threads host: API run on %s not retried (%s)", row[2], why)
-    return True
-
-
-def _note(row: OpenRun, error: BaseException, noted: set[OpenRun]) -> None:
-    """A store error on a look is said once per run, not on every pass."""
-    if row not in noted:
-        noted.add(row)
-        _log.warning(
-            "threads host: API run on %s hit a store error; looking again (%s)", row[2], error
-        )

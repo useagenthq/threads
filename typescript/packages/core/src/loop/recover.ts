@@ -1,6 +1,8 @@
 import { assertNever } from "../assert-never";
 import { type EventOf, effectKey } from "../fold/state";
+import { ok } from "../result";
 import { draft, RECOVERY } from "./drafts";
+import { lookedUp } from "./lookup";
 import { settleRequested } from "./manual";
 import type { Session } from "./session";
 import { resolvedResult, settleUnknown } from "./settle";
@@ -72,10 +74,14 @@ async function recoverRequest(
   const model = s.fold.model && s.config.models(s.fold.model);
   const fenced = s.fence();
   if (fenced !== undefined) return fenced;
+  const lookup = model?.info.lookup === "none" ? undefined : model?.lookup;
   const looked =
-    model?.lookup === undefined || model.info.lookup === "none"
+    lookup === undefined
       ? undefined
-      : await model.lookup(`${s.branchId}:${requestId}`, s.modelContext());
+      : await lookedUp(
+          () => lookup(`${s.branchId}:${requestId}`, s.modelContext()),
+          (reason) => ok({ status: "unknown", reason }),
+        );
   // The fence refused at the lookup's real send point: this writer lost its lease.
   if (looked?.ok === false)
     return { code: "branch_busy", message: looked.error.message };

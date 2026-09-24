@@ -11,6 +11,7 @@ import {
   principalKey,
   type RunResult,
   type Store,
+  StoreError,
   type ThreadId,
   tenantStore,
 } from "@threads/core/host";
@@ -47,8 +48,10 @@ export class HostContext {
   readonly #thrown = new Map<BranchId, unknown>();
   /** Branches recovery ran that failed another way than losing the lease: not run again. */
   readonly #notRetried = new Set<BranchId>();
-  /** Branches whose recovery run hit a store error, said once. */
-  readonly #noted = new Set<BranchId>();
+  /** Branches whose recovery runs meet a store error in a row: when to look again. */
+  readonly #streaks = new Map<BranchId, Streak>();
+  /** Branches a recovery run is on now: its store error is said by the streak, not per run. */
+  readonly #rerunning = new Set<BranchId>();
   readonly #stop = new AbortController();
   /** Aborted once the host stops: every run and every send not yet settled gives up on it. */
   readonly stopping: AbortSignal = this.#stop.signal;
@@ -138,7 +141,10 @@ export class HostContext {
         await this.#reply(tenant, thread);
         return json;
       } catch (error) {
-        console.error(`threads host: run on ${thread.branch} failed`, error);
+        if (
+          !(error instanceof StoreError && this.#rerunning.has(thread.branch))
+        )
+          console.error(`threads host: run on ${thread.branch} failed`, error);
         this.#thrown.set(thread.branch, error);
         return undefined;
       }
@@ -184,7 +190,19 @@ export class HostContext {
     tenant: string,
     thread: { readonly id: ThreadId; readonly branch: BranchId },
   ): Promise<"done" | "busy"> {
+    const verdict = await this.#recover(tenant, thread);
+    // A branch the watch drops leaves no streak behind.
+    if (verdict === "done") this.#streaks.delete(thread.branch);
+    return verdict;
+  }
+
+  async #recover(
+    tenant: string,
+    thread: { readonly id: ThreadId; readonly branch: BranchId },
+  ): Promise<"done" | "busy"> {
     if (this.#pending.has(thread.branch)) return "busy";
+    const streak = this.#streaks.get(thread.branch);
+    if (streak !== undefined && Date.now() < streak.atMs) return "busy";
     // Said once when it failed; the watch drops it now.
     if (this.#notRetried.delete(thread.branch)) return "done";
     const { log } = await this.open(tenant);
@@ -209,9 +227,10 @@ export class HostContext {
   }
 
   /**
-   * A recovery run. A lost lease or a store error is worth another try on a later tick: any
-   * other failure is logged with its reason and not retried, and the turn stays open in the log
-   * for a control, a new input or the next start.
+   * A recovery run. A lost lease is worth another try on the next tick, and a store error one
+   * after a wait that doubles while it lasts (said once per streak). Any other failure is logged
+   * with its reason and not retried, and the turn stays open in the log for a control, a new
+   * input or the next start. A provider's lookup failing never gets here: the loop settles it.
    */
   async #rerun(
     hosted: HostedAgent,
@@ -219,17 +238,15 @@ export class HostContext {
     who: Principal,
     thread: { readonly id: ThreadId; readonly branch: BranchId },
   ): Promise<void> {
+    this.#rerunning.add(thread.branch);
     const result = await this.resume(hosted, tenant, who, thread);
+    this.#rerunning.delete(thread.branch);
     const thrown = this.#thrown.get(thread.branch);
-    if (result === undefined && storeError(thrown)) {
-      if (!this.#noted.has(thread.branch))
-        console.error(
-          `threads host: run on ${thread.branch} hit a store error; looking again`,
-          thrown,
-        );
-      this.#noted.add(thread.branch);
+    if (result === undefined && thrown instanceof StoreError) {
+      this.#failed(thread.branch, thrown);
       return;
     }
+    this.#streaks.delete(thread.branch);
     const why =
       result === undefined
         ? thrown
@@ -241,6 +258,21 @@ export class HostContext {
     console.error(
       `threads host: run on ${thread.branch} not retried (${why instanceof Error ? why.message : String(why)})`,
     );
+  }
+
+  /** One more store error in the branch's streak: the next look waits twice as long. */
+  #failed(branch: BranchId, error: StoreError): void {
+    const streak = this.#streaks.get(branch);
+    if (streak === undefined)
+      console.error(
+        `threads host: run on ${branch} hit a store error; looking again with backoff`,
+        error,
+      );
+    const waitMs =
+      streak === undefined
+        ? STORE_RETRY_MS
+        : Math.min(streak.waitMs * 2, STORE_BACKOFF_MAX_MS);
+    this.#streaks.set(branch, { waitMs, atMs: Date.now() + waitMs });
   }
 
   async #reply(
@@ -312,15 +344,11 @@ export class HostContext {
   }
 }
 
-/** The store's and the system's errors (SQLITE_BUSY, EIO): a later look may not meet them again. */
-function storeError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    "code" in error &&
-    typeof error.code === "string" &&
-    /^(SQLITE_|E[A-Z]+$)/.test(error.code)
-  );
-}
+/** A store error's first wait before the next look, doubling while it lasts up to the max. */
+const STORE_RETRY_MS = 1_000;
+const STORE_BACKOFF_MAX_MS = 60_000;
+
+type Streak = { readonly waitMs: number; readonly atMs: number };
 
 /** A pin never changes in place: continuing a thread needs the config it started with. */
 export async function samePin(

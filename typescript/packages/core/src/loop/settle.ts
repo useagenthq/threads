@@ -3,6 +3,7 @@ import { type EventOf, effectKey } from "../fold/state";
 import type { ArtifactRef } from "../log";
 import type { EventDraft } from "../store";
 import { draft } from "./drafts";
+import { lookedUp } from "./lookup";
 import type { Session } from "./session";
 import { recordOutput } from "./spill";
 import { toolSpec } from "./turn";
@@ -101,9 +102,10 @@ async function reconcile(
   if (contract === undefined) return park(s, callId, actor);
   const fenced = s.fence();
   if (fenced !== undefined) return fenced;
-  const answer = await contract.lookup(
-    effectKey(s.fold, callId, s.branchId),
-    call.data.input,
+  const answer = await lookedUp(
+    () =>
+      contract.lookup(effectKey(s.fold, callId, s.branchId), call.data.input),
+    (reason) => ({ status: "unknown" as const, reason }),
   );
   if (answer.status === "found") {
     const shown = recordOutput(s, callId, answer.value);

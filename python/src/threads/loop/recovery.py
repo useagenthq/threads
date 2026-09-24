@@ -20,7 +20,7 @@ from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
 from threads.loop.history import CallState, call_state, open_cancel
 from threads.loop.manual import settle_requested
-from threads.loop.model import Found, NotFound
+from threads.loop.model import Found, NotFound, looked_up
 from threads.loop.runtime import Halt, Runtime, WriterContext, epoch_model, fence, lost
 from threads.result import Err
 
@@ -77,7 +77,9 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
         stale = await fence(rt)
         if stale is not None:
             return stale
-        match await model.lookup(f"{rt.writer.branch_id}:{request_id}", WriterContext(rt)):
+        match await looked_up(
+            model.lookup(f"{rt.writer.branch_id}:{request_id}", WriterContext(rt))
+        ):
             case Found(value=response) if response.provider_request_id is not None:
                 # A found response without the provider's id can't be recorded: it stays unknown.
                 found = response_drafts(rt, request_id, response, response.provider_request_id)
