@@ -146,18 +146,7 @@ function pinned(
     within === undefined ? options : { ...options, sandbox: undefined };
   const o = { ...base, context: { ...base.context, defer_tools: deferTools } };
   const user = [...o.tools, ...extensionTools(o.extensions, o.mcp)];
-  // Only the tools this thread pins are deferred: a child's within its parent's, a dynamic
-  // member's among its starter's choice.
-  const picked =
-    o.dynamic === undefined ? undefined : new Set(o.dynamic.define.tools);
-  const deferred = deferredNames(
-    user.filter(
-      (t) =>
-        (within === undefined || within.has(t.name)) &&
-        (picked === undefined || picked.has(t.name)),
-    ),
-    deferTools,
-  );
+  const deferred = deferredNames(ownTools(user, within, o.dynamic), deferTools);
   const artifacts: Uint8Array[] = [];
   const pinnedSpec = (t: {
     readonly name: string;
@@ -240,6 +229,24 @@ function pinned(
   );
   if (!text.ok) throw new ConfigError("invalid_config", text.error.message);
   return { specs, cfg, config: text.value, artifacts };
+}
+
+/**
+ * The user tools this thread pins, the only ones it can defer: a child's within its parent's, a
+ * dynamic member's among its starter's choice.
+ */
+function ownTools<T extends { readonly name: string }>(
+  user: readonly T[],
+  within: ReadonlySet<string> | undefined,
+  dynamic: DynamicPin | undefined,
+): readonly T[] {
+  const picked =
+    dynamic === undefined ? undefined : new Set(dynamic.define.tools);
+  return user.filter(
+    (t) =>
+      (within === undefined || within.has(t.name)) &&
+      (picked === undefined || picked.has(t.name)),
+  );
 }
 
 /**
