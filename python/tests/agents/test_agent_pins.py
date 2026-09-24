@@ -194,10 +194,12 @@ def _build(d: Obj) -> Agent[None, object]:
 )
 def test_the_agent_pins_the_vector(case: Obj) -> None:
     definition = _member(_OBJ.validate_python(case["agent"])).definition
-    if case["team_member"] is not True:
+    if "member" not in case:
         started, _ = definition.pin()
         assert started == case["thread_started"]
         return
+    # The lead's team member, as the lead's definition holds it (with the lead's defer_tools).
+    definition = next(m for m in definition.team or () if m.name == case["member"])
     if "dynamic" in case:
         choice = _OBJ.validate_python(case["dynamic"])
         define = MemberDefine.model_validate(choice["define"])

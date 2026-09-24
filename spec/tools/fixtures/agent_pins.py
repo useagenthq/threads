@@ -207,6 +207,16 @@ def _hashed(agent: Obj) -> Obj:
     return out
 
 
+def _member(lead: Obj, name: str) -> Obj:
+    """A member of the lead's team; without a defer_tools of its own, it pins the lead's."""
+    found = next(obj(m) for m in arr(lead["team"]) if obj(m)["name"] == name)
+    own = obj(found.get("context", {}))
+    if "defer_tools" in own:
+        return found
+    inherited = obj(lead.get("context", {})).get("defer_tools", "auto")
+    return {**found, "context": {**own, "defer_tools": inherited}}
+
+
 def _pin(agent: Obj, member: bool, choice: Obj | None) -> Obj:
     """thread_started's data, as agent() pins it (as a team member's with `member`; as a dynamic
     member's with its starter's `choice`: the chosen model and tools, the written block last)."""
@@ -238,14 +248,20 @@ def _pin(agent: Obj, member: bool, choice: Obj | None) -> Obj:
     return {**data, "config_hash": sha(canonical({**data, **hashed}))}
 
 
+def _started(agent: Obj, member: str | None, choice: Obj | None) -> Obj:
+    return (
+        _pin(agent, False, None) if member is None else _pin(_member(agent, member), True, choice)
+    )
+
+
 def _vector() -> str:
     rows: list[JsonValue] = [
         {
             "name": name,
             "agent": agent,
-            "team_member": member,
+            **({} if member is None else {"member": member}),
             **({} if choice is None else {"dynamic": choice}),
-            "thread_started": _pin(agent, member, choice),
+            "thread_started": _started(agent, member, choice),
         }
         for name, agent, member, choice in cases()
     ]
@@ -258,7 +274,8 @@ def _vector() -> str:
             "fake sandbox; `memory_write` gives local memory; extension hooks and observers are "
             "no-ops; an agent with `models` is a dynamic agent (its keys in order, the first the "
             "default), pinned as the member `dynamic` defines when given. A new thread's "
-            "thread_started data (a team member's pin, with `team_member`) "
+            "thread_started data (with `member`, that agent of the lead's team pinned as a "
+            "member, which pins the lead's resolved defer_tools unless it sets its own) "
             "must equal `thread_started`, config_hash included; a team lead's `team` ids are "
             "fresh per thread and left out."
         ),

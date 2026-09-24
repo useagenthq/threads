@@ -1,7 +1,7 @@
 # pyright: strict
 """The agent definitions of the agent pin vector (agent_pins.py): one per feature an agent can
-pin without an app schema. The flag pins the agent as a team member, and a dynamic agent's
-member with its starter's choice."""
+pin without an app schema. A member name pins that agent of the lead's team as a member, a
+dynamic one as the member its starter's choice defines."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from .jcs import Obj
 
 
-def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
+def cases() -> list[tuple[str, Obj, str | None, Obj | None]]:
     brief = {"instructions": "Be brief."}
     researcher: Obj = {"name": "researcher", "instructions": "Research."}
     p1: Obj = {"input": 3000, "output": 15000}
@@ -25,7 +25,7 @@ def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
         ],
     }
     return [
-        ("bare-agent", {"name": "bare", **brief}, False, None),
+        ("bare-agent", {"name": "bare", **brief}, None, None),
         (
             "partial-settings",
             {
@@ -35,7 +35,7 @@ def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
                 "retry": {"max_retries": 3},
                 "context": {"reserve_tokens": 10_000},
             },
-            False,
+            None,
             None,
         ),
         (
@@ -47,11 +47,27 @@ def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
                     {"name": "reviewer", "instructions": "Review.", "retry": {"max_retries": 1}}
                 ],
             },
-            False,
+            None,
             None,
         ),
-        ("team-lead", {"name": "lead", "instructions": "Lead.", "team": [researcher]}, False, None),
-        ("team-member", researcher, True, None),
+        ("team-lead", {"name": "lead", "instructions": "Lead.", "team": [researcher]}, None, None),
+        (
+            "team-member-inherits-defer-tools",
+            {
+                "name": "lead",
+                "instructions": "Lead.",
+                "team": [researcher],
+                "context": {"defer_tools": "never"},
+            },
+            "researcher",
+            None,
+        ),
+        (
+            "defer-tools",
+            {"name": "deferring", **brief, "context": {"defer_tools": "always"}},
+            None,
+            None,
+        ),
         (
             "extensions",
             {
@@ -67,10 +83,10 @@ def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
                     {"name": "timed", "hook_timeout_ms": 7000},
                 ],
             },
-            False,
+            None,
             None,
         ),
-        ("sandbox", {"name": "coder", **brief, "sandbox": "fake"}, False, None),
+        ("sandbox", {"name": "coder", **brief, "sandbox": "fake"}, None, None),
         (
             "priced-fallback-and-budget",
             {
@@ -81,7 +97,7 @@ def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
                 "budget": {"max_cost_nanos": 1_000_000_000},
                 "on_unknown_usage": "stop",
             },
-            False,
+            None,
             None,
         ),
         (
@@ -92,7 +108,7 @@ def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
                 "model": {"name": "scripted-1", "cache_ttl_ms": 3_600_000},
                 "fallback": [{"name": "scripted-small", "cache_ttl_ms": 3_600_000}],
             },
-            False,
+            None,
             None,
         ),
         (
@@ -104,7 +120,7 @@ def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
                 "fallback": [{"name": "scripted-small", "cache_ttl_ms": 300_000}],
                 "context": {"cache_ttl_ms": 600_000},
             },
-            False,
+            None,
             None,
         ),
         (
@@ -115,10 +131,10 @@ def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
                 "handoffs": [{"name": "billing", "instructions": "Bill."}],
                 "output_styles": {"terse": "Be terse.", "warm": "Be warm."},
             },
-            False,
+            None,
             None,
         ),
-        ("memory", {"name": "remembers", **brief, "memory_write": "allow"}, False, None),
+        ("memory", {"name": "remembers", **brief, "memory_write": "allow"}, None, None),
         (
             "skills",
             {
@@ -128,19 +144,24 @@ def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
                     {"name": "deploy", "description": "Ship it.", "body": "Run the deploy."}
                 ],
             },
-            False,
+            None,
             None,
         ),
         (
             "dynamic-template-lead",
             {"name": "lead", "instructions": "Lead.", "team": [analyst]},
-            False,
+            None,
             None,
         ),
         (
             "dynamic-member",
-            analyst,
-            True,
+            {
+                "name": "lead",
+                "instructions": "Lead.",
+                "team": [analyst],
+                "context": {"defer_tools": "always"},
+            },
+            "analyst",
             {
                 "define": {
                     "instructions": "Find the flaky test.",
@@ -152,8 +173,8 @@ def cases() -> list[tuple[str, Obj, bool, Obj | None]]:
         ),
         (
             "dynamic-member-defaults",
-            analyst,
-            True,
+            {"name": "lead", "instructions": "Lead.", "team": [analyst]},
+            "analyst",
             {"define": {"tools": ["bash"], "model": "fast"}, "starter": "operator"},
         ),
     ]

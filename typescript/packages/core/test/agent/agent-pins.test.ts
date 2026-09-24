@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { type Agent, agent } from "../../src/agent/agent";
+import type { DeferTools } from "../../src/agent/defer";
 import { type Extension, extension } from "../../src/agent/extension";
 import { hostRunner, memberEntry } from "../../src/agent/registry";
 import { dynamicAgent } from "../../src/agent/team/dynamic";
@@ -92,7 +93,7 @@ const Vector = z.strictObject({
     z.strictObject({
       name: z.string(),
       agent: Def,
-      team_member: z.boolean(),
+      member: z.string().optional(),
       dynamic: z
         .strictObject({ define: MemberDefine, starter: z.string() })
         .optional(),
@@ -164,6 +165,9 @@ function template(d: Def): DynamicAgent<never, unknown> {
   });
 }
 
+/** The agents built for a lead's team, by name: a member case pins one of them. */
+const members = new Map<string, object>();
+
 /** The vector's agent. */
 function build(d: Def): Agent<never, unknown> {
   const common = {
@@ -195,9 +199,11 @@ function build(d: Def): Agent<never, unknown> {
     ? agent(common)
     : agent({
         ...common,
-        team: d.team.map((m) =>
-          m.models === undefined ? build(m) : template(m),
-        ),
+        team: d.team.map((m) => {
+          const built = m.models === undefined ? build(m) : template(m);
+          members.set(m.name, built);
+          return built;
+        }),
       });
 }
 
@@ -211,12 +217,16 @@ const HASHED_ONLY = [
   "dynamic",
 ];
 
-/** A team member's thread_started: its canonical config less the hashed-only fields. */
+/**
+ * A team member's thread_started: its canonical config less the hashed-only fields. It inherits
+ * `deferTools`, its lead's resolved defer_tools, unless it sets its own.
+ */
 async function memberPin(
   a: object,
+  deferTools: DeferTools,
   choice: Vector["cases"][number]["dynamic"],
 ): Promise<unknown> {
-  const pinned = await memberEntry(a)?.pinned(choice);
+  const pinned = await memberEntry(a)?.pinned(deferTools, choice);
   if (pinned === undefined) throw new Error("no member pin");
   const config = z
     .record(z.string(), z.json())
@@ -230,16 +240,17 @@ async function memberPin(
 describe("agent pins", () => {
   for (const c of vector.cases)
     test(c.name, async () => {
-      const a =
-        c.agent.models === undefined ? build(c.agent) : template(c.agent);
-      if (c.team_member) {
-        expect(z.json().parse(await memberPin(a, c.dynamic))).toEqual(
-          c.thread_started,
-        );
+      const a = build(c.agent);
+      const started = (await hostRunner(a)?.started())?.event;
+      if (started?.type !== "thread_started") throw new Error("no pin");
+      if (c.member !== undefined) {
+        const member = members.get(c.member);
+        if (member === undefined) throw new Error(`no member ${c.member}`);
+        const lead = started.data.policy?.context?.defer_tools ?? "auto";
+        const pin = await memberPin(member, lead, c.dynamic);
+        expect(z.json().parse(pin)).toEqual(c.thread_started);
         return;
       }
-      const started = await hostRunner(a)?.started();
-      if (started?.type !== "thread_started") throw new Error("no pin");
       // A lead's team ids are fresh per thread.
       const { team: _team, ...data } = started.data;
       expect(z.json().parse(data)).toEqual(c.thread_started);
