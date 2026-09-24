@@ -1,0 +1,339 @@
+{
+  "outcome": "ok",
+  "states": {
+    "lead": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_responses": 0
+      },
+      "transcript": [],
+      "status": "idle",
+      "head": {
+        "seq": 1,
+        "hash": "bab38183af2583c89c979575907e264487cdfbae9f40e15de8ef2d19487faf0b"
+      }
+    },
+    "researcher": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+      "epoch": 1,
+      "turns_completed": 1,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 90,
+        "output_tokens": 10,
+        "unknown_responses": 0
+      },
+      "transcript": [
+        {
+          "role": "user",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-000000000004"
+        }
+      ],
+      "status": "idle",
+      "head": {
+        "seq": 7,
+        "hash": "84ce7df7da98c08e2b4949fe1fdb698df6acc967075980423a2f68a03bc49194"
+      }
+    },
+    "team": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_responses": 0
+      },
+      "transcript": [],
+      "status": "idle",
+      "head": {
+        "seq": 11,
+        "hash": "d4ddea9e9999b272a738eb098703d760aa16380ad22168be2bfcbb8fa3650229"
+      }
+    }
+  },
+  "index": {
+    "teams": [
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "tenant_id": "acme",
+        "lead_thread_id": "0192a000-0000-7000-8000-0000000000b1",
+        "team_log_branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "closed_at": null
+      }
+    ],
+    "team_members": [
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "name": "lead",
+        "generation": 1,
+        "role": "lead",
+        "agent": "lead",
+        "config_hash": "bfe90dd30a179b4b086c27c247f828b44d52b196df761f185dd234ce54a10ee1",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "provenance": null,
+        "state": "running",
+        "result": null,
+        "updated_seq": 1
+      },
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "name": "researcher-1",
+        "generation": 1,
+        "role": "member",
+        "agent": "researcher",
+        "config_hash": "66f5255887dece1271d2dfa9bedb5c3e4faf71de4d33464555b256ba93ffc446",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
+        },
+        "state": "idle",
+        "result": {
+          "member": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "status": "completed",
+          "output": {
+            "text": "Battery prices fell."
+          }
+        },
+        "updated_seq": 6
+      }
+    ],
+    "mail": [
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000007",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "member_settled",
+        "to_name": null,
+        "to_generation": null,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b3:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000007",
+          "kind": "member_settled",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "to": "team_log",
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+            "event_id": "0192e001-0000-7000-8000-000000000006"
+          },
+          "monitor_id": "0192b000-0000-7000-8000-0000000000b3:0192e001-0000-7000-8000-000000000004:task",
+          "result": {
+            "member": {
+              "tenant": "acme",
+              "team": "0192c000-0000-7000-8000-000000000001",
+              "name": "researcher-1",
+              "generation": 1
+            },
+            "status": "completed",
+            "output": {
+              "text": "Battery prices fell."
+            }
+          }
+        },
+        "created_at": 1790000007000,
+        "state": "consumed",
+        "consumed_seq": 6
+      },
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000001",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "task",
+        "to_name": "researcher-1",
+        "to_generation": 1,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b3:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000001",
+          "kind": "task",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "operator": "0192d000-0000-7000-8000-000000000001"
+          },
+          "to": {
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "body": {
+            "text": "Topic: batteries."
+          }
+        },
+        "created_at": 1790000005000,
+        "state": "consumed",
+        "consumed_seq": 2
+      }
+    ],
+    "asks": [],
+    "monitors": [],
+    "operator_receipts": [
+      {
+        "tenant_id": "acme",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "op": "start",
+        "idempotency_key": "start-1",
+        "principal_key": "api/acme/alice",
+        "body_hash": "b77b75447e1dfaaafa13e680d92cadc3e805157e63b861e03397f7f7c79ace95",
+        "request_id": "0192d000-0000-7000-8000-000000000001"
+      },
+      {
+        "tenant_id": "acme",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "op": "wait",
+        "idempotency_key": "wait-1",
+        "principal_key": "api/acme/alice",
+        "body_hash": "c9e9f22bf21872b1827a9773a1db2ead579cfaa3176fd432fc862494d022b02e",
+        "request_id": "0192d000-0000-7000-8000-000000000002"
+      }
+    ],
+    "team_feed": [
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 1
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 1
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 2
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 3
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 4
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 5
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 6
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 7
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 1
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 2
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 3
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 4
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 5
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 6
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 7
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 8
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 9
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 10
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 11
+      }
+    ],
+    "pending_wakes": []
+  }
+}

@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, TypedDict, Unpack
 
-from .common import BRANCH, MAX_SAFE, T0, THREAD, aref, eid, num, obj, sha, text
+from .common import BRANCH, MAX_SAFE, T0, THREAD, aref, arr, eid, num, obj, sha, text
 from .jcs import JsonValue, Obj, canonical
 from .render import COMPACT_INSTRUCTION, GUIDE_PREFIX, render, transcript
 
@@ -32,19 +32,19 @@ def set_writer(impl: str) -> None:
 
 
 class Log:
-    def __init__(self, branch: str = BRANCH, epoch: int = 1) -> None:
-        self.branch, self.epoch = branch, epoch
-        self.lines: list[bytes] = [self.header(branch)]
+    def __init__(self, branch: str = BRANCH, epoch: int = 1, thread: str = THREAD) -> None:
+        self.branch, self.epoch, self.thread = branch, epoch, thread
+        self.lines: list[bytes] = [self.header(branch, thread)]
         self.events: list[Obj] = []  # resolved chain, in seq order
         self.artifacts: dict[str, bytes] = {}
 
     @staticmethod
-    def header(branch: str) -> bytes:
+    def header(branch: str, thread: str = THREAD) -> bytes:
         return canonical(
             {
                 "format": "threads.log",
                 "format_version": 1,
-                "thread_id": THREAD,
+                "thread_id": thread,
                 "branch_id": branch,
                 "created_at": T0,
                 "writer": {"impl": _writer[0], "version": "0.1.0"},
@@ -71,7 +71,7 @@ class Log:
         e: Obj = {
             "seq": seq,
             "event_id": eid(seq, self.branch),
-            "thread_id": THREAD,
+            "thread_id": self.thread,
             "branch_id": branch_id or self.branch,
             "epoch": self.epoch,
             "type": type_,
@@ -91,7 +91,7 @@ class Log:
         return aref(b, mt)
 
     def copy(self) -> Log:
-        c = Log(self.branch, self.epoch)
+        c = Log(self.branch, self.epoch, self.thread)
         c.lines, c.events, c.artifacts = (
             list(self.lines),
             list(self.events),
@@ -114,7 +114,7 @@ class Log:
         idx = next(i for i, ln in enumerate(self.lines) if json.loads(ln).get("seq") == at_seq)
         c = self.copy()
         c.branch, c.epoch = branch, epoch
-        c.lines = [*self.lines[: idx + 1], Log.header(branch)]
+        c.lines = [*self.lines[: idx + 1], Log.header(branch, self.thread)]
         c.events = [e for e in self.events if num(e["seq"]) <= at_seq]
         data: Obj = {"parent_branch_id": self.branch, "at_hash": sha(self.lines[idx])}
         if sandbox_id is None:
@@ -238,6 +238,8 @@ class _Reducer:
         self.effects: dict[str, Obj] = {}
         self.call_branch: dict[str, str] = {}
         self.scopes: dict[str, str] = {}
+        self.team_log = False
+        self.settle_monitors: set[str] = set()
 
     def event(self, e: Obj) -> None:
         t = text(e["type"])
@@ -256,6 +258,34 @@ class _Reducer:
 
     def user_input(self, _e: Obj, _d: Obj) -> None:
         self.in_turn = True
+
+    def woken(self, _e: Obj, _d: Obj) -> None:
+        self.in_turn = True
+
+    def team_opened(self, _e: Obj, _d: Obj) -> None:
+        self.team_log = True
+
+    def wait_started(self, e: Obj, d: Obj) -> None:
+        for m in arr(d["members"]):
+            self.settle_monitors.add(f"{e['branch_id']}:{e['event_id']}:{text(obj(m)['name'])}")
+
+    def message_received(self, _e: Obj, d: Obj) -> None:
+        """Mail opens a turn only in a member's log, with no turn open, when it is ordinary mail
+        or a task or end notification, and no park but the one it resolves is left."""
+        env = obj(d["envelope"])
+        if self.in_turn or self.team_log or not self._opens(env):
+            return
+        resolved = {"kind": "member", "id": env.get("monitor_id")}
+        self.in_turn = all(p == resolved for p in self.parked)
+
+    def _opens(self, env: Obj) -> bool:
+        kind = text(env["kind"])
+        if kind in ("message", "ask"):
+            return True
+        if kind == "bounce":
+            return "ask_id" not in env
+        notified = kind in ("member_settled", "member_ended")
+        return notified and text(env["monitor_id"]) not in self.settle_monitors
 
     def turn_completed(self, _e: Obj, _d: Obj) -> None:
         self.in_turn, self.turns = False, self.turns + 1
@@ -315,6 +345,10 @@ class _Reducer:
 
 HANDLERS: dict[str, Callable[[_Reducer, Obj, Obj], None]] = {
     "user_input": _Reducer.user_input,
+    "woken": _Reducer.woken,
+    "team_opened": _Reducer.team_opened,
+    "wait_started": _Reducer.wait_started,
+    "message_received": _Reducer.message_received,
     "turn_completed": _Reducer.turn_completed,
     "model_response": _Reducer.model_response,
     "model_response_recovered": _Reducer.model_response,
@@ -329,12 +363,23 @@ HANDLERS: dict[str, Callable[[_Reducer, Obj, Obj], None]] = {
 }
 
 
+def turn_openers(events: list[Obj]) -> set[str]:
+    """The event ids that opened a turn, as the reducer decides it."""
+    r, opened = _Reducer(0), set[str]()
+    for e in events:
+        before = r.in_turn
+        r.event(e)
+        if r.in_turn and not before:
+            opened.add(text(e["event_id"]))
+    return opened
+
+
 def reduce(log: Log, now: int) -> Obj:
     r = _Reducer(now)
     for e in log.events:
         r.event(e)
     return {
-        "thread_id": THREAD,
+        "thread_id": log.thread,
         "branch_id": log.branch,
         "epoch": r.epoch,
         "turns_completed": r.turns,

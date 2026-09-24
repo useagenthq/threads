@@ -1,0 +1,394 @@
+{
+  "outcome": "ok",
+  "states": {
+    "lead": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+      "epoch": 1,
+      "turns_completed": 2,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 260,
+        "output_tokens": 40,
+        "unknown_responses": 0
+      },
+      "transcript": [
+        {
+          "role": "user",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-000000000004"
+        },
+        {
+          "role": "tool",
+          "event_id": "0192e001-0000-7000-8000-00000000000a"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-00000000000c"
+        },
+        {
+          "role": "context",
+          "event_id": "0192e001-0000-7000-8000-00000000000f"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-000000000011"
+        }
+      ],
+      "status": "idle",
+      "head": {
+        "seq": 19,
+        "hash": "1f8a9728e12d48eaf5a0b74949d8bdadd40bb7b309e6d0782f643361e5cac948"
+      }
+    },
+    "researcher": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+      "epoch": 1,
+      "turns_completed": 1,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 90,
+        "output_tokens": 10,
+        "unknown_responses": 0
+      },
+      "transcript": [
+        {
+          "role": "user",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-000000000004"
+        }
+      ],
+      "status": "idle",
+      "head": {
+        "seq": 7,
+        "hash": "23b0303c0af0d0fe8a2d015b0f6213b118753a24cb65787ec9919bf0852c5198"
+      }
+    },
+    "team": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_responses": 0
+      },
+      "transcript": [],
+      "status": "idle",
+      "head": {
+        "seq": 1,
+        "hash": "54063622675b31952aefc7955a9ed41f4d0c5bc89eb575114c4e0a20cc014604"
+      }
+    }
+  },
+  "index": {
+    "teams": [
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "tenant_id": "acme",
+        "lead_thread_id": "0192a000-0000-7000-8000-0000000000b1",
+        "team_log_branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "closed_at": null
+      }
+    ],
+    "team_members": [
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "name": "lead",
+        "generation": 1,
+        "role": "lead",
+        "agent": "lead",
+        "config_hash": "bfe90dd30a179b4b086c27c247f828b44d52b196df761f185dd234ce54a10ee1",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "provenance": null,
+        "state": "idle",
+        "result": {
+          "member": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "lead",
+            "generation": 1
+          },
+          "status": "completed",
+          "output": {
+            "text": "The researcher says battery prices fell."
+          }
+        },
+        "updated_seq": 19
+      },
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "name": "researcher-1",
+        "generation": 1,
+        "role": "member",
+        "agent": "researcher",
+        "config_hash": "66f5255887dece1271d2dfa9bedb5c3e4faf71de4d33464555b256ba93ffc446",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
+        },
+        "state": "idle",
+        "result": {
+          "member": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "status": "completed",
+          "output": {
+            "text": "Battery prices fell."
+          }
+        },
+        "updated_seq": 6
+      }
+    ],
+    "mail": [
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b1:c1",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "task",
+        "to_name": "researcher-1",
+        "to_generation": 1,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b1:c1",
+          "kind": "task",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "lead",
+            "generation": 1
+          },
+          "to": {
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+            "event_id": "0192e001-0000-7000-8000-000000000005"
+          },
+          "body": {
+            "text": "Your task, researcher."
+          }
+        },
+        "created_at": 1790000009000,
+        "state": "consumed",
+        "consumed_seq": 2
+      },
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000007",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "member_settled",
+        "to_name": "lead",
+        "to_generation": 1,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000007",
+          "kind": "member_settled",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "to": {
+            "name": "lead",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+            "event_id": "0192e001-0000-7000-8000-000000000006"
+          },
+          "monitor_id": "0192b000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000008:task",
+          "result": {
+            "member": {
+              "tenant": "acme",
+              "team": "0192c000-0000-7000-8000-000000000001",
+              "name": "researcher-1",
+              "generation": 1
+            },
+            "status": "completed",
+            "output": {
+              "text": "Battery prices fell."
+            }
+          }
+        },
+        "created_at": 1790000007000,
+        "state": "consumed",
+        "consumed_seq": 15
+      }
+    ],
+    "asks": [],
+    "monitors": [],
+    "operator_receipts": [],
+    "team_feed": [
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 1
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 2
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 3
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 4
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 5
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 6
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 7
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 8
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 9
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 10
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 11
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 12
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 13
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 14
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 15
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 16
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 17
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 18
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 19
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 1
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 2
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 3
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 4
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 5
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 6
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 7
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 1
+      }
+    ],
+    "pending_wakes": []
+  }
+}

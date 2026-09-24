@@ -224,6 +224,9 @@ const PARK_KINDS = [
   "input",
   "resource",
   "child",
+  "ask",
+  "wait",
+  "member",
 ] as const;
 export const ParkAddress: Strict<{
   kind: EnumOf<typeof PARK_KINDS>;
@@ -231,7 +234,7 @@ export const ParkAddress: Strict<{
 }> = z.strictObject({ kind: z.enum(PARK_KINDS), id: NonEmpty }).meta({
   id: "ParkAddress",
   description:
-    "What a parked branch waits on; resumed must name the same address. For kind effect, id is the derived effect key; for kind child, the parked subagent's child_thread_id.",
+    "What a parked branch waits on; resumed must name the same address. For kind effect, id is the derived effect key; for kind child, the parked subagent's child_thread_id; for kind ask, the AskId; for kind wait, the WaitId; for kind member, the task MonitorId of the parked member.",
 });
 
 const PERMISSION_MODES = [

@@ -5,7 +5,7 @@
   "conventions": {
     "names": "Functions and methods: TS lowerCamelCase, Python snake_case of the same words (ts is lowerCamel of py; check_api.py enforces it). Types: PascalCase, identical in both. Param and field keys here are the Python names; in TS they are lowerCamel, except inside casing wire types, which are snake_case in both.",
     "params": "kind positional params are positional in both languages. kind option params are the trailing options object in TS and keyword-only arguments in Python. required false means optional; default is the value used when omitted.",
-    "results": "{result, errors} is an expected-failure value: TS {ok: true, value} | {ok: false, error: {code, message}}, Python Ok[T] | Err[Failure] (frozen dataclasses). errors is the closed code set; every code is in the events ErrorCode enum (what the log records) or the ApiErrorCode enum in schema/api.schema.json (what public calls return). Only ConfigError at setup is thrown (throws).",
+    "results": "{result, errors} is an expected-failure value: TS {ok: true, value} | {ok: false, error: {code, message}}, Python Ok[T] | Err[Failure] (frozen dataclasses). errors is the closed code set; every code is in the events ErrorCode enum (what the log records) or the ApiErrorCode enum in schema/api.schema.json (what public calls return). Only ConfigError at setup, and StoreCorruptError for a broken store invariant, are thrown (throws).",
     "async": "async true: TS returns a Promise, Python is async def. A stream is TS AsyncIterable, Python AsyncIterator.",
     "refs": "urn:threads:schema:events:v1 is spec/schema/events.v1.schema.json, urn:threads:schema:host-api:v1 is spec/schema/host-api/host-api.v1.schema.json, urn:threads:schema:conformance:v1 is spec/conformance/case.schema.json. #/types/X is a type in this file.",
     "generics": "Deps defaults to null (TS undefined, Python None); Output defaults to string (the final text). Agent<Deps, Output> carries both into RunContext and RunResult.",
@@ -195,7 +195,9 @@
       "open": "The draft design offers output_mode tool or native; no adapter maps a response format.",
       "choice": "v0.1 pins policy.output.mode tool; native is reserved on the wire",
       "why": "no adapter maps a response format; an option neither language honors is not offered"
-    }
+    },
+    {"id": "team-tool-results", "open": "The design gives the model tools' results as types (StartResult, AskResult, ...); a model sees text.", "choice": "A team tool's tool_result.preview is its result as RFC 8785 JSON with snake_case keys; Team methods return the same data as the api types.", "why": "One shape per result, which a model and a replay read the same way."},
+    {"id": "team-deletion-results", "open": "Gate 1 (v02 §4.15) makes deleting a team's threads a fixed point that can be busy or refused.", "choice": "Store deletion (TS deleteThread/deleteTenant, Python delete_thread/delete_tenant, and threads delete) returns a result: the number of threads deleted, or not_found, busy (a live lease or an effect in doubt in the deletion set; nothing written) or thread_in_team (a member thread or team log whose lead is not deleted with it). Python's delete_thread moves from a bare int to Ok[int] | Err[DeleteError].", "why": "A delete that would erase a live executor's only recovery log must refuse, and the caller must see why."}
   ],
   "functions": {
     "agent": {
@@ -295,6 +297,8 @@
           "default": [],
           "doc": "Agents this one may hand the conversation to, pinned as policy.handoffs."
         },
+        {"name": "team", "kind": "option", "type": {"array": {"$ref": "#/types/Agent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}}, "required": false, "default": [], "doc": "Agents this one may start as team members, with the start, send, ask, reply, wait, monitor and cancel tools. run() then returns team, the Team handle. A member whose definition lists handoffs is refused at setup (handoff_in_team). Default []: no team."},
+        {"name": "team_limits", "kind": "option", "type": {"object": {"concurrent": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false, "default": 4, "doc": "Most members running at once; a start past it is refused concurrency_cap. Default 4."}, "mailbox": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false, "default": 100, "doc": "Most pending mails per member; a send past it is refused mailbox_full. Default 100."}}}, "required": false, "default_doc": "{concurrent: 4, mailbox: 100}", "doc": "The team's limits. Omitted: 4 running members and 100 pending mails per member."},
         {
           "name": "fallback",
           "kind": "option",
@@ -406,7 +410,8 @@
           "doc": "Named instructions an operator can switch a thread to with Thread.setOutputStyle. Pinned with the agent config; keys and texts non-empty. Omitted: no styles."
         }
       ],
-      "returns": {"$ref": "#/types/Agent", "args": [{"generic": "Deps"}, {"generic": "Output"}]}
+      "returns": {"$ref": "#/types/Agent", "args": [{"generic": "Deps"}, {"generic": "Output"}]},
+      "overloads": [{"when": "team", "returns": {"$ref": "#/types/TeamAgent", "args": [{"generic": "Deps"}, {"generic": "Output"}]}, "doc": "With team, agent() returns a TeamAgent: TS selects the overload by the team option, Python returns the TeamAgent class, so run().team is typed."}]
     },
     "tool": {
       "ts": "tool",
@@ -850,7 +855,8 @@
           },
           "required": false,
           "doc": "Maps an HTTP API request to a principal, or null for 401. Omitted: every /v1 route answers 401; channel webhooks still work."
-        }
+        },
+        {"name": "message_policy", "kind": "option", "type": {"array": {"$ref": "#/types/MessagePolicyRule"}}, "required": false, "default": [], "doc": "Rules that let one host agent start, send to, ask, monitor or cancel another beyond what a team grants (wait is decided as monitor). Default []: everything else is denied. Every decision is logged as message_policy_decided."}
       ],
       "returns": {"$ref": "#/types/Host"}
     },
@@ -920,6 +926,78 @@
       ],
       "returns": {"$ref": "#/types/SearchBackend"},
       "config_errors": [{"code": "missing_secret"}]
+    },
+    "openTeam": {
+      "ts": "openTeam",
+      "py": "open_team",
+      "package": "core",
+      "doc": "A Team handle for a team another process ran, or to act as another principal. RunResult.team is the common path.",
+      "async": true,
+      "params": [
+        {
+          "name": "store",
+          "kind": "positional",
+          "type": {
+            "$ref": "#/types/Store"
+          },
+          "required": true,
+          "doc": "The store the team's logs live in, the one its lead ran with."
+        },
+        {
+          "name": "ref",
+          "kind": "positional",
+          "type": {
+            "$ref": "#/types/TeamRef"
+          },
+          "required": true,
+          "doc": "Which team, as team.ref gives it."
+        },
+        {
+          "name": "principal",
+          "kind": "option",
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Principal"
+          },
+          "required": true,
+          "doc": "Who acts through this handle. Every request it makes is recorded with this principal; another tenant's is forbidden."
+        }
+      ],
+      "returns": {
+        "result": {
+          "$ref": "#/types/Team"
+        },
+        "errors": [
+          "not_found",
+          "forbidden"
+        ]
+      }
+    },
+    "assertNever": {
+      "ts": "assertNever",
+      "py": "assert_never",
+      "package": "core",
+      "doc": "Ends a switch over a union, so a variant nobody handles is a type error. Python uses typing.assert_never, which threads does not re-export.",
+      "async": false,
+      "params": [
+        {
+          "name": "value",
+          "kind": "positional",
+          "type": {
+            "native": {
+              "ts": "never",
+              "py": "typing.Never"
+            }
+          },
+          "required": true,
+          "doc": "The value no case matched; the type checker proves none can."
+        }
+      ],
+      "returns": {
+        "native": {
+          "ts": "never",
+          "py": "typing.NoReturn"
+        }
+      }
     }
   },
   "types": {
@@ -1086,7 +1164,8 @@
               "permission_rule_invalid",
               "hosted_tool_unsupported",
               "egress_policy_unsupported",
-              "transport_fence_unsupported"
+              "transport_fence_unsupported",
+              "handoff_in_team"
             ]
           }
         }
@@ -1166,6 +1245,494 @@
         }
       ],
       "doc": "The HTTP form is host-api RunOutcome (ids instead of handles)."
+    },
+    "TeamAgent": {
+      "kind": "interface",
+      "role": "handle",
+      "generics": [
+        {
+          "name": "Deps",
+          "default": {
+            "prim": "null"
+          }
+        },
+        {
+          "name": "Output",
+          "default": {
+            "prim": "string"
+          }
+        }
+      ],
+      "properties": {
+        "name": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Name"
+          },
+          "required": true,
+          "doc": "The agent's name as given to agent(): lowercase letters, digits and underscores, up to 64 characters."
+        }
+      },
+      "methods": {
+        "run": {
+          "ts": "run",
+          "py": "run",
+          "doc": "Run one input to a terminal result, as Agent.run does; the result also carries the team.",
+          "async": true,
+          "params": [
+            {
+              "name": "input",
+              "kind": "positional",
+              "type": {
+                "$ref": "urn:threads:schema:host-api:v1#/$defs/Input"
+              },
+              "required": true,
+              "doc": "Text or ordered input parts."
+            },
+            {
+              "name": "thread",
+              "kind": "option",
+              "type": {
+                "union": [
+                  {
+                    "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"
+                  },
+                  {
+                    "$ref": "#/types/Thread"
+                  }
+                ]
+              },
+              "required": false,
+              "doc": "The thread to continue: a Thread handle continues its branch; in TypeScript a thread id also works (Python takes a handle only). Omitted: a new thread."
+            },
+            {
+              "name": "store",
+              "kind": "option",
+              "type": {
+                "$ref": "#/types/Store"
+              },
+              "required": false,
+              "default_doc": "the handle's store when thread is a Thread, else sqlite(\".threads\")",
+              "doc": "Where the thread's log lives. Omitted: the handle's store when thread is a Thread handle, else sqlite(\".threads\") in the working directory."
+            },
+            {
+              "name": "deps",
+              "kind": "option",
+              "type": {
+                "generic": "Deps"
+              },
+              "required": false,
+              "doc": "Host-only dependencies your tools and hooks read as RunContext.deps; never serialized or logged. Required when the agent's Deps type is not null; omitted, tools see null (None in Python)."
+            },
+            {
+              "name": "budget",
+              "kind": "option",
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/Budget"
+              },
+              "required": false,
+              "doc": "Run budget, recorded on the user_input; it covers this thread and every subagent it starts. Omitted: only the agent's own budget option applies."
+            },
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/Principal"
+              },
+              "required": false,
+              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
+              "doc": "The verified sender of this input, recorded on the user_input. Omitted: the local operator (issuer \"api\", tenant \"local\", subject \"operator\")."
+            },
+            {
+              "name": "ceiling",
+              "kind": "option",
+              "type": {
+                "partial": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"
+                }
+              },
+              "required": false,
+              "doc": "The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Omitted: no ceiling, so only the agent's own permissions apply."
+            },
+            {
+              "name": "signal",
+              "kind": "option",
+              "type": {
+                "native": {
+                  "ts": "AbortSignal"
+                }
+              },
+              "required": false,
+              "lang": "ts",
+              "doc": "Local cancellation: aborting it stops the run in this process, and tools see it as RunContext.signal. Python uses task cancellation instead. Omitted: the run stops only through the durable Thread.cancel()."
+            }
+          ],
+          "returns": {
+            "$ref": "#/types/TeamRunResult",
+            "args": [
+              {
+                "generic": "Output"
+              }
+            ]
+          },
+          "throws": [
+            "ConfigError"
+          ]
+        },
+        "stream": {
+          "ts": "stream",
+          "py": "stream",
+          "doc": "Same run, as a subscription to its log. Not a second loop.",
+          "async": false,
+          "params": [
+            {
+              "name": "input",
+              "kind": "positional",
+              "type": {
+                "$ref": "urn:threads:schema:host-api:v1#/$defs/Input"
+              },
+              "required": true,
+              "doc": "Text or ordered input parts."
+            },
+            {
+              "name": "thread",
+              "kind": "option",
+              "type": {
+                "union": [
+                  {
+                    "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"
+                  },
+                  {
+                    "$ref": "#/types/Thread"
+                  }
+                ]
+              },
+              "required": false,
+              "doc": "The thread to continue: a Thread handle continues its branch; in TypeScript a thread id also works (Python takes a handle only). Omitted: a new thread."
+            },
+            {
+              "name": "store",
+              "kind": "option",
+              "type": {
+                "$ref": "#/types/Store"
+              },
+              "required": false,
+              "default_doc": "the handle's store when thread is a Thread, else sqlite(\".threads\")",
+              "doc": "Where the thread's log lives. Omitted: the handle's store when thread is a Thread handle, else sqlite(\".threads\") in the working directory."
+            },
+            {
+              "name": "deps",
+              "kind": "option",
+              "type": {
+                "generic": "Deps"
+              },
+              "required": false,
+              "doc": "Host-only dependencies your tools and hooks read as RunContext.deps; never serialized or logged. Required when the agent's Deps type is not null; omitted, tools see null (None in Python)."
+            },
+            {
+              "name": "budget",
+              "kind": "option",
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/Budget"
+              },
+              "required": false,
+              "doc": "Run budget, recorded on the user_input; it covers this thread and every subagent it starts. Omitted: only the agent's own budget option applies."
+            },
+            {
+              "name": "principal",
+              "kind": "option",
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/Principal"
+              },
+              "required": false,
+              "default_doc": "the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}",
+              "doc": "The verified sender of this input, recorded on the user_input. Omitted: the local operator (issuer \"api\", tenant \"local\", subject \"operator\")."
+            },
+            {
+              "name": "ceiling",
+              "kind": "option",
+              "type": {
+                "partial": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"
+                }
+              },
+              "required": false,
+              "doc": "The principal and host ceiling. Every permission decision of this run, of its subagents and of every handoff target it starts is also decided under it, in the ceiling's own mode; the stricter decision wins and a tie reports the thread's own. A handoff target is capped by the ceilings of the run that handed off, never by the source agent's own policy. Omitted: no ceiling, so only the agent's own permissions apply."
+            },
+            {
+              "name": "signal",
+              "kind": "option",
+              "type": {
+                "native": {
+                  "ts": "AbortSignal"
+                }
+              },
+              "required": false,
+              "lang": "ts",
+              "doc": "Local cancellation: aborting it stops the run in this process, and tools see it as RunContext.signal. Python uses task cancellation instead. Omitted: the run stops only through the durable Thread.cancel()."
+            }
+          ],
+          "returns": {
+            "$ref": "#/types/RunStream",
+            "args": [
+              {
+                "generic": "Output"
+              }
+            ]
+          },
+          "throws": [
+            "ConfigError"
+          ]
+        },
+        "check": {
+          "ts": "check",
+          "py": "check",
+          "doc": "Validate the definition and resolve setup (secrets, MCP handshakes, capabilities) without starting a run.",
+          "async": true,
+          "params": [],
+          "returns": {
+            "result": {
+              "prim": "void"
+            },
+            "errors": [
+              "invalid_config",
+              "missing_secret",
+              "unknown_preset",
+              "duplicate_name",
+              "capability_missing",
+              "mcp_unreachable",
+              "budget_unenforceable",
+              "permission_rule_invalid",
+              "hosted_tool_unsupported",
+              "egress_policy_unsupported",
+              "handoff_in_team"
+            ]
+          }
+        }
+      },
+      "doc": "What agent() returns for a definition with team: an Agent with the same name, stream() and check(), whose run() result always carries the team. TS: the agent() overload selected by the team option; Python: the TeamAgent class, a subclass of Agent."
+    },
+    "TeamRunResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "generics": [
+        {
+          "name": "Output",
+          "default": {
+            "prim": "string"
+          }
+        }
+      ],
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "completed"
+              },
+              "required": true,
+              "doc": "\"completed\": the run finished, and output holds its final answer."
+            },
+            "output": {
+              "type": {
+                "generic": "Output"
+              },
+              "required": true,
+              "doc": "The final answer: the last reply's text, or in TypeScript the value parsed by the agent's output schema when it has one."
+            },
+            "thread": {
+              "type": {
+                "$ref": "#/types/Thread"
+              },
+              "required": true
+            },
+            "team": {
+              "type": {
+                "$ref": "#/types/Team"
+              },
+              "required": true,
+              "doc": "The team's handle, whatever the status: start, send, ask, wait and cancel members from your code."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "parked"
+              },
+              "required": true,
+              "doc": "\"parked\": the run is waiting on a person, such as an approval or an effect whose outcome is unknown; pending lists what it waits on. Answer them with the Thread methods to let it continue."
+            },
+            "reason": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/ev_parked/properties/data/properties/reason"
+              },
+              "required": true
+            },
+            "pending": {
+              "type": {
+                "array": {
+                  "$ref": "urn:threads:schema:events:v1#/$defs/ParkAddress"
+                }
+              },
+              "required": true
+            },
+            "thread": {
+              "type": {
+                "$ref": "#/types/Thread"
+              },
+              "required": true
+            },
+            "team": {
+              "type": {
+                "$ref": "#/types/Team"
+              },
+              "required": true,
+              "doc": "The team's handle, whatever the status: start, send, ask, wait and cancel members from your code."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "cancelled"
+              },
+              "required": true,
+              "doc": "\"cancelled\": the thread was cancelled before the run finished."
+            },
+            "thread": {
+              "type": {
+                "$ref": "#/types/Thread"
+              },
+              "required": true
+            },
+            "team": {
+              "type": {
+                "$ref": "#/types/Team"
+              },
+              "required": true,
+              "doc": "The team's handle, whatever the status: start, send, ask, wait and cancel members from your code."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "failed"
+              },
+              "required": true,
+              "doc": "\"failed\": the run ended with an error; error says which."
+            },
+            "error": {
+              "type": {
+                "object": {
+                  "code": {
+                    "type": {
+                      "$ref": "urn:threads:schema:host-api:v1#/$defs/RunErrorCode"
+                    },
+                    "required": true,
+                    "doc": "What went wrong, for example model_unavailable, max_turns, output_invalid or branch_busy."
+                  },
+                  "message": {
+                    "type": {
+                      "prim": "string"
+                    },
+                    "required": true,
+                    "doc": "A readable explanation of the failure, for logs and people."
+                  }
+                },
+                "casing": "wire"
+              },
+              "required": true,
+              "doc": "Why the run failed: a code and a readable message."
+            },
+            "thread": {
+              "type": {
+                "$ref": "#/types/Thread"
+              },
+              "required": true
+            },
+            "team": {
+              "type": {
+                "$ref": "#/types/Team"
+              },
+              "required": true,
+              "doc": "The team's handle, whatever the status: start, send, ask, wait and cancel members from your code."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "budget_exhausted"
+              },
+              "required": true,
+              "doc": "\"budget_exhausted\": a budget limit was reached before the next model request; budget says which."
+            },
+            "budget": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/ev_budget_exceeded/properties/data"
+              },
+              "required": true,
+              "doc": "Which limit was hit and its value, how much was used, and whether the budget was this thread's own or an ancestor's."
+            },
+            "thread": {
+              "type": {
+                "$ref": "#/types/Thread"
+              },
+              "required": true
+            },
+            "team": {
+              "type": {
+                "$ref": "#/types/Team"
+              },
+              "required": true,
+              "doc": "The team's handle, whatever the status: start, send, ask, wait and cancel members from your code."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "handed_off"
+              },
+              "required": true,
+              "doc": "\"handed_off\": the agent handed the conversation to another agent; to_thread is that agent's thread."
+            },
+            "thread": {
+              "type": {
+                "$ref": "#/types/Thread"
+              },
+              "required": true
+            },
+            "to_thread": {
+              "type": {
+                "$ref": "#/types/Thread"
+              },
+              "required": true
+            },
+            "team": {
+              "type": {
+                "$ref": "#/types/Team"
+              },
+              "required": true,
+              "doc": "The team's handle, whatever the status: start, send, ask, wait and cancel members from your code."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "What TeamAgent.run returns: a RunResult whose every variant also carries team."
     },
     "RunStream": {
       "kind": "interface",
@@ -2440,7 +3007,8 @@
           "permission_rule_invalid",
           "hosted_tool_unsupported",
           "egress_policy_unsupported",
-          "transport_fence_unsupported"
+          "transport_fence_unsupported",
+          "handoff_in_team"
         ]
       },
       "doc": "Why setup failed. For example: missing_secret is an unset secret, duplicate_name two tools or agents with one name, capability_missing an option the sandbox or model can't support."
@@ -3594,6 +4162,1669 @@
         }
       },
       "doc": "TS: supports await using (Symbol.asyncDispose calls stop). Python: an async context manager (__aenter__ calls ready, __aexit__ calls stop)."
+    },
+    "TeamRef": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "tenant": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/NonEmpty"
+          },
+          "required": true,
+          "doc": "The team's tenant, frozen at the lead's first append."
+        },
+        "id": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/TeamId"
+          },
+          "required": true,
+          "doc": "The team's id."
+        }
+      },
+      "doc": "Which team: team.ref, for openTeam in another process."
+    },
+    "MemberRef": {
+      "kind": "alias",
+      "type": {
+        "$ref": "urn:threads:schema:events:v1#/$defs/MemberRef"
+      },
+      "doc": "One member of one team, {tenant, team, name, generation}. Immutable. A model addresses members by name only."
+    },
+    "Team": {
+      "kind": "interface",
+      "role": "handle",
+      "properties": {
+        "ref": {
+          "type": {
+            "$ref": "#/types/TeamRef"
+          },
+          "required": true,
+          "doc": "This team's tenant and id."
+        }
+      },
+      "methods": {
+        "start": {
+          "ts": "start",
+          "py": "start",
+          "doc": "Starts a member from an agent the team lists, with task as its first input. Recorded in the team log as an operator request.",
+          "async": true,
+          "params": [
+            {
+              "name": "agent",
+              "kind": "positional",
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/Name"
+              },
+              "required": true,
+              "doc": "The agent to start, by name."
+            },
+            {
+              "name": "task",
+              "kind": "positional",
+              "type": {
+                "prim": "string"
+              },
+              "required": true,
+              "doc": "The member's first input; it sees nothing else."
+            },
+            {
+              "name": "budget",
+              "kind": "option",
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/Budget"
+              },
+              "required": false,
+              "doc": "The member's own budget, capped by policy. Omitted: the agent's own budget."
+            },
+            {
+              "name": "idempotency_key",
+              "kind": "option",
+              "type": {
+                "prim": "string"
+              },
+              "required": false,
+              "doc": "Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request."
+            }
+          ],
+          "returns": {
+            "$ref": "#/types/TeamStartResult"
+          }
+        },
+        "send": {
+          "ts": "send",
+          "py": "send",
+          "doc": "Sends a message to a member. It arrives as the member's next input and wakes it if idle.",
+          "async": true,
+          "params": [
+            {
+              "name": "to",
+              "kind": "positional",
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "The member, at the generation you know."
+            },
+            {
+              "name": "text",
+              "kind": "positional",
+              "type": {
+                "prim": "string"
+              },
+              "required": true,
+              "doc": "The message."
+            },
+            {
+              "name": "idempotency_key",
+              "kind": "option",
+              "type": {
+                "prim": "string"
+              },
+              "required": false,
+              "doc": "Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request."
+            }
+          ],
+          "returns": {
+            "$ref": "#/types/TeamSendResult"
+          }
+        },
+        "ask": {
+          "ts": "ask",
+          "py": "ask",
+          "doc": "Asks a member a question and waits for its reply, its end, or the deadline.",
+          "async": true,
+          "params": [
+            {
+              "name": "to",
+              "kind": "positional",
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "The member to ask."
+            },
+            {
+              "name": "question",
+              "kind": "positional",
+              "type": {
+                "prim": "string"
+              },
+              "required": true,
+              "doc": "The question."
+            },
+            {
+              "name": "timeout_ms",
+              "kind": "option",
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+              },
+              "required": false,
+              "doc": "How long to wait. Omitted: the host policy, initially 120 s, and never more than it."
+            },
+            {
+              "name": "idempotency_key",
+              "kind": "option",
+              "type": {
+                "prim": "string"
+              },
+              "required": false,
+              "doc": "Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request."
+            }
+          ],
+          "returns": {
+            "$ref": "#/types/TeamAskResult"
+          },
+          "throws": [
+            "StoreCorruptError"
+          ]
+        },
+        "wait": {
+          "ts": "wait",
+          "py": "wait",
+          "doc": "Waits until members settle (become idle or end), or the deadline. Settlement is durable evidence: a member that went idle and started again still counts.",
+          "async": true,
+          "params": [
+            {
+              "name": "members",
+              "kind": "positional",
+              "type": {
+                "array": {
+                  "$ref": "#/types/MemberRef"
+                }
+              },
+              "required": true,
+              "doc": "The members to wait for: non-empty, frozen at the call."
+            },
+            {
+              "name": "mode",
+              "kind": "option",
+              "type": {
+                "union": [
+                  {
+                    "enum": [
+                      "all",
+                      "any"
+                    ]
+                  },
+                  {
+                    "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+                  }
+                ]
+              },
+              "required": false,
+              "default": "all",
+              "doc": "all, any, or how many must settle. any never cancels the others."
+            },
+            {
+              "name": "timeout_ms",
+              "kind": "option",
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
+              },
+              "required": false,
+              "doc": "How long to wait. Omitted: the host policy, initially 120 s, and never more than it."
+            },
+            {
+              "name": "idempotency_key",
+              "kind": "option",
+              "type": {
+                "prim": "string"
+              },
+              "required": false,
+              "doc": "Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request."
+            }
+          ],
+          "returns": {
+            "$ref": "#/types/TeamWaitResult"
+          },
+          "throws": [
+            "StoreCorruptError"
+          ]
+        },
+        "cancel": {
+          "ts": "cancel",
+          "py": "cancel",
+          "doc": "Requests a member's cancel: durable at once, applied at the member's next step.",
+          "async": true,
+          "params": [
+            {
+              "name": "member",
+              "kind": "positional",
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "The member to cancel."
+            },
+            {
+              "name": "idempotency_key",
+              "kind": "option",
+              "type": {
+                "prim": "string"
+              },
+              "required": false,
+              "doc": "Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request."
+            }
+          ],
+          "returns": {
+            "$ref": "#/types/TeamCancelResult"
+          }
+        },
+        "members": {
+          "ts": "members",
+          "py": "members",
+          "doc": "Every member of the team, the lead included, with its state and, once idle or ended, its result. A pure read.",
+          "async": true,
+          "params": [],
+          "returns": {
+            "array": {
+              "$ref": "#/types/TeamMember"
+            }
+          },
+          "throws": [
+            "StoreCorruptError"
+          ]
+        },
+        "events": {
+          "ts": "events",
+          "py": "events",
+          "doc": "The team's audit feed: every committed event of every team log, as stored (results keep their artifact refs, so this never raises StoreCorruptError). A pure read that drives nothing.",
+          "async": true,
+          "params": [
+            {
+              "name": "after",
+              "kind": "option",
+              "type": {
+                "$ref": "#/types/TeamCursor"
+              },
+              "required": false,
+              "doc": "Resume after this cursor. Omitted: from the start."
+            },
+            {
+              "name": "follow",
+              "kind": "option",
+              "type": {
+                "prim": "boolean"
+              },
+              "required": false,
+              "default": false,
+              "doc": "true keeps the stream open for new events until the team closes; false yields what is committed, then ends."
+            }
+          ],
+          "returns": {
+            "stream": {
+              "$ref": "#/types/TeamItem"
+            }
+          }
+        },
+        "askStatus": {
+          "ts": "askStatus",
+          "py": "ask_status",
+          "doc": "An ask's state from the team log: open, not_found, or its outcome. A pure read; it never closes an ask.",
+          "async": true,
+          "params": [
+            {
+              "name": "ask_id",
+              "kind": "positional",
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/AskId"
+              },
+              "required": true,
+              "doc": "The ask, as team.ask or its outcome names it."
+            }
+          ],
+          "returns": {
+            "$ref": "#/types/AskStatus"
+          },
+          "throws": [
+            "StoreCorruptError"
+          ]
+        }
+      },
+      "doc": "Your code's handle on a team: RunResult.team, or openTeam. Every request is recorded in the team log as the principal it acts for; only busy, returned before the log could be written, is not."
+    },
+    "StartRefusal": {
+      "kind": "alias",
+      "type": {
+        "enum": [
+          "forbidden",
+          "unknown_agent",
+          "concurrency_cap",
+          "budget_exceeded",
+          "team_closed"
+        ]
+      },
+      "doc": "Why a start was refused. team_closed: the lead ended, which closes the team."
+    },
+    "SendRefusal": {
+      "kind": "alias",
+      "type": {
+        "enum": [
+          "forbidden",
+          "unknown_member",
+          "stale_member",
+          "member_ended",
+          "self",
+          "mailbox_full",
+          "team_closed"
+        ]
+      },
+      "doc": "Why a send was refused. stale_member: the member was restarted under a newer generation."
+    },
+    "AskRefusal": {
+      "kind": "alias",
+      "type": {
+        "enum": [
+          "forbidden",
+          "unknown_member",
+          "stale_member",
+          "member_ended",
+          "self",
+          "mailbox_full",
+          "team_closed",
+          "budget_exceeded"
+        ]
+      },
+      "doc": "Why an ask was refused: a send's refusals, or no budget headroom for one request of the member's model."
+    },
+    "ReplyRefusal": {
+      "kind": "alias",
+      "type": {
+        "enum": [
+          "unknown_ask",
+          "already_replied",
+          "ask_closed"
+        ]
+      },
+      "doc": "Why a reply was refused."
+    },
+    "ObserveRefusal": {
+      "kind": "alias",
+      "type": {
+        "enum": [
+          "forbidden",
+          "unknown_member",
+          "stale_member"
+        ]
+      },
+      "doc": "Why a wait or monitor was refused."
+    },
+    "CancelRefusal": {
+      "kind": "alias",
+      "type": {
+        "enum": [
+          "forbidden",
+          "unknown_member",
+          "stale_member",
+          "member_ended"
+        ]
+      },
+      "doc": "Why a cancel was refused."
+    },
+    "OperatorRefusal": {
+      "kind": "alias",
+      "type": {
+        "enum": [
+          "busy",
+          "idempotency_key_reused",
+          "idempotency_key_principal_mismatch"
+        ]
+      },
+      "doc": "Refusals only Team methods return. busy: the team log stayed locked past the host's bound, so nothing was recorded; retrying with the same key is safe."
+    },
+    "MemberState": {
+      "kind": "alias",
+      "type": {
+        "enum": [
+          "starting",
+          "running",
+          "idle",
+          "parked",
+          "ended"
+        ]
+      },
+      "doc": "starting: started, its log not opened yet. idle: its latest task is done; mail wakes it. ended: failed, cancelled, out of budget or handed off."
+    },
+    "MemberResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "Whose result."
+            },
+            "status": {
+              "type": {
+                "literal": "completed"
+              },
+              "required": true,
+              "doc": "\"completed\": the latest task is done and the member is idle."
+            },
+            "output": {
+              "type": {
+                "prim": "string"
+              },
+              "required": true,
+              "doc": "The answer; structured output as its RFC 8785 JSON text."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "Whose result."
+            },
+            "status": {
+              "type": {
+                "literal": "failed"
+              },
+              "required": true,
+              "doc": "\"failed\": the member ended with an error."
+            },
+            "error": {
+              "type": {
+                "object": {
+                  "code": {
+                    "type": {
+                      "$ref": "urn:threads:schema:events:v1#/$defs/MemberErrorCode"
+                    },
+                    "required": true,
+                    "doc": "What went wrong: a run error code, or pin_unavailable / pin_mismatch when the member's definition couldn't be rebound in this process."
+                  },
+                  "message": {
+                    "type": {
+                      "prim": "string"
+                    },
+                    "required": true,
+                    "doc": "A readable explanation."
+                  }
+                },
+                "casing": "wire"
+              },
+              "required": true,
+              "doc": "Why the member failed."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "Whose result."
+            },
+            "status": {
+              "type": {
+                "literal": "cancelled"
+              },
+              "required": true,
+              "doc": "\"cancelled\": the member was cancelled."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "Whose result."
+            },
+            "status": {
+              "type": {
+                "literal": "budget_exhausted"
+              },
+              "required": true,
+              "doc": "\"budget_exhausted\": a budget stopped the member."
+            },
+            "budget": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/ev_budget_exceeded/properties/data"
+              },
+              "required": true,
+              "doc": "Which limit was hit."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "Whose result."
+            },
+            "status": {
+              "type": {
+                "literal": "handed_off"
+              },
+              "required": true,
+              "doc": "\"handed_off\": the lead handed the conversation off, which closes its team."
+            },
+            "to_thread": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/ThreadId"
+              },
+              "required": true,
+              "doc": "The thread it moved to."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "What a settled member returned. The result APIs (wait, members, ask, askStatus) read a large output from the artifact store and verify it."
+    },
+    "StoredMemberResult": {
+      "kind": "alias",
+      "type": {
+        "$ref": "urn:threads:schema:events:v1#/$defs/StoredMemberResult"
+      },
+      "doc": "A member result as the log stores it: a large output stays an artifact ref. team.events returns it."
+    },
+    "StartResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "started"
+              },
+              "required": true,
+              "doc": "\"started\": the member exists in state starting; its task is queued."
+            },
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "The new member: its name is <agent>-<k>."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "$ref": "#/types/StartRefusal"
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "The model's start tool result."
+    },
+    "SendResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "sent"
+              },
+              "required": true,
+              "doc": "\"sent\": the mail is durable and pending for its recipient."
+            },
+            "id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/MailId"
+              },
+              "required": true,
+              "doc": "The mail's id."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "$ref": "#/types/SendRefusal"
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "The model's send tool result."
+    },
+    "AskOutcome": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "answered"
+              },
+              "required": true,
+              "doc": "\"answered\": the member replied."
+            },
+            "ask_id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/AskId"
+              },
+              "required": true,
+              "doc": "The ask."
+            },
+            "text": {
+              "type": {
+                "prim": "string"
+              },
+              "required": true,
+              "doc": "The reply."
+            },
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "Who replied."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "timed_out"
+              },
+              "required": true,
+              "doc": "\"timed_out\": no reply before the deadline."
+            },
+            "ask_id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/AskId"
+              },
+              "required": true,
+              "doc": "The ask."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "member_ended"
+              },
+              "required": true,
+              "doc": "\"member_ended\": the member ended before replying."
+            },
+            "ask_id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/AskId"
+              },
+              "required": true,
+              "doc": "The ask."
+            },
+            "result": {
+              "type": {
+                "$ref": "#/types/MemberResult"
+              },
+              "required": true,
+              "doc": "How it ended."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "cancelled"
+              },
+              "required": true,
+              "doc": "\"cancelled\": the asker's turn or the whole team was cancelled."
+            },
+            "ask_id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/AskId"
+              },
+              "required": true,
+              "doc": "The ask."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "needs_input"
+              },
+              "required": true,
+              "doc": "\"needs_input\": a remote member needs input (Phase 4)."
+            },
+            "ask_id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/AskId"
+              },
+              "required": true,
+              "doc": "The ask."
+            },
+            "prompt": {
+              "type": {
+                "prim": "string"
+              },
+              "required": true,
+              "doc": "What it asks for."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "uncertain"
+              },
+              "required": true,
+              "doc": "\"uncertain\": a remote member's outcome is unknown, and the ask parks (Phase 4)."
+            },
+            "ask_id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/AskId"
+              },
+              "required": true,
+              "doc": "The ask."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "How an ask ended."
+    },
+    "AskResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "$ref": "#/types/AskOutcome"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "$ref": "#/types/AskRefusal"
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "The model's ask tool result."
+    },
+    "ReplyResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "sent"
+              },
+              "required": true,
+              "doc": "\"sent\": the mail is durable and pending for its recipient."
+            },
+            "id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/MailId"
+              },
+              "required": true,
+              "doc": "The mail's id."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "$ref": "#/types/ReplyRefusal"
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "The model's reply tool result."
+    },
+    "Waited": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "status": {
+          "type": {
+            "literal": "waited"
+          },
+          "required": true,
+          "doc": "\"waited\": the wait finished."
+        },
+        "finished": {
+          "type": {
+            "array": {
+              "$ref": "#/types/MemberResult"
+            }
+          },
+          "required": true,
+          "doc": "Members that settled (idle or ended)."
+        },
+        "parked": {
+          "type": {
+            "array": {
+              "object": {
+                "member": {
+                  "type": {
+                    "$ref": "#/types/MemberRef"
+                  },
+                  "required": true,
+                  "doc": "The parked member."
+                },
+                "reason": {
+                  "type": {
+                    "$ref": "urn:threads:schema:events:v1#/$defs/ParkReason"
+                  },
+                  "required": true,
+                  "doc": "Why it is parked."
+                }
+              }
+            }
+          },
+          "required": true,
+          "doc": "Members parked at the end: they don't settle."
+        },
+        "pending": {
+          "type": {
+            "array": {
+              "$ref": "#/types/MemberRef"
+            }
+          },
+          "required": true,
+          "doc": "Members still running or starting."
+        },
+        "timed_out": {
+          "type": {
+            "prim": "boolean"
+          },
+          "required": true,
+          "doc": "true when the deadline passed with the mode unmet."
+        }
+      },
+      "doc": "A finished wait."
+    },
+    "WaitResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "$ref": "#/types/Waited"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "$ref": "#/types/ObserveRefusal"
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "The model's wait tool result."
+    },
+    "MonitorResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "monitoring"
+              },
+              "required": true,
+              "doc": "\"monitoring\": a message arrives when the member ends."
+            },
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "The member watched."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "ended"
+              },
+              "required": true,
+              "doc": "\"ended\": the member had already ended."
+            },
+            "result": {
+              "type": {
+                "$ref": "#/types/MemberResult"
+              },
+              "required": true,
+              "doc": "How it ended."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "$ref": "#/types/ObserveRefusal"
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "The model's monitor tool result."
+    },
+    "CancelResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "cancel_requested"
+              },
+              "required": true,
+              "doc": "\"cancel_requested\": the cancel is accepted and durable, not yet applied; the member ends cancelled at its next step."
+            },
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "The member being cancelled."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "$ref": "#/types/CancelRefusal"
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "The model's cancel tool result."
+    },
+    "TeamStartResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "started"
+              },
+              "required": true,
+              "doc": "\"started\": the member exists in state starting; its task is queued."
+            },
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "The new member: its name is <agent>-<k>."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "union": [
+                  {
+                    "$ref": "#/types/StartRefusal"
+                  },
+                  {
+                    "$ref": "#/types/OperatorRefusal"
+                  }
+                ]
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "team.start's result."
+    },
+    "TeamSendResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "sent"
+              },
+              "required": true,
+              "doc": "\"sent\": the mail is durable and pending for its recipient."
+            },
+            "id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/MailId"
+              },
+              "required": true,
+              "doc": "The mail's id."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "union": [
+                  {
+                    "$ref": "#/types/SendRefusal"
+                  },
+                  {
+                    "$ref": "#/types/OperatorRefusal"
+                  }
+                ]
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "team.send's result."
+    },
+    "TeamAskResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "$ref": "#/types/AskOutcome"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "union": [
+                  {
+                    "$ref": "#/types/AskRefusal"
+                  },
+                  {
+                    "$ref": "#/types/OperatorRefusal"
+                  }
+                ]
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "team.ask's result."
+    },
+    "TeamWaitResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "$ref": "#/types/Waited"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "union": [
+                  {
+                    "$ref": "#/types/ObserveRefusal"
+                  },
+                  {
+                    "$ref": "#/types/OperatorRefusal"
+                  }
+                ]
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "team.wait's result."
+    },
+    "TeamCancelResult": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "cancel_requested"
+              },
+              "required": true,
+              "doc": "\"cancel_requested\": the cancel is accepted and durable, not yet applied; the member ends cancelled at its next step."
+            },
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "The member being cancelled."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "refused"
+              },
+              "required": true,
+              "doc": "\"refused\": nothing was done; code says why."
+            },
+            "code": {
+              "type": {
+                "union": [
+                  {
+                    "$ref": "#/types/CancelRefusal"
+                  },
+                  {
+                    "$ref": "#/types/OperatorRefusal"
+                  }
+                ]
+              },
+              "required": true,
+              "doc": "Why it was refused."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "team.cancel's result."
+    },
+    "TeamMember": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "name": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/MemberName"
+          },
+          "required": true,
+          "doc": "The member's name, such as researcher-1."
+        },
+        "ref": {
+          "type": {
+            "$ref": "#/types/MemberRef"
+          },
+          "required": true,
+          "doc": "Its full reference."
+        },
+        "agent": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Name"
+          },
+          "required": true,
+          "doc": "The agent it runs."
+        },
+        "state": {
+          "type": {
+            "$ref": "#/types/MemberState"
+          },
+          "required": true,
+          "doc": "Where it is in its lifecycle."
+        },
+        "result": {
+          "type": {
+            "$ref": "#/types/MemberResult"
+          },
+          "required": false,
+          "doc": "Present once idle or ended. Absent while starting, running or parked."
+        }
+      },
+      "doc": "One row of team.members()."
+    },
+    "AskStatus": {
+      "kind": "union",
+      "discriminator": "status",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "open"
+              },
+              "required": true,
+              "doc": "\"open\": waiting for a reply."
+            },
+            "ask_id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/AskId"
+              },
+              "required": true,
+              "doc": "The ask."
+            },
+            "deadline": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/TimeMs"
+              },
+              "required": true,
+              "doc": "When it times out."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "status": {
+              "type": {
+                "literal": "not_found"
+              },
+              "required": true,
+              "doc": "\"not_found\": no such ask in this team's log."
+            },
+            "ask_id": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/AskId"
+              },
+              "required": true,
+              "doc": "The ask."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "$ref": "#/types/AskOutcome"
+        }
+      ],
+      "doc": "team.askStatus's answer."
+    },
+    "TeamCursor": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "epoch": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+          },
+          "required": true,
+          "doc": "The feed's epoch; a rebuilt feed starts a new one."
+        },
+        "offset": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+          },
+          "required": true,
+          "doc": "The position in that epoch."
+        }
+      },
+      "doc": "A position in the team feed, to resume team.events after."
+    },
+    "TeamSource": {
+      "kind": "union",
+      "discriminator": "kind",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "kind": {
+              "type": {
+                "literal": "member"
+              },
+              "required": true,
+              "doc": "\"member\": a member's (or the lead's) own log."
+            },
+            "member": {
+              "type": {
+                "$ref": "#/types/MemberRef"
+              },
+              "required": true,
+              "doc": "Which member."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "kind": {
+              "type": {
+                "literal": "operator"
+              },
+              "required": true,
+              "doc": "\"operator\": the team log's events of one operator request."
+            },
+            "principal": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/Principal"
+              },
+              "required": true,
+              "doc": "Who made the request."
+            },
+            "request": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/RequestId"
+              },
+              "required": true,
+              "doc": "The request."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "kind": {
+              "type": {
+                "literal": "team"
+              },
+              "required": true,
+              "doc": "\"team\": the team log's own team_opened."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "Which log a feed item came from."
+    },
+    "TeamItem": {
+      "kind": "union",
+      "discriminator": "kind",
+      "casing": "api",
+      "variants": [
+        {
+          "object": {
+            "kind": {
+              "type": {
+                "literal": "event"
+              },
+              "required": true,
+              "doc": "\"event\": one committed event."
+            },
+            "cursor": {
+              "type": {
+                "$ref": "#/types/TeamCursor"
+              },
+              "required": true,
+              "doc": "Resume after it."
+            },
+            "source": {
+              "type": {
+                "$ref": "#/types/TeamSource"
+              },
+              "required": true,
+              "doc": "Where the event was written."
+            },
+            "event": {
+              "type": {
+                "$ref": "urn:threads:schema:events:v1#/$defs/Event"
+              },
+              "required": true,
+              "doc": "The event exactly as stored."
+            }
+          },
+          "casing": "api"
+        },
+        {
+          "object": {
+            "kind": {
+              "type": {
+                "literal": "epoch_restarted"
+              },
+              "required": true,
+              "doc": "\"epoch_restarted\": the feed was rebuilt; items restart from the new epoch."
+            },
+            "cursor": {
+              "type": {
+                "$ref": "#/types/TeamCursor"
+              },
+              "required": true,
+              "doc": "The new epoch's start."
+            }
+          },
+          "casing": "api"
+        }
+      ],
+      "doc": "One item of team.events()."
+    },
+    "StoreCorruptError": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "code": {
+          "type": {
+            "enum": [
+              "artifact_missing",
+              "artifact_corrupt"
+            ]
+          },
+          "required": true,
+          "doc": "Whether the bytes are gone or differ from the ref."
+        },
+        "ref": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/ArtifactRef"
+          },
+          "required": true,
+          "doc": "The verified ref that failed."
+        }
+      },
+      "doc": "Thrown by the four result reads (Team.wait, members, ask and askStatus) when a result the verified log names is missing or corrupt in the artifact store: a broken store invariant, never an expected failure. TS class StoreCorruptError extends Error, Python exception StoreCorruptError."
+    },
+    "MessagePolicyRule": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "from": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Name"
+          },
+          "required": true,
+          "doc": "The acting agent."
+        },
+        "to": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Name"
+          },
+          "required": true,
+          "doc": "The target agent."
+        },
+        "allow": {
+          "type": {
+            "array": {
+              "enum": [
+                "start",
+                "send",
+                "ask",
+                "monitor",
+                "cancel"
+              ]
+            }
+          },
+          "required": true,
+          "doc": "What from may do to to; wait is monitor."
+        },
+        "budget": {
+          "type": {
+            "$ref": "urn:threads:schema:events:v1#/$defs/Budget"
+          },
+          "required": false,
+          "doc": "Caps each member from starts; a member's budget is the smaller of this and start's. Omitted: no cap beyond the agent's own."
+        }
+      },
+      "doc": "One host messagePolicy rule. Anything no rule or team grant allows is denied."
     }
   },
   "cli": [
@@ -3622,7 +5853,7 @@
     {
       "usage": "threads delete <thread_id> | --tenant <tenant_id>",
       "via": "the store's thread deletion",
-      "doc": "Writes a tombstone, removes log rows and projections, and moves live resources to releasing; subagent threads spawned under it are deleted the same way, recursively, handoff targets are not (spec/schema/README.md, Deleting a thread)."
+      "doc": "Writes a tombstone, removes log rows and projections, and moves live resources to releasing; subagent threads spawned under it are deleted the same way, recursively, handoff targets are not (spec/schema/README.md, Deleting a thread). A lead takes its whole team set in one transaction; busy or thread_in_team is printed as <code>: <message> with a nonzero exit."
     },
     {
       "usage": "threads gc [--grace-days <n>]",

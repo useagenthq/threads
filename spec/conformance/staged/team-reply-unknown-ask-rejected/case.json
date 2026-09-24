@@ -1,0 +1,9 @@
+{
+  "name": "team-reply-unknown-ask-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 35: a reply names an ask this log never received.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

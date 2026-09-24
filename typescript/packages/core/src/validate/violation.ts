@@ -1,7 +1,10 @@
 /** A broken semantic rule (spec/schema/README.md, "Semantic rules"); undefined means none. */
 export type Violation =
   | {
-      readonly code: "invalid_transition" | "approval_mismatch";
+      readonly code:
+        | "invalid_transition"
+        | "approval_mismatch"
+        | "unsupported_critical_event";
       readonly message: string;
     }
   | undefined;

@@ -1,0 +1,842 @@
+{
+  "outcome": "ok",
+  "states": {
+    "lead": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+      "epoch": 1,
+      "turns_completed": 1,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 330,
+        "output_tokens": 70,
+        "unknown_responses": 0
+      },
+      "transcript": [
+        {
+          "role": "user",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-000000000004"
+        },
+        {
+          "role": "tool",
+          "event_id": "0192e001-0000-7000-8000-00000000000a"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-00000000000c"
+        },
+        {
+          "role": "tool",
+          "event_id": "0192e001-0000-7000-8000-000000000012"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-000000000014"
+        },
+        {
+          "role": "tool",
+          "event_id": "0192e001-0000-7000-8000-000000000019"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-00000000001b"
+        },
+        {
+          "role": "context",
+          "event_id": "0192e001-0000-7000-8000-00000000001e"
+        },
+        {
+          "role": "context",
+          "event_id": "0192e001-0000-7000-8000-00000000001f"
+        }
+      ],
+      "status": "in_turn",
+      "head": {
+        "seq": 32,
+        "hash": "aa4154eb2ad4bb0d01744f84da2de9c0e0f738fd0f847ec3ac4b17f9fc3906a9"
+      }
+    },
+    "researcher": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+      "epoch": 1,
+      "turns_completed": 1,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_responses": 0
+      },
+      "transcript": [
+        {
+          "role": "user",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        }
+      ],
+      "status": "idle",
+      "head": {
+        "seq": 9,
+        "hash": "0247a2438dc235eeff9eabdc69b4d2bc3ebac380280e0fa7f16bc468d73e056d"
+      }
+    },
+    "team": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_responses": 0
+      },
+      "transcript": [],
+      "status": "idle",
+      "head": {
+        "seq": 1,
+        "hash": "54063622675b31952aefc7955a9ed41f4d0c5bc89eb575114c4e0a20cc014604"
+      }
+    },
+    "writer": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b4",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 80,
+        "output_tokens": 20,
+        "unknown_responses": 0
+      },
+      "transcript": [
+        {
+          "role": "user",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-000000000004"
+        },
+        {
+          "role": "tool",
+          "event_id": "0192e001-0000-7000-8000-00000000000d"
+        }
+      ],
+      "status": "in_turn",
+      "head": {
+        "seq": 13,
+        "hash": "204f904f50f6b023c5249f73143a0982e86de7233abd09fdd58d9fefb0b618e6"
+      }
+    }
+  },
+  "index": {
+    "teams": [
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "tenant_id": "acme",
+        "lead_thread_id": "0192a000-0000-7000-8000-0000000000b1",
+        "team_log_branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "closed_at": null
+      }
+    ],
+    "team_members": [
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "name": "lead",
+        "generation": 1,
+        "role": "lead",
+        "agent": "lead",
+        "config_hash": "bfe90dd30a179b4b086c27c247f828b44d52b196df761f185dd234ce54a10ee1",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "provenance": null,
+        "state": "running",
+        "result": {
+          "member": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "lead",
+            "generation": 1
+          },
+          "status": "completed",
+          "output": {
+            "text": "Started the researcher and the writer."
+          }
+        },
+        "updated_seq": 30
+      },
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "name": "researcher-1",
+        "generation": 1,
+        "role": "member",
+        "agent": "researcher",
+        "config_hash": "66f5255887dece1271d2dfa9bedb5c3e4faf71de4d33464555b256ba93ffc446",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
+        },
+        "state": "ended",
+        "result": {
+          "member": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "status": "failed",
+          "error": {
+            "code": "pin_unavailable",
+            "message": "rebind failed: pin_unavailable"
+          }
+        },
+        "updated_seq": 4
+      },
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "name": "writer-1",
+        "generation": 1,
+        "role": "member",
+        "agent": "writer",
+        "config_hash": "f09febb8846e1928979f4d62cd9d75b45d780ccba678ab0468c301c0187bf68f",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b4",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
+        },
+        "state": "running",
+        "result": null,
+        "updated_seq": 12
+      }
+    ],
+    "mail": [
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b1:c1",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "task",
+        "to_name": "researcher-1",
+        "to_generation": 1,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b1:c1",
+          "kind": "task",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "lead",
+            "generation": 1
+          },
+          "to": {
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+            "event_id": "0192e001-0000-7000-8000-000000000005"
+          },
+          "body": {
+            "text": "Your task, researcher."
+          }
+        },
+        "created_at": 1790000009000,
+        "state": "consumed",
+        "consumed_seq": 2
+      },
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b1:c2",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "task",
+        "to_name": "writer-1",
+        "to_generation": 1,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b1:c2",
+          "kind": "task",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "lead",
+            "generation": 1
+          },
+          "to": {
+            "name": "writer-1",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+            "event_id": "0192e001-0000-7000-8000-00000000000d"
+          },
+          "body": {
+            "text": "Your task, writer."
+          }
+        },
+        "created_at": 1790000017000,
+        "state": "consumed",
+        "consumed_seq": 2
+      },
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b1:c3",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "message",
+        "to_name": "researcher-1",
+        "to_generation": 1,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b1:c3",
+          "kind": "message",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "lead",
+            "generation": 1
+          },
+          "to": {
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+            "event_id": "0192e001-0000-7000-8000-000000000015"
+          },
+          "body": {
+            "text": "Keep it short."
+          }
+        },
+        "created_at": 1790000024000,
+        "state": "returned",
+        "consumed_seq": 6
+      },
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000005",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "member_ended",
+        "to_name": "lead",
+        "to_generation": 1,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000005",
+          "kind": "member_ended",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "to": {
+            "name": "lead",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+            "event_id": "0192e001-0000-7000-8000-000000000004"
+          },
+          "monitor_id": "0192b000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000008:task",
+          "result": {
+            "member": {
+              "tenant": "acme",
+              "team": "0192c000-0000-7000-8000-000000000001",
+              "name": "researcher-1",
+              "generation": 1
+            },
+            "status": "failed",
+            "error": {
+              "code": "pin_unavailable",
+              "message": "rebind failed: pin_unavailable"
+            }
+          }
+        },
+        "created_at": 1790000005000,
+        "state": "consumed",
+        "consumed_seq": 30
+      },
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000007",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "bounce",
+        "to_name": "lead",
+        "to_generation": 1,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000007",
+          "kind": "bounce",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "to": {
+            "name": "lead",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+            "event_id": "0192e001-0000-7000-8000-000000000006"
+          },
+          "code": "member_ended"
+        },
+        "created_at": 1790000007000,
+        "state": "consumed",
+        "consumed_seq": 31
+      },
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000009",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "bounce",
+        "to_name": "writer-1",
+        "to_generation": 1,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000009",
+          "kind": "bounce",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "to": {
+            "name": "writer-1",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+            "event_id": "0192e001-0000-7000-8000-000000000008"
+          },
+          "code": "member_ended",
+          "ask_id": "0192b000-0000-7000-8000-0000000000b4:c1",
+          "result": {
+            "member": {
+              "tenant": "acme",
+              "team": "0192c000-0000-7000-8000-000000000001",
+              "name": "researcher-1",
+              "generation": 1
+            },
+            "status": "failed",
+            "error": {
+              "code": "pin_unavailable",
+              "message": "rebind failed: pin_unavailable"
+            }
+          }
+        },
+        "created_at": 1790000009000,
+        "state": "consumed",
+        "consumed_seq": 10
+      },
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b4:c1",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "kind": "ask",
+        "to_name": "researcher-1",
+        "to_generation": 1,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b4:c1",
+          "kind": "ask",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "writer-1",
+            "generation": 1
+          },
+          "to": {
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b4",
+            "event_id": "0192e001-0000-7000-8000-000000000005"
+          },
+          "ask_id": "0192b000-0000-7000-8000-0000000000b4:c1",
+          "deadline": 1790000120000,
+          "body": {
+            "text": "Which topic?"
+          }
+        },
+        "created_at": 1790000008000,
+        "state": "returned",
+        "consumed_seq": 8
+      }
+    ],
+    "asks": [
+      {
+        "ask_id": "0192b000-0000-7000-8000-0000000000b4:c1",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "asker_branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "recipient_name": "researcher-1",
+        "recipient_generation": 1,
+        "deadline": 1790000120000,
+        "state": "member_ended",
+        "closed_seq": 11
+      }
+    ],
+    "monitors": [
+      {
+        "monitor_id": "0192b000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000010:task",
+        "team_id": "0192c000-0000-7000-8000-000000000001",
+        "watcher_branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "target_name": "writer-1",
+        "target_generation": 1,
+        "kind": "task",
+        "wait_id": null
+      }
+    ],
+    "operator_receipts": [],
+    "team_feed": [
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 1
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 2
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 3
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 4
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 5
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 6
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 7
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 8
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 9
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 10
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 11
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 12
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 13
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 14
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 15
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 16
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 17
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 18
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 19
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 20
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 21
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 22
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 23
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 24
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 25
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 26
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 27
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 28
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 29
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 30
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 31
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+        "seq": 32
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 1
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 2
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 3
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 4
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 5
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 6
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 7
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 8
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 9
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 1
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 1
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 2
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 3
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 4
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 5
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 6
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 7
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 8
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 9
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 10
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 11
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 12
+      },
+      {
+        "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+        "seq": 13
+      }
+    ],
+    "pending_wakes": []
+  }
+}

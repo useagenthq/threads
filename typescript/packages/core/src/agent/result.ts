@@ -72,8 +72,11 @@ export function runResult<Output>(
   if (done?.type !== "turn_completed")
     throw new Error("an idle run ended its turn");
   // A typed error end (the capability pre-check) reports its own code.
-  if (done.data.code !== undefined)
-    return failed(done.data.code, done.data.reason, thread);
+  const { code } = done.data;
+  // Only a team member's rebind ends a turn this way, and a member's result is a MemberResult.
+  if (code === "pin_unavailable" || code === "pin_mismatch")
+    throw new Error(`a run's turn can't end ${code}: only a member rebinds`);
+  if (code !== undefined) return failed(code, done.data.reason, thread);
   return ended(done.data.reason, turn, thread, decode);
 }
 

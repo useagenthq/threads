@@ -1,0 +1,17 @@
+{
+  "name": "team-failed-rebind-bounces",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "The lead starts researcher-1 and writer-1 and sends the researcher a message. The writer, a member, asks the still-starting researcher and parks on the ask. The researcher's rebind fails: one append opens its log with the task's user_input, turn_completed{error: pin_unavailable}, member_ended{failed}, one member_ended notification for the lead's task monitor, and a mail_refused plus a bounce for the message and for the ask; the ask's bounce carries the ask_id and the result. The parked writer consumes that bounce as control mail: ask_closed{member_ended}, resumed and the ask call's one tool_result, with no turn opened by the bounce and no timeout. The idle lead wakes on the task notification. The index rebuilds both tasks consumed, both refused mails returned, the ask closed member_ended and only the writer's task monitor left.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "researcher",
+      "team",
+      "writer"
+    ]
+  }
+}

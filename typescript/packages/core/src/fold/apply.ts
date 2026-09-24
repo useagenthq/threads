@@ -100,6 +100,22 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "context_edited":
     case "permission_rule_added":
     case "context_preflight_blocked":
+    case "team_opened":
+    case "member_started":
+    case "member_idle":
+    case "member_ended":
+    case "member_observed":
+    case "monitor_set":
+    case "wait_started":
+    case "wait_finished":
+    case "woken":
+    case "message_sent":
+    case "message_received":
+    case "mail_refused":
+    case "ask_closed":
+    case "operator_request":
+    case "operator_refused":
+    case "message_policy_decided":
       return;
     default:
       assertNever(e);

@@ -217,6 +217,22 @@ function visible(e: KnownEvent): VisibleEvent | undefined {
     case "team_message":
     case "context_preflight_blocked":
     case "compaction_requested":
+    case "team_opened":
+    case "member_started":
+    case "member_idle":
+    case "member_ended":
+    case "member_observed":
+    case "monitor_set":
+    case "wait_started":
+    case "wait_finished":
+    case "woken":
+    case "message_sent":
+    case "message_received":
+    case "mail_refused":
+    case "ask_closed":
+    case "operator_request":
+    case "operator_refused":
+    case "message_policy_decided":
       return undefined;
     default:
       return assertNever(e);

@@ -10,6 +10,7 @@ import {
   CATALOG,
   entry,
   GATED_TOOLS,
+  MEMBER_TOOLS,
   PROVIDER_TOOLS,
 } from "../../src/tools/catalog";
 
@@ -65,7 +66,8 @@ describe("built-in tool catalog", () => {
         (e) =>
           !AGENT_TOOLS.has(e.name) &&
           !PROVIDER_TOOLS.has(e.name) &&
-          !GATED_TOOLS.has(e.name),
+          !GATED_TOOLS.has(e.name) &&
+          !MEMBER_TOOLS.has(e.name),
       ),
     );
     expect(CATALOG.map((e) => e.name)).toEqual(listed.map((e) => e.name));

@@ -25,6 +25,7 @@ ROLES = {
     "steer": "user",
     "injected": "context",
     "heartbeat": "context",
+    "message_received": "context",
     "model_response": "assistant",
     "model_response_recovered": "assistant",
     "tool_result": "tool",
@@ -204,6 +205,38 @@ class _View:
             m["late"] = True
         return m
 
+    def message(self, e: Obj) -> Obj | None:
+        """A received mail, as untrusted reference. Mail whose content reaches the model as a
+        call's result (a reply, an ask's bounce, a wait's notification), a cancel and a park
+        notice render nothing."""
+        env = obj(obj(e["data"])["envelope"])
+        kind = text(env["kind"])
+        if kind in ("reply", "cancel", "member_parked") or (kind == "bounce" and "ask_id" in env):
+            return None
+        settle = env.get("monitor_id") in _settle_monitors(self.events)
+        if kind in ("member_settled", "member_ended") and settle:
+            return None
+        sender = obj(env["from"])
+        who = 'operator="true"' if "operator" in sender else f'from="{esc(text(sender["name"]))}"'
+        ask = f' ask_id="{esc(text(env["ask_id"]))}"' if kind == "ask" else ""
+        head = f'<message {who} kind="{kind}"{ask} untrusted="true">'
+        return user_line(f"{head}\n{esc(self._mail_text(env))}\n</message>")
+
+    def _mail_text(self, env: Obj) -> str:
+        if "body" in env:
+            return self._text_of(obj(env["body"]))
+        if "result" not in env:
+            return f"bounced: {text(env['code'])}"
+        result = obj(env["result"])
+        if "output" in result:
+            result = {**result, "output": self._text_of(obj(result["output"]))}
+        return canonical(result).decode()
+
+    def _text_of(self, body: Obj) -> str:
+        if "text" in body:
+            return text(body["text"])
+        return self.artifacts[text(obj(body["ref"])["sha256"])].decode()
+
     def summary(self, c: Obj) -> Obj:
         ref = obj(obj(c["data"])["summary_ref"])
         sha = text(ref["sha256"])
@@ -261,6 +294,16 @@ def _foreign_memory(events: list[Obj]) -> set[str]:
     return {i for i, p in recalled_for.items() if p != current}
 
 
+def _settle_monitors(events: list[Obj]) -> set[str]:
+    """The settle monitors a wait registered: their notifications answer the wait call."""
+    return {
+        f"{e['branch_id']}:{e['event_id']}:{text(obj(m)['name'])}"
+        for e in events
+        if e["type"] == "wait_started"
+        for m in arr(obj(e["data"])["members"])
+    }
+
+
 def _bind(fn: Callable[[_View, Obj], Obj | None], v: _View, e: Obj) -> Callable[[], Obj | None]:
     return lambda: fn(v, e)
 
@@ -275,6 +318,7 @@ BUILDERS: dict[str, Callable[[_View, Obj], Obj | None]] = {
     "model_response_recovered": _View.assistant,
     "tool_result": _View.result,
     "tool_result_late": _View.result,
+    "message_received": _View.message,
 }
 
 
@@ -303,6 +347,8 @@ def render(
 def transcript(events: list[Obj], artifacts: dict[str, bytes]) -> list[JsonValue]:
     """ReducedState.transcript: the conversational entries the next request renders."""
     out: list[JsonValue] = []
+    if not any(e["type"] == "thread_started" for e in events):
+        return out  # a team log never renders
     for e, build in _View(events, artifacts).walk():
         role = ROLES.get(text(e["type"]))
         if role is not None and (role == "summary" or build() is not None):

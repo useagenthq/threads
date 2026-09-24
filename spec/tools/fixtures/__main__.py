@@ -41,12 +41,18 @@ from . import (
     structure,
     styles,
     summaries,
+    team_bindings,
+    team_operator,
+    team_rebind,
+    team_replay,
+    team_rules,
+    team_wire,
     teams,
     thread_methods,
     tool_groups,
     tool_inputs,
 )
-from .common import CASES, sha
+from .common import CASES, STAGED, sha
 from .integrity import FOREIGN_WRITER
 from .jcs import selftest
 from .log import WRITERS, set_writer
@@ -109,6 +115,14 @@ def _build(out: pathlib.Path) -> None:
         family.build(out)
 
 
+def _build_staged(out: pathlib.Path) -> None:
+    """Cases for an approved spec whose build hasn't landed: generated and checked like the
+    corpus, but no runner reads them until the build moves each family into FAMILIES."""
+    out.mkdir()
+    for family in (team_rules, team_bindings, team_replay, team_rebind, team_operator):
+        family.build(out)
+
+
 APPENDING_KINDS = frozenset({"recover", "stub"})
 
 
@@ -163,23 +177,27 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         out = pathlib.Path(tmp) / "cases"
         _generate(out)
+        staged = pathlib.Path(tmp) / "staged"
+        _build_staged(staged)
         problems = coverage.check(out)
         if sys.argv[1:] == ["--check"]:
-            problems += tool_inputs.check() + tool_groups.check()
+            problems += tool_inputs.check() + tool_groups.check() + team_wire.check()
         for p in problems:
             print(f"coverage.json: {p}")
         if problems:
             return 1
         if sys.argv[1:] == ["--check"]:
-            diffs = _diff(out, CASES)
+            diffs = _diff(out, CASES) + [f"staged/{d}" for d in _diff(staged, STAGED)]
             for d in diffs:
                 print(d)
             print("fixtures up to date" if not diffs else f"{len(diffs)} difference(s)")
             return 1 if diffs else 0
         tool_inputs.write()
         tool_groups.write()
-        shutil.rmtree(CASES, ignore_errors=True)
-        shutil.copytree(out, CASES)
+        team_wire.write()
+        for built, dest in ((out, CASES), (staged, STAGED)):
+            shutil.rmtree(dest, ignore_errors=True)
+            shutil.copytree(built, dest)
         print(f"wrote {sum(1 for _ in CASES.iterdir())} cases")
     return 0
 

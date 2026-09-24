@@ -1,0 +1,9 @@
+{
+  "name": "receipt-actor-not-provenance-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 45: a receipt's actor principal is not its envelope's provenance principal.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

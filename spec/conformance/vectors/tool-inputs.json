@@ -1,6 +1,6 @@
 {
   "description": "Built-in tool inputs: each case is parsed with the tool's catalog schema (Zod in TypeScript, the generated Pydantic model in Python) and must be accepted exactly when valid. catalog_sha256 is the SHA-256 of spec/schema/tools.v1.catalog.json, the canonical catalog both runtimes pin.",
-  "catalog_sha256": "92e0e0e4112bd7922afe2774ebaf92aca7d62f30fc067ab8b0d3ec1847f5b733",
+  "catalog_sha256": "e993748bf0467aa6891fce8358747c0048d9d517ae360f0dc8d1db41afa27898",
   "cases": [
     {
       "tool": "bash",
@@ -1181,6 +1181,134 @@
         "new_source": "x",
         "cell_type": "raw"
       },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "researcher",
+        "task": "Topic: batteries."
+      },
+      "valid": true
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "researcher",
+        "task": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "start",
+      "input": {
+        "agent": "researcher",
+        "task": "x",
+        "budget": {
+          "max_turns": 1
+        }
+      },
+      "valid": false
+    },
+    {
+      "tool": "send",
+      "input": {
+        "to": "researcher-1",
+        "text": "Keep it short."
+      },
+      "valid": true
+    },
+    {
+      "tool": "send",
+      "input": {
+        "to": "",
+        "text": "x"
+      },
+      "valid": false
+    },
+    {
+      "tool": "ask",
+      "input": {
+        "to": "writer-1",
+        "question": "Which topic?"
+      },
+      "valid": true
+    },
+    {
+      "tool": "ask",
+      "input": {
+        "to": "writer-1",
+        "text": "Which topic?"
+      },
+      "valid": false
+    },
+    {
+      "tool": "reply",
+      "input": {
+        "ask_id": "b:c1",
+        "text": "Batteries."
+      },
+      "valid": true
+    },
+    {
+      "tool": "reply",
+      "input": {
+        "ask_id": "",
+        "text": "Batteries."
+      },
+      "valid": false
+    },
+    {
+      "tool": "wait",
+      "input": {
+        "members": [
+          "researcher-1",
+          "researcher-2"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "tool": "wait",
+      "input": {
+        "members": []
+      },
+      "valid": false
+    },
+    {
+      "tool": "wait",
+      "input": {
+        "members": [
+          "researcher-1"
+        ],
+        "mode": "any"
+      },
+      "valid": false
+    },
+    {
+      "tool": "monitor",
+      "input": {
+        "member": "researcher-1"
+      },
+      "valid": true
+    },
+    {
+      "tool": "monitor",
+      "input": {
+        "member": 1
+      },
+      "valid": false
+    },
+    {
+      "tool": "cancel",
+      "input": {
+        "member": "researcher-1"
+      },
+      "valid": true
+    },
+    {
+      "tool": "cancel",
+      "input": {},
       "valid": false
     }
   ]

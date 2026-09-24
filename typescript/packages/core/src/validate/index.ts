@@ -14,6 +14,7 @@ import {
   checkToolResult,
 } from "./calls";
 import { checkModeChanged, checkOutput, checkToolsChanged } from "./config";
+import { checkNotYetTeam } from "./team";
 import {
   checkCause,
   checkCompactionRequested,
@@ -43,7 +44,7 @@ export function validateNext(
   if (fold.eventIds.has(event.event_id))
     return fail(`event_id ${event.event_id} repeats on the chain`, event.seq);
   if (line.kind === "unknown_event") return ok(undefined);
-  const violation = check(fold, line.event);
+  const violation = checkNotYetTeam(line.event) ?? check(fold, line.event);
   return violation === undefined
     ? ok(undefined)
     : err(logError(violation.code, violation.message, event.seq));
@@ -137,6 +138,23 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "handoff":
     case "team_task_created":
     case "context_preflight_blocked":
+      return undefined;
+    case "team_opened":
+    case "member_started":
+    case "member_idle":
+    case "member_ended":
+    case "member_observed":
+    case "monitor_set":
+    case "wait_started":
+    case "wait_finished":
+    case "woken":
+    case "message_sent":
+    case "message_received":
+    case "mail_refused":
+    case "ask_closed":
+    case "operator_request":
+    case "operator_refused":
+    case "message_policy_decided":
       return undefined;
     default:
       return assertNever(e);

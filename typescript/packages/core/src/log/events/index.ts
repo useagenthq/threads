@@ -47,12 +47,32 @@ import {
   UserInput,
 } from "./input";
 import {
+  AskClosed,
+  MailRefused,
+  MessagePolicyDecided,
+  MessageReceived,
+  MessageSent,
+  OperatorRefused,
+  OperatorRequest,
+} from "./mail";
+import {
   ModelAttemptAbandoned,
   ModelRequest,
   ModelResponse,
   ModelResponseRecovered,
   RetryScheduled,
 } from "./model";
+import {
+  MemberEnded,
+  MemberIdle,
+  MemberObserved,
+  MemberStarted,
+  MonitorSet,
+  TeamOpened,
+  WaitFinished,
+  WaitStarted,
+  Woken,
+} from "./team";
 import {
   Fork,
   LogRepaired,
@@ -126,6 +146,22 @@ export const EVENT_TYPES = [
   "team_message",
   "context_preflight_blocked",
   "compaction_requested",
+  "team_opened",
+  "member_started",
+  "member_idle",
+  "member_ended",
+  "member_observed",
+  "monitor_set",
+  "wait_started",
+  "wait_finished",
+  "woken",
+  "message_sent",
+  "message_received",
+  "mail_refused",
+  "ask_closed",
+  "operator_request",
+  "operator_refused",
+  "message_policy_decided",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -186,6 +222,22 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
     typeof TeamMessage.schema,
     typeof ContextPreflightBlocked.schema,
     typeof CompactionRequested.schema,
+    typeof TeamOpened.schema,
+    typeof MemberStarted.schema,
+    typeof MemberIdle.schema,
+    typeof MemberEnded.schema,
+    typeof MemberObserved.schema,
+    typeof MonitorSet.schema,
+    typeof WaitStarted.schema,
+    typeof WaitFinished.schema,
+    typeof Woken.schema,
+    typeof MessageSent.schema,
+    typeof MessageReceived.schema,
+    typeof MailRefused.schema,
+    typeof AskClosed.schema,
+    typeof OperatorRequest.schema,
+    typeof OperatorRefused.schema,
+    typeof MessagePolicyDecided.schema,
   ],
   "type"
 > = z.discriminatedUnion("type", [
@@ -243,6 +295,22 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
   TeamMessage.schema,
   ContextPreflightBlocked.schema,
   CompactionRequested.schema,
+  TeamOpened.schema,
+  MemberStarted.schema,
+  MemberIdle.schema,
+  MemberEnded.schema,
+  MemberObserved.schema,
+  MonitorSet.schema,
+  WaitStarted.schema,
+  WaitFinished.schema,
+  Woken.schema,
+  MessageSent.schema,
+  MessageReceived.schema,
+  MailRefused.schema,
+  AskClosed.schema,
+  OperatorRequest.schema,
+  OperatorRefused.schema,
+  MessagePolicyDecided.schema,
 ]);
 export type KnownEvent = z.infer<typeof KnownEvent>;
 
@@ -302,6 +370,22 @@ export const EVENT_FRAGMENTS: readonly z.ZodType[] = [
   TeamMessage.fragment,
   ContextPreflightBlocked.fragment,
   CompactionRequested.fragment,
+  TeamOpened.fragment,
+  MemberStarted.fragment,
+  MemberIdle.fragment,
+  MemberEnded.fragment,
+  MemberObserved.fragment,
+  MonitorSet.fragment,
+  WaitStarted.fragment,
+  WaitFinished.fragment,
+  Woken.fragment,
+  MessageSent.fragment,
+  MessageReceived.fragment,
+  MailRefused.fragment,
+  AskClosed.fragment,
+  OperatorRequest.fragment,
+  OperatorRefused.fragment,
+  MessagePolicyDecided.fragment,
 ];
 
 export * from "./agents";
@@ -309,7 +393,9 @@ export * from "./context";
 export * from "./control";
 export * from "./effects";
 export * from "./input";
+export * from "./mail";
 export * from "./model";
 export * from "./one-of";
+export * from "./team";
 export * from "./thread";
 export * from "./tools";

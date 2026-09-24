@@ -1,0 +1,16 @@
+{
+  "name": "team-operator-start-and-wait",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "The operator's team.start is an operator_request in the team log, with the team's grant, member_started (its parent is the lead's thread_started) and the task mail from {operator: request_id}. The member settles; the team log records the task notification only. team.wait then finds the member idle and records member_observed and wait_finished in the same append. The index rebuilds both operator_receipts rows, the member idle, the task and notification consumed, and no monitor left.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "researcher",
+      "team"
+    ]
+  }
+}

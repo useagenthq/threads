@@ -106,7 +106,9 @@ CREATE TABLE IF NOT EXISTS observer_cursors (
 -- attempt_key is '<branch_id>:<seq>' of that model_request. A response settles its rows to the
 -- attempt's disposition; an attempt not proven unbilled keeps its bound. A
 -- reserved row whose attempt never reached the log is released by its branch's next writer.
--- budget_id: 'thread:<thread_id>' (policy.budget) or 'run:<thread_id>:<user_input event_id>'.
+-- budget_id: 'thread:<thread_id>' (policy.budget) or 'run:<thread_id>:<user_input event_id>'; a
+-- team member's turn charges the run budget of its root request, which for an operator request is
+-- 'run:<team log thread_id>:<operator_request event_id>'.
 -- A projection with a durable cache: the rows can be rebuilt from the tree's logs.
 CREATE TABLE IF NOT EXISTS budget_ledger (
   budget_id TEXT NOT NULL,
@@ -254,4 +256,150 @@ CREATE TABLE IF NOT EXISTS tombstones (
   deleted_at INTEGER NOT NULL
 ) STRICT;
 
-PRAGMA user_version = 1;
+-- Teams (spec/schema/README.md, "Teams"; store version 4). Every row below is an index of the
+-- logs: it is inserted or changed only in the transaction of an append whose events hold every
+-- byte it needs, so wiping these tables and folding the team's logs (every member log and the
+-- team log) rebuilds them byte for byte. The one exception is mail's claim columns, which are
+-- wake hints and rebuild as null. JSON columns hold RFC 8785 bytes.
+
+-- team_opened (in the team log, written by the lead's first append) inserts the row; the lead's
+-- member_ended sets closed_at to that event's time.
+CREATE TABLE IF NOT EXISTS teams (
+  team_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  lead_thread_id TEXT NOT NULL,
+  team_log_branch_id TEXT NOT NULL,
+  closed_at INTEGER
+) STRICT;
+
+-- One row per member generation, the lead included: role lead is inserted by the lead's first
+-- append, from its thread_started{team} and the team log's team_opened (a lead has no
+-- provenance); every other row comes from member_started. branch_id is null only in the starting
+-- window, before materialize opens the member's branch. state and result
+-- change only in the member's own appends: a turn opener sets running, parked and resumed set
+-- parked and running, member_idle sets idle and result, member_ended sets ended and result.
+-- updated_seq is the seq of the event that last wrote the row, in the log that holds it.
+CREATE TABLE IF NOT EXISTS team_members (
+  team_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  generation INTEGER NOT NULL CHECK (generation >= 1),
+  role TEXT NOT NULL CHECK (role IN ('lead', 'member')),
+  agent TEXT NOT NULL,
+  config_hash TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
+  branch_id TEXT,
+  provenance BLOB,
+  state TEXT NOT NULL CHECK (state IN ('starting', 'running', 'idle', 'parked', 'ended')),
+  result BLOB,
+  updated_seq INTEGER NOT NULL,
+  PRIMARY KEY (team_id, name, generation),
+  CHECK ((state = 'starting') = (branch_id IS NULL)),
+  CHECK ((role = 'lead') = (provenance IS NULL))
+) STRICT;
+
+-- One row per mail, inserted by the sender's message_sent: envelope is that event's envelope
+-- byte for byte, and created_at is its time (the consume order is (created_at, mail_id)). The
+-- recipient's writer moves it once: message_received (or a task's user_input{source: team_task})
+-- to consumed, mail_refused to stale (stale_member) or returned (member_ended). A null to_name is
+-- the team log. claim_token and claim_expires_at deduplicate wakes among workers and are never
+-- needed for correctness.
+CREATE TABLE IF NOT EXISTS mail (
+  mail_id TEXT PRIMARY KEY,
+  team_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (
+    kind IN (
+      'message', 'ask', 'reply', 'task', 'cancel',
+      'member_settled', 'member_parked', 'member_ended', 'bounce'
+    )
+  ),
+  to_name TEXT,
+  to_generation INTEGER,
+  principal_key TEXT NOT NULL,
+  root_request TEXT NOT NULL,
+  envelope BLOB NOT NULL,
+  created_at INTEGER NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('pending', 'consumed', 'stale', 'returned')),
+  claim_token TEXT,
+  claim_expires_at INTEGER,
+  consumed_seq INTEGER,
+  CHECK ((to_name IS NULL) = (to_generation IS NULL))
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS mail_pending
+  ON mail (team_id, to_name, to_generation, created_at, mail_id)
+  WHERE state = 'pending';
+
+-- One row per ask, inserted by the ask's message_sent (ask_id = its mail_id); the asker's
+-- ask_closed moves it from open to its outcome with one conditional update.
+CREATE TABLE IF NOT EXISTS asks (
+  ask_id TEXT PRIMARY KEY,
+  team_id TEXT NOT NULL,
+  asker_branch_id TEXT NOT NULL,
+  recipient_name TEXT NOT NULL,
+  recipient_generation INTEGER NOT NULL,
+  deadline INTEGER NOT NULL,
+  state TEXT NOT NULL CHECK (
+    state IN ('open', 'answered', 'timed_out', 'member_ended', 'cancelled')
+  ),
+  closed_seq INTEGER
+) STRICT;
+
+-- Live monitors. monitor_id is derived, '<watcher branch_id>:<registering event_id>:<target
+-- name or task>'. Inserted by monitor_set (end), wait_started (settle, one per listed member not
+-- already settled) or member_started (task). Deleted by the one event that names it: the
+-- target's firing message_sent{monitor_id}, or wait_finished{wait_id} for every remaining row of
+-- that wait.
+CREATE TABLE IF NOT EXISTS monitors (
+  monitor_id TEXT PRIMARY KEY,
+  team_id TEXT NOT NULL,
+  watcher_branch_id TEXT NOT NULL,
+  target_name TEXT NOT NULL,
+  target_generation INTEGER NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('end', 'settle', 'task')),
+  wait_id TEXT,
+  CHECK ((kind = 'settle') = (wait_id IS NOT NULL))
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS monitors_target
+  ON monitors (team_id, target_name, target_generation);
+
+-- Operator idempotency, per team: inserted with the team log's operator_request that carries an
+-- idempotency_key. The binding is as run_receipts': the same principal and body return the
+-- request_id's outcome, a different body is idempotency_key_reused, a different principal is
+-- idempotency_key_principal_mismatch.
+CREATE TABLE IF NOT EXISTS operator_receipts (
+  tenant_id TEXT NOT NULL,
+  team_id TEXT NOT NULL,
+  op TEXT NOT NULL CHECK (op IN ('start', 'send', 'ask', 'wait', 'cancel')),
+  idempotency_key TEXT NOT NULL,
+  principal_key TEXT NOT NULL,
+  body_hash TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, team_id, op, idempotency_key)
+) STRICT;
+
+-- The team feed's delivery order: one row per event appended to any of the team's logs,
+-- assigned in the append's transaction. A lost index is rebuilt under a new epoch, so a cursor
+-- (epoch, feed_offset) from an older epoch restarts.
+CREATE TABLE IF NOT EXISTS team_feed (
+  team_id TEXT NOT NULL,
+  epoch INTEGER NOT NULL,
+  feed_offset INTEGER NOT NULL,
+  branch_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  PRIMARY KEY (team_id, epoch, feed_offset),
+  UNIQUE (team_id, epoch, branch_id, seq)
+) STRICT;
+
+-- Legacy background subagents: one row per running background child, inserted by its
+-- agent_spawned{mode: background} and deleted by its agent_finished, or by the parent's
+-- parked{kind: child} for it. A host takes a branch with rows and a free lease, relaunches those
+-- children and records each end with its woken in one append.
+CREATE TABLE IF NOT EXISTS pending_wakes (
+  branch_id TEXT NOT NULL,
+  child_thread_id TEXT NOT NULL,
+  PRIMARY KEY (branch_id, child_thread_id)
+) STRICT;
+
+-- Version 4: the team tables and pending_wakes. Versions 2 and 3 are lanes 14C and 16C.
+PRAGMA user_version = 4;

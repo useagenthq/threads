@@ -49,7 +49,8 @@
             "host",
             "security",
             "parity",
-            "policy"
+            "policy",
+            "team"
           ]
         },
         "description": {
@@ -130,6 +131,15 @@
               "items": {
                 "$ref": "#/$defs/HostRequest"
               }
+            },
+            "logs": {
+              "description": "team: the labels of the team's logs, each exported at logs/<label>.jsonl (every member log and the team log).",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$"
+              }
             }
           }
         },
@@ -168,6 +178,10 @@
             "seq": {
               "type": "integer",
               "minimum": 0
+            },
+            "log": {
+              "description": "team: the label of the log the error is in.",
+              "type": "string"
             }
           }
         },
@@ -435,6 +449,17 @@
           "description": "host: user_input events in the logs of every thread a receipt names.",
           "type": "integer",
           "minimum": 0
+        },
+        "states": {
+          "description": "team: reduce of each input log, by label.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ReducedState"
+          }
+        },
+        "index": {
+          "description": "team: the team tables of spec/schema/store.sql rebuilt from the logs alone (the replay rule), each sorted by its primary key. JSON columns hold their parsed values; mail's claim columns are left out (they rebuild as null).",
+          "$ref": "#/$defs/TeamIndex"
         }
       },
       "allOf": [
@@ -1152,6 +1177,26 @@
               "type": "boolean"
             }
           }
+        },
+        "pending_wakes": {
+          "description": "store.sql pending_wakes rebuilt from the log: one {branch_id, child_thread_id} per running background child, sorted.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "branch_id",
+              "child_thread_id"
+            ],
+            "properties": {
+              "branch_id": {
+                "type": "string"
+              },
+              "child_thread_id": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -1177,6 +1222,71 @@
           "type": "object"
         }
       }
+    },
+    "TeamIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "teams",
+        "team_members",
+        "mail",
+        "asks",
+        "monitors",
+        "operator_receipts",
+        "team_feed",
+        "pending_wakes"
+      ],
+      "properties": {
+        "teams": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "team_members": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "mail": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "asks": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "monitors": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "operator_receipts": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "team_feed": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "pending_wakes": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "description": "Every store.sql team table rebuilt from the logs, sorted by key. team_feed rows carry only branch_id and seq: a rebuilt feed starts a new epoch and assigns offsets in delivery order."
     }
   }
 }

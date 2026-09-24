@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import type { ConfigErrorCode } from "../../src/agent";
+import { MemberErrorCode } from "../../src/log";
 import type { RunErrorCode } from "../../src/loop";
 
 // Closed code sets written in TS are pinned to the spec that owns them.
@@ -44,6 +45,7 @@ const CONFIG_ERROR_CODES = [
   "hosted_tool_unsupported",
   "egress_policy_unsupported",
   "transport_fence_unsupported",
+  "handoff_in_team",
 ] as const satisfies readonly ConfigErrorCode[];
 
 test("RunErrorCode is host-api RunErrorCode", () => {
@@ -55,6 +57,14 @@ test("RunErrorCode is host-api RunErrorCode", () => {
     })
     .parse(read("schema/host-api/host-api.v1.schema.json"));
   expect(schema.$defs.RunErrorCode.enum).toEqual([...RUN_ERROR_CODES]);
+});
+
+test("a member's failure code is RunErrorCode plus the two rebind codes", () => {
+  expect(MemberErrorCode.options).toEqual([
+    ...RUN_ERROR_CODES,
+    "pin_unavailable",
+    "pin_mismatch",
+  ]);
 });
 
 test("ConfigErrorCode is spec/api.json ConfigErrorCode", () => {

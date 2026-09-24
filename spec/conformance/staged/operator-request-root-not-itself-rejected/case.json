@@ -1,0 +1,9 @@
+{
+  "name": "operator-request-root-not-itself-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 45: an operator_request's provenance names another event as its root request.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -2,11 +2,16 @@ import { z } from "zod";
 import { ActorWithPrincipal, ArtifactRef, Budget } from "../common";
 import { InputPart } from "../content";
 import { type EventDef, event, eventWithActor } from "../envelope";
-import { CallId, EventId, OccurrenceId } from "../ids";
+import { CallId, EventId, MailId, OccurrenceId } from "../ids";
 import { Name, NonEmpty, TimeMs } from "../primitives";
 import { type Ruled, withRule } from "../rules";
 import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
-import { HAS_TEXT_OR_CONTENT, HAS_TEXT_OR_REF, TextOrRef } from "./one-of";
+import {
+  HAS_TEXT_OR_CONTENT,
+  HAS_TEXT_OR_REF,
+  TextOrContent,
+  TextOrRef,
+} from "./one-of";
 
 // Everything that enters a thread from outside the model: user input, context, channels, schedules.
 
@@ -17,6 +22,7 @@ const INPUT_SOURCES = [
   "schedule",
   "parent_agent",
   "handoff",
+  "team_task",
 ] as const;
 const STEER_SOURCES = ["api", "cli", "channel", "parent_agent"] as const;
 const INJECTED_SOURCES = [
@@ -35,6 +41,32 @@ const INJECTED_SOURCES = [
 const TRUST_LEVELS = ["untrusted_reference", "trusted_instruction"] as const;
 const SKIP_REASONS = ["missed", "overlap"] as const;
 
+// A team member's task arrives as its user_input; mail_id names the task mail it consumes.
+const USER_INPUT_RULE: {
+  readonly allOf: readonly [
+    { readonly $ref: typeof TextOrContent },
+    {
+      readonly if: {
+        readonly properties: {
+          readonly source: { readonly const: "team_task" };
+        };
+      };
+      readonly then: { readonly required: readonly ["mail_id"] };
+      readonly else: {
+        readonly not: { readonly required: readonly ["mail_id"] };
+      };
+    },
+  ];
+} = {
+  allOf: [
+    { $ref: TextOrContent },
+    {
+      if: { properties: { source: { const: "team_task" } } },
+      then: { required: ["mail_id"] },
+      else: { not: { required: ["mail_id"] } },
+    },
+  ],
+};
 export const UserInputData: Ruled<
   Strict<{
     source: EnumOf<typeof INPUT_SOURCES>;
@@ -42,8 +74,9 @@ export const UserInputData: Ruled<
     content: Opt<Arr<typeof InputPart>>;
     delivery_event_id: Opt<typeof EventId>;
     budget: Opt<typeof Budget>;
+    mail_id: Opt<typeof MailId>;
   }>,
-  typeof HAS_TEXT_OR_CONTENT
+  typeof USER_INPUT_RULE
 > = withRule(
   z.strictObject({
     source: z.enum(INPUT_SOURCES),
@@ -55,8 +88,11 @@ export const UserInputData: Ruled<
     budget: Budget.describe(
       "The budget of the run this input starts.",
     ).optional(),
+    mail_id: MailId.describe(
+      "Exactly with source team_task: the task mail this input consumes (its row becomes consumed in this append).",
+    ).optional(),
   }),
-  HAS_TEXT_OR_CONTENT,
+  USER_INPUT_RULE,
 );
 export const UserInput: EventDef<
   "user_input",

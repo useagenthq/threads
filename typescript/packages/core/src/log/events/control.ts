@@ -13,6 +13,7 @@ const PARK_REASONS = [
   "effect_unknown",
   "awaiting_input",
   "awaiting_resource",
+  "awaiting_member",
 ] as const;
 const CANCEL_SCOPES = ["turn", "thread", "tree"] as const;
 const TURN_END_REASONS = [
@@ -40,17 +41,19 @@ const BUDGET_LIMITS = [
   "max_wall_ms",
 ] as const;
 
+export const ParkReason: EnumOf<typeof PARK_REASONS> = z
+  .enum(PARK_REASONS)
+  .meta({ id: "ParkReason", description: "Why a branch is parked." });
+
 export const ParkedData: Strict<{
   address: typeof ParkAddress;
   reason: EnumOf<typeof PARK_REASONS>;
   expires_at: Opt<typeof TimeMs>;
 }> = z.strictObject({
   address: ParkAddress,
-  reason: z
-    .enum(PARK_REASONS)
-    .describe(
-      "awaiting_input: an ask_user question; the address is {kind: input, id: <call_id>}.",
-    ),
+  reason: ParkReason.describe(
+    "awaiting_input: an ask_user question; the address is {kind: input, id: <call_id>}. awaiting_member: an open ask ({kind: ask}), a wait ({kind: wait}) or a parked run-owned member ({kind: member}).",
+  ),
   expires_at: TimeMs.optional(),
 });
 export const Parked: EventDef<"parked", typeof ParkedData, true> = event({
@@ -141,6 +144,8 @@ const TURN_ERROR_CODES = [
   "continuation_unsupported",
   "transport_fence_unsupported",
   "secret_in_provider_output",
+  "pin_unavailable",
+  "pin_mismatch",
 ] as const;
 const TURN_COMPLETED_DATA_RULE = {
   if: { required: ["code"] },
@@ -158,7 +163,7 @@ export const TurnCompletedData: Ruled<
     code: z
       .enum(TURN_ERROR_CODES)
       .describe(
-        "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried); or the response held a registered secret in provider material that is replayed byte-exact and so can't be redacted (secret_in_provider_output: nothing of it is stored, never retried).",
+        "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried); or the response held a registered secret in provider material that is replayed byte-exact and so can't be redacted (secret_in_provider_output: nothing of it is stored, never retried); or a team member's rebind failed before its first model request: its definition, a tool or a model is not registered here (pin_unavailable), or the rebuilt config_hash differs (pin_mismatch).",
       )
       .optional(),
   }),

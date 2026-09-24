@@ -1,0 +1,17 @@
+{
+  "name": "team-ask-bounce-without-ask-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 43: researcher-1 refuses the writer's open ask but its bounce names no ask_id (and carries no result), so the parked asker could never close the ask. Only the sender's mail shows the refused mail was an ask: invalid_transition at the bounce, in the researcher's log.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "researcher",
+      "team",
+      "writer"
+    ]
+  }
+}
