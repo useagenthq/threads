@@ -17,6 +17,7 @@ import {
 import { DEFAULT_PERMISSIONS } from "../permissions";
 import { knownEvents } from "../reduce";
 import { type EventDraft, keepLease, type Writer } from "../store";
+import { type Thread, threadHandle } from "../thread/handle";
 import { bindBuiltins } from "../tools";
 import type { LogError } from "../verify";
 import type { Agent } from "./agent";
@@ -160,26 +161,27 @@ export async function execute<Deps, Output>(
   await def.setup();
   // This run's own MCP connections, closed when it ends however it ends.
   await using mcp = await connectAll(def.servers);
-  const { log, artifacts } = await openStore(store);
+  const opened = await openStore(store);
+  const { log, artifacts } = opened;
   const link = linkOf(plan);
   const set: SetUp<Deps, Output> = { ...def, mcp: mcp.tools };
   const pinned = pin(set, link);
   // Each run is its own executor: a second run on a busy branch is branch_busy.
   const holder = `run-${crypto.randomUUID()}`;
-  const opened = open(
+  const began = open(
     log,
     child?.threadId ?? target?.threadId ?? plan.thread,
     [pinned.started, ...(target?.prefix ?? [])],
     holder,
     link !== undefined,
   );
-  const thread: ThreadRef = {
-    id: opened.threadId,
-    branch: opened.branchId,
-    store,
-  };
-  if (!opened.writer.ok) return failed(opened.writer.error, thread);
-  const writer = opened.writer.value;
+  const thread = threadHandle(
+    opened,
+    { id: began.threadId, branch: began.branchId, store },
+    def.sandbox === undefined ? {} : { sandbox: def.sandbox },
+  );
+  if (!began.writer.ok) return failed(began.writer.error, thread);
+  const writer = began.writer.value;
   const stop = keepLease(writer);
   try {
     checkPin(writer, pinned.started);
@@ -356,7 +358,7 @@ function checkPin(
     );
 }
 
-function failed<Output>(error: LogError, thread: ThreadRef): RunResult<Output> {
+function failed<Output>(error: LogError, thread: Thread): RunResult<Output> {
   const code =
     error.code === "branch_busy" ? "branch_busy" : "branch_not_runnable";
   return { status: "failed", error: { code, message: error.message }, thread };

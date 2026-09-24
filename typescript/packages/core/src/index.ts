@@ -9,6 +9,7 @@ export {
   type RawResponse,
   VerifiedDelivery,
 } from "./channel/protocol";
+export { Principal } from "./log";
 export * from "./memory";
 export {
   blockRealModels,

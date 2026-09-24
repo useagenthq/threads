@@ -1,0 +1,21 @@
+---
+title: "Principal"
+description: "Who acts: a verified sender, approver or operator."
+icon: "Braces"
+---
+
+Every Thread method that appends takes one, for example the local operator &#123;issuer: "api", tenant: "local", subject: "operator"&#125;. In TypeScript, Principal is also the schema that parses one.
+
+## Fields
+
+<Field name="issuer" type={"string"} required>
+  The identity authority that verified it, such as "api" or "slack:T024BE7LD". Non-empty.
+</Field>
+
+<Field name="tenant" type={"string"} required>
+  The isolation scope: a principal may act only on threads of its own tenant. Non-empty.
+</Field>
+
+<Field name="subject" type={"string"} required>
+  Who it is within the issuer, such as a user id. Non-empty.
+</Field>

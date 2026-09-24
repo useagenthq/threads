@@ -1,6 +1,6 @@
 import type { BranchId, SandboxId, ThreadId } from "../log";
 import { err, ok, type Result } from "../result";
-import { type Chain, tipHash, type VerifiedLog, verifyExport } from "../verify";
+import { type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import type { ArtifactStore } from "./artifacts";
 import { HostBindings } from "./bindings";
@@ -8,33 +8,31 @@ import { newBranch } from "./branch";
 import { BudgetLedger } from "./budget";
 import { ObserverCursors } from "./cursors";
 import type { SqliteDriver } from "./driver";
-import * as forking from "./forking";
+import * as forking from "./fork-reads";
+import {
+  beginFork,
+  type ForkRequest,
+  finishFork,
+  reclaimFork,
+} from "./fork-writes";
 import { importSegments, verifiedImport } from "./import";
+import { LEASE_TTL_MS, type StoreAccess, takeLease } from "./lease";
 import { ResourceLedger } from "./ledger";
 import { exportBytes } from "./lines";
 import { isTorn, markRepaired, recordRepair } from "./repair";
 import {
   atomically,
   type BranchRow,
-  getLease,
   installSchema,
   LOCAL_TENANT,
   ownedBranch,
-  putLease,
   rootBranch,
   setBranchState,
 } from "./tables";
-import { Writer, writerMismatch } from "./writer";
+import { type Writer, writerMismatch } from "./writer";
 
-/** 30 s lease TTL, renewed every 10 s by the holder. */
-export const LEASE_TTL_MS = 30_000;
-
-export type ForkRequest = {
-  readonly parent: BranchId;
-  readonly atSeq: number;
-  readonly branch: BranchId;
-  readonly holderId: string;
-};
+export type { ForkRequest } from "./fork-writes";
+export { LEASE_TTL_MS } from "./lease";
 
 /**
  * The append-only log store on SQLite: exact line bytes, a head checkpoint per
@@ -163,7 +161,13 @@ export class LogStore {
       if (torn !== undefined) markRepaired(this.#db, branchId);
       const log = this.#runnable(branchId);
       if (!log.ok) return log;
-      const writer = this.#take(branchId, holderId, ttlMs, log.value);
+      const writer = takeLease(
+        this.#access,
+        branchId,
+        holderId,
+        ttlMs,
+        log.value,
+      );
       if (!writer.ok || torn === undefined) return writer;
       return recordRepair(writer.value, this.#artifacts, torn, log.value);
     });
@@ -179,39 +183,7 @@ export class LogStore {
     holderId: string,
     ttlMs: number = LEASE_TTL_MS,
   ): Result<Writer, LogError> {
-    return atomically(this.#db, () => {
-      const row = ownedBranch(this.#db, branchId, this.tenant);
-      if (!row.ok) return row;
-      if (row.value.state !== "forking")
-        return err(
-          logError("branch_not_runnable", `branch ${branchId} is not forking`),
-        );
-      const chain = forking.loadChain(this.#db, branchId);
-      if (!chain.ok) return chain;
-      return this.#take(branchId, holderId, ttlMs, chain.value);
-    });
-  }
-
-  /** The lease if it is free, expired or already this holder's, at the next epoch (rule 11). */
-  #take(
-    branchId: BranchId,
-    holderId: string,
-    ttlMs: number,
-    chain: Chain,
-  ): Result<Writer, LogError> {
-    const lease = getLease(this.#db, branchId);
-    if (!lease.ok) return lease;
-    const held = lease.value;
-    if (
-      held !== undefined &&
-      held.expires_at > this.#now() &&
-      held.holder_id !== holderId
-    )
-      return err(
-        logError("branch_busy", `branch ${branchId} has a live lease`),
-      );
-    const epoch = Math.max(held?.epoch ?? 0, chain.fold.epoch) + 1;
-    return ok(this.#lease(branchId, holderId, epoch, ttlMs, chain));
+    return reclaimFork(this.#access, branchId, holderId, ttlMs);
   }
 
   /**
@@ -247,29 +219,7 @@ export class LogStore {
     request: ForkRequest,
     ttlMs: number = LEASE_TTL_MS,
   ): Result<Writer, LogError> {
-    return atomically(this.#db, () => {
-      const owned = ownedBranch(this.#db, request.parent, this.tenant);
-      if (!owned.ok) return owned;
-      const parent = this.read(request.parent);
-      if (!parent.ok) return parent;
-      const eligible = forking.forkEligible(
-        parent.value.fold,
-        request.atSeq,
-        this.#now(),
-      );
-      if (!eligible.ok) return eligible;
-      const opened = this.#openChild(parent.value, request);
-      if (!opened.ok) return opened;
-      return ok(
-        this.#lease(
-          request.branch,
-          request.holderId,
-          opened.value.fold.epoch + 1,
-          ttlMs,
-          opened.value,
-        ),
-      );
-    });
+    return beginFork(this.#access, request, ttlMs);
   }
 
   /** Step 4, in one transaction: the child's fork event bound to the parent's line, then ready. */
@@ -280,34 +230,7 @@ export class LogStore {
       readonly knowledgePolicy: "pinned" | "current";
     },
   ): Result<void, LogError> {
-    const parent = writer.chain.segments.at(-2)?.header.branch_id;
-    if (parent === undefined) throw new Error("a forking chain has a parent");
-    return atomically(this.#db, () => {
-      const forked = writer.append([
-        {
-          type: "fork",
-          type_version: 1,
-          critical: true,
-          actor: { kind: "host" },
-          data: {
-            parent_branch_id: parent,
-            at_hash: tipHash(writer.chain) ?? "",
-            reason: "snapshot",
-            sandbox_id: restored.sandboxId,
-            knowledge_policy: restored.knowledgePolicy,
-          },
-        },
-      ]);
-      if (!forked.ok) return forked;
-      setBranchState(this.#db, writer.lease.branchId, "ready");
-      // The fork is done with the child; hand the lease back so a run can take it at once.
-      putLease(this.#db, writer.lease.branchId, {
-        holder_id: writer.lease.holderId,
-        epoch: writer.lease.epoch,
-        expires_at: this.#now(),
-      });
-      return ok(undefined);
-    });
+    return finishFork(this.#access, writer, restored);
   }
 
   /** A fork that can't finish: the branch becomes `fork_failed`, never listed or runnable. */
@@ -352,41 +275,13 @@ export class LogStore {
     return this.#db;
   }
 
-  /** Stores the child's row and header, and loads its chain: the parent's through at_seq. */
-  #openChild(
-    parent: VerifiedLog,
-    request: ForkRequest,
-  ): Result<Chain, LogError> {
-    const threadId = parent.segments[0]?.header.thread_id;
-    if (threadId === undefined) throw new Error("a verified log has a header");
-    const stored = newBranch(this.#db, {
-      tenantId: this.tenant,
-      threadId,
-      branchId: request.branch,
-      parent: { branchId: request.parent, atSeq: request.atSeq },
-      state: "forking",
-      createdAt: this.#now(),
-    });
-    return stored.ok ? forking.loadChain(this.#db, request.branch) : stored;
-  }
-
-  #lease(
-    branchId: string,
-    holderId: string,
-    epoch: number,
-    ttlMs: number,
-    chain: Chain,
-  ): Writer {
-    putLease(this.#db, branchId, {
-      holder_id: holderId,
-      epoch,
-      expires_at: this.#now() + ttlMs,
-    });
-    return new Writer(
-      this.#db,
-      this.#now,
-      { branchId, holderId, epoch, ttlMs },
-      chain,
-    );
+  /** What the lease and fork steps (lease.ts, fork-writes.ts) use of this store. */
+  get #access(): StoreAccess {
+    return {
+      db: this.#db,
+      now: this.#now,
+      tenant: this.tenant,
+      read: (branchId) => this.read(branchId),
+    };
   }
 }

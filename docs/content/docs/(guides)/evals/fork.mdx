@@ -18,15 +18,13 @@ TypeScript snapshots after a turn that changed something (any tool call that isn
 
 ## Fork and continue
 
-Open the thread with the sandbox adapter to restore into, pick a point, fork, and run the child branch with the same agent.
+Take the run's thread, pick a point, fork, and run the child branch with the same agent. The fork restores into the agent's sandbox adapter. For a thread you open later by id, pass the adapter: `openThread(store, id, { sandbox })` / `open_thread(store, id, sandbox=sandbox)`.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
 ```ts
-const opened = await openThread(store, first.thread.id, { sandbox });
-if (!opened.ok) throw new Error(opened.error.message);
-const thread = opened.value;
+const thread = first.thread;
 
 const [point] = await thread.forkPoints();
 if (point === undefined) throw new Error("no fork point yet");
@@ -43,10 +41,7 @@ console.log(retry.status, child.branch !== thread.branch);
 <Tab value="Python">
 
 ```python
-opened = await open_thread(store, first.thread.id, sandbox=sandbox)
-if isinstance(opened, Err):
-    raise SystemExit(opened.error.message)
-thread = opened.value
+thread = first.thread
 
 points = await thread.fork_points()
 if isinstance(points, Err) or not points.value:
@@ -68,7 +63,7 @@ print(retry.status, child.branch != thread.branch)
 
 | Code | Why |
 |---|---|
-| `sandbox_required` | The thread was opened without a `sandbox` to restore into |
+| `sandbox_required` | The handle has no `sandbox` to restore into: the agent has none, or the thread was opened without one |
 | `no_snapshot_boundary` | The event you passed isn't a fork point on this branch |
 | `snapshot_restore_failed` | The sandbox adapter couldn't restore the snapshot, or its provider doesn't match the snapshot's |
 

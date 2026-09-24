@@ -33,6 +33,9 @@ const coder = agent({
 <Tab value="Python">
 
 ```python
+from threads import Principal
+from threads.log import Permissions
+
 PROTECTED = [".git/**", ".threads/**", ".claude/**", ".mcp.json", "**/.bashrc", "**/.zshrc", "**/.profile", "**/.gitconfig", "**/.ssh/**"]
 
 coder = agent(

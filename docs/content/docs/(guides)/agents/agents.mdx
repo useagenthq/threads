@@ -124,7 +124,7 @@ next_result = await support.run("When?", thread=result.thread)
 </Tab>
 </Tabs>
 
-In TypeScript `result.thread` is a small reference (`id`, `branch`, `store`); use [`openThread`](/docs/reference/functions/openThread) for the full handle. In Python it is already the full `Thread` handle.
+`result.thread` is the thread's handle: read its `timeline()`, `usage()` or `cost()`, or pass it back to continue. Later, with only the stored id, get it again with [`openThread`](/docs/reference/functions/openThread). In TypeScript the handle holds functions, so `structuredClone` and `postMessage` can't copy a result; to log a result or send it elsewhere, send `result.thread.id` and `result.thread.branch`.
 
 ## Change the reply style, or compact, between runs
 
@@ -144,12 +144,8 @@ const support = agent({
 const result = await support.run("Where is my invoice?", { store });
 
 const operator = { issuer: "api", tenant: "local", subject: "operator" };
-const opened = await openThread(store, result.thread.id);
-if (!opened.ok) throw new Error(opened.error.message);
-const thread = opened.value;
-
-await thread.setOutputStyle("concise", operator);
-await thread.compact(operator, { instructions: "Keep the open invoice numbers." });
+await result.thread.setOutputStyle("concise", operator);
+await result.thread.compact(operator, { instructions: "Keep the open invoice numbers." });
 
 // The next run summarizes first, then answers in the concise style.
 await support.run("And the one from May?", { store, thread: result.thread });
@@ -159,6 +155,8 @@ await support.run("And the one from May?", { store, thread: result.thread });
 <Tab value="Python">
 
 ```python
+from threads import Principal
+
 support = agent(
     model=model,
     output_styles={"concise": "Answer in at most three sentences."},
@@ -264,8 +262,8 @@ shipped = await orders.run(
 </Tab>
 </Tabs>
 
-<Callout type="warn">
-In Python, an agent with app tools needs `deps=` on every run, even when the tools use none: pass `deps=None`. Leaving it out raises `ConfigError("invalid_config")`.
+<Callout>
+In Python, `deps=` is needed only when a tool reads it. When every tool takes `RunContext[None]`, leave it out and tools see `None`. For tools typed with your own deps class, pyright flags a run without `deps=`, and the run raises `ConfigError("invalid_config")`. Only the context parameter's annotation is read, through `functools.partial` and `functools.wraps`; when it can't be read (a decorator without `wraps`, say), the error names the tool, and `deps=None` fixes it.
 </Callout>
 
 `ctx` also carries `thread_id`, `branch_id`, `principal` (who started the run) and, inside a tool, `call_id` and `effect_key`. See [RunContext](/docs/reference/types/RunContext).

@@ -6,9 +6,11 @@ import {
   knownEvents,
   type LogStore,
   ok,
+  openStore,
   type Principal,
   type Result,
   type ThreadId,
+  threadHandle,
 } from "@threads/core/host";
 import type { HostContext } from "./context";
 import { outcomeFromLog, type RunOutcome, toOutcome } from "./outcome";
@@ -77,6 +79,7 @@ async function* follow(
 ): AsyncIterable<SseMessage> {
   let cursor = afterSeq;
   const store = ctx.storeFor(log.tenant);
+  const handle = threadHandle(await openStore(store), { ...thread, store });
   for (;;) {
     const read = log.read(thread.branch);
     if (!read.ok) return;
@@ -84,10 +87,8 @@ async function* follow(
     const start = events.findIndex((e) => e.event_id === runId);
     const own = events.slice(start);
     const result =
-      outcomeFromLog(events, runId, read.value.fold.parked, {
-        ...thread,
-        store,
-      }) ?? halted(ctx, runId);
+      outcomeFromLog(events, runId, read.value.fold.parked, handle) ??
+      halted(ctx, runId);
     const end = result === undefined ? own.length : endOf(own) + 1;
     for (const event of own.slice(0, end))
       if (event.seq > cursor) {

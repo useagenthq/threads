@@ -19,7 +19,7 @@ A parked run has stopped and is waiting for someone. Nothing is lost and nothing
 
 ## Get a thread handle
 
-Approvals and other controls are methods on a thread handle. In Python the result's `thread` already is one. In TypeScript, open it from the store with `openThread`.
+Approvals and other controls are methods on a thread handle: the result's `thread` is one. Later, with only the thread id, open it from the store with `openThread` / `open_thread`.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -28,19 +28,17 @@ Approvals and other controls are methods on a thread handle. In Python the resul
 const result = await assistant.run("Email Bob hello", { store });
 // result.status === "parked", result.reason === "awaiting_approval"
 
-const opened = await openThread(store, result.thread.id);
-if (!opened.ok) throw new Error(opened.error.message);
-const thread = opened.value;
+const thread = result.thread;
 ```
 
 </Tab>
 <Tab value="Python">
 
 ```python
-result = await assistant.run("Email Bob hello", store=store, deps=None)
+result = await assistant.run("Email Bob hello", store=store)
 assert isinstance(result, Parked) and result.reason == "awaiting_approval"
 
-thread = result.thread  # already a Thread handle in Python
+thread = result.thread
 ```
 
 </Tab>
@@ -94,13 +92,13 @@ for approval in pending.value:
     await thread.approve(approval.challenge_id, me)
 
 # The approved call runs first, then the new input starts the next turn.
-after = await assistant.run("Anything else?", store=store, thread=thread, deps=None)
+after = await assistant.run("Anything else?", store=store, thread=thread)
 ```
 
 </Tab>
 </Tabs>
 
-Here `me` is the principal deciding, for example `{ issuer: "api", tenant: "local", subject: "operator" }` (`Principal(...)` from `threads.log` in Python). Only a principal of the thread's tenant may decide. Through the host, the agent's [approvers](/docs/control/permissions#who-may-approve) decide who that is.
+Here `me` is the principal deciding, for example `{ issuer: "api", tenant: "local", subject: "operator" }` (`Principal(...)`, imported from `threads`, in Python). Only a principal of the thread's tenant may decide. Through the host, the agent's [approvers](/docs/control/permissions#who-may-approve) decide who that is.
 
 You can also remember a rule or give a reason:
 
@@ -146,12 +144,10 @@ When a run parks with `effect_unknown`, threads doesn't know whether a call with
 ```ts
 async function settle(parked: typeof result): Promise<void> {
   if (parked.status !== "parked") return;
-  const opened = await openThread(store, parked.thread.id);
-  if (!opened.ok) throw new Error(opened.error.message);
   for (const address of parked.pending) {
     if (address.kind !== "effect") continue;
     // You checked the provider: the email never went out, so it is safe to send again.
-    const settled = await opened.value.resolveParked(address.id, "assume_not_done", me);
+    const settled = await parked.thread.resolveParked(address.id, "assume_not_done", me);
     if (!settled.ok) console.log(settled.error.code);
   }
 }

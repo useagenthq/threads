@@ -7,7 +7,7 @@ import pathlib
 
 import pytest
 from api_factories import Json, check_factories, expanded_errors
-from check_api import Validator
+from api_schema import Validator
 
 SPEC = pathlib.Path(__file__).resolve().parents[3] / "spec"
 CODES: list[Json] = ["invalid_config", "missing_secret", "transport_fence_unsupported"]

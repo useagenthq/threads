@@ -23,9 +23,7 @@ const bot = agent({
 const store = sqlite(".threads");
 
 const result = await bot.run("Summarize the report.", { store });
-const opened = await openThread(store, result.thread.id);
-if (!opened.ok) throw new Error(opened.error.message);
-const thread = opened.value;
+const thread = result.thread;
 
 const usage = await thread.usage();
 if (!usage.ok) throw new Error(usage.error.message);

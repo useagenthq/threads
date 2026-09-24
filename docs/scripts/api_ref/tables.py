@@ -73,13 +73,9 @@ NOTES: dict[Member, str] = {
     ("mcp", "runs"): 'Only "host" is supported today; "sandbox" is a setup error.',
     ("agent", "egress"): "Host allowlists are not supported yet in either language: use [] "
     '(deny-all) or "unenforced".',
-    ("Agent", "run"): "Python: an agent with app tools needs deps on every run; "
-    "pass deps=None when its tools take none.",
     ("Thread", "forkPoints"): "TypeScript returns the list itself; Python returns Ok or Err.",
     ("Thread", "todos"): "TypeScript returns the list itself; Python returns Ok or Err.",
     ("Thread", "children"): "TypeScript returns the list itself; Python returns Ok or Err.",
-    ("RunResult", None): "In TypeScript, thread is a ThreadRef (id, branch, store): pass it to "
-    "openThread for the full Thread handle. In Python it is the Thread handle.",
 }
 
 # Contract text that only makes sense next to the spec, rewritten for readers.

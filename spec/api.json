@@ -91,6 +91,12 @@
       "why": "Keeps the thread handle pure data and control; one run path."
     },
     {
+      "id": "result-thread-handle",
+      "open": "Whether a run's result carries a thread id to open later or the Thread handle itself.",
+      "choice": "RunResult.thread (and handed_off.to_thread) is the Thread handle in both languages, made without I/O and carrying the agent's sandbox for fork(). openThread(store, id) gets one later from a stored id. In TypeScript, ThreadRef ({id, branch, store}) stays the plain type run({thread}) accepts.",
+      "why": "A finished run's thread reads in one line (result.thread.usage()), the same in both languages."
+    },
+    {
       "id": "deny-method",
       "open": "The draft design lists approve() but no way to refuse a challenge.",
       "choice": "Thread.deny(challengeId, principal, {reason}).",
@@ -1301,7 +1307,7 @@
           "casing": "api"
         }
       ],
-      "doc": "The HTTP form is host-api RunOutcome (ids instead of handles)."
+      "doc": "What a run ended with. thread is the Thread handle in both languages: read it (usage(), timeline(), fork()) or pass it back to run() to continue. In TypeScript the handle holds functions, so it can't be structured-cloned; to send a result elsewhere, send thread.id and thread.branch. The HTTP form is host-api RunOutcome (ids instead of handles)."
     },
     "TeamAgent": {
       "kind": "interface",
@@ -3044,6 +3050,16 @@
       "kind": "interface",
       "role": "opaque",
       "doc": "The SQLite log and artifact store (sqlite()). Sealed in v0.1: no public methods."
+    },
+    "Principal": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "issuer": {"type": {"prim": "string"}, "required": true, "doc": "The identity authority that verified it, such as \"api\" or \"slack:T024BE7LD\". Non-empty."},
+        "tenant": {"type": {"prim": "string"}, "required": true, "doc": "The isolation scope: a principal may act only on threads of its own tenant. Non-empty."},
+        "subject": {"type": {"prim": "string"}, "required": true, "doc": "Who it is within the issuer, such as a user id. Non-empty."}
+      },
+      "doc": "Who acts: a verified sender, approver or operator. Every Thread method that appends takes one, for example the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}. In TypeScript, Principal is also the schema that parses one."
     },
     "Secret": {
       "kind": "interface",

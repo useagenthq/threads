@@ -10,15 +10,13 @@ A thread's log is a complete record of the run. `timeline()` reads it back in or
 
 ## Read a thread
 
-Open the thread with `openThread` / `open_thread`, then call `timeline()`. You only need the store and the thread id, not the agent.
+Call `timeline()` on a run's thread. Later, with only the store and the thread id, open it with `openThread` / `open_thread`: you don't need the agent.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
 ```ts
-const opened = await openThread(store, first.thread.id, { sandbox });
-if (!opened.ok) throw new Error(opened.error.message);
-const thread = opened.value;
+const thread = first.thread;
 
 const timeline = await thread.timeline();
 if (!timeline.ok) throw new Error(timeline.error.message);
@@ -31,10 +29,7 @@ for (const { event, fork_point } of timeline.value.entries) {
 <Tab value="Python">
 
 ```python
-opened = await open_thread(store, first.thread.id, sandbox=sandbox)
-if isinstance(opened, Err):
-    raise SystemExit(opened.error.message)
-thread = opened.value
+thread = first.thread
 
 timeline = await thread.timeline()
 if isinstance(timeline, Err):
@@ -46,7 +41,7 @@ for entry in timeline.value.entries:
 </Tab>
 </Tabs>
 
-`first` is the result of an earlier `agent.run`. In Python, `result.thread` is already a full thread handle, so you can call `result.thread.timeline()` directly. In TypeScript, `result.thread` holds the id, branch and store; open it to get the handle.
+`first` is the result of an earlier `agent.run`; its `thread` is the thread's handle in both languages.
 
 Both return a value instead of throwing: check `ok` in TypeScript, or `isinstance(x, Err)` in Python (`from threads.result import Err`). A missing thread comes back as `not_found`.
 

@@ -77,15 +77,26 @@ type Input = str | Sequence[InputPart]
 type Emit = Callable[[StreamEvent], None]
 
 
-class RunOptions[D](TypedDict, total=False):
+class _RunOptions(TypedDict, total=False):
     thread: Thread
     store: Store
-    deps: D
     budget: Budget
     principal: Principal
     ceiling: Permissions
     """The principal and host ceiling: this run, its subagents and every handoff target it
     starts are also decided under it."""
+
+
+class RunOptions[D](_RunOptions, total=False):
+    """`Agent.run` options. `deps` may be omitted when the agent's tools take none."""
+
+    deps: D
+
+
+class RunOptionsWithDeps[D](_RunOptions):
+    """`Agent.run` options for an agent whose tools read deps: `deps` is required."""
+
+    deps: D
 
 
 @dataclass(frozen=True, slots=True)

@@ -66,7 +66,7 @@ lead = agent(
     subagents=[researcher],
 )
 
-result = await lead.run("How long do refunds take?", store=store, deps=None)
+result = await lead.run("How long do refunds take?", store=store)
 ```
 
 </Tab>
@@ -111,9 +111,7 @@ Every subagent has its own thread, so you can inspect, fork or test it like any 
 <Tab value="TypeScript">
 
 ```ts
-const opened = await openThread(store, result.thread.id);
-if (!opened.ok) throw new Error(opened.error.message);
-for (const child of await opened.value.children()) {
+for (const child of await result.thread.children()) {
   console.log(child.child_thread_id, child.status); // ... completed
 }
 ```

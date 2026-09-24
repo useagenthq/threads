@@ -14,7 +14,7 @@ import { type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import { matches, modelScript, sandboxScript, stubScript } from "./case-files";
 import { caseLog, type Impl } from "./case-log";
-import type { ForkPoint } from "./open";
+import type { ForkPoint } from "./handle";
 
 // saveCase() (spec/api.json): a stub-kind conformance case in exactly the
 // spec/conformance layout, so the same runners replay it. The log is the chain through the

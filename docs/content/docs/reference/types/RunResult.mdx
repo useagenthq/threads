@@ -1,10 +1,10 @@
 ---
 title: "RunResult"
-description: "The HTTP form is host-api RunOutcome (ids instead of handles)."
+description: "What a run ended with."
 icon: "Braces"
 ---
 
-In TypeScript, thread is a ThreadRef (id, branch, store): pass it to openThread for the full Thread handle. In Python it is the Thread handle.
+thread is the Thread handle in both languages: read it (usage(), timeline(), fork()) or pass it back to run() to continue. In TypeScript the handle holds functions, so it can't be structured-cloned; to send a result elsewhere, send thread.id and thread.branch. The HTTP form is host-api RunOutcome (ids instead of handles).
 
 A union discriminated by `status`.
 

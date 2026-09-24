@@ -8,6 +8,7 @@ import type {
   ThreadId,
 } from "../log";
 import type { ChildRun, Covering, Subagent } from "../loop";
+import type { Thread } from "../thread/handle";
 import type { HostRunner } from "./hosted";
 import type { ThreadRef } from "./result";
 import type { Store } from "./sqlite";
@@ -46,7 +47,7 @@ export type HandoffLink = {
 
 export type TargetFactory = (
   env: ChildEnv,
-) => (link: HandoffLink) => Promise<ThreadRef>;
+) => (link: HandoffLink) => Promise<Thread>;
 
 /** Setup's check of an agent's tree under the limits covering it. */
 export type Enforcement = (covering: readonly z.infer<typeof Budget>[]) => void;

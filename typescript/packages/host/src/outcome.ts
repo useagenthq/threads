@@ -6,7 +6,7 @@ import {
   type KnownEvent,
   type RunResult,
   runResult,
-  type Store,
+  type Thread,
   type ThreadId,
 } from "@threads/core/host";
 import type { z } from "zod";
@@ -78,11 +78,7 @@ export function outcomeFromLog(
   events: readonly KnownEvent[],
   runId: EventId,
   parked: readonly ParkAddress[],
-  thread: {
-    readonly id: ThreadId;
-    readonly branch: BranchId;
-    readonly store: Store;
-  },
+  thread: Thread,
 ): RunOutcome | undefined {
   const start = events.findIndex((e) => e.event_id === runId);
   if (start === -1) return undefined;
