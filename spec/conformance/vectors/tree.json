@@ -1,0 +1,75 @@
+{
+  "description": "Tree artifacts for the manifest-tar.json cases of the same name: the RFC 8785 bytes, their sha256 and the manifest hash of the file entries. `invalid` are tree artifacts a reader refuses (artifact_corrupt).",
+  "cases": [
+    {
+      "name": "ustar",
+      "tree": "{\"entries\":[{\"kind\":\"file\",\"mode\":420,\"path\":\"a.txt\",\"sha256\":\"5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\",\"size\":6},{\"kind\":\"dir\",\"mode\":493,\"path\":\"bin\"},{\"kind\":\"file\",\"mode\":493,\"path\":\"bin/run.sh\",\"sha256\":\"299001868fb8c02fd431c336c6d058f5558c5dff5b5af5e6fe04b870a6a9cbba\",\"size\":18},{\"kind\":\"file\",\"mode\":2541,\"path\":\"bin/su\",\"sha256\":\"2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881\",\"size\":1},{\"kind\":\"file\",\"mode\":420,\"path\":\"deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/leaf.txt\",\"sha256\":\"74611c1d6455b534323a21f8133a6f43dc3a8188e7b946f96dcc28dde932fcb2\",\"size\":4},{\"kind\":\"file\",\"mode\":420,\"path\":\"empty\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0},{\"kind\":\"file\",\"mode\":420,\"path\":\"naïve.txt\",\"sha256\":\"850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\",\"size\":5}],\"tree_version\":1}",
+      "sha256": "cef44e0b1fa11f61a1b9c0d6d3a14050080c6f1532a4f8cf215e83407c72bd49",
+      "manifest_hash": "65237ce8a46004f05a62119c521a949a374595a4a8e7c0259e9047b37ecdd3b1"
+    },
+    {
+      "name": "pax",
+      "tree": "{\"entries\":[{\"kind\":\"file\",\"mode\":420,\"path\":\"a\\\\b\",\"sha256\":\"dcc8bea64340a9d9a29f443dae6a680eb612e746106ecf2760235a7e3328477b\",\"size\":9},{\"kind\":\"dir\",\"mode\":493,\"path\":\"café\"},{\"kind\":\"file\",\"mode\":420,\"path\":\"café/ñ.txt\",\"sha256\":\"024bb90888ca89a15a19e9bdd8c712bfb070465fce1ef25e43c170ea44fc5e5f\",\"size\":2},{\"kind\":\"file\",\"mode\":420,\"path\":\"deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/leaf.txt\",\"sha256\":\"74611c1d6455b534323a21f8133a6f43dc3a8188e7b946f96dcc28dde932fcb2\",\"size\":4},{\"kind\":\"file\",\"mode\":420,\"path\":\"my file.txt\",\"sha256\":\"4cf28831d09470e8185fbb6ace85c0ae1238bebb05972737d6422c7ff8783cce\",\"size\":6},{\"kind\":\"file\",\"mode\":420,\"path\":\"日本語\",\"sha256\":\"86e3f0c2e5967e3d9485baf848db6a853867a6796dd271905c1886f215f41814\",\"size\":7},{\"kind\":\"file\",\"mode\":420,\"path\":\"😀\",\"sha256\":\"fa1eadc4c6995667412681c69ce33adfc9302a2965f521c40908549e670e2e4e\",\"size\":5},{\"kind\":\"file\",\"mode\":420,\"path\":\"\",\"sha256\":\"ed3c0b86d419cfac8f04b9c30dd9e78f11cbc920acee1eff65d07eb764962c6b\",\"size\":11}],\"tree_version\":1}",
+      "sha256": "88ad9007f04d570d4140161b4bf8651c491669412390ee2be6dfd5a9ccc1c855",
+      "manifest_hash": "cac0c2fdf400449540004d319e788f8c6d1026604a743560636742abe89de3d9"
+    },
+    {
+      "name": "links",
+      "tree": "{\"entries\":[{\"kind\":\"file\",\"mode\":384,\"path\":\"a\",\"sha256\":\"a4d26868017c0ccffe2efe50944ef4211834660cca834c6e9f86dec6a88246fa\",\"size\":6},{\"kind\":\"file\",\"mode\":384,\"path\":\"b\",\"sha256\":\"a4d26868017c0ccffe2efe50944ef4211834660cca834c6e9f86dec6a88246fa\",\"size\":6},{\"kind\":\"symlink\",\"path\":\"link\",\"target\":\"a\"},{\"kind\":\"dir\",\"mode\":493,\"path\":\"sub\"},{\"kind\":\"file\",\"mode\":384,\"path\":\"sub/c\",\"sha256\":\"a4d26868017c0ccffe2efe50944ef4211834660cca834c6e9f86dec6a88246fa\",\"size\":6},{\"kind\":\"symlink\",\"path\":\"sub/up\",\"target\":\"../a\"},{\"kind\":\"symlink\",\"path\":\"x/long\",\"target\":\"x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/t\"}],\"tree_version\":1}",
+      "sha256": "93148573f2068b1ba3900f19c866ee1276cebd94de7f2d8cc8fea83d37461522",
+      "manifest_hash": "0b21a5fff509aa4759de0fccc5fd5a4531c950f2d04a38d6219ce0a852b3f6cf"
+    },
+    {
+      "name": "gnu",
+      "tree": "{\"entries\":[{\"kind\":\"file\",\"mode\":420,\"path\":\"deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/leaf.txt\",\"sha256\":\"74611c1d6455b534323a21f8133a6f43dc3a8188e7b946f96dcc28dde932fcb2\",\"size\":4},{\"kind\":\"symlink\",\"path\":\"s/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn\",\"target\":\"x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/../x/t\"}],\"tree_version\":1}",
+      "sha256": "f61f0fd5569c3cd4ea51591c29d879d47cf7ad6b89d5a79eb343c12eb4c1826b",
+      "manifest_hash": "91b26dd3d1136635b962753abb6ebb823cf8eab0d96a3538e28cdfc973e0e520"
+    },
+    {
+      "name": "padded",
+      "tree": "{\"entries\":[{\"kind\":\"file\",\"mode\":420,\"path\":\"only\",\"sha256\":\"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\",\"size\":1}],\"tree_version\":1}",
+      "sha256": "e986a0fd2bf903205739758186fd488d0aacfdaf8f44e9f5ff9212e22f3a51c4",
+      "manifest_hash": "9f8371e651baa9f72f6f4fd4a93e3a13eae65371d78f6794b38c783f0230f791"
+    },
+    {
+      "name": "empty",
+      "tree": "{\"entries\":[],\"tree_version\":1}",
+      "sha256": "3c02b5aee809fa474c5283fccd16fe42adfe8bb3b8fe91e36908259c240f3fc3",
+      "manifest_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "out of order",
+      "tree": "{\"entries\":[{\"kind\":\"dir\",\"mode\":493,\"path\":\"b\"},{\"kind\":\"dir\",\"mode\":493,\"path\":\"a\"}],\"tree_version\":1}"
+    },
+    {
+      "name": "duplicate path",
+      "tree": "{\"entries\":[{\"kind\":\"dir\",\"mode\":493,\"path\":\"a\"},{\"kind\":\"dir\",\"mode\":493,\"path\":\"a\"}],\"tree_version\":1}"
+    },
+    {
+      "name": "not canonical",
+      "tree": "{\"tree_version\":1, \"entries\":[]}"
+    },
+    {
+      "name": "unknown version",
+      "tree": "{\"entries\":[],\"tree_version\":2}"
+    },
+    {
+      "name": "dot-dot path",
+      "tree": "{\"entries\":[{\"kind\":\"dir\",\"mode\":493,\"path\":\"a/../b\"}],\"tree_version\":1}"
+    },
+    {
+      "name": "escaping symlink",
+      "tree": "{\"entries\":[{\"kind\":\"symlink\",\"path\":\"l\",\"target\":\"../x\"}],\"tree_version\":1}"
+    },
+    {
+      "name": "entry below a symlink",
+      "tree": "{\"entries\":[{\"kind\":\"symlink\",\"path\":\"l\",\"target\":\"a\"},{\"kind\":\"dir\",\"mode\":493,\"path\":\"l/x\"}],\"tree_version\":1}"
+    },
+    {
+      "name": "mode out of range",
+      "tree": "{\"entries\":[{\"kind\":\"dir\",\"mode\":4096,\"path\":\"a\"}],\"tree_version\":1}"
+    }
+  ]
+}

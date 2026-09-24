@@ -77,7 +77,51 @@ A model factory takes its limits from its provider's catalog, `../models/<provid
 
 ## Snapshot manifest
 
-A snapshot's `manifest_hash` is the RFC 8785 hash of its manifest: a JSON array of `{path, mode, size, sha256}`, one entry per captured file. `path` is relative to `/workspace` (no leading `/`). Entries are ordered by `path` in **UTF-16 code-unit order**, the same order JCS uses for object keys; code-point order differs above the BMP (U+1F600 sorts before U+E000). JCS canonicalizes keys, not array order, so every manifest builder must sort this way. Shared vector: `spec/conformance/vectors/manifest-order.json`.
+A snapshot's `manifest_hash` is the RFC 8785 hash of its manifest: a JSON array of `{path, mode, size, sha256}`, one entry per captured file. `path` is relative to `/workspace` (no leading `/`). `mode` is the permission bits as `stat -c %a` reads them (0 to 0o7777). Entries are ordered by `path` in **UTF-16 code-unit order**, the same order JCS uses for object keys; code-point order differs above the BMP (U+1F600 sorts before U+E000). JCS canonicalizes keys, not array order, so every manifest builder must sort this way. Shared vector: `spec/conformance/vectors/manifest-order.json`.
+
+The manifest is measured in one of two ways, which give the same hash for the same tree (a Linux test builds one real tree and compares them):
+
+- **In the sandbox, by script** (the remote kits today): `find . -type f` with `stat` and `sha256sum` (TS `MANIFEST_SCRIPT`, Python `posix.MANIFEST`). This needs the GNU tools under "Sandbox image".
+- **On the host, from a tar archive of `/workspace`**, read into a tree (below). The manifest is the tree's `file` entries, each as `{path, mode, size, sha256}`, in tree order.
+
+**The tree artifact** (`spec/schema/tree.v1.schema.json`, `tree_version` 1) is one file tree as RFC 8785 bytes: `{"entries":[...],"tree_version":1}`. Each entry is `{path, kind: "file", mode, size, sha256}` (the file's bytes are their own artifact, so an unchanged file is stored once), `{path, kind: "dir", mode}` or `{path, kind: "symlink", target}`. The root itself has no entry. Its semantic rules, which a reader checks after the schema:
+
+1. The bytes are canonical: the RFC 8785 serialization of the parsed value.
+2. Paths are strictly increasing in UTF-16 code-unit order, so each is unique.
+3. Every path is normal: relative, `/`-separated, with no empty, `.` or `..` component and no NUL. `\` is an ordinary character.
+4. A symlink's `target` is relative and lexically inside the root, resolved from the link's own directory (`a/l` → `../b` is inside; `l` → `../b` is not).
+5. No entry sits below a `file` or `symlink` entry: extracting the tree never writes through a link or into a file.
+
+A tree artifact that breaks any of these is `artifact_corrupt`. Vectors: `tree.json` (each valid tree's bytes, sha256 and manifest hash; `invalid` holds trees a reader refuses).
+
+**Reading an archive.** An archive from a sandbox is untrusted. Both languages read it with the same streaming reader, which pulls exact byte counts from the stream, so every chunking gives the same result. Each regular file streams into its own artifact (`ArtifactStore.sink()`) as it arrives; the tree artifact is put last. A refused archive may leave the file artifacts it already stored, unreferenced, for gc.
+
+- **Blocks.** 512-byte blocks. A header is POSIX ustar (magic `ustar\0`, version `00`; a non-empty prefix field is joined to the name with `/`) or GNU (magic `ustar`, two spaces and a NUL; no prefix field). The checksum is the unsigned byte sum with the checksum field read as spaces. A numeric field is octal digits, with optional leading spaces and trailing NULs or spaces; base-256 is refused. Only the name, prefix, mode, size, checksum, typeflag, linkname and magic are read. The mode is read for regular files and directories only, and kept as its low 12 bits.
+- **Long names.** A pax extended header (`x`), a GNU long name (`L`) and a GNU long link (`K`) apply to the next entry, at most one of each, with at most 1 MiB of data. Pax records are `<length> <key>=<value>\n`, the length counting the whole record. `path`, `linkpath` and `size` are used, an empty value counts as absent, a `GNU.sparse.*` record is refused and other keys are ignored. A path is the pax `path`, else the GNU long name, else the header's; a link target likewise from `linkpath`, `K` and the linkname.
+- **Types.** `0` or NUL is a regular file, `5` a directory, `2` a symlink, `1` a hardlink. Every other type (devices, FIFOs, contiguous files, pax global headers, GNU sparse and volume entries) is refused. Sockets can't be archived.
+- **Normalization.** The path must be valid UTF-8. One leading `./` is stripped, then one trailing `/` of a directory. The root (`.` or `./`) is skipped when it is a directory. The result must be a normal path (rule 3 above). A directory, symlink or hardlink declares size 0.
+- **Hardlinks are expanded.** A hardlink's target is normalized the same way and must be an **earlier** entry that is a regular file (itself possibly an expanded hardlink). The hardlink becomes a regular file with the target's content, size and mode, which is what `find -type f` sees, so the hash doesn't depend on how the exporter stored links.
+- **Caps.** 256 MiB per file and 1 GiB per archive stream (headers, padding and trailing zeros count). Both are checked from the declared sizes, before the bytes are read. Tests may lower them.
+- **The end.** Two zero blocks, then only zero bytes to the end of the stream.
+
+Each entry is checked in this order: its header, its path (UTF-8, normalization), its type, its size (the per-file cap, then the total cap), its link target, its place in the tree (duplicate, then conflict), then its data. A refusal is `archive_invalid` with a `reason` and the `entry` it names (the normalized path, the raw path when normalization failed, or null when no name was read):
+
+| `reason` | Cases |
+|---|---|
+| `bad_header` | a bad checksum, magic or numeric field; a malformed or sparse pax header; a second extended header of one kind, or one left before the end; a link or directory with data; a non-zero byte after the end blocks |
+| `truncated` | the stream ends inside a header, an entry's data or the end blocks |
+| `bad_path` | not UTF-8, absolute, an empty, `.` or `..` component, a NUL, or the root as a non-directory |
+| `unsupported_type` | any type but a regular file, directory, symlink or hardlink |
+| `file_too_large` | a file over the per-file cap |
+| `archive_too_large` | a header, an entry's data or the trailing bytes past the total cap |
+| `bad_symlink` | an empty, absolute or escaping target, or one that isn't UTF-8 |
+| `bad_hardlink` | a target that isn't an earlier regular file |
+| `duplicate` | a path already in the tree (`./a` and `a` are one path) |
+| `path_conflict` | an entry below a file or symlink, or a file or symlink over an earlier entry's directory |
+
+Vectors: `manifest-tar.json` (valid archives: ustar, pax, GNU, non-ASCII and spaced names, `./` prefixes, a setuid mode, an empty file, hardlinks, in-root symlinks, long paths and targets, record padding) and `archive-invalid.json` (one case or more per reason, some under lowered caps).
+
+**Building an archive.** The host rebuilds a canonical archive from a tree, streaming one file artifact at a time: entries in tree order (a parent before its children), ustar headers (magic `ustar\0`, version `00`, no prefix), a directory's name ending in `/`, a symlink's mode 0o777, mtime 0, the caller's uid and gid (1000 for Docker's command user), empty owner names, then two zero blocks. A name or target over 100 UTF-8 bytes gets a pax header (`././@PaxHeader`) with a `path` or `linkpath` record first. Since a tree's paths are normal, its symlinks stay in the root and nothing sits below a link, extracting a built archive can't write outside the root. A missing file artifact is `artifact_missing`, and one whose bytes or size don't match is `artifact_corrupt`.
 
 **Sandbox image.** A remote sandbox image provides `/bin/sh`, `find`, `stat -c` (`%a`, `%s`), `sha256sum`, `od`, `cut`, `tr`, `mkdir`, `rm`, `dirname`, `env` (GNU coreutils, proven by the Linux CI job; BusyBox is not gated, and BSD/macOS `stat` is not supported). `lsp` also needs `python3` on the image `PATH`; a bare language-server command is looked up in `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`, since the driver runs with no `PATH`; an absolute command is run as given. The server runs with exactly that `PATH` (and no host env), so a `#!/usr/bin/env node` launcher needs its interpreter there too. A command's argv[0] is resolved on the provider `PATH`; the command then runs with exactly the tool env.
 

@@ -61,6 +61,7 @@ from . import (
     structure,
     styles,
     summaries,
+    tar_vectors,
     team_bindings,
     team_cancel_rule,
     team_edges,
@@ -268,7 +269,7 @@ def main() -> int:
             problems += agent_pins.check()
             problems += anthropic_requests.check() + dynamic.check()
             problems += tool_search_vectors.check() + e2b_wire.check()
-            problems += ui_vectors.check()
+            problems += ui_vectors.check() + tar_vectors.check()
         for p in problems:
             print(f"coverage.json: {p}")
         if problems:
@@ -292,6 +293,7 @@ def main() -> int:
         dynamic.write()
         tool_search_vectors.write()
         e2b_wire.write()
+        tar_vectors.write()
         questions.write()
         ui_vectors.write()
         otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
