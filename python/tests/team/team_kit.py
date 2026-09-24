@@ -16,7 +16,7 @@ import pytest
 from pydantic import JsonValue, TypeAdapter
 
 from threads.agents.store import Store, open_store
-from threads.log import BranchId, ParseError, ThreadId
+from threads.log import BranchId, Event, ParseError, ThreadId
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.reduce import rules_team
@@ -48,7 +48,11 @@ _PKS: Mapping[str, str] = {
 
 def lift_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
     """Readers reduce team logs (rules 31-45 unchecked) for the rest of the test."""
-    monkeypatch.setattr(rules_team, "not_yet", lambda _event: None)
+
+    def admit(_event: Event) -> ParseError | None:
+        return None
+
+    monkeypatch.setattr(rules_team, "not_yet", admit)
 
 
 def team_cases() -> list[str]:

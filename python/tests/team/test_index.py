@@ -7,7 +7,7 @@ import json
 import sqlite3
 
 import pytest
-from pydantic import JsonValue
+from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
 from team.team_kit import (
     STAGED,
@@ -36,13 +36,14 @@ from threads.team.rebuild import rebuild_team_index
 WITH_INDEX = [
     c for c in team_cases() if "index" in json.loads((STAGED / c / "expected.json").read_text())
 ]
+_JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 NEEDS_21A = "lane 21A: the lead's message_received opens a turn (the reducer doesn't yet)"
 
 
-def _expected(case: str) -> dict[str, JsonValue]:
-    index = json.loads((STAGED / case / "expected.json").read_text())["index"]
-    assert isinstance(index, dict)
-    return index
+def _expected(case: str) -> JsonValue:
+    expected = _JSON.validate_json((STAGED / case / "expected.json").read_bytes())
+    assert isinstance(expected, dict)
+    return expected["index"]
 
 
 def _cases() -> list[object]:
@@ -189,18 +190,6 @@ def test_a_rebuild_refuses_a_forged_receipt_and_writes_nothing(
 def _dict(value: JsonValue) -> dict[str, JsonValue]:
     assert isinstance(value, dict)
     return value
-
-
-def _thread(raw: bytes) -> str:
-    header = json.loads(raw.split(b"\n", 1)[0])
-    return str(header["thread_id"])
-
-
-def _append_order(logs: dict[str, bytes]) -> list[str]:
-    """Team log first (its team_opened comes with the lead's first append), then the lead, then
-    members: every sender's row exists before its recipient changes it."""
-    first = [label for label in ("team", "lead") if label in logs]
-    return first + sorted(label for label in logs if label not in first)
 
 
 def _without_feed(rows: JsonValue) -> JsonValue:
