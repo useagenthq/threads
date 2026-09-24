@@ -28,7 +28,7 @@ from threads.loop import gates
 from threads.loop.drafts import draft
 from threads.loop.drive import drive
 from threads.loop.recovery import recover
-from threads.loop.runtime import LOST, Halt, Idle, Runtime, lost
+from threads.loop.runtime import LOST, Barred, Halt, Idle, Runtime, lost
 from threads.loop.runtime import Failed as HaltFailed
 from threads.redaction import contains_secret
 from threads.reduce.handlers import to_json
@@ -157,6 +157,8 @@ async def record_input(rt: Runtime, recorded: Recorded) -> Halt | None:
         if intake is not None and done.error.code not in LOST:
             return HaltFailed("branch_not_runnable", done.error.message)
         return lost(done.error)
+    if isinstance(done, Barred):
+        raise AssertionError("an input opens no work the cancel barrier could refuse")
     if intake is not None:
         intake.recorded.set_result(done.value[-1])
     return None

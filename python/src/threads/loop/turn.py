@@ -2,7 +2,7 @@
 
 from threads.loop import attempt, gates, ladder, limits, switch, todos
 from threads.loop.drafts import draft
-from threads.loop.runtime import Failed, Halt, Runtime, lost
+from threads.loop.runtime import Barred, Failed, Halt, Runtime, lost
 from threads.result import Err
 
 
@@ -32,4 +32,4 @@ async def complete(rt: Runtime, reason: str) -> Halt | None:
     if isinstance(done, Err):
         return lost(done.error)
     # A pending cancel kept this end out: the cancellation step ends the turn instead.
-    return None if rt.fold.in_turn else await gates.failed(rt, reason)
+    return None if isinstance(done, Barred) else await gates.failed(rt, reason)

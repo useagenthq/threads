@@ -20,7 +20,7 @@ from threads.loop.capabilities import mismatch
 from threads.loop.drafts import draft
 from threads.loop.history import open_cancel
 from threads.loop.model import Done, Model, ModelRequest, ModelResponse, PartChunk, Rejected
-from threads.loop.runtime import Failed, Runtime, WriterContext, epoch_model, fence, lost
+from threads.loop.runtime import Barred, Failed, Runtime, WriterContext, epoch_model, fence, lost
 from threads.redaction import SecretInProviderOutputError
 from threads.reduce.handlers import to_json
 from threads.result import Err
@@ -98,8 +98,8 @@ async def _recorded(  # noqa: PLR0913 - the request's parts, each named
     appended = await rt.append(draft("model_request", data))
     if isinstance(appended, Err):
         return lost(appended.error)
-    if not appended.value:
-        # The barrier kept nothing: a cancel landed while the request was prepared.
+    if isinstance(appended, Barred):
+        # A cancel landed while the request was prepared: nothing is sent.
         await budget.settle(rt)
         return await _barred(rt, compaction, cause)
     event = appended.value[0]

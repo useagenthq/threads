@@ -78,7 +78,8 @@ class Writer:
         """Appends the drafts as one transaction and resolves after it is durable. A companion
         that refuses rolls the append back: its error is the result and the writer goes on.
         `admit` picks the drafts the batch keeps, from the fold as it is under the writer's lock
-        (another task's append can land while this one waits for it)."""
+        (another task's append can land while this one waits for it). The result is what was
+        appended; `Runtime.append_with` reports a batch `admit` changed as `Barred`."""
         async with self._lock:
             if self._poisoned:
                 return Err(ParseError("writer_poisoned", "this writer lost its lease or head"))

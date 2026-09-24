@@ -15,7 +15,7 @@ from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state
 from threads.loop.model import Found, NotFound, looked_up
 from threads.loop.results import As, result_draft, text_ref
-from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
+from threads.loop.runtime import Barred, Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import Invocation, NotSent, Output, Uncertain
 from threads.result import Err
 
@@ -42,9 +42,15 @@ async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
     begun = await rt.append(draft("effect_begin", begin))
     if isinstance(begun, Err):
         return lost(begun.error)
+    if isinstance(begun, Barred):
+        # A cancel landed first: nothing is dispatched, and the cancellation step closes the call.
+        return None
     stale = await fence(rt)
-    if stale is not None:
-        return stale
+    return stale if stale is not None else await _dispatched(rt, inv, spec)
+
+
+async def _dispatched(rt: Runtime, inv: Invocation, spec: ToolSpec) -> Halt | None:
+    """Dispatches the begun attempt and records what is known of it."""
     match await rt.tools.dispatch(inv):
         case Output() as output:
             return await _settled(_commit(rt, inv, output))

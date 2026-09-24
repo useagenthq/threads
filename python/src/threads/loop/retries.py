@@ -13,7 +13,7 @@ from threads.loop import compact, gates, switch
 from threads.loop.defaults import retry
 from threads.loop.drafts import draft
 from threads.loop.history import Step, step_events
-from threads.loop.runtime import Halt, Runtime, lost
+from threads.loop.runtime import Barred, Halt, Runtime, lost
 from threads.loop.turn import complete, request
 from threads.reduce.handlers import to_json
 from threads.result import Err
@@ -67,6 +67,8 @@ async def _fall_back(
     done = await rt.append(*drafts, draft("settings_changed", data))
     if isinstance(done, Err):
         return lost(done.error)
+    if isinstance(done, Barred):
+        return None  # a cancel landed first: no switch, the cancellation step is next
     return await gates.observe(rt, "after_model_switch", entry)
 
 
@@ -95,5 +97,7 @@ async def _schedule(
     done = await rt.append(draft("retry_scheduled", data))
     if isinstance(done, Err):
         return lost(done.error)
+    if isinstance(done, Barred):
+        return None  # a cancel landed first: no wait, the cancellation step is next
     # notification observers: a retry wait began.
     return await gates.observe(rt, "notification", done.value[-1])
