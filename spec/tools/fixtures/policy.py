@@ -85,6 +85,8 @@ def build(root: pathlib.Path) -> None:
         rows,
     )
 
+    _bash_any_cases(root)
+
     src, anyr, env = "edit(src/**)", "read(**)", "read(**/.env)"
     secrets, gh, delete = "edit(src/secrets/**)", "mcp__github__*", "mcp__github__delete_repo"
     docs = "web_fetch(domain:docs.example.com)"
@@ -187,5 +189,66 @@ def build(root: pathlib.Path) -> None:
         "thread principal and host ceiling (default mode, denies git push). Each call is "
         "decided under both and the stricter wins; the target's decision is reported on a tie.",
         {"permissions": target, "ceiling": ceiling},
+        rows,
+    )
+
+
+def _bash_any_cases(root: pathlib.Path) -> None:
+    """`bash(*)`: every command in allow, ask and deny; a bare `bash` rule is unchanged."""
+    anyb, rm, push = "bash(*)", "bash(rm:*)", "bash(git push:*)"
+    pipeline = "cd app && npm test 2>&1 | tail -50"
+    perms: Obj = {**permissions("accept_edits"), "allow": [anyb], "ask": [push], "deny": [rm]}
+    a = "accept_edits"
+    rows: list[Row] = [
+        (a, "bash", "other", _bash(pipeline), "allow", "policy", anyb),
+        (a, "bash", "other", _bash("echo $PATH"), "allow", "policy", anyb),
+        (a, "bash", "other", _bash("PATH=/x npm test"), "allow", "policy", anyb),
+        (a, "bash", "other", _bash("rm -rf build"), "deny", "policy", rm),
+        (a, "bash", "other", _bash("echo $(rm -rf /)"), "deny", "policy", rm),
+        (a, "bash", "other", _bash("git push origin main"), "ask", "policy", push),
+        (a, "bash", "other", _bash("echo x > .threads/agents.ts"), "deny", "self_config_guard", ""),
+        ("plan", "bash", "other", _bash(pipeline), "deny", "mode", ""),
+        ("plan", "bash", "other", _bash("npm test"), "deny", "mode", ""),
+    ]
+    write_policy_case(
+        root,
+        "permission-rule-bash-any",
+        "bash(*) allows every command, whatever it contains: pipelines, redirections, "
+        "expansions and dangerous leading assignments. The self-config guard, deny rules "
+        "(which still match unparseable text by its raw words), plan mode and ask rules all "
+        "decide first.",
+        {"permissions": perms},
+        rows,
+    )
+
+    npm = "bash(npm test)"
+    perms = {**permissions("default"), "allow": [npm], "deny": [anyb]}
+    d = "default"
+    rows = [
+        (d, "bash", "other", _bash("npm test"), "deny", "policy", anyb),
+        (d, "bash", "other", _bash(pipeline), "deny", "policy", anyb),
+        (d, "bash", "other", _bash("echo $(id)"), "deny", "policy", anyb),
+    ]
+    write_policy_case(
+        root,
+        "permission-rule-bash-any-deny",
+        "A bash(*) deny matches every command, unparseable ones included, and wins over an "
+        "allow rule that matches too.",
+        {"permissions": perms},
+        rows,
+    )
+
+    perms = {**permissions("default"), "allow": ["bash"]}
+    rows = [
+        (d, "bash", "other", _bash(pipeline), "ask", "mode", ""),
+        (d, "bash", "other", _bash("PATH=/x npm test"), "ask", "mode", ""),
+        (d, "bash", "other", _bash("npm test"), "allow", "policy", "bash"),
+    ]
+    write_policy_case(
+        root,
+        "permission-rule-bash-bare-unchanged",
+        "A bare bash allow rule keeps its meaning: it allows only a command that parses with no "
+        "dangerous leading assignment. A pipeline with a redirection still asks.",
+        {"permissions": perms},
         rows,
     )

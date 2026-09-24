@@ -44,7 +44,7 @@ class Decision:
     rule: str | None = None
     """The matched rule string, when a rule decided."""
     reason: str | None = None
-    """A hook's why: the reason of its deny, the rule of its ask."""
+    """A hook's why (the reason of its deny, the rule of its ask), or memory_write's."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,10 +164,13 @@ def _first_any(candidates: Sequence[Rule], call: _Call) -> str | None:
 def _allowed(candidates: Sequence[Rule], call: _Call) -> str | None:
     """Allow: for bash, only a plain single simple command can match (fail closed: separators,
     escapes, expansions and redirections never do), and never one with a dangerous leading
-    assignment."""
+    assignment. `bash(*)` is the one exception: it matches every command."""
     parsed = call.command
     if parsed is None:
         return next((r.text for r in candidates if _hit(r, call)), None)
+    anything = next((r.text for r in candidates if _any_command(r)), None)
+    if anything is not None:
+        return anything
     if parsed.unparseable or not parsed.plain:
         return None
     first: str | None = None
@@ -183,10 +186,15 @@ def _any_hit(rule: Rule, call: _Call) -> bool:
     parsed = call.command
     if parsed is None:
         return _hit(rule, call)
-    if any(_bash_hit(rule, c) for c in parsed.commands):
+    if _any_command(rule) or any(_bash_hit(rule, c) for c in parsed.commands):
         return True
     # Unparseable input: the rule's leading words appearing anywhere in the raw text deny it.
     return parsed.unparseable and rule.names("bash") and _consecutive(rule, parsed.raw_words)
+
+
+def _any_command(rule: Rule) -> bool:
+    """`bash(*)`: every command, parsed or not; the sandbox is the boundary."""
+    return rule.names("bash") and rule.specifier == "*"
 
 
 def _bash_hit(rule: Rule, command: shell.Simple) -> bool:

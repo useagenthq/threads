@@ -1,0 +1,47 @@
+{
+  "outcome": "ok",
+  "decisions": [
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(*)"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(*)"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(*)"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
+    },
+    {
+      "decision": "ask",
+      "source": "policy",
+      "rule": "bash(git push:*)"
+    },
+    {
+      "decision": "deny",
+      "source": "self_config_guard"
+    },
+    {
+      "decision": "deny",
+      "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "mode"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "outcome": "ok",
+  "decisions": [
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(*)"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(*)"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(*)"
+    }
+  ]
+}

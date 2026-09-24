@@ -1,0 +1,59 @@
+{
+  "name": "permission-rule-bash-bare-unchanged",
+  "family": "permissions_approvals",
+  "kind": "policy",
+  "description": "A bare bash allow rule keeps its meaning: it allows only a command that parses with no dangerous leading assignment. A pipeline with a redirection still asks.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "workspace": "/workspace",
+    "permissions": {
+      "mode": "default",
+      "allow": [
+        "bash"
+      ],
+      "ask": [],
+      "deny": [],
+      "protected_paths": [
+        ".git/**",
+        ".threads/**",
+        ".claude/**",
+        ".mcp.json",
+        "**/.bashrc",
+        "**/.zshrc",
+        "**/.profile",
+        "**/.gitconfig",
+        "**/.ssh/**"
+      ],
+      "allow_bypass": false,
+      "plan_exit_mode": "default"
+    },
+    "calls": [
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "cd app && npm test 2>&1 | tail -50"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "PATH=/x npm test"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test"
+        }
+      }
+    ]
+  }
+}

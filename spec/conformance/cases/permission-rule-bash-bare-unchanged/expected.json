@@ -1,0 +1,18 @@
+{
+  "outcome": "ok",
+  "decisions": [
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "ask",
+      "source": "mode"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash"
+    }
+  ]
+}

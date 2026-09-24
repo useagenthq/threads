@@ -1,0 +1,111 @@
+{
+  "name": "permission-rule-bash-any",
+  "family": "permissions_approvals",
+  "kind": "policy",
+  "description": "bash(*) allows every command, whatever it contains: pipelines, redirections, expansions and dangerous leading assignments. The self-config guard, deny rules (which still match unparseable text by its raw words), plan mode and ask rules all decide first.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "workspace": "/workspace",
+    "permissions": {
+      "mode": "accept_edits",
+      "allow": [
+        "bash(*)"
+      ],
+      "ask": [
+        "bash(git push:*)"
+      ],
+      "deny": [
+        "bash(rm:*)"
+      ],
+      "protected_paths": [
+        ".git/**",
+        ".threads/**",
+        ".claude/**",
+        ".mcp.json",
+        "**/.bashrc",
+        "**/.zshrc",
+        "**/.profile",
+        "**/.gitconfig",
+        "**/.ssh/**"
+      ],
+      "allow_bypass": false,
+      "plan_exit_mode": "default"
+    },
+    "calls": [
+      {
+        "mode": "accept_edits",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "cd app && npm test 2>&1 | tail -50"
+        }
+      },
+      {
+        "mode": "accept_edits",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "echo $PATH"
+        }
+      },
+      {
+        "mode": "accept_edits",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "PATH=/x npm test"
+        }
+      },
+      {
+        "mode": "accept_edits",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "rm -rf build"
+        }
+      },
+      {
+        "mode": "accept_edits",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "echo $(rm -rf /)"
+        }
+      },
+      {
+        "mode": "accept_edits",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "git push origin main"
+        }
+      },
+      {
+        "mode": "accept_edits",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "echo x > .threads/agents.ts"
+        }
+      },
+      {
+        "mode": "plan",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "cd app && npm test 2>&1 | tail -50"
+        }
+      },
+      {
+        "mode": "plan",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test"
+        }
+      }
+    ]
+  }
+}

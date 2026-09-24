@@ -1,0 +1,61 @@
+{
+  "name": "permission-rule-bash-any-deny",
+  "family": "permissions_approvals",
+  "kind": "policy",
+  "description": "A bash(*) deny matches every command, unparseable ones included, and wins over an allow rule that matches too.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "workspace": "/workspace",
+    "permissions": {
+      "mode": "default",
+      "allow": [
+        "bash(npm test)"
+      ],
+      "ask": [],
+      "deny": [
+        "bash(*)"
+      ],
+      "protected_paths": [
+        ".git/**",
+        ".threads/**",
+        ".claude/**",
+        ".mcp.json",
+        "**/.bashrc",
+        "**/.zshrc",
+        "**/.profile",
+        "**/.gitconfig",
+        "**/.ssh/**"
+      ],
+      "allow_bypass": false,
+      "plan_exit_mode": "default"
+    },
+    "calls": [
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "cd app && npm test 2>&1 | tail -50"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "echo $(id)"
+        }
+      }
+    ]
+  }
+}
