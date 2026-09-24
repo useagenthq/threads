@@ -187,4 +187,5 @@ test("re-putting 500 existing artifacts creates no new file or link", () => {
   expect(files()).toEqual(before);
   expect(before.length).toBe(500);
   expect(before.every((n) => n === 1)).toBe(true);
-});
+  // 1000 fsynced puts: slow on a bind-mounted Linux file system, well past the 5 s default.
+}, 60_000);
