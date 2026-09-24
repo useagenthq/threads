@@ -176,7 +176,8 @@ class Model(Protocol):
 @runtime_checkable
 class LooksUp(Protocol):
     """spec/api.json `Model.lookup`, the optional capability of a `Model`: recover a response
-    after a crash by client request id."""
+    after a crash by client request id. `lookup` must be a method: setup checks that it is
+    callable, since an `isinstance` check against this protocol only sees the name."""
 
     async def lookup(
         self, request_id: str, context: ModelContext

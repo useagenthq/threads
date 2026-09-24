@@ -5,10 +5,9 @@ from dataclasses import dataclass, replace
 from typing import Literal
 
 from threads.log import SnapshotData
-from threads.loop.model import LookupResult
 from threads.result import Err, Ok
 from threads.sandbox import FakeSandbox, LookupSupport, SandboxError, SandboxInfo, SandboxSession
-from threads.sandbox.protocol import SandboxContext
+from threads.sandbox.protocol import Looked, SandboxContext
 
 NEITHER = LookupSupport(create="none", snapshot="none")
 
@@ -47,9 +46,7 @@ class NoLookups:
 
 @dataclass
 class CreateLookupOnly(NoLookups):
-    async def lookup(
-        self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SandboxSession]:
+    async def lookup(self, operation_key: str, context: SandboxContext) -> Looked[SandboxSession]:
         return await self.inner.lookup(operation_key, context)
 
 
@@ -57,5 +54,5 @@ class CreateLookupOnly(NoLookups):
 class SnapshotLookupOnly(NoLookups):
     async def lookup_snapshot(
         self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SnapshotData]:
+    ) -> Looked[SnapshotData]:
         return await self.inner.lookup_snapshot(operation_key, context)

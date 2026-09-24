@@ -43,6 +43,7 @@ class Corpus:
     """An empty, read-only corpus whose revision can be made to fail."""
 
     failing: bool = False
+    reads: int = 0
 
     async def ingest(self, scope: Scope, source: KnowledgeSource, key: str) -> Outcome[DocVersion]:
         return Err(READ_ONLY)
@@ -65,6 +66,7 @@ class Corpus:
         return Err(ProviderError("not_found", doc_id))
 
     async def revision(self, scope: Scope) -> Outcome[int]:
+        self.reads += 1
         return Err(ProviderError("unavailable", "the index is down")) if self.failing else Ok(7)
 
 
@@ -137,5 +139,25 @@ def test_revision_error_skips_the_snapshot() -> None:
         points = await second.thread.fork_points()
         assert isinstance(points, Ok)
         assert [p.seq for p in points.value] == [snaps[0].seq]
+
+    asyncio.run(main())
+
+
+def test_the_revision_is_read_only_when_a_capture_follows() -> None:
+    async def main() -> None:
+        corpus = Corpus()
+        script: JsonValue = {"responses": [done(), write("a.txt", "c1"), done()]}
+        bot = agent(
+            model=scripted_model(script),
+            sandbox=fake_sandbox(),
+            knowledge=corpus,
+            permissions=BYPASS,
+        )
+        first = await bot.run("chat", store=sqlite(":memory:"))
+        assert isinstance(first, Completed)
+        assert corpus.reads == 0, "a turn that never opened the sandbox captures nothing"
+        second = await bot.run("write", thread=first.thread)
+        assert isinstance(second, Completed)
+        assert corpus.reads == 1
 
     asyncio.run(main())

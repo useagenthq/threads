@@ -8,7 +8,7 @@ from pydantic import JsonValue, ValidationError
 from sandbox_kit import OPEN, KitContext
 
 from threads.log import ParseError
-from threads.loop.model import Found, LookupUnknown, NotFound
+from threads.loop.model import Found, NotFound
 from threads.result import Err, Ok
 from threads.sandbox import FakeSandbox, SandboxSession, fake_sandbox
 from threads.store.context import CleanupAuthority
@@ -128,8 +128,14 @@ def test_every_provider_operation_is_fenced() -> None:
             await s.close(stale),
         ]
         assert all(isinstance(r, Err) and r.error.code == "stale_epoch" for r in refused)
-        assert isinstance(await sandbox.lookup("k1", stale), LookupUnknown)
-        assert (sandbox.creates, sandbox.releases, stale.fences) == (1, 0, 10)
+        # spec/api.json Sandbox.lookup: a refused fence is Err(stale_epoch), not an answer.
+        for looked in (
+            await sandbox.lookup("k1", stale),
+            await sandbox.lookup_snapshot("k1", stale),
+        ):
+            assert isinstance(looked, Err)
+            assert looked.error.code == "stale_epoch"
+        assert (sandbox.creates, sandbox.releases, stale.fences) == (1, 0, 11)
 
     asyncio.run(main())
 
@@ -157,15 +163,15 @@ def test_a_restored_snapshot_is_isolated_and_verified() -> None:
         assert await parent.upload("/workspace/a.txt", b"v1", OPEN) == Ok(None)
         snap = await parent.snapshot("snap-key", OPEN)
         assert isinstance(snap, Ok)
-        assert await sandbox.lookup_snapshot("snap-key", OPEN) == Found(snap.value)
+        assert await sandbox.lookup_snapshot("snap-key", OPEN) == Ok(Found(snap.value))
         bad = await sandbox.restore(snap.value.snapshot_id, "0" * 64, "bad-key", OPEN)
         assert isinstance(bad, Err)
         assert bad.error.code == "snapshot_manifest_mismatch"
-        assert await sandbox.lookup("bad-key", OPEN) == NotFound()
+        assert await sandbox.lookup("bad-key", OPEN) == Ok(NotFound())
         manifest = snap.value.manifest_hash
         child = await sandbox.restore(snap.value.snapshot_id, manifest, "restore-key", OPEN)
         assert isinstance(child, Ok)
-        assert await sandbox.lookup("restore-key", OPEN) == Found(child.value)
+        assert await sandbox.lookup("restore-key", OPEN) == Ok(Found(child.value))
         assert await child.value.download("/workspace/a.txt", OPEN) == Ok(b"v1")
         assert await child.value.upload("/workspace/a.txt", b"v2", OPEN) == Ok(None)
         assert await parent.download("/workspace/a.txt", OPEN) == Ok(b"v1")

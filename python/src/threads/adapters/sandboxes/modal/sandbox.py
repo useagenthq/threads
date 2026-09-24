@@ -32,14 +32,16 @@ from threads.adapters.sandboxes.modal.router import Router
 from threads.adapters.sandboxes.modal.session import ModalSession
 from threads.agents.config import ConfigError
 from threads.log import SnapshotData
-from threads.loop.model import Found, LookupResult, LookupUnknown, NotFoundNonfinal
+from threads.loop.model import Found, LookupUnknown, NotFoundNonfinal
 from threads.result import Err, Ok
 from threads.sandbox.protocol import (
+    Looked,
     LookupSupport,
     SandboxContext,
     SandboxError,
     SandboxInfo,
     SandboxSession,
+    unanswered,
 )
 from threads.secrets import Secret, credential
 
@@ -109,21 +111,19 @@ class ModalSandbox:
     ) -> Ok[SandboxSession] | Err[SandboxError]:
         return Err(SandboxError("snapshot_missing", f"modal: no snapshots here ({snapshot_id})"))
 
-    async def lookup(
-        self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SandboxSession]:
+    async def lookup(self, operation_key: str, context: SandboxContext) -> Looked[SandboxSession]:
         control = self._control_plane()
         found = await dispatch(context, lambda: control.by_name(_name(operation_key)), classify)
         if isinstance(found, Ok):
-            return Found(self._session(found.value))
+            return Ok(Found(self._session(found.value)))
         if found.error.code == "not_found":
-            return NotFoundNonfinal()
-        return LookupUnknown(f"{found.error.code}: {found.error.message}")
+            return Ok(NotFoundNonfinal())
+        return unanswered(found.error)
 
     async def lookup_snapshot(
         self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SnapshotData]:
-        return LookupUnknown("modal: this adapter declares no snapshots")
+    ) -> Looked[SnapshotData]:
+        return Ok(LookupUnknown("modal: this adapter declares no snapshots"))
 
     async def attach(
         self, ref: str, context: SandboxContext

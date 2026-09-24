@@ -21,8 +21,15 @@ from threads.log import (
 )
 from threads.reduce import Fold
 from threads.result import Err, Ok
-from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, release_session
-from threads.sandbox.protocol import Sandbox, SandboxError, session_lookup
+from threads.sandbox.ledger import (
+    Fenced,
+    Tracked,
+    abandon,
+    acquire,
+    release_session,
+    session_lookup,
+)
+from threads.sandbox.protocol import Sandbox, SandboxError
 from threads.store import SqliteStore, Writer
 from threads.store.worker import Clock
 

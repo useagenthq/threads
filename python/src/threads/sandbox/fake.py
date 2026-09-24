@@ -9,12 +9,13 @@ from typing import Literal, NotRequired, TypedDict
 from pydantic import ConfigDict, JsonValue, TypeAdapter, with_config
 
 from threads.log import SnapshotData
-from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound
+from threads.loop.model import Found, NotFound
 from threads.result import Err, Ok
 from threads.sandbox.fake_session import FakeSession, ToolScript
 from threads.sandbox.manifest import ManifestEntry, manifest_of
 from threads.sandbox.manifest import manifest_hash as tree_hash
 from threads.sandbox.protocol import (
+    Looked,
     LookupSupport,
     SandboxContext,
     SandboxError,
@@ -130,21 +131,21 @@ class FakeSandbox:
             case "ok" | None:
                 return Ok(session)
 
-    async def lookup(
-        self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SandboxSession]:
-        if await refused(context) is not None:
-            return LookupUnknown("stale_epoch: the owner lost its lease")
+    async def lookup(self, operation_key: str, context: SandboxContext) -> Looked[SandboxSession]:
+        stale = await refused(context)
+        if stale is not None:
+            return stale
         found = self._by_key.get(operation_key)
-        return NotFound() if isinstance(found, SnapshotData | None) else Found(found)
+        return Ok(NotFound() if isinstance(found, SnapshotData | None) else Found(found))
 
     async def lookup_snapshot(
         self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SnapshotData]:
-        if await refused(context) is not None:
-            return LookupUnknown("stale_epoch: the owner lost its lease")
+    ) -> Looked[SnapshotData]:
+        stale = await refused(context)
+        if stale is not None:
+            return stale
         found = self._by_key.get(operation_key)
-        return Found(found) if isinstance(found, SnapshotData) else NotFound()
+        return Ok(Found(found) if isinstance(found, SnapshotData) else NotFound())
 
     async def attach(
         self, ref: str, context: SandboxContext

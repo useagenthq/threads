@@ -11,12 +11,13 @@ from pathlib import Path
 from typing import Literal
 
 from threads.log import ParseError, SnapshotData
-from threads.loop.model import LookupResult, LookupUnknown, NotFound
+from threads.loop.model import LookupUnknown, NotFound
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
 from threads.sandbox.protocol import (
     NO_ENV,
     ExecOutput,
+    Looked,
     LookupSupport,
     SandboxContext,
     SandboxError,
@@ -152,15 +153,13 @@ class LocalSandbox:
     ) -> Ok[SandboxSession] | Err[SandboxError]:
         return Err(SandboxError("unavailable", "no snapshots"))
 
-    async def lookup(
-        self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SandboxSession]:
-        return NotFound()
+    async def lookup(self, operation_key: str, context: SandboxContext) -> Looked[SandboxSession]:
+        return Ok(NotFound())
 
     async def lookup_snapshot(
         self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SnapshotData]:
-        return LookupUnknown("no snapshots")
+    ) -> Looked[SnapshotData]:
+        return Ok(LookupUnknown("no snapshots"))
 
     async def attach(
         self, ref: str, context: SandboxContext

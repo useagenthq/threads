@@ -10,7 +10,7 @@ the crash left is decided and the decision appended durably.
 Recovery is idempotent: a second pass over its own output finds nothing to decide.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from pydantic.experimental.missing_sentinel import MISSING
 
@@ -20,7 +20,7 @@ from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
 from threads.loop.history import CallState, call_state
 from threads.loop.manual import settle_requested
-from threads.loop.model import Found, LooksUp, NotFound
+from threads.loop.model import Found, LooksUp, LookupUnknown, NotFound, NotFoundNonfinal
 from threads.loop.runtime import Failed, Halt, Runtime, WriterContext, epoch_model, fence, lost
 from threads.result import Err
 
@@ -70,8 +70,8 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
     outcome = "unknown"
     # No settings change can land while a request is open: the current epoch is the request's.
     model = epoch_model(rt)
-    # Setup refused a model that declares lookup without the method, so a model that isn't
-    # LooksUp here declared none.
+    # A model without the method is treated as declaring none: check() and the first run
+    # refuse one that declares a lookup, and recovery only runs inside a run.
     if model is not None and model.info.lookup != "none" and isinstance(model, LooksUp):
         stale = await fence(rt)
         if stale is not None:
@@ -88,8 +88,10 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
                 return lost(done.error) if isinstance(done, Err) else None
             case NotFound():
                 outcome = "not_sent"
+            case Found() | NotFoundNonfinal() | LookupUnknown():
+                pass  # no final answer this log can record: the attempt stays unknown
             case _:
-                pass
+                assert_never(looked.value)
     data: dict[str, JsonValue] = {
         "request_event_id": request_id,
         "provider_outcome": outcome,

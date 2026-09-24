@@ -26,15 +26,17 @@ from threads.adapters.sandboxes.e2b.session import E2BSession, Owner, call
 from threads.adapters.sandboxes.e2b.transport import FencedHttpx, http_transport, rpc_transport
 from threads.adapters.sandboxes.e2b.wire import Sandbox as Described
 from threads.log import SnapshotData
-from threads.loop.model import Found, LookupResult, LookupUnknown, NotFoundNonfinal
+from threads.loop.model import Found, LookupUnknown, NotFoundNonfinal
 from threads.result import Err, Ok
 from threads.sandbox.protocol import (
+    Looked,
     LookupSupport,
     SandboxContext,
     SandboxError,
     SandboxId,
     SandboxInfo,
     SandboxSession,
+    unanswered,
 )
 from threads.secrets import Secret, credential
 
@@ -111,27 +113,25 @@ class E2BSandbox:
     ) -> Ok[SandboxSession] | Err[SandboxError]:
         return Err(SandboxError("snapshot_missing", "e2b: this adapter takes no snapshots"))
 
-    async def lookup(
-        self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SandboxSession]:
+    async def lookup(self, operation_key: str, context: SandboxContext) -> Looked[SandboxSession]:
         found = await call(context, lambda: self._owner.control.find(operation_key))
         if isinstance(found, Err):
-            return LookupUnknown(f"{found.error.code}: {found.error.message}")
+            return unanswered(found.error)
         match found.value:
             case []:
-                return NotFoundNonfinal()
+                return Ok(NotFoundNonfinal())
             case [ref]:
                 attached = await self.attach(ref, context)
                 if isinstance(attached, Err):
-                    return LookupUnknown(f"{attached.error.code}: {attached.error.message}")
-                return Found(attached.value)
+                    return unanswered(attached.error)
+                return Ok(Found(attached.value))
             case refs:
-                return LookupUnknown(f"several sandboxes carry {operation_key}: {refs}")
+                return Ok(LookupUnknown(f"several sandboxes carry {operation_key}: {refs}"))
 
     async def lookup_snapshot(
         self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SnapshotData]:
-        return LookupUnknown("an E2B snapshot's record can't be rebuilt from a lookup")
+    ) -> Looked[SnapshotData]:
+        return Ok(LookupUnknown("an E2B snapshot's record can't be rebuilt from a lookup"))
 
     async def attach(
         self, ref: str, context: SandboxContext

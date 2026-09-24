@@ -21,14 +21,13 @@ from threads import (
     ModelInfo,
     ModelRequest,
     ModelResponse,
-    StaleEpoch,
     agent,
     scripted_model,
     sqlite,
 )
 from threads.log import TextPart, Usage
 from threads.loop.guard import block_model_requests
-from threads.loop.model import Done, LookupCapability, PartChunk
+from threads.loop.model import Done, LookupCapability, PartChunk, StaleEpoch
 from threads.loop.recovery import recover
 from threads.loop.runtime import Failed, Runtime
 from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel

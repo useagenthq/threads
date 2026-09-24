@@ -158,8 +158,16 @@ async def every_operation_is_fenced_at_the_transport(h: Harness) -> None:
             ]
         codes = [r.error.code if isinstance(r, Err) else "ok" for r in refused]
         assert codes == [code] * len(refused)
-        assert isinstance(await h.sandbox.lookup("k1", lost), LookupUnknown)
-        assert isinstance(await h.sandbox.lookup_snapshot("snap-key", lost), LookupUnknown)
+        # spec/api.json Sandbox.lookup: a refused fence is Err, never an answer.
+        looked = await h.sandbox.lookup("k1", lost)
+        assert isinstance(looked, Err)
+        assert looked.error.code == code
+        # An adapter that can't look snapshots up answers unknown without asking anyone.
+        snapped = await h.sandbox.lookup_snapshot("snap-key", lost)
+        if isinstance(snapped, Err):
+            assert snapped.error.code == code
+        else:
+            assert isinstance(snapped.value, LookupUnknown)
         assert h.backend.requests == before, "a refused operation reached the provider"
         assert lost.fences >= len(refused)
 
@@ -176,7 +184,7 @@ async def a_snapshot_restores_isolated_and_verified(h: Harness) -> None:
     assert snap.value.provider == h.sandbox.info.provider
     assert snap.value.manifest_hash == manifest_hash(manifest_of({"a.txt": b"v1"}))
     if h.sandbox.info.lookup.snapshot != "none":
-        assert await h.sandbox.lookup_snapshot("snap-key", OPEN) == Found(snap.value)
+        assert await h.sandbox.lookup_snapshot("snap-key", OPEN) == Ok(Found(snap.value))
     bad = await h.sandbox.restore(snap.value.snapshot_id, "0" * 64, "bad-key", OPEN)
     assert isinstance(bad, Err)
     assert bad.error.code == "snapshot_manifest_mismatch"
@@ -214,12 +222,13 @@ async def a_lost_create_is_found_by_its_key(h: Harness) -> None:
     assert isinstance(lost, Err)
     assert lost.error.code in ("unavailable", "timeout")
     found = await h.sandbox.lookup("k-lost", OPEN)
-    assert isinstance(found, Found)
-    assert found.value.id in h.backend.boxes
+    assert isinstance(found, Ok)
+    assert isinstance(found.value, Found)
+    assert found.value.value.id in h.backend.boxes
     assert h.backend.creates == 1
     nothing = await h.sandbox.lookup("k-never", OPEN)
     final = h.sandbox.info.lookup.create == "final"
-    assert nothing == (NotFound() if final else NotFoundNonfinal())
+    assert nothing == Ok(NotFound() if final else NotFoundNonfinal())
 
 
 async def attach_then_close_releases(h: Harness) -> None:

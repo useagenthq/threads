@@ -6,7 +6,7 @@ failures are `SandboxError` values; an adapter raises only for bugs.
 """
 
 import posixpath
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final, Literal, NewType, Protocol, assert_never, runtime_checkable
@@ -76,6 +76,17 @@ def refusal(authority: SandboxAuthority) -> Refusal:
 
 def is_refusal(error: SandboxError) -> bool:
     return error.code in ("stale_epoch", "cleanup_claim_lost")
+
+
+type Looked[T] = Ok[LookupResult[T]] | Err[SandboxError]
+"""spec/api.json `Sandbox.lookup` and `lookupSnapshot` returns: the answer, or a refused fence
+(stale_epoch or cleanup_claim_lost), when nothing was asked."""
+
+
+def unanswered(error: SandboxError) -> Ok[LookupUnknown] | Err[SandboxError]:
+    """A lookup whose provider call failed: a refused fence stays an error; any other failure
+    is an answer that proves nothing."""
+    return Err(error) if is_refusal(error) else Ok(LookupUnknown(f"{error.code}: {error.message}"))
 
 
 async def refused(context: SandboxContext) -> Err[SandboxError] | None:
@@ -218,9 +229,7 @@ class Sandbox(Protocol):
 class LooksUpSandbox(Protocol):
     """spec/api.json `Sandbox.lookup`, an optional capability of a `Sandbox`."""
 
-    async def lookup(
-        self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SandboxSession]:
+    async def lookup(self, operation_key: str, context: SandboxContext) -> Looked[SandboxSession]:
         """Finds a sandbox whose create or restore answer was lost."""
         ...
 
@@ -231,33 +240,6 @@ class LooksUpSnapshot(Protocol):
 
     async def lookup_snapshot(
         self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SnapshotData]:
+    ) -> Looked[SnapshotData]:
         """Finds a snapshot whose capture answer was lost."""
         ...
-
-
-type Lookup[T] = Callable[[str], Awaitable[LookupResult[T]]]
-"""A lookup by operation key, bound to its context."""
-
-
-async def _unasked(_key: str) -> LookupUnknown:
-    return LookupUnknown("this sandbox has no lookup for it")
-
-
-def session_lookup(
-    sandbox: Sandbox, context: SandboxContext
-) -> tuple[Lookup[SandboxSession], LookupCapability]:
-    """How a lost create or restore is found, and what that lookup can prove. A sandbox
-    without the method declared none (setup refuses any other)."""
-    if isinstance(sandbox, LooksUpSandbox):
-        return (lambda key: sandbox.lookup(key, context)), sandbox.info.lookup.create
-    return _unasked, "none"
-
-
-def snapshot_lookup(
-    sandbox: Sandbox, context: SandboxContext
-) -> tuple[Lookup[SnapshotData], LookupCapability]:
-    """How a lost capture is found, and what that lookup can prove."""
-    if isinstance(sandbox, LooksUpSnapshot):
-        return (lambda key: sandbox.lookup_snapshot(key, context)), sandbox.info.lookup.snapshot
-    return _unasked, "none"

@@ -43,15 +43,17 @@ from threads.adapters.sandboxes.daytona.wire import SandboxDto
 from threads.adapters.sandboxes.fence import dispatch
 from threads.agents.config import ConfigError
 from threads.log import SnapshotData
-from threads.loop.model import Found, LookupResult, LookupUnknown, NotFoundNonfinal
+from threads.loop.model import Found, LookupUnknown, NotFoundNonfinal
 from threads.result import Err, Ok
 from threads.sandbox import manifest
 from threads.sandbox.protocol import (
+    Looked,
     LookupSupport,
     SandboxContext,
     SandboxError,
     SandboxInfo,
     SandboxSession,
+    unanswered,
 )
 from threads.secrets import Secret, credential
 
@@ -149,18 +151,16 @@ class DaytonaSandbox:
         await child.close(context)
         return Err(SandboxError("snapshot_manifest_mismatch", f"{snapshot_id}: manifest"))
 
-    async def lookup(
-        self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SandboxSession]:
+    async def lookup(self, operation_key: str, context: SandboxContext) -> Looked[SandboxSession]:
         found = await dispatch(context, lambda: self._find(resource_name(operation_key)), classify)
         if isinstance(found, Err):
-            return LookupUnknown(f"{found.error.code}: {found.error.message}")
-        return NotFoundNonfinal() if found.value is None else Found(found.value)
+            return unanswered(found.error)
+        return Ok(NotFoundNonfinal() if found.value is None else Found(found.value))
 
     async def lookup_snapshot(
         self, operation_key: str, context: SandboxContext
-    ) -> LookupResult[SnapshotData]:
-        return LookupUnknown("a Daytona snapshot can't be found by key with its manifest")
+    ) -> Looked[SnapshotData]:
+        return Ok(LookupUnknown("a Daytona snapshot can't be found by key with its manifest"))
 
     async def attach(
         self, ref: str, context: SandboxContext

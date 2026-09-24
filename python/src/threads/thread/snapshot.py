@@ -14,15 +14,16 @@ from typing import Final
 from threads.log import ParseError, SnapshotData, SnapshotEvent
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
-from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, release_session
-from threads.sandbox.protocol import (
-    Sandbox,
-    SandboxError,
-    SandboxSession,
-    is_refusal,
+from threads.sandbox.ledger import (
+    Fenced,
+    Tracked,
+    abandon,
+    acquire,
+    release_session,
     session_lookup,
     snapshot_lookup,
 )
+from threads.sandbox.protocol import Sandbox, SandboxError, SandboxSession, is_refusal
 from threads.store import Draft, SqliteStore, Writer
 from threads.store.worker import Clock
 

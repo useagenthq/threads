@@ -22,16 +22,18 @@ export async function snapshotTurn(
   session: SessionGetter,
   ledger: ResourceLedger,
   writer: Writer,
-  /** The corpus revision this branch searches as of, when it has knowledge. */
-  knowledgeRevision?: Revision,
+  /** Reads the corpus revision the snapshot records; undefined without knowledge. */
+  knowledgeRevision: () => Promise<Revision | undefined>,
 ): Promise<void> {
-  // A failed revision takes no snapshot: a knowledge-bound one always records its revision.
-  if (knowledgeRevision?.ok === false) return;
   if (sandbox === undefined || !ranEffects(knownEvents(writer.chain))) return;
+  // Read only when a capture follows, and before it, so a failure costs no scratch sandbox.
+  const revision = await knowledgeRevision();
+  // A failed revision takes no snapshot: a knowledge-bound one always records its revision.
+  if (revision?.ok === false) return;
   const live = await session();
   if (!live.ok) return;
   const captured = await captureSnapshot(ledger, writer, sandbox, live.value);
   // ponytail: a refused capture only costs this turn its fork point; it is not reported yet.
   if (captured.ok)
-    writer.append([snapshotEvent(captured.value, knowledgeRevision?.value)]);
+    writer.append([snapshotEvent(captured.value, revision?.value)]);
 }

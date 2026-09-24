@@ -7,24 +7,24 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import assert_never
 
-from threads.log import ParseError
+from threads.log import ParseError, SnapshotData
 from threads.loop.model import (
     Found,
     LookupCapability,
-    LookupResult,
     LookupUnknown,
     NotFound,
     NotFoundNonfinal,
 )
 from threads.result import Err, Ok
 from threads.sandbox.protocol import (
+    Looked,
+    LooksUpSandbox,
+    LooksUpSnapshot,
     Sandbox,
     SandboxContext,
     SandboxError,
     SandboxSession,
     is_refusal,
-    session_lookup,
-    snapshot_lookup,
 )
 from threads.store import SqliteStore
 from threads.store.lease import Owner
@@ -34,6 +34,33 @@ from threads.store.worker import Clock
 _LOST = frozenset({"unavailable", "timeout"})
 """Answers that don't say whether the provider acted: resolved by the operation key."""
 
+type Lookup[T] = Callable[[str], Awaitable[Looked[T]]]
+"""A lookup by operation key, bound to its context."""
+
+
+async def _unasked(_key: str) -> Ok[LookupUnknown]:
+    return Ok(LookupUnknown("this sandbox has no lookup for it"))
+
+
+def session_lookup(
+    sandbox: Sandbox, context: SandboxContext
+) -> tuple[Lookup[SandboxSession], LookupCapability]:
+    """How a lost create or restore is found, and what that lookup can prove. A sandbox
+    without the method is treated as declaring none; check() and the first run refuse one
+    that declares a lookup, but a fork or gc outside a run doesn't pass through them."""
+    if isinstance(sandbox, LooksUpSandbox):
+        return (lambda key: sandbox.lookup(key, context)), sandbox.info.lookup.create
+    return _unasked, "none"
+
+
+def snapshot_lookup(
+    sandbox: Sandbox, context: SandboxContext
+) -> tuple[Lookup[SnapshotData], LookupCapability]:
+    """How a lost capture is found, and what that lookup can prove (as `session_lookup`)."""
+    if isinstance(sandbox, LooksUpSnapshot):
+        return (lambda key: sandbox.lookup_snapshot(key, context)), sandbox.info.lookup.snapshot
+    return _unasked, "none"
+
 
 @dataclass(frozen=True, slots=True)
 class Tracked[T]:
@@ -41,7 +68,7 @@ class Tracked[T]:
 
     kind: Kind
     create: Callable[[str], Awaitable[Ok[T] | Err[SandboxError]]]
-    lookup: Callable[[str], Awaitable[LookupResult[T]]]
+    lookup: Lookup[T]
     capability: LookupCapability
     ref: Callable[[T], str]
 
@@ -82,14 +109,19 @@ async def _outcome[T](
 
 async def resolve_key[T](
     capability: LookupCapability,
-    lookup: Callable[[str], Awaitable[LookupResult[T]]],
+    lookup: Lookup[T],
     key: str,
 ) -> tuple[Answer, T | None]:
     """What a lookup by operation key establishes. not_found counts only from a lookup whose
-    declared capability is final; finality is never inferred from lookup being available."""
+    declared capability is final; finality is never inferred from lookup being available. A
+    refused fence proves nothing either: the ledger write that follows is fenced the same way,
+    so the caller gets the refusal from it."""
     if capability == "none":
         return "unresolved", None
-    result = await lookup(key)
+    looked = await lookup(key)
+    if isinstance(looked, Err):
+        return "unresolved", None
+    result = looked.value
     match result:
         case Found(value=value):
             return "found", value

@@ -26,20 +26,25 @@ const readOnly = {
 function corpus(): {
   readonly provider: KnowledgeProvider;
   readonly fail: () => void;
+  readonly reads: () => number;
 } {
   let failing = false;
+  let reads = 0;
   const provider: KnowledgeProvider = {
     ingest: async () => err(readOnly),
     remove: async () => err(readOnly),
     search: async () => ok([]),
     get: async () => err(readOnly),
-    revision: async () =>
-      failing
+    revision: async () => {
+      reads += 1;
+      return failing
         ? err({ code: "unavailable", message: "the index is down" } as const)
-        : ok(7),
+        : ok(7);
+    },
   };
   return {
     provider,
+    reads: () => reads,
     fail: () => {
       failing = true;
     },
@@ -108,5 +113,23 @@ describe("KnowledgeProvider.revision", () => {
     expect(after.snapshots).toEqual([7]);
     expect(after.forkPoints).toBe(1);
     expect(after.rows).toBe(before.rows);
+  });
+
+  test("is read only when a capture follows", async () => {
+    const kb = corpus();
+    const bot = agent({
+      model: scriptedModel({
+        responses: [done, write("a.txt", "c1"), done],
+      }),
+      sandbox: fakeSandbox(),
+      knowledge: kb.provider,
+      permissions: { mode: "accept_edits" },
+    });
+    const first = await bot.run("chat", { store: sqlite(":memory:") });
+    expect(first.status).toBe("completed");
+    expect(kb.reads()).toBe(0);
+    const second = await bot.run("write", { thread: first.thread });
+    expect(second.status).toBe("completed");
+    expect(kb.reads()).toBe(1);
   });
 });

@@ -41,7 +41,6 @@ from threads.loop.model import (  # noqa: E402
     ModelInfo,
     ModelRequest,
     ModelResponse,
-    StaleEpoch,
 )
 from threads.loop.scripted import scripted_model  # noqa: E402
 from threads.memory.local_knowledge import local_knowledge  # noqa: E402
@@ -129,7 +128,6 @@ __all__ = [
     "Secret",
     "SetsUp",
     "Skill",
-    "StaleEpoch",
     "StatusItem",
     "Store",
     "StreamEvent",

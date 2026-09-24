@@ -226,10 +226,11 @@ def test_a_failed_create_leaves_a_sandbox_lookup_finds_and_a_retry_reuses() -> N
             assert isinstance(failed, Err)
             assert failed.error.code == "unavailable"
             found = await sandbox.lookup("k", OPEN)
-            assert isinstance(found, Found)
+            assert isinstance(found, Ok)
+            assert isinstance(found.value, Found)
             again = await sandbox.create("k", OPEN)
             assert isinstance(again, Ok)
-            assert again.value.id == found.value.id
+            assert again.value.id == found.value.value.id
             assert backend.creates == 1
             ran = await again.value.exec(["echo", "hi"], OPEN, process_key="p")
             assert isinstance(ran, Ok)
