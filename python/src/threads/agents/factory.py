@@ -11,16 +11,18 @@ from pydantic import BaseModel
 from threads._json_schema import unchecked
 from threads.agents import narrowing
 from threads.agents.agent import Agent, deps_of
-from threads.agents.bindings import AppTool, ToolServer
+from threads.agents.bindings import DEFAULT_PERMISSIONS, AppTool, ToolServer
 from threads.agents.builtins import Egress
 from threads.agents.catalog import GitOptions, LspOptions, WebOptions, catalog
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
+from threads.agents.sections import Section, completed
 from threads.agents.skills import Skill, checked
 from threads.agents.team_agent import TeamAgent, TeamLimits
 from threads.agents.tool import json_schema
 from threads.hooks.extension import Extension
 from threads.log import Budget, Context, Permissions, Principal, Retry
+from threads.loop.defaults import CONTEXT, RETRY
 from threads.loop.model import Model
 from threads.memory.authority import MemoryWrite
 from threads.memory.protocol import KnowledgeProvider, MemoryProvider
@@ -36,14 +38,17 @@ class CommonOptions(TypedDict, total=False):
 
     instructions: str
     name: str
-    permissions: Permissions
+    permissions: Section[Permissions]
+    """A complete Permissions, or only the fields to change over the defaults."""
     budget: Budget
     on_unknown_usage: Literal["upper_bound", "stop"]
     """"stop": a limit the model has no per-attempt bound for is refused at run time instead of
     at setup (budget_unenforceable); default "upper_bound"."""
-    retry: Retry
-    context: Context
-    """The context ladder's settings; absent: the ADR defaults."""
+    retry: Section[Retry]
+    """A complete Retry, or only the fields to change over the defaults."""
+    context: Section[Context]
+    """The context ladder's settings, complete or only the fields to change; absent: the ADR
+    defaults."""
     fallback: Sequence[Model]
     """Models to fall back to, in order, when the current one stays overloaded. With the default
     fallback_scope "turn", the next input reverts to the settings before the fallback."""
@@ -297,10 +302,10 @@ def build_definition[T](
         model,
         options.get("instructions", ""),
         tools,
-        options.get("permissions"),
+        completed("permissions", options.get("permissions"), DEFAULT_PERMISSIONS),
         options.get("budget"),
-        options.get("retry"),
-        options.get("context"),
+        completed("retry", options.get("retry"), RETRY),
+        completed("context", options.get("context"), CONTEXT),
         sandbox,
         egress,
         tuple(options.get("extensions", ())),

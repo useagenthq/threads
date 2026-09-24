@@ -34,22 +34,16 @@ const coder = agent({
 
 ```python
 from threads import Principal
-from threads.log import Permissions
-
-PROTECTED = [".git/**", ".threads/**", ".claude/**", ".mcp.json", "**/.bashrc", "**/.zshrc", "**/.profile", "**/.gitconfig", "**/.ssh/**"]
 
 coder = agent(
     name="coder",
     model=scripted_model({"responses": [{"content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn", "usage": {"input_tokens": 1, "output_tokens": 1}}]}),
-    permissions=Permissions(
-        mode="accept_edits",
-        allow=["bash(git status)", "bash(npm test:*)", "web_fetch(domain:docs.example.com)"],
-        ask=["bash(git push:*)"],
-        deny=["bash(rm:*)", "read(secrets/**)", "mcp__github__*"],
-        protected_paths=PROTECTED,
-        allow_bypass=False,
-        plan_exit_mode="default",
-    ),
+    permissions={
+        "mode": "accept_edits",
+        "allow": ["bash(git status)", "bash(npm test:*)", "web_fetch(domain:docs.example.com)"],
+        "ask": ["bash(git push:*)"],
+        "deny": ["bash(rm:*)", "read(secrets/**)", "mcp__github__*"],
+    },
     approvers=[Principal(issuer="slack:T024BE7LD", tenant="acme", subject="U42")],
 )
 ```
@@ -57,7 +51,7 @@ coder = agent(
 </Tab>
 </Tabs>
 
-In TypeScript you pass only the fields you change; the rest keep their defaults. In Python, `Permissions` (from `threads.log`) takes every field; the defaults are shown above.
+Pass only the fields you change; the rest keep their defaults. In Python you can also pass a complete `Permissions` (from `threads.log`).
 
 | Field | Default | Meaning |
 |---|---|---|

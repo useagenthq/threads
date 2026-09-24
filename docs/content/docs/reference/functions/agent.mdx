@@ -165,7 +165,7 @@ def agent(
 </Field>
 
 <Field name="permissions" type={"Partial<Policy.permissions>"}>
-  The permission policy every tool call is decided under: mode, allow, ask and deny rules, protected_paths, allow_bypass and plan_exit_mode. The rule bash(*) matches every shell command, whatever it contains, in allow, ask and deny. The .threads guard, deny rules, plan mode and ask rules still decide first (protected_paths cover the file tools, not bash). The guard and deny rules match command text, so they are guardrails: with bash(*), the sandbox is the boundary. A bare bash rule allows only commands that parse. In TypeScript the fields you give override the defaults; Python takes a complete Permissions. Omitted: mode default, no rules, the built-in protected paths, allow_bypass false and plan_exit_mode default.
+  The permission policy every tool call is decided under: mode, allow, ask and deny rules, protected_paths, allow_bypass and plan_exit_mode. The rule bash(*) matches every shell command, whatever it contains, in allow, ask and deny. The .threads guard, deny rules, plan mode and ask rules still decide first (protected_paths cover the file tools, not bash). The guard and deny rules match command text, so they are guardrails: with bash(*), the sandbox is the boundary. A bare bash rule allows only commands that parse. The fields you give override the defaults. Omitted: mode default, no rules, the built-in protected paths, allow_bypass false and plan_exit_mode default.
 </Field>
 
 <Field name="approvers" type={"readonly Principal[]"}>
@@ -181,11 +181,11 @@ def agent(
 </Field>
 
 <Field name="retry" type={"Partial<Policy.retry>"}>
-  Model retry settings: max_retries, base_delay_ms, max_delay_ms, max_retry_after_ms, max_total_wait_ms, crash_resends, fallback_after, fallback_scope and heartbeat_ms. In TypeScript the fields you give override the defaults; Python takes a complete Retry. Omitted: the default policy (8 retries, 1000 ms base delay doubling up to 32000 ms, fallback after 3 failures in a turn).
+  Model retry settings: max_retries, base_delay_ms, max_delay_ms, max_retry_after_ms, max_total_wait_ms, crash_resends, fallback_after, fallback_scope and heartbeat_ms. The fields you give override the defaults. Omitted: the default policy (8 retries, 1000 ms base delay doubling up to 32000 ms, fallback after 3 failures in a turn).
 </Field>
 
 <Field name="context" type={"Partial<Policy.context>"}>
-  Context-window settings: reserve_tokens, clearing old tool results, spilling large results, compaction and what is restored after it, output continuations and tool deferral. defer_tools is auto (the default: tools with defer are deferred), never (nothing is) or always (every app, extension and MCP tool without ends_turn is); a subagent, team member or handoff target that doesn't set it inherits its parent's resolved value (in Python, one whose context is None). defer_threshold is reserved and not read. In TypeScript the fields you give override the defaults; Python takes a complete Context. Omitted: the default context policy, with cache_ttl_ms from the models' declared cache lifetimes (ModelInfo.cache) when they agree; models that disagree, or whose lifetime is unknown, need cache_ttl_ms set (checked at check() or the first run).
+  Context-window settings: reserve_tokens, clearing old tool results, spilling large results, compaction and what is restored after it, output continuations and tool deferral. The fields you give override the defaults. defer_tools is auto (the default: tools with defer are deferred), never (nothing is) or always (every app, extension and MCP tool without ends_turn is); a subagent, team member or handoff target that doesn't set it inherits its parent's resolved value. defer_threshold is reserved and not read. Unless you set cache_ttl_ms, it comes from the models' declared cache lifetimes (ModelInfo.cache) when they agree; models that disagree, or whose lifetime is unknown, need cache_ttl_ms set (checked at check() or the first run).
 </Field>
 
 <Field name="egress" type={"readonly string[] | \"unenforced\""} default={"[]"}>
