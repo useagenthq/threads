@@ -1,15 +1,14 @@
 # pyright: strict
-"""Staged cases for run completion (spec/schema/README.md, "Run completion"; Gate 1 decision
-27): a run spans its input turn and every wake turn of the same request, waits for its own
-members and background children, and returns the last lead turn's answer."""
+"""Staged Phase 1 cases for run completion (spec/schema/README.md, "Run completion"; Gate 1
+decision 27): a run spans its input turn and every wake turn of the same request, waits for its
+own members, and returns the last lead turn's answer. The legacy-child half is legacy_run."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from .common import eid, text
-from .log import Log
-from .pieces import answer, call, reduce_case, started, user
+from .pieces import answer, reduce_case, user
 from .run_end import run_projection
 from .team_pieces import (
     LEAD,
@@ -27,13 +26,12 @@ from .team_pieces import (
     provenance,
 )
 from .team_steps import FAM, idle, received, start
-from .teams import catalog_specs
-from .wakes import KIDS, late, one_append_log, woken
 
 if TYPE_CHECKING:
     import pathlib
 
     from .jcs import Obj
+    from .log import Log
 
 
 def build(root: pathlib.Path) -> None:
@@ -116,26 +114,6 @@ def _cases() -> list[tuple[str, str, Log]]:
         )
     )
     out += _parks()
-    log = one_append_log()
-    answer(log, "The dependency scan is clean.")
-    out.append(
-        (
-            "legacy-run-waits-for-its-children",
-            "A run with two background children: the first reported and woke the lead, which "
-            "answered; the second still runs, so the run is still running.",
-            log.copy(),
-        )
-    )
-    woken(log, [late(log, "call_2", KIDS[1])])
-    answer(log, "Both scans are clean.")
-    out.append(
-        (
-            "legacy-run-final-answer-after-wake",
-            "Both background children reported and each woke the lead: the run is completed with "
-            "the last wake turn's answer.",
-            log,
-        )
-    )
     return out
 
 
@@ -167,28 +145,6 @@ def _parks() -> list[tuple[str, str, Log]]:
             "last park (message_received, then resumed) and opens the wake turn, whose answer is "
             "the run's output.",
             lead,
-        )
-    )
-    log = Log()
-    started(log, catalog_specs(("spawn_agent",)))
-    user(log, "Review the diff.")
-    call(log, "spawn_agent", {"agent": "reviewer", "prompt": "Review it."}, "call_1")
-    spawned: Obj = {
-        "call_id": "call_1",
-        "child_thread_id": KIDS[0],
-        "agent_name": "reviewer",
-        "mode": "foreground",
-        "isolation": "none",
-    }
-    log.add("agent_spawned", spawned)
-    child: Obj = {"kind": "child", "id": KIDS[0]}
-    log.add("parked", {"address": child, "reason": "awaiting_approval"})
-    out.append(
-        (
-            "legacy-run-child-parks",
-            "A foreground child parks, which parks the lead mid-turn (the spawn call stays "
-            "pending): the run returns parked, not running.",
-            log,
         )
     )
     return out

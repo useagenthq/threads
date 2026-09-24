@@ -28,6 +28,8 @@ from . import (
     host,
     integrity,
     ladder,
+    legacy_run,
+    legacy_wake_rows,
     memory,
     models,
     open_turn,
@@ -123,17 +125,23 @@ def _build(out: pathlib.Path) -> None:
         family.build(out)
 
 
+# Staged families, by the phase whose build moves them into FAMILIES: Phase 0 (the legacy wake)
+# takes the first, the Teams Phase 1 read side (lanes 21A and 21B) the second.
+STAGED_PHASE_0 = (legacy_run.build, legacy_wake_rows.build)
+STAGED_PHASE_1 = (
+    team_bindings.build_staged,
+    team_replay.build,
+    team_rebind.build,
+    team_operator.build,
+    run_cases.build,
+)
+
+
 def _build_staged(out: pathlib.Path) -> None:
     """Cases for an approved spec whose build hasn't landed: generated and checked like the
     corpus, but no runner reads them until the build moves each family into FAMILIES."""
     out.mkdir()
-    for build in (
-        team_bindings.build_staged,
-        team_replay.build,
-        team_rebind.build,
-        team_operator.build,
-        run_cases.build,
-    ):
+    for build in (*STAGED_PHASE_0, *STAGED_PHASE_1):
         build(out)
 
 
