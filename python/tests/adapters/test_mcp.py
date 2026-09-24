@@ -184,6 +184,26 @@ def test_an_unreachable_server_is_a_setup_error_that_names_it(gone: McpServer) -
     asyncio.run(main())
 
 
+def test_a_server_without_streamable_http_is_tried_over_sse_as_in_typescript() -> None:
+    seen: list[tuple[str, str]] = []
+
+    def old(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.headers.get("accept", "")))
+        return httpx.Response(405 if request.method == "POST" else 503, request=request)
+
+    async def main() -> None:
+        gone = replace(mcp(name="old", url="http://old.test/mcp"), http=httpx.MockTransport(old))
+        bot = agent(model=scripted_model({"responses": []}), tools=[gone])
+        with pytest.raises(ConfigError) as raised:
+            await bot.run("hi", store=sqlite(":memory:"))
+        assert raised.value.code == "mcp_unreachable"
+
+    asyncio.run(main())
+    # Streamable HTTP first (a POST), then the SSE transport's event stream (a GET).
+    assert seen[0][0] == "POST"
+    assert ("GET", "text/event-stream") in seen
+
+
 def test_http_sends_secret_headers_from_the_host_only(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("KIT_TOKEN", "s3cr3t-value")
     app = server()

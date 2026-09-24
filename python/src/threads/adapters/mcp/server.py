@@ -12,7 +12,7 @@ never starts with its tools silently missing.
 import asyncio
 import os
 import re
-from collections.abc import AsyncGenerator, Mapping, Sequence
+from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Final, Literal, Required, TypedDict, Unpack
@@ -20,6 +20,7 @@ from typing import Final, Literal, Required, TypedDict, Unpack
 import httpx
 from jsonschema import Draft202012Validator, SchemaError
 from mcp import ClientSession
+from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import PaginatedRequestParams, Tool
 from pydantic import JsonValue, TypeAdapter, ValidationError
@@ -45,7 +46,7 @@ class ToolFilter(TypedDict, total=False):
 class McpOptions(TypedDict, total=False):
     name: Required[str]
     url: str
-    """Streamable HTTP. Exactly one of url or command."""
+    """Streamable HTTP, falling back to SSE. Exactly one of url or command."""
     headers: Mapping[str, Value]
     command: str
     """stdio, spawned on the host."""
@@ -87,6 +88,29 @@ class McpServer:
     async def _connect(self, fence: Fence) -> AsyncGenerator[Sequence[McpTool]]:
         headers = {k: _value(v) for k, v in self.headers.items()}
         env = {k: _value(v) for k, v in self.env.items()}
+        error: Exception = AssertionError("no transport")
+        # Each transport in order (Streamable HTTP, then SSE); the last failure names the server.
+        for streams in self._streams(fence, headers, env):
+            started = await self._start(streams)
+            if isinstance(started, ConfigError):
+                # The server answered but its tools can't be pinned: another transport won't help.
+                raise started
+            if isinstance(started, Exception):
+                error = started
+                continue
+            tools, stop, owner = started
+            try:
+                yield tools
+            finally:
+                stop.set()
+                await asyncio.gather(owner, return_exceptions=True)
+            return
+        raise ConfigError("mcp_unreachable", f"MCP server {self.name}: {error!r}") from error
+
+    async def _start(
+        self, streams: Callable[[], AbstractAsyncContextManager[Streams]]
+    ) -> tuple[tuple[McpTool, ...], asyncio.Event, asyncio.Task[None]] | Exception:
+        """Connects one transport and pins its tools, or the reason it couldn't."""
         ready: asyncio.Future[tuple[McpTool, ...]] = asyncio.get_running_loop().create_future()
         stop = asyncio.Event()
 
@@ -94,10 +118,7 @@ class McpServer:
             # The SDK's task groups live in this task, so a dying server can never cancel the
             # run itself; the run's calls then fail as connection closed (uncertain).
             try:
-                async with (
-                    self._streams(fence, headers, env) as streams,
-                    ClientSession(*streams) as session,
-                ):
+                async with streams() as opened, ClientSession(*opened) as session:
                     init = await session.initialize()
                     offers = init.capabilities.resources is not None
                     ready.set_result(self._pin(session, await _listed(session), resources=offers))
@@ -109,28 +130,24 @@ class McpServer:
         owner = asyncio.create_task(own())
         try:
             async with asyncio.timeout(SETUP_S):
-                tools = await asyncio.shield(ready)
+                return await asyncio.shield(ready), stop, owner
         except Exception as error:
             owner.cancel()
             await asyncio.gather(owner, return_exceptions=True)
-            if isinstance(error, ConfigError):
-                raise
-            raise ConfigError("mcp_unreachable", f"MCP server {self.name}: {error!r}") from error
-        try:
-            yield tools
-        finally:
-            stop.set()
-            await asyncio.gather(owner, return_exceptions=True)
+            return error
 
     def _streams(
         self, fence: Fence, headers: Mapping[str, str], env: Mapping[str, str]
-    ) -> AbstractAsyncContextManager[Streams]:
+    ) -> tuple[Callable[[], AbstractAsyncContextManager[Streams]], ...]:
         if self.command is not None:
+            command = self.command
             base = {k: os.environ[k] for k in ("PATH", "HOME") if k in os.environ}
-            return stdio(self.command, self.args, {**base, **env}, fence)
-        if self.url is None:
+            return (lambda: stdio(command, self.args, {**base, **env}, fence),)
+        url = self.url
+        if url is None:
             raise AssertionError("mcp() requires url or command")
-        return _http(self.url, self.http or httpx.AsyncHTTPTransport(), fence, headers)
+        inner = self.http or httpx.AsyncHTTPTransport()
+        return (lambda: _http(url, inner, fence, headers), lambda: _sse(url, inner, fence, headers))
 
     def _pin(
         self, session: ClientSession, listed: Sequence[Tool], *, resources: bool
@@ -176,16 +193,45 @@ class McpServer:
         return McpTool(name, tool.name, description, schema, self.effect, session, defer=self.defer)
 
 
+def _client(
+    inner: httpx.AsyncBaseTransport, fence: Fence, headers: Mapping[str, str]
+) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        transport=FencedTransport(inner, fence),
+        headers=dict(headers),
+        timeout=httpx.Timeout(30.0, read=300.0),
+    )
+
+
+@asynccontextmanager
+async def _sse(
+    url: str, inner: httpx.AsyncBaseTransport, fence: Fence, headers: Mapping[str, str]
+) -> AsyncGenerator[Streams]:
+    """The older SSE transport through the SDK, for a server without Streamable HTTP; the SDK
+    makes its clients through this factory, so every request is fenced too."""
+
+    def made(
+        headers: dict[str, str] | None = None,
+        timeout: httpx.Timeout | None = None,
+        auth: httpx.Auth | None = None,
+    ) -> httpx.AsyncClient:
+        client = _client(inner, fence, {**(headers or {})})
+        if timeout is not None:
+            client.timeout = timeout
+        if auth is not None:
+            client.auth = auth
+        return client
+
+    async with sse_client(url, headers=dict(headers), httpx_client_factory=made) as (read, write):
+        yield read, write
+
+
 @asynccontextmanager
 async def _http(
     url: str, inner: httpx.AsyncBaseTransport, fence: Fence, headers: Mapping[str, str]
 ) -> AsyncGenerator[Streams]:
     """Streamable HTTP through the SDK, on an httpx client whose transport is fenced."""
-    client = httpx.AsyncClient(
-        transport=FencedTransport(inner, fence),
-        headers=dict(headers),
-        timeout=httpx.Timeout(30.0, read=300.0),
-    )
+    client = _client(inner, fence, headers)
     async with client, streamable_http_client(url, http_client=client) as (read, write, _):
         yield read, write
 

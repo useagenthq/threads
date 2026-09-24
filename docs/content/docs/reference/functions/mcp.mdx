@@ -55,7 +55,7 @@ def mcp(
 </Field>
 
 <Field name="url" type={"string"}>
-  The server's URL, for a server reached over HTTP: Streamable HTTP, with an SSE fallback in TypeScript. Exactly one of url or command; omit it for a stdio server.
+  The server's URL, for a server reached over HTTP: Streamable HTTP, falling back to the older SSE transport. Exactly one of url or command; omit it for a stdio server.
 </Field>
 
 <Field name="headers" type={"Record<string, string | Secret>"} default={"{}"}>

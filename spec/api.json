@@ -849,7 +849,7 @@
           "kind": "option",
           "type": {"prim": "string"},
           "required": false,
-          "doc": "The server's URL, for a server reached over HTTP: Streamable HTTP, with an SSE fallback in TypeScript. Exactly one of url or command; omit it for a stdio server."
+          "doc": "The server's URL, for a server reached over HTTP: Streamable HTTP, falling back to the older SSE transport. Exactly one of url or command; omit it for a stdio server."
         },
         {
           "name": "headers",
