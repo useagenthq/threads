@@ -17,43 +17,26 @@ What Modal 1.5.5 supports here, and nothing broader (#170):
   experimental in the SDK. capture_classes is empty; restore answers snapshot_missing.
 - egress is enforced deny-all (Modal's block_network) unless `allow_internet`, then
   unenforced.
+
+The sandbox and session logic is the remote kit's; this adapter is its driver (driver.py) over
+one event loop's channels (plane.py).
 """
 
-from dataclasses import dataclass, field
-from typing import Literal
-
-import grpclib.client
-from grpclib.const import Status
-from grpclib.exceptions import GRPCError
-
 from threads.adapters.loop_resources import LoopResources
-from threads.adapters.sandboxes.fence import dispatch
-from threads.adapters.sandboxes.modal.channel import Connect, classify
+from threads.adapters.sandboxes.modal.channel import Connect
 from threads.adapters.sandboxes.modal.channel import connect as tls_channel
 from threads.adapters.sandboxes.modal.control import Control, Settings
-from threads.adapters.sandboxes.modal.router import Router
-from threads.adapters.sandboxes.modal.session import ModalSession
+from threads.adapters.sandboxes.modal.driver import ModalDriver
+from threads.adapters.sandboxes.modal.plane import Plane, close_plane
 from threads.agents.config import ConfigError
-from threads.log import SnapshotData
-from threads.loop.model import Found, LookupUnknown, NotFoundNonfinal
-from threads.result import Err, Ok
-from threads.sandbox.protocol import (
-    Looked,
-    LookupSupport,
-    SandboxContext,
-    SandboxError,
-    SandboxInfo,
-    SandboxSession,
-    unanswered,
-)
+from threads.sandbox.remote.sandbox import RemoteInfo, RemoteSandbox
 from threads.secrets import Secret, credential
 
 SERVER_URL = "https://api.modal.com"
 _MIN_LIFETIME_MS, _MAX_LIFETIME_MS = 1000, 24 * 3600 * 1000
-_CREATE_ERRORS = ("stale_epoch", "cleanup_claim_lost", "timeout")
 
 
-class ModalSandbox:
+class ModalSandbox(RemoteSandbox):
     def __init__(
         self,
         settings: Settings,
@@ -68,80 +51,11 @@ class ModalSandbox:
         self._token_secret = credential("modal", "token_secret", tokens[1], "MODAL_TOKEN_SECRET")
         self._server_url = server_url
         self._connect = connect
-        self._planes = LoopResources(name, _close)
+        self._planes = LoopResources(name, close_plane)
         self.lifetime_ms: int = settings.lifetime_s * 1000
         """The declared provider expiry: Modal ends a sandbox this long after its create."""
-        self._info = SandboxInfo(
-            provider=name,
-            egress="unenforced" if settings.internet else "enforced",
-            capture_classes=(),
-            browser="none",
-            desktop="none",
-            lookup=LookupSupport(create="nonfinal", snapshot="none"),
-            termination="unconfirmed",
-        )
-
-    @property
-    def info(self) -> SandboxInfo:
-        return self._info
-
-    async def create(
-        self, operation_key: str, context: SandboxContext
-    ) -> Ok[SandboxSession] | Err[SandboxError]:
-        control = self._control_plane()
-
-        async def call() -> str:
-            try:
-                return await control.create(_name(operation_key))
-            except GRPCError as error:
-                if error.status != Status.ALREADY_EXISTS:
-                    raise
-                return await control.by_name(_name(operation_key))
-
-        made = await dispatch(context, call, classify)
-        if isinstance(made, Err):
-            code = made.error.code
-            return (
-                made
-                if code in _CREATE_ERRORS
-                else Err(SandboxError("unavailable", str(made.error)))
-            )
-        return Ok(self._session(made.value))
-
-    async def restore(
-        self, snapshot_id: str, manifest_hash: str, operation_key: str, context: SandboxContext
-    ) -> Ok[SandboxSession] | Err[SandboxError]:
-        return Err(SandboxError("snapshot_missing", f"modal: no snapshots here ({snapshot_id})"))
-
-    async def lookup(self, operation_key: str, context: SandboxContext) -> Looked[SandboxSession]:
-        control = self._control_plane()
-        found = await dispatch(context, lambda: control.by_name(_name(operation_key)), classify)
-        if isinstance(found, Ok):
-            return Ok(Found(self._session(found.value)))
-        if found.error.code == "not_found":
-            return Ok(NotFoundNonfinal())
-        return unanswered(found.error)
-
-    async def lookup_snapshot(
-        self, operation_key: str, context: SandboxContext
-    ) -> Looked[SnapshotData]:
-        return Ok(LookupUnknown("modal: this adapter declares no snapshots"))
-
-    async def attach(
-        self, ref: str, context: SandboxContext
-    ) -> Ok[SandboxSession] | Err[SandboxError]:
-        control = self._control_plane()
-        running = await dispatch(context, lambda: control.running(ref), classify)
-        if isinstance(running, Err):
-            return running
-        if not running.value:
-            return Err(SandboxError("not_found", f"sandbox {ref} has ended"))
-        return Ok(self._session(ref))
-
-    async def release(
-        self, ref: str, context: SandboxContext
-    ) -> Ok[Literal["released", "already_gone"]] | Err[SandboxError]:
-        return Err(SandboxError("unavailable", f"modal: no snapshots here ({ref})"))
+        declared = RemoteInfo(name, "unenforced" if settings.internet else "enforced")
+        super().__init__(ModalDriver(self._plane), declared)
 
     async def setup(self) -> None:
         """Resolves both tokens on the host. Channels are opened on first use, in the run."""
@@ -157,46 +71,13 @@ class ModalSandbox:
                 "modal: set token_id/token_secret or MODAL_TOKEN_ID/MODAL_TOKEN_SECRET",
             ) from error
 
-    def _session(self, ident: str) -> ModalSession:
-        plane = self._plane()
-        return ModalSession(ident, plane.control, plane.router)
-
-    def _control_plane(self) -> Control:
-        return self._plane().control
-
-    def _plane(self) -> "_Plane":
-        def make() -> _Plane:
+    def _plane(self) -> Plane:
+        def make() -> Plane:
             channels = {self._server_url: self._connect(self._server_url)}
             control = Control(channels[self._server_url], self._settings, self._resolved())
-            return _Plane(self._connect, control, channels)
+            return Plane(self._connect, control, channels)
 
         return self._planes.get(make)
-
-
-@dataclass(frozen=True, slots=True)
-class _Plane:
-    """One event loop's channels (one per URL, so a fence listener is registered once) and the
-    control client over the API's."""
-
-    connect: Connect
-    control: Control
-    channels: dict[str, grpclib.client.Channel] = field(
-        default_factory=dict[str, grpclib.client.Channel]
-    )
-
-    def router(self, url: str, task_id: str, jwt: str) -> Router:
-        if url not in self.channels:
-            self.channels[url] = self.connect(url)
-        return Router(self.channels[url], task_id, jwt)
-
-
-async def _close(plane: _Plane) -> None:
-    for channel in plane.channels.values():
-        channel.close()
-
-
-def _name(operation_key: str) -> str:
-    return f"threads-{operation_key}"
 
 
 def modal(  # noqa: PLR0913 - the options a Modal sandbox is configured by
