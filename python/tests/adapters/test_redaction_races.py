@@ -24,22 +24,24 @@ from threads.store.forking import ChildStart, Forking
 from threads.store.worker import Worker
 
 
-def test_a_value_registered_before_the_append_publishes_is_refused(
+def test_a_value_registered_before_the_append_publishes_is_redacted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The append's drafts are admitted on the store's thread with registration paused, so a
+    value registered while the append waited for that thread is redacted like any other."""
+
     async def main() -> None:
         store = await opened()
         w = await writer(store)
         assert isinstance(await w.append([started({})]), Ok)
         Race(monkeypatch, RACED)
         appended = await w.append([user(f"note {RACED}")])
-        assert isinstance(appended, Err)
-        assert appended.error.code == "secret_in_stored_bytes"
+        assert isinstance(appended, Ok)
         exported = await store.export(ROOT)
         assert isinstance(exported, Ok)
         assert RACED.encode() not in exported.value
-        # Nothing was written, so the writer goes on.
-        assert isinstance(await w.append([user("safe")]), Ok)
+        # The redacted note opened a turn: the writer goes on and ends it.
+        assert isinstance(await w.append([Draft("turn_completed", {"reason": "end_turn"})]), Ok)
         await store.close()
 
     asyncio.run(main())
@@ -222,7 +224,7 @@ def test_a_rebuild_over_a_source_holding_a_value_keeps_the_old_index() -> None:
     asyncio.run(main())
 
 
-def test_a_cancelled_append_the_store_refused_leaves_the_writer_usable(
+def test_a_cancelled_append_whose_value_was_registered_meanwhile_leaves_the_writer_usable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def main() -> None:
@@ -243,7 +245,8 @@ def test_a_cancelled_append_the_store_refused_leaves_the_writer_usable(
         appending.append(task)
         with pytest.raises(asyncio.CancelledError):
             await task
-        assert isinstance(await w.append([user("safe")]), Ok)
+        # The redacted note opened a turn: the writer goes on and ends it.
+        assert isinstance(await w.append([Draft("turn_completed", {"reason": "end_turn"})]), Ok)
         exported = await store.export(ROOT)
         assert isinstance(exported, Ok)
         assert RACED.encode() not in exported.value
