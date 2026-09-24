@@ -1,0 +1,15 @@
+{"data":{"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_STARTED"}}
+{"data":{"stepName":"model","type":"STEP_STARTED"},"id":"3:0"}
+{"data":{"parentMessageId":"0192e000-0000-7000-8000-000000000003","toolCallId":"call_1","toolCallName":"spawn_agent","type":"TOOL_CALL_START"},"id":"4:0"}
+{"data":{"delta":"{\"agent\":\"scanner\",\"prompt\":\"Scan deps.\"}","toolCallId":"call_1","type":"TOOL_CALL_ARGS"},"id":"4:1"}
+{"data":{"toolCallId":"call_1","type":"TOOL_CALL_END"},"id":"4:2"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"4:3"}
+{"data":{"name":"scanner","parentToolCallId":"call_1","subagentRunId":"0192a000-0000-7000-8000-0000000000d1","type":"SUBAGENT_STARTED"},"id":"7:0"}
+{"data":{"stepName":"model","type":"STEP_STARTED"},"id":"9:0"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000009:0","role":"assistant","type":"TEXT_MESSAGE_START"},"id":"10:0"}
+{"data":{"delta":"The scan is running.","messageId":"0192e000-0000-7000-8000-000000000009:0","type":"TEXT_MESSAGE_CONTENT"},"id":"10:1"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000009:0","type":"TEXT_MESSAGE_END"},"id":"10:2"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"10:3"}
+{"data":{"outcome":{"type":"success"},"subagentRunId":"0192a000-0000-7000-8000-0000000000d1","type":"SUBAGENT_FINISHED"},"id":"12:0"}
+{"data":{"content":"No vulnerable dependencies.","messageId":"0192e000-0000-7000-8000-00000000000d","role":"tool","toolCallId":"call_1","type":"TOOL_CALL_RESULT"},"id":"13:0"}
+{"data":{"outcome":{"type":"success"},"result":"The scan is running.","runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_FINISHED"}}

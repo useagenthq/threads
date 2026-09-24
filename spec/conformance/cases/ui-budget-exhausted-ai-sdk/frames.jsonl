@@ -1,0 +1,4 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"errorText":"budget_exhausted: max_model_requests","type":"error"}}
+{"data":{"finishReason":"error","type":"finish"}}
+{"data":"[DONE]"}

@@ -1,0 +1,2 @@
+{"data":{"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_STARTED"}}
+{"data":{"code":"budget_exhausted","message":"budget_exhausted: max_model_requests","type":"RUN_ERROR"}}

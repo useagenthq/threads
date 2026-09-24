@@ -1,0 +1,13 @@
+{
+  "name": "ui-attempt-abandoned-ai-sdk",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "An abandoned attempt closes its step with data-attempt / CUSTOM threads.attempt_abandoned; the resent attempt's parts use its new request id.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ai-sdk",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}

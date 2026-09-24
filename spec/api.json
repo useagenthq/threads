@@ -1043,7 +1043,7 @@
       "ts": "host",
       "py": "host",
       "package": "host",
-      "doc": "Bind agents to a store, channels and schedules. Starts nothing until ready().",
+      "doc": "Bind agents to a store, channels and schedules. Starts nothing until ready(). Its HTTP API also serves web UIs: the AI SDK UI message stream (useChat) at /v1/ui/ai-sdk/{agent} and AG-UI at /v1/ui/ag-ui/{agent}, with frames derived from the log; a browser chat key is scoped to the signed-in principal (spec/schema/ui/README.md).",
       "async": false,
       "params": [
         {"name": "store", "kind": "option", "type": {"$ref": "#/types/Store"}, "required": true, "doc": "The store every bound agent's threads, runs and host records live in."},
@@ -3864,7 +3864,8 @@
         {
           "object": {
             "kind": {"type": {"literal": "delta"}, "required": true, "doc": "\"delta\": a piece of streamed text, shown live and not recorded on its own."},
-            "text": {"type": {"prim": "string"}, "required": true, "doc": "The new text since the last delta."}
+            "part": {"type": {"prim": "integer"}, "required": true, "doc": "The index this text will have in the committed response content (text parts only). An adapter that can't name it sends no deltas; the parts still arrive whole."},
+            "text": {"type": {"prim": "string"}, "required": true, "doc": "The new text of that part since its last delta."}
           },
           "casing": "wire"
         },

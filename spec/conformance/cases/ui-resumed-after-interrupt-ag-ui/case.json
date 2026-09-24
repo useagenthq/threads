@@ -1,0 +1,29 @@
+{
+  "name": "ui-resumed-after-interrupt-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "The stream after a resume that granted the interrupt: a new AG-UI run opening with the snapshot through the grant, then the resumed run to its end.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "ids": {
+      "threadId": "chat-1",
+      "runId": "run-a"
+    },
+    "replay": true,
+    "live": [
+      {
+        "register": true
+      },
+      {
+        "commit": 10
+      },
+      {
+        "commit": 14
+      }
+    ]
+  }
+}

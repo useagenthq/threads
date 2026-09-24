@@ -1,0 +1,11 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"type":"start-step"},"id":"3:0"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000003:0","type":"reasoning-start"},"id":"4:0"}
+{"data":{"delta":"Weigh both options.","id":"0192e000-0000-7000-8000-000000000003:0","type":"reasoning-delta"},"id":"4:1"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000003:0","type":"reasoning-end"},"id":"4:2"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000003:1","type":"text-start"},"id":"4:3"}
+{"data":{"delta":"Option A.","id":"0192e000-0000-7000-8000-000000000003:1","type":"text-delta"},"id":"4:4"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000003:1","type":"text-end"},"id":"4:5"}
+{"data":{"type":"finish-step"},"id":"4:6"}
+{"data":{"finishReason":"stop","type":"finish"}}
+{"data":"[DONE]"}

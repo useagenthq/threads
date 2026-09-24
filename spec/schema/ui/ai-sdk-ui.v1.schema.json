@@ -1,0 +1,1054 @@
+{
+  "$id": "urn:threads:schema:ui:ai-sdk:v1",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "anyOf": [
+    {
+      "additionalProperties": {},
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "text-start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "delta": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "text-delta",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "delta"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "text-end",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "errorText": {
+          "type": "string"
+        },
+        "type": {
+          "const": "error",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "errorText"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "dynamic": {
+          "type": "boolean"
+        },
+        "providerExecuted": {
+          "type": "boolean"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "title": {
+          "type": "string"
+        },
+        "toolCallId": {
+          "type": "string"
+        },
+        "toolMetadata": {
+          "additionalProperties": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/__schema0"
+              }
+            ]
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "toolName": {
+          "type": "string"
+        },
+        "type": {
+          "const": "tool-input-start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "toolCallId",
+        "toolName"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "inputTextDelta": {
+          "type": "string"
+        },
+        "toolCallId": {
+          "type": "string"
+        },
+        "type": {
+          "const": "tool-input-delta",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "toolCallId",
+        "inputTextDelta"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "dynamic": {
+          "type": "boolean"
+        },
+        "input": {},
+        "providerExecuted": {
+          "type": "boolean"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "title": {
+          "type": "string"
+        },
+        "toolCallId": {
+          "type": "string"
+        },
+        "toolMetadata": {
+          "additionalProperties": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/__schema0"
+              }
+            ]
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "toolName": {
+          "type": "string"
+        },
+        "type": {
+          "const": "tool-input-available",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "toolCallId",
+        "toolName",
+        "input"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "dynamic": {
+          "type": "boolean"
+        },
+        "errorText": {
+          "type": "string"
+        },
+        "input": {},
+        "providerExecuted": {
+          "type": "boolean"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "title": {
+          "type": "string"
+        },
+        "toolCallId": {
+          "type": "string"
+        },
+        "toolMetadata": {
+          "additionalProperties": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/__schema0"
+              }
+            ]
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "toolName": {
+          "type": "string"
+        },
+        "type": {
+          "const": "tool-input-error",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "toolCallId",
+        "toolName",
+        "input",
+        "errorText"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "approvalDescriptor": {},
+        "approvalId": {
+          "type": "string"
+        },
+        "inputSchemaInput": {},
+        "isAutomatic": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "toolCallId": {
+          "type": "string"
+        },
+        "type": {
+          "const": "tool-approval-request",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "approvalId",
+        "toolCallId"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "approvalId": {
+          "type": "string"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "providerExecuted": {
+          "type": "boolean"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "type": {
+          "const": "tool-approval-response",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "approvalId",
+        "approved"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "dynamic": {
+          "type": "boolean"
+        },
+        "output": {},
+        "preliminary": {
+          "type": "boolean"
+        },
+        "providerExecuted": {
+          "type": "boolean"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "toolCallId": {
+          "type": "string"
+        },
+        "toolMetadata": {
+          "additionalProperties": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/__schema0"
+              }
+            ]
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "tool-output-available",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "toolCallId",
+        "output"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "dynamic": {
+          "type": "boolean"
+        },
+        "errorText": {
+          "type": "string"
+        },
+        "providerExecuted": {
+          "type": "boolean"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "toolCallId": {
+          "type": "string"
+        },
+        "toolMetadata": {
+          "additionalProperties": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/__schema0"
+              }
+            ]
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "tool-output-error",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "toolCallId",
+        "errorText"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "toolCallId": {
+          "type": "string"
+        },
+        "type": {
+          "const": "tool-output-denied",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "toolCallId"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "reasoning-start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "delta": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "reasoning-delta",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "delta"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "reasoning-end",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "custom",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "kind"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "sourceId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "source-url",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "sourceId",
+        "url"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "filename": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "sourceId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "source-document",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "sourceId",
+        "mediaType",
+        "title"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "mediaType": {
+          "type": "string"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "file",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "url",
+        "mediaType"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "mediaType": {
+          "type": "string"
+        },
+        "providerMetadata": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/__schema0"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "reasoning-file",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "url",
+        "mediaType"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "data": {},
+        "id": {
+          "type": "string"
+        },
+        "transient": {
+          "type": "boolean"
+        },
+        "type": {
+          "pattern": "^data-",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "data"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "type": {
+          "const": "start-step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "type": {
+          "const": "finish-step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "type": {
+          "const": "reset-step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "messageId": {
+          "type": "string"
+        },
+        "messageMetadata": {},
+        "type": {
+          "const": "start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "finishReason": {
+          "enum": [
+            "stop",
+            "length",
+            "content-filter",
+            "tool-calls",
+            "error",
+            "other"
+          ],
+          "type": "string"
+        },
+        "messageMetadata": {},
+        "type": {
+          "const": "finish",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "type": {
+          "const": "abort",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": {},
+      "properties": {
+        "messageMetadata": {},
+        "type": {
+          "const": "message-metadata",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "messageMetadata"
+      ],
+      "type": "object"
+    }
+  ],
+  "definitions": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "additionalProperties": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/__schema0"
+              }
+            ]
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "items": {
+            "$ref": "#/definitions/__schema0"
+          },
+          "type": "array"
+        }
+      ]
+    }
+  },
+  "description": "Exported from uiMessageChunkSchema of ai@7.0.113 by typescript/packages/host/scripts/export-ui-schemas.ts. Never edited by hand.",
+  "title": "AI SDK UI message stream v1 chunk (ai@7.0.113)"
+}

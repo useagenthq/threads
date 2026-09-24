@@ -1,0 +1,436 @@
+[
+  {
+    "name": "the accepted AI SDK subset, other fields ignored",
+    "protocol": "ai-sdk",
+    "body": {
+      "id": "chat-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Hi",
+              "state": "done"
+            }
+          ],
+          "metadata": {
+            "x": 1
+          }
+        }
+      ],
+      "trigger": "submit-message",
+      "extra": true
+    },
+    "code": null
+  },
+  {
+    "name": "regenerate",
+    "protocol": "ai-sdk",
+    "body": {
+      "id": "chat-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Hi",
+              "state": "done"
+            }
+          ],
+          "metadata": {
+            "x": 1
+          }
+        }
+      ],
+      "trigger": "regenerate-message",
+      "extra": true
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "a file part",
+    "protocol": "ai-sdk",
+    "body": {
+      "id": "chat-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "parts": [
+            {
+              "type": "file",
+              "url": "x",
+              "mediaType": "image/png"
+            }
+          ],
+          "metadata": {
+            "x": 1
+          }
+        }
+      ],
+      "trigger": "submit-message",
+      "extra": true
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "a chat key with a space",
+    "protocol": "ai-sdk",
+    "body": {
+      "id": "chat 1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Hi",
+              "state": "done"
+            }
+          ],
+          "metadata": {
+            "x": 1
+          }
+        }
+      ],
+      "trigger": "submit-message",
+      "extra": true
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "a message id with a space",
+    "protocol": "ai-sdk",
+    "body": {
+      "id": "chat-1",
+      "messages": [
+        {
+          "id": "m 1",
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Hi"
+            }
+          ],
+          "metadata": {
+            "x": 1
+          }
+        }
+      ],
+      "trigger": "submit-message",
+      "extra": true
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "no messages",
+    "protocol": "ai-sdk",
+    "body": {
+      "id": "chat-1",
+      "messages": [],
+      "trigger": "submit-message",
+      "extra": true
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "an empty text",
+    "protocol": "ai-sdk",
+    "body": {
+      "id": "chat-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": ""
+            }
+          ],
+          "metadata": {
+            "x": 1
+          }
+        }
+      ],
+      "trigger": "submit-message",
+      "extra": true
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "a system message last",
+    "protocol": "ai-sdk",
+    "body": {
+      "id": "chat-1",
+      "messages": [
+        {
+          "id": "s",
+          "role": "system",
+          "parts": [
+            {
+              "type": "text",
+              "text": "x"
+            }
+          ]
+        }
+      ],
+      "trigger": "submit-message",
+      "extra": true
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "an unknown trigger",
+    "protocol": "ai-sdk",
+    "body": {
+      "id": "chat-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Hi",
+              "state": "done"
+            }
+          ],
+          "metadata": {
+            "x": 1
+          }
+        }
+      ],
+      "trigger": "resume-stream",
+      "extra": true
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "the accepted AG-UI subset, state and context ignored",
+    "protocol": "ag-ui",
+    "body": {
+      "threadId": "chat-1",
+      "runId": "run-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "content": "Hi"
+        }
+      ],
+      "tools": [],
+      "context": [],
+      "state": {
+        "any": "thing"
+      },
+      "forwardedProps": {
+        "x": 1
+      },
+      "protocolVersion": "1.0"
+    },
+    "code": null
+  },
+  {
+    "name": "a text-parts user message",
+    "protocol": "ag-ui",
+    "body": {
+      "threadId": "chat-1",
+      "runId": "run-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hi"
+            }
+          ]
+        }
+      ],
+      "tools": [],
+      "context": [],
+      "state": {
+        "any": "thing"
+      },
+      "forwardedProps": {
+        "x": 1
+      },
+      "protocolVersion": "1.0"
+    },
+    "code": null
+  },
+  {
+    "name": "frontend tools",
+    "protocol": "ag-ui",
+    "body": {
+      "threadId": "chat-1",
+      "runId": "run-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "content": "Hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "t",
+          "description": "d",
+          "parameters": {}
+        }
+      ],
+      "context": [],
+      "state": {
+        "any": "thing"
+      },
+      "forwardedProps": {
+        "x": 1
+      },
+      "protocolVersion": "1.0"
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "a binary content part",
+    "protocol": "ag-ui",
+    "body": {
+      "threadId": "chat-1",
+      "runId": "run-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "content": [
+            {
+              "type": "binary",
+              "mimeType": "image/png"
+            }
+          ]
+        }
+      ],
+      "tools": [],
+      "context": [],
+      "state": {
+        "any": "thing"
+      },
+      "forwardedProps": {
+        "x": 1
+      },
+      "protocolVersion": "1.0"
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "no user message and no resume",
+    "protocol": "ag-ui",
+    "body": {
+      "threadId": "chat-1",
+      "runId": "run-1",
+      "messages": [],
+      "tools": [],
+      "context": [],
+      "state": {
+        "any": "thing"
+      },
+      "forwardedProps": {
+        "x": 1
+      },
+      "protocolVersion": "1.0"
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "no runId",
+    "protocol": "ag-ui",
+    "body": {
+      "threadId": "chat-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "content": "Hi"
+        }
+      ],
+      "tools": [],
+      "context": [],
+      "state": {
+        "any": "thing"
+      },
+      "forwardedProps": {
+        "x": 1
+      },
+      "protocolVersion": "1.0"
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "a resume status that is not resolved or cancelled",
+    "protocol": "ag-ui",
+    "body": {
+      "threadId": "chat-1",
+      "runId": "run-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "content": "Hi"
+        }
+      ],
+      "tools": [],
+      "context": [],
+      "state": {
+        "any": "thing"
+      },
+      "forwardedProps": {
+        "x": 1
+      },
+      "protocolVersion": "1.0",
+      "resume": [
+        {
+          "interruptId": "x",
+          "status": "approved"
+        }
+      ]
+    },
+    "code": "invalid_request"
+  },
+  {
+    "name": "a resume entry naming no interrupt of the thread",
+    "protocol": "ag-ui",
+    "body": {
+      "threadId": "chat-1",
+      "runId": "run-1",
+      "messages": [
+        {
+          "id": "m-1",
+          "role": "user",
+          "content": "Hi"
+        }
+      ],
+      "tools": [],
+      "context": [],
+      "state": {
+        "any": "thing"
+      },
+      "forwardedProps": {
+        "x": 1
+      },
+      "protocolVersion": "1.0",
+      "resume": [
+        {
+          "interruptId": "x",
+          "status": "cancelled"
+        }
+      ]
+    },
+    "code": "not_found"
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "name": "ui-refusal-content-filter-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A response that stopped with refusal completes the run with finish{content-filter} (AI SDK) and RUN_FINISHED success (AG-UI).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}

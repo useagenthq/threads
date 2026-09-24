@@ -1,0 +1,14 @@
+{
+  "name": "ui-approval-resumed-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "The grant, the resumed tool result and the final text, from the cursor after the grant (AI SDK), and from the park's event boundary as a snapshot replay (AG-UI).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "after": "8:0"
+  }
+}

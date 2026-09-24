@@ -50,7 +50,8 @@
             "security",
             "parity",
             "policy",
-            "team"
+            "team",
+            "ui"
           ]
         },
         "description": {
@@ -162,6 +163,64 @@
               "items": {
                 "type": "string",
                 "pattern": "^[a-z][a-z0-9_-]*$"
+              }
+            },
+            "protocol": {
+              "description": "ui: the stream's protocol.",
+              "enum": [
+                "ai-sdk",
+                "ag-ui"
+              ]
+            },
+            "run_id": {
+              "description": "ui: the run to stream (its user_input's event_id).",
+              "type": "string"
+            },
+            "ids": {
+              "description": "ui, AG-UI: the threadId and runId RUN_STARTED and RUN_FINISHED echo. Absent: the log's thread_id and run_id (the cursor route).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "threadId",
+                "runId"
+              ],
+              "properties": {
+                "threadId": {
+                  "type": "string"
+                },
+                "runId": {
+                  "type": "string"
+                }
+              }
+            },
+            "after": {
+              "description": "ui: a cursor <seq>:<k>, as the committed-frames route resumes after it.",
+              "type": "string",
+              "pattern": "^[0-9]+:[0-9]+$"
+            },
+            "replay": {
+              "description": "ui, AG-UI: served as a replay, with the snapshot point at the head the connection reads (a retry or the stream after a resume).",
+              "const": true
+            },
+            "resume": {
+              "description": "ui, AG-UI: the request's resume entries. They are all settled, so they record nothing; each one whose value differs from the log gives a threads.resume_conflict frame.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/UiResumeEntry"
+              }
+            },
+            "receipts": {
+              "description": "ui: the thread's `ui` receipts, run_id to the client's message id (the snapshot's fallback for runs recorded without client_message_id).",
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "live": {
+              "description": "ui: one connection's timeline, in order. Absent: the connection registers first and reads the whole log.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/UiStep"
               }
             }
           }
@@ -505,6 +564,13 @@
                 "type": "string"
               }
             }
+          }
+        },
+        "messages": {
+          "description": "ui: the stock client's messages after the frames, in canonical form (spec/conformance/README.md, ui).",
+          "type": "array",
+          "items": {
+            "type": "object"
           }
         }
       },
@@ -1382,6 +1448,89 @@
         }
       },
       "description": "Every store.sql team table rebuilt from the logs, sorted by key. team_feed rows carry only team_id, branch_id and seq: a rebuilt feed starts a new epoch and assigns offsets in delivery order, and a nested lead's events have a row under each of its two teams."
+    },
+    "UiResumeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interruptId",
+        "status"
+      ],
+      "properties": {
+        "interruptId": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "resolved",
+            "cancelled"
+          ]
+        },
+        "payload": {
+          "$ref": "urn:threads:schema:events:v1#/$defs/JsonValue"
+        }
+      }
+    },
+    "UiStep": {
+      "description": "register: the connection registers with the live hub (the parts a delta already went out for are missed). delta: the model's redacted delta reaches the hub. commit: the log's head is now this seq. Every step after register is followed by one read of the connection (the first is its head read): it handles the deltas it received, then the committed events it has not seen.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "register"
+          ],
+          "properties": {
+            "register": {
+              "const": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "delta"
+          ],
+          "properties": {
+            "delta": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "request_event_id",
+                "part",
+                "text"
+              ],
+              "properties": {
+                "request_event_id": {
+                  "type": "string"
+                },
+                "part": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "commit"
+          ],
+          "properties": {
+            "commit": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      ]
     }
   }
 }

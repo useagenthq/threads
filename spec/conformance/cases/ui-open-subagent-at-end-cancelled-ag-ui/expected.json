@@ -1,0 +1,19 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000003",
+      "role": "assistant",
+      "toolCalls": [
+        {
+          "id": "call_1",
+          "type": "function",
+          "function": {
+            "name": "spawn_agent",
+            "arguments": "{\"agent\":\"scanner\",\"prompt\":\"Scan deps.\"}"
+          }
+        }
+      ]
+    }
+  ]
+}

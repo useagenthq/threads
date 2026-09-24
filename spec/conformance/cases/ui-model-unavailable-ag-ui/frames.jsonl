@@ -1,0 +1,5 @@
+{"data":{"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_STARTED"}}
+{"data":{"stepName":"model","type":"STEP_STARTED"},"id":"3:0"}
+{"data":{"name":"threads.attempt_abandoned","type":"CUSTOM","value":{"reason":"overloaded","requestId":"0192e000-0000-7000-8000-000000000003"}},"id":"4:0"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"4:1"}
+{"data":{"code":"failed","message":"failed: model_unavailable","type":"RUN_ERROR"}}

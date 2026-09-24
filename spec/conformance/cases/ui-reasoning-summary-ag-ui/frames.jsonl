@@ -1,0 +1,12 @@
+{"data":{"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_STARTED"}}
+{"data":{"stepName":"model","type":"STEP_STARTED"},"id":"3:0"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:0","type":"REASONING_START"},"id":"4:0"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:0","role":"reasoning","type":"REASONING_MESSAGE_START"},"id":"4:1"}
+{"data":{"delta":"Weigh both options.","messageId":"0192e000-0000-7000-8000-000000000003:0","type":"REASONING_MESSAGE_CONTENT"},"id":"4:2"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:0","type":"REASONING_MESSAGE_END"},"id":"4:3"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:0","type":"REASONING_END"},"id":"4:4"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:1","role":"assistant","type":"TEXT_MESSAGE_START"},"id":"4:5"}
+{"data":{"delta":"Option A.","messageId":"0192e000-0000-7000-8000-000000000003:1","type":"TEXT_MESSAGE_CONTENT"},"id":"4:6"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:1","type":"TEXT_MESSAGE_END"},"id":"4:7"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"4:8"}
+{"data":{"outcome":{"type":"success"},"result":"Option A.","runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_FINISHED"}}

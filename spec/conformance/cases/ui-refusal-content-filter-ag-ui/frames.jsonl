@@ -1,0 +1,7 @@
+{"data":{"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_STARTED"}}
+{"data":{"stepName":"model","type":"STEP_STARTED"},"id":"3:0"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:0","role":"assistant","type":"TEXT_MESSAGE_START"},"id":"4:0"}
+{"data":{"delta":"I can't help with that.","messageId":"0192e000-0000-7000-8000-000000000003:0","type":"TEXT_MESSAGE_CONTENT"},"id":"4:1"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:0","type":"TEXT_MESSAGE_END"},"id":"4:2"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"4:3"}
+{"data":{"outcome":{"type":"success"},"result":"I can't help with that.","runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_FINISHED"}}

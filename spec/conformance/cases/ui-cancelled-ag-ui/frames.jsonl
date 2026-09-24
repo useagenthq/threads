@@ -1,0 +1,11 @@
+{"data":{"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_STARTED"}}
+{"data":{"stepName":"model","type":"STEP_STARTED"},"id":"3:0"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:0","role":"assistant","type":"TEXT_MESSAGE_START"},"id":"4:0"}
+{"data":{"delta":"Reading.","messageId":"0192e000-0000-7000-8000-000000000003:0","type":"TEXT_MESSAGE_CONTENT"},"id":"4:1"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:0","type":"TEXT_MESSAGE_END"},"id":"4:2"}
+{"data":{"parentMessageId":"0192e000-0000-7000-8000-000000000003","toolCallId":"call_1","toolCallName":"read_file","type":"TOOL_CALL_START"},"id":"4:3"}
+{"data":{"delta":"{\"path\":\"big.log\"}","toolCallId":"call_1","type":"TOOL_CALL_ARGS"},"id":"4:4"}
+{"data":{"toolCallId":"call_1","type":"TOOL_CALL_END"},"id":"4:5"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"4:6"}
+{"data":{"content":"not executed: cancelled","messageId":"0192e000-0000-7000-8000-000000000008","role":"tool","toolCallId":"call_1","type":"TOOL_CALL_RESULT"},"id":"8:0"}
+{"data":{"outcome":{"type":"cancelled"},"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_FINISHED"}}

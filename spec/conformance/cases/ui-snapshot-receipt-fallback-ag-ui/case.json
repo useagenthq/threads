@@ -1,0 +1,21 @@
+{
+  "name": "ui-snapshot-receipt-fallback-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A run recorded without client_message_id is named by its ui receipt's message id.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000006",
+    "ids": {
+      "threadId": "chat-1",
+      "runId": "run-a"
+    },
+    "replay": true,
+    "receipts": {
+      "0192e000-0000-7000-8000-000000000002": "msg-old"
+    }
+  }
+}

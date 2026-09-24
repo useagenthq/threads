@@ -1,0 +1,12 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"type":"start-step"},"id":"3:0"}
+{"data":{"input":{"question":"Staging or production?"},"toolCallId":"call_1","toolName":"ask_user","type":"tool-input-available"},"id":"4:0"}
+{"data":{"type":"finish-step"},"id":"4:1"}
+{"data":{"output":"Staging.","toolCallId":"call_1","type":"tool-output-available"},"id":"8:0"}
+{"data":{"type":"start-step"},"id":"10:0"}
+{"data":{"id":"0192e000-0000-7000-8000-00000000000a:0","type":"text-start"},"id":"11:0"}
+{"data":{"delta":"Deployed to staging.","id":"0192e000-0000-7000-8000-00000000000a:0","type":"text-delta"},"id":"11:1"}
+{"data":{"id":"0192e000-0000-7000-8000-00000000000a:0","type":"text-end"},"id":"11:2"}
+{"data":{"type":"finish-step"},"id":"11:3"}
+{"data":{"finishReason":"stop","type":"finish"}}
+{"data":"[DONE]"}

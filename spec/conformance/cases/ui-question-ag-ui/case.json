@@ -1,0 +1,13 @@
+{
+  "name": "ui-question-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "An ask_user park and its answer: the answer is the tool's output, then the run goes on.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}

@@ -1,0 +1,8 @@
+{"data":{"runId":"run-a","threadId":"chat-1","type":"RUN_STARTED"}}
+{"data":{"messages":[{"content":"What is in README.md?","id":"0192e000-0000-7000-8000-000000000002","role":"user"},{"content":"Looking.","id":"0192e000-0000-7000-8000-000000000003:0","role":"assistant"},{"id":"0192e000-0000-7000-8000-000000000003","role":"assistant","toolCalls":[{"function":{"arguments":"{\"path\":\"README.md\"}","name":"read_file"},"id":"call_1","type":"function"}]},{"content":"# demo\n","id":"0192e000-0000-7000-8000-000000000007","role":"tool","toolCallId":"call_1"}],"type":"MESSAGES_SNAPSHOT"}}
+{"data":{"stepName":"model","type":"STEP_STARTED"}}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000008:0","role":"assistant","type":"TEXT_MESSAGE_START"},"id":"9:0"}
+{"data":{"delta":"One heading.","messageId":"0192e000-0000-7000-8000-000000000008:0","type":"TEXT_MESSAGE_CONTENT"},"id":"9:1"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000008:0","type":"TEXT_MESSAGE_END"},"id":"9:2"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"9:3"}
+{"data":{"outcome":{"type":"success"},"result":"One heading.","runId":"run-a","threadId":"chat-1","type":"RUN_FINISHED"}}

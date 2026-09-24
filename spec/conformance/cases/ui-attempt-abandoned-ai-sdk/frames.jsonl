@@ -1,0 +1,11 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"type":"start-step"},"id":"3:0"}
+{"data":{"data":{"reason":"stream_broken","status":"abandoned"},"id":"0192e000-0000-7000-8000-000000000003","type":"data-attempt"},"id":"4:0"}
+{"data":{"type":"finish-step"},"id":"4:1"}
+{"data":{"type":"start-step"},"id":"5:0"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000005:0","type":"text-start"},"id":"6:0"}
+{"data":{"delta":"Hi.","id":"0192e000-0000-7000-8000-000000000005:0","type":"text-delta"},"id":"6:1"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000005:0","type":"text-end"},"id":"6:2"}
+{"data":{"type":"finish-step"},"id":"6:3"}
+{"data":{"finishReason":"stop","type":"finish"}}
+{"data":"[DONE]"}

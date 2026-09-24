@@ -1,0 +1,34 @@
+{
+  "name": "ui-resume-settled-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A resume for an interrupt another approver already granted, and one for an expired approval: nothing is recorded, one threads.resume_conflict per entry follows the snapshot, and RUN_FINISHED lists the interrupts the run is still parked on.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "ids": {
+      "threadId": "chat-1",
+      "runId": "run-a"
+    },
+    "replay": true,
+    "resume": [
+      {
+        "interruptId": "0192c000-0000-7000-8000-0000000000e1",
+        "status": "resolved",
+        "payload": {
+          "decision": "deny"
+        }
+      },
+      {
+        "interruptId": "0192c000-0000-7000-8000-0000000000e2",
+        "status": "resolved",
+        "payload": {
+          "decision": "grant"
+        }
+      }
+    ]
+  }
+}

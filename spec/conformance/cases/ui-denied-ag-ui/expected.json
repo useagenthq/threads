@@ -1,0 +1,30 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000003",
+      "role": "assistant",
+      "toolCalls": [
+        {
+          "id": "call_1",
+          "type": "function",
+          "function": {
+            "name": "run_shell",
+            "arguments": "{\"command\":\"rm -rf build\"}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "0192e000-0000-7000-8000-00000000000b",
+      "role": "tool",
+      "content": "denied: not today",
+      "toolCallId": "call_1"
+    },
+    {
+      "id": "0192e000-0000-7000-8000-00000000000c:0",
+      "role": "assistant",
+      "content": "I left it alone."
+    }
+  ]
+}

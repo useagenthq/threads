@@ -1,0 +1,31 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "tool-read_file",
+          "state": "output-error",
+          "toolCallId": "call_1",
+          "input": {
+            "path": "secrets.txt"
+          },
+          "errorText": "no such file"
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "It is not there.",
+          "state": "done"
+        }
+      ]
+    }
+  ]
+}

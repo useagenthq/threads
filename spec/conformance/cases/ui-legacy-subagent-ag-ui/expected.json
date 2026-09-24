@@ -1,0 +1,30 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000003",
+      "role": "assistant",
+      "toolCalls": [
+        {
+          "id": "call_1",
+          "type": "function",
+          "function": {
+            "name": "spawn_agent",
+            "arguments": "{\"agent\":\"reviewer\",\"prompt\":\"Review the diff.\"}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "0192e000-0000-7000-8000-000000000009",
+      "role": "tool",
+      "content": "reviewer failed",
+      "toolCallId": "call_1"
+    },
+    {
+      "id": "0192e000-0000-7000-8000-00000000000a:0",
+      "role": "assistant",
+      "content": "The review failed."
+    }
+  ]
+}

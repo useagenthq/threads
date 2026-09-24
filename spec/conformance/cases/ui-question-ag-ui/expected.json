@@ -1,0 +1,30 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000003",
+      "role": "assistant",
+      "toolCalls": [
+        {
+          "id": "call_1",
+          "type": "function",
+          "function": {
+            "name": "ask_user",
+            "arguments": "{\"question\":\"Staging or production?\"}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "0192e000-0000-7000-8000-000000000008",
+      "role": "tool",
+      "content": "Staging.",
+      "toolCallId": "call_1"
+    },
+    {
+      "id": "0192e000-0000-7000-8000-00000000000a:0",
+      "role": "assistant",
+      "content": "Deployed to staging."
+    }
+  ]
+}

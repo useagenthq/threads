@@ -1,0 +1,31 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "tool-ask_user",
+          "state": "output-available",
+          "toolCallId": "call_1",
+          "input": {
+            "question": "Staging or production?"
+          },
+          "output": "Staging."
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Deployed to staging.",
+          "state": "done"
+        }
+      ]
+    }
+  ]
+}

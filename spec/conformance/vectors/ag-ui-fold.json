@@ -1,0 +1,890 @@
+[
+  {
+    "name": "ui-text-and-tool-ag-ui",
+    "initial": [],
+    "events": [
+      {
+        "runId": "0192e000-0000-7000-8000-000000000002",
+        "threadId": "0192a000-0000-7000-8000-000000000001",
+        "type": "RUN_STARTED"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_STARTED"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "role": "assistant",
+        "type": "TEXT_MESSAGE_START"
+      },
+      {
+        "delta": "Let me look.",
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "type": "TEXT_MESSAGE_CONTENT"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "type": "TEXT_MESSAGE_END"
+      },
+      {
+        "parentMessageId": "0192e000-0000-7000-8000-000000000003",
+        "toolCallId": "call_1",
+        "toolCallName": "read_file",
+        "type": "TOOL_CALL_START"
+      },
+      {
+        "delta": "{\"path\":\"README.md\"}",
+        "toolCallId": "call_1",
+        "type": "TOOL_CALL_ARGS"
+      },
+      {
+        "toolCallId": "call_1",
+        "type": "TOOL_CALL_END"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_FINISHED"
+      },
+      {
+        "content": "# demo\n",
+        "messageId": "0192e000-0000-7000-8000-000000000007",
+        "role": "tool",
+        "toolCallId": "call_1",
+        "type": "TOOL_CALL_RESULT"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_STARTED"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000008:0",
+        "role": "assistant",
+        "type": "TEXT_MESSAGE_START"
+      },
+      {
+        "delta": "One heading: demo.",
+        "messageId": "0192e000-0000-7000-8000-000000000008:0",
+        "type": "TEXT_MESSAGE_CONTENT"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000008:0",
+        "type": "TEXT_MESSAGE_END"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_FINISHED"
+      },
+      {
+        "outcome": {
+          "type": "success"
+        },
+        "result": "One heading: demo.",
+        "runId": "0192e000-0000-7000-8000-000000000002",
+        "threadId": "0192a000-0000-7000-8000-000000000001",
+        "type": "RUN_FINISHED"
+      }
+    ],
+    "messages": [
+      {
+        "id": "0192e000-0000-7000-8000-000000000003:0",
+        "role": "assistant",
+        "content": "Let me look."
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000003",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "arguments": "{\"path\":\"README.md\"}"
+            }
+          }
+        ]
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000007",
+        "toolCallId": "call_1",
+        "role": "tool",
+        "content": "# demo\n"
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000008:0",
+        "role": "assistant",
+        "content": "One heading: demo."
+      }
+    ]
+  },
+  {
+    "name": "ui-snapshot-fold-ag-ui",
+    "initial": [],
+    "events": [
+      {
+        "runId": "run-a",
+        "threadId": "chat-1",
+        "type": "RUN_STARTED"
+      },
+      {
+        "messages": [
+          {
+            "content": "Check both files.",
+            "id": "0192e000-0000-7000-8000-000000000002",
+            "role": "user"
+          },
+          {
+            "content": "Checking.",
+            "id": "0192e000-0000-7000-8000-000000000003:0",
+            "role": "assistant"
+          },
+          {
+            "id": "0192e000-0000-7000-8000-000000000003",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "function": {
+                  "arguments": "{\"path\":\"README.md\"}",
+                  "name": "read_file"
+                },
+                "id": "call_1",
+                "type": "function"
+              },
+              {
+                "function": {
+                  "arguments": "{\"path\":\"NOTES.md\"}",
+                  "name": "read_file"
+                },
+                "id": "call_2",
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "# demo\n",
+            "id": "0192e000-0000-7000-8000-000000000009",
+            "role": "tool",
+            "toolCallId": "call_1"
+          },
+          {
+            "content": "notes\n",
+            "id": "0192e000-0000-7000-8000-00000000000a",
+            "role": "tool",
+            "toolCallId": "call_2"
+          },
+          {
+            "content": "Both requested.",
+            "id": "0192e000-0000-7000-8000-000000000003:3",
+            "role": "assistant"
+          },
+          {
+            "content": "Both look fine.",
+            "id": "0192e000-0000-7000-8000-00000000000b:0",
+            "role": "reasoning"
+          },
+          {
+            "content": "Both fine.",
+            "id": "0192e000-0000-7000-8000-00000000000b:1",
+            "role": "assistant"
+          }
+        ],
+        "type": "MESSAGES_SNAPSHOT"
+      },
+      {
+        "outcome": {
+          "type": "success"
+        },
+        "result": "Both fine.",
+        "runId": "run-a",
+        "threadId": "chat-1",
+        "type": "RUN_FINISHED"
+      }
+    ],
+    "messages": [
+      {
+        "content": "Check both files.",
+        "id": "0192e000-0000-7000-8000-000000000002",
+        "role": "user"
+      },
+      {
+        "content": "Checking.",
+        "id": "0192e000-0000-7000-8000-000000000003:0",
+        "role": "assistant"
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000003",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"path\":\"README.md\"}",
+              "name": "read_file"
+            },
+            "id": "call_1",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"path\":\"NOTES.md\"}",
+              "name": "read_file"
+            },
+            "id": "call_2",
+            "type": "function"
+          }
+        ]
+      },
+      {
+        "content": "# demo\n",
+        "id": "0192e000-0000-7000-8000-000000000009",
+        "role": "tool",
+        "toolCallId": "call_1"
+      },
+      {
+        "content": "notes\n",
+        "id": "0192e000-0000-7000-8000-00000000000a",
+        "role": "tool",
+        "toolCallId": "call_2"
+      },
+      {
+        "content": "Both requested.",
+        "id": "0192e000-0000-7000-8000-000000000003:3",
+        "role": "assistant"
+      },
+      {
+        "content": "Both look fine.",
+        "id": "0192e000-0000-7000-8000-00000000000b:0",
+        "role": "reasoning"
+      },
+      {
+        "content": "Both fine.",
+        "id": "0192e000-0000-7000-8000-00000000000b:1",
+        "role": "assistant"
+      }
+    ]
+  },
+  {
+    "name": "ui-reasoning-summary-ag-ui",
+    "initial": [],
+    "events": [
+      {
+        "runId": "0192e000-0000-7000-8000-000000000002",
+        "threadId": "0192a000-0000-7000-8000-000000000001",
+        "type": "RUN_STARTED"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_STARTED"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "type": "REASONING_START"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "role": "reasoning",
+        "type": "REASONING_MESSAGE_START"
+      },
+      {
+        "delta": "Weigh both options.",
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "type": "REASONING_MESSAGE_CONTENT"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "type": "REASONING_MESSAGE_END"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "type": "REASONING_END"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:1",
+        "role": "assistant",
+        "type": "TEXT_MESSAGE_START"
+      },
+      {
+        "delta": "Option A.",
+        "messageId": "0192e000-0000-7000-8000-000000000003:1",
+        "type": "TEXT_MESSAGE_CONTENT"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:1",
+        "type": "TEXT_MESSAGE_END"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_FINISHED"
+      },
+      {
+        "outcome": {
+          "type": "success"
+        },
+        "result": "Option A.",
+        "runId": "0192e000-0000-7000-8000-000000000002",
+        "threadId": "0192a000-0000-7000-8000-000000000001",
+        "type": "RUN_FINISHED"
+      }
+    ],
+    "messages": [
+      {
+        "id": "0192e000-0000-7000-8000-000000000003:0",
+        "role": "reasoning",
+        "content": "Weigh both options."
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000003:1",
+        "role": "assistant",
+        "content": "Option A."
+      }
+    ]
+  },
+  {
+    "name": "ui-deferred-then-late-ag-ui",
+    "initial": [],
+    "events": [
+      {
+        "runId": "0192e000-0000-7000-8000-000000000002",
+        "threadId": "0192a000-0000-7000-8000-000000000001",
+        "type": "RUN_STARTED"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_STARTED"
+      },
+      {
+        "parentMessageId": "0192e000-0000-7000-8000-000000000003",
+        "toolCallId": "call_1",
+        "toolCallName": "spawn_agent",
+        "type": "TOOL_CALL_START"
+      },
+      {
+        "delta": "{\"agent\":\"scanner\",\"prompt\":\"Scan deps.\"}",
+        "toolCallId": "call_1",
+        "type": "TOOL_CALL_ARGS"
+      },
+      {
+        "toolCallId": "call_1",
+        "type": "TOOL_CALL_END"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_FINISHED"
+      },
+      {
+        "name": "scanner",
+        "parentToolCallId": "call_1",
+        "subagentRunId": "0192a000-0000-7000-8000-0000000000d1",
+        "type": "SUBAGENT_STARTED"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_STARTED"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000009:0",
+        "role": "assistant",
+        "type": "TEXT_MESSAGE_START"
+      },
+      {
+        "delta": "The scan is running.",
+        "messageId": "0192e000-0000-7000-8000-000000000009:0",
+        "type": "TEXT_MESSAGE_CONTENT"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000009:0",
+        "type": "TEXT_MESSAGE_END"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_FINISHED"
+      },
+      {
+        "outcome": {
+          "type": "success"
+        },
+        "subagentRunId": "0192a000-0000-7000-8000-0000000000d1",
+        "type": "SUBAGENT_FINISHED"
+      },
+      {
+        "content": "No vulnerable dependencies.",
+        "messageId": "0192e000-0000-7000-8000-00000000000d",
+        "role": "tool",
+        "toolCallId": "call_1",
+        "type": "TOOL_CALL_RESULT"
+      },
+      {
+        "outcome": {
+          "type": "success"
+        },
+        "result": "The scan is running.",
+        "runId": "0192e000-0000-7000-8000-000000000002",
+        "threadId": "0192a000-0000-7000-8000-000000000001",
+        "type": "RUN_FINISHED"
+      }
+    ],
+    "messages": [
+      {
+        "id": "0192e000-0000-7000-8000-000000000003",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+              "name": "spawn_agent",
+              "arguments": "{\"agent\":\"scanner\",\"prompt\":\"Scan deps.\"}"
+            }
+          }
+        ]
+      },
+      {
+        "id": "0192e000-0000-7000-8000-00000000000d",
+        "toolCallId": "call_1",
+        "role": "tool",
+        "content": "No vulnerable dependencies."
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000009:0",
+        "role": "assistant",
+        "content": "The scan is running."
+      }
+    ]
+  },
+  {
+    "name": "ui-live-prefix-ag-ui",
+    "initial": [],
+    "events": [
+      {
+        "runId": "0192e000-0000-7000-8000-000000000002",
+        "threadId": "0192a000-0000-7000-8000-000000000001",
+        "type": "RUN_STARTED"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_STARTED"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "role": "assistant",
+        "type": "TEXT_MESSAGE_START"
+      },
+      {
+        "delta": "Hello ",
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "type": "TEXT_MESSAGE_CONTENT"
+      },
+      {
+        "delta": "there.",
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "type": "TEXT_MESSAGE_CONTENT"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:0",
+        "type": "TEXT_MESSAGE_END"
+      },
+      {
+        "parentMessageId": "0192e000-0000-7000-8000-000000000003",
+        "toolCallId": "call_1",
+        "toolCallName": "read_file",
+        "type": "TOOL_CALL_START"
+      },
+      {
+        "delta": "{\"path\":\"README.md\"}",
+        "toolCallId": "call_1",
+        "type": "TOOL_CALL_ARGS"
+      },
+      {
+        "toolCallId": "call_1",
+        "type": "TOOL_CALL_END"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:2",
+        "role": "assistant",
+        "type": "TEXT_MESSAGE_START"
+      },
+      {
+        "delta": "Done.",
+        "messageId": "0192e000-0000-7000-8000-000000000003:2",
+        "type": "TEXT_MESSAGE_CONTENT"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000003:2",
+        "type": "TEXT_MESSAGE_END"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_FINISHED"
+      },
+      {
+        "content": "# demo\n",
+        "messageId": "0192e000-0000-7000-8000-000000000007",
+        "role": "tool",
+        "toolCallId": "call_1",
+        "type": "TOOL_CALL_RESULT"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_STARTED"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000008:0",
+        "role": "assistant",
+        "type": "TEXT_MESSAGE_START"
+      },
+      {
+        "delta": "One heading.",
+        "messageId": "0192e000-0000-7000-8000-000000000008:0",
+        "type": "TEXT_MESSAGE_CONTENT"
+      },
+      {
+        "messageId": "0192e000-0000-7000-8000-000000000008:0",
+        "type": "TEXT_MESSAGE_END"
+      },
+      {
+        "stepName": "model",
+        "type": "STEP_FINISHED"
+      },
+      {
+        "outcome": {
+          "type": "success"
+        },
+        "result": "One heading.",
+        "runId": "0192e000-0000-7000-8000-000000000002",
+        "threadId": "0192a000-0000-7000-8000-000000000001",
+        "type": "RUN_FINISHED"
+      }
+    ],
+    "messages": [
+      {
+        "id": "0192e000-0000-7000-8000-000000000003:0",
+        "role": "assistant",
+        "content": "Hello there."
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000003",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "arguments": "{\"path\":\"README.md\"}"
+            }
+          }
+        ]
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000007",
+        "toolCallId": "call_1",
+        "role": "tool",
+        "content": "# demo\n"
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000003:2",
+        "role": "assistant",
+        "content": "Done."
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000008:0",
+        "role": "assistant",
+        "content": "One heading."
+      }
+    ]
+  },
+  {
+    "name": "ui-resume-settled-ag-ui",
+    "initial": [],
+    "events": [
+      {
+        "runId": "run-a",
+        "threadId": "chat-1",
+        "type": "RUN_STARTED"
+      },
+      {
+        "messages": [
+          {
+            "content": "Clean both folders.",
+            "id": "0192e000-0000-7000-8000-000000000002",
+            "role": "user"
+          },
+          {
+            "id": "0192e000-0000-7000-8000-000000000003",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "function": {
+                  "arguments": "{\"command\":\"rm -rf build\"}",
+                  "name": "run_shell"
+                },
+                "id": "call_1",
+                "type": "function"
+              },
+              {
+                "function": {
+                  "arguments": "{\"command\":\"rm -rf dist\"}",
+                  "name": "run_shell"
+                },
+                "id": "call_2",
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "removed",
+            "id": "0192e000-0000-7000-8000-00000000000f",
+            "role": "tool",
+            "toolCallId": "call_1"
+          }
+        ],
+        "type": "MESSAGES_SNAPSHOT"
+      },
+      {
+        "name": "threads.resume_conflict",
+        "type": "CUSTOM",
+        "value": {
+          "interruptId": "0192c000-0000-7000-8000-0000000000e1",
+          "recorded": "granted"
+        }
+      },
+      {
+        "name": "threads.resume_conflict",
+        "type": "CUSTOM",
+        "value": {
+          "interruptId": "0192c000-0000-7000-8000-0000000000e2",
+          "recorded": "expired"
+        }
+      },
+      {
+        "outcome": {
+          "interrupts": [
+            {
+              "expiresAt": "2026-09-21T14:13:50.000Z",
+              "id": "0192c000-0000-7000-8000-0000000000e2",
+              "message": "approve run_shell",
+              "reason": "tool_approval",
+              "responseSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "decision": {
+                    "enum": [
+                      "grant",
+                      "deny"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "remember_rule": {
+                    "$ref": "urn:threads:schema:events:v1#/$defs/PermissionRule",
+                    "description": "grant only: appended as permission_rule_added. Must be one of the challenge's suggested_rules."
+                  }
+                },
+                "required": [
+                  "decision"
+                ],
+                "type": "object"
+              },
+              "toolCallId": "call_2"
+            }
+          ],
+          "type": "interrupt"
+        },
+        "runId": "run-a",
+        "threadId": "chat-1",
+        "type": "RUN_FINISHED"
+      }
+    ],
+    "messages": [
+      {
+        "content": "Clean both folders.",
+        "id": "0192e000-0000-7000-8000-000000000002",
+        "role": "user"
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000003",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"command\":\"rm -rf build\"}",
+              "name": "run_shell"
+            },
+            "id": "call_1",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"command\":\"rm -rf dist\"}",
+              "name": "run_shell"
+            },
+            "id": "call_2",
+            "type": "function"
+          }
+        ]
+      },
+      {
+        "content": "removed",
+        "id": "0192e000-0000-7000-8000-00000000000f",
+        "role": "tool",
+        "toolCallId": "call_1"
+      }
+    ]
+  },
+  {
+    "name": "a snapshot merged over a partial client state",
+    "initial": [
+      {
+        "id": "local-1",
+        "role": "user",
+        "content": "a draft only this page has"
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000003:0",
+        "role": "assistant",
+        "content": "Chec"
+      }
+    ],
+    "events": [
+      {
+        "runId": "run-a",
+        "threadId": "chat-1",
+        "type": "RUN_STARTED"
+      },
+      {
+        "messages": [
+          {
+            "content": "Check both files.",
+            "id": "0192e000-0000-7000-8000-000000000002",
+            "role": "user"
+          },
+          {
+            "content": "Checking.",
+            "id": "0192e000-0000-7000-8000-000000000003:0",
+            "role": "assistant"
+          },
+          {
+            "id": "0192e000-0000-7000-8000-000000000003",
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "function": {
+                  "arguments": "{\"path\":\"README.md\"}",
+                  "name": "read_file"
+                },
+                "id": "call_1",
+                "type": "function"
+              },
+              {
+                "function": {
+                  "arguments": "{\"path\":\"NOTES.md\"}",
+                  "name": "read_file"
+                },
+                "id": "call_2",
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "# demo\n",
+            "id": "0192e000-0000-7000-8000-000000000009",
+            "role": "tool",
+            "toolCallId": "call_1"
+          },
+          {
+            "content": "notes\n",
+            "id": "0192e000-0000-7000-8000-00000000000a",
+            "role": "tool",
+            "toolCallId": "call_2"
+          },
+          {
+            "content": "Both requested.",
+            "id": "0192e000-0000-7000-8000-000000000003:3",
+            "role": "assistant"
+          },
+          {
+            "content": "Both look fine.",
+            "id": "0192e000-0000-7000-8000-00000000000b:0",
+            "role": "reasoning"
+          },
+          {
+            "content": "Both fine.",
+            "id": "0192e000-0000-7000-8000-00000000000b:1",
+            "role": "assistant"
+          }
+        ],
+        "type": "MESSAGES_SNAPSHOT"
+      },
+      {
+        "outcome": {
+          "type": "success"
+        },
+        "result": "Both fine.",
+        "runId": "run-a",
+        "threadId": "chat-1",
+        "type": "RUN_FINISHED"
+      }
+    ],
+    "messages": [
+      {
+        "content": "Checking.",
+        "id": "0192e000-0000-7000-8000-000000000003:0",
+        "role": "assistant"
+      },
+      {
+        "content": "Check both files.",
+        "id": "0192e000-0000-7000-8000-000000000002",
+        "role": "user"
+      },
+      {
+        "id": "0192e000-0000-7000-8000-000000000003",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"path\":\"README.md\"}",
+              "name": "read_file"
+            },
+            "id": "call_1",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"path\":\"NOTES.md\"}",
+              "name": "read_file"
+            },
+            "id": "call_2",
+            "type": "function"
+          }
+        ]
+      },
+      {
+        "content": "# demo\n",
+        "id": "0192e000-0000-7000-8000-000000000009",
+        "role": "tool",
+        "toolCallId": "call_1"
+      },
+      {
+        "content": "notes\n",
+        "id": "0192e000-0000-7000-8000-00000000000a",
+        "role": "tool",
+        "toolCallId": "call_2"
+      },
+      {
+        "content": "Both requested.",
+        "id": "0192e000-0000-7000-8000-000000000003:3",
+        "role": "assistant"
+      },
+      {
+        "content": "Both look fine.",
+        "id": "0192e000-0000-7000-8000-00000000000b:0",
+        "role": "reasoning"
+      },
+      {
+        "content": "Both fine.",
+        "id": "0192e000-0000-7000-8000-00000000000b:1",
+        "role": "assistant"
+      }
+    ]
+  }
+]

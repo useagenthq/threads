@@ -1,0 +1,13 @@
+{
+  "name": "ui-denied-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A denied approval: tool-approval-response{approved: false, reason} then tool-output-denied (AI SDK); a TOOL_CALL_RESULT with the preview (AG-UI).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}

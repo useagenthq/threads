@@ -1,0 +1,25 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "msg-old",
+      "role": "user",
+      "content": "Hi."
+    },
+    {
+      "id": "0192e000-0000-7000-8000-000000000003:0",
+      "role": "assistant",
+      "content": "Hello!"
+    },
+    {
+      "id": "0192e000-0000-7000-8000-000000000006",
+      "role": "user",
+      "content": "What is in README.md?"
+    },
+    {
+      "id": "0192e000-0000-7000-8000-000000000007:0",
+      "role": "assistant",
+      "content": "One heading."
+    }
+  ]
+}

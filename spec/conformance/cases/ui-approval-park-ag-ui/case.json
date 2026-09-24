@@ -1,0 +1,13 @@
+{
+  "name": "ui-approval-park-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A call parked on approval: the AI SDK gets tool-approval-request and finish{tool-calls}; AG-UI gets RUN_FINISHED{interrupt} with the challenge's id, schema and expiry.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}

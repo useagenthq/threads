@@ -1,0 +1,9 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"type":"start-step"},"id":"3:0"}
+{"data":{"input":{"agent":"scanner","prompt":"Scan deps."},"toolCallId":"call_1","toolName":"spawn_agent","type":"tool-input-available"},"id":"4:0"}
+{"data":{"type":"finish-step"},"id":"4:1"}
+{"data":{"data":{"agent":"scanner","status":"running"},"id":"0192a000-0000-7000-8000-0000000000d1","type":"data-subagent"},"id":"7:0"}
+{"data":{"output":"scanner started","preliminary":true,"toolCallId":"call_1","type":"tool-output-available"},"id":"8:0"}
+{"data":{"data":{"agent":"scanner","status":"stopped"},"id":"0192a000-0000-7000-8000-0000000000d1","type":"data-subagent"}}
+{"data":{"reason":"cancelled","type":"abort"}}
+{"data":"[DONE]"}

@@ -1,0 +1,52 @@
+{
+  "name": "ui-live-prefix-ai-sdk",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "Deltas for parts 0 and 2 of a response of text, tool_use, text: part 0 streams live and its commit sends only the rest; part 2 arrives at commit, since part 1 did not stream (the order rule). One start and one end per part id.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ai-sdk",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "live": [
+      {
+        "commit": 3
+      },
+      {
+        "register": true
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "Hello "
+        }
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "there."
+        }
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 2,
+          "text": "Do"
+        }
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 2,
+          "text": "ne."
+        }
+      },
+      {
+        "commit": 10
+      }
+    ]
+  }
+}

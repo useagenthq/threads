@@ -1,0 +1,40 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "tool-spawn_agent",
+          "state": "output-error",
+          "toolCallId": "call_1",
+          "input": {
+            "agent": "reviewer",
+            "prompt": "Review the diff."
+          },
+          "errorText": "reviewer failed"
+        },
+        {
+          "type": "data-subagent",
+          "id": "0192a000-0000-7000-8000-0000000000d1",
+          "data": {
+            "agent": "reviewer",
+            "status": "failed"
+          }
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "The review failed.",
+          "state": "done"
+        }
+      ]
+    }
+  ]
+}

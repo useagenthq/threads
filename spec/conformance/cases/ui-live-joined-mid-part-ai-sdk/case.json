@@ -1,0 +1,48 @@
+{
+  "name": "ui-live-joined-mid-part-ai-sdk",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A connection that registers mid-part gets no live frames for it and the whole committed part.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ai-sdk",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "live": [
+      {
+        "commit": 3
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "Hello "
+        }
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "the"
+        }
+      },
+      {
+        "register": true
+      },
+      {
+        "commit": 3
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "re."
+        }
+      },
+      {
+        "commit": 10
+      }
+    ]
+  }
+}

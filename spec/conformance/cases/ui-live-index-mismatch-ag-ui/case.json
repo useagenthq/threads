@@ -1,0 +1,31 @@
+{
+  "name": "ui-live-index-mismatch-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "An adapter bug: a live part commits as a tool call. The connection sends text-end and closes without its closing frames (and without [DONE]); a replay gives the message.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "live": [
+      {
+        "commit": 3
+      },
+      {
+        "register": true
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "Let me"
+        }
+      },
+      {
+        "commit": 10
+      }
+    ]
+  }
+}

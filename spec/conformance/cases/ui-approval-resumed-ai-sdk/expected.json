@@ -1,0 +1,35 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "tool-run_shell",
+          "state": "output-available",
+          "toolCallId": "call_1",
+          "input": {
+            "command": "rm -rf build"
+          },
+          "output": "removed",
+          "approval": {
+            "id": "0192c000-0000-7000-8000-0000000000a1",
+            "approved": true
+          }
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Cleaned.",
+          "state": "done"
+        }
+      ]
+    }
+  ]
+}

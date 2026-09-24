@@ -1,0 +1,13 @@
+{
+  "name": "ui-cancelled-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A cancelled run: abort / RUN_FINISHED{cancelled}.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}

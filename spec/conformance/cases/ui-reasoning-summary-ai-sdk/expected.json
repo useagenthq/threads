@@ -1,0 +1,25 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "reasoning",
+          "id": "0192e000-0000-7000-8000-000000000003:0",
+          "text": "Weigh both options.",
+          "state": "done"
+        },
+        {
+          "type": "text",
+          "text": "Option A.",
+          "state": "done"
+        }
+      ]
+    }
+  ]
+}

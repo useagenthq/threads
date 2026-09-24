@@ -6862,6 +6862,11 @@
               "$ref": "#/$defs/Budget",
               "description": "The budget of the run this input starts."
             },
+            "client_message_id": {
+              "description": "The id a web UI gave this message (the AI SDK UIMessage id or the AG-UI message id), recorded by the UI routes so a retry finds its run and a snapshot names the message as the client does. Not rendered.",
+              "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+              "type": "string"
+            },
             "content": {
               "items": {
                 "$ref": "#/$defs/InputPart"

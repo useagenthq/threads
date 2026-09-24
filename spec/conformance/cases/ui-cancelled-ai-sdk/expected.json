@@ -1,0 +1,28 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Reading.",
+          "state": "done"
+        },
+        {
+          "type": "tool-read_file",
+          "state": "output-error",
+          "toolCallId": "call_1",
+          "input": {
+            "path": "big.log"
+          },
+          "errorText": "not executed: cancelled"
+        }
+      ]
+    }
+  ]
+}

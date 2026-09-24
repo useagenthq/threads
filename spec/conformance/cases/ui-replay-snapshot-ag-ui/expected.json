@@ -1,0 +1,40 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "user",
+      "content": "What is in README.md?"
+    },
+    {
+      "id": "0192e000-0000-7000-8000-000000000003:0",
+      "role": "assistant",
+      "content": "Looking."
+    },
+    {
+      "id": "0192e000-0000-7000-8000-000000000003",
+      "role": "assistant",
+      "toolCalls": [
+        {
+          "id": "call_1",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\":\"README.md\"}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "0192e000-0000-7000-8000-000000000007",
+      "role": "tool",
+      "content": "# demo\n",
+      "toolCallId": "call_1"
+    },
+    {
+      "id": "0192e000-0000-7000-8000-000000000008:0",
+      "role": "assistant",
+      "content": "One heading."
+    }
+  ]
+}

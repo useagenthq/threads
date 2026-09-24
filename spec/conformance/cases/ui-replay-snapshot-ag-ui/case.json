@@ -1,0 +1,29 @@
+{
+  "name": "ui-replay-snapshot-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A replay from the head after a text, a tool call and its result, with a second model step open: RUN_STARTED, the snapshot, the STEP_STARTED preamble, then the later frames.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "ids": {
+      "threadId": "chat-1",
+      "runId": "run-a"
+    },
+    "replay": true,
+    "live": [
+      {
+        "register": true
+      },
+      {
+        "commit": 8
+      },
+      {
+        "commit": 10
+      }
+    ]
+  }
+}

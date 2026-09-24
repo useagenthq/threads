@@ -1,0 +1,20 @@
+{"data":{"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_STARTED"}}
+{"data":{"stepName":"model","type":"STEP_STARTED"},"id":"3:0"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:0","role":"assistant","type":"TEXT_MESSAGE_START"}}
+{"data":{"delta":"Hello ","messageId":"0192e000-0000-7000-8000-000000000003:0","type":"TEXT_MESSAGE_CONTENT"}}
+{"data":{"delta":"there.","messageId":"0192e000-0000-7000-8000-000000000003:0","type":"TEXT_MESSAGE_CONTENT"}}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:0","type":"TEXT_MESSAGE_END"},"id":"4:2"}
+{"data":{"parentMessageId":"0192e000-0000-7000-8000-000000000003","toolCallId":"call_1","toolCallName":"read_file","type":"TOOL_CALL_START"},"id":"4:3"}
+{"data":{"delta":"{\"path\":\"README.md\"}","toolCallId":"call_1","type":"TOOL_CALL_ARGS"},"id":"4:4"}
+{"data":{"toolCallId":"call_1","type":"TOOL_CALL_END"},"id":"4:5"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:2","role":"assistant","type":"TEXT_MESSAGE_START"},"id":"4:6"}
+{"data":{"delta":"Done.","messageId":"0192e000-0000-7000-8000-000000000003:2","type":"TEXT_MESSAGE_CONTENT"},"id":"4:7"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000003:2","type":"TEXT_MESSAGE_END"},"id":"4:8"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"4:9"}
+{"data":{"content":"# demo\n","messageId":"0192e000-0000-7000-8000-000000000007","role":"tool","toolCallId":"call_1","type":"TOOL_CALL_RESULT"},"id":"7:0"}
+{"data":{"stepName":"model","type":"STEP_STARTED"},"id":"8:0"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000008:0","role":"assistant","type":"TEXT_MESSAGE_START"},"id":"9:0"}
+{"data":{"delta":"One heading.","messageId":"0192e000-0000-7000-8000-000000000008:0","type":"TEXT_MESSAGE_CONTENT"},"id":"9:1"}
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000008:0","type":"TEXT_MESSAGE_END"},"id":"9:2"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"9:3"}
+{"data":{"outcome":{"type":"success"},"result":"One heading.","runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_FINISHED"}}

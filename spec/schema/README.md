@@ -6,6 +6,7 @@ The wire contract for the threads log. Both implementations read and write exact
 |---|---|
 | `events.v1.schema.json` | JSON Schema (draft 2020-12) for one canonical line of a branch: the `Header`, an event (envelope plus per-type `data`), or the `Head` checkpoint |
 | `host-api/` | The host HTTP API: `openapi.json` (routes) and `host-api.v1.schema.json` (bodies and projections, `$id` `urn:threads:schema:host-api:v1`) |
+| `ui/` | The web UI protocols the host serves (the AI SDK UI message stream and AG-UI 1.0): the pinned protocol schemas and the normative mapping from the log to their frames (`ui/README.md`) |
 | `api.schema.json` | The shape of `../api.json`, the public API contract |
 | `model-catalog.v1.schema.json` | The shape of a model catalog, `../models/<provider>.v1.json` (Zod source `typescript/packages/core/src/model/catalog.ts`). Both runtimes embed the catalogs (`../tools/gen_model_catalogs.py`) and parse them at load |
 | `store.sql` | The normative SQLite DDL of the log store, versioned by `PRAGMA user_version` (4: the team tables of [Teams](#teams); 2 and 3 belong to lanes 14C and 16C). Embedded in both implementations by `../tools/gen_store_sql.py` (`--check` in CI) |
@@ -100,7 +101,7 @@ A snapshot's `manifest_hash` is the RFC 8785 hash of its manifest: a JSON array 
    | `config_hash`, `args_hash`, `manifest_hash`, `tools_changed.tools_hash` | RFC 8785 bytes of the structured value | canonical |
 
 4. **Numbers.** Envelope fields and framework-authored integer fields are integers in `0 … 2^53−1`. Floats appear only in `JsonValue` positions (tool `input`, `model_params`, adapter `settings`), spelled per the spec. Fractions in policy are integer permille; prices are integer nano-units per token, of `policy.currency` (`agent()` pins `"USD"` whenever a pinned model declares a price, so its prices are nano-USD). A thread pinned before that rule keeps its pin: it reads and reduces unchanged, with a null `cost`, and continuing it through `agent()` is refused like any other config change (`invalid_config`), since its `config_hash` differs from the fresh pin's. Token counts are an integer or `null` (unknown, never zero).
-5. **Identifiers.** `thread_id`, `branch_id` and `event_id` are lowercase UUID strings, branded per kind in both languages. Writers MUST generate UUIDv7. Readers accept any lowercase UUID: the version is a writer rule, not an admission rule. `call_id` is opaque and may come from the provider.
+5. **Identifiers.** `thread_id`, `branch_id` and `event_id` are lowercase UUID strings, branded per kind in both languages. Writers MUST generate UUIDv7, with one exception: a thread the host's UI routes create for a browser chat key has a derived UUIDv8 (`ui/README.md`, "Chat key"; vector `../conformance/vectors/ui-thread-ids.json`). Readers accept any lowercase UUID: the version is a writer rule, not an admission rule. `call_id` is opaque and may come from the provider.
 6. **Pinned names.** Event `type` names, every enum literal and every `ErrorCode` are frozen by a golden test in both languages. Add only. Never update the pins in a rename PR.
 7. **Header** (a branch's first line): `{format: "threads.log", format_version: 1, thread_id, branch_id, created_at, writer: {impl, version}}`. It is not an event: no `seq`, no `prev_hash`. Every branch, root or child, has its own header. `writer` pins the only implementation and major version that may append.
 8. **Head checkpoint** (the last line of every export): `{format: "threads.head", format_version: 1, branch_id, seq, hash}`.
@@ -180,7 +181,7 @@ The one normative representation of a model request. `req_hash` covers these byt
 
   | Event | Line |
   |---|---|
-  | `user_input`, `steer` | `{"role":"user","content":[{"type":"text","text":<text>}]}`, or `{"role":"user","content":<content>}` when the event has `content` (ordered input parts, as recorded). **Nothing** if a later `hook_decision{hook: before_input, decision: deny \| failed, input_event_id}` before the request names it |
+  | `user_input`, `steer` | `{"role":"user","content":[{"type":"text","text":<text>}]}`, or `{"role":"user","content":<content>}` when the event has `content` (ordered input parts, as recorded). Other fields (`source`, `budget`, `delivery_event_id`, `mail_id`, `client_message_id`) are never rendered. **Nothing** if a later `hook_decision{hook: before_input, decision: deny \| failed, input_event_id}` before the request names it |
   | `injected`, trust `untrusted_reference` | A user line whose text is `<reference source="esc(S)" id="esc(ID)" untrusted="true">\nesc(TEXT)\n</reference>`. **Nothing** for `source: memory` recalled for another principal ([Memory in shared threads](#memory-in-shared-threads-adr-0015-invariant-6)) |
   | `injected`, trust `trusted_instruction` | A user line whose text is `<context source="esc(S)" id="esc(ID)">\nesc(TEXT)\n</context>` |
   | `heartbeat` | A user line whose text is `<heartbeat>\nrunning: esc(ID), esc(ID)\n</heartbeat>` |

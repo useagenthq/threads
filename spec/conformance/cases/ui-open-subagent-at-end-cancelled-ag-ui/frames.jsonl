@@ -1,0 +1,9 @@
+{"data":{"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_STARTED"}}
+{"data":{"stepName":"model","type":"STEP_STARTED"},"id":"3:0"}
+{"data":{"parentMessageId":"0192e000-0000-7000-8000-000000000003","toolCallId":"call_1","toolCallName":"spawn_agent","type":"TOOL_CALL_START"},"id":"4:0"}
+{"data":{"delta":"{\"agent\":\"scanner\",\"prompt\":\"Scan deps.\"}","toolCallId":"call_1","type":"TOOL_CALL_ARGS"},"id":"4:1"}
+{"data":{"toolCallId":"call_1","type":"TOOL_CALL_END"},"id":"4:2"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"4:3"}
+{"data":{"name":"scanner","parentToolCallId":"call_1","subagentRunId":"0192a000-0000-7000-8000-0000000000d1","type":"SUBAGENT_STARTED"},"id":"7:0"}
+{"data":{"message":"subagent scanner stopped: cancelled","subagentRunId":"0192a000-0000-7000-8000-0000000000d1","type":"SUBAGENT_ERROR"}}
+{"data":{"outcome":{"type":"cancelled"},"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_FINISHED"}}

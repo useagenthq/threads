@@ -1,0 +1,18 @@
+{
+  "name": "ui-snapshot-client-ids-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "The snapshot names a UI-started run's user message by its client_message_id (msg-abc) and an API-started run's by its event_id, each before its answer.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000006",
+    "ids": {
+      "threadId": "chat-1",
+      "runId": "run-a"
+    },
+    "replay": true
+  }
+}

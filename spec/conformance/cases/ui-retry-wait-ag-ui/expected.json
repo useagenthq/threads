@@ -1,0 +1,10 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000006:0",
+      "role": "assistant",
+      "content": "Hi."
+    }
+  ]
+}

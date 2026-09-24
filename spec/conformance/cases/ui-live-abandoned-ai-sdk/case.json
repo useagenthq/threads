@@ -1,0 +1,34 @@
+{
+  "name": "ui-live-abandoned-ai-sdk",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "Live text, then model_attempt_abandoned: text-end, the abandonment frames and the step's end; the resent attempt's step and parts use its new request id.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ai-sdk",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "live": [
+      {
+        "commit": 3
+      },
+      {
+        "register": true
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "Hel"
+        }
+      },
+      {
+        "commit": 4
+      },
+      {
+        "commit": 7
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "ui-open-subagent-at-end-cancelled-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A background legacy subagent still running when the run ends: suspended on a park, stopped (SUBAGENT_ERROR) on a cancel or an error, before RUN_FINISHED / RUN_ERROR.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}

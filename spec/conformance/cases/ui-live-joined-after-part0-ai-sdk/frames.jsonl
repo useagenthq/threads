@@ -1,0 +1,18 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"type":"start-step"},"id":"3:0"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000003:0","type":"text-start"},"id":"4:0"}
+{"data":{"delta":"Hello there.","id":"0192e000-0000-7000-8000-000000000003:0","type":"text-delta"},"id":"4:1"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000003:0","type":"text-end"},"id":"4:2"}
+{"data":{"input":{"path":"README.md"},"toolCallId":"call_1","toolName":"read_file","type":"tool-input-available"},"id":"4:3"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000003:2","type":"text-start"},"id":"4:4"}
+{"data":{"delta":"Done.","id":"0192e000-0000-7000-8000-000000000003:2","type":"text-delta"},"id":"4:5"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000003:2","type":"text-end"},"id":"4:6"}
+{"data":{"type":"finish-step"},"id":"4:7"}
+{"data":{"output":"# demo\n","toolCallId":"call_1","type":"tool-output-available"},"id":"7:0"}
+{"data":{"type":"start-step"},"id":"8:0"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000008:0","type":"text-start"},"id":"9:0"}
+{"data":{"delta":"One heading.","id":"0192e000-0000-7000-8000-000000000008:0","type":"text-delta"},"id":"9:1"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000008:0","type":"text-end"},"id":"9:2"}
+{"data":{"type":"finish-step"},"id":"9:3"}
+{"data":{"finishReason":"stop","type":"finish"}}
+{"data":"[DONE]"}

@@ -75,6 +75,9 @@ from . import (
     tool_search_rules,
     tool_search_vectors,
     tool_sets,
+    ui_cases,
+    ui_cases_live,
+    ui_vectors,
     wake_bars,
     wakes,
 )
@@ -138,6 +141,8 @@ FAMILIES = (
     dynamic,
     questions,
     host_sends,
+    ui_cases,
+    ui_cases_live,
 )
 
 
@@ -245,6 +250,7 @@ def main() -> int:
             problems += agent_pins.check()
             problems += anthropic_requests.check() + dynamic.check()
             problems += tool_search_vectors.check()
+            problems += ui_vectors.check()
         for p in problems:
             print(f"coverage.json: {p}")
         if problems:
@@ -267,6 +273,7 @@ def main() -> int:
         dynamic.write()
         tool_search_vectors.write()
         questions.write()
+            problems += ui_vectors.check()
         otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
         for built, dest in ((out, CASES), (staged, STAGED), *otel_parts):
             shutil.rmtree(dest, ignore_errors=True)

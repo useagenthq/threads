@@ -32,6 +32,18 @@
         "description": "Typed failure of subscribeRun.",
         "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found"] } } } } }] } } }
       },
+      "UiRunError": {
+        "description": "Typed failure of the UI start-and-stream routes, before any stream starts. After it has started, a failure is a protocol error frame.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused", "approval_mismatch", "approval_expired", "approval_duplicate", "no_open_question"] } } } } }] } } }
+      },
+      "UiReconnectError": {
+        "description": "Typed failure of the AI SDK reconnect route.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "invalid_request", "not_found"] } } } } }] } } }
+      },
+      "UiCursorError": {
+        "description": "Typed failure of the committed-frames UI route.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "invalid_request", "not_found", "invalid_cursor"] } } } } }] } } }
+      },
       "GetTimelineError": {
         "description": "Typed failure of getTimeline.",
         "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "log_corrupt", "unsupported_format", "unsupported_critical_event"] } } } } }] } } }
@@ -246,6 +258,73 @@
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/ModeChange" } } } },
         "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/SetModeError" } }
+      }
+    },
+    "/v1/ui/ai-sdk/{agent}": {
+      "post": {
+        "operationId": "uiAiSdkChat",
+        "x-error-codes": ["unauthenticated", "forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused", "approval_mismatch", "approval_expired", "approval_duplicate", "no_open_question"],
+        "parameters": [{ "name": "agent", "in": "path", "required": true, "description": "A key of host({agents}).", "schema": { "$ref": "../events.v1.schema.json#/$defs/NonEmpty" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/AiSdkChatRequest" } } } },
+        "responses": {
+          "200": {
+            "description": "The AI SDK UI message stream (header x-vercel-ai-ui-message-stream: v1) of the run the request starts, retries or resumes, ended by data: [DONE]. A last user message starts a run on the key's thread (idempotent on its id); a last assistant message only records its approval decisions and ask_user answers and streams the resumed run. Frames are derived from the log (spec/schema/ui/README.md); each log-derived frame's SSE id is <seq>:<k>.",
+            "headers": { "x-vercel-ai-ui-message-stream": { "schema": { "const": "v1" } } },
+            "content": { "text/event-stream": { "schema": { "type": "string" }, "x-sse-data": { "$ref": "../ui/ai-sdk-ui.v1.schema.json" } } }
+          },
+          "204": { "description": "An assistant-last request with nothing to record and no run to stream." },
+          "4XX": { "$ref": "#/components/responses/UiRunError" }
+        }
+      }
+    },
+    "/v1/ui/ai-sdk/{agent}/{chat_id}/stream": {
+      "get": {
+        "operationId": "uiAiSdkReconnect",
+        "x-error-codes": ["unauthenticated", "invalid_request", "not_found"],
+        "parameters": [{ "name": "agent", "in": "path", "required": true, "description": "A key of host({agents}).", "schema": { "$ref": "../events.v1.schema.json#/$defs/NonEmpty" } }, { "name": "chat_id", "in": "path", "required": true, "description": "The chat key.", "schema": { "$ref": "host-api.v1.schema.json#/$defs/ChatKey" } }],
+        "responses": {
+          "200": {
+            "description": "useChat({resume: true}): the key's latest run, from its start, while it has not ended.",
+            "headers": { "x-vercel-ai-ui-message-stream": { "schema": { "const": "v1" } } },
+            "content": { "text/event-stream": { "schema": { "type": "string" }, "x-sse-data": { "$ref": "../ui/ai-sdk-ui.v1.schema.json" } } }
+          },
+          "204": { "description": "No active stream: the latest run has ended, or the key has no thread." },
+          "4XX": { "$ref": "#/components/responses/UiReconnectError" }
+        }
+      }
+    },
+    "/v1/ui/ag-ui/{agent}": {
+      "post": {
+        "operationId": "uiAgUiRun",
+        "x-error-codes": ["unauthenticated", "forbidden", "invalid_request", "not_found", "branch_busy", "branch_not_runnable", "idempotency_key_reused", "approval_mismatch", "approval_expired", "approval_duplicate", "no_open_question"],
+        "parameters": [{ "name": "agent", "in": "path", "required": true, "description": "A key of host({agents}).", "schema": { "$ref": "../events.v1.schema.json#/$defs/NonEmpty" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/AgUiRunInput" } } } },
+        "responses": {
+          "200": {
+            "description": "AG-UI 1.0 events of the run the input starts, retries or resumes. A stream that does not start at the run's first event is a replay and opens with MESSAGES_SNAPSHOT. An approval or a question ends it with RUN_FINISHED{outcome: interrupt}, answered by the next input's resume.",
+            "content": { "text/event-stream": { "schema": { "type": "string" }, "x-sse-data": { "$ref": "../ui/ag-ui-1.0.schema.json" } } }
+          },
+          "4XX": { "$ref": "#/components/responses/UiRunError" }
+        }
+      }
+    },
+    "/v1/threads/{thread_id}/runs/{run_id}/ui/{protocol}": {
+      "get": {
+        "operationId": "uiRunFrames",
+        "x-error-codes": ["unauthenticated", "invalid_request", "not_found", "invalid_cursor"],
+        "parameters": [
+          { "$ref": "#/components/parameters/thread_id" },
+          { "name": "run_id", "in": "path", "required": true, "description": "The run's user_input event_id.", "schema": { "$ref": "../events.v1.schema.json#/$defs/EventId" } },
+          { "name": "protocol", "in": "path", "required": true, "schema": { "enum": ["ai-sdk", "ag-ui"] } },
+          { "name": "after", "in": "query", "required": false, "description": "Resume after this frame id <seq>:<k> (also accepted as the SSE Last-Event-ID, which wins). AI SDK resumes with frame k+1 of event seq; AG-UI resumes at the event boundary after seq with a new RUN_STARTED and a snapshot.", "schema": { "type": "string", "pattern": "^[0-9]+:[0-9]+$" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "For custom clients: the run's committed frames only, in the protocol's stream format, resumable by cursor. No live text.",
+            "content": { "text/event-stream": { "schema": { "type": "string" }, "x-sse-data": { "anyOf": [{ "$ref": "../ui/ai-sdk-ui.v1.schema.json" }, { "$ref": "../ui/ag-ui-1.0.schema.json" }] } } }
+          },
+          "4XX": { "$ref": "#/components/responses/UiCursorError" }
+        }
       }
     },
     "/channels/{channel}/events": {

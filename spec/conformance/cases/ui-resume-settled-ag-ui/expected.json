@@ -1,0 +1,38 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "user",
+      "content": "Clean both folders."
+    },
+    {
+      "id": "0192e000-0000-7000-8000-000000000003",
+      "role": "assistant",
+      "toolCalls": [
+        {
+          "id": "call_1",
+          "type": "function",
+          "function": {
+            "name": "run_shell",
+            "arguments": "{\"command\":\"rm -rf build\"}"
+          }
+        },
+        {
+          "id": "call_2",
+          "type": "function",
+          "function": {
+            "name": "run_shell",
+            "arguments": "{\"command\":\"rm -rf dist\"}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "0192e000-0000-7000-8000-00000000000f",
+      "role": "tool",
+      "content": "removed",
+      "toolCallId": "call_1"
+    }
+  ]
+}

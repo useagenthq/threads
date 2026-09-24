@@ -1,0 +1,13 @@
+{
+  "name": "ui-tool-error-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A tool error: tool-output-error{errorText: preview} (AI SDK), TOOL_CALL_RESULT (AG-UI).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}

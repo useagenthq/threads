@@ -1,0 +1,14 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"type":"start-step"},"id":"3:0"}
+{"data":{"input":{"command":"rm -rf build"},"toolCallId":"call_1","toolName":"run_shell","type":"tool-input-available"},"id":"4:0"}
+{"data":{"type":"finish-step"},"id":"4:1"}
+{"data":{"approvalId":"0192c000-0000-7000-8000-0000000000a1","toolCallId":"call_1","type":"tool-approval-request"},"id":"7:0"}
+{"data":{"approvalId":"0192c000-0000-7000-8000-0000000000a1","approved":false,"reason":"not today","type":"tool-approval-response"},"id":"9:0"}
+{"data":{"toolCallId":"call_1","type":"tool-output-denied"},"id":"11:0"}
+{"data":{"type":"start-step"},"id":"12:0"}
+{"data":{"id":"0192e000-0000-7000-8000-00000000000c:0","type":"text-start"},"id":"13:0"}
+{"data":{"delta":"I left it alone.","id":"0192e000-0000-7000-8000-00000000000c:0","type":"text-delta"},"id":"13:1"}
+{"data":{"id":"0192e000-0000-7000-8000-00000000000c:0","type":"text-end"},"id":"13:2"}
+{"data":{"type":"finish-step"},"id":"13:3"}
+{"data":{"finishReason":"stop","type":"finish"}}
+{"data":"[DONE]"}

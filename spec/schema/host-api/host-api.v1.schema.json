@@ -304,6 +304,109 @@
         "answer": { "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "array", "minItems": 1, "items": { "type": "string" } }] }
       }
     },
+    "ChatKey": {
+      "description": "A browser's conversation id on the UI routes (AI SDK useChat({id}), AG-UI threadId). With the signed-in principal and the agent it names one thread (spec/schema/ui/README.md, \"Chat key\"). Never recorded.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+    },
+    "ClientMessageId": {
+      "description": "A UI message id threads records as user_input.client_message_id and keys a UI run's idempotency on.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+    },
+    "AiSdkChatRequest": {
+      "description": "POST /v1/ui/ai-sdk/{agent}: the part of an AI SDK 7 chat request (DefaultChatTransport's body) that threads reads. Other keys, and other fields of messages and parts, are ignored: the browser's history is never read as truth.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "messages", "trigger"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ChatKey" },
+        "messages": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/AiSdkMessage" } },
+        "trigger": { "enum": ["submit-message", "regenerate-message"] },
+        "messageId": { "type": "string" }
+      }
+    },
+    "AiSdkMessage": {
+      "description": "One UIMessage. Only the last one is read: a user message starts a run, an assistant message carries approval decisions and ask_user answers.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "role", "parts"],
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "enum": ["system", "user", "assistant"] },
+        "parts": { "type": "array", "items": { "$ref": "#/$defs/AiSdkPart" } }
+      }
+    },
+    "AiSdkPart": {
+      "description": "One UIMessage part: text (type text), or a tool part (type tool-<name>) with its state, approval and output.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string" },
+        "text": { "type": "string" },
+        "toolCallId": { "type": "string" },
+        "state": { "type": "string" },
+        "approval": { "$ref": "#/$defs/AiSdkApproval" },
+        "output": { "$ref": "urn:threads:schema:events:v1#/$defs/JsonValue" }
+      }
+    },
+    "AiSdkApproval": {
+      "description": "A tool part's approval: id is the challenge_id; approved and reason are the browser's decision.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" },
+        "approved": { "type": "boolean" },
+        "reason": { "type": "string" }
+      }
+    },
+    "AgUiRunInput": {
+      "description": "POST /v1/ui/ag-ui/{agent}: the part of an AG-UI 1.0 RunAgentInput that threads reads. state, context and forwardedProps are ignored; a non-empty tools is refused.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["threadId", "runId", "messages"],
+      "properties": {
+        "threadId": { "$ref": "#/$defs/ChatKey" },
+        "runId": { "type": "string" },
+        "messages": { "type": "array", "items": { "$ref": "#/$defs/AgUiMessage" } },
+        "tools": { "type": "array", "items": { "$ref": "urn:threads:schema:events:v1#/$defs/JsonObject" } },
+        "resume": { "type": "array", "items": { "$ref": "#/$defs/AgUiResumeEntry" } }
+      }
+    },
+    "AgUiMessage": {
+      "description": "One AG-UI message. Only the last user message is read, as the run's input.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "role"],
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "type": "string" },
+        "content": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "$ref": "#/$defs/AgUiContentPart" } }] }
+      }
+    },
+    "AgUiContentPart": {
+      "description": "A part of a user message's content: text is read, any other type is refused.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string" },
+        "text": { "type": "string" }
+      }
+    },
+    "AgUiResumeEntry": {
+      "description": "An answer to one interrupt: resolved with a payload (an ApprovalDecision or an Answer), or cancelled.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["interruptId", "status"],
+      "properties": {
+        "interruptId": { "type": "string" },
+        "status": { "enum": ["resolved", "cancelled"] },
+        "payload": { "$ref": "urn:threads:schema:events:v1#/$defs/JsonValue" }
+      }
+    },
     "ParkedResolution": {
       "description": "A human settling an unknown effect (C3). Recorded as effect_resolved{by: human}.",
       "type": "object",

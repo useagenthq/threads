@@ -1,0 +1,12 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"type":"start-step"},"id":"3:0"}
+{"data":{"input":{"path":"secrets.txt"},"toolCallId":"call_1","toolName":"read_file","type":"tool-input-available"},"id":"4:0"}
+{"data":{"type":"finish-step"},"id":"4:1"}
+{"data":{"errorText":"no such file","toolCallId":"call_1","type":"tool-output-error"},"id":"7:0"}
+{"data":{"type":"start-step"},"id":"8:0"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000008:0","type":"text-start"},"id":"9:0"}
+{"data":{"delta":"It is not there.","id":"0192e000-0000-7000-8000-000000000008:0","type":"text-delta"},"id":"9:1"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000008:0","type":"text-end"},"id":"9:2"}
+{"data":{"type":"finish-step"},"id":"9:3"}
+{"data":{"finishReason":"stop","type":"finish"}}
+{"data":"[DONE]"}

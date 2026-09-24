@@ -1,0 +1,167 @@
+[
+  {
+    "name": "a key",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "alice"
+    },
+    "agent": "support",
+    "key": "chat-1",
+    "thread_id": "bc672ca5-fa26-88c2-9ecb-2d572bb4675c"
+  },
+  {
+    "name": "the same key, another principal",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "bob"
+    },
+    "agent": "support",
+    "key": "chat-1",
+    "thread_id": "feab10ed-a2ca-87db-8e9b-37159378b6b1"
+  },
+  {
+    "name": "the same key and subject, another tenant",
+    "principal": {
+      "issuer": "api",
+      "tenant": "globex",
+      "subject": "alice"
+    },
+    "agent": "support",
+    "key": "chat-1",
+    "thread_id": "29fa5e8c-f270-8925-8337-4832d8ef5a64"
+  },
+  {
+    "name": "the same key, another agent",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "alice"
+    },
+    "agent": "sales",
+    "key": "chat-1",
+    "thread_id": "0eb7b98f-172a-8683-aa3e-c0a8aaaede01"
+  },
+  {
+    "name": "a lowercase UUID key",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "alice"
+    },
+    "agent": "support",
+    "key": "0192a000-0000-7000-8000-000000000001",
+    "thread_id": "c90db10b-8c61-8da8-a467-792a2d7661b9"
+  },
+  {
+    "name": "a non-ASCII subject",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "zoë/ü%"
+    },
+    "agent": "support",
+    "key": "chat-1",
+    "thread_id": "615fd9ed-396a-83ab-b327-ed4e44910821"
+  },
+  {
+    "name": "a NUL inside a field",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "a\u0000b"
+    },
+    "agent": "support",
+    "key": "c",
+    "thread_id": "3896795b-244a-8721-a24f-50b5281862e1"
+  },
+  {
+    "name": "the split a NUL would collide with",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "a"
+    },
+    "agent": "support",
+    "key": "b\u0000c",
+    "error": "invalid_request"
+  },
+  {
+    "name": "a slash in the issuer",
+    "principal": {
+      "issuer": "x/y",
+      "tenant": "acme",
+      "subject": "alice"
+    },
+    "agent": "support",
+    "key": "k",
+    "thread_id": "8b41a64e-ba2a-8590-9506-e015696e0362"
+  },
+  {
+    "name": "an escaped slash as text",
+    "principal": {
+      "issuer": "x%2Fy",
+      "tenant": "acme",
+      "subject": "alice"
+    },
+    "agent": "support",
+    "key": "k",
+    "thread_id": "95860082-653f-8650-88d1-1aade4218f56"
+  },
+  {
+    "name": "a 128-character key",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "alice"
+    },
+    "agent": "support",
+    "key": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+    "thread_id": "7fadad72-9d03-8ae0-9a39-7046152cfb3f"
+  },
+  {
+    "name": "a 129-character key",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "alice"
+    },
+    "agent": "support",
+    "key": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+    "error": "invalid_request"
+  },
+  {
+    "name": "a key with a space",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "alice"
+    },
+    "agent": "support",
+    "key": "chat 1",
+    "error": "invalid_request"
+  },
+  {
+    "name": "an empty key",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "alice"
+    },
+    "agent": "support",
+    "key": "",
+    "error": "invalid_request"
+  },
+  {
+    "name": "a key with a colon",
+    "principal": {
+      "issuer": "api",
+      "tenant": "acme",
+      "subject": "alice"
+    },
+    "agent": "support",
+    "key": "chat:1",
+    "error": "invalid_request"
+  }
+]

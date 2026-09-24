@@ -1,0 +1,14 @@
+{
+  "name": "ui-resume-mid-event-ai-sdk-k2",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "The cursor 9:2 of a four-frame event resumes with exactly frames 3.. of that event, then the events after it: no gap, no duplicate.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ai-sdk",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "after": "9:2"
+  }
+}

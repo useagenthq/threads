@@ -1,0 +1,3 @@
+{"data":{"runId":"run-a","threadId":"chat-1","type":"RUN_STARTED"}}
+{"data":{"messages":[{"content":"Hi.","id":"msg-abc","role":"user"},{"content":"Hello!","id":"0192e000-0000-7000-8000-000000000003:0","role":"assistant"},{"content":"What is in README.md?","id":"0192e000-0000-7000-8000-000000000006","role":"user"},{"content":"One heading.","id":"0192e000-0000-7000-8000-000000000007:0","role":"assistant"}],"type":"MESSAGES_SNAPSHOT"}}
+{"data":{"outcome":{"type":"success"},"result":"One heading.","runId":"run-a","threadId":"chat-1","type":"RUN_FINISHED"}}

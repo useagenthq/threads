@@ -1,0 +1,48 @@
+{
+  "name": "ui-live-race-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A part whose first delta went out before registration: a delta between the registration and the head read, and one after the head read, are not taken for a first delta; the part arrives whole at commit.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "live": [
+      {
+        "commit": 3
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "Hel"
+        }
+      },
+      {
+        "register": true
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "lo "
+        }
+      },
+      {
+        "commit": 3
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "there."
+        }
+      },
+      {
+        "commit": 10
+      }
+    ]
+  }
+}

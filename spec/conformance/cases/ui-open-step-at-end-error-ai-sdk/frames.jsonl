@@ -1,0 +1,6 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"type":"start-step"},"id":"3:0"}
+{"data":{"type":"finish-step"}}
+{"data":{"errorText":"failed: model_error","type":"error"}}
+{"data":{"finishReason":"error","type":"finish"}}
+{"data":"[DONE]"}

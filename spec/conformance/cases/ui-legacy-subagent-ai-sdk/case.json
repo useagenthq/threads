@@ -1,0 +1,13 @@
+{
+  "name": "ui-legacy-subagent-ai-sdk",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A foreground child that fails: data-subagent{status: failed} (AI SDK); SUBAGENT_ERROR{message: 'subagent reviewer ended: failed', code: failed} (AG-UI).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ai-sdk",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}

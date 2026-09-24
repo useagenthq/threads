@@ -1,0 +1,14 @@
+{
+  "name": "ui-cursor-snapshot-ag-ui-k2",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "AG-UI resumes at the event boundary whatever k is: the cursor 9:2 gives RUN_STARTED, a snapshot through the event, the preamble, then the events after it, the same stream for every k.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "after": "9:2"
+  }
+}

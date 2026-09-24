@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import arr, obj, text
+from .common import arr, num, obj, text
 from .turn_open import mail_opens_turn
 
 if TYPE_CHECKING:
@@ -99,6 +99,10 @@ class _Run:
         waiting = self.output is not None and not self.turn_open and not self.done
         return waiting and self.status is None and d["scope"] in ("thread", "tree")
 
+    def decided(self) -> bool:
+        """The run has ended: otherwise (a status), or its end holds now."""
+        return self.status is not None or self._ended()
+
     def _ended(self) -> bool:
         """The run's end holds: an answer, no turn open, nothing parked, every helper reported."""
         idle = not (self.turn_open or self.parks or self.children or self.monitors)
@@ -146,7 +150,27 @@ class _Run:
 def run_projection(events: list[Obj]) -> Obj:
     """The `run` projection of the log's last run (its latest user_input)."""
     last = [e for e in events if e["type"] == "user_input"][-1]
-    r = _Run(text(last["event_id"]), text(last["branch_id"]))
+    return run_of(events, last)
+
+
+def run_of(events: list[Obj], request: Obj) -> Obj:
+    """The `run` projection of the run `request` (a user_input) opens."""
+    r = _Run(text(request["event_id"]), text(request["branch_id"]))
     for e in events:
         r.event(e)
     return r.result()
+
+
+# A late result and the woken naming it are one append: a run never ends between them.
+_MID_APPEND = ("agent_finished", "tool_result_late")
+
+
+def run_end_seq(events: list[Obj], request: Obj) -> int | None:
+    """The seq of the event at which the run `request` opens ended, or None while it goes on or
+    is parked: the first event after which it ended otherwise, or its end held."""
+    r = _Run(text(request["event_id"]), text(request["branch_id"]))
+    for e in events:
+        r.event(e)
+        if e["type"] not in _MID_APPEND and r.decided():
+            return num(e["seq"])
+    return None

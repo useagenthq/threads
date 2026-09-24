@@ -1,0 +1,7 @@
+{"data":{"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_STARTED"}}
+{"data":{"stepName":"model","type":"STEP_STARTED"},"id":"3:0"}
+{"data":{"parentMessageId":"0192e000-0000-7000-8000-000000000003","toolCallId":"call_1","toolCallName":"ask_user","type":"TOOL_CALL_START"},"id":"4:0"}
+{"data":{"delta":"{\"question\":\"Staging or production?\"}","toolCallId":"call_1","type":"TOOL_CALL_ARGS"},"id":"4:1"}
+{"data":{"toolCallId":"call_1","type":"TOOL_CALL_END"},"id":"4:2"}
+{"data":{"stepName":"model","type":"STEP_FINISHED"},"id":"4:3"}
+{"data":{"outcome":{"interrupts":[{"id":"call_1","message":"Staging or production?","reason":"user_input","responseSchema":{"additionalProperties":false,"description":"The answer to an ask_user question: text, or the chosen options.","properties":{"answer":{"oneOf":[{"minLength":1,"type":"string"},{"items":{"type":"string"},"minItems":1,"type":"array"}]}},"required":["answer"],"type":"object"},"toolCallId":"call_1"}],"type":"interrupt"},"runId":"0192e000-0000-7000-8000-000000000002","threadId":"0192a000-0000-7000-8000-000000000001","type":"RUN_FINISHED"}}

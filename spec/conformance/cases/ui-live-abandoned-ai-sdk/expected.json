@@ -1,0 +1,35 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Hel",
+          "state": "done"
+        },
+        {
+          "type": "data-attempt",
+          "id": "0192e000-0000-7000-8000-000000000003",
+          "data": {
+            "status": "abandoned",
+            "reason": "stream_broken"
+          }
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Hi.",
+          "state": "done"
+        }
+      ]
+    }
+  ]
+}

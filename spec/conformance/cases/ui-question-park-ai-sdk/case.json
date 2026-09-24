@@ -1,0 +1,13 @@
+{
+  "name": "ui-question-park-ai-sdk",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "An ask_user park: a tool-ask_user part ending finish{tool-calls} (AI SDK); an interrupt of reason user_input with the question and the Answer schema (AG-UI).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ai-sdk",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}

@@ -1,0 +1,8 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"type":"start-step"},"id":"3:0"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000003:0","type":"text-start"},"id":"4:0"}
+{"data":{"delta":"I can't help with that.","id":"0192e000-0000-7000-8000-000000000003:0","type":"text-delta"},"id":"4:1"}
+{"data":{"id":"0192e000-0000-7000-8000-000000000003:0","type":"text-end"},"id":"4:2"}
+{"data":{"type":"finish-step"},"id":"4:3"}
+{"data":{"finishReason":"content-filter","type":"finish"}}
+{"data":"[DONE]"}

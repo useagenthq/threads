@@ -1,0 +1,47 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "tool-spawn_agent",
+          "state": "output-available",
+          "toolCallId": "call_1",
+          "input": {
+            "agent": "scanner",
+            "prompt": "Scan deps."
+          },
+          "output": "scanner started",
+          "preliminary": true
+        },
+        {
+          "type": "data-subagent",
+          "id": "0192a000-0000-7000-8000-0000000000d1",
+          "data": {
+            "agent": "scanner",
+            "status": "running"
+          }
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "tool-run_shell",
+          "state": "approval-requested",
+          "toolCallId": "call_2",
+          "input": {
+            "command": "rm -rf build"
+          },
+          "approval": {
+            "id": "0192c000-0000-7000-8000-0000000000b1"
+          }
+        }
+      ]
+    }
+  ]
+}

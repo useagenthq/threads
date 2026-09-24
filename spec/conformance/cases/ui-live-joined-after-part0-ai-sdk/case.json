@@ -1,0 +1,45 @@
+{
+  "name": "ui-live-joined-after-part0-ai-sdk",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "A connection registered after part 0's first delta streams nothing of that request live, not even part 2.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ai-sdk",
+    "run_id": "0192e000-0000-7000-8000-000000000002",
+    "live": [
+      {
+        "commit": 3
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "Hello "
+        }
+      },
+      {
+        "register": true
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 0,
+          "text": "there."
+        }
+      },
+      {
+        "delta": {
+          "request_event_id": "0192e000-0000-7000-8000-000000000003",
+          "part": 2,
+          "text": "Done."
+        }
+      },
+      {
+        "commit": 10
+      }
+    ]
+  }
+}

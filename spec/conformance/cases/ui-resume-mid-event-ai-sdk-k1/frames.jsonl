@@ -1,0 +1,5 @@
+{"data":{"messageId":"0192e000-0000-7000-8000-000000000002","type":"start"}}
+{"data":{"id":"0192e000-0000-7000-8000-000000000008:0","type":"text-end"},"id":"9:2"}
+{"data":{"type":"finish-step"},"id":"9:3"}
+{"data":{"finishReason":"stop","type":"finish"}}
+{"data":"[DONE]"}

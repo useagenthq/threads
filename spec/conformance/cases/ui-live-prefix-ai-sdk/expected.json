@@ -1,0 +1,41 @@
+{
+  "outcome": "ok",
+  "messages": [
+    {
+      "id": "0192e000-0000-7000-8000-000000000002",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Hello there.",
+          "state": "done"
+        },
+        {
+          "type": "tool-read_file",
+          "state": "output-available",
+          "toolCallId": "call_1",
+          "input": {
+            "path": "README.md"
+          },
+          "output": "# demo\n"
+        },
+        {
+          "type": "text",
+          "text": "Done.",
+          "state": "done"
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "One heading.",
+          "state": "done"
+        }
+      ]
+    }
+  ]
+}

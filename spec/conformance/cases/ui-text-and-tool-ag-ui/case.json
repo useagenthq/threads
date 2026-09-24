@@ -1,0 +1,13 @@
+{
+  "name": "ui-text-and-tool-ag-ui",
+  "family": "tools_streaming",
+  "kind": "ui",
+  "description": "Two steps: text before a tool call in one response, its result, then a final text. Text parts are id'd <request event_id>:<index>; the call is a tool part (AI SDK) or joins its request's assistant message (AG-UI).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "protocol": "ag-ui",
+    "run_id": "0192e000-0000-7000-8000-000000000002"
+  }
+}
