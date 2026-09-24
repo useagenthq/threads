@@ -220,6 +220,15 @@ describe("UI route errors", () => {
       },
     );
     expect(unknown.status).toBe(404);
+    const malformed = await h.call(
+      "GET",
+      "/v1/threads/nope/runs/nope/ui/ai-sdk",
+      {
+        as: alice,
+      },
+    );
+    expect(malformed.status).toBe(400);
+    expect(await code(malformed)).toBe("invalid_request");
     for (const protocol of ["ai-sdk", "ag-ui"]) {
       const bad = await h.call(
         "GET",
@@ -251,7 +260,8 @@ describe("UI route errors", () => {
       ],
       trigger: "submit-message",
     });
-    expect(r.status).toBe(204);
+    expect(r.status).toBe(200);
+    expect(await r.text()).toContain('"type":"finish"');
     expect(await receipts()).toEqual(before);
   });
 });

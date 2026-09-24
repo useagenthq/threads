@@ -132,10 +132,13 @@ export function chat(
   as: Principal,
   id: string,
   agent = "support",
+  /** The messages the page starts with: another tab's, or a reload's restored history. */
+  messages: UIMessage[] = [],
 ): { readonly chat: TestChat; readonly log: Wire } {
   const { fetch, log } = wire(h);
   const made = new TestChat({
     id,
+    messages,
     transport: new DefaultChatTransport({
       api: `http://host.test/v1/ui/ai-sdk/${agent}`,
       headers: { "x-principal": JSON.stringify(as) },

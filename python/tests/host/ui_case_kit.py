@@ -121,7 +121,7 @@ def serve(case: Case, without_after: bool = False) -> Served:
     for raw in steps:
         step = _dict(raw)
         if "register" in step:
-            listener = LiveListener(hub if isinstance(live, list) else None, thread_id)
+            listener = LiveListener(hub if isinstance(live, list) else None, "acme", thread_id)
             continue
         head = _step(case, hub, thread_id, step, head)
         if listener is None:
@@ -148,13 +148,13 @@ def _step(case: Case, hub: LiveHub, thread: str, step: dict[str, JsonValue], hea
     if isinstance(delta, dict):
         part = delta["part"]
         assert isinstance(part, int)
-        hub.delta(thread, Delta(str(delta["request_event_id"]), part, str(delta["text"])))
+        hub.delta("acme", thread, Delta(str(delta["request_event_id"]), part, str(delta["text"])))
         return head
     commit = step["commit"]
     assert isinstance(commit, int)
     for e in case.events:
         if head < e.seq <= commit:
-            hub.appended(thread, e)
+            hub.appended("acme", thread, e)
     return commit
 
 

@@ -2,7 +2,9 @@
 interrupt still open is recorded through the same controls as the REST routes. One for an
 interrupt already settled (by the same value, another value, another approver, or expiry)
 records nothing and is never an error: the stock client would be locked out of its thread.
-Where its value differs from the log's, the stream says so with threads.resume_conflict."""
+Where its value differs from the log's, the stream says so with threads.resume_conflict. An
+interrupt settled by someone else after the request read the log is settled too: every entry is
+judged against the log read again."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -12,7 +14,7 @@ from pydantic import JsonValue, ValidationError
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._generated.host_api_v1 import AgUiResumeEntry, Answer, ApprovalDecision
-from threads.host.ui.common import UiLog
+from threads.host.ui.common import SETTLED_MEANWHILE, UiLog, read_log
 from threads.host.ui.frame import Chunk
 from threads.host.ui.settled import Approval, Other, Question, Unknown, interrupt_of
 from threads.log import CallId, Event, ParkAddress, ParseError, Principal
@@ -43,12 +45,18 @@ async def apply_resume(  # noqa: PLR0913 - the request and how it came
         return classified
     if new_message and _blocked(log, classified.value, now):
         return Err(ParseError("invalid_request", "answer the interrupts first"))
+    raced = False
     for c in classified.value:
         if _acts(c):
             done = await _record(host, principal, log, c, wait=new_message)
             if isinstance(done, Err):
-                return done
-    return Ok([chunk for c in classified.value for chunk in _conflict(c)])
+                if done.error.code not in SETTLED_MEANWHILE:
+                    return done
+                raced = True
+    if not raced:
+        return Ok([chunk for c in classified.value for chunk in _conflict(c)])
+    now_log = await read_log(log.thread) or log
+    return resume_conflicts(now_log.events, now_log.parked, entries, now)
 
 
 def resume_conflicts(

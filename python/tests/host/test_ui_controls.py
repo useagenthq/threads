@@ -1,7 +1,7 @@
 """The UI routes' human input and bookkeeping (spec/schema/ui/README.md): approval authority is
-unchanged, an assistant message with nothing new takes no receipt, an import rebuilds the `ui`
-receipts, and the interrupt answer schemas are host-api's. The registration and head-read race
-of live text is the `ui-live-race-*` cases (test_ui_cases)."""
+unchanged, an assistant message with nothing new streams and takes no receipt, an import
+rebuilds the `ui` receipts, and the interrupt answer schemas are host-api's. The registration
+and head-read race of live text is the `ui-live-race-*` cases (test_ui_cases)."""
 
 import asyncio
 import json
@@ -63,7 +63,7 @@ def test_approval_authority_is_unchanged_and_a_repeat_decision_is_a_no_op(tmp_pa
     run(main)
 
 
-def test_an_assistant_message_with_nothing_new_is_204_and_takes_no_receipt(
+def test_an_assistant_message_with_nothing_new_streams_the_latest_run_and_takes_no_receipt(
     tmp_path: Path,
 ) -> None:
     async def main() -> None:
@@ -71,7 +71,9 @@ def test_an_assistant_message_with_nothing_new_is_204_and_takes_no_receipt(
             await post(client, AI_SDK, "alice", chat("c", user("m1", "Send x")))
             nothing: JsonValue = {"id": "a1", "role": "assistant", "parts": []}
             answered = await post(client, AI_SDK, "alice", chat("c", user("m1", "x"), nothing))
-            assert answered.status_code == HTTPStatus.NO_CONTENT
+            # Never 204 on a POST: the stock DefaultChatTransport fails on an empty body.
+            assert answered.status_code == HTTPStatus.OK
+            assert frames(answered)[-1][1] == "[DONE]"
 
     run(main)
     with sqlite3.connect(tmp_path / "threads.db") as conn:

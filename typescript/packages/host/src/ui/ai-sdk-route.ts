@@ -66,7 +66,11 @@ async function submitted(
     );
   const text = message.parts.map((p) => p.text ?? "").join("");
   if (text === "") return failure("invalid_request", "the message has no text");
-  const listener = new LiveListener(call.ctx.hub, threadId);
+  const listener = new LiveListener(
+    call.ctx.hub,
+    call.principal.tenant,
+    threadId,
+  );
   const started = await startUiRun(call.ctx, hosted, call.principal, threadId, {
     id: id.data,
     text,
@@ -92,13 +96,22 @@ async function submitted(
   );
 }
 
-/** Records the message's decisions and answers, then streams the run after the last of them. */
+/**
+ * Records the message's decisions and answers, then streams the run after the last of them.
+ * The client continues its assistant message with that stream. With nothing new (a second tab,
+ * a repeated request), the same: after the last logged decision or answer the parts name, so the
+ * tab gets what the first one did. Else the latest run from its start; 204 when there is none.
+ */
 async function decided(
   call: Call,
   threadId: ThreadId,
   parts: readonly AiSdkPart[],
 ): Promise<Response> {
-  const listener = new LiveListener(call.ctx.hub, threadId);
+  const listener = new LiveListener(
+    call.ctx.hub,
+    call.principal.tenant,
+    threadId,
+  );
   const log = await uiThread(call, threadId);
   if (log === undefined) {
     listener.stop();
@@ -109,10 +122,12 @@ async function decided(
     listener.stop();
     return routeFailure(UI_CODES, recorded.error);
   }
-  const after = (await uiThread(call, threadId))?.events;
-  const last = after?.findLast((e) => recorded.value.includes(e.event_id));
-  const run = last === undefined ? undefined : runOf(after ?? [], last.seq);
-  if (last === undefined || run === undefined) {
+  const events = (await uiThread(call, threadId))?.events ?? log.events;
+  const last =
+    events.findLast((e) => recorded.value.includes(e.event_id)) ??
+    settledIn(events, parts);
+  const run = runOf(events, last?.seq ?? Number.POSITIVE_INFINITY);
+  if (run === undefined) {
     listener.stop();
     return new Response(null, { status: 204 });
   }
@@ -126,10 +141,33 @@ async function decided(
         thread: { id: log.thread.id, branch: log.thread.branch },
         runId: run,
         ids: { threadId: log.thread.id, runId: run },
-        after: { seq: last.seq, k: Number.POSITIVE_INFINITY },
+        ...(last === undefined
+          ? {}
+          : { after: { seq: last.seq, k: Number.POSITIVE_INFINITY } }),
       },
       listener,
     ),
+  );
+}
+
+/** The last logged decision or answer of the parts' approvals and questions. */
+function settledIn(
+  events: readonly KnownEvent[],
+  parts: readonly AiSdkPart[],
+): KnownEvent | undefined {
+  const challenges = new Set(parts.flatMap((p) => p.approval?.id ?? []));
+  const questions = new Set(
+    parts.flatMap((p) =>
+      p.type === "tool-ask_user" ? (p.toolCallId ?? []) : [],
+    ),
+  );
+  return events.findLast(
+    (e) =>
+      ((e.type === "approval_granted" || e.type === "approval_denied") &&
+        challenges.has(e.data.challenge_id)) ||
+      (e.type === "tool_result" &&
+        e.data.origin === "answered" &&
+        questions.has(e.data.call_id)),
   );
 }
 
@@ -153,7 +191,11 @@ export async function aiSdkReconnect(call: Call): Promise<Response> {
       "a chat id is 1 to 128 of A-Z a-z 0-9 _ . -",
     );
   const threadId = uiThreadId(call.principal, hosted.key, key);
-  const listener = new LiveListener(call.ctx.hub, threadId);
+  const listener = new LiveListener(
+    call.ctx.hub,
+    call.principal.tenant,
+    threadId,
+  );
   const log = await uiThread(call, threadId);
   const run = log?.events.findLast((e) => e.type === "user_input");
   const going =

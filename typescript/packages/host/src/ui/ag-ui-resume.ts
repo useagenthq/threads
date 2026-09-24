@@ -10,8 +10,8 @@ import type { HostContext } from "../context";
 import { answerQuestion, decideChallenge, resumeThread } from "../decisions";
 import type { Failure } from "../errors";
 import { Answer, ApprovalDecision } from "../schemas";
-import type { Log } from "./ai-sdk-decisions";
 import type { AgUiResumeEntry } from "./bodies";
+import { type Log, readLog, SETTLED_MEANWHILE } from "./common";
 import type { Chunk } from "./frame";
 import { type Interrupt, interruptOf, type Recorded } from "./settled";
 
@@ -40,11 +40,16 @@ export async function applyResume(
       code: "invalid_request",
       message: "answer the interrupts first",
     });
+  let raced = false;
   for (const c of acting) {
     const done = await record(ctx, principal, log, c, options.newMessage);
-    if (!done.ok) return done;
+    if (!done.ok && !SETTLED_MEANWHILE.has(done.error.code)) return done;
+    raced ||= !done.ok;
   }
-  return ok(classified.value.flatMap(conflict));
+  if (!raced) return ok(classified.value.flatMap(conflict));
+  // Someone settled an interrupt after the read: judge every entry against the log as it is now.
+  const now = await readLog(ctx, principal.tenant, log.thread);
+  return resumeConflicts(now ?? log, entries, options.now);
 }
 
 /** The threads.resume_conflict frames the entries give, recording nothing. */

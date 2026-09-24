@@ -15,13 +15,13 @@ export class LiveListener {
   readonly #stop: () => void;
 
   /** Registers now: call it before reading the log's head, and before starting the run. */
-  constructor(hub: LiveHub | undefined, thread: string) {
+  constructor(hub: LiveHub | undefined, tenant: string, thread: string) {
     if (hub === undefined) {
       this.missed = undefined;
       this.#stop = () => undefined;
       return;
     }
-    const registered = hub.listen(thread, (item) => {
+    const registered = hub.listen(tenant, thread, (item) => {
       if (item.kind === "delta") this.#inbox.push(item.delta);
       this.#wake?.();
     });

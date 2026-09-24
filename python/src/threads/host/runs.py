@@ -291,7 +291,7 @@ class Runner:
         return None
 
     def _emit(self, thread: Thread) -> "_Emit":
-        return _Emit(self, thread)
+        return _Emit(self, thread, self.tenant_of(thread.store) or "")
 
     def _ended(self, thread: Thread, task: RunTask) -> None:
         branch = thread.branch
@@ -378,14 +378,15 @@ class _Emit:
 
     runner: Runner
     thread: Thread
+    tenant: str
 
     def __call__(self, item: StreamEvent) -> None:
         if isinstance(item, EventItem):
-            self.runner.hub.appended(self.thread.id, item.event)
+            self.runner.hub.appended(self.tenant, self.thread.id, item.event)
         self.runner.wake(self.thread.branch)
 
     def delta(self, request: EventId, part: int, text: str) -> None:
-        self.runner.hub.delta(self.thread.id, Delta(request, part, text))
+        self.runner.hub.delta(self.tenant, self.thread.id, Delta(request, part, text))
 
 
 async def _pinned(sq: SqliteStore, thread_id: ThreadId) -> tuple[str, bool] | None:

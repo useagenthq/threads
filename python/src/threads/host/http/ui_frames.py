@@ -10,6 +10,7 @@ from typing import Final
 from starlette.requests import Request
 from starlette.responses import Response
 
+from threads._json_formats import FORMATS
 from threads.agents.store import now_ms, open_store
 from threads.host.app import Host
 from threads.host.http.common import Handler, authenticated, error
@@ -30,11 +31,14 @@ _CURSOR: Final = re.compile(r"^(\d+):(\d+)$")
 
 def frames(host: Host) -> Handler:
     async def handle(request: Request, principal: Principal) -> Response:
+        raw_thread, raw_run = request.path_params["thread_id"], request.path_params["run_id"]
+        if not (FORMATS["uuid"](raw_thread) and FORMATS["uuid"](raw_run)):
+            return error("invalid_request", "malformed thread_id or run_id")
         protocol = request.path_params["protocol"]
         if not is_protocol(protocol):
             return error("not_found", f"no UI protocol {protocol}")
-        thread_id = ThreadId(request.path_params["thread_id"])
-        run_id = EventId(request.path_params["run_id"])
+        thread_id = ThreadId(raw_thread)
+        run_id = EventId(raw_run)
         store = host.runner.store(principal.tenant)
         sq = await open_store(store)
         found = None
@@ -56,7 +60,7 @@ def frames(host: Host) -> Handler:
         elif after is not None:
             receipts = await sq.tables.ui_messages(thread_id)
             plan = SessionPlan(protocol, run_id, plan.ids, replay=int(after.seq), receipts=receipts)
-        listener = LiveListener(None, thread_id)
+        listener = LiveListener(None, "", thread_id)
         return streamed(host, Thread(thread_id, branch, store), plan, listener)
 
     return authenticated(host, handle)

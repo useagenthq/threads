@@ -29,6 +29,10 @@ UI_CODES: Final = frozenset(
     }
 )
 
+SETTLED_MEANWHILE: Final = frozenset({"approval_duplicate", "approval_expired", "no_open_question"})
+"""The codes a decision or answer gets when someone else settled the interrupt between the
+route's log read and its append: the route reads the log again and treats it as settled."""
+
 
 @dataclass(frozen=True, slots=True)
 class UiLog:
@@ -44,7 +48,11 @@ async def ui_log(host: "Host", principal: Principal, thread_id: ThreadId) -> UiL
     opened = await host.thread(principal, thread_id, None)
     if isinstance(opened, Err):
         return None
-    thread = opened.value
+    return await read_log(opened.value)
+
+
+async def read_log(thread: Thread) -> UiLog | None:
+    """The thread's log read again, as it stands now."""
     read = await (await open_store(thread.store)).read(thread.branch, now_ms())
     if not isinstance(read, Ok):
         return None

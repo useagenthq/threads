@@ -59,7 +59,7 @@ def run(host: Host) -> Handler:
         if isinstance(message, str):
             return error("invalid_request", message)
         thread_id = ui_thread_id(principal, agent, parsed.threadId)
-        listener = LiveListener(host.runner.hub, thread_id)
+        listener = LiveListener(host.runner.hub, principal.tenant, thread_id)
         resume = () if parsed.resume is MISSING else parsed.resume
         answered = await _respond(host, principal, agent, thread_id, message, resume=resume)
         if isinstance(answered, ParseError):

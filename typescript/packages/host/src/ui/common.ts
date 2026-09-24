@@ -33,32 +33,52 @@ export function routeAgent(call: Call): HostedAgent | Response {
   return call.ctx.agents.get(name) ?? failure("not_found", `no agent ${name}`);
 }
 
+/** A UI thread's handle and its main branch's log as last read. */
+export type Log = {
+  readonly thread: Thread;
+  readonly events: readonly KnownEvent[];
+  readonly parked: readonly ParkAddress[];
+};
+
 /** The thread's handle and its main branch's log, or undefined when it doesn't exist yet. */
 export async function uiThread(
   call: Call,
   threadId: ThreadId,
-): Promise<
-  | {
-      readonly thread: Thread;
-      readonly events: readonly KnownEvent[];
-      readonly parked: readonly ParkAddress[];
-    }
-  | undefined
-> {
+): Promise<Log | undefined> {
   const opened = await openThread(
     call.ctx.storeFor(call.principal.tenant),
     threadId,
   );
-  if (!opened.ok) return undefined;
-  const { log } = await call.ctx.open(call.principal.tenant);
-  const read = log.read(opened.value.branch);
+  return opened.ok
+    ? readLog(call.ctx, call.principal.tenant, opened.value)
+    : undefined;
+}
+
+/** The thread's log read again, as it stands now. */
+export async function readLog(
+  ctx: HostContext,
+  tenant: string,
+  thread: Thread,
+): Promise<Log | undefined> {
+  const { log } = await ctx.open(tenant);
+  const read = log.read(thread.branch);
   if (!read.ok) return undefined;
   return {
-    thread: opened.value,
+    thread,
     events: knownEvents(read.value),
     parked: read.value.fold.parked,
   };
 }
+
+/**
+ * The codes a decision or answer gets when someone else settled the interrupt between the
+ * route's log read and its append: the route reads the log again and treats it as settled.
+ */
+export const SETTLED_MEANWHILE: ReadonlySet<string> = new Set([
+  "approval_duplicate",
+  "approval_expired",
+  "no_open_question",
+]);
 
 export async function receiptsOf(
   ctx: HostContext,

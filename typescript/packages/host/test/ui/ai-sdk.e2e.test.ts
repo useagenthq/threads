@@ -88,6 +88,41 @@ describe("AI SDK end to end", () => {
     expect(c.messages).toHaveLength(2);
   });
 
+  test("a second tab approving an already approved call streams the run, with no error", async () => {
+    const sent: string[] = [];
+    h = harness({
+      agents: {
+        support: mailer({
+          responses: [use("send_email", { to: "bob" }, "m1"), say("Mailed.")],
+          sent,
+        }),
+      },
+    });
+    const { chat: a } = chat(h.host, alice, "chat-1");
+    await a.sendMessage({ text: "Mail bob" });
+    await settled(a);
+    const { chat: b, log } = chat(
+      h.host,
+      alice,
+      "chat-1",
+      "support",
+      structuredClone(a.messages),
+    );
+    const part = z
+      .object({ approval: z.object({ id: z.string() }) })
+      .parse(a.messages.at(-1)?.parts.find((p) => "approval" in p));
+    await a.addToolApprovalResponse({ id: part.approval.id, approved: true });
+    await settled(a, () => JSON.stringify(a.messages).includes("Mailed."));
+    await b.addToolApprovalResponse({ id: part.approval.id, approved: true });
+    await settled(b, () => log.requests.some((r) => r.method === "POST"));
+    expect(b.error?.message).toBeUndefined();
+    expect(b.status).toBe("ready");
+    expect(sent).toEqual(["bob"]);
+    const run = Assistant.parse(b.messages.at(-1)).id;
+    expect(last(b)).toEqual(await uninterrupted(run));
+    expect(last(b)).toEqual(last(a));
+  });
+
   test("a stream dropped during live text resumes with resumeStream: one assistant message", async () => {
     const gate = new Gate();
     h = harness({

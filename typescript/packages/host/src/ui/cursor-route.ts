@@ -58,7 +58,7 @@ export async function runFrames(
   };
   const frames =
     after === undefined
-      ? uiFrames(call.ctx, plan, new LiveListener(undefined, threadId.data))
+      ? uiFrames(call.ctx, plan, new LiveListener(undefined, "", threadId.data))
       : uiFrames(
           call.ctx,
           protocol === "ai-sdk"
@@ -72,7 +72,7 @@ export async function runFrames(
                   threadId.data,
                 ),
               },
-          new LiveListener(undefined, threadId.data),
+          new LiveListener(undefined, "", threadId.data),
         );
   return sseResponse(protocol, frames);
 }

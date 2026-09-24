@@ -94,6 +94,30 @@ export class LogStore {
   }
 
   /**
+   * The thread's root branch, else `branchId` created as it, in one transaction: processes racing
+   * to start a thread all get the root that stood first.
+   */
+  rootOrCreate(
+    threadId: ThreadId,
+    branchId: BranchId,
+  ): Result<BranchId, LogError> {
+    return atomically(this.#db, () => {
+      const root = rootBranch(this.#db, threadId, this.tenant);
+      if (!root.ok) return root;
+      if (root.value !== undefined) return ok(root.value);
+      const made = newBranch(this.#db, {
+        tenantId: this.tenant,
+        threadId,
+        branchId,
+        parent: null,
+        state: "ready",
+        createdAt: this.#now(),
+      });
+      return made.ok ? ok(branchId) : made;
+    });
+  }
+
+  /**
    * `branch.open` in a transaction of its own: a new root branch of this tenant with its first
    * events, held by the returned writer at epoch 1. `already_open` when the branch exists.
    */

@@ -13,7 +13,7 @@ POLL_S: Final = 0.05
 
 
 class LiveListener:
-    def __init__(self, hub: LiveHub | None, thread: str) -> None:
+    def __init__(self, hub: LiveHub | None, tenant: str, thread: str) -> None:
         """Registers now: call it before reading the log's head, and before starting the run."""
         self._inbox: list[Delta] = []
         self._wake = asyncio.Event()
@@ -21,7 +21,7 @@ class LiveListener:
             self.missed: frozenset[str] | None = None
             self._stop = lambda: None
             return
-        registered = hub.listen(thread, self._heard)
+        registered = hub.listen(tenant, thread, self._heard)
         self.missed = registered.missed
         self._stop = registered.stop
 

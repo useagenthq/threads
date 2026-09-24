@@ -8,7 +8,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from threads._generated.host_api_v1 import AiSdkChatRequest, AiSdkMessage
+from threads._generated.host_api_v1 import AiSdkChatRequest, AiSdkMessage, AiSdkPart
 from threads.host.app import Host
 from threads.host.http.common import Handler, authenticated, body, error
 from threads.host.http.ui_common import refused, streamed
@@ -20,7 +20,16 @@ from threads.host.ui.key import CHAT_KEY, ui_thread_id
 from threads.host.ui.listener import LiveListener
 from threads.host.ui.session import SessionPlan
 from threads.host.ui.start import UserMessage, start_ui_run
-from threads.log import Event, EventId, Principal, ThreadId, UserInputEvent
+from threads.log import (
+    ApprovalDeniedEvent,
+    ApprovalGrantedEvent,
+    Event,
+    EventId,
+    Principal,
+    ThreadId,
+    ToolResultEvent,
+    UserInputEvent,
+)
 from threads.reduce.run_end import run_end
 from threads.result import Err
 from threads.thread.handle import Thread
@@ -60,7 +69,7 @@ async def _submitted(
     text = "".join("" if p.text is MISSING else p.text for p in message.parts)
     if not text:
         return error("invalid_request", "the message has no text")
-    listener = LiveListener(host.runner.hub, thread_id)
+    listener = LiveListener(host.runner.hub, principal.tenant, thread_id)
     started = await start_ui_run(
         host.runner, agent, principal, thread_id, UserMessage(message.id, text)
     )
@@ -75,8 +84,11 @@ async def _submitted(
 async def _decided(
     host: Host, principal: Principal, thread_id: ThreadId, message: AiSdkMessage
 ) -> Response:
-    """Records the message's decisions and answers, then streams the run after the last."""
-    listener = LiveListener(host.runner.hub, thread_id)
+    """Records the message's decisions and answers, then streams the run after the last. The
+    client continues its assistant message with that stream. With nothing new (a second tab, a
+    repeated request), the same: after the last logged decision or answer the parts name, so the
+    tab gets what the first one did. Else the latest run from its start; 204 when there is none."""
+    listener = LiveListener(host.runner.hub, principal.tenant, thread_id)
     log = await ui_log(host, principal, thread_id)
     if log is None:
         listener.stop()
@@ -87,15 +99,36 @@ async def _decided(
     after = await ui_log(host, principal, thread_id)
     events = () if after is None else after.events
     last = next((e for e in reversed(events) if e.event_id in recorded.value), None)
-    run = None if last is None else _run_of(events, last.seq)
-    if last is None or run is None:
+    last = last or _settled_in(events, message.parts)
+    run = _run_of(events, INF if last is None else last.seq)
+    if run is None:
         listener.stop()
         return Response(status_code=204)
-    plan = SessionPlan("ai-sdk", run, RunIds(thread_id, run), after=Cursor(last.seq, INF))
+    after = None if last is None else Cursor(last.seq, INF)
+    plan = SessionPlan("ai-sdk", run, RunIds(thread_id, run), after=after)
     return streamed(host, log.thread, plan, listener)
 
 
-def _run_of(events: Sequence[Event], seq: int) -> EventId | None:
+def _settled_in(events: Sequence[Event], parts: Sequence[AiSdkPart]) -> Event | None:
+    """The last logged decision or answer of the parts' approvals and questions."""
+    challenges = {p.approval.id for p in parts if p.approval is not MISSING}
+    questions = {
+        p.toolCallId for p in parts if p.type == "tool-ask_user" and p.toolCallId is not MISSING
+    }
+    for e in reversed(events):
+        if isinstance(e, ApprovalGrantedEvent | ApprovalDeniedEvent):
+            if e.data.challenge_id in challenges:
+                return e
+        elif (
+            isinstance(e, ToolResultEvent)
+            and e.data.origin == "answered"
+            and e.data.call_id in questions
+        ):
+            return e
+    return None
+
+
+def _run_of(events: Sequence[Event], seq: float) -> EventId | None:
     """The run whose slice holds the event at `seq`: the latest user_input at or before it."""
     runs = [e.event_id for e in events if isinstance(e, UserInputEvent) and e.seq <= seq]
     return runs[-1] if runs else None
@@ -113,7 +146,7 @@ def reconnect(host: Host) -> Handler:
         if not CHAT_KEY.match(key):
             return error("invalid_request", "a chat id is 1 to 128 of A-Z a-z 0-9 _ . -")
         thread_id = ui_thread_id(principal, agent, key)
-        listener = LiveListener(host.runner.hub, thread_id)
+        listener = LiveListener(host.runner.hub, principal.tenant, thread_id)
         log = await ui_log(host, principal, thread_id)
         runs = [] if log is None else [e for e in log.events if isinstance(e, UserInputEvent)]
         if log is None or not runs or run_end(log.events, runs[-1].event_id).status != "running":

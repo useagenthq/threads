@@ -143,11 +143,10 @@ function input(principal: Principal, message: UserMessage): EventDraft {
 }
 
 /**
- * The key's thread: continued when it exists, else created with its derived id. The check and
- * the create run with no await between them, so two requests of this process make one thread.
+ * The key's thread: continued when it exists, else created with its derived id. The lookup and
+ * the create are one store transaction, so requests racing on a new key, in this process or
+ * another, make one thread.
  */
-// ponytail: two processes racing a brand-new key can each create a root branch; a transaction
-// over the threads row is the fix if that ever matters.
 async function uiTarget(
   log: LogStore,
   store: Store,
@@ -159,13 +158,8 @@ async function uiTarget(
   // The spec artifacts are durable before first, which names them, is appended.
   await pin.put(store);
   const first = [pin.event];
-  const main = log.mainBranch(threadId);
-  if (!main.ok) {
-    const branchId = BranchId.parse(uuidv7(log.now()));
-    const made = log.createBranch(threadId, branchId);
-    if (!made.ok) return fail("invalid_request", made.error.message);
-    return ok({ threadId, branchId, first });
-  }
+  const main = log.rootOrCreate(threadId, BranchId.parse(uuidv7(log.now())));
+  if (!main.ok) return fail("invalid_request", main.error.message);
   const read = log.read(main.value);
   if (!read.ok) return fail("branch_not_runnable", read.error.message);
   const events = knownEvents(read.value);

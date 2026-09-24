@@ -1,29 +1,17 @@
-import type { Thread } from "@threads/core";
-import {
-  err,
-  type KnownEvent,
-  ok,
-  type ParkAddress,
-  type Principal,
-  type Result,
-} from "@threads/core/host";
+import { err, ok, type Principal, type Result } from "@threads/core/host";
 import type { HostContext } from "../context";
 import { answerQuestion, decideChallenge } from "../decisions";
 import type { Failure } from "../errors";
 import { Answer } from "../schemas";
 import type { AiSdkPart } from "./bodies";
+import { type Log, readLog, SETTLED_MEANWHILE } from "./common";
 import { decisionOf } from "./settled";
 
 // What an assistant-last AI SDK request records (spec/schema/ui/README.md, "AI SDK bodies"):
 // each approval-responded tool part's decision and an ask_user part's answer to the open
 // question, through the same controls as the REST routes. A decision the log already holds
-// with the same value is a no-op; another value is approval_duplicate.
-
-export type Log = {
-  readonly thread: Thread;
-  readonly events: readonly KnownEvent[];
-  readonly parked: readonly ParkAddress[];
-};
+// with the same value is a no-op; another value is approval_duplicate. One decided by someone
+// else after this request read the log is judged the same way, against the log read again.
 
 /** The event ids of what it newly recorded, in order. */
 export async function recordParts(
@@ -68,20 +56,33 @@ async function approval(
       message: "an approval-responded part needs approval.approved",
     });
   const challenge = part.approval.id;
-  const logged = decisionOf(log.events, challenge);
-  if (logged !== undefined)
-    return logged === (approved ? "granted" : "denied")
-      ? ok(undefined)
-      : err({
-          code: "approval_duplicate",
-          message: `challenge ${challenge} is already ${logged}`,
-        });
+  const logged = alreadyDecided(log, challenge, approved);
+  if (logged !== undefined) return logged;
   const reason = part.approval.reason;
   const done = await decideChallenge(ctx, principal, log.thread, challenge, {
     decision: approved ? "grant" : "deny",
     ...(approved || reason === undefined ? {} : { reason }),
   });
-  return done.ok ? ok(done.value.event_id) : done;
+  if (done.ok) return ok(done.value.event_id);
+  if (!SETTLED_MEANWHILE.has(done.error.code)) return done;
+  const now = await readLog(ctx, principal.tenant, log.thread);
+  return (now && alreadyDecided(now, challenge, approved)) ?? done;
+}
+
+/** The answer to a challenge the log already decided: a no-op, or approval_duplicate. */
+function alreadyDecided(
+  log: Log,
+  challenge: string,
+  approved: boolean,
+): Result<undefined, Failure> | undefined {
+  const logged = decisionOf(log.events, challenge);
+  if (logged === undefined) return undefined;
+  return logged === (approved ? "granted" : "denied")
+    ? ok(undefined)
+    : err({
+        code: "approval_duplicate",
+        message: `challenge ${challenge} is already ${logged}`,
+      });
 }
 
 async function answer(
@@ -107,5 +108,7 @@ async function answer(
     callId,
     parsed.data.answer,
   );
-  return done.ok ? ok(done.value.event_id) : done;
+  if (done.ok) return ok(done.value.event_id);
+  // Answered or closed meanwhile: ignored, like any answer to a question no longer open.
+  return done.error.code === "no_open_question" ? ok(undefined) : done;
 }

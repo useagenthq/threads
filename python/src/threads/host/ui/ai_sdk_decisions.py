@@ -1,7 +1,8 @@
 """What an assistant-last AI SDK request records (spec/schema/ui/README.md, "Bodies"): each
 approval-responded tool part's decision, and an ask_user part's answer to the open question,
 through the same controls as the REST routes. A decision the log already holds with the same
-value is a no-op; another value is approval_duplicate."""
+value is a no-op; another value is approval_duplicate. One decided by someone else after this
+request read the log is judged the same way, against the log read again."""
 
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
@@ -10,7 +11,7 @@ from pydantic import ValidationError
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._generated.host_api_v1 import AiSdkPart, Answer
-from threads.host.ui.common import UiLog
+from threads.host.ui.common import SETTLED_MEANWHILE, UiLog, read_log
 from threads.host.ui.settled import decision_of
 from threads.log import CallId, ParseError, Principal
 from threads.result import Err, Ok
@@ -50,21 +51,32 @@ async def _approval(host: "Host", principal: Principal, log: UiLog, part: AiSdkP
         why = "an approval-responded part needs approval.approved"
         return Err(ParseError("invalid_request", why))
     granted = approval.approved
-    logged = decision_of(log.events, approval.id)
+    logged = _already(log, approval.id, granted=granted)
     if logged is not None:
-        if logged == ("granted" if granted else "denied"):
-            return Ok(None)
-        why = f"challenge {approval.id} is already {logged}"
-        return Err(ParseError("approval_duplicate", why))
+        return logged
     if granted:
         done = await log.thread.approve(approval.id, principal)
     else:
         reason = None if approval.reason is MISSING else approval.reason
         done = await log.thread.deny(approval.id, principal, reason=reason)
     if isinstance(done, Err):
-        return done
+        if done.error.code not in SETTLED_MEANWHILE:
+            return done
+        now_log = await read_log(log.thread)
+        again = None if now_log is None else _already(now_log, approval.id, granted=granted)
+        return done if again is None else again
     await host.resume(log.thread)
     return Ok(done.value.event_id)
+
+
+def _already(log: UiLog, challenge: str, *, granted: bool) -> Recorded | None:
+    """The answer to a challenge the log already decided: a no-op, or approval_duplicate."""
+    logged = decision_of(log.events, challenge)
+    if logged is None:
+        return None
+    if logged == ("granted" if granted else "denied"):
+        return Ok(None)
+    return Err(ParseError("approval_duplicate", f"challenge {challenge} is already {logged}"))
 
 
 async def _answer(host: "Host", principal: Principal, log: UiLog, part: AiSdkPart) -> Recorded:
@@ -78,6 +90,7 @@ async def _answer(host: "Host", principal: Principal, log: UiLog, part: AiSdkPar
         return Err(ParseError("invalid_request", why))
     done = await log.thread.answer(CallId(call), answer.answer, principal)
     if isinstance(done, Err):
-        return done
+        # Answered or closed meanwhile: ignored, like any answer to a question no longer open.
+        return Ok(None) if done.error.code == "no_open_question" else done
     await host.resume(log.thread)
     return Ok(done.value.event_id)

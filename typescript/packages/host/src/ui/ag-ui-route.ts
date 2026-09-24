@@ -34,7 +34,11 @@ export async function agUiRun(call: Call): Promise<Response> {
   if (typeof message === "string") return failure("invalid_request", message);
   const threadId = uiThreadId(call.principal, hosted.key, body.data.threadId);
   const ids = { threadId: body.data.threadId, runId: body.data.runId };
-  const listener = new LiveListener(call.ctx.hub, threadId);
+  const listener = new LiveListener(
+    call.ctx.hub,
+    call.principal.tenant,
+    threadId,
+  );
   const answered = await respond(call, hosted, threadId, {
     ids,
     message,

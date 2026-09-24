@@ -201,11 +201,12 @@ class Timeline {
     if ("register" in step)
       this.#listener = new LiveListener(
         this.#live ? this.#hub : undefined,
+        "acme",
         this.#thread,
       );
     else if ("delta" in step) {
       const d = step.delta;
-      this.#hub.delta(this.#thread, {
+      this.#hub.delta("acme", this.#thread, {
         requestId: d.request_event_id,
         part: d.part,
         text: d.text,
@@ -213,7 +214,7 @@ class Timeline {
     } else {
       for (const e of this.#log.events)
         if (e.seq > this.#head && e.seq <= step.commit)
-          this.#hub.appended(this.#thread, e);
+          this.#hub.appended("acme", e);
       this.#head = step.commit;
     }
     return this.#listener;

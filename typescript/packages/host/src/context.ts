@@ -158,8 +158,8 @@ export class HostContext {
           [],
           {
             onDelta: (requestId, part, text) =>
-              this.hub.delta(thread.id, { requestId, part, text }),
-            onEvent: (e) => this.hub.appended(e.thread_id, e),
+              this.hub.delta(tenant, thread.id, { requestId, part, text }),
+            onEvent: (e) => this.hub.appended(tenant, e),
           },
         );
         const json = asJson(result);
