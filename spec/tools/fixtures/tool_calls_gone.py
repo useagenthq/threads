@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import NOW, tokens
+from .common import BRANCH, DAY, NOW, tokens
 from .log import Log, reduce
 from .pieces import (
     ALLOW,
@@ -137,6 +137,58 @@ def _removed(root: pathlib.Path) -> None:
     )
 
 
+def _in_doubt(root: pathlib.Path) -> None:
+    log = Log()
+    started(log, [READ_FILE])
+    user(log, "Deploy to prod.")
+    _unknown_call(log, "mcp__ops__deploy", DEPLOY_IN)
+    log.add("permission_decision", {"call_id": "call_1", **ALLOW})
+    log.add("effect_begin", {"call_id": "call_1", "attempt": 1})
+    write_case(
+        root,
+        case(
+            "recover-unknown-tool-effect-parks",
+            FAM,
+            "recover",
+            "An effect_begin for a call to mcp__ops__deploy, which was not in the tool set when "
+            "the call was made, then a crash. The effect may have been sent and the call has no "
+            "class to settle it by, so recovery marks it unknown and parks it; it never closes "
+            "it not_executed.",
+            model_script="model.json",
+            sandbox_script="sandbox.json",
+        ),
+        log,
+        {
+            "outcome": "ok",
+            "state": reduce(log, NOW),
+            "appended": [
+                {
+                    "type": "effect_unknown",
+                    "actor_kind": "recovery",
+                    "epoch": 2,
+                    "data": {"call_id": "call_1", "reason": "crash_after_begin"},
+                },
+                {
+                    "type": "parked",
+                    "actor_kind": "recovery",
+                    "epoch": 2,
+                    "data": {
+                        "address": {"kind": "effect", "id": f"{BRANCH}:call_1"},
+                        "reason": "effect_unknown",
+                        "expires_at": NOW + DAY,
+                    },
+                },
+            ],
+            "sandbox": {"dispatches": {"mcp__ops__deploy": 0}},
+        },
+        extra={
+            "model.json": {"responses": []},
+            "sandbox.json": {"tools": {"mcp__ops__deploy": {"output": "ran"}}},
+        },
+    )
+
+
 def build(root: pathlib.Path) -> None:
     _unknown(root)
     _removed(root)
+    _in_doubt(root)

@@ -1,0 +1,11 @@
+{
+  "name": "recover-unknown-tool-effect-parks",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "An effect_begin for a call to mcp__ops__deploy, which was not in the tool set when the call was made, then a crash. The effect may have been sent and the call has no class to settle it by, so recovery marks it unknown and parks it; it never closes it not_executed.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}
