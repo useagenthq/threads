@@ -79,6 +79,12 @@ def ended(w: World, label: str, outcome: Obj) -> Obj:
     if row is None:
         raise AssertionError(label)
     result: Obj = {"member": w.ref(row), **outcome}
+    # The member's own open asks never outlive it: each closes cancelled before its end.
+    branch = w.logs[label].branch
+    for ask in w.rows("asks"):
+        if ask["asker_branch_id"] == branch and ask["state"] == "open":
+            closed: Obj = {"ask_id": ask["ask_id"], "outcome": {"status": "cancelled"}}
+            w.add(label, "ask_closed", closed)
     settled = w.add(label, "member_ended", {"result": result})
     _fire(w, label, settled, result)
     _refuse(w, label, row, result)

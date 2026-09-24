@@ -7263,6 +7263,166 @@
       }
     },
     {
+      "name": "end-asker-closes-its-open-asks",
+      "section": "4.11",
+      "description": "The writer ends while its ask to researcher-1 is open: the same append closes the ask cancelled before member_ended, so no ask row outlives its asker; a later reply is refused ask_closed.",
+      "given": {
+        "world": "end-asker-closes-its-open-asks"
+      },
+      "now": 1790000100000,
+      "op": "end",
+      "by": "writer",
+      "input": {
+        "reason": "error",
+        "code": "pin_unavailable",
+        "result": {
+          "status": "failed",
+          "error": {
+            "code": "pin_unavailable",
+            "message": "rebind failed: pin_unavailable"
+          }
+        }
+      },
+      "expect": {
+        "outcome": {
+          "status": "ended"
+        },
+        "appended": {
+          "writer": [
+            "turn_completed",
+            "ask_closed",
+            "member_ended",
+            "message_sent"
+          ]
+        },
+        "rows": {
+          "team_members": {
+            "update": [
+              {
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "name": "writer-1",
+                "generation": 1,
+                "role": "member",
+                "agent": "writer",
+                "config_hash": "c7c8a3b65717c17e2d722696a05c7f899ad28b17c9c4f6f7109103b4f75ff8bd",
+                "thread_id": "0192a000-0000-7000-8000-0000000000b4",
+                "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+                "provenance": {
+                  "principal": {
+                    "issuer": "api",
+                    "tenant": "acme",
+                    "subject": "alice"
+                  },
+                  "root_request": {
+                    "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+                    "event_id": "0192e001-0000-7000-8000-000000000002"
+                  },
+                  "via": []
+                },
+                "state": "ended",
+                "result": {
+                  "member": {
+                    "tenant": "acme",
+                    "team": "0192c000-0000-7000-8000-000000000001",
+                    "name": "writer-1",
+                    "generation": 1
+                  },
+                  "status": "failed",
+                  "error": {
+                    "code": "pin_unavailable",
+                    "message": "rebind failed: pin_unavailable"
+                  }
+                },
+                "updated_seq": 14
+              }
+            ]
+          },
+          "mail": {
+            "insert": [
+              {
+                "mail_id": "0192b000-0000-7000-8000-0000000000b4:0192e001-0000-7000-8000-00000000000f",
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "kind": "member_ended",
+                "to_name": "lead",
+                "to_generation": 1,
+                "principal_key": "api/acme/alice",
+                "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+                "envelope": {
+                  "mail_id": "0192b000-0000-7000-8000-0000000000b4:0192e001-0000-7000-8000-00000000000f",
+                  "kind": "member_ended",
+                  "team": "0192c000-0000-7000-8000-000000000001",
+                  "from": {
+                    "tenant": "acme",
+                    "team": "0192c000-0000-7000-8000-000000000001",
+                    "name": "writer-1",
+                    "generation": 1
+                  },
+                  "to": {
+                    "name": "lead",
+                    "generation": 1
+                  },
+                  "provenance": {
+                    "principal": {
+                      "issuer": "api",
+                      "tenant": "acme",
+                      "subject": "alice"
+                    },
+                    "root_request": {
+                      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+                      "event_id": "0192e001-0000-7000-8000-000000000002"
+                    },
+                    "via": []
+                  },
+                  "causal": {
+                    "thread_id": "0192a000-0000-7000-8000-0000000000b4",
+                    "event_id": "0192e001-0000-7000-8000-00000000000e"
+                  },
+                  "monitor_id": "0192b000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000010:task",
+                  "result": {
+                    "member": {
+                      "tenant": "acme",
+                      "team": "0192c000-0000-7000-8000-000000000001",
+                      "name": "writer-1",
+                      "generation": 1
+                    },
+                    "status": "failed",
+                    "error": {
+                      "code": "pin_unavailable",
+                      "message": "rebind failed: pin_unavailable"
+                    }
+                  }
+                },
+                "created_at": 1790000100000,
+                "state": "pending",
+                "consumed_seq": null
+              }
+            ]
+          },
+          "asks": {
+            "update": [
+              {
+                "ask_id": "0192b000-0000-7000-8000-0000000000b4:c1",
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "asker_branch_id": "0192b000-0000-7000-8000-0000000000b4",
+                "recipient_name": "researcher-1",
+                "recipient_generation": 1,
+                "deadline": 1790000220000,
+                "state": "cancelled",
+                "closed_seq": 13
+              }
+            ]
+          },
+          "monitors": {
+            "delete": [
+              {
+                "monitor_id": "0192b000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000010:task"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
       "name": "end-lead-closes-team",
       "section": "4.11",
       "description": "The lead's model fails: its member_ended sets teams.closed_at, and the same append sends one cancel to each live member (running researcher-1, running writer-1), in name order, with the lead's run as provenance.",
@@ -13329,6 +13489,91 @@
           "57b4bd27aebba90f",
           "b62c5887c5cfdadf",
           "b23334b33343f058",
+          "b7fe67a5dfaf793b",
+          "0d46e73f0b478ebd"
+        ],
+        "asks": [
+          "563ed69f596f1f87"
+        ],
+        "monitors": [
+          "4fb5f5c494c1989d",
+          "43955ff949eee316"
+        ],
+        "operator_receipts": [],
+        "pending_wakes": []
+      }
+    },
+    "end-asker-closes-its-open-asks": {
+      "logs": {
+        "lead": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+          "events": [
+            "f346836cf1927571",
+            "e3518c871880ffe0",
+            "9e120c269dc664f2",
+            "6f4d3ff5801c17e1",
+            "abc74c7e3567009a",
+            "7fbdae9c221f3bee",
+            "151a4f8f9c661b0d",
+            "56567842a679da60",
+            "4dfca82f329ea2dd",
+            "a65ae8dcfcb8d3d2",
+            "2fda6b6434ebfddd",
+            "31e76a53a5bf34b3",
+            "5926607b34183bba",
+            "3014a1285fd0bb5e",
+            "5855141aaeb609d5",
+            "d17c16c52cd8c72a",
+            "039bb2a624f74184",
+            "c5ff2f6880b363ab"
+          ]
+        },
+        "researcher": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+          "events": [
+            "078150a0494371bf",
+            "3413706c8e1ed539"
+          ]
+        },
+        "team": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+          "events": [
+            "7b29896169d9dfe8"
+          ]
+        },
+        "writer": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b4",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+          "events": [
+            "0101069122e21709",
+            "f67059d5938379f0",
+            "87a60a739a691d27",
+            "eb0ee58a11bacbc2",
+            "a0503e3e542447ed",
+            "53f18e0382775d64",
+            "d56824b3a57edb8b",
+            "fa42febbec5b883c",
+            "2385da19fc12bbc9",
+            "d1bce3fdd9279856",
+            "a566baa3abfeaaf1"
+          ]
+        }
+      },
+      "rows": {
+        "teams": [
+          "00e61f342e72d6ae"
+        ],
+        "team_members": [
+          "7dafa2f438d8de25",
+          "380890775b159143",
+          "093c3ffba4466824"
+        ],
+        "mail": [
+          "57b4bd27aebba90f",
+          "b62c5887c5cfdadf",
           "b7fe67a5dfaf793b",
           "0d46e73f0b478ebd"
         ],
@@ -20876,6 +21121,27 @@
           "output_tokens": 20
         },
         "completeness": "complete"
+      }
+    },
+    "a566baa3abfeaaf1": {
+      "seq": 11,
+      "event_id": "0192e001-0000-7000-8000-00000000000b",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b4",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+      "epoch": 1,
+      "type": "tool_result",
+      "type_version": 1,
+      "time": 1790000011000,
+      "actor": {
+        "kind": "host"
+      },
+      "critical": true,
+      "data": {
+        "call_id": "c1",
+        "completeness": "complete",
+        "is_error": true,
+        "origin": "not_executed",
+        "preview": "not executed: rebind failed: pin_unavailable"
       }
     },
     "a59c4bd3d7270d50": {

@@ -110,6 +110,7 @@ def life_vectors() -> list[Vec]:
             },
         )
     )
+    out.append(_asker_ends())
     w = running(writer=True)
     w.logs["lead"].model_request()
     out.append(
@@ -128,6 +129,43 @@ def life_vectors() -> list[Vec]:
         )
     )
     return [*out, _ended_lead_refuses(), *_team_log_vectors()]
+
+
+def _asker_ends() -> Vec:
+    """The writer asked, then its rebind failed while it waited: its pending ask call closed
+    not_executed, and its end closes the ask it sent."""
+    w = running(writer=True)
+    dispatch(w, "writer", "ask", {"to": "researcher-1", "question": "Which topic?"}, "c1")
+    closed: Obj = {
+        "call_id": "c1",
+        "completeness": "complete",
+        "is_error": True,
+        "origin": "not_executed",
+        "preview": "not executed: rebind failed: pin_unavailable",
+    }
+    w.logs["writer"].add("tool_result", closed)
+    code = "pin_unavailable"
+    failed: Obj = {
+        "reason": "error",
+        "code": code,
+        "result": {
+            "status": "failed",
+            "error": {"code": code, "message": f"rebind failed: {code}"},
+        },
+    }
+    return Vec(
+        "end-asker-closes-its-open-asks",
+        "4.11",
+        "The writer ends while its ask to researcher-1 is open: the same append closes the ask "
+        "cancelled before member_ended, so no ask row outlives its asker; a later reply is "
+        "refused ask_closed.",
+        w,
+        "end",
+        "writer",
+        failed,
+        {"status": "ended"},
+        {"writer": ["turn_completed", "ask_closed", "member_ended", S]},
+    )
 
 
 def _operator_started() -> World:
