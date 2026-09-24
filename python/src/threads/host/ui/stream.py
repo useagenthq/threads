@@ -16,6 +16,7 @@ from threads.host.ui.closing import ending
 from threads.host.ui.frame import Frame
 from threads.host.ui.listener import LiveListener
 from threads.host.ui.session import SessionPlan, UiSession
+from threads.reduce.fold import loop_parked
 from threads.result import Ok
 from threads.store import VerifiedLog
 from threads.thread.handle import Thread
@@ -73,7 +74,7 @@ def _outcome(
     start = run_start(events, plan.run_id)
     if start is None:
         return None
-    return logged(events, start, read.fold.parked, thread) or unlogged(runner, thread.branch)
+    return logged(events, start, loop_parked(read.fold), thread) or unlogged(runner, thread.branch)
 
 
 async def _read(thread: Thread) -> VerifiedLog | None:

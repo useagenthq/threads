@@ -2,6 +2,7 @@ import {
   type BranchId,
   type KnownEvent,
   knownEvents,
+  loopParked,
   openStore,
   type ParkAddress,
   type ThreadId,
@@ -90,7 +91,7 @@ async function runLog(
     read: () => {
       const r = log.read(plan.thread.branch);
       return r.ok
-        ? { events: knownEvents(r.value), parked: r.value.fold.parked }
+        ? { events: knownEvents(r.value), parked: loopParked(r.value.fold) }
         : undefined;
     },
     outcome: (read) =>

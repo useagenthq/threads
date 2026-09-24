@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Final
 
 from threads.agents.store import now_ms, open_store
 from threads.log import Event, ParkAddress, Principal, ThreadId
+from threads.reduce.fold import loop_parked
 from threads.result import Err, Ok
 from threads.thread.handle import Thread
 
@@ -56,4 +57,4 @@ async def read_log(thread: Thread) -> UiLog | None:
     read = await (await open_store(thread.store)).read(thread.branch, now_ms())
     if not isinstance(read, Ok):
         return None
-    return UiLog(thread, read.value.fold.events, read.value.fold.parked)
+    return UiLog(thread, read.value.fold.events, loop_parked(read.value.fold))

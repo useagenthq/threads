@@ -71,14 +71,17 @@ async def start_ui_run(
     found = await find_ui_run(runner, agent, principal, thread_id, message)
     if found is not None:
         return found
-    wanted = runner.bound_to(agent)
+    # The signed-in caller can answer this run's questions: ask_user is offered.
+    wanted = runner.bound_to(agent, answerer=True)
     store = runner.store(principal.tenant)
     now = now_ms()
     branch = await (await open_store(store)).root_or_create(thread_id, BranchId(uuid7(now)), now)
     bound = await runner.bound(store, thread_id)
-    if bound is not None and bound.definition is not wanted.definition:
+    plain = runner.bound_to(agent).definition
+    if bound is not None and all(bound.definition is not d for d in (wanted.definition, plain)):
         why = f"this chat's thread does not run agent {agent}"
         return Err(ParseError("invalid_request", why))
+    wanted = wanted if bound is None else bound
     body = receipts.ui_body_hash(wanted.definition.name, message.text)
     key = receipts.Key(
         principal.tenant,

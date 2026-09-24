@@ -2,6 +2,7 @@ import { openThread, type Thread } from "@threads/core";
 import {
   type KnownEvent,
   knownEvents,
+  loopParked,
   type ParkAddress,
   storeConnection,
   type ThreadId,
@@ -66,7 +67,7 @@ export async function readLog(
   return {
     thread,
     events: knownEvents(read.value),
-    parked: read.value.fold.parked,
+    parked: loopParked(read.value.fold),
   };
 }
 

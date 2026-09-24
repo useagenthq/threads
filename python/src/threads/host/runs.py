@@ -15,18 +15,17 @@ from weakref import WeakKeyDictionary
 from threads.agents.agent import Agent
 from threads.agents.definition import Definition
 from threads.agents.intake import Intake
-from threads.agents.results import EventItem, Failed, RunResult, StreamEvent
+from threads.agents.results import Failed, RunResult
 from threads.agents.run import Input, RunOptions, execute
 from threads.agents.store import Store, open_store, scoped
 from threads.host.channel import ChannelAdapter
 from threads.host.deliver import deliver, undelivered
+from threads.host.emit import Emit
 from threads.host.send import Conversation, SendServer
 from threads.host.ui.hub import LiveHub
-from threads.host.ui.live import Delta
 from threads.log import (
     BranchId,
     Budget,
-    EventId,
     HandoffEvent,
     Permissions,
     Principal,
@@ -206,7 +205,7 @@ class Runner:
             options["budget"] = budget
         how = bound.intake(intake, thread.store)
         branch = thread.branch
-        emit = _Emit(self, thread, self.tenant_of(thread.store) or "")
+        emit = Emit(self, thread, self.tenant_of(thread.store) or "")
         run = execute(bound.definition, input, options, None, emit, None, how, on_delta=emit.delta)
         task = asyncio.get_running_loop().create_task(run)
         if self._stopping or (since is not None and since != self._generation):
@@ -367,23 +366,6 @@ class Runner:
             for task in tasks:
                 task.cancel()
             await asyncio.wait(tasks)
-
-
-@dataclass(frozen=True, slots=True)
-class _Emit:
-    """A run's appends wake its branch's subscribers and thread's live hub; deltas go there."""
-
-    runner: Runner
-    thread: Thread
-    tenant: str
-
-    def __call__(self, item: StreamEvent) -> None:
-        if isinstance(item, EventItem):
-            self.runner.hub.appended(self.tenant, self.thread.id, item.event)
-        self.runner.wake(self.thread.branch)
-
-    def delta(self, request: EventId, part: int, text: str) -> None:
-        self.runner.hub.delta(self.tenant, self.thread.id, Delta(request, part, text))
 
 
 async def _pinned(sq: SqliteStore, thread_id: ThreadId) -> tuple[str, bool] | None:
