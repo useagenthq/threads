@@ -225,7 +225,7 @@ export function host(options: HostOptions): Host {
             // Each step runs even when an earlier one fails: a broken schedule never holds up
             // reply recovery or the inbox sweep.
             await isolated("schedule tick", () =>
-              tick(ctx, bound, startedAt, Date.now()),
+              tick(ctx, bound, startedAt, Date.now(), recovery),
             );
             await isolated("reply recovery", recoverReplies);
             await isolated("inbox sweep", sweep);

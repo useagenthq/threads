@@ -2,6 +2,7 @@ import { storeConnection } from "@threads/core/host";
 import type { HostContext } from "../context";
 import { occurrences } from "../cron";
 import { isolated } from "../isolated";
+import { Recovery } from "../recovery";
 import type { Bound } from "./bind";
 import { decideThread } from "./decide";
 import { reserveDue } from "./identity";
@@ -19,12 +20,16 @@ const LOCAL_TENANT = "local";
 /** Enough to see both instances of a fall-back hour, so its second one is never run. */
 const LOOKBACK_MS = 3 * 3_600_000;
 
-/** One scheduler pass at `now`; `startedAt` is when this host became ready. */
+/**
+ * One scheduler pass at `now`; `startedAt` is when this host became ready. `recovery` is the
+ * host's own, so a thread's store-outage backoff carries across ticks.
+ */
 export async function tick(
   ctx: HostContext,
   bound: readonly Bound[],
   startedAt: number,
   now: number,
+  recovery: Recovery = new Recovery(ctx),
   tenant: string = LOCAL_TENANT,
 ): Promise<void> {
   const { db } = await storeConnection(ctx.store);
@@ -51,7 +56,10 @@ export async function tick(
     const main = log.mainBranch(id);
     // ponytail: a run in flight here gets a no-op resume queued behind it each tick; track
     // in-flight branches if ticks ever outpace runs.
-    if (main.ok) void ctx.recover(tenant, { id, branch: main.value });
+    if (main.ok)
+      void isolated(`recovering ${id}`, async () => {
+        await recovery.look(tenant, id, main.value);
+      });
   }
 }
 

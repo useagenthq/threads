@@ -13,6 +13,7 @@ import {
 } from "@threads/core/host";
 import { z } from "zod";
 import { HostContext } from "../src/context";
+import { Recovery } from "../src/recovery";
 import { bindSchedules, type Schedule, tick } from "../src/schedules";
 import { eventsOf, say } from "./kit";
 
@@ -142,7 +143,14 @@ class Replay {
     const ticking = names.map((name) => this.scheduler(name));
     await Promise.all(
       ticking.map((s) =>
-        tick(s.ctx, s.bound, s.startedAt, Date.parse(at), s.tenant),
+        tick(
+          s.ctx,
+          s.bound,
+          s.startedAt,
+          Date.parse(at),
+          new Recovery(s.ctx),
+          s.tenant,
+        ),
       ),
     );
     await Promise.all(ticking.map((s) => s.ctx.idle()));
@@ -182,7 +190,7 @@ class Replay {
     const last = this.last;
     if (how === "crash" || held.kind === "outbound") return;
     if (last === undefined) throw new Error("no run to finish");
-    await last.ctx.recover("local", { id: held.thread, branch: held.branch });
+    await new Recovery(last.ctx).look("local", held.thread, held.branch);
     await last.ctx.idle();
   }
 
