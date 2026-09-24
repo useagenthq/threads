@@ -33,14 +33,28 @@ export type Exporter = {
   readonly sync: () => Promise<Result<SyncReport, SyncError>>;
 };
 
-const BOUND = new WeakMap<Exporter, Store>();
+/** What a host gives its exporter: its store, and the signal its stop() aborts. */
+export type TelemetryBinding = {
+  readonly store: Store;
+  readonly signal: AbortSignal;
+};
 
-/** host({store, telemetry}): an exporter made without a store exports the host's. */
-export function bindTelemetry(exporter: Exporter, store: Store): void {
-  BOUND.set(exporter, store);
+const BOUND = new WeakMap<Exporter, TelemetryBinding>();
+
+/**
+ * host({store, telemetry}): an exporter made without a store exports the host's, and once the
+ * host's stop() aborts `signal` it sends nothing more and moves no cursor.
+ */
+export function bindTelemetry(
+  exporter: Exporter,
+  binding: TelemetryBinding,
+): void {
+  BOUND.set(exporter, binding);
 }
 
-/** The store a host bound the exporter to, if any. */
-export function boundStore(exporter: Exporter): Store | undefined {
+/** What a host bound the exporter to, if anything. */
+export function telemetryBinding(
+  exporter: Exporter,
+): TelemetryBinding | undefined {
   return BOUND.get(exporter);
 }

@@ -4,7 +4,7 @@ description: "A telemetry exporter (otel())."
 icon: "Plug"
 ---
 
-A host with telemetry calls sync() every second and once more, bounded by 5 s, on stop(); runs never wait on it.
+A host with telemetry calls sync() every second and once more, bounded by 5 s, on stop(); a slow or unreachable collector never holds up a run, and nothing of it runs after stop() returns.
 
 <Callout>A protocol: adapters implement it.</Callout>
 

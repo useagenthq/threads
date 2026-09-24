@@ -89,6 +89,20 @@ describe("Exporter.sync", () => {
     expect(await cursors(store)).toEqual({});
   });
 
+  test("errors name the endpoint without its userinfo or query string", async () => {
+    c = collector();
+    const store = sqlite(":memory:");
+    await looping(1).run("Hi.", { store });
+    const url = "http://user:pa55word@127.0.0.1:1/v1/traces?api_key=SEKRET123";
+    const sent = await exporter(store, url).sync();
+    if (sent.ok) throw new Error("expected collector_unavailable");
+    expect(sent.error.message).toContain(
+      "http://127.0.0.1:1/v1/traces is unavailable",
+    );
+    expect(sent.error.message).not.toContain("SEKRET123");
+    expect(sent.error.message).not.toContain("pa55word");
+  });
+
   test("a 400 is collector_rejected with its status and the start of its body", async () => {
     c = collector();
     const store = sqlite(":memory:");
@@ -186,6 +200,32 @@ describe("Exporter.sync", () => {
     await unwrapped(otel({ store, endpoint: c.url, content: true }));
     const text = c.received.map((r) => r.text).join("");
     expect(text).toContain("gen_ai.tool.call.arguments");
+    expect(text).not.toContain(key);
+  });
+
+  test("a secret split across two text parts is never joined back together", async () => {
+    c = collector();
+    const key = credential("fake", "apiKey", "sk-otel-lane23-split", "U")();
+    const store = sqlite(":memory:");
+    const halves = [key.slice(0, 8), key.slice(8)];
+    const bot = agent({
+      model: scriptedModel({
+        responses: [
+          {
+            content: halves.map((text) => ({ type: "text", text })),
+            stop_reason: "end_turn",
+            usage: { input_tokens: 1, output_tokens: 1 },
+          },
+        ],
+      }),
+    });
+    await bot.run("Hi.", { store });
+    await unwrapped(otel({ store, endpoint: c.url, content: true }));
+    const text = c.received.map((r) => r.text).join("");
+    expect(text).toContain("threads.model.output_text");
+    expect(text).toContain(
+      `{"arrayValue":{"values":[{"stringValue":"${halves[0]}"},{"stringValue":"${halves[1]}"}]}}`,
+    );
     expect(text).not.toContain(key);
   });
 

@@ -94,10 +94,10 @@ def usage_attrs(u: Usage) -> Attrs:
 def response_attrs(
     response: ModelResponseEvent | ModelResponseRecoveredEvent, content: bool
 ) -> Attrs:
+    # Each part as it was logged: redaction is per string, so joining parts could re-form a
+    # secret split across two of them.
     text = (
-        "".join(p.text for p in response.data.content if isinstance(p, TextPart))
-        if content
-        else None
+        tuple(p.text for p in response.data.content if isinstance(p, TextPart)) if content else None
     )
     return {
         "gen_ai.response.finish_reasons": (response.data.stop_reason,),

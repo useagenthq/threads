@@ -52,6 +52,8 @@ class Context:
     trace_id: str
     parent_span_id: str | None
     parent_missing: bool = False
+    run_id: str | None = None
+    """The user_input that opened the run, when a user_input opened it."""
 
 
 @dataclass(slots=True)

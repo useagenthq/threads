@@ -103,7 +103,7 @@ Every span: `threads.tenant`, `threads.thread_id`, `threads.branch_id` (the expo
 
 | Span | Attributes |
 |---|---|
-| turn | `gen_ai.operation.name = invoke_agent`, `gen_ai.agent.name`, `gen_ai.conversation.id` (the thread id); `threads.run_id` (the latest `user_input` at or before the opener, when there is one), `threads.turn.reason` (from `turn_completed`), `threads.parked`, `threads.parent_missing`. Status ERROR, message the reason, for every reason but `end_turn`, `cancelled`, `handoff` and `input_denied`. |
+| turn | `gen_ai.operation.name = invoke_agent`, `gen_ai.agent.name`, `gen_ai.conversation.id` (the thread id); `threads.run_id` (the `user_input` that opened the turn, or the turn it resumes; absent for a turn a `woken` or `message_received` opened), `threads.turn.reason` (from `turn_completed`), `threads.parked`, `threads.parent_missing`. Status ERROR, message the reason, for every reason but `end_turn`, `cancelled`, `handoff` and `input_denied`. |
 | model call | `gen_ai.operation.name = chat`, `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.response.finish_reasons = [stop_reason]`, the usage below; `threads.model.attempt`, `threads.model.purpose` (`turn` or `compaction`). An abandoned attempt: status ERROR with its `reason` as message and `error.type`. |
 | tool call, continuation | `gen_ai.operation.name = execute_tool`, `gen_ai.tool.name`, `gen_ai.tool.call.id`, `gen_ai.tool.type = function`; `threads.tool.effect_class` (from the latest pinned tool set, when the tool is in it), `threads.resumed` (continuations). `is_error`: status ERROR with the result's `origin` as message. |
 
@@ -121,8 +121,9 @@ also exported on its own: `gen_ai.usage.cache_read.input_tokens`,
 **Content** is off by default. With `content: true`: tool and continuation spans get
 `gen_ai.tool.call.arguments` (the input's canonical JSON) and, when closed by a result,
 `gen_ai.tool.call.result` (its `preview`); model spans closed by a response get
-`threads.model.output_text` (its text parts, joined with nothing). These are the logged, already
-redacted bytes. Prompts are never exported.
+`threads.model.output_text` (its text parts, as a string array, one element per part: never
+joined, since redaction applies per logged string and a join could re-form a secret split across
+two parts). These are the logged, already redacted bytes. Prompts are never exported.
 
 **Timestamps** are the opening and closing events' `time` × 10⁶ ns. An end before its start (a
 clock step between processes) becomes the start, with `threads.clock_skew`.

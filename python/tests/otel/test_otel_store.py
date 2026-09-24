@@ -11,6 +11,7 @@ from otel_collector_kit import Collector, collector
 from otel_store_kit import CASES, cursors, imported, losses, query
 
 from threads import sqlite
+from threads._generated.store_sql import STORE_VERSION
 from threads.agents.store import Store, open_store
 from threads.log import BranchId, ThreadId
 from threads.log.digest import sha256_hex
@@ -190,7 +191,7 @@ def test_no_registered_observer_records_no_loss(tmp_path: Path) -> None:
 
 def test_older_stores_are_refused(tmp_path: Path) -> None:
     async def main() -> None:
-        for version in (5, 6):
+        for version in range(1, STORE_VERSION):
             path = tmp_path / f"v{version}.db"
             conn = sqlite3.connect(path)
             conn.execute("CREATE TABLE t (x)")

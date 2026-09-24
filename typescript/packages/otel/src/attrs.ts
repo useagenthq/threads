@@ -92,10 +92,10 @@ export function responseAttrs(
   response: EventOf<"model_response"> | EventOf<"model_response_recovered">,
   content: boolean,
 ): Attrs {
+  // Each part as it was logged: redaction is per string, so joining parts could re-form a
+  // secret split across two of them.
   const text = content
-    ? response.data.content
-        .flatMap((p) => (p.type === "text" ? [p.text] : []))
-        .join("")
+    ? response.data.content.flatMap((p) => (p.type === "text" ? [p.text] : []))
     : undefined;
   return {
     "gen_ai.response.finish_reasons": [response.data.stop_reason],

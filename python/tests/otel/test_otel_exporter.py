@@ -4,17 +4,21 @@ least once across a crash, nothing moved when the collector fails."""
 import asyncio
 import gzip
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from otel_collector_kit import collector
 from otel_store_kit import cursors, looping
 
-from threads import Completed, ConfigError, sqlite
+from threads import Completed, ConfigError, agent, scripted_model, sqlite
 from threads.agents.store import open_store
 from threads.otel import otel
 from threads.redaction import register
 from threads.result import Err, Ok
 from threads.telemetry import Exporter, SyncReport
+
+if TYPE_CHECKING:
+    from pydantic import JsonValue
 
 
 async def _synced(exporter: Exporter) -> SyncReport:
@@ -138,6 +142,44 @@ def test_content_is_off_by_default_and_a_secret_never_leaves(tmp_path: Path) -> 
             assert b"threads.model.output_text" not in off.body
             assert b"gen_ai.tool.call.arguments" in on.body
             assert secret.encode() not in off.body + on.body
+
+    asyncio.run(main())
+
+
+def test_a_secret_split_across_text_parts_is_never_joined(tmp_path: Path) -> None:
+    secret = "sk-live-split-0123456789"  # noqa: S105 - a test value
+    halves = [secret[:8], secret[8:]]
+
+    async def main() -> None:
+        async with collector() as c:
+            register(secret, "API_KEY")
+            store = sqlite(str(tmp_path / "s"))
+            reply: JsonValue = {
+                "content": [{"type": "text", "text": h} for h in halves],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            }
+            bot = agent(model=scripted_model({"responses": [reply]}))
+            assert isinstance(await bot.run("go", store=store), Completed)
+            await _synced(otel(store=store, endpoint=c.url, content=True))
+            body = b"".join(r.body for r in c.received)
+            values = ",".join(f'{{"stringValue":"{h}"}}' for h in halves)
+            assert f'{{"arrayValue":{{"values":[{values}]}}}}'.encode() in body
+            assert secret.encode() not in body
+
+    asyncio.run(main())
+
+
+def test_errors_name_the_endpoint_without_its_credentials(tmp_path: Path) -> None:
+    async def main() -> None:
+        store = sqlite(str(tmp_path / "s"))
+        assert isinstance(await looping(1).run("go", store=store), Completed)
+        url = "http://user:pa55word@127.0.0.1:9/v1/traces?api_key=SEKRET123"
+        refused = await otel(store=store, endpoint=url).sync()
+        assert isinstance(refused, Err)
+        assert "http://127.0.0.1:9/v1/traces is unavailable" in refused.error.message
+        assert "SEKRET123" not in refused.error.message
+        assert "pa55word" not in refused.error.message
 
     asyncio.run(main())
 

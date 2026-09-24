@@ -98,6 +98,9 @@ class OtelExporter:
             self._backoff.cleared(branch.branch_id)
             chains[branch.branch_id] = read.value
             ready.append(await self._fresh(feed, branch, read.value, chains))
+            # Deriving a long chain is CPU work on the loop: let the host's other work run
+            # between branches.
+            await asyncio.sleep(0)
         return ready
 
     async def _fresh(

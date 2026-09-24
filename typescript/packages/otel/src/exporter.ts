@@ -9,10 +9,10 @@ import {
 } from "@threads/core";
 import { err, ok, type Result } from "@threads/core/host";
 import {
-  boundStore,
   type ChainEvent,
   type ChangedBranch,
   Feed,
+  telemetryBinding,
 } from "@threads/core/internal/feed";
 import { Backoff } from "./backoff";
 import type { Config } from "./env";
@@ -54,13 +54,18 @@ export class OtelExporter implements Exporter {
 
   /** One sync at a time: a second call waits for the first. */
   sync(): Promise<Result<SyncReport, SyncError>> {
-    const run = this.#queue.then(() => this.#sync());
-    this.#queue = run.catch(() => undefined);
+    const run = (async (): Promise<Result<SyncReport, SyncError>> => {
+      await this.#queue;
+      return await this.#sync();
+    })();
+    this.#queue = settled(run);
     return run;
   }
 
   async #sync(): Promise<Result<SyncReport, SyncError>> {
-    const store = this.#store ?? boundStore(this);
+    const binding = telemetryBinding(this);
+    const signal = binding?.signal;
+    const store = this.#store ?? binding?.store;
     if (store === undefined)
       throw new ConfigError(
         "invalid_config",
@@ -74,25 +79,31 @@ export class OtelExporter implements Exporter {
         `the store's branch rows are corrupt: ${changed.error.message}`,
       );
     const skipped: SkippedBranch[] = [];
-    const ready = this.#read(feed, changed.value, skipped);
+    const ready = await this.#read(feed, changed.value, skipped, signal);
+    if (signal?.aborted) return err(stopped());
     feed.checkpoint(
       ready
         .filter((r) => r.spans.length === 0)
         .map((r) => ({ branch_id: r.branch.branch_id, seq: r.head })),
     );
-    const sent = await this.#send(feed, ready);
+    const sent = await this.#send(feed, ready, signal);
     if (!sent.ok) return sent;
-    const lost = await this.#losses(feed);
+    const lost = await this.#losses(feed, signal);
     if (!lost.ok) return lost;
     return ok({ spans: sent.value, possiblyLostEvents: lost.value, skipped });
   }
 
-  /** Each changed branch's chain and newly closed spans; one that doesn't read is skipped. */
-  #read(
+  /**
+   * Each changed branch's chain and newly closed spans; one that doesn't read is skipped. It
+   * yields to the event loop after each branch, so re-deriving many long threads never holds
+   * the host's other work for more than one branch at a time.
+   */
+  async #read(
     feed: Feed,
     changed: readonly ChangedBranch[],
     skipped: SkippedBranch[],
-  ): Ready[] {
+    signal: AbortSignal | undefined,
+  ): Promise<Ready[]> {
     const chains = new Map<string, readonly ChainEvent[] | undefined>();
     const lookup = (id: string): readonly ChainEvent[] | undefined => {
       if (!chains.has(id)) {
@@ -104,6 +115,8 @@ export class OtelExporter implements Exporter {
     const ready: Ready[] = [];
     const now = Date.now();
     for (const branch of changed) {
+      await nextTask();
+      if (signal?.aborted) break;
       if (this.#backoff.waiting(branch.branch_id, branch.head_seq, now))
         continue;
       const read = feed.chain(branch.branch_id);
@@ -137,6 +150,7 @@ export class OtelExporter implements Exporter {
   async #send(
     feed: Feed,
     ready: readonly Ready[],
+    signal: AbortSignal | undefined,
   ): Promise<Result<number, SyncError>> {
     const byId = new Map<string, Ready>(
       ready.map((r) => [r.branch.branch_id, r]),
@@ -149,8 +163,11 @@ export class OtelExporter implements Exporter {
       const posted = await post(
         this.#config,
         body(batch, this.#config.resource, VERSION),
+        signal,
       );
       if (!posted.ok) return err(posted.error);
+      // Stopped after the 2xx: the cursor stays, so these are sent again (never lost).
+      if (signal?.aborted) return err(stopped());
       sent += batch.length;
       const through = new Map<string, number>();
       for (const s of batch) {
@@ -177,7 +194,10 @@ export class OtelExporter implements Exporter {
   }
 
   /** The unreported deletion losses, as possibly_lost spans after the branch batches. */
-  async #losses(feed: Feed): Promise<Result<number, SyncError>> {
+  async #losses(
+    feed: Feed,
+    signal: AbortSignal | undefined,
+  ): Promise<Result<number, SyncError>> {
     const rows = feed.unreportedLosses();
     if (!rows.ok)
       throw new Error(
@@ -189,11 +209,37 @@ export class OtelExporter implements Exporter {
       const posted = await post(
         this.#config,
         body(lossSpans(this.#observer, chunk), this.#config.resource, VERSION),
+        signal,
       );
       if (!posted.ok) return err(posted.error);
+      if (signal?.aborted) return err(stopped());
       feed.markReported(chunk);
       lost += chunk.reduce((n, r) => n + r.unchecked_events, 0);
     }
     return ok(lost);
+  }
+}
+
+function stopped(): SyncError {
+  return {
+    code: "collector_unavailable",
+    message:
+      "the host stopped: nothing more is sent, and the next start sends it again",
+  };
+}
+
+/** A macrotask turn: timers, I/O and other work run before the next branch is read. */
+function nextTask(): Promise<void> {
+  const next = Promise.withResolvers<void>();
+  setTimeout(next.resolve, 0);
+  return next.promise;
+}
+
+/** Waits for `work` to end, whatever its outcome, so the next sync runs after it. */
+async function settled(work: Promise<unknown>): Promise<void> {
+  try {
+    await work;
+  } catch {
+    // The caller of that sync sees its error.
   }
 }

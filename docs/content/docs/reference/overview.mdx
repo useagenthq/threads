@@ -19,6 +19,7 @@ say so.
 
 | Package | TypeScript | Python |
 |---|---|---|
+| otel | `@threads/otel` | `threads.otel` |
 | core | `@threads/core` | `threads` |
 | host | `@threads/host` | `threads.host` |
 | mcp | `@threads/mcp` | `threads.mcp` |
@@ -59,6 +60,7 @@ A provider factory connects an agent to an outside service and returns one of th
 
 | TypeScript | Python | What it does |
 |---|---|---|
+| [`otel`](/docs/reference/functions/otel) | `otel` | An Exporter that sends each span of every thread in the store once, when it closes, to an OpenTelemetry collector over OTLP/HTTP JSON. |
 | [`supermemory`](/docs/reference/functions/supermemory) | `supermemory` | A MemoryProvider that stores records in Supermemory. |
 | [`zep`](/docs/reference/functions/zep) | `zep` | A MemoryProvider that stores records in Zep. |
 | [`anthropic`](/docs/reference/functions/anthropic) | `anthropic` | A Claude model through the Messages API. |
@@ -95,7 +97,7 @@ These providers exist but are not in the reference yet; their guides describe th
 
 **Channel adapters:** [`ChannelAdapter`](/docs/reference/types/ChannelAdapter), [`ChannelCapabilities`](/docs/reference/types/ChannelCapabilities), [`RawRequest`](/docs/reference/types/RawRequest), [`RawResponse`](/docs/reference/types/RawResponse), [`VerifiedDelivery`](/docs/reference/types/VerifiedDelivery), [`Inbound`](/docs/reference/types/Inbound), [`DeliveryOutcome`](/docs/reference/types/DeliveryOutcome)
 
-**Other types:** [`TeamAgent`](/docs/reference/types/TeamAgent), [`TeamRunResult`](/docs/reference/types/TeamRunResult), [`TeamRunStream`](/docs/reference/types/TeamRunStream), [`Principal`](/docs/reference/types/Principal), [`TeamRef`](/docs/reference/types/TeamRef), [`MemberRef`](/docs/reference/types/MemberRef), [`StartRefusal`](/docs/reference/types/StartRefusal), [`SendRefusal`](/docs/reference/types/SendRefusal), [`StartResult`](/docs/reference/types/StartResult), [`SendResult`](/docs/reference/types/SendResult)
+**Other types:** [`Exporter`](/docs/reference/types/Exporter), [`SyncReport`](/docs/reference/types/SyncReport), [`SkippedBranch`](/docs/reference/types/SkippedBranch), [`TeamAgent`](/docs/reference/types/TeamAgent), [`TeamRunResult`](/docs/reference/types/TeamRunResult), [`TeamRunStream`](/docs/reference/types/TeamRunStream), [`Principal`](/docs/reference/types/Principal), [`TeamRef`](/docs/reference/types/TeamRef), [`MemberRef`](/docs/reference/types/MemberRef), [`StartRefusal`](/docs/reference/types/StartRefusal), [`SendRefusal`](/docs/reference/types/SendRefusal), [`StartResult`](/docs/reference/types/StartResult), [`SendResult`](/docs/reference/types/SendResult)
 
 ## HTTP API
 

@@ -465,7 +465,7 @@ CREATE TABLE IF NOT EXISTS pending_wakes (
   PRIMARY KEY (branch_id, child_thread_id)
 ) STRICT;
 
--- Telemetry exporters (spec/otel/README.md; store version 7). An exporter registers itself here
+-- Telemetry exporters (spec/otel/README.md; store version 6). An exporter registers itself here
 -- on its first sync, so a deletion knows whose unsent spans it may drop.
 CREATE TABLE IF NOT EXISTS observers (
   name TEXT PRIMARY KEY,
@@ -493,6 +493,5 @@ CREATE INDEX IF NOT EXISTS observer_losses_unreported
 -- Version 4: the team tables and pending_wakes. Version 5: lane 14C's schedule_threads,
 -- tenant-scoped schedule_occurrences with pending and retired rows, and questions (planned as
 -- version 2; the team tables took 4 first, so a version-4 store has the older schedule layout and
--- is refused). Version 6 is claimed by lane 16C's snapshot_receipts, in flight. Version 7: lane
--- 23's observers and observer_losses. If 16C merges after this, it takes 8.
-PRAGMA user_version = 7;
+-- is refused). Version 6: lane 23's observers and observer_losses.
+PRAGMA user_version = 6;

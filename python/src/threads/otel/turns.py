@@ -2,7 +2,7 @@
 bookkeeping of the turn that is open, the one a park closed, and the runs they belong to."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from pydantic.experimental.missing_sentinel import MISSING
 
@@ -42,7 +42,6 @@ class Turns:
         self.call_contexts: dict[str, Context] = {}
         """Each call's turn context, for a woken turn that its late result opens."""
         self._late_calls: dict[str, str] = {}
-        self._last_input: str | None = None
         self._started: ThreadStartedEvent | None = None
         self._turns = 0
 
@@ -50,8 +49,6 @@ class Turns:
         """Bookkeeping every event feeds, before any span opens at it."""
         if isinstance(e, ThreadStartedEvent):
             self._started = e
-        elif isinstance(e, UserInputEvent):
-            self._last_input = e.event_id
         elif isinstance(e, ToolResultLateEvent):
             self._late_calls[e.event_id] = e.data.call_id
 
@@ -59,6 +56,9 @@ class Turns:
         """A turn opener's turn, in the trace its rules give."""
         context = self._first() or self._root_of(e)
         self._turns += 1
+        # Only a user_input names its run; a woken or mail turn's run would be a guess.
+        if isinstance(e, UserInputEvent):
+            context = replace(context, run_id=e.event_id)
         return self._start(e, context, ())
 
     def resume(self, e: Event, parked: Turn) -> Turn:
@@ -84,7 +84,7 @@ class Turns:
             self.open.span.events.append(span_event(e, retry_of))
 
     def _start(self, e: Event, context: Context, links: tuple[Link, ...]) -> Turn:
-        attrs = turn_attrs(self.agent, e.thread_id, self._last_input, context.parent_missing)
+        attrs = turn_attrs(self.agent, e.thread_id, context.run_id, context.parent_missing)
         span = OpenSpan(
             Link(context.trace_id, span_id(e.branch_id, e.event_id)),
             context.parent_span_id,

@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import type { Exporter, SyncError, SyncReport } from "@threads/core";
+import {
+  type Exporter,
+  type SyncError,
+  type SyncReport,
+  sqlite,
+} from "@threads/core";
 import { BranchId, err, ok, type Result, ThreadId } from "@threads/core/host";
 import { Telemetry } from "../src/telemetry";
 
@@ -83,7 +88,7 @@ describe("host telemetry", () => {
       skipped(4),
       skipped(6),
     ]);
-    const t = new Telemetry(s.exporter, FAST);
+    const t = new Telemetry(s.exporter, sqlite(":memory:"), FAST);
     t.start();
     await until(() => s.calls() >= 7);
     await t.stop();
@@ -99,7 +104,7 @@ describe("host telemetry", () => {
       ok({ spans: 1, possiblyLostEvents: 0, skipped: [] }),
       down,
     ]);
-    const t = new Telemetry(s.exporter, FAST);
+    const t = new Telemetry(s.exporter, sqlite(":memory:"), FAST);
     t.start();
     await until(() => s.calls() >= 6);
     await t.stop();
@@ -111,10 +116,14 @@ describe("host telemetry", () => {
   test("stop() runs one last sync, bounded", async () => {
     capture();
     const s = scripted([]);
-    const t = new Telemetry(s.exporter, FAST);
+    const t = new Telemetry(s.exporter, sqlite(":memory:"), FAST);
     await t.stop();
     expect(s.calls()).toBe(1);
-    const hung = new Telemetry({ sync: () => new Promise(() => {}) }, FAST);
+    const hung = new Telemetry(
+      { sync: () => new Promise(() => {}) },
+      sqlite(":memory:"),
+      FAST,
+    );
     const started = Date.now();
     await hung.stop();
     expect(Date.now() - started).toBeLessThan(2_000);

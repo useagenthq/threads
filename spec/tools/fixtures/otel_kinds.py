@@ -79,9 +79,9 @@ def chat(ctx: Ctx, shape: Shape, ends: tuple[Obj, Obj], model: Obj | None = None
         attrs |= _usage(obj(c["usage"]))
         if ctx.content:
             parts = [obj(p) for p in arr(c["content"])]
-            attrs["threads.model.output_text"] = "".join(
+            attrs["threads.model.output_text"] = [
                 text(p["text"]) for p in parts if p["type"] == "text"
-            )
+            ]
     elif close["type"] == "model_attempt_abandoned":
         status = text(c["reason"])
         attrs["error.type"] = status

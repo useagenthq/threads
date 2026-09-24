@@ -5,7 +5,6 @@ import {
   type Exporter,
 } from "@threads/core";
 import {
-  bindTelemetry,
   type EventId,
   type Principal,
   type Result,
@@ -117,9 +116,7 @@ export function host(options: HostOptions): Host {
   const telemetry =
     options.telemetry === undefined
       ? undefined
-      : new Telemetry(options.telemetry);
-  if (options.telemetry !== undefined)
-    bindTelemetry(options.telemetry, options.store);
+      : new Telemetry(options.telemetry, options.store);
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking: Promise<void> | undefined;
   let tickWaiters: (() => void)[] = [];

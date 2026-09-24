@@ -2,9 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { sqlite } from "@threads/core";
 import { knownEvents, openStore } from "@threads/core/host";
 import { host } from "@threads/host";
+import { Telemetry } from "../../host/src/telemetry";
 import { otel } from "../src";
 import { accepted, type Collector, collector } from "./collector";
-import { looping } from "./kit";
+import { cursors, looping } from "./kit";
 
 // host({telemetry: otel()}): the host's store is exported on its own timer and once more on
 // stop(); a collector that never answers holds up no run.
@@ -72,6 +73,33 @@ describe("host({telemetry})", () => {
     await bot.run("Hi.", { store });
     await served.stop();
     expect(accepted(c).map((s) => s.name)).toContain("invoke_agent agent");
+  });
+
+  test("stop() aborts the POST in flight: nothing of the exporter runs after it returns", async () => {
+    c = collector();
+    c.answers = Array.from({ length: 10 }, () => "hang" as const);
+    const store = sqlite(":memory:");
+    await looping(1).run("Hi.", { store });
+    const exporter = otel({ endpoint: c.url });
+    const t = new Telemetry(exporter, store, {
+      everyMs: 5,
+      maxWaitMs: 40,
+      lastSyncMs: 200,
+    });
+    t.start();
+    await until(() => c.attempts.length > 0);
+    const started = Date.now();
+    await t.stop();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    // Its queue is free at once: nothing is still waiting on the hung collector.
+    const after = Date.now();
+    const next = await exporter.sync();
+    expect(Date.now() - after).toBeLessThan(500);
+    expect(next).toMatchObject({
+      ok: false,
+      error: { code: "collector_unavailable" },
+    });
+    expect(await cursors(store)).toEqual({});
   });
 
   test("a collector that never answers holds up no run, and stop() is bounded", async () => {

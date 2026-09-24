@@ -1,4 +1,5 @@
-import type { Exporter, SkippedBranch } from "@threads/core";
+import type { Exporter, SkippedBranch, Store } from "@threads/core";
+import { bindTelemetry } from "@threads/core/host";
 
 // host({telemetry}): the exporter syncs on its own timer, beside the tick and never inside it, so
 // a slow or dead collector holds up no run, schedule or reply. A failing collector is retried
@@ -23,10 +24,13 @@ export class Telemetry {
   #nextAt = 0;
 
   readonly #timing: Timing;
+  /** Aborted by stop(): the exporter's POST in flight ends, and no cursor moves after it. */
+  readonly #stopped = new AbortController();
 
-  constructor(exporter: Exporter, timing: Timing = TIMING) {
+  constructor(exporter: Exporter, store: Store, timing: Timing = TIMING) {
     this.#exporter = exporter;
     this.#timing = timing;
+    bindTelemetry(exporter, { store, signal: this.#stopped.signal });
   }
 
   start(): void {
@@ -38,7 +42,11 @@ export class Telemetry {
     }, this.#timing.everyMs);
   }
 
-  /** stop(): no new tick, then one last sync once the one in flight is done, bounded by 5 s. */
+  /**
+   * stop(): no new tick, then one last sync once the one in flight is done, bounded by 5 s. Then
+   * the exporter is aborted and awaited, so nothing of it runs after stop() returns (an exporter
+   * that ignores the abort is given one more bound, then left).
+   */
   async stop(): Promise<void> {
     clearInterval(this.#timer);
     this.#timer = undefined;
@@ -46,9 +54,15 @@ export class Telemetry {
       await this.#running;
       await this.#sync();
     })();
+    await this.#within(last);
+    this.#stopped.abort();
+    await this.#within(last);
+  }
+
+  async #within(work: Promise<void>): Promise<void> {
     const bound = Promise.withResolvers<void>();
     const timer = setTimeout(bound.resolve, this.#timing.lastSyncMs);
-    await Promise.race([last, bound.promise]);
+    await Promise.race([work, bound.promise]);
     clearTimeout(timer);
   }
 

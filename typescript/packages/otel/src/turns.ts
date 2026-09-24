@@ -11,7 +11,11 @@ export type ParentOf = (
   parent: NonNullable<EventOf<"thread_started">["data"]["parent"]>,
 ) => Link | undefined;
 
-type TurnContext = Context & { readonly parentMissing: boolean };
+type TurnContext = Context & {
+  readonly parentMissing: boolean;
+  /** The user_input that opened the run, when a user_input opened it. */
+  readonly runId: string | undefined;
+};
 
 /** A turn span and the context its resumed turns inherit. */
 export type Turn = { readonly span: OpenSpan; readonly context: TurnContext };
@@ -23,7 +27,6 @@ export class Turns {
   /** Each call's turn context, for a woken turn that its late result opens. */
   readonly callContexts: Map<string, TurnContext> = new Map();
   #lateCalls = new Map<string, string>();
-  #lastInput: string | undefined;
   #started: EventOf<"thread_started"> | undefined;
   #turns = 0;
 
@@ -35,16 +38,17 @@ export class Turns {
   /** Bookkeeping every event feeds, before any span opens at it. */
   see(e: KnownEvent): void {
     if (e.type === "thread_started") this.#started = e;
-    if (e.type === "user_input") this.#lastInput = e.event_id;
     if (e.type === "tool_result_late")
       this.#lateCalls.set(e.event_id, e.data.call_id);
   }
 
   /** A turn opener's turn, in the trace its rules give. */
   begin(e: KnownEvent): Turn {
-    const context = this.#first() ?? this.#rootOf(e);
+    const trace = this.#first() ?? this.#rootOf(e);
     this.#turns += 1;
-    return this.#start(e, context, []);
+    // Only a user_input names its run; a woken or mail turn's run would be a guess.
+    const runId = e.type === "user_input" ? e.event_id : undefined;
+    return this.#start(e, { ...trace, runId }, []);
   }
 
   /** The turn a park interrupted goes on at `e`, in its trace, linked to its span. */
@@ -80,7 +84,7 @@ export class Turns {
     const attrs = turnAttrs(
       this.agent(),
       e.thread_id,
-      this.#lastInput,
+      context.runId,
       context.parentMissing,
     );
     const span = new OpenSpan(
@@ -98,7 +102,7 @@ export class Turns {
   }
 
   /** A child thread's first turn: under the parent's span, or its own root if that is gone. */
-  #first(): TurnContext | undefined {
+  #first(): Omit<TurnContext, "runId"> | undefined {
     const parent = this.#started?.data.parent;
     if (this.#turns > 0 || parent === undefined) return undefined;
     if (parent.relation === "team_member") return undefined;
@@ -111,7 +115,7 @@ export class Turns {
     };
   }
 
-  #rootOf(e: KnownEvent): TurnContext {
+  #rootOf(e: KnownEvent): Omit<TurnContext, "runId"> {
     const missing =
       this.#turns === 0 &&
       this.#started?.data.parent !== undefined &&

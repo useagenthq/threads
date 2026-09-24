@@ -38,7 +38,9 @@ Install the extra: `pip install "threads[otel]"`.
 </Tab>
 </Tabs>
 
-The host sends new spans every second, on their own schedule: a slow or unreachable collector never holds up a run. It retries with back-off and logs once until the collector is back. When the host stops, it sends once more (for at most 5 seconds).
+The host sends new spans every second, on their own schedule: a slow or unreachable collector never holds up a run. It retries with back-off and logs once until the collector is back. When the host stops, it sends once more (for at most 5 seconds), then cancels whatever is left.
+
+Building the spans re-reads each changed thread's log in the host process. The exporter works one thread at a time and lets other work run in between, but many very long, busy threads still cost CPU there.
 
 ## What a trace looks like
 
@@ -171,4 +173,4 @@ asyncio.run(main())
 
 ## Upgrading
 
-Telemetry adds tables to the store (store version 7). A store created by an earlier version is refused with "create a new store": `threads export` the threads you want to keep, then import them into a new store.
+Telemetry adds tables to the store. A store created by an earlier version of threads is refused with "create a new store": `threads export` the threads you want to keep, then import them into a new store.

@@ -464,7 +464,7 @@ each span once, when it closes. Its `observer_cursors` row means "closed through
 closing at or before the cursor was acknowledged, and open spans never hold it back. It never
 takes a lease and never appends. A deletion inserts one `observer_losses` row per registered
 `observers` row in the same transaction: an upper bound on the events that exporter may not have
-sent, exported later as a `threads.export.possibly_lost` span. No event changes. Store version 7.
+sent, exported later as a `threads.export.possibly_lost` span. No event changes. It came with store version 6.
 
 ## Semantic rules
 

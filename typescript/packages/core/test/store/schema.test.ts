@@ -27,7 +27,9 @@ describe("store schema", () => {
     expect(
       f.db.all("SELECT type, name, sql FROM sqlite_master ORDER BY name", []),
     ).toEqual(schema(spec));
-    expect(f.db.all("PRAGMA user_version", [])).toEqual([{ user_version: 7 }]);
+    expect(f.db.all("PRAGMA user_version", [])).toEqual([
+      { user_version: STORE_VERSION },
+    ]);
     expect(f.db.all("SELECT thread_id, tenant_id FROM threads", [])).toEqual([
       { thread_id: THREAD, tenant_id: LOCAL_TENANT },
     ]);
@@ -63,8 +65,8 @@ describe("store schema", () => {
     ).toEqual([]);
   });
 
-  test("a version 5 or 6 store is refused: version 7 adds the telemetry tables", () => {
-    for (const version of [5, 6]) {
+  test("every older version is refused, and gets none of the current tables", () => {
+    for (let version = 1; version < STORE_VERSION; version++) {
       const db = openBunSqlite(":memory:");
       db.exec(
         `CREATE TABLE threads (thread_id TEXT PRIMARY KEY); PRAGMA user_version = ${version}`,

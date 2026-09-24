@@ -4,7 +4,7 @@ walk is fed events directly, past validation."""
 
 from otel_goldens_kit import goldens
 
-from threads.log import Event, UnknownEvent, UserInputEvent
+from threads.log import Event, UnknownEvent, UserInputEvent, WokenEvent
 from threads.otel.walk import WalkInput, walk
 
 
@@ -30,3 +30,28 @@ def test_a_call_open_at_turn_end_is_cut() -> None:
     turn = next(s for s in walked.spans if s.name.startswith("invoke_agent"))
     assert turn.status is None
     assert "threads.cut" not in turn.attributes
+
+
+def test_only_a_turn_a_user_input_opened_names_its_run() -> None:
+    golden = next(g for g in goldens() if g.case.name == "otel-turn-model-tool")
+    branch = golden.case.branches[0]
+    events: list[Event] = [
+        e
+        for s in golden.logs[branch].segments
+        for e, _ in s.events
+        if not isinstance(e, UnknownEvent)
+    ]
+    opener = next(e for e in events if isinstance(e, UserInputEvent))
+
+    def run_of(chain: list[Event]) -> object:
+        walked = walk(WalkInput("local", branch, chain, {opener.event_id}, False, lambda _: None))
+        turn = next(s for s in walked.spans if s.name.startswith("invoke_agent"))
+        return turn.attributes.get("threads.run_id")
+
+    assert run_of(events) == opener.event_id
+    # The same turn opened by a woken (validation bypassed): its run is not guessed.
+    raw = opener.model_dump(mode="json")
+    woken = WokenEvent.model_validate(
+        {**raw, "type": "woken", "data": {"causes": [opener.event_id]}}
+    )
+    assert run_of([woken if e is opener else e for e in events]) is None

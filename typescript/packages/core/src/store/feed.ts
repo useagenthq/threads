@@ -25,7 +25,7 @@ export type { EventOf } from "../fold/state";
 export { sha256Hex } from "../hash";
 export { canonicalize, type Json, type KnownEvent } from "../log";
 export { turnOpeners } from "../team";
-export { boundStore } from "../telemetry";
+export { type TelemetryBinding, telemetryBinding } from "../telemetry";
 export type { ChainEvent, LogError, VerifiedLog } from "../verify";
 export type { LossRow } from "./losses";
 
