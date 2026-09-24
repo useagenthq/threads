@@ -11,6 +11,7 @@ import sys
 import tempfile
 
 from . import (
+    agent_pins,
     agents,
     anthropic_requests,
     call_order,
@@ -237,6 +238,7 @@ def main() -> int:
                 tool_inputs.check() + tool_groups.check() + team_wire.check() + team_ops.check()
             )
             problems += handoff_transcripts.check()
+            problems += agent_pins.check()
             problems += anthropic_requests.check() + dynamic.check()
             problems += tool_search_vectors.check()
         for p in problems:
@@ -256,6 +258,7 @@ def main() -> int:
         team_wire.write()
         team_ops.write()
         handoff_transcripts.write()
+        agent_pins.write()
         anthropic_requests.write()
         dynamic.write()
         tool_search_vectors.write()
