@@ -19,6 +19,7 @@ import {
 } from "@threads/core/host";
 import type { z } from "zod";
 import { reply } from "./outbound";
+import { LiveHub } from "./ui/hub";
 
 // What every part of one host shares: its agents (by key and by pinned name), channels, and the
 // in-process executions, one lane per branch so this process never races itself for a lease.
@@ -46,6 +47,8 @@ export class HostContext {
   readonly #pending = new Map<string, number>();
   /** A run's in-process result, by run_id, for a halt the log can't show. */
   readonly results: Map<string, RunResult<Json>> = new Map();
+  /** Live text of the runs this process executes, for the UI streams on their branches. */
+  readonly hub: LiveHub = new LiveHub();
   /**
    * Told when a run of this process meets a store outage: the host watches the thread, so its
    * recovery runs it on with backoff. Unset, the outage is logged like any failure.
@@ -153,6 +156,11 @@ export class HostContext {
             ...(this.ceiling === undefined ? {} : { ceiling: this.ceiling }),
           },
           [],
+          {
+            onDelta: (requestId, part, text) =>
+              this.hub.delta(thread.id, { requestId, part, text }),
+            onEvent: (e) => this.hub.appended(e.thread_id, e),
+          },
         );
         const json = asJson(result);
         // A run that lost the branch is no answer: the run holding it answers from the log.

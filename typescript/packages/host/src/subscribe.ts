@@ -51,7 +51,7 @@ export async function subscribe(
 }
 
 /** The branch whose own segment holds the run's user_input. */
-function runBranch(
+export function runBranch(
   log: LogStore,
   threadId: ThreadId,
   runId: EventId,
@@ -112,7 +112,7 @@ async function* follow(
  * parked or halted) the one before the next input, else the latest. The stream never shows
  * another run's events.
  */
-function endOf(
+export function endOf(
   events: readonly KnownEvent[],
   runId: EventId,
   start: number,
@@ -125,7 +125,10 @@ function endOf(
 }
 
 /** A run this process executed that halted before its turn could complete (branch_busy). */
-function halted(ctx: HostContext, runId: EventId): RunOutcome | undefined {
+export function halted(
+  ctx: HostContext,
+  runId: EventId,
+): RunOutcome | undefined {
   const result = ctx.results.get(runId);
   return result?.status === "failed" ? toOutcome(result) : undefined;
 }

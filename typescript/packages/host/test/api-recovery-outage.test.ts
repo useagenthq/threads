@@ -32,7 +32,7 @@ describe("a store outage", () => {
       ) {
         sends += 1;
         if (sends === 1) {
-          yield { kind: "delta", text: "partial" };
+          yield { kind: "delta", part: 0, text: "partial" };
           throw new StoreError("disk I/O error");
         }
         yield* inner.send(request, context, options);

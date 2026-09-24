@@ -11,8 +11,13 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@ag-ui/client": "1.0.0",
+    "@ag-ui/core": "1.0.0",
     "@threads/github": "workspace:*",
     "@threads/slack": "workspace:*",
-    "@threads/whatsapp": "workspace:*"
+    "@threads/whatsapp": "workspace:*",
+    "ai": "7.0.113",
+    "ajv": "8.20.0",
+    "rxjs": "7.8.1"
   }
 }

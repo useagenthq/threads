@@ -4,6 +4,7 @@ import {
   type ChannelAdapter,
   type DeliveryOutcome,
   type Inbound,
+  type Model,
   type Store,
   scriptedModel,
   secret,
@@ -66,6 +67,8 @@ export function mailer(options: {
   readonly responses: readonly unknown[];
   readonly approvers?: readonly Principal[];
   readonly sent?: string[];
+  /** In place of a scripted model of `responses`. */
+  readonly model?: Model;
 }): Agent<undefined, string> {
   const send = tool({
     name: "send_email",
@@ -79,7 +82,8 @@ export function mailer(options: {
   });
   return agent({
     name: "support",
-    model: scriptedModel({ responses: [...options.responses] }),
+    model:
+      options.model ?? scriptedModel({ responses: [...options.responses] }),
     tools: [send],
     ...(options.approvers === undefined
       ? {}
@@ -101,8 +105,10 @@ export type Harness = {
   ) => Promise<Response>;
 };
 
-export function harness(options: Omit<HostOptions, "store">): Harness {
-  const store = sqlite(":memory:");
+export function harness(
+  options: Omit<HostOptions, "store"> & { readonly store?: Store },
+): Harness {
+  const store = options.store ?? sqlite(":memory:");
   const h = host({ store, authenticate, ...options });
   return {
     host: h,

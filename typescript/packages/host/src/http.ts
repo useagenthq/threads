@@ -5,6 +5,9 @@ import { startRun } from "./runs";
 import { IdempotencyKey, StartRunRequest } from "./schemas";
 import { type SseMessage, subscribe } from "./subscribe";
 import * as threads from "./threads";
+import { agUiRun } from "./ui/ag-ui-route";
+import { aiSdkChat, aiSdkReconnect } from "./ui/ai-sdk-route";
+import { runFrames } from "./ui/cursor-route";
 
 // The typed HTTP API (spec/schema/host-api/openapi.json). Every /v1 route authenticates the
 // caller as a principal first (absent authenticate: 401) and passes that principal to the
@@ -75,6 +78,27 @@ const ROUTES: readonly Route[] = [
     handler: threads.setModel,
   },
   { method: "POST", path: new RegExp(`^${T}/mode$`), handler: threads.setMode },
+  // Web UIs (spec/schema/ui/README.md): the AI SDK UI message stream and AG-UI.
+  {
+    method: "POST",
+    path: /^\/v1\/ui\/ai-sdk\/(?<agent>[^/]+)$/,
+    handler: aiSdkChat,
+  },
+  {
+    method: "GET",
+    path: /^\/v1\/ui\/ai-sdk\/(?<agent>[^/]+)\/(?<chat_id>[^/]+)\/stream$/,
+    handler: aiSdkReconnect,
+  },
+  {
+    method: "POST",
+    path: /^\/v1\/ui\/ag-ui\/(?<agent>[^/]+)$/,
+    handler: agUiRun,
+  },
+  {
+    method: "GET",
+    path: new RegExp(`^${T}/runs/(?<run_id>[^/]+)/ui/(?<protocol>[^/]+)$`),
+    handler: runFrames,
+  },
 ];
 
 /** A path parameter's text, or undefined when a %-escape is malformed (client input). */

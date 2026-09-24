@@ -9,6 +9,7 @@ import {
 } from "@threads/core/host";
 import type { z } from "zod";
 import type { HostContext } from "./context";
+import { answerQuestion, decideChallenge, resumeThread } from "./decisions";
 import { failure, json, routeFailure } from "./errors";
 import {
   Answer,
@@ -86,31 +87,6 @@ async function parsed<T>(
   return body.success
     ? body.data
     : failure("invalid_request", body.error.message);
-}
-
-/**
- * After a control appended, the branch continues from the log (a resumed or a cancel). A
- * subagent's thread continues through its root: the parent parked on it re-runs it and resumes.
- */
-async function resume(call: Call, thread: Thread): Promise<void> {
-  const { log } = await call.ctx.open(call.principal.tenant);
-  let at = { id: thread.id, branch: thread.branch };
-  for (;;) {
-    const read = log.read(at.branch);
-    if (!read.ok) return;
-    const events = knownEvents(read.value);
-    const started = events.find((e) => e.type === "thread_started");
-    const parent =
-      started?.type === "thread_started" ? started.data.parent : undefined;
-    if (parent?.relation === "subagent") {
-      at = { id: parent.thread_id, branch: parent.branch_id };
-      continue;
-    }
-    const hosted = call.ctx.agentOf(events);
-    if (hosted === undefined) return;
-    void call.ctx.resume(hosted, call.principal.tenant, call.principal, at);
-    return;
-  }
 }
 
 export async function timeline(call: Call): Promise<Response> {
@@ -205,21 +181,16 @@ export async function decide(call: Call): Promise<Response> {
   if (o instanceof Response) return o;
   const body = await parsed(call, ApprovalDecision);
   if (body instanceof Response) return body;
-  const refused = await authority(call, o.thread);
-  if (refused !== undefined) return refused;
-  const done =
-    body.decision === "grant"
-      ? await o.thread.approve(challenge.data, call.principal, {
-          ...(body.remember_rule === undefined
-            ? {}
-            : { rememberRule: body.remember_rule }),
-        })
-      : await o.thread.deny(challenge.data, call.principal, {
-          ...(body.reason === undefined ? {} : { reason: body.reason }),
-        });
-  if (!done.ok) return routeFailure(DECIDE_CODES, done.error);
-  await resume(call, o.thread);
-  return json(200, done.value);
+  const done = await decideChallenge(
+    call.ctx,
+    call.principal,
+    o.thread,
+    challenge.data,
+    body,
+  );
+  return done.ok
+    ? json(200, done.value)
+    : routeFailure(DECIDE_CODES, done.error);
 }
 
 export async function answer(call: Call): Promise<Response> {
@@ -229,7 +200,13 @@ export async function answer(call: Call): Promise<Response> {
   if (o instanceof Response) return o;
   const body = await parsed(call, Answer);
   if (body instanceof Response) return body;
-  const done = await o.thread.answer(callId.data, body.answer, call.principal);
+  const done = await answerQuestion(
+    call.ctx,
+    call.principal,
+    o.thread,
+    callId.data,
+    body.answer,
+  );
   if (!done.ok)
     return routeFailure(
       [
@@ -242,7 +219,6 @@ export async function answer(call: Call): Promise<Response> {
       ],
       done.error,
     );
-  await resume(call, o.thread);
   return json(200, done.value);
 }
 
@@ -271,7 +247,7 @@ export async function resolveParked(call: Call): Promise<Response> {
       ],
       done.error,
     );
-  await resume(call, o.thread);
+  await resumeThread(call.ctx, call.principal, o.thread);
   return json(200, done.value);
 }
 
@@ -281,7 +257,7 @@ export async function cancel(call: Call): Promise<Response> {
   const done = await o.thread.cancel(call.principal);
   if (!done.ok)
     return routeFailure(["forbidden", "not_found", "branch_busy"], done.error);
-  await resume(call, o.thread);
+  await resumeThread(call.ctx, call.principal, o.thread);
   return json(200, done.value);
 }
 

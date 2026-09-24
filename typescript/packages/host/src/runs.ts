@@ -19,7 +19,7 @@ import {
 } from "@threads/core/host";
 import { type HostContext, type HostedAgent, samePin } from "./context";
 import type { Failure } from "./errors";
-import { findReceipt, insertReceipt, type Keyed } from "./receipts";
+import { findReceipt, insertReceipt, type Keyed, START_RUN } from "./receipts";
 import type { StartRunRequest } from "./schemas";
 
 // Host.startRun (POST /v1/runs): the user_input and its idempotency receipt commit in one
@@ -40,10 +40,10 @@ export type StartRunCode =
   | "idempotency_key_reused"
   | "idempotency_key_principal_mismatch";
 
-type StartFailure = Failure & { readonly code: StartRunCode };
-type Started = Result<RunAccepted, StartFailure>;
+export type StartFailure = Failure & { readonly code: StartRunCode };
+export type Started = Result<RunAccepted, StartFailure>;
 
-const fail = (
+export const fail = (
   code: StartRunCode,
   message: string,
 ): { readonly ok: false; readonly error: StartFailure } =>
@@ -60,21 +60,46 @@ export async function startRun(
     return fail("not_found", `no agent ${request.agent}`);
   const text = canonicalize(request);
   if (!text.ok) return fail("invalid_request", text.error.message);
-  const binding = {
-    principal_key: principalKey(principal),
-    body_hash: sha256Hex(text.value),
-  };
-  const at = { tenant: principal.tenant, key: idempotencyKey };
-  const { db } = await storeConnection(ctx.store);
-  const prior = replayed(findReceipt(db, at), binding);
-  if (prior !== undefined) return prior;
-  const accepted = await accept(ctx, hosted, request, principal, {
-    at,
-    binding,
+  return start(ctx, hosted, principal, {
+    at: { tenant: principal.tenant, operation: START_RUN, key: idempotencyKey },
+    binding: {
+      principal_key: principalKey(principal),
+      body_hash: sha256Hex(text.value),
+    },
+    keyName: "this Idempotency-Key",
+    target: (log) =>
+      branchFor(log, ctx.storeFor(principal.tenant), hosted, request),
+    input: input(request, principal),
   });
+}
+
+/** How one run starts: its receipt, the branch it goes to and its user_input. */
+export type RunPlan = {
+  readonly at: Keyed;
+  readonly binding: Binding;
+  /** What the key is called in a refusal, e.g. "this Idempotency-Key". */
+  readonly keyName: string;
+  readonly target: (log: LogStore) => Promise<Result<Target, StartFailure>>;
+  readonly input: EventDraft;
+};
+
+/**
+ * The receipt answers a replay; otherwise the user_input and its receipt commit in one
+ * transaction and the run proceeds in the host.
+ */
+export async function start(
+  ctx: HostContext,
+  hosted: HostedAgent,
+  principal: Principal,
+  plan: RunPlan,
+): Promise<Started> {
+  const { db } = await storeConnection(ctx.store);
+  const prior = replayed(findReceipt(db, plan.at), plan);
+  if (prior !== undefined) return prior;
+  const accepted = await accept(ctx, principal, plan);
   // Another request took the key between our read and our commit: answer as a replay.
   if (!accepted.ok && accepted.error.code === "idempotency_key_reused")
-    return replayed(findReceipt(db, at), binding) ?? accepted;
+    return replayed(findReceipt(db, plan.at), plan) ?? accepted;
   if (!accepted.ok) return accepted;
   const { thread_id, branch_id, run_id } = accepted.value;
   void ctx.resume(
@@ -87,12 +112,15 @@ export async function startRun(
   return accepted;
 }
 
-type Binding = { readonly principal_key: string; readonly body_hash: string };
+export type Binding = {
+  readonly principal_key: string;
+  readonly body_hash: string;
+};
 
 /** A stored receipt answers the request: the same one replays, anything else is refused. */
 function replayed(
   found: ReturnType<typeof findReceipt>,
-  binding: Binding,
+  { binding, keyName }: Pick<RunPlan, "binding" | "keyName">,
 ): Started | undefined {
   if (!found.ok) return fail("invalid_request", found.error.message);
   const receipt = found.value;
@@ -101,12 +129,12 @@ function replayed(
   if (receipt.principal_key !== binding.principal_key)
     return fail(
       "idempotency_key_principal_mismatch",
-      "this Idempotency-Key belongs to another principal",
+      `${keyName} belongs to another principal`,
     );
   if (receipt.body_hash !== binding.body_hash)
     return fail(
       "idempotency_key_reused",
-      "this Idempotency-Key was used with another request",
+      `${keyName} was used with another request`,
     );
   const { thread_id, branch_id, run_id } = receipt;
   return ok({ thread_id, branch_id, run_id });
@@ -114,14 +142,11 @@ function replayed(
 
 async function accept(
   ctx: HostContext,
-  hosted: HostedAgent,
-  request: StartRunRequest,
   principal: Principal,
-  key: { readonly at: Keyed; readonly binding: Binding },
+  plan: RunPlan,
 ): Promise<Started> {
   const { log } = await ctx.open(principal.tenant);
-  const store = ctx.storeFor(principal.tenant);
-  const target = await branchFor(log, store, hosted, request);
+  const target = await plan.target(log);
   if (!target.ok) return target;
   const { threadId, branchId, first } = target.value;
   const holder = `host-${crypto.randomUUID()}`;
@@ -131,16 +156,18 @@ async function accept(
     if (writer.value.chain.fold.turnOpen)
       return fail("branch_busy", "the branch is in the middle of a turn");
     const { db } = await storeConnection(ctx.store);
-    const drafts = [...first, input(request, principal)];
+    // A branch opens with its thread_started, once: a racing request may have written it.
+    const empty = writer.value.chain.events.length === 0;
+    const drafts = [...(empty ? first : []), plan.input];
     let lost = false;
     const appended = writer.value.append(drafts, (added) => {
       const run = added.at(-1);
       if (run?.kind !== "event") throw new Error("user_input is a known event");
       const won = insertReceipt(
         db,
-        key.at,
+        plan.at,
         {
-          ...key.binding,
+          ...plan.binding,
           thread_id: threadId,
           branch_id: branchId,
           run_id: run.event.event_id,
@@ -182,7 +209,7 @@ function input(request: StartRunRequest, principal: Principal): EventDraft {
   };
 }
 
-type Target = {
+export type Target = {
   readonly threadId: ThreadId;
   readonly branchId: BranchId;
   /** A new thread's thread_started, appended with its first input. */

@@ -6,6 +6,7 @@ import {
   type Result,
   type SqliteDriver,
   ThreadId,
+  UI_RECEIPT,
 } from "@threads/core/host";
 import { z } from "zod";
 
@@ -13,6 +14,8 @@ import { z } from "zod";
 // tenant and operation; its principal and body hash are the binding it is checked against.
 
 export const START_RUN = "start_run";
+/** A UI route's run, keyed `<thread_id>:<client message id>` (spec/schema/ui/README.md). */
+export const UI_RUN: typeof UI_RECEIPT = UI_RECEIPT;
 
 export type Receipt = {
   readonly principal_key: string;
@@ -32,6 +35,7 @@ const Row: z.ZodType<Receipt> = z.strictObject({
 
 export type Keyed = {
   readonly tenant: string;
+  readonly operation: typeof START_RUN | typeof UI_RUN;
   readonly key: string;
 };
 
@@ -44,7 +48,7 @@ export function findReceipt(
     db.all(
       `SELECT principal_key, body_hash, thread_id, branch_id, run_id FROM run_receipts
         WHERE tenant_id = ? AND operation = ? AND idempotency_key = ?`,
-      [at.tenant, START_RUN, at.key],
+      [at.tenant, at.operation, at.key],
     ),
   );
   return rows.ok ? { ok: true, value: rows.value[0] } : rows;
@@ -66,7 +70,7 @@ export function insertReceipt(
       ON CONFLICT DO NOTHING`,
     [
       at.tenant,
-      START_RUN,
+      at.operation,
       at.key,
       receipt.principal_key,
       receipt.body_hash,
@@ -78,6 +82,38 @@ export function insertReceipt(
   );
   const stored = findReceipt(db, at);
   return stored.ok && stored.value?.run_id === receipt.run_id;
+}
+
+const UiRow = z.strictObject({
+  idempotency_key: z.string(),
+  run_id: EventId,
+});
+
+/**
+ * A thread's `ui` receipts: each run's client message id by run id. Read by the byte range of
+ * `<thread_id>:` keys (`;` is the byte after `:`), never LIKE, so the index serves it.
+ */
+export function uiReceipts(
+  db: SqliteDriver,
+  tenant: string,
+  threadId: ThreadId,
+): Result<ReadonlyMap<string, string>, LogError> {
+  const rows = parseRows(
+    UiRow,
+    db.all(
+      `SELECT idempotency_key, run_id FROM run_receipts
+        WHERE tenant_id = ? AND operation = ? AND idempotency_key >= ? AND idempotency_key < ?`,
+      [tenant, UI_RUN, `${threadId}:`, `${threadId};`],
+    ),
+  );
+  if (!rows.ok) return rows;
+  const prefix = `${threadId}:`.length;
+  return {
+    ok: true,
+    value: new Map(
+      rows.value.map((r) => [r.run_id, r.idempotency_key.slice(prefix)]),
+    ),
+  };
 }
 
 export type RunBranch = {

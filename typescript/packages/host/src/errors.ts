@@ -1,11 +1,13 @@
 // Every non-2xx JSON response of the host API is an ErrorBody (host-api.v1.schema.json) whose
-// code is one of its route's x-error-codes (openapi.json). Status: 400 invalid_request,
-// 401 unauthenticated and unverified, 403 forbidden, 404 not_found, 409 any domain code.
+// code is one of its route's x-error-codes (openapi.json). Status: 400 invalid_request and
+// invalid_cursor, 401 unauthenticated and unverified, 403 forbidden, 404 not_found, 409 any
+// domain code.
 
 export type Failure = { readonly code: string; readonly message: string };
 
 const STATUS: Readonly<Record<string, number>> = {
   invalid_request: 400,
+  invalid_cursor: 400,
   unauthenticated: 401,
   unverified: 401,
   forbidden: 403,

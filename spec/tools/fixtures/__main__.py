@@ -273,7 +273,7 @@ def main() -> int:
         dynamic.write()
         tool_search_vectors.write()
         questions.write()
-            problems += ui_vectors.check()
+        ui_vectors.write()
         otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
         for built, dest in ((out, CASES), (staged, STAGED), *otel_parts):
             shutil.rmtree(dest, ignore_errors=True)
