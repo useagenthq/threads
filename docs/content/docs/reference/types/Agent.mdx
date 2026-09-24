@@ -59,7 +59,7 @@ async def run(
 </Field>
 
 <Field name="thread" type={"ThreadId | Thread"}>
-  The thread to continue: a Thread handle continues its branch; in TypeScript a thread id also works (Python takes a handle only). Omitted: a new thread.
+  The thread to continue: a Thread handle continues its branch; a thread id continues its main branch in store (a ConfigError invalid_config when the store has no such thread). Omitted: a new thread.
 </Field>
 
 <Field name="store" type={"Store"}>
@@ -178,7 +178,7 @@ def stream(
 </Field>
 
 <Field name="thread" type={"ThreadId | Thread"}>
-  The thread to continue: a Thread handle continues its branch; in TypeScript a thread id also works (Python takes a handle only). Omitted: a new thread.
+  The thread to continue: a Thread handle continues its branch; a thread id continues its main branch in store (a ConfigError invalid_config when the store has no such thread). Omitted: a new thread.
 </Field>
 
 <Field name="store" type={"Store"}>

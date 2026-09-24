@@ -82,7 +82,8 @@ type Emit = Callable[[StreamEvent], None]
 
 
 class _RunOptions(TypedDict, total=False):
-    thread: Thread
+    thread: Thread | ThreadId
+    """A Thread handle continues its branch; a thread id continues its main branch in `store`."""
     store: Store
     budget: Budget
     principal: Principal
@@ -144,9 +145,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
     member: MemberRun | None,
 ) -> RunResult[str]:
     await _set_up(definition, options.get("budget"))
-    thread = options.get("thread")
-    store = options.get("store") or (thread.store if thread is not None else sqlite(".threads"))
-    sq = await open_store(store)
+    store, sq, thread = await _where(options.get("store"), options.get("thread"))
     # Each run is its own executor: a second run on a busy branch is branch_busy.
     holder = uuid.uuid4().hex if member is None else member.holder
     opened = await (_open(sq, thread, holder) if launch is None else launched(sq, launch, holder))
@@ -292,6 +291,21 @@ async def _held(writer: Writer) -> AsyncGenerator[None]:
         with contextlib.suppress(asyncio.CancelledError):
             await task
         await writer.release()
+
+
+async def _where(
+    given: Store | None, thread: Thread | ThreadId | None
+) -> tuple[Store, SqliteStore, Thread | None]:
+    """The run's store and thread: a thread id is its main branch in the store. Raises
+    ConfigError for a thread the store doesn't have."""
+    store = given or (thread.store if isinstance(thread, Thread) else sqlite(".threads"))
+    sq = await open_store(store)
+    if not isinstance(thread, str):
+        return store, sq, thread
+    root = await sq.root(thread)
+    if isinstance(root, Err):
+        raise ConfigError("invalid_config", f"thread {thread} is not in this store")
+    return store, sq, Thread(thread, root.value, store)
 
 
 async def _open(
