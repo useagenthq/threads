@@ -1,0 +1,9 @@
+{
+  "name": "render-team-message-lines",
+  "family": "agents_teams",
+  "kind": "render",
+  "description": "Render v1 message lines: operator mail (escaped), an ask with a ref body, a bounce naming no ask, a task notice with a ref output and an end monitor's member_ended each open a turn and render; a member_parked notice renders nothing.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1635,16 +1635,7 @@
           "$ref": "#/$defs/MemberRef"
         },
         {
-          "additionalProperties": false,
-          "properties": {
-            "operator": {
-              "$ref": "#/$defs/RequestId"
-            }
-          },
-          "required": [
-            "operator"
-          ],
-          "type": "object"
+          "$ref": "#/$defs/OperatorSender"
         }
       ]
     },
@@ -1761,6 +1752,18 @@
     "NonEmpty": {
       "minLength": 1,
       "type": "string"
+    },
+    "OperatorSender": {
+      "additionalProperties": false,
+      "properties": {
+        "operator": {
+          "$ref": "#/$defs/RequestId"
+        }
+      },
+      "required": [
+        "operator"
+      ],
+      "type": "object"
     },
     "OutputPart": {
       "oneOf": [

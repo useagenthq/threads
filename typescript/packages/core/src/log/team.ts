@@ -266,11 +266,16 @@ export const MailAddress: z.ZodXor<
 
 export const MailSender: z.ZodXor<
   readonly [typeof MemberRef, Strict<{ operator: typeof RequestId }>]
-> = z.xor([MemberRef, z.strictObject({ operator: RequestId })]).meta({
-  id: "MailSender",
-  description:
-    "The sending member, or the operator request. Written by the fenced writer; never an actor.",
-});
+> = z
+  .xor([
+    MemberRef,
+    z.strictObject({ operator: RequestId }).meta({ id: "OperatorSender" }),
+  ])
+  .meta({
+    id: "MailSender",
+    description:
+      "The sending member, or the operator request. Written by the fenced writer; never an actor.",
+  });
 
 // A field appears only on the kinds that use it, and each kind carries what it needs. Typed as
 // a plain Rule: narrowing the TS type by fifteen if/then branches would be exponential.

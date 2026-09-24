@@ -14,9 +14,11 @@ from threads.log import (
     EventId,
     HeartbeatEvent,
     InjectedEvent,
+    MessageReceivedEvent,
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
     SteerEvent,
+    TeamOpenedEvent,
     ToolResultEvent,
     ToolResultLateEvent,
     UserInputEvent,
@@ -36,6 +38,7 @@ class TranscriptEntry:
 _ROLES: Mapping[type, Role] = {
     InjectedEvent: "context",
     HeartbeatEvent: "context",
+    MessageReceivedEvent: "context",
     ToolResultEvent: "tool",
     ToolResultLateEvent: "tool",
     CompactedEvent: "summary",
@@ -51,6 +54,8 @@ def _role(view: RenderView, event: Event) -> Role | None:
 
 
 def transcript(events: Sequence[Event]) -> tuple[TranscriptEntry, ...]:
+    if events and isinstance(events[0], TeamOpenedEvent):
+        return ()  # a team log never renders
     view = render_view(events)
     entries: list[TranscriptEntry] = []
     for event in walk(view, events):

@@ -6,6 +6,7 @@ import type {
   Policy,
   ToolSpec,
 } from "../log";
+import { emptyTeam, type TeamFold } from "./team";
 import { emptyWake, type WakeFold } from "./wake";
 
 /** The known event with tag `T`. */
@@ -126,6 +127,7 @@ export type Fold = {
   readonly itemKeys: Set<string>;
   readonly occurrenceIds: Set<string>;
   readonly wake: WakeFold;
+  readonly team: TeamFold;
 };
 
 export function emptyFold(): Fold {
@@ -169,6 +171,7 @@ export function emptyFold(): Fold {
     itemKeys: new Set(),
     occurrenceIds: new Set(),
     wake: emptyWake(),
+    team: emptyTeam(),
   };
 }
 

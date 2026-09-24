@@ -1,9 +1,15 @@
 import { assertNever } from "../assert-never";
 import type { EventOf, ResultEvent } from "../fold/state";
-import type { ArtifactRef, ContentPart, Json, KnownEvent } from "../log";
+import type {
+  ArtifactRef,
+  ContentPart,
+  Json,
+  KnownEvent,
+  MailEnvelope,
+} from "../log";
 import { err, ok, type Result } from "../result";
 import type { LogError } from "../verify/error";
-import { toolLine } from "./prefix";
+import { jcs, toolLine } from "./prefix";
 import {
   assistantParts,
   type Compacted,
@@ -155,9 +161,55 @@ export function eventLine(ctx: LineContext, e: VisibleEvent): Line {
     case "tool_result":
     case "tool_result_late":
       return result(ctx, e);
+    case "message_received":
+      return mail(ctx, e);
     default:
       return assertNever(e);
   }
+}
+
+/** A received mail as an untrusted `<message>` user line, from its envelope alone. */
+function mail(ctx: LineContext, e: EventOf<"message_received">): Line {
+  const env = e.data.envelope;
+  const body = mailText(ctx.read, env, e.seq);
+  if (!body.ok) return body;
+  // No member name can produce operator="true".
+  const who =
+    "operator" in env.from ? 'operator="true"' : `from="${esc(env.from.name)}"`;
+  const ask =
+    env.kind === "ask" && env.ask_id !== undefined
+      ? ` ask_id="${esc(env.ask_id)}"`
+      : "";
+  const head = `<message ${who} kind="${env.kind}"${ask} untrusted="true">`;
+  return ok(userLine(`${head}\n${esc(body.value)}\n</message>`));
+}
+
+/** A mail's text: its body, a notification's result as RFC 8785 JSON, or a bounce's code. */
+function mailText(
+  read: ReadRef,
+  env: MailEnvelope,
+  seq: number,
+): Result<string, LogError> {
+  if (env.body !== undefined) return bodyText(read, env.body, seq);
+  if (env.result === undefined) {
+    if (env.code === undefined)
+      throw new Error("the schema requires a bounce's code");
+    return ok(`bounced: ${env.code}`);
+  }
+  if (env.result.status !== "completed") return ok(jcs(env.result));
+  const output = bodyText(read, env.result.output, seq);
+  return output.ok ? ok(jcs({ ...env.result, output: output.value })) : output;
+}
+
+function bodyText(
+  read: ReadRef,
+  body: NonNullable<MailEnvelope["body"]>,
+  seq: number,
+): Result<string, LogError> {
+  if (body.text !== undefined) return ok(body.text);
+  if (body.ref === undefined)
+    throw new Error("the schema requires a body's text or ref");
+  return readText(read, body.ref, seq);
 }
 
 function injected(ctx: LineContext, e: EventOf<"injected">): Line {

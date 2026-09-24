@@ -14,7 +14,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
-from corpus import CASES, cases, load, now_of, own, stored_artifacts
+from corpus import CASES, cases, error_json, import_and_read, load, now_of, own
 
 from threads.log import (
     CompactedEvent,
@@ -32,7 +32,7 @@ from threads.log.digest import sha256_hex
 from threads.reduce import PROJECTIONS
 from threads.render import render
 from threads.result import Err, Ok
-from threads.store import SqliteStore, VerifiedLog, verify_export
+from threads.store import verify_export
 
 CASE_KEYS = frozenset(
     {"name", "family", "kind", "description", "clock", "model_script", "sandbox_script"}
@@ -46,34 +46,6 @@ EXPECTED_KEYS = frozenset(
 OWN_RUNNER = frozenset({"policy", "recover", "stub", "fork", "intake", "host"})
 """Kinds another runner owns: policy (tests/permissions), recover and stub (tests/loop), fork
 (tests/thread), intake and host (tests/host)."""
-
-
-def _error(error: ParseError) -> Err[str]:
-    return Err(json.dumps({"code": error.code, "seq": error.seq}))
-
-
-async def import_and_read(case: Path, log: bytes, now: int) -> Ok[VerifiedLog] | Err[str]:
-    """Imports an export into a fresh store holding the case's artifacts and reads the last
-    branch back from SQLite."""
-    verified = verify_export(log, now)
-    if isinstance(verified, Err):
-        return _error(verified.error)
-    opened = await SqliteStore.open(artifacts=stored_artifacts(case))
-    assert isinstance(opened, Ok)
-    store = opened.value
-    try:
-        stored = await store.import_log(verified.value)
-        if isinstance(stored, Err):
-            return _error(stored.error)
-        branch = verified.value.segments[-1].header.branch_id
-        if verified.value.head_verified:
-            # SQLite and JSONL are one contract: the export is the imported bytes.
-            assert await store.export(branch) == Ok(log)
-        read = await store.read(branch, now)
-    finally:
-        await store.close()
-    assert isinstance(read, Ok), read
-    return read
 
 
 def test_corpus_kinds_and_keys_are_known() -> None:
@@ -127,7 +99,7 @@ def _next(case: Path, events: Sequence[Event]) -> Ok[bytes] | Err[str]:
     """Step 4: the next request. Import already replayed every recorded one (step 3)."""
     rendered = render(events, artifacts(case))
     if isinstance(rendered, Err):
-        return _error(rendered.error)
+        return error_json(rendered.error)
     expected = load(case, "expected.json")["render"]
     assert isinstance(expected, dict)
     line0 = rendered.value.line0

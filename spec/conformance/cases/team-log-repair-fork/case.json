@@ -1,0 +1,9 @@
+{
+  "name": "team-log-repair-fork",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 33: a team log's repair fork is admitted; the child is inspection-only.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

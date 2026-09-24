@@ -18,6 +18,7 @@ from threads.log import (
     HookDecisionEvent,
     HostedToolPart,
     InjectedEvent,
+    MessageReceivedEvent,
     ModelRequestEvent,
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
@@ -33,7 +34,9 @@ from threads.log import (
     ToolsChangedEvent,
     ToolUsePart,
     UserInputEvent,
+    WaitStartedEvent,
 )
+from threads.reduce.team_fold import mail_renders, monitor_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +59,9 @@ class RenderView:
     withheld: frozenset[EventId] = frozenset()
     """Recalled memory from a turn another principal started: memory is per principal, so in a
     shared thread it renders only while that principal's input is current."""
+    silent_mail: frozenset[EventId] = frozenset()
+    """Receipts whose mail reaches the model as a call's result (a reply, an ask's bounce, a
+    wait's notification) or not at all (a cancel, a park notice)."""
 
 
 @dataclass(slots=True)
@@ -74,9 +80,12 @@ class _Builder:
     recalled: list[tuple[EventId, Principal | None]] = field(
         default_factory=list[tuple[EventId, Principal | None]]
     )
+    settle: set[str] = field(default_factory=set[str])
+    silent_mail: set[EventId] = field(default_factory=set[EventId])
 
     def add(self, event: Event) -> None:
         self._memory(event)
+        self._mail(event)
         if isinstance(event, ModelResponseEvent | ModelResponseRecoveredEvent):
             self.proposed.update(
                 p.call_id for p in event.data.content if isinstance(p, ToolUsePart)
@@ -100,6 +109,14 @@ class _Builder:
             self.principal = event.actor.principal
         elif isinstance(event, InjectedEvent) and event.data.source == "memory":
             self.recalled.append((event.event_id, self.principal))
+
+    def _mail(self, event: Event) -> None:
+        if isinstance(event, WaitStartedEvent):
+            self.settle.update(monitor_id(event, m.name) for m in event.data.members)
+        elif isinstance(event, MessageReceivedEvent) and not mail_renders(
+            event.data.envelope, self.settle
+        ):
+            self.silent_mail.add(event.event_id)
 
     def _hook(self, event: HookDecisionEvent) -> None:
         d = event.data
@@ -130,6 +147,7 @@ def render_view(events: Sequence[Event]) -> RenderView:
         dict(b.redactions),
         frozenset(c for c in b.calls if c not in b.proposed),
         frozenset(i for i, by in b.recalled if by != b.principal),
+        frozenset(b.silent_mail),
     )
 
 
@@ -168,7 +186,11 @@ def walk(view: RenderView, events: Sequence[Event]) -> Iterator[Event]:
     for event in events:
         compacted = next((c for c in view.ranges if covers(c, event.seq)), None)
         if compacted is None:
-            hidden = _host_result(view, event) or event.event_id in view.withheld
+            hidden = (
+                _host_result(view, event)
+                or event.event_id in view.withheld
+                or event.event_id in view.silent_mail
+            )
             if not isinstance(event, CompactedEvent) and not hidden:
                 yield event
         elif event.seq == compacted.data.from_seq:

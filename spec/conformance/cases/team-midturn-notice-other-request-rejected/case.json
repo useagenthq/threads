@@ -1,0 +1,9 @@
+{
+  "name": "team-midturn-notice-other-request-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 34: a task monitor's notice of another request is consumed mid-turn.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

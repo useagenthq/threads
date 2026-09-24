@@ -65,6 +65,56 @@ class Wake:
     nor an agent_finished: the late results of one append."""
 
 
+@dataclass(frozen=True, slots=True)
+class TurnRun:
+    """A turn's run: its opener's principal and the whole root request. A member's task turn has
+    no root request in its own log (it is in the lead's): None, and only its principal counts."""
+
+    principal: PrincipalKey
+    root: tuple[str, str] | None
+    """(thread_id, event_id) of the root request."""
+
+
+@dataclass(slots=True)
+class Team:
+    """What one log's events leave for semantic rules 31 and 33-45 (team_fold, rules_team). Ids
+    are the wire's MailId, AskId, WaitId and MonitorId strings."""
+
+    team_log: bool = False
+    """The log starts with team_opened: it takes only operator-side events (rule 33)."""
+    lead_thread: str | None = None
+    member: bool = False
+    """thread_started.parent.relation is team_member (rule 41)."""
+    had_input: bool = False
+    ended: bool = False
+    last_end: str | None = None
+    """The reason of the last turn_completed (rule 38)."""
+    turn: TurnRun | None = None
+    """The run of the open turn (rule 34)."""
+    spawns: dict[str, TurnRun] = field(default_factory=dict[str, TurnRun])
+    """The run that spawned each background spawn_agent call: a woken turn's run (rule 34)."""
+    mail_done: set[str] = field(default_factory=set[str])
+    """Mail received, refused or taken as a task (rule 31)."""
+    asks_in: set[str] = field(default_factory=set[str])
+    """Asks this log received and has not replied to (rule 35)."""
+    asks_out: set[str] = field(default_factory=set[str])
+    """Asks this log sent and has not closed (rules 36, 40)."""
+    replies_in: dict[str, str] = field(default_factory=dict[str, str])
+    """Received replies: reply mail_id -> the ask it answers (rule 36)."""
+    waits: set[str] = field(default_factory=set[str])
+    """Waits this log started and has not finished (rules 39, 40)."""
+    monitors: set[str] = field(default_factory=set[str])
+    """Monitors this log registered that have neither fired nor been observed (rule 39)."""
+    settle: set[str] = field(default_factory=set[str])
+    """The settle monitors of this log's waits: their notifications open no turn."""
+    task_monitors: set[str] = field(default_factory=set[str])
+    """The task monitor of each member_started in this log (rule 40)."""
+    requests: set[str] = field(default_factory=set[str])
+    """operator_request ids in this log (rule 42)."""
+    request_events: set[str] = field(default_factory=set[str])
+    """operator_request event ids in this log (rule 42)."""
+
+
 @dataclass(slots=True)
 class Fold:
     now: int
@@ -123,6 +173,8 @@ class Fold:
     unknown_responses: int = 0
     wake: Wake = field(default_factory=Wake)
     """Background wake bookkeeping (rules_wake)."""
+    team: Team = field(default_factory=Team)
+    """Team bookkeeping (team_fold)."""
 
 
 def policy(fold: Fold) -> Policy | None:

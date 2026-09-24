@@ -1,0 +1,9 @@
+{
+  "name": "team-receipt-root-thread-differs-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 34: mid-turn mail whose root request has the turn's event_id in another thread.",
+  "clock": {
+    "now": 1790000060000
+  }
+}
