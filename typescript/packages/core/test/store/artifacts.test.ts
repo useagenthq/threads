@@ -3,6 +3,7 @@ import { mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileArtifacts, memoryArtifacts } from "../../src/store";
+import { StoreError } from "../../src/store/driver";
 
 const bytes = new TextEncoder().encode("dropped bytes");
 
@@ -27,6 +28,17 @@ describe("file artifacts", () => {
     writeFileSync(join(root, "sha256", sha.slice(0, 2), sha), "tampered");
     const corrupt = store.get(sha);
     expect(corrupt.ok ? "ok" : corrupt.error.code).toBe("artifact_corrupt");
+  });
+
+  test("a disk that fails is a StoreError; missing and corrupt stay values", () => {
+    const dir = mkdtempSync(join(tmpdir(), "threads-artifacts-"));
+    // The root is a file: every read and write under it fails at the file system.
+    const root = join(dir, "artifacts");
+    writeFileSync(root, "");
+    const store = fileArtifacts(root);
+    expect(() => store.put(bytes)).toThrow(StoreError);
+    expect(() => store.get("0".repeat(64))).toThrow(StoreError);
+    expect(() => store.sink()).toThrow(StoreError);
   });
 });
 

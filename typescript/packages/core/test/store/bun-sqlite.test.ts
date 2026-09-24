@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
+import { StoreError } from "../../src/store/driver";
 
 // Several host processes share one store file. A write that meets another process's
 // transaction must wait for it, not fail with SQLITE_BUSY (found by the F9.6 two-writers drill).
@@ -34,6 +35,33 @@ describe("bun:sqlite driver", () => {
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an outage is a StoreError; a SQL bug is not", () => {
+    // Can't open: an outage a later try may not meet.
+    expect(() => openBunSqlite("/nonexistent/threads/threads.db")).toThrow(
+      StoreError,
+    );
+    const db = openBunSqlite(":memory:");
+    try {
+      db.exec("CREATE TABLE t (x INTEGER PRIMARY KEY)");
+      db.run("INSERT INTO t (x) VALUES (?)", [1]);
+      const bugs = [
+        () => db.exec("SELEC 1"),
+        () => db.run("INSERT INTO t (x) VALUES (?)", [1]),
+        () => db.all("SELECT nope FROM t", []),
+      ];
+      for (const bug of bugs) {
+        expect(bug).toThrow();
+        try {
+          bug();
+        } catch (error) {
+          expect(error).not.toBeInstanceOf(StoreError);
+        }
+      }
+    } finally {
+      db.close();
     }
   });
 });

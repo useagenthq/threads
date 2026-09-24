@@ -1,5 +1,5 @@
 import { Database, SQLiteError } from "bun:sqlite";
-import { type SqliteDriver, StoreError } from "./driver";
+import { outage, type SqliteDriver, StoreError } from "./driver";
 
 /**
  * A SqliteDriver on `bun:sqlite`: WAL, synchronous=FULL, and full fsync (acted on only by
@@ -36,12 +36,16 @@ function open(path: string): SqliteDriver {
   };
 }
 
-/** SQLite's errors, raised as StoreError: what a host may try again later. */
+/** SQLite's outages, raised as StoreError: what a host may try again later. A bug stays itself. */
 function guarded<T>(run: () => T): T {
   try {
     return run();
   } catch (error) {
-    if (error instanceof SQLiteError)
+    if (
+      error instanceof SQLiteError &&
+      typeof error.code === "string" &&
+      outage(error.code)
+    )
       throw new StoreError(error.message, { cause: error });
     throw error;
   }

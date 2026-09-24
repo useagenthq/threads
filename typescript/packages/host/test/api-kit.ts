@@ -50,6 +50,14 @@ export function serve(store: Store, model: Model, instructions?: string): Host {
     model,
     ...(instructions === undefined ? {} : { instructions }),
   });
+  return serveAgent(store, support);
+}
+
+/** A host of `support` on `store`, stopped after the test. */
+export function serveAgent(
+  store: Store,
+  support: Parameters<typeof host>[0]["agents"][string],
+): Host {
   const h = host({ store, authenticate, agents: { support } });
   hosts.push(h);
   return h;

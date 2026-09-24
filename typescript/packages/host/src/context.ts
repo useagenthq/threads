@@ -6,6 +6,7 @@ import {
   JsonValue,
   type KnownEvent,
   knownEvents,
+  type LogStore,
   openStore,
   type Principal,
   principalKey,
@@ -205,8 +206,8 @@ export class HostContext {
     if (streak !== undefined && Date.now() < streak.atMs) return "busy";
     // Said once when it failed; the watch drops it now.
     if (this.#notRetried.delete(thread.branch)) return "done";
-    const { log } = await this.open(tenant);
-    const read = log.read(thread.branch);
+    const read = await this.#read(tenant, thread.branch);
+    if (read === undefined) return "busy";
     if (!read.ok) {
       console.error(
         `threads host: run on ${thread.branch} not recovered (${read.error.code}: ${read.error.message})`,
@@ -258,6 +259,21 @@ export class HostContext {
     console.error(
       `threads host: run on ${thread.branch} not retried (${why instanceof Error ? why.message : String(why)})`,
     );
+  }
+
+  /** The branch's log; undefined after a store error, which joins the branch's streak. */
+  async #read(
+    tenant: string,
+    branch: BranchId,
+  ): Promise<ReturnType<LogStore["read"]> | undefined> {
+    try {
+      const { log } = await this.open(tenant);
+      return log.read(branch);
+    } catch (error) {
+      if (!(error instanceof StoreError)) throw error;
+      this.#failed(branch, error);
+      return undefined;
+    }
   }
 
   /** One more store error in the branch's streak: the next look waits twice as long. */
