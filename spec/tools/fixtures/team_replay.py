@@ -1,14 +1,14 @@
 # pyright: strict
-"""Staged replay cases (spec/schema/README.md, "Teams"): the pending_wakes row a legacy wake leaves,
-a member's settlement waking the idle lead, and a receipt that differs from its sender's mail."""
+"""Staged Phase 1 replay cases (spec/schema/README.md, "Teams"): a member's settlement waking the
+idle lead, a receipt that differs from its sender's mail, and the starting window's tree walk.
+The legacy pending_wakes case is legacy_wake_rows."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from .common import eid, text
-from .pieces import reduce_case, user
-from .team_index import pending_wakes
+from .pieces import user
 from .team_pieces import (
     LEAD,
     LEAD_BRANCH,
@@ -24,8 +24,7 @@ from .team_pieces import (
     provenance,
     team_log,
 )
-from .team_steps import FAM, idle, materialize, received, start, tool, write_team
-from .wakes import one_append_log
+from .team_steps import idle, materialize, received, start, tool, write_team
 
 if TYPE_CHECKING:
     import pathlib
@@ -37,26 +36,10 @@ KIDS = ("0192a000-0000-7000-8000-0000000000c9", "0192a000-0000-7000-8000-0000000
 
 
 def build(root: pathlib.Path) -> None:
-    _pending_row(root)
     _tree(root, notified=False)
     _tree(root, notified=True)
     _settle(root)
     _receipt_mismatch(root)
-
-
-def _pending_row(root: pathlib.Path) -> None:
-    log = one_append_log()
-    reduce_case(
-        root,
-        (
-            "legacy-wake-pending-row",
-            FAM,
-            "legacy-wake-in-the-late-result-append's log: the child that finished leaves no "
-            "pending_wakes row, and the one still running keeps its row.",
-        ),
-        log,
-        {"pending_wakes": pending_wakes([log])},
-    )
 
 
 def _settle(root: pathlib.Path) -> None:

@@ -62,6 +62,8 @@ def _bounce(events: list[Obj], env: Obj, sent: dict[str, Obj]) -> str | None:
     refused = sent.get(text(obj(refusal["data"])["mail_id"]))
     if refused is None:
         return None
+    if env["provenance"] != refused["provenance"]:
+        return "43: a bounce's provenance is not its refused mail's"
     if refused["kind"] == "ask":
         ok = env.get("ask_id") == refused["ask_id"] and "result" in env
         return None if ok else "43: an ask's bounce must name the ask and carry the result"

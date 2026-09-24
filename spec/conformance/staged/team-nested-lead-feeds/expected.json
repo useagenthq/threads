@@ -1,18 +1,39 @@
 {
   "outcome": "ok",
   "states": {
-    "lead": {
-      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
-      "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+    "inner": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b6",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b6",
       "epoch": 1,
-      "turns_completed": 1,
+      "turns_completed": 0,
       "pending_calls": [],
       "effects": [],
       "parked": [],
       "fork_points": [],
       "usage": {
-        "input_tokens": 170,
-        "output_tokens": 30,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_responses": 0
+      },
+      "transcript": [],
+      "status": "idle",
+      "head": {
+        "seq": 1,
+        "hash": "c7204e2af38b56db672d494572bafaa93f27bb4f5f621a1636cc32a1651aaebf"
+      }
+    },
+    "lead": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 80,
+        "output_tokens": 20,
         "unknown_responses": 0
       },
       "transcript": [
@@ -27,16 +48,38 @@
         {
           "role": "tool",
           "event_id": "0192e001-0000-7000-8000-00000000000a"
-        },
-        {
-          "role": "assistant",
-          "event_id": "0192e001-0000-7000-8000-00000000000c"
         }
       ],
-      "status": "idle",
+      "status": "in_turn",
       "head": {
-        "seq": 14,
-        "hash": "2288b3156daef93ffc35c4bd3905db5b55fa57d1aebbf71390dcc758cf8ef521"
+        "seq": 10,
+        "hash": "8af1dddde34f2d8e3d870152e3e460b0703285be15ebe18fb9b2682fa307784b"
+      }
+    },
+    "researcher": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_responses": 0
+      },
+      "transcript": [
+        {
+          "role": "user",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        }
+      ],
+      "status": "in_turn",
+      "head": {
+        "seq": 2,
+        "hash": "8dfada12f1b2d0d51d875f3a8e2e284f07bd82cb6175595316853393326e795f"
       }
     },
     "team": {
@@ -69,6 +112,13 @@
         "lead_thread_id": "0192a000-0000-7000-8000-0000000000b1",
         "team_log_branch_id": "0192b000-0000-7000-8000-0000000000b3",
         "closed_at": null
+      },
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000002",
+        "tenant_id": "acme",
+        "lead_thread_id": "0192a000-0000-7000-8000-0000000000b2",
+        "team_log_branch_id": "0192b000-0000-7000-8000-0000000000b6",
+        "closed_at": null
       }
     ],
     "team_members": [
@@ -82,20 +132,9 @@
         "thread_id": "0192a000-0000-7000-8000-0000000000b1",
         "branch_id": "0192b000-0000-7000-8000-0000000000b1",
         "provenance": null,
-        "state": "idle",
-        "result": {
-          "member": {
-            "tenant": "acme",
-            "team": "0192c000-0000-7000-8000-000000000001",
-            "name": "lead",
-            "generation": 1
-          },
-          "status": "completed",
-          "output": {
-            "text": "Started the researcher."
-          }
-        },
-        "updated_seq": 14
+        "state": "running",
+        "result": null,
+        "updated_seq": 2
       },
       {
         "team_id": "0192c000-0000-7000-8000-000000000001",
@@ -105,7 +144,7 @@
         "agent": "researcher",
         "config_hash": "66f5255887dece1271d2dfa9bedb5c3e4faf71de4d33464555b256ba93ffc446",
         "thread_id": "0192a000-0000-7000-8000-0000000000b2",
-        "branch_id": null,
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
         "provenance": {
           "principal": {
             "issuer": "api",
@@ -118,9 +157,23 @@
           },
           "via": []
         },
-        "state": "starting",
+        "state": "running",
         "result": null,
-        "updated_seq": 8
+        "updated_seq": 2
+      },
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000002",
+        "name": "researcher",
+        "generation": 1,
+        "role": "lead",
+        "agent": "researcher",
+        "config_hash": "66f5255887dece1271d2dfa9bedb5c3e4faf71de4d33464555b256ba93ffc446",
+        "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "provenance": null,
+        "state": "running",
+        "result": null,
+        "updated_seq": 2
       }
     ],
     "mail": [
@@ -167,8 +220,8 @@
           }
         },
         "created_at": 1790000009000,
-        "state": "pending",
-        "consumed_seq": null
+        "state": "consumed",
+        "consumed_seq": 2
       }
     ],
     "asks": [],
@@ -237,27 +290,32 @@
       },
       {
         "team_id": "0192c000-0000-7000-8000-000000000001",
-        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
-        "seq": 11
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 1
       },
       {
         "team_id": "0192c000-0000-7000-8000-000000000001",
-        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
-        "seq": 12
-      },
-      {
-        "team_id": "0192c000-0000-7000-8000-000000000001",
-        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
-        "seq": 13
-      },
-      {
-        "team_id": "0192c000-0000-7000-8000-000000000001",
-        "branch_id": "0192b000-0000-7000-8000-0000000000b1",
-        "seq": 14
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 2
       },
       {
         "team_id": "0192c000-0000-7000-8000-000000000001",
         "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+        "seq": 1
+      },
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000002",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 1
+      },
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000002",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "seq": 2
+      },
+      {
+        "team_id": "0192c000-0000-7000-8000-000000000002",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b6",
         "seq": 1
       }
     ],
@@ -265,10 +323,9 @@
   },
   "tree": {
     "counted": [
-      "lead"
-    ],
-    "pending": [
+      "lead",
       "researcher-1"
-    ]
+    ],
+    "pending": []
   }
 }

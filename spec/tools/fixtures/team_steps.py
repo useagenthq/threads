@@ -109,9 +109,10 @@ def materialize(
     task: Obj,
     agent: str = "researcher",
     where: tuple[str, str] = (MEMBER_BRANCH, MEMBER_THREAD),
+    team: Obj | None = None,
 ) -> Log:
     """The member's log opened with its task as the first input."""
-    log = member_log(started_id, agent, where)
+    log = member_log(started_id, agent, where, team)
     text_ = text(task["body"]["text"]) if isinstance(task["body"], dict) else ""
     host(log, "user_input", {"source": "team_task", "text": text_, "mail_id": task["mail_id"]})
     return log
