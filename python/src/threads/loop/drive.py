@@ -34,7 +34,7 @@ from threads.log import (
     ToolResultLateEvent,
     TurnCompletedEvent,
 )
-from threads.loop import calls, gates, output, parallel, record, retries, tool_gates
+from threads.loop import calls, gates, output, parallel, questions, record, retries, tool_gates
 from threads.loop.defaults import context, max_pauses
 from threads.loop.drafts import draft
 from threads.loop.history import (
@@ -89,7 +89,7 @@ async def drive(rt: Runtime) -> Halt:
 async def _step(rt: Runtime) -> Halt | None:
     fold = rt.fold
     if fold.parked:
-        return parked(rt.events, fold.parked)
+        return await _still_parked(rt)
     if not fold.in_turn:
         return Idle(_last_reason(rt.events))
     cancel = open_cancel(rt.events)
@@ -103,6 +103,15 @@ async def _step(rt: Runtime) -> Halt | None:
         # Every call of the response is recorded and authorized before any of them runs.
         return await (record.record_calls(rt) if owed else parallel.run_pending(rt))
     return await _next(rt)
+
+
+async def _still_parked(rt: Runtime) -> Halt | None:
+    """Parked, unless an expired question closes now (then the turn goes on)."""
+    waiting = len(rt.fold.parked)
+    halt = await questions.expire(rt)
+    if halt is not None or len(rt.fold.parked) < waiting:
+        return halt
+    return parked(rt.events, rt.fold.parked)
 
 
 async def _notify_parked(rt: Runtime) -> None:

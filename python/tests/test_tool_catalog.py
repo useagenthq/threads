@@ -17,6 +17,7 @@ VECTOR: dict[str, JsonValue] = json.loads(
 CATALOG = (SPEC / "schema" / "tools.v1.catalog.json").read_bytes()
 MODELS = {
     "ask": tools_v1.AskInput,
+    "ask_user": tools_v1.AskUserInput,
     "bash": tools_v1.BashInput,
     "cancel": tools_v1.CancelInput,
     "computer": tools_v1.ComputerInput,

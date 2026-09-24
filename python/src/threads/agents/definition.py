@@ -71,6 +71,9 @@ class Definition[D]:
     team_limits: TeamLimits = field(default_factory=TeamLimits)
     in_team: bool = False
     """Pinned as a team's member: offered the team tools."""
+    answerer: bool = False
+    """A host answers for the run (a channel conversation or an HTTP API call): ask_user is
+    offered. Never for agent.run(), a schedule or a subagent."""
     allowed: frozenset[str] | None = None
     """A subagent's tools are its own filtered to these, its parent's pinned names: a child only
     narrows. final_output is exempt."""
@@ -169,6 +172,7 @@ class Definition[D]:
                 team=bool(self.subagents) or self.member,
                 handoffs=bool(self.handoffs),
                 members=self.team is not None or self.in_team,
+                answerer=self.answerer and not self.member,
             ),
             gated=self.catalog.gated(),
             skills=bool(self.skills),

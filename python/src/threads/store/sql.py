@@ -17,6 +17,7 @@ from threads._generated.store_sql import STORE_SQL, STORE_VERSION
 from threads.log import BranchId, ForkEvent, ParseError, ThreadId
 from threads.log.digest import sha256_hex
 from threads.store.lines import head_line
+from threads.store.project_rows import project_rows, write_rows
 from threads.store.verify import Segment, StoredEvent, VerifiedLog
 
 LOCAL_TENANT: Final = "local"
@@ -258,6 +259,8 @@ def insert_segments(
             row = replace(row, dropped_ref=dropped_ref)
         insert_branch(conn, row)
         insert_events(conn, segment.events, sha256_hex(segment.last_line))
+        # The index rows its settlements imply, never judged against today's clock.
+        write_rows(conn, tenant_id, project_rows([e for e, _ in segment.events]))
     return None
 
 

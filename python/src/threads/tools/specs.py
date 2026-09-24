@@ -24,6 +24,7 @@ class _Entry(TypedDict):
 _ENTRIES: Final = TypeAdapter(list[_Entry]).validate_python(json.loads(tools_v1.TOOL_CATALOG))
 
 MODELS: Final[Mapping[str, type[StrictModel]]] = {
+    "ask_user": tools_v1.AskUserInput,
     "bash": tools_v1.BashInput,
     "computer": tools_v1.ComputerInput,
     "computer_screenshot": tools_v1.ComputerScreenshotInput,
@@ -123,11 +124,12 @@ def search_tool_spec(deferred_names: Sequence[str]) -> ToolSpec:
 
 
 def agent_tools(
-    *, spawn: bool, team: bool, handoffs: bool, members: bool = False
+    *, spawn: bool, team: bool, handoffs: bool, members: bool = False, answerer: bool = False
 ) -> frozenset[str]:
     """spawn_agent with subagents, the task-board tools in a subagent team, handoff with handoff
-    targets, and the team tools for a lead (agent(team=...)) and its members."""
-    wanted = (("spawn_agent", spawn), ("handoff", handoffs))
+    targets, the team tools for a lead (agent(team=...)) and its members, and ask_user when a
+    host answers for the run (a channel conversation or an HTTP API call)."""
+    wanted = (("spawn_agent", spawn), ("handoff", handoffs), ("ask_user", answerer))
     chosen = frozenset(n for n, on in wanted if on) | (
         PINNED_MEMBERS if members else frozenset[str]()
     )

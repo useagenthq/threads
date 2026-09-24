@@ -7,7 +7,7 @@ TEAM: Final = frozenset({"send_message", "team_task_claim", "team_task_create", 
 """Offered to a team: an agent with subagents, and every child it spawns."""
 PINNED_MEMBERS: Final = frozenset({"send", "start"})
 """The team tools pinned and run so far: lane 21E pins ask, reply, wait, monitor and cancel."""
-FRAMEWORK: Final = TEAM | PINNED_MEMBERS | {"todo_write", "handoff", "spawn_agent"}
+FRAMEWORK: Final = TEAM | PINNED_MEMBERS | {"todo_write", "handoff", "spawn_agent", "ask_user"}
 """Log-only tools: `read_only` is exact, since only log state changes."""
 FINAL_OUTPUT: Final = "final_output"
 """The structured-output tool, pinned with an output model."""

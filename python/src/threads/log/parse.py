@@ -25,6 +25,7 @@ type ApiCode = Literal[
     "not_found",
     "forbidden",
     "no_open_question",
+    "invalid_answer",
     "not_parked",
     "idempotency_key_reused",
     "idempotency_key_principal_mismatch",

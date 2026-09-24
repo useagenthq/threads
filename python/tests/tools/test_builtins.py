@@ -28,7 +28,7 @@ ALL = specs(
     egress_denied=True,
     memory=Writes(),
     knowledge=True,
-    framework=agent_tools(spawn=True, team=True, handoffs=True),
+    framework=agent_tools(spawn=True, team=True, handoffs=True, answerer=True),
     gated=GATED,
     skills=True,
 )

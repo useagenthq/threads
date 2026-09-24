@@ -26,7 +26,7 @@ TEAM_TABLES: Final = (
     "team_feed",
 )
 """Every team-keyed index table: a doomed lead's team takes all of its rows."""
-_PER_BRANCH: Final = ("events", "leases", "observer_cursors", "pending_wakes")
+_PER_BRANCH: Final = ("events", "leases", "observer_cursors", "pending_wakes", "questions")
 
 
 @dataclass(frozen=True, slots=True)

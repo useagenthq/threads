@@ -13,9 +13,11 @@ from typing import TYPE_CHECKING, Final, Literal
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._generated.host_api_v1 import Appended, SettingsChange
+from threads._generated.tools_v1 import AskUserInput
 from threads.agents.store import LIVE, Store, now_ms, open_store
 from threads.log import (
     BranchId,
+    CallId,
     ModelSettings,
     ParkAddress,
     ParseError,
@@ -25,6 +27,7 @@ from threads.log import (
     ThreadStartedEvent,
     UserInputEvent,
 )
+from threads.log.ask_user import Ask, ask_of, invalid_answer, match_answer
 from threads.loop.runtime import LOST
 from threads.reduce import Fold
 from threads.reduce.handlers import to_json
@@ -199,9 +202,44 @@ def requester(events: Sequence[StoredEvent]) -> Principal | None:
     return None
 
 
-def answer_text(text: str | Sequence[str]) -> str:
-    """A list answer joins with newlines: a comma may sit inside a choice (spec, Multi-choice)."""
-    return text if isinstance(text, str) else "\n".join(text)
+def question(fold: Fold, call_id: str) -> Ask:
+    """The open question's ask_user input. Rule 46 keeps an unreadable one from parking; one that
+    parked anyway takes free text."""
+    call = fold.calls.get(CallId(call_id))
+    ask = None if call is None else ask_of(dict(call.data.input))
+    return FREE if ask is None else ask
+
+
+FREE: Final = AskUserInput(question="?")
+
+
+def answering(
+    fold: Fold, call_id: str, text: str | Sequence[str], principal: Principal
+) -> Ok[str] | Err[ParseError]:
+    """The recorded answer to an open question from `principal`, strict to its options."""
+    if ParkAddress(kind="input", id=call_id) not in fold.parked:
+        return Err(ParseError("no_open_question", f"no open question {call_id}"))
+    if requester(fold.events) != principal:
+        return forbidden("only the principal who asked may answer")
+    ask = question(fold, call_id)
+    recorded = match_answer(ask, text)
+    if recorded is None:
+        return Err(ParseError("invalid_answer", invalid_answer(ask)))
+    return Ok(recorded)
+
+
+def answered(fold: Fold, call_id: str, preview: str, principal: Principal) -> tuple[Draft, ...]:
+    """tool_result{origin: answered} by the asker, then resumed."""
+    data: dict[str, JsonValue] = {
+        "call_id": call_id,
+        "is_error": False,
+        "completeness": "complete",
+        "preview": preview,
+        "origin": "answered",
+    }
+    result = first("tool_result", data, actor("user", principal))
+    address = ParkAddress(kind="input", id=call_id)
+    return (result, *resumed(fold, address, _id(result)))
 
 
 async def answer(
@@ -212,26 +250,15 @@ async def answer(
     principal: Principal,
 ) -> Controlled:
     """The answer to an open ask_user question: tool_result{origin: answered} by the principal
-    whose input opened the turn, then resumed."""
+    whose input opened the turn, then resumed. With options only an option is an answer."""
     if principal.tenant != store.tenant:
         return forbidden("another tenant's thread")
-    preview = answer_text(text)
-    address = ParkAddress(kind="input", id=call_id)
 
     def build(fold: Fold) -> Ok[Sequence[Draft]] | Err[ParseError]:
-        if address not in fold.parked:
-            return Err(ParseError("no_open_question", f"no open question {call_id}"))
-        if requester(fold.events) != principal:
-            return forbidden("only the principal who asked may answer")
-        data: dict[str, JsonValue] = {
-            "call_id": call_id,
-            "is_error": False,
-            "completeness": "complete",
-            "preview": preview,
-            "origin": "answered",
-        }
-        result = first("tool_result", data, actor("user", principal))
-        return Ok((result, *resumed(fold, address, _id(result))))
+        recorded = answering(fold, call_id, text, principal)
+        if isinstance(recorded, Err):
+            return recorded
+        return Ok(answered(fold, call_id, recorded.value, principal))
 
     return await append(store, branch, build)
 

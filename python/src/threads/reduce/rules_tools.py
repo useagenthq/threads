@@ -1,15 +1,17 @@
 """Tool calls, approvals, effects, results, context edits, cancellation and parking (semantic
-rules 7, 8, 9, 11, 13, 19, 25 in spec/schema/README.md)."""
+rules 7, 8, 9, 11, 13, 19, 25, 46 and 47 in spec/schema/README.md)."""
 
 from collections.abc import Callable, Mapping
 
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import (
+    AnswerRejectedEvent,
     ApprovalBinding,
     ApprovalDeniedEvent,
     ApprovalGrantedEvent,
     ApprovalRequestedEvent,
+    CallId,
     CancelledEvent,
     CancelRequestedEvent,
     ContextEditedEvent,
@@ -27,6 +29,7 @@ from threads.log import (
     ToolResultEvent,
     ToolResultLateEvent,
 )
+from threads.log.ask_user import Ask, accepts_recorded, ask_of
 from threads.reduce.fold import EffectStatus, Fold, Result, reject
 from threads.reduce.handlers import Handler, on
 from threads.reduce.redaction import span_error, text_part
@@ -112,8 +115,12 @@ def _tool_result(fold: Fold, event: ToolResultEvent) -> ParseError | None:
     data = event.data
     if data.call_id not in fold.pending:
         return reject(event, f"no pending tool_call {data.call_id}")
-    if data.origin == "answered" and ParkAddress(kind="input", id=data.call_id) not in fold.parked:
-        return reject(event, "an answered result needs an open parked input address")
+    if data.origin == "answered":
+        if not _asking(fold, data.call_id):
+            return reject(event, "an answered result needs an open parked input address")
+        ask = _ask(fold, data.call_id)
+        if ask is not None and not accepts_recorded(ask, data.preview):
+            return reject(event, f"the answer to {data.call_id} is none of its options")
     fold.pending.remove(data.call_id)
     fold.results[data.call_id] = data
     if data.origin == "deferred":
@@ -159,8 +166,34 @@ def _cancelled(fold: Fold, event: CancelledEvent) -> ParseError | None:
     return None
 
 
-def _parked(fold: Fold, event: ParkedEvent) -> None:
-    fold.parked.append(event.data.address)
+def _asking(fold: Fold, call_id: str) -> bool:
+    return ParkAddress(kind="input", id=call_id) in fold.parked
+
+
+def _ask(fold: Fold, call_id: str) -> Ask | None:
+    """The ask_user call's input when the question rules accept it (rule 46)."""
+    call = fold.calls.get(CallId(call_id))
+    if call is None or call.data.name != "ask_user":
+        return None
+    return ask_of(dict(call.data.input))
+
+
+def _parked(fold: Fold, event: ParkedEvent) -> ParseError | None:
+    address = event.data.address
+    if address.kind == "input":
+        call_id = CallId(address.id)
+        if call_id not in fold.pending or fold.calls[call_id].data.name != "ask_user":
+            return reject(event, f"a question park on {address.id}, no pending ask_user")
+        if _ask(fold, address.id) is None:
+            return reject(event, f"ask_user {address.id} breaks the question rules")
+    fold.parked.append(address)
+    return None
+
+
+def _answer_rejected(fold: Fold, event: AnswerRejectedEvent) -> ParseError | None:
+    if not _asking(fold, event.data.call_id):
+        return reject(event, f"answer_rejected for {event.data.call_id}, no open question")
+    return None
 
 
 def _resumed(fold: Fold, event: ResumedEvent) -> None:
@@ -186,5 +219,6 @@ HANDLERS: Mapping[type, Handler] = dict(
         on(CancelledEvent, _cancelled),
         on(ParkedEvent, _parked),
         on(ResumedEvent, _resumed),
+        on(AnswerRejectedEvent, _answer_rejected),
     ]
 )

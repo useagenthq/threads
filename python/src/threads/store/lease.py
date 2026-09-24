@@ -9,7 +9,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from threads.log import BranchId, ParseError
-from threads.store import approvals
+from threads.store import approvals, questions
 from threads.store.sql import Branch, branch, insert_branch, insert_events, root, transaction
 from threads.store.verify import StoredEvent
 
@@ -170,6 +170,7 @@ def append(
             insert_events(conn, batch.rows, batch.head_hash)
             events = tuple(event for event, _ in batch.rows)
             approvals.record(conn, stored.tenant_id, events)
+            questions.record(conn, stored.tenant_id, events, now)
             refused = after(conn, stored, batch)
             if refused is not None:
                 raise _RollbackError(refused)

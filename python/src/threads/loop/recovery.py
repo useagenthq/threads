@@ -14,7 +14,14 @@ from typing import TYPE_CHECKING, assert_never
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import CancelledEvent, EventId, ModelRequestEvent, SteerEvent, ToolSpec
+from threads.log import (
+    CancelledEvent,
+    EventId,
+    ModelRequestEvent,
+    ResumedEvent,
+    SteerEvent,
+    ToolSpec,
+)
 from threads.loop import calls, effects, record
 from threads.loop.attempt import response_draft
 from threads.loop.drafts import draft
@@ -64,14 +71,16 @@ async def recover(rt: Runtime) -> Halt | None:
 
 def _open_turn_to_close(rt: Runtime) -> bool:
     """An open turn with nothing pending closes as interrupted, unless none of its input was sent
-    yet (no model_request after its last user_input or steer) or a cancel is durable in it: the
-    run then continues it, or carries the cancel out."""
+    yet (no model_request after its last user_input or steer), a cancel is durable in it, or a
+    control just unparked it (its last event is resumed): the run then continues it, or carries
+    the cancel out."""
     fold = rt.fold
     if not fold.in_turn or fold.pending or fold.open_requests or fold.parked:
         return False
     if record.owed(rt):
         return False  # the response's calls are recorded next, never left without results
-    if open_cancel(rt.events) is not None:
+    if open_cancel(rt.events) is not None or isinstance(rt.events[-1], ResumedEvent):
+        # A control unparked the turn (an answer, an expiry) with no run holding the branch.
         return False
     # The turn's opener (an input, a woken, a receipt) or a later steer.
     opened = turn_start(rt.events) or 0
