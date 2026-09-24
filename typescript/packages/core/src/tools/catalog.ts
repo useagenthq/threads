@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Opt, Strict } from "../log/zod-types";
 import {
+  AskUserInput,
   HandoffInput,
   SendMessageInput,
   SpawnAgentInput,
@@ -299,6 +300,12 @@ const ENTRIES: readonly CatalogEntry[] = [
     name: "team_task_update",
     description: "Complete, fail or release a team task you claimed.",
     input: TeamTaskUpdateInput,
+  },
+  {
+    name: "ask_user",
+    description:
+      "Ask the user who started this conversation a question and wait for the reply. With options, only a listed option is accepted.",
+    input: AskUserInput,
   },
   {
     name: "todo_write",

@@ -1,8 +1,9 @@
 import type { EventOf, Fold } from "../fold/state";
 import { sameAddress } from "../fold/state";
+import { acceptsRecorded } from "../tools/ask-user";
 import { invalid, type Violation } from "./violation";
 
-// Rules 7, 8, 9 (call_id, approval consumption), 11, 13, 19 and 25.
+// Rules 7, 8, 9 (call_id, approval consumption), 11, 13, 19, 25, 46 and 47.
 
 /** Rule 9: a call_id is used once. */
 export function checkToolCall(fold: Fold, e: EventOf<"tool_call">): Violation {
@@ -19,16 +20,47 @@ export function checkToolResult(
   const { call_id: callId, origin } = e.data;
   if (!fold.pending.has(callId))
     return invalid(`tool_result for ${callId}, which has no pending tool_call`);
-  const question = { kind: "input", id: callId } as const;
-  if (
-    origin === "answered" &&
-    !fold.parked.some((address) => sameAddress(address, question))
-  ) {
+  if (origin !== "answered") return undefined;
+  if (!asking(fold, callId))
     return invalid(
       `answered tool_result for ${callId} without an open question`,
     );
-  }
-  return undefined;
+  const ask = fold.asks.get(callId);
+  return ask === undefined ||
+    ask === "invalid" ||
+    acceptsRecorded(ask, e.data.preview)
+    ? undefined
+    : invalid(`the answer to ${callId} is none of its options`);
+}
+
+function asking(fold: Fold, callId: string): boolean {
+  const question = { kind: "input", id: callId } as const;
+  return fold.parked.some((address) => sameAddress(address, question));
+}
+
+/** Rule 46: a park on {kind: input} names a pending ask_user call the question rules accept. */
+export function checkQuestionPark(
+  fold: Fold,
+  e: EventOf<"parked">,
+): Violation {
+  const { address } = e.data;
+  if (address.kind !== "input") return undefined;
+  const ask = fold.asks.get(address.id);
+  if (!fold.pending.has(address.id) || ask === undefined)
+    return invalid(`a question park on ${address.id}, no pending ask_user`);
+  return ask === "invalid"
+    ? invalid(`ask_user ${address.id} breaks the question rules`)
+    : undefined;
+}
+
+/** Rule 47: a rejected answer names an open question. */
+export function checkAnswerRejected(
+  fold: Fold,
+  e: EventOf<"answer_rejected">,
+): Violation {
+  return asking(fold, e.data.call_id)
+    ? undefined
+    : invalid(`answer_rejected for ${e.data.call_id}, no open question`);
 }
 
 /** Rule 7: a late result follows a deferred placeholder, once. */

@@ -1,0 +1,10 @@
+{
+  "name": "ask-user-parks-on-call",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "An allowed ask_user call with valid options parks the branch on {input, call_id} for 24 hours; the model is not called.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

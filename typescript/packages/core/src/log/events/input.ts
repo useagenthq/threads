@@ -285,3 +285,26 @@ export const ScheduleSkipped: EventDef<
     "An occurrence that was reserved but not run: missed (it fell due while no host ran), overlap (the schedule's previous run was still going) or removed (its agent is no longer served, or now pins another config than the thread was started with). Skipping it cannot change reduce or render output.",
   data: ScheduleSkippedData,
 });
+
+const ANSWER_REJECTIONS = ["not_an_option"] as const;
+
+export const AnswerRejectedData: Strict<{
+  call_id: typeof CallId;
+  delivery_event_id: typeof EventId;
+  reason: EnumOf<typeof ANSWER_REJECTIONS>;
+}> = z.strictObject({
+  call_id: CallId.describe("The open ask_user call the reply was for."),
+  delivery_event_id: EventId.describe("The reply's channel_delivery."),
+  reason: z.enum(ANSWER_REJECTIONS),
+});
+export const AnswerRejected: EventDef<
+  "answer_rejected",
+  typeof AnswerRejectedData,
+  true
+> = event({
+  type: "answer_rejected",
+  critical: true,
+  description:
+    "The asker's channel reply matched none of the open question's options (rule 47). The question stays open; the host derives the correction message from this event. Render v1 renders nothing for it.",
+  data: AnswerRejectedData,
+});

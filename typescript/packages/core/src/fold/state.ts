@@ -7,6 +7,7 @@ import type {
   Policy,
   ToolSpec,
 } from "../log";
+import type { Ask } from "../tools/ask-user";
 import { emptyTeam, type TeamFold } from "./team";
 import { emptyWake, type WakeFold } from "./wake";
 
@@ -136,6 +137,8 @@ export type Fold = {
   readonly messageIds: Set<string>;
   readonly itemKeys: Set<string>;
   readonly occurrenceIds: Set<string>;
+  /** Each ask_user call's input, or invalid when rule 46 refuses it (rules 25, 46, 47). */
+  readonly asks: Map<string, Ask | "invalid">;
   readonly wake: WakeFold;
   readonly team: TeamFold;
 };
@@ -192,6 +195,7 @@ export function emptyFold(): Fold {
     messageIds: new Set(),
     itemKeys: new Set(),
     occurrenceIds: new Set(),
+    asks: new Map(),
     wake: emptyWake(),
     team: emptyTeam(),
   };

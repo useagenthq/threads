@@ -1,5 +1,6 @@
 import { assertNever } from "../assert-never";
 import type { KnownEvent, ToolSpec } from "../log";
+import { askOf } from "../tools/ask-user";
 import { applyAgents } from "./agents";
 import { applyControl } from "./control";
 import {
@@ -126,6 +127,7 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "operator_request":
     case "operator_refused":
     case "message_policy_decided":
+    case "answer_rejected":
       return;
     case "tools_loaded":
       for (const t of e.data.tools) fold.loaded.set(t.name, t.spec_ref);
@@ -279,6 +281,8 @@ function applyCall(fold: Fold, e: CallEvent): void {
         late: false,
       });
       fold.pending.add(e.data.call_id);
+      if (e.data.name === "ask_user")
+        fold.asks.set(e.data.call_id, askOf(e.data.input) ?? "invalid");
       return;
     }
     case "permission_decision":

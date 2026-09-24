@@ -44,6 +44,7 @@ from . import (
     policy,
     policy_shell,
     prompt_cache,
+    questions,
     recovery,
     ref_team,
     renders,
@@ -134,6 +135,7 @@ FAMILIES = (
     legacy_wake_rows,
     run_cases,
     dynamic,
+    questions,
 )
 
 
@@ -237,7 +239,7 @@ def main() -> int:
             problems += (
                 tool_inputs.check() + tool_groups.check() + team_wire.check() + team_ops.check()
             )
-            problems += handoff_transcripts.check()
+            problems += handoff_transcripts.check() + questions.check()
             problems += agent_pins.check()
             problems += anthropic_requests.check() + dynamic.check()
             problems += tool_search_vectors.check()
@@ -262,6 +264,7 @@ def main() -> int:
         anthropic_requests.write()
         dynamic.write()
         tool_search_vectors.write()
+        questions.write()
         otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
         for built, dest in ((out, CASES), (staged, STAGED), *otel_parts):
             shutil.rmtree(dest, ignore_errors=True)

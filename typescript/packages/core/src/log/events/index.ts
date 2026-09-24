@@ -38,6 +38,7 @@ import {
   ToolResultLate,
 } from "./effects";
 import {
+  AnswerRejected,
   ChannelDelivery,
   Heartbeat,
   Injected,
@@ -165,6 +166,7 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
     typeof OperatorRefused.schema,
     typeof MessagePolicyDecided.schema,
     typeof ToolsLoaded.schema,
+    typeof AnswerRejected.schema,
   ],
   "type"
 > = z.discriminatedUnion("type", [
@@ -239,6 +241,7 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
   OperatorRefused.schema,
   MessagePolicyDecided.schema,
   ToolsLoaded.schema,
+  AnswerRejected.schema,
 ]);
 export type KnownEvent = z.infer<typeof KnownEvent>;
 
@@ -315,6 +318,7 @@ export const EVENT_FRAGMENTS: readonly z.ZodType[] = [
   OperatorRefused.fragment,
   MessagePolicyDecided.fragment,
   ToolsLoaded.fragment,
+  AnswerRejected.fragment,
 ];
 
 export * from "./agents";

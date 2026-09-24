@@ -1,0 +1,9 @@
+{
+  "name": "ask-user-rejected-without-question-rejected",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "answer_rejected for a call with no open question (rule 47): invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

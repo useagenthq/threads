@@ -1,0 +1,10 @@
+{
+  "name": "ask-user-invalid-options-closed",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "ask_user options that are equal under the matching rule: the call is closed with an error result (not_executed) and never parks; the model sees the error.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

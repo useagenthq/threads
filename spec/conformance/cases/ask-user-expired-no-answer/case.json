@@ -1,0 +1,10 @@
+{
+  "name": "ask-user-expired-no-answer",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "A question past its expires_at with no answer: the next run records the error result no answer (not_executed) and resumed, then the turn goes on.",
+  "clock": {
+    "now": 1790086405000
+  },
+  "model_script": "model.json"
+}

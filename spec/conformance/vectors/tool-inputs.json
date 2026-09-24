@@ -477,6 +477,69 @@
       "valid": false
     },
     {
+      "tool": "ask_user",
+      "input": {
+        "question": "Staging or production?"
+      },
+      "valid": true
+    },
+    {
+      "tool": "ask_user",
+      "input": {
+        "question": "Which?",
+        "options": [
+          "a",
+          "b"
+        ],
+        "multi_select": true
+      },
+      "valid": true
+    },
+    {
+      "tool": "ask_user",
+      "input": {
+        "question": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "ask_user",
+      "input": {
+        "question": "Which?",
+        "options": [
+          "a"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "tool": "ask_user",
+      "input": {
+        "question": "Which?",
+        "options": [
+          "a",
+          ""
+        ]
+      },
+      "valid": false
+    },
+    {
+      "tool": "ask_user",
+      "input": {
+        "question": "Which?",
+        "multi_select": "yes"
+      },
+      "valid": false
+    },
+    {
+      "tool": "ask_user",
+      "input": {
+        "question": "Which?",
+        "default": "a"
+      },
+      "valid": false
+    },
+    {
       "tool": "todo_write",
       "input": {
         "todos": []

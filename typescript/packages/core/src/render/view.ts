@@ -293,6 +293,7 @@ function visible(e: KnownEvent): VisibleEvent | undefined {
     case "operator_request":
     case "operator_refused":
     case "message_policy_decided":
+    case "answer_rejected":
       return undefined;
     default:
       return assertNever(e);

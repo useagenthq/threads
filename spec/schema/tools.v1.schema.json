@@ -19,6 +19,32 @@
       ],
       "type": "object"
     },
+    "AskUserInput": {
+      "additionalProperties": false,
+      "properties": {
+        "multi_select": {
+          "description": "Default false. With options: the user may pick several; no option may contain a comma or a line break.",
+          "type": "boolean"
+        },
+        "options": {
+          "description": "The only answers accepted, distinct ignoring case and surrounding spaces. Include an escape option such as Other when the list may not cover every answer. Omit for a free-text answer.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "question": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "type": "object"
+    },
     "BashInput": {
       "additionalProperties": false,
       "properties": {

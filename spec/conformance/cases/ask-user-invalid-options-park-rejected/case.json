@@ -1,0 +1,9 @@
+{
+  "name": "ask-user-invalid-options-park-rejected",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "A park on {input, call_id} whose ask_user options are equal under the matching rule (rule 46): invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

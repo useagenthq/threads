@@ -88,6 +88,13 @@ CASES_: tuple[tuple[str, Obj, bool], ...] = (
     ("search_knowledge", {"query": "refund", "sources": [""]}, False),
     ("search_knowledge", {"query": "refund", "tenant_id": "b"}, False),
     ("search_knowledge", {"query": ""}, False),
+    ("ask_user", {"question": "Staging or production?"}, True),
+    ("ask_user", {"question": "Which?", "options": ["a", "b"], "multi_select": True}, True),
+    ("ask_user", {"question": ""}, False),
+    ("ask_user", {"question": "Which?", "options": ["a"]}, False),
+    ("ask_user", {"question": "Which?", "options": ["a", ""]}, False),
+    ("ask_user", {"question": "Which?", "multi_select": "yes"}, False),
+    ("ask_user", {"question": "Which?", "default": "a"}, False),
     ("todo_write", {"todos": []}, True),
     ("todo_write", {"todos": [{"id": "1", "content": "Fix it", "status": "pending"}]}, True),
     (

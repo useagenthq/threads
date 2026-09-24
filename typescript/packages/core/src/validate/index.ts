@@ -9,7 +9,9 @@ import {
   checkCancelled,
   checkContextEdit,
   checkEffect,
+  checkAnswerRejected,
   checkLateResult,
+  checkQuestionPark,
   checkToolCall,
   checkToolResult,
 } from "./calls";
@@ -46,7 +48,7 @@ import { checkWoken } from "./wake";
 
 /**
  * The semantic rules that need earlier events (spec/schema/README.md, "Semantic rules" 6-13
- * and 17-46, but 43), checked against the fold before `line` is applied. Rules 1-4 are the chain's,
+ * and 17-49, but 43), checked against the fold before `line` is applied. Rules 1-4 are the chain's,
  * 5 is the parser's, and 14-16 need rendering or a fork request.
  */
 export function validateNext(
@@ -157,7 +159,9 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "context_preflight_blocked":
       return undefined;
     case "parked":
-      return checkTeamPark(fold, e);
+      return checkQuestionPark(fold, e) ?? checkTeamPark(fold, e);
+    case "answer_rejected":
+      return checkAnswerRejected(fold, e);
     case "woken":
       return checkNotEnded(fold) ?? checkWoken(fold, e);
     case "team_opened":

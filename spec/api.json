@@ -386,7 +386,7 @@
           "type": {"array": {"union": [{"$ref": "#/types/Tool"}, {"$ref": "#/types/McpServer"}]}},
           "required": false,
           "default": [],
-          "doc": "App tools and MCP servers. Built-in tools come from the sandbox and the options below."
+          "doc": "App tools and MCP servers. Built-in tools come from the sandbox and the options below; todo_write is always pinned, and ask_user only for runs a host starts from a channel conversation or an authenticated HTTP API call (not agent.run(), schedule runs or subagents), so a thread started one way continues only the same way."
         },
         {
           "name": "extensions",
@@ -2619,7 +2619,7 @@
               "kind": "positional",
               "type": {"union": [{"prim": "string"}, {"array": {"prim": "string"}}]},
               "required": true,
-              "doc": "The answer text, or the chosen options as a list (joined with newlines)."
+              "doc": "The answer text, or the chosen options as a list. With options, each must be an option or its 1-based number (literal text only when an option is itself a number), compared after trimming whitespace and lowercasing ASCII letters; a multi_select reply may also separate choices with commas or line breaks. The recorded answer is each chosen option's offered spelling, joined with newlines in first-reply order. Anything else is invalid_answer, with the options in its message; without options any non-blank text is accepted."
             },
             {
               "name": "principal",
@@ -2631,9 +2631,9 @@
           ],
           "returns": {
             "result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"},
-            "errors": ["forbidden", "no_open_question", "branch_busy"]
+            "errors": ["forbidden", "no_open_question", "invalid_answer", "branch_busy"]
           },
-          "doc": "Answers an open ask_user question, recorded as that call's result, then resumes the branch. No built-in tool asks questions yet."
+          "doc": "Answers an open ask_user question, recorded as that call's result, then resumes the branch. An unanswered question closes after 24 hours with the error result no answer."
         },
         "resolveParked": {
           "ts": "resolveParked",
@@ -4579,6 +4579,22 @@
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Event"},
               "required": true,
               "doc": "A log event to reply with: a turn's final model_response or an open approval card. Return one op per message to send, or none."
+            }
+          ],
+          "returns": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"}}
+        },
+        "renderText": {
+          "ts": "renderText",
+          "py": "render_text",
+          "doc": "Outbound ops for a plain message the host writes itself: an open ask_user question with its choices, or the correction after a reply that matched none of them.",
+          "async": false,
+          "params": [
+            {
+              "name": "text",
+              "kind": "positional",
+              "type": {"prim": "string"},
+              "required": true,
+              "doc": "The message text, never empty."
             }
           ],
           "returns": {"array": {"$ref": "urn:threads:schema:events:v1#/$defs/JsonObject"}}

@@ -39,6 +39,31 @@ export const TodoWriteInput: Strict<{ todos: Arr<TodoItem> }> = z.strictObject({
     .describe("The complete new list; ids are unique."),
 });
 
+/**
+ * ask_user. Options unique under the matching rule, and free of the reply separators when
+ * multi_select, are semantic rule 46 (spec/schema/README.md, "Questions and remembered rules").
+ */
+export const AskUserInput: Strict<{
+  question: z.ZodString;
+  options: Opt<Arr<z.ZodString>>;
+  multi_select: Opt<z.ZodBoolean>;
+}> = z.strictObject({
+  question: Text,
+  options: z
+    .array(Text)
+    .min(2)
+    .optional()
+    .describe(
+      "The only answers accepted, distinct ignoring case and surrounding spaces. Include an escape option such as Other when the list may not cover every answer. Omit for a free-text answer.",
+    ),
+  multi_select: z
+    .boolean()
+    .optional()
+    .describe(
+      "Default false. With options: the user may pick several; no option may contain a comma or a line break.",
+    ),
+});
+
 export const SpawnAgentInput: Strict<{
   agent: z.ZodString;
   prompt: z.ZodString;

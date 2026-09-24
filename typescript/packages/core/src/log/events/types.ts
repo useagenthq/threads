@@ -71,5 +71,6 @@ export const EVENT_TYPES = [
   "operator_refused",
   "message_policy_decided",
   "tools_loaded",
+  "answer_rejected",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];

@@ -2868,6 +2868,51 @@
       ],
       "type": "object"
     },
+    "ev_answer_rejected": {
+      "description": "The asker's channel reply matched none of the open question's options (rule 47). The question stays open; the host derives the correction message from this event. Render v1 renders nothing for it.",
+      "properties": {
+        "critical": {
+          "const": true
+        },
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "call_id": {
+              "$ref": "#/$defs/CallId",
+              "description": "The open ask_user call the reply was for."
+            },
+            "delivery_event_id": {
+              "$ref": "#/$defs/EventId",
+              "description": "The reply's channel_delivery."
+            },
+            "reason": {
+              "enum": [
+                "not_an_option"
+              ]
+            }
+          },
+          "required": [
+            "call_id",
+            "delivery_event_id",
+            "reason"
+          ],
+          "type": "object"
+        },
+        "type": {
+          "const": "answer_rejected"
+        },
+        "type_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "type",
+        "type_version",
+        "critical",
+        "data"
+      ],
+      "type": "object"
+    },
     "ev_approval_denied": {
       "properties": {
         "actor": {

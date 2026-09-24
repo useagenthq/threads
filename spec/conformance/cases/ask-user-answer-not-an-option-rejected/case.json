@@ -1,0 +1,9 @@
+{
+  "name": "ask-user-answer-not-an-option-rejected",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "An answered tool_result whose preview is none of the ask_user options (rule 25): invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

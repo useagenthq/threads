@@ -1,0 +1,584 @@
+{
+  "description": "ask_user's question rules and strict answers (spec/schema/README.md, \"Questions and remembered rules\"). inputs: schema-valid ask_user inputs and whether rule 46 accepts them. replies: an accepted input, a reply (text, or a list as Thread.answer takes it) and the recorded answer, or null when it is invalid_answer. messages: the question and correction texts a channel shows.",
+  "inputs": [
+    {
+      "input": {
+        "question": "Staging or production?"
+      },
+      "valid": true
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ],
+        "multi_select": true
+      },
+      "valid": true
+    },
+    {
+      "input": {
+        "question": "Street?",
+        "options": [
+          "Straße",
+          "STRASSE"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "input": {
+        "question": "How many?",
+        "options": [
+          "1",
+          "10"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "input": {
+        "question": "Road?",
+        "options": [
+          "ΟΔΟΣ",
+          "x"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "input": {
+        "question": "Ok?",
+        "options": [
+          "Yes",
+          " yes "
+        ]
+      },
+      "valid": false
+    },
+    {
+      "input": {
+        "question": "Ok?",
+        "options": [
+          " Yes",
+          "yes"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "input": {
+        "question": "Ok?",
+        "options": [
+          "Yes",
+          "yes"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "input": {
+        "question": "Ok?",
+        "options": [
+          "x",
+          "  "
+        ]
+      },
+      "valid": false
+    },
+    {
+      "input": {
+        "question": "Ok?",
+        "multi_select": true
+      },
+      "valid": false
+    },
+    {
+      "input": {
+        "question": "Ok?",
+        "multi_select": false
+      },
+      "valid": true
+    },
+    {
+      "input": {
+        "question": "Ok?",
+        "options": [
+          "a, b",
+          "c"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "input": {
+        "question": "Ok?",
+        "options": [
+          "a, b",
+          "c"
+        ],
+        "multi_select": true
+      },
+      "valid": false
+    },
+    {
+      "input": {
+        "question": "Ok?",
+        "options": [
+          "a\nb",
+          "c"
+        ],
+        "multi_select": true
+      },
+      "valid": false
+    },
+    {
+      "input": {
+        "question": "Ok?",
+        "options": [
+          "a b",
+          "c"
+        ],
+        "multi_select": true
+      },
+      "valid": false
+    }
+  ],
+  "replies": [
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": "2",
+      "answer": "blue"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": " RED ",
+      "answer": "red"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": " blue　",
+      "answer": "blue"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": "02",
+      "answer": "blue"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": "3",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": "0",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": "green",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": "",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": "red, blue",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": "2",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": "٢",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": [
+        "red"
+      ],
+      "answer": "red"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "reply": [
+        "red",
+        "blue"
+      ],
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Street?",
+        "options": [
+          "Straße",
+          "STRASSE"
+        ]
+      },
+      "reply": "STRASSE",
+      "answer": "STRASSE"
+    },
+    {
+      "input": {
+        "question": "Street?",
+        "options": [
+          "Straße",
+          "STRASSE"
+        ]
+      },
+      "reply": "strasse",
+      "answer": "STRASSE"
+    },
+    {
+      "input": {
+        "question": "Street?",
+        "options": [
+          "Straße",
+          "STRASSE"
+        ]
+      },
+      "reply": "STRAßE",
+      "answer": "Straße"
+    },
+    {
+      "input": {
+        "question": "How many?",
+        "options": [
+          "1",
+          "10"
+        ]
+      },
+      "reply": "1",
+      "answer": "1"
+    },
+    {
+      "input": {
+        "question": "How many?",
+        "options": [
+          "1",
+          "10"
+        ]
+      },
+      "reply": "10",
+      "answer": "10"
+    },
+    {
+      "input": {
+        "question": "How many?",
+        "options": [
+          "1",
+          "10"
+        ]
+      },
+      "reply": "2",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Road?",
+        "options": [
+          "ΟΔΟΣ",
+          "x"
+        ]
+      },
+      "reply": "οδος",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Road?",
+        "options": [
+          "ΟΔΟΣ",
+          "x"
+        ]
+      },
+      "reply": "ΟΔΟΣ",
+      "answer": "ΟΔΟΣ"
+    },
+    {
+      "input": {
+        "question": "Road?",
+        "options": [
+          "ΟΔΟΣ",
+          "x"
+        ]
+      },
+      "reply": "2",
+      "answer": "x"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ],
+        "multi_select": true
+      },
+      "reply": "red, RED\n",
+      "answer": "red"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ],
+        "multi_select": true
+      },
+      "reply": "BLUE, red, Blue",
+      "answer": "blue\nred"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ],
+        "multi_select": true
+      },
+      "reply": "2,1",
+      "answer": "blue\nred"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ],
+        "multi_select": true
+      },
+      "reply": "red blue",
+      "answer": "red\nblue"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ],
+        "multi_select": true
+      },
+      "reply": ", ,",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ],
+        "multi_select": true
+      },
+      "reply": "red, green",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ],
+        "multi_select": true
+      },
+      "reply": [
+        "red",
+        "blue"
+      ],
+      "answer": "red\nblue"
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ],
+        "multi_select": true
+      },
+      "reply": [
+        "blue",
+        "2"
+      ],
+      "answer": "blue"
+    },
+    {
+      "input": {
+        "question": "Staging or production?"
+      },
+      "reply": "Staging.",
+      "answer": "Staging."
+    },
+    {
+      "input": {
+        "question": "Staging or production?"
+      },
+      "reply": " Staging. ",
+      "answer": " Staging. "
+    },
+    {
+      "input": {
+        "question": "Staging or production?"
+      },
+      "reply": "   ",
+      "answer": null
+    },
+    {
+      "input": {
+        "question": "Staging or production?"
+      },
+      "reply": [
+        "staging, eu",
+        "production"
+      ],
+      "answer": "staging, eu\nproduction"
+    }
+  ],
+  "messages": [
+    {
+      "input": {
+        "question": "Staging or production?"
+      },
+      "question": "Staging or production?",
+      "correction": "Please answer with some text."
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ]
+      },
+      "question": "Which color?\n\n1. red\n2. blue\n\nReply with the number or the text of your choice.",
+      "correction": "Please answer with one of:\n\n1. red\n2. blue\n\nReply with the number or the text of your choice."
+    },
+    {
+      "input": {
+        "question": "Which color?",
+        "options": [
+          "red",
+          "blue"
+        ],
+        "multi_select": true
+      },
+      "question": "Which color?\n\n1. red\n2. blue\n\nReply with the number or the text of each choice, separated by commas.",
+      "correction": "Please answer with one of:\n\n1. red\n2. blue\n\nReply with the number or the text of each choice, separated by commas."
+    },
+    {
+      "input": {
+        "question": "How many?",
+        "options": [
+          "1",
+          "10"
+        ]
+      },
+      "question": "How many?\n\n- 1\n- 10\n\nReply with the exact text of your choice.",
+      "correction": "Please answer with one of:\n\n- 1\n- 10\n\nReply with the exact text of your choice."
+    }
+  ]
+}

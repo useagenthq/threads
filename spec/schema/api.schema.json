@@ -61,6 +61,7 @@
         "input_denied",
         "stop_hook_limit",
         "no_open_question",
+        "invalid_answer",
         "not_parked",
         "unavailable",
         "timeout",

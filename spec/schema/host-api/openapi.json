@@ -58,7 +58,7 @@
       },
       "AnswerQuestionError": {
         "description": "Typed failure of answerQuestion.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "no_open_question", "branch_busy"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "no_open_question", "invalid_answer", "branch_busy"] } } } } }] } } }
       },
       "ResolveParkedError": {
         "description": "Typed failure of resolveParked.",
@@ -194,7 +194,7 @@
       "post": {
         "operationId": "answerQuestion",
         "x-api": ["Thread.answer"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "no_open_question", "branch_busy"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "no_open_question", "invalid_answer", "branch_busy"],
         "parameters": [
           { "$ref": "#/components/parameters/thread_id" },
           { "$ref": "#/components/parameters/branch_id" },

@@ -1,0 +1,9 @@
+{
+  "name": "ask-user-rejected-answer-keeps-question-open",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "The asker's channel reply matched no option: channel_delivery then answer_rejected, and the branch stays parked on the question (rule 47).",
+  "clock": {
+    "now": 1790000060000
+  }
+}

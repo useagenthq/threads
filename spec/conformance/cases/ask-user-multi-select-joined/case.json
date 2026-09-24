@@ -1,0 +1,9 @@
+{
+  "name": "ask-user-multi-select-joined",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "A multi_select answer records the chosen options' offered spellings joined with a newline, in reply order; the turn is open again.",
+  "clock": {
+    "now": 1790000060000
+  }
+}
