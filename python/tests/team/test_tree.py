@@ -4,7 +4,6 @@ makes the tree log_corrupt."""
 
 import asyncio
 
-import pytest
 from pydantic import JsonValue
 from team.team_kit import (
     LEAD,
@@ -12,10 +11,9 @@ from team.team_kit import (
     TEAM,
     Line,
     branch_of,
+    case_logs,
     holding,
-    lift_refusal,
     rechain,
-    staged,
 )
 from thread.rewrite_log import rewrite_log
 
@@ -41,7 +39,7 @@ POLICY: JsonValue = {
         }
     ],
 }
-"""The price both languages pin on the staged logs for the tree totals."""
+"""The price both languages pin on the corpus logs for the tree totals."""
 SETTLE_TREE: JsonValue = {
     "currency": "USD",
     "known_nanos": 1800000,
@@ -75,25 +73,22 @@ def _cost(found: Ok[Cost | None] | Err[ParseError]) -> JsonValue:
     return found.value.model_dump(mode="json")
 
 
-def test_the_tree_adds_each_member_from_its_own_log(monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
-    logs = staged("team-settle-wakes-lead")
+def test_the_tree_adds_each_member_from_its_own_log() -> None:
+    logs = case_logs("team-settle-wakes-lead")
     logs = {k: v if k == "team" else rechain(v, _priced) for k, v in logs.items()}
     assert _cost(asyncio.run(_run(logs))) == SETTLE_TREE
 
 
-def test_only_the_lead_priced_leaves_the_member_unpriced(monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
-    logs = staged("team-settle-wakes-lead")
+def test_only_the_lead_priced_leaves_the_member_unpriced() -> None:
+    logs = case_logs("team-settle-wakes-lead")
     logs["lead"] = rechain(logs["lead"], _priced)
     cost = _cost(asyncio.run(_run(logs)))
     lead_only = {"known_nanos": 1380000, "upper_bound_nanos": 1380000}
     assert cost == {**_as_dict(SETTLE_TREE), **lead_only, "complete": False, "bounded": False}
 
 
-def test_a_member_in_the_starting_window_counts_zero(monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
-    logs = staged("team-tree-starting-member-pending")
+def test_a_member_in_the_starting_window_counts_zero() -> None:
+    logs = case_logs("team-tree-starting-member-pending")
     logs["lead"] = rechain(logs["lead"], _priced)
 
     async def main() -> tuple[JsonValue, object]:
@@ -109,31 +104,26 @@ def test_a_member_in_the_starting_window_counts_zero(monkeypatch: pytest.MonkeyP
     assert opened == Ok(PENDING)
 
 
-def test_a_missing_member_log_after_its_notice_is_corrupt(monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
-    found = asyncio.run(_run(staged("team-tree-missing-branch-after-notice-rejected")))
+def test_a_missing_member_log_after_its_notice_is_corrupt() -> None:
+    found = asyncio.run(_run(case_logs("team-tree-missing-branch-after-notice-rejected")))
     assert isinstance(found, Err)
     assert found.error.code == "log_corrupt"
 
 
-def test_an_operator_started_member_names_the_leads_thread_started(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    lift_refusal(monkeypatch)
+def test_an_operator_started_member_names_the_leads_thread_started() -> None:
     logs = {
         k: v if k == "team" else rechain(v, _priced)
-        for k, v in staged("team-operator-start-and-wait").items()
+        for k, v in case_logs("team-operator-start-and-wait").items()
     }
     cost = _cost(asyncio.run(_run(logs)))
     assert _as_dict(cost)["complete"] is True
 
 
-def test_a_forged_backlink_is_corrupt(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_forged_backlink_is_corrupt() -> None:
     """The member's thread_started names another event of the lead than its member_started."""
-    lift_refusal(monkeypatch)
 
     async def main() -> Ok[Cost | None] | Err[ParseError]:
-        store = await holding(staged("team-settle-wakes-lead"))
+        store = await holding(case_logs("team-settle-wakes-lead"))
         assert await rebuild_team_index(await open_store(store), TEAM) == Ok(None)
 
         def forge(lines: list[Line]) -> list[Line]:
@@ -156,17 +146,16 @@ def test_a_forged_backlink_is_corrupt(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "member researcher-1" in found.error.message
 
 
-def test_a_fork_of_the_lead_still_counts_its_member(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_fork_of_the_lead_still_counts_its_member() -> None:
     """The member's backlink names the branch its member_started is on (main), not the fork the
     walk starts from. A repair fork at seq 10 (the start call's result): the fork's own 540,000
     plus the researcher's 420,000, as TypeScript pins."""
-    lift_refusal(monkeypatch)
     fork = BranchId("0192b000-0000-7000-8000-0000000000f1")
 
     async def main() -> Ok[Cost | None] | Err[ParseError]:
         logs = {
             k: v if k == "team" else rechain(v, _priced)
-            for k, v in staged("team-settle-wakes-lead").items()
+            for k, v in case_logs("team-settle-wakes-lead").items()
         }
         store = await holding(logs)
         sq = await open_store(store)

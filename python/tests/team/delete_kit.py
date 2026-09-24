@@ -8,9 +8,9 @@ from team.team_kit import (
     TEAM,
     TENANT,
     Line,
+    case_logs,
     holding,
     rechain,
-    staged,
 )
 
 from threads.agents.store import Store, open_store
@@ -50,7 +50,7 @@ def remapped(raw: bytes, *, lead_parent: JsonValue = None) -> bytes:
 
 
 async def team(case: str) -> Store:
-    store = await holding(staged(case))
+    store = await holding(case_logs(case))
     assert await rebuild_team_index(await open_store(store), TEAM) == Ok(None)
     return store
 
@@ -84,3 +84,14 @@ def parent_is(parent: JsonValue) -> Callable[[list[Line]], list[Line]]:
 def obj(value: JsonValue) -> dict[str, JsonValue]:
     assert isinstance(value, dict)
     return value
+
+
+PLAIN = ThreadId("0192a000-0000-7000-8000-000000000001")
+"""The thread of budget-exceeded-terminal's log: a plain agent with no team."""
+
+
+def plain_child(parent: JsonValue) -> bytes:
+    """A plain agent's log (budget-exceeded-terminal) whose thread_started names `parent`."""
+    return rechain(
+        (CASES / "budget-exceeded-terminal" / "log.jsonl").read_bytes(), parent_is(parent)
+    )

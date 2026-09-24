@@ -1,17 +1,14 @@
 """The `team` conformance kind (spec/conformance/README.md): import and reduce every log, check
 rule 43 across them, fold the index into a fresh store from the logs alone, then walk the lead's
-tree. It runs every corpus team case, and every staged one with the pre-build refusal lifted and
-without `states` (a mail-opened turn needs lane 21A's reducer), until 21A moves them."""
+tree. It runs every corpus team case in full."""
 
 import asyncio
-import json
 from pathlib import Path
 
 import pytest
-from corpus import CASES
 from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
-from team.team_kit import STAGED, holding, index_rows, lift_refusal, team_cases, verified
+from team.team_kit import CASES, holding, index_rows, team_cases, verified
 
 from threads.agents.store import Store, open_store
 from threads.log import ParseError, TeamOpenedEvent, ThreadStartedEvent
@@ -127,46 +124,15 @@ async def _tree(store: Store, leads: dict[str, tuple[str, VerifiedLog]]) -> Foun
     return {"counted": counted, "pending": pending}
 
 
-def _cases() -> list[object]:
-    corpus = [
-        pytest.param(CASES / d.name, True, id=d.name)
-        for d in sorted(CASES.iterdir())
-        if json.loads((d / "case.json").read_text())["kind"] == "team"
-    ]
-    staged = [pytest.param(STAGED / name, False, id=f"staged/{name}") for name in team_cases()]
-    return [*corpus, *staged]
-
-
-@pytest.mark.parametrize(("case", "corpus"), _cases())
-def test_team_case(case: Path, corpus: bool, monkeypatch: pytest.MonkeyPatch) -> None:
-    if not corpus:
-        lift_refusal(monkeypatch)
+@pytest.mark.parametrize("name", team_cases())
+def test_team_case(name: str) -> None:
+    case = CASES / name
     expected = _load(case / "expected.json")
     got = asyncio.run(run(case))
     if expected["outcome"] == "error":
         assert got == expected["error"]
         return
     assert "code" not in got, got
-    if corpus:
-        assert got["states"] == expected["states"]
+    assert got["states"] == expected["states"]
+    assert got["index"] == expected["index"]
     assert got["tree"] == expected["tree"]
-    assert got["index"] == (
-        _before_21a(expected["index"]) if case.name in NEEDS_21A else expected["index"]
-    )
-
-
-NEEDS_21A = frozenset({"team-failed-rebind-bounces"})
-"""Until lane 21A makes a lead's message_received open a turn, the lead row stays as its
-member_idle left it. Pinned exactly, so this fails (and goes) when 21A lands."""
-
-
-def _before_21a(index: JsonValue) -> JsonValue:
-    assert isinstance(index, dict)
-    rows = index["team_members"]
-    assert isinstance(rows, list)
-    lead = {"state": "idle", "updated_seq": 29}
-    fixed: list[JsonValue] = [
-        {**r, **lead} if isinstance(r, dict) and r["role"] == "lead" else r for r in rows
-    ]
-    out: dict[str, JsonValue] = {**index, "team_members": fixed}
-    return out

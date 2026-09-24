@@ -1,6 +1,6 @@
 """The team index (spec/schema/README.md, "Teams", the replay rule): the rows the writer's
 insert_rows/change_rows produce are exactly the ones a rebuild from the logs alone produces, and
-both equal the reference fold pinned in every staged team case's `index`."""
+both equal the reference fold pinned in every team case's `index`."""
 
 import asyncio
 import json
@@ -10,13 +10,12 @@ import pytest
 from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
 from team.team_kit import (
-    STAGED,
+    CASES,
     TEAM,
+    case_logs,
     index_rows,
-    lift_refusal,
     rebuild_all,
     rechain,
-    staged,
     stored,
     team_cases,
     verified,
@@ -38,49 +37,37 @@ from threads.team.index import TeamLog, change_rows, insert_rows, turn_openers
 from threads.team.rebuild import rebuild_team_index
 
 WITH_INDEX = [
-    c for c in team_cases() if "index" in json.loads((STAGED / c / "expected.json").read_text())
+    c for c in team_cases() if "index" in json.loads((CASES / c / "expected.json").read_text())
 ]
 _JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
-NEEDS_21A = "lane 21A: the lead's message_received opens a turn (the reducer doesn't yet)"
 
 
 def _expected(case: str) -> JsonValue:
-    expected = _JSON.validate_json((STAGED / case / "expected.json").read_bytes())
+    expected = _JSON.validate_json((CASES / case / "expected.json").read_bytes())
     assert isinstance(expected, dict)
     return expected["index"]
 
 
-def _cases() -> list[object]:
-    return [
-        pytest.param(c, marks=pytest.mark.xfail(strict=True, reason=NEEDS_21A))
-        if c == "team-failed-rebind-bounces"
-        else c
-        for c in WITH_INDEX
-    ]
-
-
-@pytest.mark.parametrize("case", _cases())
-def test_rebuild_equals_the_reference_fold(case: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
+@pytest.mark.parametrize("case", WITH_INDEX)
+def test_rebuild_equals_the_reference_fold(case: str) -> None:
 
     async def main() -> dict[str, JsonValue]:
-        store = await stored(staged(case))
-        await rebuild_all(store, staged(case))
+        store = await stored(case_logs(case))
+        await rebuild_all(store, case_logs(case))
         return await store.run(index_rows)
 
     assert asyncio.run(main()) == _expected(case)
 
 
 @pytest.mark.parametrize("case", WITH_INDEX)
-def test_append_time_writes_equal_the_rebuild(case: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_append_time_writes_equal_the_rebuild(case: str) -> None:
     """The writer's path: one event at a time, in an order where every sender appended before
     its recipient. The rebuild after a wipe gives the same rows, the feed aside."""
-    lift_refusal(monkeypatch)
 
     async def main() -> tuple[JsonValue, JsonValue]:
-        store = await stored(staged(case))
+        store = await stored(case_logs(case))
         queues: list[tuple[TeamLog, list[Event], frozenset[str]]] = []
-        for label, raw in staged(case).items():
+        for label, raw in case_logs(case).items():
             log = verified(raw)
             assert isinstance(log, Ok), label
             fold = log.value.fold
@@ -90,7 +77,7 @@ def test_append_time_writes_equal_the_rebuild(case: str, monkeypatch: pytest.Mon
             queues.append((team_log, list(fold.events), turn_openers(log.value)))
         await store.run(lambda c: _append_all(c, queues))
         written = await store.run(index_rows)
-        await rebuild_all(store, staged(case))
+        await rebuild_all(store, case_logs(case))
         rebuilt = await store.run(index_rows)
         return _without_feed(written), _without_feed(rebuilt)
 
@@ -129,11 +116,10 @@ def _exists(conn: sqlite3.Connection, query: str, key: object) -> bool:
     return conn.execute(query, (key,)).fetchone() is not None
 
 
-def test_rebuild_of_an_unknown_team_is_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
+def test_rebuild_of_an_unknown_team_is_not_found() -> None:
 
     async def main() -> None:
-        store = await stored(staged("team-settle-wakes-lead"))
+        store = await stored(case_logs("team-settle-wakes-lead"))
         found = await rebuild_team_index(store, "0192c000-0000-7000-8000-00000000ffff")
         assert isinstance(found, Err)
         assert found.error.code == "not_found"
@@ -141,11 +127,10 @@ def test_rebuild_of_an_unknown_team_is_not_found(monkeypatch: pytest.MonkeyPatch
     asyncio.run(main())
 
 
-def test_a_second_rebuild_starts_a_new_feed_epoch(monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
+def test_a_second_rebuild_starts_a_new_feed_epoch() -> None:
 
     async def main() -> None:
-        store = await stored(staged("team-settle-wakes-lead"))
+        store = await stored(case_logs("team-settle-wakes-lead"))
         assert await rebuild_team_index(store, TEAM) == Ok(None)
         assert await rebuild_team_index(store, TEAM) == Ok(None)
         epochs = await store.run(
@@ -158,12 +143,9 @@ def test_a_second_rebuild_starts_a_new_feed_epoch(monkeypatch: pytest.MonkeyPatc
     asyncio.run(main())
 
 
-def test_a_rebuild_refuses_a_forged_receipt_and_writes_nothing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_a_rebuild_refuses_a_forged_receipt_and_writes_nothing() -> None:
     """Rule 43 guards every rebuild: a receipt whose body differs from its sender's."""
-    lift_refusal(monkeypatch)
-    logs = staged("team-settle-wakes-lead")
+    logs = case_logs("team-settle-wakes-lead")
 
     def forge(events: list[dict[str, JsonValue]]) -> list[dict[str, JsonValue]]:
         for e in events:
@@ -206,7 +188,6 @@ def test_a_rebuild_reads_the_logs_inside_its_own_transaction(
 ) -> None:
     """The reads, the rule 43 check and the refold share one IMMEDIATE transaction, so no append
     lands between the read and the wipe."""
-    lift_refusal(monkeypatch)
     seen: list[bool] = []
 
     def export(conn: sqlite3.Connection, branch: BranchId) -> bytes:
@@ -216,7 +197,7 @@ def test_a_rebuild_reads_the_logs_inside_its_own_transaction(
     monkeypatch.setattr(rebuild, "export", export)
 
     async def main() -> None:
-        store = await stored(staged("team-settle-wakes-lead"))
+        store = await stored(case_logs("team-settle-wakes-lead"))
         assert await rebuild_team_index(store, TEAM) == Ok(None)
 
     asyncio.run(main())

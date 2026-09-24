@@ -29,6 +29,8 @@ from threads.log import (
     ThreadStartedEvent,
     UserInputEvent,
 )
+from threads.reduce import Fold, apply
+from threads.reduce.team_fold import mail_renders
 from threads.team.index import json_bytes
 
 type Identity = tuple[str, str, int] | str
@@ -66,14 +68,53 @@ def check_team_logs(
     are not among its own team's logs."""
     team = _team(logs)
     for log in logs:
-        mine = team.identities.get(log.thread_id, frozenset[Identity]())
-        for e in log.events:
-            if team_id is not None and _mail_of_another(e, team_id):
-                continue
-            why = _check(e, log, mine, team)
-            if why is not None:
-                return CrossFailure(log.branch_id, e.seq, f"43: {why}")
+        found = _first_break(log, team, team_id) or _task_turn(log, team, team_id)
+        if found is not None:
+            return found
     return None
+
+
+def _first_break(log: TeamLogEvents, team: _Team, team_id: str | None) -> CrossFailure | None:
+    mine = team.identities.get(log.thread_id, frozenset[Identity]())
+    for e in log.events:
+        if team_id is not None and _mail_of_another(e, team_id):
+            continue
+        why = _check(e, log, mine, team)
+        if why is not None:
+            return CrossFailure(log.branch_id, e.seq, f"43: {why}")
+    return None
+
+
+def _task_turn(log: TeamLogEvents, team: _Team, team_id: str | None) -> CrossFailure | None:
+    """Mail that renders inside a member's task turn belongs to the task's run: one log shows
+    only the task turn's principal (rule 34), and the task envelope, in the starter's log, holds
+    its root request. The log is re-folded with the reducer to know its turns."""
+    fold = Fold(now=0, thread_id=log.thread_id)
+    root: tuple[str, str] | None = None
+    for e in log.events:
+        turn = fold.team.turn
+        if (
+            isinstance(e, MessageReceivedEvent)
+            and turn is not None
+            and turn.root is None
+            and root is not None
+            and not (team_id is not None and _mail_of_another(e, team_id))
+            and mail_renders(e.data.envelope, fold.team.settle)
+            and _root(e.data.envelope) != root
+        ):
+            why = "43: mail of another run joins a member's task turn"
+            return CrossFailure(log.branch_id, e.seq, why)
+        if isinstance(e, UserInputEvent) and e.data.mail_id is not MISSING:
+            task = team.sent.get(e.data.mail_id)
+            root = root if task is None else _root(task)
+        fold.segment = e.branch_id  # the chain was verified; only its state is wanted here
+        apply(fold, e)
+    return None
+
+
+def _root(env: MailEnvelope) -> tuple[str, str]:
+    r = env.provenance.root_request
+    return (r.thread_id, r.event_id)
 
 
 def _mail_of_another(e: Event, team_id: str) -> bool:

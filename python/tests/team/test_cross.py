@@ -1,4 +1,4 @@
-"""Semantic rule 43 across a team's logs: every accepted staged team case passes, and each rule-43
+"""Semantic rule 43 across a team's logs: every accepted team case passes, and each rule-43
 case breaks it exactly at its pinned log and seq."""
 
 import json
@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 import pytest
 from pydantic import JsonValue
-from team.team_kit import STAGED, lift_refusal, rechain, staged, team_cases, verified
+from team.team_kit import CASES, case_logs, rechain, team_cases, verified
 
 from threads.result import Ok
 from threads.team.cross import TeamLogEvents, check_team_logs
@@ -28,7 +28,7 @@ def _check(logs: dict[str, bytes]) -> tuple[str, int] | None:
 
 
 def _expected(case: str) -> tuple[str, int] | None:
-    expected = json.loads((STAGED / case / "expected.json").read_text())
+    expected = json.loads((CASES / case / "expected.json").read_text())
     error = expected.get("error")
     if expected["outcome"] == "ok" or error is None or error["code"] != "invalid_transition":
         return None
@@ -36,9 +36,8 @@ def _expected(case: str) -> tuple[str, int] | None:
 
 
 @pytest.mark.parametrize("case", team_cases())
-def test_staged_team_cases(case: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
-    assert _check(staged(case)) == _expected(case)
+def test_team_cases(case: str) -> None:
+    assert _check(case_logs(case)) == _expected(case)
 
 
 def test_the_rule_43_cases_are_among_them() -> None:
@@ -65,10 +64,9 @@ def _data(line: Line) -> Line:
     return data
 
 
-def test_a_mail_sent_from_a_log_its_from_does_not_name(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_mail_sent_from_a_log_its_from_does_not_name() -> None:
     """The lead's task names researcher-1 as its sender."""
-    lift_refusal(monkeypatch)
-    logs = staged("team-settle-wakes-lead")
+    logs = case_logs("team-settle-wakes-lead")
 
     def forge(e: Line) -> None:
         env = _obj(_data(e)["envelope"])
@@ -83,9 +81,8 @@ def _obj(value: JsonValue) -> Line:
     return value
 
 
-def test_a_member_whose_parent_is_not_its_member_started(monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
-    logs = staged("team-settle-wakes-lead")
+def test_a_member_whose_parent_is_not_its_member_started() -> None:
+    logs = case_logs("team-settle-wakes-lead")
 
     def forge(e: Line) -> None:
         parent = _obj(_data(e)["parent"])
@@ -95,9 +92,8 @@ def test_a_member_whose_parent_is_not_its_member_started(monkeypatch: pytest.Mon
     assert _check(logs) == ("researcher", 1)
 
 
-def test_a_task_taken_by_another_principal(monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
-    logs = staged("team-settle-wakes-lead")
+def test_a_task_taken_by_another_principal() -> None:
+    logs = case_logs("team-settle-wakes-lead")
 
     def forge(e: Line) -> None:
         actor = _obj(e["actor"])

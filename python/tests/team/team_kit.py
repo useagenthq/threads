@@ -1,9 +1,7 @@
 """Team logs in a store, for the tests of the team index, rule 43, tree walks and deletion.
 
-The staged team cases (spec/conformance/staged) are the fixtures: real logs of the Teams
-contract. Until lane 21A implements rules 31-45, every reader refuses a team event with
-unsupported_critical_event, so `lift_refusal` lifts that pre-build refusal for one test. Remove
-it when lane 21A replaces the pre-build refusal.
+The corpus team cases (spec/conformance/cases, kind team) are the fixtures: real logs of the
+Teams contract.
 """
 
 import copy
@@ -12,20 +10,18 @@ import sqlite3
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-import pytest
 from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.store import Store, open_store
-from threads.log import BranchId, Event, ParseError, ThreadId, ThreadStartedEvent
+from threads.log import BranchId, ParseError, ThreadId, ThreadStartedEvent
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
-from threads.reduce import rules_team
 from threads.result import Err, Ok
 from threads.store import SqliteStore, VerifiedLog, sql, verify_export
 from threads.team.rebuild import rebuild_team_index
 
-STAGED = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "staged"
+CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 TEAM = "0192c000-0000-7000-8000-000000000001"
 TENANT = "acme"
 LEAD = ThreadId("0192a000-0000-7000-8000-0000000000b1")
@@ -47,26 +43,17 @@ _PKS: Mapping[str, str] = {
 }
 
 
-def lift_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Readers reduce team logs (rules 31-45 unchecked) for the rest of the test."""
-
-    def admit(_event: Event) -> ParseError | None:
-        return None
-
-    monkeypatch.setattr(rules_team, "not_yet", admit)
-
-
 def team_cases() -> list[str]:
     return sorted(
         d.name
-        for d in STAGED.iterdir()
+        for d in CASES.iterdir()
         if json.loads((d / "case.json").read_text())["kind"] == "team"
     )
 
 
-def staged(case: str) -> dict[str, bytes]:
+def case_logs(case: str) -> dict[str, bytes]:
     """The case's logs by label."""
-    return {p.stem: p.read_bytes() for p in sorted((STAGED / case / "logs").glob("*.jsonl"))}
+    return {p.stem: p.read_bytes() for p in sorted((CASES / case / "logs").glob("*.jsonl"))}
 
 
 def canonical(value: JsonValue) -> bytes:
@@ -96,7 +83,7 @@ def verified(raw: bytes) -> Ok[VerifiedLog] | Err[ParseError]:
 
 
 async def stored(logs: Mapping[str, bytes], tenant: str = TENANT) -> SqliteStore:
-    """A fresh store holding the logs byte for byte (no request replay: the staged cases ship no
+    """A fresh store holding the logs byte for byte (no request replay: the team cases ship no
     artifacts), with empty team tables."""
     return await open_store(await holding(logs, tenant))
 
@@ -170,5 +157,5 @@ def _cell(name: str, value: object) -> JsonValue:
 
 
 def branch_of(thread: ThreadId) -> BranchId:
-    """The staged fixtures number a thread's branch like the thread."""
+    """The team cases number a thread's branch like the thread."""
     return BranchId(thread.replace("0192a000", "0192b000"))

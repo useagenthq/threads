@@ -6,12 +6,10 @@ import asyncio
 import sqlite3
 from typing import TYPE_CHECKING
 
-import pytest
-from team.delete_kit import PENDING, SETTLE, count, delete, parent_is, remapped, team, team_rows
-from team.team_kit import LEAD, MEMBER, add, branch_of, holding, lift_refusal, rechain, staged
+from team.delete_kit import PENDING, PLAIN, SETTLE, count, delete, plain_child, team, team_rows
+from team.team_kit import LEAD, MEMBER, add, branch_of, case_logs, holding
 
 from threads.agents.store import open_store
-from threads.log import ThreadId
 from threads.result import Err, Ok
 from threads.store.deletion import TEAM_TABLES
 
@@ -19,9 +17,8 @@ if TYPE_CHECKING:
     from pydantic import JsonValue
 
 
-def test_a_branch_that_does_not_verify_is_busy(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_branch_that_does_not_verify_is_busy() -> None:
     """It can't be proved free of an effect in doubt, so deletion refuses rather than erase it."""
-    lift_refusal(monkeypatch)
     member = branch_of(MEMBER)
 
     async def main() -> None:
@@ -42,9 +39,8 @@ def test_a_branch_that_does_not_verify_is_busy(monkeypatch: pytest.MonkeyPatch) 
     asyncio.run(main())
 
 
-def test_a_leads_team_is_found_through_its_teams_row(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_leads_team_is_found_through_its_teams_row() -> None:
     """The rows go even when the lead's own log names another team id than its `teams` row."""
-    lift_refusal(monkeypatch)
     renamed = "0192c000-0000-7000-8000-00000000000a"
 
     def rename(c: sqlite3.Connection) -> None:
@@ -60,11 +56,8 @@ def test_a_leads_team_is_found_through_its_teams_row(monkeypatch: pytest.MonkeyP
     asyncio.run(main())
 
 
-def test_deleting_a_background_child_drops_its_parents_wake_row(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    lift_refusal(monkeypatch)
-    kid = ThreadId("0192a000-0000-7000-8000-0000000000c2")
+def test_deleting_a_background_child_drops_its_parents_wake_row() -> None:
+    kid = PLAIN
     sub_parent: JsonValue = {
         "relation": "subagent",
         "thread_id": MEMBER,
@@ -75,8 +68,7 @@ def test_deleting_a_background_child_drops_its_parents_wake_row(
     async def main() -> None:
         store = await team("team-settle-wakes-lead")
         sq = await open_store(store)
-        child = remapped(staged("team-settle-wakes-lead")["researcher"])
-        await add(sq, {"child": rechain(child, parent_is(sub_parent))})
+        await add(sq, {"child": plain_child(sub_parent)})
         await sq.run(
             lambda c: c.execute(
                 "INSERT INTO pending_wakes (branch_id, child_thread_id) VALUES (?, ?)",
@@ -89,11 +81,10 @@ def test_deleting_a_background_child_drops_its_parents_wake_row(
     asyncio.run(main())
 
 
-def test_a_member_whose_lead_is_gone_can_be_deleted(monkeypatch: pytest.MonkeyPatch) -> None:
-    lift_refusal(monkeypatch)
+def test_a_member_whose_lead_is_gone_can_be_deleted() -> None:
 
     async def main() -> None:
-        store = await holding({"researcher": staged("team-settle-wakes-lead")["researcher"]})
+        store = await holding({"researcher": case_logs("team-settle-wakes-lead")["researcher"]})
         assert await delete(store, MEMBER) == Ok(1)
 
     asyncio.run(main())
