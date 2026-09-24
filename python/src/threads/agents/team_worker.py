@@ -269,7 +269,7 @@ class TeamWorker:
 
         def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[None]:
             batch = Batch(tx.fold.seq, tx.now, self._env.mint)
-            rebind_failed(AppendContext(tx.conn, batch, thread, branch), tx.fold, code)
+            rebind_failed(AppendContext(tx.conn, batch, thread, branch), tx.fold, code, tx.now)
             return batch.drafts
 
         ended = await w.append_decided(decide)

@@ -25,9 +25,21 @@ from threads import (
     tool,
 )
 from threads.agents.definition import Definition
+from threads.agents.store import now_ms
 from threads.agents.team_worker import MemberRun, TeamWorker, WorkerEnv
 from threads.agents.teams import member_pin
-from threads.log import Budget, MemberEndedEvent, UserInputEvent
+from threads.log import (
+    BranchId,
+    Budget,
+    MemberEndedEvent,
+    ThreadId,
+    ToolResultEvent,
+    UserInputEvent,
+)
+from threads.result import Ok
+from threads.store import Draft
+from threads.team.rows import member_rows
+from threads.thread.handle import open_thread
 
 ALICE = Principal(issuer="api", tenant="local", subject="alice")
 BOB = Principal(issuer="api", tenant="local", subject="bob")
@@ -211,6 +223,55 @@ def test_h4_a_parked_member_whose_definition_changed_ends_failed_pin_mismatch() 
         assert ended["error"] == {"code": "pin_mismatch", "message": "rebind failed: pin_mismatch"}
         assert len(receipts(await events(store, r.thread), "member_ended")) == 1
         await assert_team_replays(await sq_of(store), r.team.ref.id)
+
+    asyncio.run(main())
+
+
+def test_n5_a_changed_member_with_an_effect_in_doubt_parks_on_it_and_ends_once_settled() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        operator = Principal(issuer="api", tenant="local", subject="operator")
+        r = await _mailer("v1", [start("c1", "researcher", "Mail bob."), say("Started.")]).run(
+            "Go.", store=store
+        )
+        sq = await sq_of(store)
+        rows = await sq.run(lambda c: member_rows(c, r.team.ref.id))
+        row = next(m for m in rows if m.name == "researcher-1")
+        assert row.branch_id is not None
+        branch = BranchId(row.branch_id)
+        member = await open_thread(store, ThreadId(row.thread_id))
+        assert isinstance(member, Ok)
+        pending = await member.value.pending_approvals()
+        assert isinstance(pending, Ok)
+        approved = await member.value.approve(pending.value[0].challenge_id, operator)
+        assert isinstance(approved, Ok), approved
+        # A process crashed right after the email's effect_begin was durable.
+        crashed = await sq.acquire(branch, "crashed", now_ms)
+        assert isinstance(crashed, Ok), crashed
+        begun = await crashed.value.append([Draft("effect_begin", {"call_id": "m1", "attempt": 1})])
+        assert isinstance(begun, Ok), begun
+        await crashed.value.release()
+        # A deploy changed the researcher while the email may have been sent.
+        again = await _mailer("v2", [say("Unused.")]).run("Again.", store=store, thread=r.thread)
+        assert isinstance(again, Parked), again
+        after = await member_events(store, r.team.ref.id, "researcher-1")
+        assert [e.type for e in after][-2:] == ["effect_unknown", "parked"]
+        assert not any(e.type in ("member_ended", "tool_result") for e in after)
+        # A human settles it: the next run ends the member from the record, never re-sending.
+        resolved = await member.value.resolve_parked(f"{branch}:m1", "assume_done", operator)
+        assert isinstance(resolved, Ok), resolved
+        lead = _mailer("v2", [say("Noted."), say("Done.")])
+        third = await lead.run("Once more.", store=store, thread=r.thread)
+        assert isinstance(third, Completed), third
+        settled = await member_events(store, r.team.ref.id, "researcher-1")
+        result = next(e for e in settled if isinstance(e, ToolResultEvent))
+        assert (result.data.call_id, result.data.origin) == ("m1", "executed")
+        ended = await _ended_with(store, r.team.ref.id)
+        assert isinstance(ended, dict)
+        assert ended["status"] == "failed"
+        assert isinstance(ended["error"], dict)
+        assert ended["error"]["code"] == "pin_mismatch"
+        await assert_team_replays(sq, r.team.ref.id)
 
     asyncio.run(main())
 
