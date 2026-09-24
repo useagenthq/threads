@@ -2,7 +2,16 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { openBunSqlite } from "@threads/core/bun-sqlite";
 import { z } from "zod";
-import { finish, go, kill, reap, scratch, spawn, waitAt } from "./drill";
+import {
+  expireLeases,
+  finish,
+  go,
+  kill,
+  reap,
+  scratch,
+  spawn,
+  waitAt,
+} from "./drill";
 import { RACED, RACER_THREAD, TEAM, TEAM_LOG } from "./team-worker";
 
 // Team store drills on real processes: a lead killed with SIGKILL inside its first append leaves
@@ -12,6 +21,7 @@ import { RACED, RACER_THREAD, TEAM, TEAM_LOG } from "./team-worker";
 afterEach(reap);
 
 const WORKER = join(import.meta.dir, "team-worker.ts");
+const TEAM_RUN = join(import.meta.dir, "team-run.ts");
 const Rows = z.array(z.record(z.string(), z.unknown()));
 
 function query(
@@ -89,5 +99,44 @@ describe("team store drills", () => {
       { seq: 1, type: "thread_started" },
       { seq: 2, type: "user_input" },
     ]);
+  });
+
+  test("a lead killed inside its member's settlement: the restart settles the member once and answers", async () => {
+    const dir = scratch();
+    const first = spawn(
+      "run",
+      dir,
+      { DRILL_STOP_AT: "member_settle" },
+      TEAM_RUN,
+    );
+    await waitAt(first, "member_settle");
+    await kill(first);
+    // Nothing of the settling append was stored: the member's turn is still open.
+    expect(
+      query(dir, "SELECT name, state FROM team_members WHERE role = 'member'"),
+    ).toEqual([{ name: "researcher-1", state: "running" }]);
+    expireLeases(dir);
+    const again = spawn("resume", dir, {}, TEAM_RUN);
+    const said = await again.lines.next();
+    expect(await finish(again)).toBe(0);
+    expect(String(said.value)).toBe("completed");
+    expect(
+      query(
+        dir,
+        "SELECT COUNT(*) AS n FROM events WHERE type = 'member_started'",
+      ),
+    ).toEqual([{ n: 1 }]);
+    expect(
+      query(
+        dir,
+        "SELECT COUNT(*) AS n FROM events WHERE type = 'member_idle' OR type = 'member_ended'",
+      ),
+    ).toEqual([{ n: 3 }]);
+    expect(
+      query(
+        dir,
+        "SELECT COUNT(*) AS n FROM mail WHERE kind IN ('member_settled', 'member_ended') AND state = 'consumed'",
+      ),
+    ).toEqual([{ n: 1 }]);
   });
 });

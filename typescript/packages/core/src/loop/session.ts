@@ -12,6 +12,7 @@ import { err, ok, type Result } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import { type DecideTx, isRefusal, type Refusal } from "../store/writer";
 import { Batch } from "../team/batch";
+import { parkNotice } from "../team/park";
 import { turnProvenance } from "../team/provenance";
 import { settle } from "../team/settle";
 import { settlementOf } from "../team/turn-end";
@@ -128,15 +129,18 @@ export class Session {
     const admitted = afterBarrier(this.fold, this.events, drafts);
     if (admitted.length === 0) return undefined;
     const team = this.config.team;
-    if (team !== undefined && admitted.some((d) => d.type === "turn_completed"))
-      return this.#settled(team, admitted);
+    const settles = admitted.some(
+      (d) => d.type === "turn_completed" || d.type === "parked",
+    );
+    if (team !== undefined && settles) return this.#settled(team, admitted);
     return this.#committed(this.#writer.append(admitted));
   }
 
   /**
    * A team thread's turn end carries its settlement in the same append (spec/schema/README.md,
    * "Teams", Settling): member_idle or member_ended with the notifications, refusals and, for a
-   * lead, the cancels they send, decided from the rows in the append's transaction.
+   * lead, the cancels they send, decided from the rows in the append's transaction. A member's
+   * first park carries its one member_parked notice to its starter.
    */
   #settled(team: TeamRuntime, drafts: readonly EventDraft[]): Halt | undefined {
     const events = this.events;
@@ -144,20 +148,29 @@ export class Session {
       events.findLastIndex((e) => e.type === "turn_completed") + 1,
     );
     const how = settlementOf(turn, drafts);
+    let parkedBefore = events.some((e) => e.type === "parked");
     const appended = this.#writer.appendDecided((tx) => {
       const batch = new Batch(tx.chain.fold.seq, tx.now, team.mint);
-      for (const d of drafts) batch.add(d);
       const provenance = turnProvenance(tx.db, tx.chain);
+      const ctx = {
+        db: tx.db,
+        batch,
+        threadId: this.threadId,
+        branchId: this.branchId,
+      };
+      for (const d of drafts) {
+        const id = batch.add(d);
+        if (d.type !== "parked" || parkedBefore || provenance === undefined)
+          continue;
+        parkedBefore = true;
+        parkNotice(
+          { ...ctx, provenance },
+          { eventId: id, reason: d.data.reason },
+        );
+      }
       if (how !== undefined && provenance !== undefined)
         settle(
-          {
-            db: tx.db,
-            batch,
-            threadId: this.threadId,
-            branchId: this.branchId,
-            provenance,
-            put: (text) => this.store(text, "text/plain"),
-          },
+          { ...ctx, provenance, put: (text) => this.store(text, "text/plain") },
           how,
         );
       return ok(batch.drafts);

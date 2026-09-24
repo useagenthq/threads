@@ -2,6 +2,7 @@ import type { Fold } from "../fold/state";
 import { type MailEnvelope, principalKey } from "../log";
 import type { Chain } from "../verify";
 import { received } from "./mail";
+import { takeParkNotice } from "./park";
 import { turnProvenance } from "./provenance";
 import { type MemberRow, ownRows, pendingFor, teamRow } from "./rows";
 import { type AppendContext, refuseAll } from "./settle";
@@ -13,10 +14,9 @@ import { type AppendContext, refuseAll } from "./settle";
 // first row of another. Mail reaching a member that already ended is refused under its writer.
 // Reference: spec/tools/fixtures/ops_consume.py.
 //
-// Lane 21E adds the rest of control mail: applying a cancel, the replies, bounces and notices
-// that complete an ask or a wait, and the member_parked notice. Until then those stay pending,
-// and a pending cancel stops the ordinary mail behind it: a member being cancelled takes no new
-// work.
+// Lane 21E adds the rest of control mail: applying a cancel, and the replies, bounces and
+// notices that complete an ask or a wait. Until then those stay pending, and a pending cancel
+// stops the ordinary mail behind it: a member being cancelled takes no new work.
 
 export type ConsumeContext = AppendContext & { readonly chain: Chain };
 
@@ -41,13 +41,12 @@ type Pass = {
 
 /**
  * Mail a consume can take now, so the worker wakes its recipient for it: all but the control mail
- * lane 21E consumes (a cancel, a reply, an ask's bounce, a park notice).
+ * lane 21E consumes (a cancel, a reply, an ask's bounce).
  */
 export function consumable(env: MailEnvelope): boolean {
   return !(
     env.kind === "cancel" ||
     env.kind === "reply" ||
-    env.kind === "member_parked" ||
     (env.kind === "bounce" && env.ask_id !== undefined)
   );
 }
@@ -88,6 +87,11 @@ function take(
     resume(ctx, env);
     return true;
   }
+  if (control === "park") {
+    // Ordinary mail behind a new park waits for the next consume.
+    if (takeParkNotice(ctx, env, false)) pass.blocked = true;
+    return true;
+  }
   if (pass.blocked) return false;
   const pair = pairOf(env.provenance);
   if (pass.turn !== undefined) {
@@ -117,16 +121,18 @@ function resume(ctx: ConsumeContext, env: MailEnvelope): void {
 }
 
 /**
- * Control mail this lane takes: a task or end notice resolving a `{kind: member}` park. The rest
- * of control mail waits for lane 21E ("later"); anything else is ordinary.
+ * Control mail this lane takes: a member's park notice, and a task or end notice resolving a
+ * `{kind: member}` park. The rest of control mail waits for lane 21E ("later"); anything else is
+ * ordinary.
  */
 function controlOf(
   fold: Fold,
   env: MailEnvelope,
-): "resume" | "later" | "ordinary" {
+): "resume" | "park" | "later" | "ordinary" {
   switch (env.kind) {
-    case "cancel":
     case "member_parked":
+      return "park";
+    case "cancel":
     case "reply":
       return "later";
     case "bounce":

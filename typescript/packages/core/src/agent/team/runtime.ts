@@ -66,7 +66,12 @@ export function teamOf<Deps, Output>(
   });
   worker.start();
   return {
-    runtime: { ...base, notify: worker.notify, progress: worker.progress },
+    runtime: {
+      ...base,
+      notify: worker.notify,
+      progress: worker.progress,
+      busy: worker.busy,
+    },
     stop: () => worker.stop(),
   };
 }

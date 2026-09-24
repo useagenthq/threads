@@ -292,6 +292,8 @@ export type TeamRuntime = {
    * absent, a thread takes its pending mail and stops once idle (a member run by the worker).
    */
   readonly progress?: () => Promise<void>;
+  /** The worker is running a member now: a lead parked on its members waits for it. */
+  readonly busy?: () => boolean;
   /** The event ids of team appends; tests inject deterministic ones. */
   readonly mint?: (seq: number, now: number) => string;
 };

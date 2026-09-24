@@ -75,6 +75,9 @@ export class TeamWorker {
       ? this.#changed.promise
       : Promise.reject(this.#failure.error);
 
+  /** A member run is in flight. */
+  readonly busy = (): boolean => this.#running.size > 0;
+
   start(): void {
     this.#loop = this.#run();
   }
@@ -121,7 +124,10 @@ export class TeamWorker {
   ): (() => Promise<void>) | undefined {
     if (row.state === "starting") return () => this.#materialize(row);
     const branch = row.branch_id;
-    if (branch === null || row.state === "parked") return undefined;
+    if (branch === null) return undefined;
+    // A parked member runs again at a run's start: what it waits on may be answered by now.
+    if (row.state === "parked")
+      return recovering ? () => this.#member(row, branch) : undefined;
     const pending = pendingFor(db, ownRows(db, row.thread_id));
     if (row.state === "ended")
       return pending.length > 0 ? () => this.#refuse(branch) : undefined;

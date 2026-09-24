@@ -5,7 +5,6 @@ import {
   MemberName,
   type MemberRef,
   PosInt,
-  StoredMemberResult,
   TeamId,
   ThreadId,
 } from "../log";
@@ -78,10 +77,6 @@ const MonitorRow: Strict<{
   kind: z.enum(["end", "settle", "task"]),
 });
 export type MonitorRow = z.infer<typeof MonitorRow>;
-
-const ResultRow = z
-  .strictObject({ result: z.instanceof(Uint8Array) })
-  .transform((r) => StoredMemberResult.parse(json(r.result)));
 
 const MEMBER_COLUMNS =
   "team_id, name, generation, role, agent, config_hash, thread_id, branch_id, state";
@@ -195,42 +190,4 @@ export function monitorsOn(
       [team, row.name, row.generation],
     ),
   );
-}
-
-/** Whether a monitor row is still live (neither fired nor observed). */
-export function monitorLive(db: SqliteDriver, monitorId: string): boolean {
-  return (
-    db.all("SELECT 1 FROM monitors WHERE monitor_id = ?", [monitorId]).length >
-    0
-  );
-}
-
-/** The member row whose branch this is, if any: where mail to that writer goes. */
-export function memberAt(
-  db: SqliteDriver,
-  branch: string,
-): MemberRow | undefined {
-  return z
-    .array(MemberRow)
-    .parse(
-      db.all(`SELECT ${MEMBER_COLUMNS} FROM team_members WHERE branch_id = ?`, [
-        branch,
-      ]),
-    )[0];
-}
-
-/** A member row's recorded result, once idle or ended. */
-export function resultOf(
-  db: SqliteDriver,
-  team: TeamId,
-  row: MemberRow,
-): StoredMemberResult | undefined {
-  return z
-    .array(ResultRow)
-    .parse(
-      db.all(
-        "SELECT result FROM team_members WHERE team_id = ? AND name = ? AND generation = ? AND result IS NOT NULL",
-        [team, row.name, row.generation],
-      ),
-    )[0];
 }

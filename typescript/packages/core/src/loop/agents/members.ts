@@ -85,10 +85,11 @@ export function sendTool(
 }
 
 /**
- * A team thread's turns after its input's: while idle, its pending mail is consumed and each turn
- * a receipt opens is run. A member run by the team worker stops once nothing opens a turn; the
- * lead of an in-process run waits for its members until its run ends (spec/schema/README.md,
- * "Run completion"), woken by their progress, its own log moving, or the in-process poll.
+ * A team thread's turns after its input's: while idle, or parked only on its members, its
+ * pending mail is consumed and each turn a receipt opens is run. A member run by the team worker
+ * stops once nothing opens a turn. The lead of an in-process run waits for its members until its
+ * run ends (spec/schema/README.md, "Run completion"), woken by their progress, its own log moving,
+ * or the in-process poll; parked on members, it waits only while the worker is running one.
  */
 export async function teamTurns(
   s: Session,
@@ -97,17 +98,32 @@ export async function teamTurns(
 ): Promise<LoopEnd> {
   const team = teamOf(s);
   let end = first;
-  while (end.kind === "idle") {
+  while (end.kind === "idle" || (end.kind === "parked" && onMembers(s))) {
     // Taken before the checks, so progress made after them still wakes the wait.
     const progress = team.progress?.();
     const moved = s.moved();
     const halted = consumeMail(s);
     if (halted !== undefined) return { kind: "halted", halt: halted };
     if (s.fold.turnOpen) end = await turn();
-    else if (progress === undefined || runStatus(s) !== "running") return end;
+    else if (progress === undefined || !waits(s, team)) return idleOrParked(s);
     else await waitFor(progress, moved);
   }
   return end;
+}
+
+/** Whether every park of this thread is on one of its members (a {kind: member} park). */
+function onMembers(s: Session): boolean {
+  return s.fold.parked.every((p) => p.kind === "member");
+}
+
+/** The lead waits: parked only on members the worker is running, or its run still open. */
+function waits(s: Session, team: TeamRuntime): boolean {
+  if (s.fold.parked.length > 0) return onMembers(s) && team.busy?.() === true;
+  return runStatus(s) === "running";
+}
+
+function idleOrParked(s: Session): LoopEnd {
+  return s.fold.parked.length > 0 ? { kind: "parked" } : { kind: "idle" };
 }
 
 async function waitFor(

@@ -42,8 +42,6 @@ const LATER: ReadonlySet<string> = new Set([
 const CONTROL_21E: ReadonlySet<string> = new Set([
   "ask-reply-closes-ask",
   "ask-bounce-closes-member-ended",
-  "consume-member-parked-parks-lead",
-  "consume-member-parked-after-settle",
   "cancel-applied-running-member",
   "cancel-applied-parked-asker",
   "cancel-applied-asker-with-pending-reply",
