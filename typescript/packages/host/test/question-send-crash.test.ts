@@ -100,18 +100,22 @@ function crashingOn(n: number): FakeChannel {
   };
 }
 
+/** The conversation's thread branch: a team lead's store also holds its team log's branch. */
+const CONVERSATION = `SELECT b.branch_id FROM branches b
+  JOIN channel_threads c ON c.thread_id = b.thread_id AND b.parent_branch_id IS NULL`;
+
 async function branchOf(store: Store): Promise<BranchId> {
   const { db } = await storeConnection(store);
   const [row] = z
     .array(z.object({ branch_id: BranchId }))
-    .parse(db.all("SELECT branch_id FROM branches", []));
+    .parse(db.all(CONVERSATION, []));
   if (row === undefined) throw new Error("no branch");
   return row.branch_id;
 }
 
 async function log(store: Store): Promise<readonly KnownEvent[]> {
   const { db } = await storeConnection(store);
-  if (db.all("SELECT branch_id FROM branches", []).length === 0) return [];
+  if (db.all(CONVERSATION, []).length === 0) return [];
   return knownEventsOf(store, TENANT, await branchOf(store));
 }
 
@@ -172,10 +176,8 @@ async function crashAfterQuestionBegun(
   const first = start(store, ask, crashingOn(1), lead);
   await first.h.ready();
   await first.post(hook("E1", [message("Paint it.", "E1#0")]));
-  // A team lead opens its team first, which takes a while on a loaded CI machine.
-  await until(
-    async () => (await log(store)).some((e) => e.type === "effect_begin"),
-    10_000,
+  await until(async () =>
+    (await log(store)).some((e) => e.type === "effect_begin"),
   );
   await first.h.stop();
 }
@@ -331,6 +333,5 @@ describe("a host send in doubt while a question is open", () => {
       expect(runEnd(events, input.event_id).status).toBe("completed");
       expect(settled(events, "q1")).toEqual(["answered:blue"]);
     },
-    30_000,
   );
 });
