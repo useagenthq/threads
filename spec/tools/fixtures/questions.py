@@ -154,6 +154,7 @@ def build(root: pathlib.Path) -> None:
     _invalid_input(root)
     _strict(root)
     _rejected(root)
+    _resumed(root)
 
 
 def _asked(inp: Obj) -> Log:
@@ -281,7 +282,7 @@ def _invalid_input(root: pathlib.Path) -> None:
     )
 
 
-def _answered(inp: Obj, preview: str) -> Log:
+def _answered(inp: Obj, preview: str, *, resume: bool = True) -> Log:
     log = _parked(inp)
     ans = log.add(
         "tool_result",
@@ -295,7 +296,8 @@ def _answered(inp: Obj, preview: str) -> Log:
         actor="user",
         principal=ALICE,
     )
-    log.add("resumed", {"address": ADDRESS, "cause_event_id": ans["event_id"]})
+    if resume:
+        log.add("resumed", {"address": ADDRESS, "cause_event_id": ans["event_id"]})
     return log
 
 
@@ -308,7 +310,7 @@ def _strict(root: pathlib.Path) -> None:
             "An answered tool_result whose preview is none of the ask_user options "
             "(rule 25): invalid_transition.",
         ),
-        _answered(RGB, "green"),
+        _answered(RGB, "green", resume=False),
     )
     log = _answered(RGB_MULTI, "blue\nred")
     reduce_case(
@@ -371,4 +373,22 @@ def _rejected(root: pathlib.Path) -> None:
             "answer_rejected for a call with no open question (rule 47): invalid_transition.",
         ),
         log,
+    )
+
+
+def _resumed(root: pathlib.Path) -> None:
+    log = _answered(RGB, "red")
+    write_case(
+        root,
+        case(
+            "ask-user-answered-then-resumed",
+            FAM,
+            "recover",
+            "The asker answered and the branch resumed, then the host stopped before the next "
+            "request: recovery doesn't end the turn interrupted, the run sends the answer on.",
+            model_script="model.json",
+        ),
+        log,
+        {"outcome": "ok", "state": reduce(log, NOW), "appended": TAIL},
+        extra={"model.json": {"responses": [FINAL]}},
     )

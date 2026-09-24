@@ -1,0 +1,10 @@
+{
+  "name": "ask-user-answered-then-resumed",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "The asker answered and the branch resumed, then the host stopped before the next request: recovery doesn't end the turn interrupted, the run sends the answer on.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}
