@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack
 from dataclasses import replace
 from functools import partial
-from typing import Final, Literal, Required, TypedDict, Unpack, overload
+from typing import Final, Literal, Required, TypedDict, TypeGuard, Unpack, overload
 
 from pydantic import BaseModel
 
@@ -21,10 +21,17 @@ from threads.agents.catalog import GitOptions, LspOptions, WebOptions, catalog
 from threads.agents.config import ConfigError, Failure
 from threads.agents.definition import Definition
 from threads.agents.results import Completed, RunResult, StreamEvent
-from threads.agents.run import Emit, Input, RunOptions, execute, with_servers
+from threads.agents.run import (
+    Emit,
+    Input,
+    RunOptions,
+    RunOptionsWithDeps,
+    execute,
+    with_servers,
+)
 from threads.agents.setup import set_up
 from threads.agents.skills import Skill, checked
-from threads.agents.tool import json_schema
+from threads.agents.tool import Tool, json_schema
 from threads.hooks.extension import Extension
 from threads.log import Budget, Context, Permissions, Principal, Retry
 from threads.loop.model import Model
@@ -170,13 +177,31 @@ class Agent[D, O]:
             return options["deps"]
         if self._default_deps:
             return self._default_deps[0]
-        raise ConfigError("invalid_config", f"agent {self.name} needs deps for its tools")
+        why = f"agent {self.name} needs deps for its tools: pass run(..., deps=...)"
+        raise ConfigError("invalid_config", f"{why}, or type each tool's context RunContext[None]")
 
-    async def run(self, input: Input, **options: Unpack[RunOptions[D]]) -> RunResult[O]:
-        """Runs one input to a terminal result. Needs no server."""
+    @overload
+    async def run(
+        self: "Agent[None, O]", input: Input, **options: Unpack[RunOptions[None]]
+    ) -> RunResult[O]: ...
+    @overload
+    async def run(self, input: Input, **options: Unpack[RunOptionsWithDeps[D]]) -> RunResult[O]: ...
+    async def run[T](
+        self: "Agent[T, O]", input: Input, **options: Unpack[RunOptions[T]]
+    ) -> RunResult[O]:
+        """Runs one input to a terminal result. Needs no server. `deps` is required only when
+        the agent's tools read deps; tools typed `RunContext[None]` see None."""
         return await self._run(input, options, self._deps(options), _drop)
 
-    def stream(self, input: Input, **options: Unpack[RunOptions[D]]) -> RunStream[O]:
+    @overload
+    def stream(
+        self: "Agent[None, O]", input: Input, **options: Unpack[RunOptions[None]]
+    ) -> RunStream[O]: ...
+    @overload
+    def stream(self, input: Input, **options: Unpack[RunOptionsWithDeps[D]]) -> RunStream[O]: ...
+    def stream[T](
+        self: "Agent[T, O]", input: Input, **options: Unpack[RunOptions[T]]
+    ) -> RunStream[O]:
         """The same run as `run`, streamed. Call it inside a running event loop."""
         queue: asyncio.Queue[StreamEvent | None] = asyncio.Queue()
         run = self._run(input, options, self._deps(options), queue.put_nowait)
@@ -241,10 +266,15 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, o
     given = options.get("tools", ())
     servers = tuple(t for t in given if isinstance(t, ToolServer))
     tools = tuple(t for t in given if not isinstance(t, ToolServer))
-    if not tools:
-        empty: tuple[AppTool[None], ...] = ()
-        return Agent(_definition(options, empty, servers, output), (None,), decode)
+    if _take_no_deps(tools):
+        return Agent(_definition(options, tools, servers, output), (None,), decode)
     return Agent(_definition(options, tools, servers, output), (), decode)
+
+
+def _take_no_deps[D](tools: tuple[AppTool[D], ...]) -> TypeGuard[tuple[AppTool[None], ...]]:
+    """Every tool's context is annotated `RunContext[None]` (or there are none), so a run's deps
+    default to None. Read from the annotations, which are the tools' static type."""
+    return all(isinstance(t, Tool) and t.takes_no_deps() for t in tools)
 
 
 def _output(output: object) -> type[BaseModel] | None:

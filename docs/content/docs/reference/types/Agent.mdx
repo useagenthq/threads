@@ -18,7 +18,7 @@ Building one does no I/O; run() or stream() starts a run.
 
 ### run
 
-Run one input to a terminal result. Needs no server. The run spans its input turn and every later turn of the same request: when the agent starts background subagents or team members, run() waits until each has reported and the lead has reacted (a wake turn), so it returns later and runs more turns; members an operator or an earlier run started never extend it. Python: an agent with app tools needs deps on every run; pass deps=None when its tools take none.
+Run one input to a terminal result. Needs no server. The run spans its input turn and every later turn of the same request: when the agent starts background subagents or team members, run() waits until each has reported and the lead has reacted (a wake turn), so it returns later and runs more turns; members an operator or an earlier run started never extend it.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

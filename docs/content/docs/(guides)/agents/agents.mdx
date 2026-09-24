@@ -266,8 +266,8 @@ shipped = await orders.run(
 </Tab>
 </Tabs>
 
-<Callout type="warn">
-In Python, an agent with app tools needs `deps=` on every run, even when the tools use none: pass `deps=None`. Leaving it out raises `ConfigError("invalid_config")`.
+<Callout>
+In Python, `deps=` is needed only when a tool reads it. When every tool takes `RunContext[None]`, leave it out and tools see `None`. For tools typed with your own deps class, pyright flags a run without `deps=`, and the run raises `ConfigError("invalid_config")`.
 </Callout>
 
 `ctx` also carries `thread_id`, `branch_id`, `principal` (who started the run) and, inside a tool, `call_id` and `effect_key`. See [RunContext](/docs/reference/types/RunContext).

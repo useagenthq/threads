@@ -37,7 +37,7 @@ const thread = opened.value;
 <Tab value="Python">
 
 ```python
-result = await assistant.run("Email Bob hello", store=store, deps=None)
+result = await assistant.run("Email Bob hello", store=store)
 assert isinstance(result, Parked) and result.reason == "awaiting_approval"
 
 thread = result.thread  # already a Thread handle in Python
@@ -94,7 +94,7 @@ for approval in pending.value:
     await thread.approve(approval.challenge_id, me)
 
 # The approved call runs first, then the new input starts the next turn.
-after = await assistant.run("Anything else?", store=store, thread=thread, deps=None)
+after = await assistant.run("Anything else?", store=store, thread=thread)
 ```
 
 </Tab>

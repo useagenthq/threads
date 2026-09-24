@@ -37,7 +37,7 @@ looper = agent(
     budget=Budget(max_model_requests=2),
 )
 
-result = await looper.run("Find it.", store=sqlite(":memory:"), deps=None)
+result = await looper.run("Find it.", store=sqlite(":memory:"))
 if isinstance(result, BudgetExhausted):
     b = result.budget
     print(b.scope, b.limit, b.limit_value, b.observed)  # thread max_model_requests 2 3

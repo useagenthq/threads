@@ -148,7 +148,7 @@ You'll build a small weather agent with one tool. First it runs on a **scripted 
 
 
     async def main() -> None:
-        result = await weather.run("What is the weather in Paris?", store=sqlite(":memory:"), deps=None)
+        result = await weather.run("What is the weather in Paris?", store=sqlite(":memory:"))
         print(result.output if result.status == "completed" else result.status)
 
 
@@ -164,9 +164,6 @@ You'll build a small weather agent with one tool. First it runs on a **scripted 
     It is sunny in Paris.
     ```
 
-    <Callout>
-      In Python, an agent with tools needs `deps=` on every run. Pass `deps=None` when your tools don't use any. See [Agents](/docs/agents/agents).
-    </Callout>
   </Step>
   <Step>
     ### Switch to a real model
@@ -220,7 +217,7 @@ You'll build a small weather agent with one tool. First it runs on a **scripted 
 
 
     async def main() -> None:
-        result = await weather.run("What is the weather in Paris?", store=sqlite(".threads"), deps=None)
+        result = await weather.run("What is the weather in Paris?", store=sqlite(".threads"))
         match result.status:
             case "completed":
                 print(result.output)

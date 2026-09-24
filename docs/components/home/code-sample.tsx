@@ -69,7 +69,7 @@ weather = agent(
 
 
 async def main() -> None:
-    result = await weather.run("What is the weather in Paris?", store=sqlite(".threads"), deps=None)
+    result = await weather.run("What is the weather in Paris?", store=sqlite(".threads"))
     if result.status == "completed":
         print(result.output)
 

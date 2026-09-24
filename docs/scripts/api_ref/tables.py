@@ -73,8 +73,6 @@ NOTES: dict[Member, str] = {
     ("mcp", "runs"): 'Only "host" is supported today; "sandbox" is a setup error.',
     ("agent", "egress"): "Host allowlists are not supported yet in either language: use [] "
     '(deny-all) or "unenforced".',
-    ("Agent", "run"): "Python: an agent with app tools needs deps on every run; "
-    "pass deps=None when its tools take none.",
     ("Thread", "forkPoints"): "TypeScript returns the list itself; Python returns Ok or Err.",
     ("Thread", "todos"): "TypeScript returns the list itself; Python returns Ok or Err.",
     ("Thread", "children"): "TypeScript returns the list itself; Python returns Ok or Err.",
