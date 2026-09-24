@@ -10,8 +10,7 @@ import { changeRows, insertRows, turnOpeners } from "../../src/team/index";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
 import { code, unwrap } from "../store/helpers";
 import {
-  liftTeamRefusal,
-  stagedLogs,
+  caseLogs,
   TENANT,
   type Team,
   teamIndexRows,
@@ -22,8 +21,6 @@ import {
 // The replay rule by construction: the rows a writer leaves, appending each event with
 // insertRows then changeRows in the order the team's appends happened, equal the rows a rebuild
 // folds from the logs alone. And rule 43, forged one clause at a time.
-
-liftTeamRefusal();
 
 const CASES: Readonly<Record<string, readonly string[]>> = {
   "team-settle-wakes-lead": ["lead", "researcher", "team"],
@@ -105,7 +102,7 @@ function written(t: Team): void {
 describe("the replay rule", () => {
   for (const [name, labels] of Object.entries(CASES))
     test(`${name}: appends and a rebuild leave the same rows`, () => {
-      const t = teamStore(stagedLogs(name, labels));
+      const t = teamStore(caseLogs(name, labels));
       const rebuilt = rowsOf(t);
       written(t);
       expect(rowsOf(t)).toEqual(rebuilt);
@@ -113,10 +110,7 @@ describe("the replay rule", () => {
 
   test("a rebuild is idempotent and starts a new feed epoch", () => {
     const t = teamStore(
-      stagedLogs(
-        "team-settle-wakes-lead",
-        CASES["team-settle-wakes-lead"] ?? [],
-      ),
+      caseLogs("team-settle-wakes-lead", CASES["team-settle-wakes-lead"] ?? []),
     );
     const first = teamIndexRows(t.db, [t.team], branches(t));
     unwrap(rebuildTeamIndex(t.store, t.team));
@@ -146,7 +140,7 @@ describe("the replay rule", () => {
         return base.all(sql, params);
       },
     };
-    const t = teamStore(stagedLogs(SETTLE, CASES[SETTLE] ?? []), TENANT, spy);
+    const t = teamStore(caseLogs(SETTLE, CASES[SETTLE] ?? []), TENANT, spy);
     reads.length = 0;
     unwrap(rebuildTeamIndex(t.store, t.team));
     expect(reads.length).toBeGreaterThan(0);
@@ -154,7 +148,7 @@ describe("the replay rule", () => {
   });
 
   test("a team no lead names is not_found", () => {
-    const t = teamStore(stagedLogs("team-settle-wakes-lead", ["lead", "team"]));
+    const t = teamStore(caseLogs("team-settle-wakes-lead", ["lead", "team"]));
     const other = TeamId.parse("0192c000-0000-7000-8000-0000000000ff");
     expect(code(rebuildTeamIndex(t.store, other))).toBe("not_found");
   });
@@ -168,7 +162,7 @@ const SETTLE = "team-settle-wakes-lead";
 function cross(edit: (label: string, line: Line) => Line) {
   const labels = CASES[SETTLE] ?? [];
   return checkTeamLogs(
-    [...stagedLogs(SETTLE, labels, edit).values()].map((bytes) => {
+    [...caseLogs(SETTLE, labels, edit).values()].map((bytes) => {
       const chain = verified(bytes);
       const header = chain.segments[0]?.header;
       if (header === undefined) throw new Error("no header");

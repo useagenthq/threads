@@ -1,4 +1,3 @@
-import { afterAll, beforeAll, mock } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
@@ -8,39 +7,22 @@ import type { SqliteDriver } from "../../src/store";
 import { importSegments } from "../../src/store/import";
 import type { LogStore } from "../../src/store/store";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
-import * as preBuild from "../../src/validate/team";
 import { type VerifiedLog, verifyExport } from "../../src/verify";
 import { fixture, unwrap } from "../store/helpers";
 
-// Shared by the team tests: reading staged team logs into a store, and the index rows as the
+// Shared by the team tests: reading the team cases' logs into a store, and the index rows as the
 // `team` conformance kind compares them.
 
-export const STAGED: string = join(
-  import.meta.dir,
-  "../../../../../spec/conformance/staged",
-);
+const SPEC: string = join(import.meta.dir, "../../../../../spec/conformance");
+/** The team cases of the corpus, whose logs these tests build on. */
+export const CASES: string = join(SPEC, "cases");
+/** Cases still staged for another lane. */
+export const STAGED: string = join(SPEC, "staged");
 
-/**
- * Until lane 21A implements rules 31-45, a reader refuses every team event (validate/team.ts).
- * The team tests read team logs through the real reader, so they lift that refusal for their
- * file only. Remove this when 21A replaces the refusal.
- */
-export function liftTeamRefusal(): void {
-  const original = { ...preBuild };
-  beforeAll(() => {
-    mock.module("../../src/validate/team", () => ({
-      checkNotYetTeam: () => undefined,
-    }));
-  });
-  afterAll(() => {
-    mock.module("../../src/validate/team", () => original);
-  });
-}
-
-/** A staged case's log bytes. */
-export function stagedLog(name: string, label: string): Uint8Array {
+/** A team case's log bytes. */
+export function caseLog(name: string, label: string): Uint8Array {
   return new Uint8Array(
-    readFileSync(join(STAGED, name, "logs", `${label}.jsonl`)),
+    readFileSync(join(CASES, name, "logs", `${label}.jsonl`)),
   );
 }
 
@@ -137,7 +119,7 @@ export function verified(bytes: Uint8Array): VerifiedLog {
 
 /**
  * Stores verified logs byte for byte, as import does, without replaying their model requests:
- * the staged team cases ship no artifacts.
+ * the team cases ship no artifacts.
  */
 export function storeLogs(store: LogStore, logs: readonly VerifiedLog[]): void {
   for (const log of logs)
@@ -149,10 +131,10 @@ export function storeLogs(store: LogStore, logs: readonly VerifiedLog[]): void {
     );
 }
 
-/** The staged teams' tenant: a lead's team is indexed under its principal's tenant. */
+/** The team cases' tenant: a lead's team is indexed under its principal's tenant. */
 export const TENANT = "acme";
 
-/** A staged team, by label, stored and indexed as its appends would have left it. */
+/** A team case, by label, stored and indexed as its appends would have left it. */
 export type Team = {
   readonly store: LogStore;
   readonly db: SqliteDriver;
@@ -177,8 +159,8 @@ export function teamStore(
   return { store, db, team, logs: read };
 }
 
-/** A staged case's logs, each optionally edited and re-chained. */
-export function stagedLogs(
+/** A team case's logs, each optionally edited and re-chained. */
+export function caseLogs(
   name: string,
   labels: readonly string[],
   edit: (
@@ -189,7 +171,7 @@ export function stagedLogs(
   return new Map(
     labels.map((label) => [
       label,
-      relinked(stagedLog(name, label), (line) => edit(label, line)),
+      relinked(caseLog(name, label), (line) => edit(label, line)),
     ]),
   );
 }

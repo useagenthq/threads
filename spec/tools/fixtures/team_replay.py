@@ -40,6 +40,7 @@ def build(root: pathlib.Path) -> None:
     _tree(root, notified=True)
     _settle(root)
     _receipt_mismatch(root)
+    _other_run(root)
 
 
 def _settle(root: pathlib.Path) -> None:
@@ -97,6 +98,36 @@ def _receipt_mismatch(root: pathlib.Path) -> None:
         "receipt, in the researcher's log.",
         {"lead": lead, "researcher": member, "team": team_log()},
         {"code": "invalid_transition", "seq": forged["seq"], "log": "researcher"},
+    )
+
+
+def _other_run(root: pathlib.Path) -> None:
+    """Alice's second run messages the member while its task turn, of her first run, is open."""
+    lead = lead_log()
+    first = text(user(lead, "Research batteries.")["event_id"])
+    started_id, task = start(lead, first, RESEARCHER, "c1")
+    idle(lead, LEAD, "Started the researcher.")
+    second = text(user(lead, "Also check prices.")["event_id"])
+    c = tool(lead, "send", {"to": "researcher-1", "text": "Check prices."}, "c2", "researcher-1")
+    note = envelope(
+        f"{LEAD_BRANCH}:c2",
+        "message",
+        Route(LEAD, "researcher-1", provenance(second)),
+        at(text(c["event_id"])),
+        body=body("Check prices."),
+    )
+    lead.add("message_sent", {"envelope": note})
+    member = materialize(started_id, task)
+    mixed = received(member, note)
+    write_team(
+        root,
+        "team-task-turn-other-run-rejected",
+        "Rule 43: the member's task turn belongs to Alice's first run, and a message of her "
+        "second run is received inside it. One log shows only the task turn's principal, which "
+        "is the same; the task envelope in the lead's log holds the first run's root request: "
+        "invalid_transition at the receipt, in the researcher's log.",
+        {"lead": lead, "researcher": member, "team": team_log()},
+        {"code": "invalid_transition", "seq": mixed["seq"], "log": "researcher"},
     )
 
 

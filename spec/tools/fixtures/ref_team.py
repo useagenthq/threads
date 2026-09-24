@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from .common import obj, text
 from .ref_rules import Check
+from .turn_open import mail_renders
 
 if TYPE_CHECKING:
     import pathlib
@@ -145,11 +146,31 @@ def _cross_one(
     return None
 
 
+def _task_turn(events: list[Obj], sent: dict[str, Obj]) -> tuple[int, str] | None:
+    """Mail that renders inside a member's task turn belongs to the task's run: its
+    root_request is the task envelope's. One log only shows the task turn's principal (rule 34);
+    the task envelope, in the starter's log, holds its root request."""
+    c = Check()
+    task_root: JsonValue = None
+    for e in events:
+        d, t = obj(e["data"]), e["type"]
+        if t == "message_received" and c.turn is not None and c.turn[1] is None:
+            env = obj(d["envelope"])
+            root = obj(env["provenance"])["root_request"]
+            if task_root is not None and mail_renders(env, c.settle) and root != task_root:
+                return (int(str(e["seq"])), "43: mail of another run joins a member's task turn")
+        if t == "user_input" and d.get("mail_id") in sent:
+            task_root = obj(sent[text(d["mail_id"])]["provenance"])["root_request"]
+        c.step(e)
+    return None
+
+
 def cross(logs: dict[str, list[Obj]]) -> Found:
     sent = _sent(logs)
     own = _identities(logs)
     for label in sorted(logs):
         found = _cross_one(logs[label], logs, sent, own[label])
+        found = found or _task_turn(logs[label], sent)
         if found is not None:
             return (label, found[0], found[1])
     return None

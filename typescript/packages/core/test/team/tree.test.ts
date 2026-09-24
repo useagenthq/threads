@@ -3,9 +3,8 @@ import { treeCost } from "../../src/thread/cost-tree";
 import type { VerifiedLog } from "../../src/verify";
 import { code, unwrap } from "../store/helpers";
 import {
+  caseLogs,
   forkedAt,
-  liftTeamRefusal,
-  stagedLogs,
   storeLogs,
   type Team,
   teamStore,
@@ -15,8 +14,6 @@ import {
 // Tree cost with teams (spec/schema/README.md, "Tree walks with teams"): a lead's members are
 // found from its team_members rows and counted after their backlink is checked. The priced
 // totals are pinned in both languages (python/tests/team), so the walks agree byte for byte.
-
-liftTeamRefusal();
 
 const POLICY = {
   currency: "USD",
@@ -61,7 +58,7 @@ const SETTLE = "team-settle-wakes-lead";
 describe("tree cost walks a lead's members", () => {
   test("adds a member from its own log", () => {
     const t = teamStore(
-      stagedLogs(
+      caseLogs(
         SETTLE,
         ["lead", "researcher", "team"],
         pricing(["lead", "researcher"]),
@@ -78,7 +75,7 @@ describe("tree cost walks a lead's members", () => {
 
   test("an unpriced member that ran makes the total incomplete", () => {
     const t = teamStore(
-      stagedLogs(SETTLE, ["lead", "researcher", "team"], pricing(["lead"])),
+      caseLogs(SETTLE, ["lead", "researcher", "team"], pricing(["lead"])),
     );
     expect(unwrap(cost(t))).toEqual({
       currency: "USD",
@@ -91,7 +88,7 @@ describe("tree cost walks a lead's members", () => {
 
   test("a member in the starting window counts zero and leaves the total complete", () => {
     const t = teamStore(
-      stagedLogs(
+      caseLogs(
         "team-tree-starting-member-pending",
         ["lead", "team"],
         pricing(["lead"]),
@@ -108,7 +105,7 @@ describe("tree cost walks a lead's members", () => {
 
   test("a missing branch after the task notification is log_corrupt", () => {
     const t = teamStore(
-      stagedLogs("team-tree-missing-branch-after-notice-rejected", [
+      caseLogs("team-tree-missing-branch-after-notice-rejected", [
         "lead",
         "team",
       ]),
@@ -117,7 +114,7 @@ describe("tree cost walks a lead's members", () => {
   });
 
   test("from a fork of the lead, a member started on the main branch still counts", () => {
-    const logs = stagedLogs(
+    const logs = caseLogs(
       SETTLE,
       ["lead", "researcher", "team"],
       pricing(["lead", "researcher"]),
@@ -146,9 +143,9 @@ describe("tree cost walks a lead's members", () => {
   });
 
   test("a forged backlink is log_corrupt", () => {
-    const t = teamStore(stagedLogs(SETTLE, ["lead", "researcher", "team"]));
+    const t = teamStore(caseLogs(SETTLE, ["lead", "researcher", "team"]));
     // Replace the researcher's stored log with one whose parent names another event.
-    const forged = stagedLogs(SETTLE, ["researcher"], (_, line) =>
+    const forged = caseLogs(SETTLE, ["researcher"], (_, line) =>
       line["type"] === "thread_started"
         ? {
             ...line,

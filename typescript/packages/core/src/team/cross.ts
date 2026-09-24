@@ -1,4 +1,6 @@
-import type { EventOf } from "../fold/state";
+import { apply } from "../fold/apply";
+import { type EventOf, emptyFold } from "../fold/state";
+import { mailRenders } from "../fold/team";
 import type {
   BranchId,
   KnownEvent,
@@ -87,17 +89,67 @@ export function checkTeamLogs(
   team?: TeamId,
 ): CrossFailure | undefined {
   const known = facts(logs);
-  for (const log of logs)
-    for (const e of log.events) {
-      const mail =
-        e.type === "message_sent" || e.type === "message_received"
-          ? e.data.envelope.team
-          : undefined;
-      if (team !== undefined && mail !== undefined && mail !== team) continue;
-      const why = check(e, log, known);
-      if (why !== undefined)
-        return { branchId: log.branchId, seq: e.seq, message: `43: ${why}` };
-    }
+  for (const log of logs) {
+    const found = firstBreak(log, known, team) ?? taskTurn(log, known, team);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/** Only `team`'s mail, when a team is given. */
+function outside(e: KnownEvent, team: TeamId | undefined): boolean {
+  const mail =
+    e.type === "message_sent" || e.type === "message_received"
+      ? e.data.envelope.team
+      : undefined;
+  return team !== undefined && mail !== undefined && mail !== team;
+}
+
+function firstBreak(
+  log: TeamLogEvents,
+  known: Facts,
+  team: TeamId | undefined,
+): CrossFailure | undefined {
+  for (const e of log.events) {
+    const why = outside(e, team) ? undefined : check(e, log, known);
+    if (why !== undefined)
+      return { branchId: log.branchId, seq: e.seq, message: `43: ${why}` };
+  }
+  return undefined;
+}
+
+/**
+ * Mail that renders inside a member's task turn belongs to the task's run: one log shows only
+ * the task turn's principal (rule 34), and the task envelope, in the starter's log, holds its
+ * root request.
+ */
+function taskTurn(
+  log: TeamLogEvents,
+  known: Facts,
+  team: TeamId | undefined,
+): CrossFailure | undefined {
+  const fold = emptyFold();
+  let root: MailEnvelope["provenance"]["root_request"] | undefined;
+  for (const e of log.events) {
+    const inTask =
+      fold.team.turn !== undefined && fold.team.turn.root === undefined;
+    if (
+      e.type === "message_received" &&
+      inTask &&
+      root !== undefined &&
+      !outside(e, team) &&
+      mailRenders(e.data.envelope, fold.team.settle) &&
+      !sameJson(e.data.envelope.provenance.root_request, root)
+    )
+      return {
+        branchId: log.branchId,
+        seq: e.seq,
+        message: "43: mail of another run joins a member's task turn",
+      };
+    if (e.type === "user_input" && e.data.mail_id !== undefined)
+      root = known.sent.get(e.data.mail_id)?.provenance.root_request ?? root;
+    apply(fold, { kind: "event", event: e });
+  }
   return undefined;
 }
 

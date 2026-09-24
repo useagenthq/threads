@@ -8,13 +8,11 @@ import {
 } from "../../src/store/deletion";
 import { caseStore, loadCase } from "../conformance/cases";
 import { code, T0, unwrap } from "../store/helpers";
-import { liftTeamRefusal, stagedLogs, type Team, teamStore } from "./kit";
+import { caseLogs, type Team, teamStore } from "./kit";
 
 // Deleting with teams (Gate 1 §4.15): the deletion set is a fixed point over subagent and
 // team_member children and each doomed lead's team log, deleted in one transaction, refused
 // busy while anything in it runs and thread_in_team for a member or team log without its lead.
-
-liftTeamRefusal();
 
 const REBIND = "team-failed-rebind-bounces";
 const ALL = ["lead", "researcher", "team", "writer"];
@@ -48,7 +46,7 @@ function untouched(t: Team, threads: number): void {
 
 describe("deleting a team", () => {
   test("the lead takes its members, its team log and every row of its team", () => {
-    const t = teamStore(stagedLogs(REBIND, ALL));
+    const t = teamStore(caseLogs(REBIND, ALL));
     expect(teamRows(t)).toBeGreaterThan(0);
     expect(
       unwrap(deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0)),
@@ -60,7 +58,7 @@ describe("deleting a team", () => {
 
   test("a member in the starting window has no thread: its row and task mail go with the lead", () => {
     const t = teamStore(
-      stagedLogs("team-tree-starting-member-pending", ["lead", "team"]),
+      caseLogs("team-tree-starting-member-pending", ["lead", "team"]),
     );
     expect(count(t, "team_members WHERE state = 'starting'")).toBe(1);
     expect(
@@ -71,7 +69,7 @@ describe("deleting a team", () => {
   });
 
   test("a member alone, or the team log alone, is thread_in_team and writes nothing", () => {
-    const t = teamStore(stagedLogs(REBIND, ALL));
+    const t = teamStore(caseLogs(REBIND, ALL));
     for (const label of ["researcher", "team"]) {
       const refused = deleteThread(t.db, t.store.tenant, thread(t, label), T0);
       expect(code(refused)).toBe("thread_in_team");
@@ -83,7 +81,7 @@ describe("deleting a team", () => {
   });
 
   test("a live lease anywhere in the set is busy; an expired one is not", () => {
-    const t = teamStore(stagedLogs(REBIND, ALL));
+    const t = teamStore(caseLogs(REBIND, ALL));
     t.db.run(
       "INSERT INTO leases (branch_id, holder_id, epoch, expires_at) VALUES (?, 'w', 9, ?)",
       [branch(t, "writer"), T0 + 1],
@@ -95,7 +93,7 @@ describe("deleting a team", () => {
   });
 
   test("a crash mid-delete leaves everything", () => {
-    const t = teamStore(stagedLogs(REBIND, ALL));
+    const t = teamStore(caseLogs(REBIND, ALL));
     t.db.exec(`CREATE TRIGGER crash BEFORE INSERT ON tombstones
       WHEN (SELECT COUNT(*) FROM tombstones) >= 1
       BEGIN SELECT RAISE(ABORT, 'crash'); END`);
@@ -106,7 +104,7 @@ describe("deleting a team", () => {
   });
 
   test("another tenant's lead is not_found", () => {
-    const t = teamStore(stagedLogs(REBIND, ALL));
+    const t = teamStore(caseLogs(REBIND, ALL));
     expect(code(deleteThread(t.db, "other", thread(t, "lead"), T0))).toBe(
       "not_found",
     );
@@ -114,14 +112,14 @@ describe("deleting a team", () => {
   });
 
   test("a whole tenant is one set: every thread, no thread_in_team", () => {
-    const t = teamStore(stagedLogs(REBIND, ALL));
+    const t = teamStore(caseLogs(REBIND, ALL));
     expect(unwrap(deleteTenant(t.db, t.store.tenant, T0))).toBe(4);
     expect(teamRows(t)).toBe(0);
     expect(unwrap(deleteTenant(t.db, t.store.tenant, T0))).toBe(0);
   });
 
   test("a whole tenant is busy while any thread of it runs", () => {
-    const t = teamStore(stagedLogs(REBIND, ALL));
+    const t = teamStore(caseLogs(REBIND, ALL));
     t.db.run(
       "INSERT INTO leases (branch_id, holder_id, epoch, expires_at) VALUES (?, 'w', 9, ?)",
       [branch(t, "researcher"), T0 + 1],

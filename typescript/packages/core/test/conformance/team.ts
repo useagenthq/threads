@@ -154,21 +154,15 @@ function run(c: Case): Found | Failure {
   return "code" in walked ? walked : { states, index, tree: walked };
 }
 
-/**
- * Runs one `team` case and compares its outcome. `states: false` skips the reduced states,
- * which for mail-opened turns need lane 21A's reducer (the staged direct test only).
- */
-export function runTeam(
-  c: Case,
-  { states = true }: { readonly states?: boolean } = {},
-): void {
+/** Runs one `team` case and compares its outcome. */
+export function runTeam(c: Case): void {
   const got = run(c);
   if (c.error !== undefined) {
     expect(plain(got)).toEqual(plain(c.error));
     return;
   }
   if ("code" in got) throw new Error(`${got.code} at ${got.log}@${got.seq}`);
-  if (states) expect(plain(got.states)).toEqual(plain(c.team.states));
+  expect(plain(got.states)).toEqual(plain(c.team.states));
   expect(plain(got.index)).toEqual(plain(c.team.index));
   expect(plain(got.tree)).toEqual(plain(c.team.tree));
 }

@@ -1,0 +1,16 @@
+{
+  "name": "team-task-turn-other-run-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 43: the member's task turn belongs to Alice's first run, and a message of her second run is received inside it. One log shows only the task turn's principal, which is the same; the task envelope in the lead's log holds the first run's root request: invalid_transition at the receipt, in the researcher's log.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "researcher",
+      "team"
+    ]
+  }
+}
