@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Literal
 from threads.log import Event, MailEnvelope, MemberEndedEvent, Principal, Provenance
 from threads.log.keys import principal_key
 from threads.reduce import Fold
+from threads.reduce.fold import loop_parked
 from threads.reduce.handlers import to_json
 from threads.store.lines import Draft
 from threads.team.mail import received
@@ -75,7 +76,7 @@ def consume(ctx: ConsumeContext) -> Consumed:
     fold = ctx.fold
     opened = turn_provenance(ctx.conn, fold.events) if fold.in_turn else None
     turn = None if opened is None else _pair(Provenance.model_validate(opened))
-    state = _Pass(turn, bool(fold.parked))
+    state = _Pass(turn, bool(loop_parked(fold)))
     for env in pending:
         if _take(ctx, fold, state, env):
             state.taken.append(env.mail_id)

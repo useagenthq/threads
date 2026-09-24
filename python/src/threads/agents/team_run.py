@@ -14,6 +14,7 @@ from threads.loop.drive import drive, parked
 from threads.loop.runtime import Halt, Idle, Runtime
 from threads.loop.team_runtime import TeamRuntime
 from threads.loop.teams import team_turns
+from threads.reduce.fold import loop_parked
 from threads.store import StoredEvent
 
 
@@ -35,7 +36,7 @@ async def unparked[D](rt: Runtime, agents: Agents[D], side: TeamSide | None) -> 
     """A lead parked on its members first waits for them, as a parent runs the children it is
     parked on: their settlements resume it, and only then does a new input start a turn. None:
     it ended idle, or waits on nothing of its team."""
-    held = rt.fold.parked
+    held = loop_parked(rt.fold)
     if side is None or not held or any(p.kind != "member" for p in held):
         return None
     halt = await team_turns(rt, parked(rt.events, held), partial(_again, rt, agents))

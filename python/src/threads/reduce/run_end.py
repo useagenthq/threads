@@ -24,7 +24,9 @@ from threads.log import (
     ParkAddress,
     ParkedEvent,
     ResumedEvent,
+    ToolCallEvent,
     ToolResultLateEvent,
+    ToolUsePart,
     TurnCompletedEvent,
     UserInputEvent,
     WaitStartedEvent,
@@ -78,6 +80,10 @@ class _Run:
     """The task monitors of this run's members that have not reported."""
     settle: set[str] = field(default_factory=set[str])
     """The settle monitors of this log's waits: their notifications open no turn."""
+    tool_uses: dict[str, frozenset[str]] = field(default_factory=dict[str, frozenset[str]])
+    """Each response's tool_use call ids, by request."""
+    host_sends: set[str] = field(default_factory=set[str])
+    """The effect keys of the host's own sends: a park on one is never the run's."""
     answered: tuple[Event, ...] | None = None
     decided: RunEnd | None = None
 
@@ -88,11 +94,12 @@ class _Run:
             self.open, self.start, self.current = True, i, opens[0]
         self._helpers(event)
         self._members(event)
+        self._sends(event)
         if isinstance(event, CancelRequestedEvent):
             self._idle_cancel(event.data.scope, i)
         elif isinstance(event, TurnCompletedEvent):
             self._turn_end(events, i, event.data.reason)
-        elif isinstance(event, ParkedEvent):
+        elif isinstance(event, ParkedEvent) and not self._host_park(event.data.address):
             self.parks.append(event.data.address)
         elif isinstance(event, ResumedEvent) and event.data.address in self.parks:
             self.parks.remove(event.data.address)
@@ -127,6 +134,23 @@ class _Run:
                 self.monitors.discard(env.monitor_id)
         elif isinstance(event, WaitStartedEvent):
             self.settle.update(monitor_id(event, m.name) for m in event.data.members)
+
+    def _sends(self, event: Event) -> None:
+        """The host's own sends (reduce/fold.py host_calls): a channel_send no response asked
+        for."""
+        if isinstance(event, ModelResponseEvent | ModelResponseRecoveredEvent):
+            ids = frozenset(
+                str(p.call_id) for p in event.data.content if isinstance(p, ToolUsePart)
+            )
+            self.tool_uses[event.data.request_event_id] = ids
+        elif isinstance(event, ToolCallEvent) and event.data.name == "channel_send":
+            if event.data.call_id not in self.tool_uses.get(
+                event.data.request_event_id, frozenset()
+            ):
+                self.host_sends.add(f"{event.branch_id}:{event.data.call_id}")
+
+    def _host_park(self, address: ParkAddress) -> bool:
+        return address.kind == "effect" and address.id in self.host_sends
 
     def _helpers(self, event: Event) -> None:
         if isinstance(event, AgentSpawnedEvent) and event.data.mode == "background":

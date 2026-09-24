@@ -1,0 +1,60 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 1,
+    "pending_calls": [
+      "question_call_1_0"
+    ],
+    "effects": [
+      {
+        "effect_key": "0192b000-0000-7000-8000-000000000001:question_call_1_0",
+        "call_id": "question_call_1_0",
+        "status": "unknown"
+      }
+    ],
+    "parked": [
+      {
+        "kind": "effect",
+        "id": "0192b000-0000-7000-8000-000000000001:question_call_1_0"
+      }
+    ],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 170,
+      "output_tokens": 30,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-00000000000d"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000010"
+      }
+    ],
+    "status": "parked",
+    "head": {
+      "seq": 17,
+      "hash": "a966c435e3e121dfc63051dfba38275ae2d0951a6c01b0f00938887f5d273c89"
+    }
+  },
+  "projections": {
+    "run": {
+      "status": "completed",
+      "output_event_id": "0192e000-0000-7000-8000-000000000010"
+    }
+  }
+}

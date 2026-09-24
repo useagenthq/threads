@@ -5,6 +5,7 @@ import {
   type KnownEvent,
   knownEvents,
   type LogStore,
+  loopParked,
   ok,
   openStore,
   type Principal,
@@ -88,7 +89,7 @@ async function* follow(
     const start = events.findIndex((e) => e.event_id === runId);
     const own = events.slice(start);
     const result =
-      outcomeFromLog(events, runId, read.value.fold.parked, handle) ??
+      outcomeFromLog(events, runId, loopParked(read.value.fold), handle) ??
       halted(ctx, runId);
     const end = endOf(events, runId, start) + 1;
     for (const event of own.slice(0, end))

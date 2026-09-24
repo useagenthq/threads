@@ -1,3 +1,4 @@
+import { loopParked } from "../fold/state";
 import { ObserverPump } from "../hooks/observers";
 import { type LoopConfig, type LoopEnd, resume } from "../loop";
 import { knownEvents } from "../reduce";
@@ -75,11 +76,9 @@ export async function execute<Deps, Output>(
   const stop = keepLease(writer);
   const team = teamOf(def, plan, writer, opened);
   try {
-    // A host continues a thread as it was started: with ask_user when its pin has it.
-    const pinned =
-      plan.answerer === "pinned" && asks(knownEvents(writer.chain))
-        ? pin(set, link, undefined, true)
-        : created;
+    const pinned = asPinned(plan, writer, created, () =>
+      pin(set, link, undefined, true),
+    );
     checkPin(writer, pinned.started);
     const builtin = bindBuiltins(
       child === undefined ? def.sandbox : undefined,
@@ -149,7 +148,7 @@ export async function execute<Deps, Output>(
     return runResult(
       end,
       knownEvents(writer.chain),
-      writer.chain.fold.parked,
+      loopParked(writer.chain.fold),
       thread,
       def.decode,
     );
@@ -243,4 +242,16 @@ function failed<Output>(error: LogError, thread: Thread): RunResult<Output> {
   const code =
     error.code === "branch_busy" ? "branch_busy" : "branch_not_runnable";
   return { status: "failed", error: { code, message: error.message }, thread };
+}
+
+/** A host continues a thread as it was started: with ask_user when its pin has it. */
+function asPinned<P>(
+  plan: Plan<unknown>,
+  writer: Writer,
+  created: P,
+  answering: () => P,
+): P {
+  return plan.answerer === "pinned" && asks(knownEvents(writer.chain))
+    ? answering()
+    : created;
 }

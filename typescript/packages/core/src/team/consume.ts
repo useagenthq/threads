@@ -1,4 +1,4 @@
-import type { Fold } from "../fold/state";
+import { type Fold, loopParked } from "../fold/state";
 import { type MailEnvelope, type Principal, principalKey } from "../log";
 import type { Chain } from "../verify";
 import { received } from "./mail";
@@ -66,7 +66,7 @@ export function consume(ctx: ConsumeContext): Consumed {
   const open = fold.turnOpen ? turnProvenance(ctx.db, ctx.chain) : undefined;
   const pass: Pass = {
     turn: open === undefined ? undefined : pairOf(open),
-    blocked: fold.parked.length > 0,
+    blocked: loopParked(fold).length > 0,
     batch: undefined,
   };
   const mailIds = pending.flatMap((env) =>

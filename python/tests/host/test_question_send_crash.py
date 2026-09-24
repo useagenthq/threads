@@ -24,8 +24,10 @@ from threads.log import (
     JsonObject,
     ToolResultEvent,
     TurnCompletedEvent,
+    UserInputEvent,
 )
 from threads.loop.model import Found, LookupResult, NotFound
+from threads.reduce.run_end import run_end
 from threads.result import Ok
 from threads.thread.handle import open_thread
 
@@ -103,8 +105,10 @@ def _answer(events: list[Event]) -> list[str]:
     ]
 
 
-def _crash_then_answer(lookup: str) -> tuple[Crashy, list[Event]]:
-    bot = agent(model=scripted_model({"responses": [_ask(), text("Done.")]}))
+def _crash_then_answer(lookup: str, lead: bool = False) -> tuple[Crashy, list[Event]]:
+    model = scripted_model({"responses": [_ask(), text("Done.")]})
+    # A team lead waits on its members; its own question send is never one of them.
+    bot = agent(model=model, team=[]) if lead else agent(model=model)
     store = sqlite(":memory:")
     channel = Crashy(hang="Which color?", capabilities=_caps(lookup))
 
@@ -124,12 +128,16 @@ def _crash_then_answer(lookup: str) -> tuple[Crashy, list[Event]]:
     return channel, asyncio.run(_events(store))
 
 
+@pytest.mark.parametrize("lead", [False, True])
 @pytest.mark.parametrize("lookup", ["final", "none"])
-def test_a_question_send_in_doubt_never_holds_the_answered_turn(lookup: str) -> None:
-    channel, events = _crash_then_answer(lookup)
+def test_a_question_send_in_doubt_never_holds_the_answered_turn(lookup: str, lead: bool) -> None:
+    channel, events = _crash_then_answer(lookup, lead)
     assert _texts(channel, "Which color?") == [QUESTION]
     assert _answer(events) == ["blue"]
     assert _completed(events)
+    request = next(e for e in events if isinstance(e, UserInputEvent))
+    # With no lookup the send stays parked for a human, and the run is still completed.
+    assert run_end(events, request.event_id).status == "completed"
 
 
 def test_a_question_send_that_never_began_is_closed_once_its_question_is_answered(

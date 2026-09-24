@@ -1,10 +1,11 @@
-import { type ParkAddress, sameAddress } from "../fold/state";
+import { HOST_SEND, type ParkAddress, sameAddress } from "../fold/state";
 import { mailRenders } from "../fold/team";
 import type { KnownEvent, MailEnvelope } from "../log";
 
 // Run completion (spec/schema/README.md, "Run completion"; Gate 1 decision 27): a run spans its
 // request's turn and every wake turn of the same request, and ends at the first point where no
-// turn is open, nothing is parked and every background child it spawned has reported. Only the
+// turn is open, nothing is parked (a park on the host's own send doesn't count: it is never the
+// agent's) and every background child it spawned has reported. Only the
 // lead's own log decides it, so run(), the host's outcome and SSE, and replay agree. A turn opens
 // with a user_input, a woken (the run that spawned its children) or a received mail that opens a
 // turn (its provenance's root request). Reference: spec/tools/fixtures/run_end.py.
@@ -56,6 +57,9 @@ class Run {
   readonly #children = new Set<string>();
   /** The task monitors of this run's members that have not reported. */
   readonly #monitors = new Set<string>();
+  /** Each response's tool_use call ids, by request, and the effect keys of the host's sends. */
+  readonly #toolUses = new Map<string, ReadonlySet<string>>();
+  readonly #hostSends = new Set<string>();
   /** The settle monitors of this log's waits: their notifications open no turn. */
   readonly #settle = new Set<string>();
   #answered: readonly KnownEvent[] | undefined;
@@ -76,6 +80,7 @@ class Run {
     }
     this.#helpers(e);
     this.#members(e);
+    this.#sends(e);
     this.#control(events, i, e);
     // A late result and the woken naming it are one append: the end is never between them.
     const midAppend =
@@ -125,11 +130,35 @@ class Run {
     if (e.type === "cancel_requested") this.#idleCancel(e.data.scope, i);
     else if (e.type === "turn_completed")
       this.#turnEnd(events, i, e.data.reason);
-    else if (e.type === "parked") this.#parks.push(e.data.address);
+    else if (e.type === "parked" && !this.#hostPark(e.data.address))
+      this.#parks.push(e.data.address);
     else if (e.type === "resumed") {
       const at = this.#parks.findIndex((p) => sameAddress(p, e.data.address));
       if (at !== -1) this.#parks.splice(at, 1);
     }
+  }
+
+  /** The host's own sends (fold/state.ts hostCall): a channel_send no response asked for. */
+  #sends(e: KnownEvent): void {
+    if (e.type === "model_response" || e.type === "model_response_recovered")
+      this.#toolUses.set(
+        e.data.request_event_id,
+        new Set(
+          e.data.content.flatMap((p) =>
+            p.type === "tool_use" ? [p.call_id] : [],
+          ),
+        ),
+      );
+    else if (
+      e.type === "tool_call" &&
+      e.data.name === HOST_SEND &&
+      this.#toolUses.get(e.data.request_event_id)?.has(e.data.call_id) !== true
+    )
+      this.#hostSends.add(`${e.branch_id}:${e.data.call_id}`);
+  }
+
+  #hostPark(address: ParkAddress): boolean {
+    return address.kind === "effect" && this.#hostSends.has(address.id);
   }
 
   #helpers(e: KnownEvent): void {

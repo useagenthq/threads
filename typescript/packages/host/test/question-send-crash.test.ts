@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { sqlite } from "@threads/core";
+import { agent, scriptedModel, sqlite } from "@threads/core";
 import {
   BranchId,
   type EventDraft,
   type KnownEvent,
   openStore,
   resumed,
+  runEnd,
   storeConnection,
   tenantStore,
 } from "@threads/core/host";
@@ -53,15 +54,23 @@ const hook = (delivery: string, items: readonly unknown[]) =>
     items,
   });
 
+/** The channel's agent: the kit's mailer, or a team lead of that name with no members. */
+function serving(responses: readonly unknown[], lead: boolean) {
+  if (!lead) return mailer({ responses });
+  const model = scriptedModel({ responses: [...responses] });
+  return agent({ name: "support", model, team: [] });
+}
+
 function start(
   store: Store,
   responses: readonly unknown[],
   slack: FakeChannel,
+  lead = false,
 ) {
   const h = host({
     store,
     authenticate,
-    agents: { support: mailer({ responses }) },
+    agents: { support: serving(responses, lead) },
     channels: { slack },
   });
   hosts.push(h);
@@ -155,8 +164,12 @@ const settled = (events: readonly KnownEvent[], callId: string) =>
       : [],
   );
 
-async function crashAfterQuestionBegun(store: Store): Promise<void> {
-  const first = start(store, [use("ask_user", COLORS, "q1")], crashingOn(1));
+async function crashAfterQuestionBegun(
+  store: Store,
+  lead = false,
+): Promise<void> {
+  const ask = [use("ask_user", COLORS, "q1")];
+  const first = start(store, ask, crashingOn(1), lead);
   await first.h.ready();
   await first.post(hook("E1", [message("Paint it.", "E1#0")]));
   await until(async () =>
@@ -289,4 +302,32 @@ describe("a host send in doubt while a question is open", () => {
     ).toHaveLength(3);
     expect(events.some((e) => e.type === "effect_unknown")).toBe(false);
   });
+
+  test.each([
+    ["an agent", false],
+    ["a team lead", true],
+  ])(
+    "begun, no adapter lookup: the send parks for a human, the asker answers, %s's run completes",
+    async (_, lead) => {
+      const store = sqlite(":memory:");
+      await crashAfterQuestionBegun(store, lead);
+      const slack = fakeChannel("support", { buttons: false, lookup: "none" });
+      const next = start(store, [say("Blue it is.")], slack, lead);
+      await next.h.ready();
+      await until(async () =>
+        (await log(store)).some(
+          (e) => e.type === "parked" && e.data.address.kind === "effect",
+        ),
+      );
+      await next.post(hook("E2", [message("2", "E2#0")]));
+      await until(async () =>
+        (await log(store)).some((e) => e.type === "turn_completed"),
+      );
+      const events = await log(store);
+      const input = events.find((e) => e.type === "user_input");
+      if (input === undefined) throw new Error("no input");
+      expect(runEnd(events, input.event_id).status).toBe("completed");
+      expect(settled(events, "q1")).toEqual(["answered:blue"]);
+    },
+  );
 });

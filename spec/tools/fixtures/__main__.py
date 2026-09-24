@@ -31,6 +31,7 @@ from . import (
     guards,
     handoff_transcripts,
     host,
+    host_sends,
     integrity,
     ladder,
     legacy_run,
@@ -136,6 +137,7 @@ FAMILIES = (
     run_cases,
     dynamic,
     questions,
+    host_sends,
 )
 
 

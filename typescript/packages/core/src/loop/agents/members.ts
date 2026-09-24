@@ -1,4 +1,4 @@
-import type { EventOf } from "../../fold/state";
+import { type EventOf, loopParked } from "../../fold/state";
 import { ThreadId } from "../../log";
 import { ok } from "../../result";
 import { uuidv7 } from "../../store/encode";
@@ -155,17 +155,18 @@ export async function teamTurns(
 
 /** Whether every park of this thread is on one of its members (a {kind: member} park). */
 function onMembers(s: Session): boolean {
-  return s.fold.parked.every((p) => p.kind === "member");
+  return loopParked(s.fold).every((p) => p.kind === "member");
 }
 
 /** The lead waits: parked only on members the worker is running, or its run still open. */
 function waits(s: Session, team: TeamRuntime): boolean {
-  if (s.fold.parked.length > 0) return onMembers(s) && team.busy?.() === true;
+  if (loopParked(s.fold).length > 0)
+    return onMembers(s) && team.busy?.() === true;
   return runStatus(s) === "running";
 }
 
 function idleOrParked(s: Session): LoopEnd {
-  return s.fold.parked.length > 0 ? { kind: "parked" } : { kind: "idle" };
+  return loopParked(s.fold).length > 0 ? { kind: "parked" } : { kind: "idle" };
 }
 
 async function waitFor(

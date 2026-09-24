@@ -1,0 +1,9 @@
+{
+  "name": "host-send-park-is-not-the-run",
+  "family": "permissions_approvals",
+  "kind": "reduce",
+  "description": "The host's question send (a channel_send no tool_use asked for) is left in doubt and parked for a human; the asker answers and the turn ends end_turn. The run is completed: a park on the host's own send is never the agent's. The branch still shows the park.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

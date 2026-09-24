@@ -1,5 +1,5 @@
 import { assertNever } from "../assert-never";
-import { type EffectStatus, effectKey } from "../fold/state";
+import { type EffectStatus, effectKey, loopPending } from "../fold/state";
 import type { EventDraft } from "../store";
 import type { Chain } from "../verify";
 import { parkNotice } from "./park";
@@ -32,7 +32,8 @@ export function rebindFailed(ctx: Ctx, code: RebindCode, now: number): void {
   const { fold } = ctx.chain;
   const status = (callId: string): EffectStatus | undefined =>
     fold.effects.get(effectKey(fold, callId, ctx.branchId))?.status;
-  const doubt = [...fold.pending].filter((c) => {
+  // The host's own sends are the host's to settle, never a member's rebind's.
+  const doubt = loopPending(fold).filter((c) => {
     const s = status(c);
     return s === "begun" || s === "unknown";
   });
@@ -40,7 +41,7 @@ export function rebindFailed(ctx: Ctx, code: RebindCode, now: number): void {
     parkOn(ctx, doubt, status, provenance, now);
     return;
   }
-  for (const callId of fold.pending)
+  for (const callId of loopPending(fold))
     ctx.batch.add(closing(ctx.chain, callId, status(callId), code));
   if (fold.turnOpen)
     ctx.batch.add({

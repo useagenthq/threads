@@ -13,7 +13,7 @@ from pydantic import JsonValue
 
 from threads.log import ArtifactRef, EffectCommitEvent, EffectResolvedEvent, ParkedEvent
 from threads.reduce import Fold
-from threads.reduce.fold import EffectStatus
+from threads.reduce.fold import EffectStatus, loop_pending
 from threads.reduce.handlers import to_json
 from threads.store.lines import Draft
 from threads.team.materialize import RebindCode
@@ -29,11 +29,12 @@ def rebind_failed(ctx: AppendContext, fold: Fold, code: RebindCode, now: int) ->
     provenance = turn_provenance(ctx.conn, fold.events)
     if provenance is None:
         raise AssertionError("a member's log has a turn")
-    doubt = [c for c in fold.pending if _status(fold, ctx, c) in ("begun", "unknown")]
+    # The host's own sends are the host's to settle, never a member's rebind's.
+    doubt = [c for c in loop_pending(fold) if _status(fold, ctx, c) in ("begun", "unknown")]
     if doubt:
         _park_on(ctx, fold, doubt, provenance, now)
         return
-    for call_id in fold.pending:
+    for call_id in loop_pending(fold):
         ctx.batch.add(_closing(fold, call_id, _status(fold, ctx, call_id), code))
     if fold.in_turn:
         ctx.batch.add(Draft("turn_completed", {"reason": "error", "code": code}))

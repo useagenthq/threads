@@ -12,6 +12,7 @@ from threads.log import Event, ParkedEvent, TurnCompletedEvent, UserInputEvent
 from threads.loop.drive import parked
 from threads.loop.runtime import Appended, Halt, Idle, Parked, Runtime, after_barrier, lost
 from threads.loop.team_runtime import TeamRuntime
+from threads.reduce.fold import loop_parked
 from threads.reduce.run_end import RunStatus, run_end
 from threads.result import Err
 from threads.store import Draft
@@ -128,18 +129,18 @@ async def team_turns(rt: Runtime, halt: Halt, turn: Callable[[], Awaitable[Halt]
 
 
 def _on_members(rt: Runtime) -> bool:
-    return all(p.kind == "member" for p in rt.fold.parked)
+    return all(p.kind == "member" for p in loop_parked(rt.fold))
 
 
 def _waits(rt: Runtime, team: TeamRuntime) -> bool:
     """A lead parked only on its members waits while one of them runs; an idle one while its
     run is open."""
-    if rt.fold.parked:
+    if loop_parked(rt.fold):
         return _on_members(rt) and team.busy is not None and team.busy()
     return run_status(rt.events) == "running"
 
 
 def _idle_or_parked(rt: Runtime, halt: Halt) -> Halt:
-    if rt.fold.parked:
-        return parked(rt.events, rt.fold.parked)
+    if held := loop_parked(rt.fold):
+        return parked(rt.events, held)
     return halt if isinstance(halt, Idle) else Idle("end_turn")

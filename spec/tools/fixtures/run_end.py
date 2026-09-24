@@ -33,6 +33,8 @@ class _Run:
         self.status: str | None = None
         self.done = False  # the run ended completed: at the first point its end held
         self.settle: set[str] = set()  # settle monitors of this log's waits
+        self.tool_uses: dict[str, set[str]] = {}  # request -> its response's tool_use ids
+        self.host_sends: set[str] = set()  # effect keys of the host's own sends
 
     def _opens(self, e: Obj, d: Obj) -> str | None:
         """The run of the turn this event opens, or None when it opens no turn."""
@@ -56,6 +58,7 @@ class _Run:
                 self.turn_open, self.current = True, run
         self._helpers(e, d, t)
         self._waits(e, d, t)
+        self._sends(e, d, t)
         mine = self.turn_open and self.current == self.request
         if t in ("model_response", "model_response_recovered") and mine:
             self.last_response = e["event_id"]
@@ -69,11 +72,26 @@ class _Run:
             self.turn_open = False
         elif t == "cancel_requested" and self._idle_cancel(d):
             self.status = "cancelled"
-        elif t == "parked":
+        elif t == "parked" and not self._host_park(obj(d["address"])):
             self.parks.append(d["address"])
-        elif t == "resumed":
+        elif t == "resumed" and d["address"] in self.parks:
             self.parks.remove(d["address"])
         self.done = self.done or (self.status is None and self._ended())
+
+    def _sends(self, e: Obj, d: Obj, t: str) -> None:
+        """The host's own sends: a channel_send tool_call no response's tool_use asked for. A
+        park on one's effect is the host's, never the run's."""
+        if t in ("model_response", "model_response_recovered"):
+            uses = [obj(p) for p in arr(d["content"])]
+            ids = {text(p["call_id"]) for p in uses if p["type"] == "tool_use"}
+            self.tool_uses[text(d["request_event_id"])] = ids
+        elif t == "tool_call" and d["name"] == "channel_send":
+            asked = self.tool_uses.get(text(d["request_event_id"]), set())
+            if text(d["call_id"]) not in asked:
+                self.host_sends.add(f"{text(e['branch_id'])}:{text(d['call_id'])}")
+
+    def _host_park(self, address: Obj) -> bool:
+        return address["kind"] == "effect" and text(address["id"]) in self.host_sends
 
     def _idle_cancel(self, d: Obj) -> bool:
         """A thread or tree cancel while no turn is open, after the run answered and before it

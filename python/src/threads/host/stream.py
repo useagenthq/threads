@@ -15,6 +15,7 @@ from threads.agents.store import Store, now_ms, open_store
 from threads.host.outcome import logged, outcome, run_events, run_start
 from threads.host.runs import Runner
 from threads.log import BranchId, EventId, ParseError, Principal, ThreadId
+from threads.reduce.fold import loop_parked
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import VerifiedLog
@@ -59,7 +60,9 @@ async def _follow(
             if event.seq > seen:
                 seen = event.seq
                 yield Message({"kind": "event", "event": to_json(event)}, event.seq)
-        end = logged(events, start, read.fold.parked, thread) or _unlogged(runner, thread.branch)
+        end = logged(events, start, loop_parked(read.fold), thread) or _unlogged(
+            runner, thread.branch
+        )
         if end is not None:
             yield Message({"kind": "result", "run_id": run_id, "result": end})
             return
