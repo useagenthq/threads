@@ -130,8 +130,9 @@ async function* play(
     yield { kind: "rejected", ...entry.error };
     return;
   }
-  for (const part of entry.content) {
-    if (part.type === "text") yield { kind: "delta", text: part.text };
+  for (const [index, part] of entry.content.entries()) {
+    if (part.type === "text" && part.text !== "")
+      yield { kind: "delta", part: index, text: part.text };
     yield { kind: "part", part };
   }
   yield { kind: "done", stop_reason: entry.stop_reason, usage: entry.usage };

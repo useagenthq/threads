@@ -81,9 +81,13 @@ export type SendError =
   | "continuation_unsupported"
   | "transport_fence_unsupported";
 
-/** One streamed item of an attempt. A rejection before any content is a chunk, never a throw. */
+/**
+ * One streamed item of an attempt. A rejection before any content is a chunk, never a throw. A
+ * delta's `part` is the index its text will have in the committed content; an adapter that
+ * can't name it sends no deltas.
+ */
 export type ModelChunk =
-  | { readonly kind: "delta"; readonly text: string }
+  | { readonly kind: "delta"; readonly part: number; readonly text: string }
   | { readonly kind: "part"; readonly part: OutputPart }
   | {
       readonly kind: "done";

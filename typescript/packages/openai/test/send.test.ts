@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  deltaProblems,
   drain,
   failure,
   recordingFetch,
@@ -69,7 +70,11 @@ describe("streaming", () => {
           output_index: 0,
           item: reasoning,
         }),
-        ev({ type: "response.output_text.delta", delta: "See docs." }),
+        ev({
+          type: "response.output_text.delta",
+          content_index: 0,
+          delta: "See docs.",
+        }),
         ev({
           type: "response.output_item.done",
           output_index: 1,
@@ -111,6 +116,7 @@ describe("streaming", () => {
     ]);
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe("https://api.openai.com/v1/responses");
+    expect(deltaProblems(chunks)).toEqual([]);
     const [first, ...rest] = chunks;
     if (first?.kind !== "part" || first.part.type !== "reasoning")
       throw new Error("expected a reasoning part first");
@@ -120,7 +126,7 @@ describe("streaming", () => {
       stored.ok && JSON.parse(new TextDecoder().decode(stored.value)),
     ).toEqual(reasoning);
     expect<unknown>(rest).toEqual([
-      { kind: "delta", text: "See docs." },
+      { kind: "delta", part: 1, text: "See docs." },
       { kind: "part", part: { type: "text", text: "See docs." } },
       {
         kind: "part",
@@ -260,14 +266,18 @@ describe("rejections before content, one transport attempt each", () => {
   test("a failure after content is a broken stream (thrown)", async () => {
     const { chunks, thrown } = await run([
       sse([
-        ev({ type: "response.output_text.delta", delta: "Hi" }),
+        ev({
+          type: "response.output_text.delta",
+          content_index: 0,
+          delta: "Hi",
+        }),
         ev({
           type: "response.failed",
           response: { error: { code: "server_error", message: "oops" } },
         }),
       ]),
     ]);
-    expect(chunks).toEqual([{ kind: "delta", text: "Hi" }]);
+    expect(chunks).toEqual([{ kind: "delta", part: 0, text: "Hi" }]);
     expect(thrown).toBeDefined();
   });
 });

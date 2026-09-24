@@ -154,8 +154,15 @@ export type LoopConfig = {
   /** The agent's output schema, when policy.output is pinned. */
   readonly output?: z.ZodType;
   readonly signal?: AbortSignal;
-  /** Transient stream items (text deltas, retry waits); never logged. */
-  readonly onDelta?: (requestEventId: string, text: string) => void;
+  /**
+   * Transient stream items (text deltas, retry waits); never logged. `part` is the text's index
+   * in the response's committed content.
+   */
+  readonly onDelta?: (
+    requestEventId: string,
+    part: number,
+    text: string,
+  ) => void;
   readonly onEvent?: (event: KnownEvent) => void;
   /** Extensions whose hooks gate, feed and observe the loop, in declaration order. */
   readonly extensions?: readonly LoopExtension[];

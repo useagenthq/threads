@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  deltaProblems,
   drain,
   failure,
   recordingFetch,
@@ -119,6 +120,7 @@ describe("streaming", () => {
     ]);
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe("https://api.anthropic.com/v1/messages");
+    expect(deltaProblems(chunks)).toEqual([]);
     const [reasoning, ...rest] = chunks;
     expect(reasoning?.kind === "part" && reasoning.part.type).toBe("reasoning");
     if (reasoning?.kind !== "part" || reasoning.part.type !== "reasoning")
@@ -129,7 +131,7 @@ describe("streaming", () => {
     );
     expect(reasoning.part.summary).toBe("Look first.");
     expect<unknown>(rest).toEqual([
-      { kind: "delta", text: "On it." },
+      { kind: "delta", part: 1, text: "On it." },
       { kind: "part", part: { type: "text", text: "On it." } },
       {
         kind: "part",
@@ -338,7 +340,7 @@ describe("rejections before content, one transport attempt each", () => {
         },
       ]),
     ]);
-    expect(chunks).toEqual([{ kind: "delta", text: "Hi" }]);
+    expect(chunks).toEqual([{ kind: "delta", part: 0, text: "Hi" }]);
     expect(thrown).toBeDefined();
   });
 });

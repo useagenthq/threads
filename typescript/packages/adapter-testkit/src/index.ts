@@ -103,6 +103,28 @@ export function recordingFetch(responses: readonly Response[]): {
   return { fetch, calls };
 }
 
+/**
+ * Where a send's deltas break the ModelChunk rule, or [] when none does: each delta names the
+ * index its text has in the committed parts, that part is text, and the part's deltas joined
+ * are a prefix of its text (spec/schema/ui/README.md, "Live text"). A stream that broke before
+ * its parts landed is checked only for what landed.
+ */
+export function deltaProblems(chunks: readonly ModelChunk[]): string[] {
+  const parts = chunks.flatMap((c) => (c.kind === "part" ? [c.part] : []));
+  const sent = new Map<number, string>();
+  for (const c of chunks)
+    if (c.kind === "delta") sent.set(c.part, (sent.get(c.part) ?? "") + c.text);
+  return [...sent].flatMap(([index, text]) => {
+    const part = parts[index];
+    if (part === undefined) return [];
+    if (part.type !== "text")
+      return [`delta part ${index} is a ${part.type} part`];
+    return part.text.startsWith(text)
+      ? []
+      : [`delta part ${index} text ${JSON.stringify(text)} is not a prefix`];
+  });
+}
+
 /** Every chunk of one send; a thrown error comes back as `{ thrown }`. */
 export async function drain(
   stream: AsyncIterable<ModelChunk>,

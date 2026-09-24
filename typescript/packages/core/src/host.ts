@@ -33,6 +33,7 @@ export {
   canonicalize,
   EventId,
   Int,
+  type Json,
   JsonObject,
   JsonValue,
   type KnownEvent,
@@ -72,6 +73,7 @@ export { uuidv7 } from "./store/encode";
 export { dueQuestionBranches } from "./store/questions";
 export { sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";
+export { inputText, UI_RECEIPT, uiBodyHash } from "./store/ui-receipts";
 export { pendingWakes, wakeBranches } from "./store/wakes";
 export { bindTelemetry } from "./telemetry";
 export { cancelChildren } from "./thread/cancel";

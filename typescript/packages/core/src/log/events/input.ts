@@ -75,6 +75,7 @@ export const UserInputData: Ruled<
     delivery_event_id: Opt<typeof EventId>;
     budget: Opt<typeof Budget>;
     mail_id: Opt<typeof MailId>;
+    client_message_id: Opt<z.ZodString>;
   }>,
   typeof USER_INPUT_RULE
 > = withRule(
@@ -91,6 +92,13 @@ export const UserInputData: Ruled<
     mail_id: MailId.describe(
       "Exactly with source team_task: the task mail this input consumes (its row becomes consumed in this append).",
     ).optional(),
+    client_message_id: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]{1,128}$/)
+      .describe(
+        "The id a web UI gave this message (the AI SDK UIMessage id or the AG-UI message id), recorded by the UI routes so a retry finds its run and a snapshot names the message as the client does. Not rendered.",
+      )
+      .optional(),
   }),
   USER_INPUT_RULE,
 );

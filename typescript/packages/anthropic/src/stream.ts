@@ -80,6 +80,8 @@ export async function* decode(
   const open = new Map<number, Open>();
   let usage: ProviderUsage = {};
   let stop: Stop = "other";
+  // Parts yielded so far: a text block's part is the next one, since blocks close in order.
+  let yielded = 0;
   for await (const raw of events) {
     if (!KNOWN.has(Tagged.parse(raw).type)) continue;
     const e = Event.parse(raw);
@@ -92,12 +94,19 @@ export async function* decode(
         break;
       case "content_block_delta": {
         const text = apply(openAt(open, e.index), e.delta);
-        if (text !== undefined) yield { kind: "delta", text };
+        // With another block open, the part's index isn't known: whole at commit instead.
+        if (text !== undefined && open.size === 1)
+          yield { kind: "delta", part: yielded, text };
         break;
       }
       case "content_block_stop":
-        for (const part of await blockParts(close(openAt(open, e.index)), ctx))
+        for (const part of await blockParts(
+          close(openAt(open, e.index)),
+          ctx,
+        )) {
           yield { kind: "part", part };
+          yielded += 1;
+        }
         open.delete(e.index);
         break;
       case "message_delta":

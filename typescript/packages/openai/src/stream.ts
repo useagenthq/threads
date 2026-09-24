@@ -30,6 +30,7 @@ const Final = z.object({
 const Event = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("response.output_text.delta"),
+    content_index: z.int().nonnegative(),
     delta: z.string(),
   }),
   z.object({ type: z.literal("response.output_item.done"), item: JsonObject }),
@@ -56,18 +57,23 @@ export async function* decode(
   ctx: ItemContext,
 ): AsyncGenerator<ModelChunk, void, undefined> {
   const seen = { calls: false, refused: false };
+  // Parts yielded so far. Items arrive one at a time, so a message's first text is the next
+  // part; a later content's index depends on the citations before it, so it streams no deltas.
+  let yielded = 0;
   for await (const raw of events) {
     if (!KNOWN.has(Tagged.parse(raw).type)) continue;
     const e = Event.parse(raw);
     switch (e.type) {
       case "response.output_text.delta":
-        yield { kind: "delta", text: e.delta };
+        if (e.content_index === 0)
+          yield { kind: "delta", part: yielded, text: e.delta };
         break;
       case "response.output_item.done": {
         const item = await itemParts(e.item, ctx);
         seen.refused ||= item.refused;
         seen.calls ||= item.parts.some((p) => p.type === "tool_use");
         for (const part of item.parts) yield { kind: "part", part };
+        yielded += item.parts.length;
         break;
       }
       case "response.completed":

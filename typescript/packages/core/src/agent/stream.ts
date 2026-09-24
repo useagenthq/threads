@@ -17,7 +17,8 @@ export function stream<Deps, Output>(
   };
   const result = run(def, input, options, {
     onEvent: (event) => push({ kind: "event", event }),
-    onDelta: (id, text) => push({ kind: "delta", request_event_id: id, text }),
+    onDelta: (id, _part, text) =>
+      push({ kind: "delta", request_event_id: id, text }),
   });
   const finished = async (): Promise<void> => {
     try {

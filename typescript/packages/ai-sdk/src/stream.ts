@@ -52,6 +52,7 @@ export async function* decode(
   ctx: StreamContext,
 ): AsyncGenerator<ModelChunk, void, undefined> {
   const open: Open = new Map();
+  let yielded = 0;
   for await (const part of stream) {
     if (part.type === "finish") {
       yield {
@@ -62,7 +63,10 @@ export async function* decode(
       return;
     }
     if (part.type === "error") throw new StreamError(part.error);
-    yield* chunks(part, open, ctx);
+    for await (const chunk of chunks(part, open, ctx, yielded)) {
+      if (chunk.kind === "part") yielded += 1;
+      yield chunk;
+    }
   }
   throw new Error("ai-sdk stream ended before finish");
 }
@@ -74,6 +78,7 @@ async function* chunks(
   part: Part,
   open: Open,
   ctx: StreamContext,
+  yielded: number,
 ): AsyncGenerator<ModelChunk, void, undefined> {
   switch (part.type) {
     case "text-start":
@@ -81,10 +86,18 @@ async function* chunks(
       open.set(part.id, { text: "", metadata: part.providerMetadata });
       return;
     case "text-delta":
-    case "reasoning-delta":
-      grow(open, part.id, part.delta, part.providerMetadata);
-      if (part.type === "text-delta") yield { kind: "delta", text: part.delta };
+    case "reasoning-delta": {
+      const block = grow(open, part.id, part.delta, part.providerMetadata);
+      // The text lands as the next part only when it is the one open block and no metadata
+      // part will precede it; otherwise its index isn't known, and it shows at commit.
+      if (
+        part.type === "text-delta" &&
+        open.size === 1 &&
+        block.metadata === undefined
+      )
+        yield { kind: "delta", part: yielded, text: part.delta };
       return;
+    }
     case "text-end":
     case "reasoning-end": {
       const block = grow(open, part.id, "", part.providerMetadata);

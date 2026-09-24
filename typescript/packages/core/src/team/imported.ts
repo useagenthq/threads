@@ -3,13 +3,15 @@ import { ok, type Result } from "../result";
 import type { LogStore } from "../store";
 import { knownOf } from "../store/indexing";
 import { openedThreads } from "../store/started";
+import { uiReceiptRows } from "../store/ui-receipts";
 import { refoldWakes } from "../store/wakes";
 import type { VerifiedLog } from "../verify";
 import type { LogError } from "../verify/error";
 import { rebuildTeamIndex } from "./rebuild";
 
 // An import stores a log's bytes without its appends' hooks, so in the same transaction the
-// index is folded again from the logs: each imported branch's wake rows, and every team the log
+// index is folded again from the logs: each imported branch's wake rows and UI run receipts,
+// and every team the log
 // belongs to, rebuilt whole. A team whose lead is not stored yet has no rows until its lead is
 // imported (that import rebuilds it). A log that breaks rule 43 with the stored team is refused.
 
@@ -20,6 +22,7 @@ export function indexImported(
 ): Result<void, LogError> {
   for (const s of log.segments)
     refoldWakes(store.driver, s.header.branch_id, knownOf(s.events));
+  uiReceiptRows(store.driver, store.tenant, knownOf(log.events));
   const teams = teamsOf(store, log);
   if (!teams.ok) return teams;
   for (const team of teams.value) {

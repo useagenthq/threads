@@ -24,6 +24,7 @@ const KINDS = [
   "parity",
   "policy",
   "team",
+  "ui",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -109,6 +110,7 @@ const ExpectedFile = z.strictObject({
   api: z.unknown().optional(),
   user_inputs: z.unknown().optional(),
   decisions: z.unknown().optional(),
+  messages: z.unknown().optional(),
 });
 
 const Matcher = z.strictObject({

@@ -79,7 +79,11 @@ const OPERATOR: Principal = {
 
 export type Hooks = {
   readonly onEvent?: (event: KnownEvent) => void;
-  readonly onDelta?: (requestEventId: string, text: string) => void;
+  readonly onDelta?: (
+    requestEventId: string,
+    part: number,
+    text: string,
+  ) => void;
 };
 
 export async function run<Deps, Output>(

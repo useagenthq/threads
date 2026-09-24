@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { APICallError, type LanguageModelV4Usage } from "@ai-sdk/provider";
-import { drain, renderBody, renderCase } from "@threads/adapter-testkit";
+import {
+  deltaProblems,
+  drain,
+  renderBody,
+  renderCase,
+} from "@threads/adapter-testkit";
 import { type Json, memoryContext, parseRender } from "@threads/core/adapter";
 import { aiSdk } from "../src";
 import { toPrompt } from "../src/prompt";
@@ -97,6 +102,7 @@ describe("streaming", () => {
       { role: "system", content: "Be brief." },
       { role: "user", content: [{ type: "text", text: "hi" }] },
     ]);
+    expect(deltaProblems(chunks)).toEqual([]);
     const [first, ...rest] = chunks;
     if (first?.kind !== "part" || first.part.type !== "reasoning")
       throw new Error("expected reasoning first");
@@ -110,8 +116,8 @@ describe("streaming", () => {
       providerOptions: signed,
     });
     expect<unknown>(rest).toEqual([
-      { kind: "delta", text: "On " },
-      { kind: "delta", text: "it." },
+      { kind: "delta", part: 1, text: "On " },
+      { kind: "delta", part: 1, text: "it." },
       { kind: "part", part: { type: "text", text: "On it." } },
       {
         kind: "part",
@@ -322,7 +328,7 @@ describe("rejections before content, one attempt each (no hidden retry)", () => 
       ],
     ]);
     const { chunks, thrown } = await send(hi);
-    expect(chunks).toEqual([{ kind: "delta", text: "Hi" }]);
+    expect(chunks).toEqual([{ kind: "delta", part: 0, text: "Hi" }]);
     expect(thrown).toBeDefined();
   });
 

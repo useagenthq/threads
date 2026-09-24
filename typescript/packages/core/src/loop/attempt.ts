@@ -175,7 +175,7 @@ async function collect(
 ): Promise<Collected> {
   assertModelAllowed(model);
   const parts: OutputPart[] = [];
-  const shown = redactStream();
+  const shown = new Shown(s, requestId);
   const request = { request_id: `${s.branchId}:${requestId}`, body };
   const options =
     s.config.signal === undefined ? {} : { signal: s.config.signal };
@@ -183,13 +183,13 @@ async function collect(
     for await (const chunk of model.send(request, s.modelContext(), options)) {
       switch (chunk.kind) {
         case "delta":
-          delta(s, requestId, shown.feed(chunk.text));
+          shown.feed(chunk.part, chunk.text);
           break;
         case "part":
           parts.push(chunk.part);
           break;
         case "done":
-          delta(s, requestId, shown.end());
+          shown.end();
           return {
             kind: "done",
             parts,
@@ -214,9 +214,48 @@ async function collect(
   return { kind: "broken" };
 }
 
-/** A delta shown to a streaming caller: redacted, never logged. */
-function delta(s: Session, requestId: string, text: string): void {
-  if (text !== "") s.config.onDelta?.(requestId, text);
+/**
+ * Deltas shown to a streaming caller: redacted per part before they stream, never logged. Each
+ * part has its own redactor, so a part's live text is always a prefix of its committed text.
+ */
+class Shown {
+  readonly #s: Session;
+  readonly #requestId: string;
+  readonly #parts = new Map<number, ReturnType<typeof redactStream>>();
+  /** Parts whose tail was flushed: a later delta for one is dropped, never shown unredacted. */
+  #done = -1;
+
+  constructor(s: Session, requestId: string) {
+    this.#s = s;
+    this.#requestId = requestId;
+  }
+
+  feed(part: number, text: string): void {
+    if (part <= this.#done) return;
+    // A later part has begun, so every earlier one is complete: its held tail can go out.
+    this.#flush((p) => p < part);
+    this.#done = part - 1;
+    const stream = this.#parts.get(part) ?? redactStream();
+    this.#parts.set(part, stream);
+    this.#emit(part, stream.feed(text));
+  }
+
+  /** The held tails, once the response is complete. */
+  end(): void {
+    this.#flush(() => true);
+  }
+
+  #flush(which: (part: number) => boolean): void {
+    for (const [part, stream] of this.#parts)
+      if (which(part)) {
+        this.#emit(part, stream.end());
+        this.#parts.delete(part);
+      }
+  }
+
+  #emit(part: number, text: string): void {
+    if (text !== "") this.#s.config.onDelta?.(this.#requestId, part, text);
+  }
 }
 
 function record(

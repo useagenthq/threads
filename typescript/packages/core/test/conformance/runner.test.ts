@@ -32,6 +32,7 @@ const LATER: Readonly<Record<Kind, string | undefined>> = {
   host: "run by packages/host/test/conformance.test.ts",
   policy: undefined,
   team: undefined,
+  ui: "run by packages/host/test/ui/cases.test.ts",
   security: "no runner yet for this reserved kind",
   parity: "no runner yet for this reserved kind",
 };
