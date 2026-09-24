@@ -251,7 +251,8 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
     """spec/api.json `host`. Starts nothing until `ready()`. Without `authenticate` every /v1
     route answers 401; channel webhooks still work. `ceiling` caps every run this host starts
     or resumes (Agent.run `ceiling`). `telemetry` (such as `otel()`) syncs every second beside
-    the scheduler and once more on `stop()`, bounded by 5 s; runs never wait on it."""
+    the scheduler and once more on `stop()`, bounded by 5 s; a slow or unreachable collector
+    never holds up a run."""
     return Host(
         store,
         agents,
