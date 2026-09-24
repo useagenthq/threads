@@ -50,6 +50,25 @@ describe("the exec deadline", () => {
       s.end();
     });
 
+  test("covers the start too: an exec that never starts is a timeout, as in Python", async () => {
+    const driver = {
+      ...memoryDriver(new World()),
+      run: () => new Promise<never>(() => undefined),
+    };
+    const ran = execute(
+      remoteSession(driver, "memory", "sandbox-test"),
+      ["true"],
+      CTX,
+      { processKey: "b:c", timeoutMs: 5 },
+      memoryArtifacts(),
+    );
+    const past = Bun.sleep(100).then(() => PAST);
+    const result = await Promise.race([ran, past]);
+    expect(typeof result === "symbol" ? "pending" : code(result)).toBe(
+      "timeout",
+    );
+  });
+
   test("the tool result path records a timeout as effect_unknown, never a result", () => {
     expect(
       toolRunOf({ ok: false, error: { code: "timeout", message: "t" } }),

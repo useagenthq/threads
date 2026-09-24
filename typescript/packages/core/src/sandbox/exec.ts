@@ -122,14 +122,16 @@ export async function execute(
   // Read before the await: the session runs a copy, and the deadline and the kill must match it
   // even if the caller changes its options mid-call.
   const { timeoutMs, processKey } = options;
-  const started = await session.exec(command, context, options);
-  if (!started.ok) return started;
-  const collected = collect(started.value, artifacts, keep);
+  const collected = (async (): Promise<Result<ExecResult, ExecFailure>> => {
+    const started = await session.exec(command, context, options);
+    return started.ok ? collect(started.value, artifacts, keep) : started;
+  })();
   if (timeoutMs === undefined) return collected;
   // After a timeout nobody awaits it; a stream that breaks later is not a crash.
   collected.catch(() => undefined);
-  // Once the deadline passes the outcome is a timeout, whatever the process does next: the
-  // kill is best effort and unconfirmed, so the effect stays unknown.
+  // The deadline covers the start too (as in Python). Once it passes the outcome is a timeout,
+  // whatever the process does next: the kill is best effort and unconfirmed, so the effect
+  // stays unknown.
   const deadline = Promise.withResolvers<Result<ExecResult, ExecFailure>>();
   const timer = setTimeout(() => {
     deadline.resolve(
