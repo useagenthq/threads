@@ -32,7 +32,7 @@ def build(root: pathlib.Path) -> None:
     lead = lead_log()
     root_event = text(user(lead, "Research batteries.")["event_id"])
     started_id, task = start(lead, root_event, RESEARCHER, "c1")
-    inner: Obj = {"id": INNER, "log_branch_id": INNER_LOG[0]}
+    inner: Obj = {"id": INNER, "log_thread_id": INNER_LOG[1], "log_branch_id": INNER_LOG[0]}
     researcher = materialize(started_id, task, team=inner)
     opened = Log(INNER_LOG[0], thread=INNER_LOG[1])
     nested_lead: Obj = {"tenant": TENANT, "team": INNER, "name": "researcher", "generation": 1}

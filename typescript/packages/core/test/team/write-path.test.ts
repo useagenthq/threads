@@ -10,7 +10,7 @@ import {
   teamsOf,
   verified,
 } from "./kit";
-import { reappend, renamed } from "./writes";
+import { reappend } from "./writes";
 
 // Write path equals rebuild path: every recorded team (corpus and staged) appended again event
 // by event through writers into a fresh store leaves exactly the index rows the case expects,
@@ -33,14 +33,14 @@ describe("the team index on the write path", () => {
     test(`${c.name}: appends leave the expected rows, and a rebuild leaves them again`, () => {
       const logs = [...c.logs.values()].map((bytes) => verified(bytes));
       const fx = fixture(TENANT);
-      const ids = reappend(fx, logs);
+      reappend(fx, logs);
       const teams = teamsOf(logs);
       const branches = logs.flatMap(
         (l) => l.segments[0]?.header.branch_id ?? [],
       );
       const rows = () => plain(teamIndexRows(fx.db, teams, branches));
-      expect(rows()).toEqual(renamed(c.team.index, ids));
+      expect(rows()).toEqual(plain(c.team.index));
       for (const team of teams) assertTeamReplays(fx.store, team);
-      expect(rows()).toEqual(renamed(c.team.index, ids));
+      expect(rows()).toEqual(plain(c.team.index));
     });
 });

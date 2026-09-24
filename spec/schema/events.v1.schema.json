@@ -6193,10 +6193,15 @@
                 "log_branch_id": {
                   "$ref": "#/$defs/BranchId",
                   "description": "The team log's branch, opened in this append's transaction with its team_opened."
+                },
+                "log_thread_id": {
+                  "$ref": "#/$defs/ThreadId",
+                  "description": "The team log's thread, opened in this append's transaction with its team_opened."
                 }
               },
               "required": [
                 "id",
+                "log_thread_id",
                 "log_branch_id"
               ],
               "type": "object"

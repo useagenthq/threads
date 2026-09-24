@@ -46,6 +46,10 @@ describe("a lead's first append", () => {
     const fx = fixture(TENANT);
     openLead(fx, 2);
     const log = unwrap(fx.store.read(TEAM_LOG));
+    // The thread the lead's thread_started.team names.
+    expect(log.segments[0]?.header.thread_id).toBe(
+      ThreadId.parse("0192a000-0000-7000-8000-0000000000b3"),
+    );
     expect(plain(knownEvents(log).map((e) => [e.type, e.data]))).toEqual([
       [
         "team_opened",

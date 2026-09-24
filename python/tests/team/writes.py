@@ -2,11 +2,9 @@
 writers. The lead's first append opens the team log (so the recorded team_opened is not appended
 again), and every other log opens with branch.open."""
 
-import json
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass
 
-from pydantic import JsonValue, TypeAdapter
 from team.team_kit import appendable
 
 from threads.log import Event, TeamOpenedEvent
@@ -15,7 +13,6 @@ from threads.result import Ok
 from threads.store import Draft, SqliteStore, VerifiedLog, Writer
 
 HOLDER = "replay"
-_JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 
 
 @dataclass
@@ -36,26 +33,9 @@ class _Queue:
     writer: Writer | None = None
 
 
-@dataclass
-class _Replay:
-    store: SqliteStore
-    clock: ReplayClock
-    renamed: dict[str, str] = field(default_factory=dict[str, str])
-    """A team log's thread id is minted when the lead's first append opens it (only its branch
-    id is logged), so each recorded team log thread is renamed to the one minted."""
-
-
-def renamed(value: JsonValue, ids: Mapping[str, str]) -> JsonValue:
-    """`value` with every renamed id replaced."""
-    text = json.dumps(value)
-    for recorded, minted in ids.items():
-        text = text.replace(recorded, minted)
-    return _JSON.validate_json(text)
-
-
-def draft_of(e: Event, ids: Mapping[str, str] | None = None) -> Draft:
+def draft_of(e: Event) -> Draft:
     """The event as the draft that appended it: the writer fills in the rest again."""
-    wire = renamed(to_json(e), ids or {})
+    wire = to_json(e)
     assert isinstance(wire, dict)
     data, actor = wire["data"], wire["actor"]
     assert isinstance(data, dict)
@@ -63,10 +43,9 @@ def draft_of(e: Event, ids: Mapping[str, str] | None = None) -> Draft:
     return Draft(e.type, data, actor, e.critical, e.event_id)
 
 
-async def reappend(store: SqliteStore, logs: Sequence[VerifiedLog]) -> dict[str, str]:
-    """Re-appends `logs` into `store` through writers, in an order their rows allow. Returns
-    each recorded team log thread's minted id."""
-    replay = _Replay(store, ReplayClock())
+async def reappend(store: SqliteStore, logs: Sequence[VerifiedLog]) -> None:
+    """Re-appends `logs` into `store` through writers, in an order their rows allow."""
+    clock = ReplayClock()
     queues: list[_Queue] = []
     for log in logs:
         events = list(log.fold.events)
@@ -76,53 +55,41 @@ async def reappend(store: SqliteStore, logs: Sequence[VerifiedLog]) -> dict[str,
     while moved:
         moved = False
         for q in queues:
-            moved = await _drain(replay, q) or moved
+            moved = await _drain(store, clock, q) or moved
     assert [len(q.events) for q in queues] == [0] * len(queues)
-    return replay.renamed
 
 
-async def _drain(replay: _Replay, q: _Queue) -> bool:
+async def _drain(store: SqliteStore, clock: ReplayClock, q: _Queue) -> bool:
     """Appends what of `q` can go now: each event once the rows it moves exist."""
     moved = False
-    while q.events and await replay.store.run(lambda c, e=q.events[0]: appendable(c, e)):
-        replay.clock.now = q.events[0].time
-        if not await _append(replay, q, q.events[0]):
+    while q.events and await store.run(lambda c, e=q.events[0]: appendable(c, e)):
+        clock.now = q.events[0].time
+        if not await _append(store, clock, q, q.events[0]):
             break
         q.events.pop(0)
         moved = True
     return moved
 
 
-async def _append(replay: _Replay, q: _Queue, e: Event) -> bool:
+async def _append(store: SqliteStore, clock: ReplayClock, q: _Queue, e: Event) -> bool:
     """Appends `e` to its log, opening the log's branch with it when it is the first event.
     False: a team log the lead's first append has not opened yet."""
     header = q.log.segments[0].header
     if q.writer is None and q.team_log:
-        q.writer = await _take_team_log(replay, q)
-        if q.writer is None:
+        if not isinstance(await store.branch(header.branch_id), Ok):
             return False
-    draft = draft_of(e, replay.renamed)
+        taken = await store.acquire(header.branch_id, HOLDER, clock)
+        assert isinstance(taken, Ok), taken
+        q.writer = taken.value
     if q.writer is not None:
         assert isinstance(await q.writer.renew(), Ok)
-        done = await q.writer.append([draft])
+        done = await q.writer.append([draft_of(e)])
         assert isinstance(done, Ok), (header.branch_id, e.seq, done)
         return True
-    opened = await replay.store.open_branch(
-        header.thread_id, header.branch_id, [draft], holder_id=HOLDER, clock=replay.clock
+    opened = await store.open_branch(
+        header.thread_id, header.branch_id, [draft_of(e)], holder_id=HOLDER, clock=clock
     )
     assert isinstance(opened, Ok), opened
     assert isinstance(opened.value, Writer), opened
     q.writer = opened.value
     return True
-
-
-async def _take_team_log(replay: _Replay, q: _Queue) -> Writer | None:
-    """The team log the lead's first append opened, once it has; learns its minted thread id."""
-    header = q.log.segments[0].header
-    stored = await replay.store.read(header.branch_id, replay.clock())
-    if not isinstance(stored, Ok):
-        return None
-    replay.renamed[header.thread_id] = stored.value.segments[0].header.thread_id
-    taken = await replay.store.acquire(header.branch_id, HOLDER, replay.clock)
-    assert isinstance(taken, Ok), taken
-    return taken.value

@@ -25,6 +25,9 @@ export const TEAM = "0192c000-0000-7000-8000-000000000001";
 export const LEAD_BRANCH: BranchId = BranchId.parse(
   "0192b000-0000-7000-8000-0000000000b1",
 );
+export const TEAM_LOG_THREAD: ThreadId = ThreadId.parse(
+  "0192a000-0000-7000-8000-0000000000b3",
+);
 export const TEAM_LOG: BranchId = BranchId.parse(
   "0192b000-0000-7000-8000-0000000000b3",
 );
@@ -38,7 +41,11 @@ export const RACER_THREAD: Readonly<Record<string, ThreadId>> = {
   "open-b": ThreadId.parse("0192a000-0000-7000-8000-0000000000cb"),
 };
 
-const started = (team?: { id: string; log_branch_id: string }): EventDraft => ({
+const started = (team?: {
+  id: string;
+  log_thread_id: string;
+  log_branch_id: string;
+}): EventDraft => ({
   type: "thread_started",
   type_version: 1,
   critical: true,
@@ -89,7 +96,11 @@ function lead(where: string): string {
     branchId: LEAD_BRANCH,
     lease: { holderId: "lead", ttlMs: 0 },
     drafts: [
-      started({ id: TEAM, log_branch_id: TEAM_LOG }),
+      started({
+        id: TEAM,
+        log_thread_id: TEAM_LOG_THREAD,
+        log_branch_id: TEAM_LOG,
+      }),
       input("Lead the team."),
     ],
   });

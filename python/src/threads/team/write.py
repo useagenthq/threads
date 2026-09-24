@@ -7,12 +7,13 @@ from typing import TYPE_CHECKING, Final
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import BranchId, ParseError, ThreadId, ThreadStartedEvent
+from threads._generated.events_v1 import Team
+from threads.log import ParseError, ThreadStartedEvent
 
 # Modules, not their names: opening runs these hooks for the branch it opens (a cycle).
 from threads.store import lease, opening
 from threads.store.appended import Appended
-from threads.store.lines import Draft, uuid7
+from threads.store.lines import Draft
 from threads.team.index import TeamLog, change_rows, insert_rows
 
 if TYPE_CHECKING:
@@ -36,9 +37,7 @@ def open_team_log(conn: sqlite3.Connection, a: Appended) -> ParseError | None:
         if not isinstance(e, ThreadStartedEvent) or e.data.team is MISSING:
             continue
         log = e.data.team.log_branch_id
-        opened = opening.open_branch(
-            conn, _team_log(a, e.data.agent_name, e.data.team.id, log), a.now
-        )
+        opened = opening.open_branch(conn, _team_log(a, e.data.agent_name, e.data.team), a.now)
         if isinstance(opened, ParseError):
             return opened
         if opened == opening.ALREADY_OPEN:
@@ -47,13 +46,15 @@ def open_team_log(conn: sqlite3.Connection, a: Appended) -> ParseError | None:
     return None
 
 
-def _team_log(a: Appended, lead: str, team: str, log: BranchId) -> "opening.BranchOpening":
-    """The team log of the team `a`'s lead opens: its own thread, and its team_opened."""
-    ref: JsonValue = {"tenant": a.tenant_id, "team": team, "name": lead, "generation": 1}
-    opened = Draft("team_opened", {"team": team, "lead": ref, "lead_thread_id": a.thread_id})
+def _team_log(a: Appended, lead: str, team: Team) -> "opening.BranchOpening":
+    """The team log `a`'s lead opens: the thread and branch its `team` names, with team_opened."""
+    ref: JsonValue = {"tenant": a.tenant_id, "team": team.id, "name": lead, "generation": 1}
+    opened = Draft("team_opened", {"team": team.id, "lead": ref, "lead_thread_id": a.thread_id})
     # Free at once: the next writer (an operator, the team worker) takes epoch 2.
     held = lease.Lease(a.holder_id, 1, a.now)
-    return opening.BranchOpening(a.tenant_id, ThreadId(uuid7(a.now)), log, held, (opened,))
+    return opening.BranchOpening(
+        a.tenant_id, team.log_thread_id, team.log_branch_id, held, (opened,)
+    )
 
 
 _FEED: Final = (

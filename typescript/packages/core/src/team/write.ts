@@ -1,7 +1,5 @@
 import { z } from "zod";
-import { ThreadId } from "../log";
 import { err, ok, type Result } from "../result";
-import { uuidv7 } from "../store/encode";
 import type { Appended } from "../store/indexing";
 import { ALREADY_OPEN, openBranch } from "../store/open";
 import { parseRows } from "../store/tables";
@@ -31,7 +29,7 @@ export function openTeamLog(a: Appended): Result<void, LogError> {
     if (e.type !== "thread_started" || team === undefined) continue;
     const opened = openBranch(a.db, a.now, {
       tenantId: a.tenant,
-      threadId: ThreadId.parse(uuidv7(a.now)),
+      threadId: team.log_thread_id,
       branchId: team.log_branch_id,
       // Free at once: the next writer (an operator, the team worker) takes epoch 2.
       lease: { holderId: a.holderId, ttlMs: 0 },

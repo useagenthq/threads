@@ -115,6 +115,19 @@ def _addressed(e: Obj, own: set[str], sent: dict[str, Obj]) -> str | None:
     return None if want in own else "43: a mail is not in the log `from` names"
 
 
+def _team_log_named(opened: Obj, logs: dict[str, list[Obj]]) -> str | None:
+    """A team log is the thread and branch its lead's thread_started.team names."""
+    team = obj(opened["data"])["team"]
+    for es in logs.values():
+        for e in es:
+            named = obj(e["data"]).get("team") if e["type"] == "thread_started" else None
+            if isinstance(named, dict) and named["id"] == team:
+                here = (opened["thread_id"], opened["branch_id"])
+                ok = here == (named["log_thread_id"], named["log_branch_id"])
+                return None if ok else "43: a team log is not the thread its lead names"
+    return None
+
+
 def _cross_one(
     events: list[Obj], logs: dict[str, list[Obj]], sent: dict[str, Obj], own: set[str]
 ) -> tuple[int, str] | None:
@@ -127,7 +140,9 @@ def _cross_one(
     for e in events:
         d, t = obj(e["data"]), e["type"]
         why = None
-        if t in ("message_received", "message_sent"):
+        if t == "team_opened":
+            why = _team_log_named(e, logs)
+        elif t in ("message_received", "message_sent"):
             why = _addressed(e, own, sent)
             if why is None and t == "message_sent" and obj(d["envelope"])["kind"] == "bounce":
                 why = _bounce(events, obj(d["envelope"]), sent)

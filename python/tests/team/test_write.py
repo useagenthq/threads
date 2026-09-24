@@ -62,6 +62,8 @@ def test_a_leads_first_append_opens_the_team_log_the_teams_row_and_its_row() -> 
         await _open_lead(store, clock, 2)
         log = await store.read(LOG_BRANCH, clock())
         assert isinstance(log, Ok)
+        # The thread the lead's thread_started.team names.
+        assert log.value.segments[0].header.thread_id == TEAM_LOG
         (opened,) = log.value.fold.events
         lead = {"tenant": TENANT, "team": TEAM, "name": "lead", "generation": 1}
         assert json.loads(opened.model_dump_json(include={"type", "data"})) == {

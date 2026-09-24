@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue, TypeAdapter
 from team.team_kit import CASES, TENANT, assert_team_replays, index_rows, teams_of, verified
-from team.writes import reappend, renamed
+from team.writes import reappend
 
 from threads.result import Ok
 from threads.store import SqliteStore
@@ -47,11 +47,11 @@ def test_appends_leave_the_expected_rows_and_a_rebuild_leaves_them_again(case: P
         assert isinstance(opened, Ok)
         store = opened.value
         reads = [verified(raw) for raw in logs.values()]
-        ids = await reappend(store, [r.value for r in reads if isinstance(r, Ok)])
-        assert await store.run(index_rows) == renamed(expected["index"], ids)
+        await reappend(store, [r.value for r in reads if isinstance(r, Ok)])
+        assert await store.run(index_rows) == expected["index"]
         for team in teams_of(logs):
             await assert_team_replays(store, team)
-        assert await store.run(index_rows) == renamed(expected["index"], ids)
+        assert await store.run(index_rows) == expected["index"]
         await store.close()
 
     asyncio.run(main())

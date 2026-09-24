@@ -27,6 +27,7 @@ TENANT: Final = "acme"
 TEAM: Final = "0192c000-0000-7000-8000-000000000001"
 LEAD: Final = ThreadId("0192a000-0000-7000-8000-0000000000b1")
 LEAD_BRANCH: Final = BranchId("0192b000-0000-7000-8000-0000000000b1")
+TEAM_LOG_THREAD: Final = ThreadId("0192a000-0000-7000-8000-0000000000b3")
 TEAM_LOG: Final = BranchId("0192b000-0000-7000-8000-0000000000b3")
 RACED: Final = BranchId("0192b000-0000-7000-8000-0000000000c1")
 """The branch both open-* workers race to open, each with its own thread."""
@@ -75,7 +76,7 @@ async def lead(where: Path) -> str:
         )
 
     await store.run(stop_at_the_feed)
-    team: JsonValue = {"id": TEAM, "log_branch_id": TEAM_LOG}
+    team: JsonValue = {"id": TEAM, "log_thread_id": TEAM_LOG_THREAD, "log_branch_id": TEAM_LOG}
     drafts = [_started(team), _input("Lead the team.")]
     opened = await store.open_branch(LEAD, LEAD_BRANCH, drafts, holder_id="lead", clock=_now)
     assert isinstance(opened, Ok), opened
