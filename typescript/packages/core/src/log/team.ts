@@ -211,6 +211,7 @@ const TEAM_REFUSALS = [
   "concurrency_cap",
   "budget_exceeded",
   "team_closed",
+  "invalid_definition",
   "unknown_member",
   "stale_member",
   "member_ended",
