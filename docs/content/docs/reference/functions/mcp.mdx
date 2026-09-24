@@ -95,7 +95,7 @@ def mcp(
 </Field>
 
 <Field name="defer" type={"boolean"} default={"false"}>
-  true: the model doesn't see this server's tool schemas until it finds them with tool_search; it sees their names and descriptions until then. Use it for a server with many tools. context.defer_tools decides whether the flag is honoured. Default false.
+  true: the model sees only this server's tool names, listed in tool_search's description, until it loads them with tool_search; their descriptions and schemas are sent only after a load. Use it for a server with many tools. context.defer_tools decides whether the flag is honoured. Default false.
 </Field>
 
 ## Returns

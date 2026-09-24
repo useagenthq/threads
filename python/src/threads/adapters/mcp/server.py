@@ -56,7 +56,8 @@ class McpOptions(TypedDict, total=False):
     effect: EffectClass
     """Undeclared: unguarded, so an uncertain call parks and is never retried (F1.10)."""
     defer: bool
-    """True: every tool of the server is deferred until tool_search loads it."""
+    """True: the model sees only the server's tool names, listed in tool_search's description,
+    until tool_search loads them."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +76,8 @@ class McpServer:
     http: httpx.AsyncBaseTransport | None = None
     """The HTTP transport under the fence; None opens real connections. Tests pass one."""
     defer: bool = False
-    """Every tool of the server is deferred until tool_search loads it."""
+    """The model sees only the server's tool names, listed in tool_search's description, until
+    tool_search loads them."""
 
     def connect(self, fence: Fence) -> AbstractAsyncContextManager[Sequence[McpTool]]:
         """The server's pinned tools for one run, live until the context exits."""

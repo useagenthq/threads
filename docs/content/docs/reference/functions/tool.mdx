@@ -122,7 +122,7 @@ def tool(
 </Field>
 
 <Field name="defer" type={"boolean"} default={"false"}>
-  true: the model doesn't see this tool's schema until it finds it with tool_search; can't be combined with ends_turn (setup error invalid_config). The model sees the tool's name and description until then. context.defer_tools decides whether the flag is honoured. Default false.
+  true: the model sees only this tool's name, listed in tool_search's description, until it loads the tool with tool_search; its description and schema are sent only after the load. Can't be combined with ends_turn (setup error invalid_config). context.defer_tools decides whether the flag is honoured. Default false.
 </Field>
 
 ## Returns

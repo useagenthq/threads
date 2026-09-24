@@ -60,7 +60,8 @@ class Tool[I: BaseModel, O, D]:
     concurrent: bool = False
     """Runs with the other concurrent read-only calls of one response. Hashed, not in line 0."""
     defer: bool = False
-    """The model sees only the name and description until tool_search loads it."""
+    """The model sees only the name, listed in tool_search's description, until tool_search loads
+    it."""
 
     def spec(self) -> ToolSpec:
         """The pinned ToolSpec: what line 0 shows and what decides the effect class."""
@@ -162,7 +163,8 @@ def tool[I: BaseModel, O, D](**options: Unpack[ToolOptions[I, O, D]]) -> Tool[I,
     if defer and ends_turn:
         raise ConfigError(
             "invalid_config",
-            f"tool {options['name']}: defer can't be combined with ends_turn",
+            f"tool {options['name']}: defer can't be combined with ends_turn; a deferred tool is "
+            "loaded by tool_search first",
         )
     return Tool(
         options["name"],

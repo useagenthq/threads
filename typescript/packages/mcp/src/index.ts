@@ -41,7 +41,7 @@ export type McpOptions = {
   readonly effect?: "read_only" | "unguarded" | "idempotent";
   /** Required exactly when effect is idempotent: the server dedups on the effect key within it. */
   readonly dedupWindowMs?: number;
-  /** true: every tool of this server is deferred: the model loads it with tool_search. */
+  /** true: the model sees only this server's tool names, listed in tool_search's description, until it loads them with tool_search. */
   readonly defer?: boolean;
   /** The HTTP client's fetch (a proxy, a test server); the fence wraps it either way. */
   readonly fetch?: Fetch;

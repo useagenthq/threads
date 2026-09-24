@@ -745,7 +745,7 @@
           "doc": "true: this read-only tool may run at the same time as the other concurrent read-only calls of one model response. Needs effect \"read_only\" and not ends_turn (setup error invalid_config otherwise). Results are always recorded in call order. At most 8 are outstanding at once. Covered by config_hash (not shown to the model), so changing it is a config change."
         },
         {"name": "ends_turn", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "true: a successful result from this tool ends the turn with no further model call; an error result doesn't. Default false."},
-        {"name": "defer", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "true: the model doesn't see this tool's schema until it finds it with tool_search; can't be combined with ends_turn (setup error invalid_config). The model sees the tool's name and description until then. context.defer_tools decides whether the flag is honoured. Default false."}
+        {"name": "defer", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "true: the model sees only this tool's name, listed in tool_search's description, until it loads the tool with tool_search; its description and schema are sent only after the load. Can't be combined with ends_turn (setup error invalid_config). context.defer_tools decides whether the flag is honoured. Default false."}
       ],
       "returns": {"$ref": "#/types/Tool", "args": [{"generic": "Input"}, {"generic": "Output"}, {"generic": "Deps"}]}
     },
@@ -897,7 +897,7 @@
           "default": "unguarded",
           "doc": "The effect class every tool from this server is pinned with. Use read_only for a server whose tools change nothing; the default unguarded means an uncertain call parks and is never retried. idempotent is refused in Python and needs a dedup window in TypeScript."
         },
-        {"name": "defer", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "true: the model doesn't see this server's tool schemas until it finds them with tool_search; it sees their names and descriptions until then. Use it for a server with many tools. context.defer_tools decides whether the flag is honoured. Default false."}
+        {"name": "defer", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "true: the model sees only this server's tool names, listed in tool_search's description, until it loads them with tool_search; their descriptions and schemas are sent only after a load. Use it for a server with many tools. context.defer_tools decides whether the flag is honoured. Default false."}
       ],
       "returns": {"$ref": "#/types/McpServer"}
     },

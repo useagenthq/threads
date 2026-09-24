@@ -329,7 +329,7 @@ Turning `concurrent` on or off changes the agent's config, so a thread started w
 
 ## Many tools: load them on demand
 
-An agent with dozens or hundreds of tools pays for every schema on every request. Mark the big ones `defer` and the model sees only their names until it needs them.
+An agent with dozens or hundreds of tools pays for every schema on every request. Mark the big ones `defer` and the model sees only their names until it loads them.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -364,10 +364,11 @@ support = agent(
 </Tab>
 </Tabs>
 
-- **What the model sees.** Each deferred tool as its name and description, and a `tool_search` tool whose description lists every deferred name.
+- **What the model sees.** Only the names of the deferred tools, listed in the description of a `tool_search` tool. A deferred tool's own description and schema are sent only once it is loaded, so name your tools well: the model picks by name.
 - **Exact names or keywords.** `tool_search({query: "mcp__jira__create_issue, mcp__jira__add_comment"})` loads exactly those (up to 10). Any other query loads the best keyword matches from the names and descriptions (`limit`, default 5).
 - **Loaded for good.** A loaded tool stays loaded for the rest of the thread, and a call to a tool that isn't loaded yet fails with a message telling the model to search first.
-- **The prompt prefix never changes.** A load is added to the conversation history, so the cached start of the prompt stays the same. The first request after a load misses the provider's cache once, because the tool list changed.
+- **Each load rewrites the provider's prompt cache.** A load changes the tool list the provider receives, and providers treat any change to tool definitions as a change to the whole prompt: Anthropic, for example, invalidates the entire cache (tools, system prompt and messages). So the first request after a load pays a full cache write for the whole context, and later requests read from the cache again. Load in few, well-chosen batches.
+- **The recorded prompt prefix never changes.** threads records a load in the conversation history, not in the thread's declared prefix, so the thread's settings and its replay checks stay the same. That is a separate guarantee from the provider cache above.
 - **`context.defer_tools`**: `auto` (the default) honours `defer`, `never` defers nothing, `always` defers every app, extension and MCP tool that doesn't end the turn. Subagents, team members and handoff targets use their parent's setting unless they set their own; they start with nothing loaded.
 
 Defer large catalogs, not two or three small tools. Changing which tools are deferred, or a deferred tool's schema, changes the agent's config, so existing threads need a new thread.

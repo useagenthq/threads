@@ -47,7 +47,7 @@ export type ToolDefinition<Input, Output, Deps = undefined> = {
   readonly endsTurn?: boolean;
   /** true: runs with the other concurrent read-only calls of one response. Hashed, not in line 0. */
   readonly concurrent?: boolean;
-  /** true: the model sees only its name and description until tool_search loads it. */
+  /** true: the model sees only its name, listed in tool_search's description, until tool_search loads it. */
   readonly defer?: boolean;
 };
 

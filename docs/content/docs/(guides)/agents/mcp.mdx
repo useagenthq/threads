@@ -133,7 +133,7 @@ Running a stdio server inside the sandbox (`runs: "sandbox"`) is not supported y
 </Field>
 
 <Field name="defer" type="boolean" default="false">
-  The model sees only the server's tool names until it loads them with `tool_search`. Use it for servers with many tools. See [load them on demand](/docs/agents/tools#many-tools-load-them-on-demand).
+  The model sees only the server's tool names, listed in `tool_search`'s description, until it loads them with `tool_search`; their descriptions and schemas are sent after the load. Use it for servers with many tools; each load rewrites the provider's prompt cache once. See [load them on demand](/docs/agents/tools#many-tools-load-them-on-demand).
 </Field>
 
 <Callout>
