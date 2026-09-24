@@ -24,6 +24,7 @@ from threads.loop.history import CallState
 from threads.loop.runtime import Halt, Parked, Runtime, lost
 from threads.loop.team_runtime import TeamRuntime
 from threads.loop.teams import put_text
+from threads.reduce.fold import loop_parked
 from threads.result import Err, Ok
 from threads.store import Draft
 from threads.store.lines import uuid7
@@ -63,7 +64,8 @@ async def _decided(
         return lost(done.error)
     # An ask or a wait parked its call: the park stops the run until an answer resumes it. (A
     # cancel that landed first, Barred, leaves the call to the cancellation step.)
-    return Parked("awaiting_member", tuple(rt.fold.parked)) if rt.fold.parked else None
+    held = loop_parked(rt.fold)
+    return Parked("awaiting_member", tuple(held)) if held else None
 
 
 async def start_call(rt: Runtime, state: CallState) -> Halt | None:

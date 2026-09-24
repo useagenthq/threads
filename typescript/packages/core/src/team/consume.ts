@@ -1,5 +1,5 @@
-import { type Fold, loopParked } from "../fold/state";
 import { assertNever } from "../assert-never";
+import { loopParked } from "../fold/state";
 import { type MailEnvelope, type Principal, principalKey } from "../log";
 import { type CloseContext, takeAnswer, takeWaitNotice } from "./close";
 import { received } from "./mail";

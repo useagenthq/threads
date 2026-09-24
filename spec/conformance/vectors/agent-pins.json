@@ -738,6 +738,49 @@
         },
         "tools": [
           {
+            "description": "Ask a team member a question. Its reply is this call's result; you wait for it.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "question": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "to": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "to",
+                "question"
+              ],
+              "type": "object"
+            },
+            "name": "ask",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Get a message when a member ends, with its result. An idle watcher wakes for it.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "member": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "member"
+              ],
+              "type": "object"
+            },
+            "name": "monitor",
+            "effect_class": "read_only"
+          },
+          {
             "description": "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
             "input_schema": {
               "additionalProperties": false,
@@ -765,6 +808,30 @@
               "type": "object"
             },
             "name": "read_tool_result",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Answer an ask you received, by its ask_id.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "ask_id": {
+                  "description": "The ask_id of an ask you received.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ask_id",
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "reply",
             "effect_class": "read_only"
           },
           {
@@ -886,6 +953,29 @@
               "type": "object"
             },
             "name": "todo_write",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Wait until each listed member is idle or has ended, or the deadline passes. Returns their results.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "members": {
+                  "items": {
+                    "description": "A member's name, such as researcher-1.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "members"
+              ],
+              "type": "object"
+            },
+            "name": "wait",
             "effect_class": "read_only"
           }
         ],
@@ -968,7 +1058,7 @@
             "server_edits": "disabled"
           }
         },
-        "config_hash": "c3c45bb936b4e9634be994d6f73da9ed59daa61e38f7758c792f49b63658f2f4"
+        "config_hash": "2b8b5fcedfe6e958df45f810afc6b95c99b5b105607fa885aff37fbfab60a776"
       }
     },
     {
@@ -1004,6 +1094,49 @@
         },
         "tools": [
           {
+            "description": "Ask a team member a question. Its reply is this call's result; you wait for it.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "question": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "to": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "to",
+                "question"
+              ],
+              "type": "object"
+            },
+            "name": "ask",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Get a message when a member ends, with its result. An idle watcher wakes for it.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "member": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "member"
+              ],
+              "type": "object"
+            },
+            "name": "monitor",
+            "effect_class": "read_only"
+          },
+          {
             "description": "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
             "input_schema": {
               "additionalProperties": false,
@@ -1031,6 +1164,30 @@
               "type": "object"
             },
             "name": "read_tool_result",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Answer an ask you received, by its ask_id.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "ask_id": {
+                  "description": "The ask_id of an ask you received.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ask_id",
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "reply",
             "effect_class": "read_only"
           },
           {
@@ -1153,6 +1310,29 @@
             },
             "name": "todo_write",
             "effect_class": "read_only"
+          },
+          {
+            "description": "Wait until each listed member is idle or has ended, or the deadline passes. Returns their results.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "members": {
+                  "items": {
+                    "description": "A member's name, such as researcher-1.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "members"
+              ],
+              "type": "object"
+            },
+            "name": "wait",
+            "effect_class": "read_only"
           }
         ],
         "policy": {
@@ -1234,7 +1414,7 @@
             "server_edits": "disabled"
           }
         },
-        "config_hash": "6437c7fe50adece62e4d5360489e9ab036bb3197eb7f5a68fd82e92c3e7d4c15"
+        "config_hash": "e0675c25428efcbfd51190a3b3f4fb907ef030fdbf3e59f2547864743d47891e"
       }
     },
     {
@@ -3456,6 +3636,49 @@
         },
         "tools": [
           {
+            "description": "Ask a team member a question. Its reply is this call's result; you wait for it.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "question": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "to": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "to",
+                "question"
+              ],
+              "type": "object"
+            },
+            "name": "ask",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Get a message when a member ends, with its result. An idle watcher wakes for it.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "member": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "member"
+              ],
+              "type": "object"
+            },
+            "name": "monitor",
+            "effect_class": "read_only"
+          },
+          {
             "description": "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
             "input_schema": {
               "additionalProperties": false,
@@ -3483,6 +3706,30 @@
               "type": "object"
             },
             "name": "read_tool_result",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Answer an ask you received, by its ask_id.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "ask_id": {
+                  "description": "The ask_id of an ask you received.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ask_id",
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "reply",
             "effect_class": "read_only"
           },
           {
@@ -3604,6 +3851,29 @@
               "type": "object"
             },
             "name": "todo_write",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Wait until each listed member is idle or has ended, or the deadline passes. Returns their results.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "members": {
+                  "items": {
+                    "description": "A member's name, such as researcher-1.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "members"
+              ],
+              "type": "object"
+            },
+            "name": "wait",
             "effect_class": "read_only"
           }
         ],
@@ -3686,7 +3956,7 @@
             "server_edits": "disabled"
           }
         },
-        "config_hash": "10ad1d9c717bad44c18975e178dbebee7c5d01df411a0090da1c51b2feffb0cf"
+        "config_hash": "cbdcb7a1a2b97448f3da657ee4926b93fc4a24124f2ba5d7b0d680059135e7d1"
       }
     },
     {
@@ -3748,6 +4018,30 @@
         },
         "tools": [
           {
+            "description": "Ask a team member a question. Its reply is this call's result; you wait for it.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "question": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "to": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "to",
+                "question"
+              ],
+              "type": "object"
+            },
+            "name": "ask",
+            "effect_class": "read_only"
+          },
+          {
             "description": "Search file contents under path with an extended regular expression; prints path:line:text.",
             "input_schema": {
               "additionalProperties": false,
@@ -3775,6 +4069,25 @@
               "type": "object"
             },
             "name": "grep",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Get a message when a member ends, with its result. An idle watcher wakes for it.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "member": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "member"
+              ],
+              "type": "object"
+            },
+            "name": "monitor",
             "effect_class": "read_only"
           },
           {
@@ -3838,6 +4151,30 @@
               "type": "object"
             },
             "name": "read_tool_result",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Answer an ask you received, by its ask_id.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "ask_id": {
+                  "description": "The ask_id of an ask you received.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ask_id",
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "reply",
             "effect_class": "read_only"
           },
           {
@@ -3959,6 +4296,29 @@
               "type": "object"
             },
             "name": "todo_write",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Wait until each listed member is idle or has ended, or the deadline passes. Returns their results.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "members": {
+                  "items": {
+                    "description": "A member's name, such as researcher-1.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "members"
+              ],
+              "type": "object"
+            },
+            "name": "wait",
             "effect_class": "read_only"
           }
         ],
@@ -4047,7 +4407,7 @@
           }
         },
         "sandbox_provider": "fake",
-        "config_hash": "fa4ef4b4be28913c02b387ee749cd00392406bb2eb5b60df120f5aa7185f8802"
+        "config_hash": "067996c56179fc5f8739c5ebce6e698474065d635eb7d01798d4e1b680bbe0c3"
       }
     },
     {
@@ -4104,6 +4464,30 @@
         },
         "tools": [
           {
+            "description": "Ask a team member a question. Its reply is this call's result; you wait for it.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "question": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "to": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "to",
+                "question"
+              ],
+              "type": "object"
+            },
+            "name": "ask",
+            "effect_class": "read_only"
+          },
+          {
             "description": "Run a shell command in the sandbox. Returns exit_code, stdout and stderr previews, and full_output when truncated.",
             "input_schema": {
               "additionalProperties": false,
@@ -4127,6 +4511,25 @@
             },
             "name": "bash",
             "effect_class": "sandbox_local"
+          },
+          {
+            "description": "Get a message when a member ends, with its result. An idle watcher wakes for it.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "member": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "member"
+              ],
+              "type": "object"
+            },
+            "name": "monitor",
+            "effect_class": "read_only"
           },
           {
             "description": "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
@@ -4156,6 +4559,30 @@
               "type": "object"
             },
             "name": "read_tool_result",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Answer an ask you received, by its ask_id.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "ask_id": {
+                  "description": "The ask_id of an ask you received.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ask_id",
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "reply",
             "effect_class": "read_only"
           },
           {
@@ -4278,6 +4705,29 @@
             },
             "name": "todo_write",
             "effect_class": "read_only"
+          },
+          {
+            "description": "Wait until each listed member is idle or has ended, or the deadline passes. Returns their results.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "members": {
+                  "items": {
+                    "description": "A member's name, such as researcher-1.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "members"
+              ],
+              "type": "object"
+            },
+            "name": "wait",
+            "effect_class": "read_only"
           }
         ],
         "policy": {
@@ -4360,7 +4810,7 @@
           }
         },
         "sandbox_provider": "fake",
-        "config_hash": "164b1cd62083c79215189d069ed705fb6ccb4ffa5b61a3b38f1a78367f6f9ff6"
+        "config_hash": "a773eb73b2fdeb0b85e993ef5b2f1c6dbe2b496b2dbab20c7037c7a1304321ee"
       }
     }
   ]

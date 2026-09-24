@@ -1,4 +1,4 @@
-import type { EventOf, ParkAddress } from "../fold/state";
+import { type EventOf, loopPending, type ParkAddress } from "../fold/state";
 import type { MailEnvelope } from "../log";
 import type { CallContext, Caller } from "./call";
 import { addressOf, received, sent } from "./mail";
@@ -105,7 +105,7 @@ function waitingOn(ctx: CallContext): readonly ParkAddress[] | undefined {
   const items = itemsOf(ctx.chain, ctx.batch);
   const waits = openWaits(ctx.chain, ctx.batch);
   const out: ParkAddress[] = [];
-  for (const callId of ctx.chain.fold.pending) {
+  for (const callId of loopPending(ctx.chain.fold)) {
     const id = `${ctx.call.branch_id}:${callId}`;
     const closed = items.some(
       (e) => e.type === "tool_result" && e.data.call_id === callId,

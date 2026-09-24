@@ -81,8 +81,12 @@ export class TeamWorker {
       ? this.#changed.promise
       : Promise.reject(this.#failure.error);
 
-  /** A member run is in flight. */
-  readonly busy = (): boolean => this.#running.size > 0;
+  /**
+   * A member run is in flight, or one failed: a lead parked on its members then waits on
+   * progress, which rejects with the failure.
+   */
+  readonly busy = (): boolean =>
+    this.#running.size > 0 || this.#failure !== undefined;
 
   start(): void {
     this.#loop = this.#run();

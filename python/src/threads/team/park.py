@@ -7,6 +7,7 @@ Reference: spec/tools/fixtures/ops_request.py (park) and ops_consume.py."""
 from pydantic import JsonValue
 
 from threads.log import MailEnvelope, MessageSentData, ParkAddress
+from threads.reduce.fold import loop_pending
 from threads.reduce.handlers import to_json
 from threads.store.lines import Draft
 from threads.team.call import CallContext
@@ -71,7 +72,7 @@ def _waiting_on(ctx: CallContext) -> list[ParkAddress] | None:
     asks = {env.mail_id for env in envelopes if env.kind == "ask"}
     waits = open_waits(ctx.fold, ctx.batch)
     out: list[ParkAddress] = []
-    for call_id in ctx.fold.pending:
+    for call_id in loop_pending(ctx.fold):
         at = f"{ctx.call.branch_id}:{call_id}"
         if call_id in closed:
             continue
