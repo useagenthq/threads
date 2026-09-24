@@ -8,13 +8,12 @@ import { losesAfter } from "../../core/test/sandbox/remote/kit";
 import { World } from "../../core/test/sandbox/remote/world";
 import { code, unwrap } from "../../core/test/store/helpers";
 import { e2b } from "../src";
-import { e2bOn } from "../src/sandbox";
-import { fenceable } from "../src/transport";
 import { e2bBackend } from "./backend";
 
 // e2b() over its mocked wire: the shared adapter contract, the fork cases and the ledger
-// crash/takeover suite, then what is E2B's own: the fence at the SDK's real transport, and
-// its declarations. No network: the SDK's requests reach the mocked backend only.
+// crash/takeover suite, then what is E2B's own: the fence at the real send, and
+// its declarations. No network: every request reaches the mocked backend only. The wire
+// itself is pinned against Python's by wire.test.ts.
 
 const DOMAIN = "e2b.test";
 
@@ -38,7 +37,7 @@ forkCases(remoteHarness("e2b", (world) => adapter(world).sandbox));
 ledgerSuite(remoteHarness("e2b", (world) => adapter(world).sandbox));
 
 describe("e2b transport", () => {
-  test("every SDK request is fenced: a lease lost after the create sends nothing more", async () => {
+  test("every request is fenced: a lease lost after the create sends nothing more", async () => {
     const world = new World();
     const { sandbox, backend } = adapter(world);
     expect(code(await sandbox.create("op", losesAfter(1)))).toBe("stale_epoch");
@@ -58,24 +57,6 @@ describe("e2b transport", () => {
       .join("\n");
     expect(envd).toContain("x-access-token: envd-token");
     expect(envd).not.toContain(CANARY);
-  });
-
-  test("other fetches in the process pass through untouched", async () => {
-    const world = new World();
-    await adapter(world).sandbox.create("op", CTX);
-    expect(await (await fetch("data:text/plain,hi")).text()).toBe("hi");
-  });
-
-  test("only runtimes where the SDK sends through fetch are fenceable", () => {
-    expect(fenceable()).toBe(true);
-    expect(fenceable({})).toBe(false);
-  });
-
-  test("on a runtime whose SDK sends through undici (Node), e2b() is transport_fence_unsupported", () => {
-    expect(() => e2bOn({}, {})).toThrow(
-      expect.objectContaining({ code: "transport_fence_unsupported" }),
-    );
-    expect(() => e2bOn({ Deno: {} }, {})).not.toThrow();
   });
 });
 

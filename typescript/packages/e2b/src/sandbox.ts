@@ -7,23 +7,24 @@ import {
   type Secret,
 } from "@threads/core/adapter";
 import { e2bDriver } from "./driver";
-import { fenceable, networkFetch } from "./transport";
 
-// e2b(): E2B sandboxes through the official SDK (npm `e2b`), as a threads Sandbox (spec/api.json).
+// e2b(): E2B sandboxes, spoken to directly over E2B's REST API and each sandbox's envd
+// (driver.ts), as a threads Sandbox (spec/api.json). No E2B SDK: it takes no fetch, so its
+// sends couldn't be fenced.
 //
 // What it declares, and why:
-// - Transport: every SDK request is fenced at its real send (transport.ts). On Node the SDK
-//   binds undici, which can't be wrapped, so that route is refused: transport_fence_unsupported.
-// - Egress: E2B enforces `allowInternetAccess: false`, the default here (egress enforced).
+// - Transport: every request, control plane and envd, leaves through `fetch` behind the fence
+//   at its real send, one attempt each, redirects unfollowed (transport.ts). Bun and Node alike.
+// - Egress: E2B enforces `allow_internet_access: false`, the default here (egress enforced).
 //   `allowInternet: true` lets the sandbox reach anything (egress unenforced).
 // - Create: tagged with its operation key in sandbox metadata and found by it; a list can miss
 //   a create still in flight, so lookup is nonfinal. A sandbox dies at its lifetime (expiry).
+//   Nothing refreshes that timeout, as in Python.
 // - Termination: a kill goes through envd, E2B's process daemon inside the guest, and can't
 //   prove a detached descendant is gone: unconfirmed, so a crashed exec parks.
 // - Snapshots: unconfirmed quiescence (driver.ts), so none are taken; a restore from an E2B
 //   snapshot or template id is verified against the manifest hash.
-// - Exec output: the SDK hands stdout and stderr over as decoded text, so they are re-encoded
-//   as UTF-8; bytes that aren't UTF-8 arrive as U+FFFD. Files move as raw bytes.
+// - Exec output and files move as raw bytes.
 
 export type E2bOptions = {
   /**
@@ -39,19 +40,13 @@ export type E2bOptions = {
   readonly allowInternet?: boolean;
   /** The E2B domain, for a self-hosted or regional deployment. Defaults to E2B's. */
   readonly domain?: string;
-  /** The transport under the fence. Defaults to the process's fetch. */
+  /** The transport under the fence. Defaults to the runtime's fetch. */
   readonly fetch?: Fetch;
 };
 
 const HOUR_MS = 3_600_000;
 
-/** e2b() on a given JavaScript runtime (globalThis): the refusal off Bun and Deno is testable. */
-export function e2bOn(runtime: object, options: E2bOptions): ProviderSandbox {
-  if (!fenceable(runtime))
-    throw new ConfigError(
-      "transport_fence_unsupported",
-      "e2b: on Node the E2B SDK sends through undici, which threads can't fence; run on Bun",
-    );
+export function e2bSandbox(options: E2bOptions): ProviderSandbox {
   const lifetimeMs = options.lifetimeMs ?? HOUR_MS;
   if (!Number.isInteger(lifetimeMs) || lifetimeMs <= 0)
     throw new ConfigError(
@@ -61,14 +56,13 @@ export function e2bOn(runtime: object, options: E2bOptions): ProviderSandbox {
   const internet = options.allowInternet ?? false;
   const apiKey = credential("e2b", "apiKey", options.apiKey, "E2B_API_KEY");
   const driver = e2bDriver({
-    connection: () => ({
-      apiKey: apiKey(),
-      ...(options.domain === undefined ? {} : { domain: options.domain }),
-    }),
+    apiKey,
+    // As the e2b SDKs: E2B_DOMAIN, then E2B's own.
+    domain: options.domain ?? process.env["E2B_DOMAIN"] ?? "e2b.app",
     template: options.template ?? "base",
     timeoutMs: lifetimeMs,
     internet,
-    fetch: options.fetch ?? networkFetch,
+    fetch: options.fetch ?? ((input, init) => globalThis.fetch(input, init)),
   });
   const sandbox = remoteSandbox(
     driver,

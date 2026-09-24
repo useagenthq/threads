@@ -5,7 +5,6 @@ import { run } from "../../core/test/sandbox/remote/kit";
 import { code, unwrap } from "../../core/test/store/helpers";
 import { e2b } from "../src";
 import { e2bDriver } from "../src/driver";
-import { networkFetch } from "../src/transport";
 
 // Live gate: real E2B, so it runs only with THREADS_LIVE=1 and E2B_API_KEY.
 
@@ -43,11 +42,12 @@ describe.skipIf(!live)("live gate: e2b", () => {
     const sandbox = e2b({ ...(key === undefined ? {} : { apiKey: key }) });
     const box = unwrap(await sandbox.create(crypto.randomUUID(), CTX));
     const driver = e2bDriver({
-      connection: () => (key === undefined ? {} : { apiKey: key }),
+      apiKey: () => key ?? "",
+      domain: "e2b.app",
       template: "base",
       timeoutMs: 300_000,
       internet: false,
-      fetch: networkFetch,
+      fetch: (input, init) => fetch(input, init),
     });
     try {
       unwrap(await box.upload("f.txt", utf8.encode("one"), CTX));

@@ -1,11 +1,12 @@
 import type { Fetch } from "@threads/core/adapter";
 import { z } from "zod";
 import type { World } from "../../core/test/sandbox/remote/world";
-import { OPERATION_KEY, PROCESS_KEY } from "../src/driver";
+import { OPERATION_KEY } from "../src/driver";
 
 // E2B's wire, mocked over a World: the control plane (api.<domain>) and each sandbox's envd
-// (49983-<id>.<domain>: Connect RPC for processes, HTTP for files), as the pinned SDK speaks
-// them. Every request is recorded for the credential canary.
+// (49983-<id>.<domain>: Connect RPC for processes, HTTP for files), as
+// spec/conformance/vectors/e2b-wire/cases.json pins them. Every request is recorded for the
+// credential canary.
 
 const json = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), {
@@ -30,8 +31,9 @@ const StartBody = z.object({
     args: z.array(z.string()),
     envs: z.record(z.string(), z.string()).optional(),
   }),
+  tag: z.string().optional(),
 });
-const SignalBody = z.object({ process: z.object({ pid: z.int() }) });
+const SignalBody = z.object({ process: z.object({ tag: z.string() }) });
 
 /** One Connect envelope: flags, big-endian length, JSON. */
 function envelope(flags: number, message: unknown): Uint8Array {
@@ -43,12 +45,19 @@ function envelope(flags: number, message: unknown): Uint8Array {
   return out;
 }
 
+/** The one file part of an envd upload. */
+async function upload(req: Request): Promise<Uint8Array> {
+  const part = (await req.formData()).get("file");
+  if (!(part instanceof Blob)) throw new TypeError("no file part");
+  return new Uint8Array(await part.arrayBuffer());
+}
+
 function unenvelope(bytes: Uint8Array): unknown {
   const length = new DataView(bytes.buffer, bytes.byteOffset).getUint32(1);
   return JSON.parse(text.decode(bytes.subarray(5, 5 + length)));
 }
 
-function sandboxJson(id: string) {
+function sandboxJson(id: string, key = "") {
   return {
     sandboxID: id,
     templateID: "base",
@@ -62,7 +71,7 @@ function sandboxJson(id: string) {
     memoryMB: 512,
     diskSizeMB: 1024,
     state: "running",
-    metadata: {},
+    metadata: { [OPERATION_KEY]: key },
   };
 }
 
@@ -74,12 +83,6 @@ export type E2bBackend = {
 
 export function e2bBackend(world: World, domain: string): E2bBackend {
   const log: string[] = [];
-  const pids = new Map<
-    number,
-    { readonly box: string; readonly key: string }
-  >();
-  let pid = 100;
-
   const create = (body: z.infer<typeof CreateBody>): Response => {
     const snapshot = body.templateID === "base" ? undefined : body.templateID;
     const made = world.create(body.metadata?.[OPERATION_KEY] ?? "", snapshot);
@@ -90,11 +93,10 @@ export function e2bBackend(world: World, domain: string): E2bBackend {
 
   const list = (url: URL): Response => {
     const query = new URLSearchParams(url.searchParams.get("metadata") ?? "");
-    const found = world.find(
-      decodeURIComponent(query.get(OPERATION_KEY) ?? ""),
-    );
+    const key = decodeURIComponent(query.get(OPERATION_KEY) ?? "");
+    const found = world.find(key);
     if (found === "error") return json(500, { code: 500, message: "failed" });
-    return json(200, found === undefined ? [] : [sandboxJson(found)]);
+    return json(200, found === undefined ? [] : [sandboxJson(found, key)]);
   };
 
   const live = (id: string): Response =>
@@ -107,7 +109,6 @@ export function e2bBackend(world: World, domain: string): E2bBackend {
     (id: string, req: Request) => Promise<Response> | Response,
   ][] = [
     ["GET", /^\/sandboxes\/([^/]+)$/, live],
-    ["POST", /^\/v2\/sandboxes\/([^/]+)\/connect$/, live],
     [
       "DELETE",
       /^\/sandboxes\/([^/]+)$/,
@@ -145,28 +146,22 @@ export function e2bBackend(world: World, domain: string): E2bBackend {
   };
 
   const start = (box: string, request: z.infer<typeof StartBody>): Response => {
-    const key = request.process.envs?.[PROCESS_KEY];
-    pid += 1;
-    const me = pid;
-    if (key !== undefined) pids.set(me, { box, key });
     const stream = new ReadableStream<Uint8Array>({
       start: (controller) => {
         const event = (e: unknown) =>
           controller.enqueue(envelope(0, { event: e }));
-        event({ start: { pid: me } });
+        event({ start: { pid: 1 } });
         const started = world.machine(box).start(
-          request.process.args[2] ?? "",
+          request.process.args[1] ?? "",
           {
             stdout: (b) => event({ data: { stdout: base64(b) } }),
             stderr: (b) => event({ data: { stderr: base64(b) } }),
           },
-          key,
+          request.tag,
         );
         const finish = async () => {
           const code = await started.exit;
-          event({
-            end: { exitCode: code, exited: true, status: `exit ${code}` },
-          });
+          event({ end: { exitCode: code, exited: true } });
           controller.enqueue(envelope(2, {}));
           controller.close();
         };
@@ -194,26 +189,15 @@ export function e2bBackend(world: World, domain: string): E2bBackend {
           box,
           StartBody.parse(unenvelope(new Uint8Array(await req.arrayBuffer()))),
         );
-      case "POST /process.Process/List":
-        return json(200, {
-          processes: [...pids]
-            .filter(([, p]) => p.box === box && machine.procs.has(p.key))
-            .map(([n, p]) => ({
-              config: {
-                cmd: "/bin/bash",
-                args: [],
-                envs: { [PROCESS_KEY]: p.key },
-              },
-              pid: n,
-            })),
-        });
       case "POST /process.Process/SendSignal": {
         const { process } = SignalBody.parse(await req.json());
-        machine.stop(pids.get(process.pid)?.key ?? "");
+        if (!machine.procs.has(process.tag))
+          return json(404, { code: "not_found", message: "no process" });
+        machine.stop(process.tag);
         return json(200, {});
       }
       case "POST /files":
-        machine.write(file, new Uint8Array(await req.arrayBuffer()));
+        machine.write(file, await upload(req));
         return json(200, [{ name: file, type: "file", path: file }]);
       case "GET /files": {
         const bytes = machine.files.get(file)?.bytes;
