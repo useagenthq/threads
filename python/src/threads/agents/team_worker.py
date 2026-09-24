@@ -107,8 +107,9 @@ class TeamWorker:
 
     def busy(self) -> bool:
         """Whether a member run is in flight, or may be: until the recovery pass has looked,
-        a parked member may be about to run on."""
-        return bool(self._running) or not self._recovered
+        a parked member may be about to run on. A failed member run counts, so a lead parked on
+        its members waits on progress, which raises the failure."""
+        return bool(self._running) or not self._recovered or self._failure is not None
 
     def progress(self) -> Awaitable[None]:
         """Returns on the team's next progress after this call; raises once a member run failed
@@ -174,18 +175,20 @@ class TeamWorker:
             return None
         pending = await self._env.sq.run(lambda c: pending_for(c, own_rows(c, row.thread_id)))
         # A parked member runs again at a run's start (what it waits on may be answered by now),
-        # for mail that may resume it, and once an ask or a wait it parked on is due.
+        # for mail that may resume it, and once an ask or a wait it parked on is due. Waking on a
+        # due deadline or on mail to refuse waits for a free lease: its holder does that work, and
+        # a launch that can't acquire would relaunch at once.
         if row.state == "parked":
             wake = (
                 recovering
                 or await self._claim([m for m in pending if may_resume(m)])
-                or await self._due(BranchId(branch))
+                or (await self._free(branch) and await self._due(BranchId(branch)))
             )
             return (lambda: self._member(row, BranchId(branch))) if wake else None
         if row.state == "ended":
             return (
                 (lambda: refuse_ended(self._env.sq, self._env.mint, BranchId(branch)))
-                if pending
+                if pending and await self._free(branch)
                 else None
             )
         # A turn left open with its lease free is resumed (hostless recovery).

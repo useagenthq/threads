@@ -7,7 +7,7 @@ from collections.abc import Sequence
 
 from pydantic import JsonValue
 
-from threads.log import ParkAddress, WaitStartedEvent
+from threads.log import WaitStartedEvent
 from threads.store.lines import Draft
 from threads.team.call import (
     CallContext,
@@ -62,12 +62,11 @@ def wait(
     parks."""
     caller = caller_of(ctx)
     wait_id = call_mail_id(ctx)
-    address = ParkAddress(kind="wait", id=wait_id)
     again = any(
         isinstance(e, WaitStartedEvent) and e.data.wait_id == wait_id for e in ctx.fold.events
     )
     if again:
-        park_call(ctx, caller.provenance, address)
+        park_call(ctx, caller.provenance)
         return {"status": "waiting", "wait_id": wait_id}
     rows: list[MemberRow] = []
     for name in dict.fromkeys(members):
@@ -90,7 +89,7 @@ def wait(
         _observe(ctx, f"{ctx.call.branch_id}:{started}:{row.name}", row)
     if len(settled) == len(rows):
         return finish_wait(_closing(ctx), wait_id, cause=None, deadline=False)
-    park_call(ctx, caller.provenance, address)
+    park_call(ctx, caller.provenance)
     return {"status": "waiting", "wait_id": wait_id}
 
 

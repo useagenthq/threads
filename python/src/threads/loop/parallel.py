@@ -21,19 +21,32 @@ WINDOW: Final = 8
 
 
 async def run_pending(rt: Runtime) -> Halt | None:
-    """Runs the next group of pending calls, or the first pending call alone."""
-    group = _next_group(rt)
+    """Runs the next group of pending calls, or the first pending call alone that records
+    something: an opened ask or wait records nothing until the turn has nothing else to run,
+    when it parks."""
+    for start in range(len(loop_pending(rt.fold))):
+        seen = len(rt.events)
+        halt = await _run_from(rt, start)
+        if halt is not None or len(rt.events) != seen:
+            return halt
+        if open_cancel(rt.events) is not None:
+            return None
+    raise AssertionError("no pending call made progress")
+
+
+async def _run_from(rt: Runtime, start: int) -> Halt | None:
+    group = _next_group(rt, start)
     if len(group) > 1:
         return await run_group(rt, group)
-    call_id = loop_pending(rt.fold)[0]
+    call_id = loop_pending(rt.fold)[start]
     halt = await calls.run_call(rt, call_id)
     return halt or await tool_gates.after_tool(rt, call_id)
 
 
-def _next_group(rt: Runtime) -> tuple[CallId, ...]:
-    """The group that starts at the first pending call."""
+def _next_group(rt: Runtime, start: int) -> tuple[CallId, ...]:
+    """The group that starts at the pending call at `start`."""
+    pending = loop_pending(rt.fold)[start:]
     candidates: list[Candidate] = []
-    pending = loop_pending(rt.fold)
     for call_id in pending:
         found = _candidate(rt, call_state(rt.events, call_id), calls.pending_spec(rt, call_id))
         candidates.append(found)

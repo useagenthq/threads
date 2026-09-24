@@ -39,13 +39,16 @@ def pending_spec(rt: Runtime, call_id: CallId) -> ToolSpec:
 
 async def run_call(rt: Runtime, call_id: CallId) -> Halt | None:
     """Advances one pending call until it has a result, or the run must stop. A cancel that
-    lands meanwhile (authorize's hooks await) stops it: the cancellation step closes the call."""
+    lands meanwhile (authorize's hooks await) stops it: the cancellation step closes the call. So
+    does an advance that records nothing: an opened ask or wait waits for its answer while the
+    calls after it run."""
     while call_id in rt.fold.pending:
         if open_cancel(rt.events) is not None:
             return None
+        seen = len(rt.events)
         state = call_state(rt.events, call_id)
         halt = await _advance(rt, state, pending_spec(rt, call_id))
-        if halt is not None:
+        if halt is not None or len(rt.events) == seen:
             return halt
     return None
 

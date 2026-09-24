@@ -204,6 +204,15 @@ def ask_row(conn: sqlite3.Connection, ask_id: str) -> AskRow | None:
     return AskRow(text_of(found[0]), int_of(found[1]), text_of(found[2]))
 
 
+def open_asks(conn: sqlite3.Connection, branch: str) -> list[str]:
+    """This branch's open asks, in ask_id order."""
+    rows: list[tuple[object]] = conn.execute(
+        "SELECT ask_id FROM asks WHERE asker_branch_id = ? AND state = 'open' ORDER BY ask_id",
+        (branch,),
+    ).fetchall()
+    return [text_of(a) for (a,) in rows]
+
+
 def due_asks(conn: sqlite3.Connection, branch: str, now: int) -> list[tuple[str, int]]:
     """This branch's open asks whose deadline is at or before `now`, oldest first, with it."""
     rows: list[tuple[object, object]] = conn.execute(

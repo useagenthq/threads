@@ -4,11 +4,10 @@ the ask answered, resumes the asker and records the call's one result, and the t
 test ends with the team replaying from its logs. Mirrors TypeScript's test/team/ask.test.ts."""
 
 import asyncio
-from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING
 
-from pydantic import JsonValue
 from team.run_kit import (
-    Answering,
+    answers,
     call,
     events,
     member_events,
@@ -23,22 +22,10 @@ from team.run_kit import (
 from team.team_kit import assert_team_replays
 
 from threads import Completed, agent, scripted_model, sqlite
+from threads.log import Budget
 
-
-def _nothing(_request: str) -> JsonValue:
-    return say("Nothing more.")
-
-
-def _scripted(answers: Sequence[Callable[[str], JsonValue]]) -> Answering:
-    """A model whose nth answer (from 0) is made from its rendered request."""
-    n = [0]
-
-    def answer(request: str) -> JsonValue:
-        made = answers[n[0]] if n[0] < len(answers) else _nothing
-        n[0] += 1
-        return made(request)
-
-    return Answering(answer)
+if TYPE_CHECKING:
+    from pydantic import JsonValue
 
 
 def test_the_lead_asks_a_member_its_reply_is_the_asks_result_and_the_turn_goes_on() -> None:
@@ -46,7 +33,7 @@ def test_the_lead_asks_a_member_its_reply_is_the_asks_result_and_the_turn_goes_o
         store = sqlite(":memory:")
         researcher = agent(
             name="researcher",
-            model=_scripted(
+            model=answers(
                 [
                     lambda _r: say("Read about batteries."),
                     lambda r: reply_to("r1", r, "Batteries."),
@@ -98,7 +85,7 @@ def test_a_member_asks_another_member_and_parks_the_reply_runs_it_on() -> None:
         store = sqlite(":memory:")
         researcher = agent(
             name="researcher",
-            model=_scripted(
+            model=answers(
                 [
                     lambda _r: say("Read."),
                     lambda r: reply_to("r1", r, "Batteries."),
@@ -154,6 +141,31 @@ def test_an_ask_of_an_unknown_member_is_refused_and_nothing_parks() -> None:
         log = await events(store, r.thread)
         assert result_of(log, "c1") == {"code": "unknown_member", "status": "refused"}
         assert "parked" not in types(log)
+        await assert_team_replays(await sq_of(store), r.team.ref.id)
+
+    asyncio.run(main())
+
+
+def test_an_ask_of_a_member_with_no_room_in_its_own_budget_is_refused_budget_exceeded() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        lead_script: list[JsonValue] = [
+            start("c1", "a", "Go."),
+            call("c2", "wait", {"members": ["a-1"]}),
+            call("c3", "ask", {"to": "a-1", "question": "More?"}),
+            say("No room."),
+            say("Final."),
+        ]
+        member = agent(
+            name="a",
+            budget=Budget(max_model_requests=1),
+            model=scripted_model({"responses": [say("done."), say("more.")]}),
+        )
+        lead = agent(name="lead", model=scripted_model({"responses": lead_script}), team=[member])
+        r = await lead.run("Go.", store=store)
+        log = await events(store, r.thread)
+        assert result_of(log, "c3") == {"code": "budget_exceeded", "status": "refused"}
+        assert receipts(await member_events(store, r.team.ref.id, "a-1"), "ask") == []
         await assert_team_replays(await sq_of(store), r.team.ref.id)
 
     asyncio.run(main())

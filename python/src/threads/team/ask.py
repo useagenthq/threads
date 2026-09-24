@@ -7,11 +7,10 @@ from dataclasses import dataclass
 
 from pydantic import JsonValue
 
-from threads.log import MailEnvelope, MemberRef, MessageReceivedEvent, MessageSentEvent, ParkAddress
+from threads.log import MailEnvelope, MemberRef, MessageReceivedEvent, MessageSentEvent
 from threads.reduce.handlers import to_json
 from threads.team.call import (
     CallContext,
-    Caller,
     Refusal,
     call_mail_id,
     caller_of,
@@ -48,10 +47,6 @@ def _sent_as(ctx: CallContext, mail_id: str) -> MailEnvelope | None:
     )
 
 
-def _park(ctx: CallContext, caller: Caller, ask_id: str) -> None:
-    park_call(ctx, caller.provenance, ParkAddress(kind="ask", id=ask_id))
-
-
 def ask(ctx: CallContext, to: str, question: str, plan: AskPlan) -> JsonValue:
     """ask.open: send with kind ask, a deadline and headroom on the recipient's budgets; the
     asker's call stays pending and parks once its turn has nothing else to run. A re-dispatched
@@ -60,9 +55,10 @@ def ask(ctx: CallContext, to: str, question: str, plan: AskPlan) -> JsonValue:
     ask_id = call_mail_id(ctx)
     opened = _sent_as(ctx, ask_id)
     if opened is not None:
-        _park(ctx, caller, ask_id)
-        deadline = opened.deadline if isinstance(opened.deadline, int) else 0
-        return {"status": "open", "ask_id": ask_id, "deadline": deadline}
+        if not isinstance(opened.deadline, int):
+            raise AssertionError("an ask envelope always has a deadline")
+        park_call(ctx, caller.provenance)
+        return {"status": "open", "ask_id": ask_id, "deadline": opened.deadline}
     row = deliverable(ctx, caller, "ask", to, plan.limits)
     if isinstance(row, Refusal):
         return recorded(ctx, row)
@@ -83,7 +79,7 @@ def ask(ctx: CallContext, to: str, question: str, plan: AskPlan) -> JsonValue:
         "body": body_of(question, ctx.put),
     }
     ctx.batch.add(sent(env))
-    _park(ctx, caller, ask_id)
+    park_call(ctx, caller.provenance)
     return {"status": "open", "ask_id": ask_id, "deadline": deadline}
 
 

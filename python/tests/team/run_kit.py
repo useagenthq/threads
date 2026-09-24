@@ -76,14 +76,32 @@ class Answering(ScriptedModel):
             yield chunk
 
 
+def answers(made: Sequence[Callable[[str], JsonValue]]) -> Answering:
+    """A model whose nth answer (from 0) is made from its rendered request."""
+    n = [0]
+
+    def answer(request: str) -> JsonValue:
+        n[0] += 1
+        return made[n[0] - 1](request) if n[0] <= len(made) else say("Nothing more.")
+
+    return Answering(answer)
+
+
 _OBJECT: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 
 
-def result_of(log: Sequence[Event], call_id: str) -> dict[str, JsonValue]:
-    """The value a call's one tool_result records."""
+def result_of[T](
+    log: Sequence[Event], call_id: str, wire: TypeAdapter[T] | None = None
+) -> dict[str, JsonValue]:
+    """The value a call's one tool_result records. With `wire`, the public result type reads it
+    back field for field: the model sees exactly that type."""
     found = [e for e in log if isinstance(e, ToolResultEvent) and e.data.call_id == call_id]
     assert len(found) == 1, found
-    return _OBJECT.validate_json(found[0].data.preview)
+    preview = found[0].data.preview
+    got = _OBJECT.validate_json(preview)
+    if wire is not None:
+        assert wire.dump_python(wire.validate_json(preview), mode="json") == got
+    return got
 
 
 def ask_ids(request: str) -> list[str]:

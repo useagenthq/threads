@@ -21,6 +21,7 @@ from threads.team.rows import (
     TeamRow,
     member_rows,
     monitors_on,
+    open_asks,
     own_rows,
     pending_to,
     ref_of,
@@ -89,6 +90,12 @@ def settle(ctx: SettleContext, how: Settlement) -> None:
             _fire(ctx, team_of(row), row, "member_idle", settled, result)
         return
     result = {"member": member, **how}
+    # The member's own open asks never outlive it: each closes cancelled before its end.
+    closed = {str(d.data["ask_id"]) for d in ctx.batch.drafts if d.type == "ask_closed"}
+    for ask_id in open_asks(ctx.conn, ctx.branch_id):
+        if ask_id not in closed:
+            outcome: JsonValue = {"status": "cancelled"}
+            ctx.batch.add(Draft("ask_closed", {"ask_id": ask_id, "outcome": outcome}))
     settled = ctx.batch.add(Draft("member_ended", {"result": result}))
     for row in rows:
         _fire(ctx, team_of(row), row, "member_ended", settled, result)
