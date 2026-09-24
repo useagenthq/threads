@@ -759,6 +759,25 @@
           "reason": {
             "description": "Why the call asks, copied from its permission_decision: a hook's rule, or the memory_write option to change.",
             "type": "string"
+          },
+          "member": {
+            "description": "In a team member's thread: which member, as its starter's member_started records it, with the label and, for a dynamic agent, what the starter chose (define). Absent in any other thread.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/components/schemas/events_MemberName"
+              },
+              "label": {
+                "$ref": "#/components/schemas/events_NonEmpty"
+              },
+              "define": {
+                "$ref": "#/components/schemas/events_MemberDefine"
+              }
+            }
           }
         }
       },
@@ -2589,6 +2608,31 @@
           }
         ]
       },
+      "events_MemberDefine": {
+        "additionalProperties": false,
+        "properties": {
+          "instructions": {
+            "$ref": "#/components/schemas/events_NonEmpty",
+            "description": "The written instructions, byte for byte: the member's line 0 ends with them in the delimited block. Absent: the preamble alone."
+          },
+          "model": {
+            "$ref": "#/components/schemas/events_NonEmpty",
+            "description": "The chosen key of the template's models."
+          },
+          "tools": {
+            "description": "The chosen tools, unique, in the template's pinned order; none of the framework set. The member pins exactly these and the framework tools.",
+            "items": {
+              "$ref": "#/components/schemas/events_Name"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tools",
+          "model"
+        ],
+        "type": "object"
+      },
       "events_MemberErrorCode": {
         "description": "A failed member's code: the host API RunErrorCode, plus pin_unavailable and pin_mismatch for a failed rebind.",
         "enum": [
@@ -3340,6 +3384,7 @@
           "concurrency_cap",
           "budget_exceeded",
           "team_closed",
+          "invalid_definition",
           "unknown_member",
           "stale_member",
           "member_ended",
@@ -5385,6 +5430,14 @@
               "config_hash": {
                 "$ref": "#/components/schemas/events_Sha256",
                 "description": "The pinned definition, whose canonical bytes are stored before this append; materialize rebinds against it."
+              },
+              "define": {
+                "$ref": "#/components/schemas/events_MemberDefine",
+                "description": "Present exactly when the agent is a dynamic agent: what its starter chose. config_hash binds it."
+              },
+              "label": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "A display name the starter gave (1-64 code points, no control or format characters; semantic rule 46). Never hashed, never rendered to a model."
               },
               "member": {
                 "$ref": "#/components/schemas/events_MemberRef"

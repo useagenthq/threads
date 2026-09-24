@@ -4,20 +4,20 @@ description: "Why a start was refused."
 icon: "Braces"
 ---
 
-team_closed: the lead ended, which closes the team.
+team_closed: the lead ended, which closes the team. invalid_definition: a label, instructions, tools or model the start may not choose; detail says which.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
 ```ts
-type StartRefusal = "forbidden" | "unknown_agent" | "concurrency_cap" | "budget_exceeded" | "team_closed";
+type StartRefusal = "forbidden" | "unknown_agent" | "concurrency_cap" | "budget_exceeded" | "team_closed" | "invalid_definition";
 ```
 
 </Tab>
 <Tab value="Python">
 
 ```python
-type StartRefusal = Literal["forbidden", "unknown_agent", "concurrency_cap", "budget_exceeded", "team_closed"]
+type StartRefusal = Literal["forbidden", "unknown_agent", "concurrency_cap", "budget_exceeded", "team_closed", "invalid_definition"]
 ```
 
 </Tab>

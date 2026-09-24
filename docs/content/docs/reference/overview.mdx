@@ -41,10 +41,12 @@ say so.
 | TypeScript | Python | What it does |
 |---|---|---|
 | [`agent`](/docs/reference/functions/agent) | `agent` | Describe an agent. |
+| [`dynamicAgent`](/docs/reference/functions/dynamicAgent) | `dynamic_agent` | Describe a dynamic agent: a template in a lead's team whose members the lead (or team.start) defines at runtime within what this code pins. |
 | [`tool`](/docs/reference/functions/tool) | `tool` | Define an app tool. |
 | [`extension`](/docs/reference/functions/extension) | `extension` | The one extension primitive: tools, trusted instructions and hooks. |
 | [`mcp`](/docs/reference/functions/mcp) | `mcp` | An MCP server in one line. |
 | [`secret`](/docs/reference/functions/secret) | `secret` | A reference to a host secret, resolved only in the host. |
+| [`usd`](/docs/reference/functions/usd) | `usd` | A US-dollar amount as the integer nano-dollars budgets and prices use: usd(0.5) is 500000000. |
 | [`openThread`](/docs/reference/functions/openThread) | `open_thread` | A handle for inspection and control, independent of any in-memory run. |
 | [`sqlite`](/docs/reference/functions/sqlite) | `sqlite` | The one log and artifact store. |
 | [`localMemory`](/docs/reference/functions/localMemory) | `local_memory` | Built-in memory: SQLite FTS5 in the run's store. |
@@ -97,7 +99,7 @@ These providers exist but are not in the reference yet; their guides describe th
 
 **Channel adapters:** [`ChannelAdapter`](/docs/reference/types/ChannelAdapter), [`ChannelCapabilities`](/docs/reference/types/ChannelCapabilities), [`RawRequest`](/docs/reference/types/RawRequest), [`RawResponse`](/docs/reference/types/RawResponse), [`VerifiedDelivery`](/docs/reference/types/VerifiedDelivery), [`Inbound`](/docs/reference/types/Inbound), [`DeliveryOutcome`](/docs/reference/types/DeliveryOutcome)
 
-**Other types:** [`Exporter`](/docs/reference/types/Exporter), [`SyncReport`](/docs/reference/types/SyncReport), [`SkippedBranch`](/docs/reference/types/SkippedBranch), [`TeamAgent`](/docs/reference/types/TeamAgent), [`TeamRunResult`](/docs/reference/types/TeamRunResult), [`TeamRunStream`](/docs/reference/types/TeamRunStream), [`Principal`](/docs/reference/types/Principal), [`TeamRef`](/docs/reference/types/TeamRef), [`MemberRef`](/docs/reference/types/MemberRef), [`StartRefusal`](/docs/reference/types/StartRefusal), [`SendRefusal`](/docs/reference/types/SendRefusal), [`StartResult`](/docs/reference/types/StartResult), [`SendResult`](/docs/reference/types/SendResult)
+**Other types:** [`Exporter`](/docs/reference/types/Exporter), [`SyncReport`](/docs/reference/types/SyncReport), [`SkippedBranch`](/docs/reference/types/SkippedBranch), [`TeamAgent`](/docs/reference/types/TeamAgent), [`DynamicAgent`](/docs/reference/types/DynamicAgent), [`TeamRunResult`](/docs/reference/types/TeamRunResult), [`TeamRunStream`](/docs/reference/types/TeamRunStream), [`Principal`](/docs/reference/types/Principal), [`TeamRef`](/docs/reference/types/TeamRef), [`MemberRef`](/docs/reference/types/MemberRef), [`StartRefusal`](/docs/reference/types/StartRefusal), [`InvalidDefinition`](/docs/reference/types/InvalidDefinition), [`SendRefusal`](/docs/reference/types/SendRefusal), [`StartResult`](/docs/reference/types/StartResult), [`SendResult`](/docs/reference/types/SendResult)
 
 ## HTTP API
 

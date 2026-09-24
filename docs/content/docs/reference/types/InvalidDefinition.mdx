@@ -1,0 +1,19 @@
+---
+title: "InvalidDefinition"
+description: "Why a start's chosen fields were refused (StartRefusal invalid_definition)."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="field" type={"\"label\" | \"instructions\" | \"tools\" | \"model\""} required>
+  The start field that was refused.
+</Field>
+
+<Field name="reason" type={"\"not_allowed\" | \"invalid\""} required>
+  not_allowed: a tool or model key outside what the template allows (allowed lists it), or instructions, tools or model on an agent that isn't dynamic. invalid: a repeated tool, instructions that are empty, over 16 KiB or hold the block's delimiter or sentence, or a label that is empty, over 64 characters, holds a control or format character, or is operator.
+</Field>
+
+<Field name="allowed" type={"readonly string[]"}>
+  With not_allowed on tools or model: the names the template allows, so the model can correct itself. Absent otherwise.
+</Field>

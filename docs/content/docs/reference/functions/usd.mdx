@@ -1,0 +1,40 @@
+---
+title: "usd"
+description: "A US-dollar amount as the integer nano-dollars budgets and prices use: usd(0.5) is 500000000."
+icon: "SquareFunction"
+---
+
+Rounded to the nearest nano-dollar.
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function usd(dollars: number): Int
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def usd(
+    dollars: float,
+) -> Int
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="dollars" type={"number"} required>
+  The amount in dollars; finite and not negative, else ConfigError invalid_config.
+</Field>
+
+## Returns
+
+`Int`
+
+**Throws** `ConfigError` for a definition that can't run.

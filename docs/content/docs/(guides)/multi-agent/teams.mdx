@@ -157,11 +157,82 @@ const lead = agent({
 - `team` lists the agents the lead may start. Passing it, even as `[]`, makes `agent()` return a `TeamAgent`, whose results carry `team`.
 - The lead's instructions end with the names of the agents its team lists (`Agents you can start as team members with start: researcher, writer.`), so its model knows what `start` may name.
 - `teamLimits.concurrent` caps how many members are starting or running at once (default 4). `teamLimits.mailbox` caps how many messages can wait for one member (default 100).
-- An agent in a team can't hand off, so a listed agent with `handoffs` is refused when the lead is set up (`handoff_in_team`). A lead or member can't have its own tool named `start`, `send`, `ask`, `reply`, `wait`, `monitor` or `cancel` (`duplicate_name`).
+- An agent in a team can't hand off, so a listed agent with `handoffs` is refused when the lead is set up (`handoff_in_team`). A lead or member can't have its own tool named `start`, `send`, `ask`, `reply`, `wait`, `monitor` or `cancel` (`duplicate_name`). No agent in a team may be named `operator`, which marks text your own code writes (`invalid_config`).
 
 <Callout>
   More team tools are on the way in this phase: `ask` and `reply`, `wait`, `monitor` and `cancel` for the model, and methods on the team handle (`team.start`, `team.send`, `team.ask`, `team.wait`, `team.members`) for your own code. Until they land, `r.team` names the team: `r.team.ref`.
 </Callout>
+
+## Specialists the lead defines
+
+Sometimes the lead knows best what help it needs. A dynamic agent lets its model write a specialist's instructions, pick its tools and pick its model when it starts it, while your code still decides everything the specialist may ever have.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { anthropic } from "@threads/anthropic";
+import { agent, dynamicAgent, usd } from "@threads/core";
+
+const specialist = dynamicAgent({
+  name: "specialist",
+  instructions: "You are a careful analyst. Cite the tool output you rely on.",
+  tools: [readNotes, invoiceStatus], // the most a specialist can be given
+  models: { fast: anthropic("claude-haiku-4-5"), strong: anthropic("claude-sonnet-5") },
+  budget: { max_cost_nanos: usd(0.5) }, // every specialist's own cap
+});
+
+const lead = agent({
+  name: "lead",
+  instructions: "Split the question. Start a specialist for each part, with only the tools it needs.",
+  model: anthropic("claude-sonnet-5"),
+  team: [specialist],
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads import agent, dynamic_agent, usd
+from threads.anthropic import anthropic
+
+specialist = dynamic_agent(
+    name="specialist",
+    instructions="You are a careful analyst. Cite the tool output you rely on.",
+    tools=[read_notes, invoice_status],  # the most a specialist can be given
+    models={"fast": anthropic("claude-haiku-4-5"), "strong": anthropic("claude-sonnet-5")},
+    budget={"max_cost_nanos": usd(0.5)},  # every specialist's own cap
+)
+
+lead = agent(
+    name="lead",
+    instructions="Split the question. Start a specialist for each part, with only the tools it needs.",
+    model=anthropic("claude-sonnet-5"),
+    team=[specialist],
+)
+```
+
+</Tab>
+</Tabs>
+
+The lead's `start` call can then add up to four fields, all optional:
+
+| Field | What the lead chooses | When it's left out |
+|---|---|---|
+| `instructions` | Text added after the specialist's own instructions, in a block marked as written by the lead | Only the specialist's own instructions |
+| `tools` | Some of the specialist's tools, by name | All of them |
+| `model` | One of the `models` keys | The first key |
+| `label` | A display name for the timeline, such as `invoice checker`. It works on any start and is never shown to a model | No label |
+
+Your code keeps the rest: permissions, approvals, hooks, skills, memory, the sandbox, the budget and the output schema all come from `dynamicAgent`, and the lead can't change them. A specialist given `tools: ["invoice_status"]` has exactly that tool, plus the team and bookkeeping tools every member keeps. It gets no shell and no web access, even when the template has a sandbox and web tools.
+
+- **The lead sees its choices.** Its instructions list each dynamic agent with the tools and models it may choose, such as `specialist (you write its instructions; tools: invoice_status, read_notes; models: fast (default), strong)`.
+- **A bad choice is refused, with the fix.** A tool or model the specialist doesn't have is refused `invalid_definition`, and the result lists what is allowed, so the model can try again. Written text that tries to close the block or copy the sentence after it is refused too.
+- **Budgets use the chosen model.** `start` checks there's room for one request of the model the lead picked, so `strong` can be refused where `fast` would start.
+- **It's all in the log.** The lead's `member_started` records what it chose (`define`) and the label, and the specialist's first event records the resulting instructions, tools and model. An approval raised by a specialist shows its name, label and `define`.
+- **The written text is guidance, not a boundary.** It helps the specialist do the right job; the tools, permissions and budgets are what limit it.
+- **Teams only.** A dynamic agent can't be a subagent or a handoff target, and it can't start members of its own.
 
 ## The subagent task board
 

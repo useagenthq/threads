@@ -25,3 +25,7 @@ A union discriminated by `status`.
 <Field name="code" type={"StartRefusal"} required>
   Why it was refused.
 </Field>
+
+<Field name="detail" type={"InvalidDefinition"}>
+  Present exactly when code is invalid_definition: which field, why, and what is allowed.
+</Field>

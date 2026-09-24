@@ -1,10 +1,10 @@
 ---
-title: "agent"
-description: "Describe an agent."
+title: "dynamicAgent / dynamic_agent"
+description: "Describe a dynamic agent: a template in a lead's team whose members the lead (or team.start) defines at runtime within what this code pins."
 icon: "SquareFunction"
 ---
 
-Pure: no I/O, no env reads, no sockets. Checked by Agent.check() or on the first run.
+A start may choose only a label, instructions (added last, in a delimited block), a subset of this template's tools (built-ins included; the framework tools are always kept) and a models key; everything else (permissions, hooks, skills, memory, sandbox, budget, output) is this config. Only a team lists it: in subagents it is ConfigError invalid_config. Pure, like agent().
 
 Import from `@threads/core` (TypeScript) or `threads` (Python).
 
@@ -12,8 +12,8 @@ Import from `@threads/core` (TypeScript) or `threads` (Python).
 <Tab value="TypeScript">
 
 ```ts
-function agent(options: {
-  model: Model;
+function dynamicAgent(options: {
+  models: Record<string, Model>;
   instructions?: string;
   name?: Name;
   tools?: readonly (Tool | McpServer)[];
@@ -25,10 +25,6 @@ function agent(options: {
   skills?: readonly Skill[];
   output?: z.ZodType<Output>;
   outputRetries?: number;
-  subagents?: readonly (Agent<unknown, unknown>)[];
-  handoffs?: readonly (Agent<unknown, unknown>)[];
-  team?: readonly (Agent<unknown, unknown> | DynamicAgent<unknown, unknown>)[];
-  teamLimits?: { concurrent?: PosInt; mailbox?: PosInt };
   fallback?: readonly Model[];
   permissions?: Partial<Policy.permissions>;
   approvers?: readonly Principal[];
@@ -42,16 +38,16 @@ function agent(options: {
   computer?: boolean;
   lsp?: { languages: readonly string[] };
   outputStyles?: Record<string, string>;
-}): Agent<Deps, Output>
+}): DynamicAgent<Deps, Output>
 ```
 
 </Tab>
 <Tab value="Python">
 
 ```python
-def agent(
+def dynamic_agent(
     *,
-    model: Model,
+    models: Mapping[str, Model],
     instructions: str = "",
     name: Name = "agent",
     tools: Sequence[Tool | McpServer] = (),
@@ -63,10 +59,6 @@ def agent(
     skills: Sequence[Skill] = (),
     output: type[Output] | None = None,
     output_retries: int = 2,
-    subagents: Sequence[Agent[object, object]] = (),
-    handoffs: Sequence[Agent[object, object]] = (),
-    team: Sequence[Agent[object, object] | DynamicAgent[object, object]] | None = None,
-    team_limits: {concurrent?: PosInt, mailbox?: PosInt} | None = None,
     fallback: Sequence[Model] = (),
     permissions: Policy.permissions | None = None,
     approvers: Sequence[Principal] | None = None,
@@ -80,7 +72,7 @@ def agent(
     computer: bool = False,
     lsp: {languages: Sequence[str]} | None = None,
     output_styles: Mapping[str, str] = {},
-) -> Agent[Deps, Output]
+) -> DynamicAgent[Deps, Output]
 ```
 
 </Tab>
@@ -88,16 +80,16 @@ def agent(
 
 ## Parameters
 
-<Field name="model" type={"Model"} required>
-  The model every turn is sent to: a model adapter such as anthropic() or openai(), or scriptedModel() in tests. Fallback models are tried after it. A model (primary, fallback or any subagent's or handoff target's) that declares info.lookup other than none without a lookup method fails check() and the first run with capability_missing. See [Model](/docs/reference/types/Model).
+<Field name="models" type={"Record<string, Model>"} required>
+  The models a starter may choose from, by key, in order: the first key is the default. Non-empty, each key a name (lowercase letters, digits and underscores, starting with a letter), else ConfigError invalid_config. A start's model field names a key; the member runs that model.
 </Field>
 
 <Field name="instructions" type={"string"} default={""}>
-  Pinned system text (the pinned prompt prefix).
+  The fixed preamble every member of this template starts its the system prompt with. A starter's written instructions follow it and everything else, in a delimited block that comes last. Omitted: none.
 </Field>
 
 <Field name="name" type={"Name"} default={"agent"}>
-  Unique among the agents a host, subagent list or handoff list names.
+  The template's name: the agent a start names, and each member is &lt;name>-&lt;k>. Unique in the team tree; operator is reserved.
 </Field>
 
 <Field name="tools" type={"readonly (Tool | McpServer)[]"} default={"[]"}>
@@ -117,7 +109,7 @@ def agent(
 </Field>
 
 <Field name="memoryWrite / memory_write" type={"\"deny\" | \"ask\" | \"allow_principal\" | \"allow\""} default={"ask"}>
-  Write authority for save_memory. A write it turns into an ask records a reason naming memory_write, shown as PendingApproval.reason. The reason uses wire names: memory_write is memoryWrite in TypeScript.
+  Write authority for save_memory.
 </Field>
 
 <Field name="knowledge" type={"KnowledgeProvider"}>
@@ -136,36 +128,12 @@ def agent(
   Failed candidates per turn (a rejected final_output or a plain-text end) before turn_completed&#123;output_invalid&#125;. An integer from 0 to 2^53-1; anything else is ConfigError invalid_config.
 </Field>
 
-<Field name="subagents" type={"readonly (Agent<unknown, unknown>)[]"} default={"[]"}>
-  Agents spawn_agent may start, by name. Team tools come with them. A subagent with output reports the canonical JSON of its accepted output.
-</Field>
-
-<Field name="handoffs" type={"readonly (Agent<unknown, unknown>)[]"} default={"[]"}>
-  Agents this one may hand the conversation to, pinned as policy.handoffs.
-</Field>
-
-<Field name="team" type={"readonly (Agent<unknown, unknown> | DynamicAgent<unknown, unknown>)[]"}>
-  Agents or dynamic agents (dynamicAgent) this one may start as team members, with the start, send, ask, reply, wait, monitor and cancel tools. Passing it, even as [], makes agent() return a TeamAgent whose run() result carries team, the Team handle; [] is a team no model can grow (start is refused unknown_agent). A member whose definition lists handoffs is refused at setup (handoff_in_team), and so is an own tool named start, send, ask, reply, wait, monitor or cancel (duplicate_name). Omitted: no team, a plain Agent. An agent named operator anywhere in the team tree is refused at setup (invalid_config): the name is reserved.
-</Field>
-
-<Field name="teamLimits / team_limits" type={"{ concurrent?: PosInt; mailbox?: PosInt }"}>
-  The team's limits. Omitted: 4 running members and 100 pending mails per member.
-</Field>
-
-<Field name="teamLimits.concurrent / team_limits.concurrent" type={"PosInt"} default={"4"}>
-  Most members running at once; a start past it is refused concurrency_cap. Default 4.
-</Field>
-
-<Field name="teamLimits.mailbox / team_limits.mailbox" type={"PosInt"} default={"100"}>
-  Most pending mails per member; a send past it is refused mailbox_full. Default 100.
-</Field>
-
 <Field name="fallback" type={"readonly Model[]"} default={"[]"}>
   Fallback models in order. With the default fallback_scope turn, the next user_input reverts to the settings before the fallback (settings_changed&#123;reason: revert&#125;), gated by before_model_switch.
 </Field>
 
 <Field name="permissions" type={"Partial<Policy.permissions>"}>
-  The permission policy every tool call is decided under: mode, allow, ask and deny rules, protected_paths, allow_bypass and plan_exit_mode. The rule bash(*) matches every shell command, whatever it contains, in allow, ask and deny. The .threads guard, deny rules, plan mode and ask rules still decide first (protected_paths cover the file tools, not bash). The guard and deny rules match command text, so they are guardrails: with bash(*), the sandbox is the boundary. A bare bash rule allows only commands that parse. In TypeScript the fields you give override the defaults; Python takes a complete Permissions. Omitted: mode default, no rules, the built-in protected paths, allow_bypass false and plan_exit_mode default.
+  The permission policy every tool call is decided under: mode, allow, ask and deny rules, protected_paths, allow_bypass and plan_exit_mode. In TypeScript the fields you give override the defaults; Python takes a complete Permissions. Omitted: mode default, no rules, the built-in protected paths, allow_bypass false and plan_exit_mode default.
 </Field>
 
 <Field name="approvers" type={"readonly Principal[]"}>
@@ -189,7 +157,7 @@ def agent(
 </Field>
 
 <Field name="egress" type={"readonly string[] | \"unenforced\""} default={"[]"}>
-  Sandbox egress allowlist of hosts. [] is deny-all. unenforced opts in to a provider that can't enforce it; stub mode then refuses. Host allowlists are not supported yet in either language: use [] (deny-all) or "unenforced".
+  Sandbox egress allowlist of hosts. [] is deny-all. unenforced opts in to a provider that can't enforce it; stub mode then refuses.
 </Field>
 
 <Field name="web" type={"{ fetch?: boolean; search?: SearchBackend }"}>
@@ -238,4 +206,6 @@ def agent(
 
 ## Returns
 
-[`Agent<Deps, Output>`](/docs/reference/types/Agent)
+[`DynamicAgent<Deps, Output>`](/docs/reference/types/DynamicAgent)
+
+**Throws** `ConfigError` for a definition that can't run.
