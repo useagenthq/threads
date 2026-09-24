@@ -90,6 +90,7 @@ export class Writer {
   readonly requiresRecovery: boolean;
   #chain: Chain;
   #poisoned = false;
+  #moved = Promise.withResolvers<void>();
 
   constructor(db: SqliteDriver, now: () => number, lease: Lease, chain: Chain) {
     this.#db = db;
@@ -103,6 +104,11 @@ export class Writer {
       effects
         .values()
         .some((e) => e.status === "begun" || e.status === "unknown");
+  }
+
+  /** Settles on this writer's next committed append, whoever made it (a control included). */
+  moved(): Promise<void> {
+    return this.#moved.promise;
   }
 
   /** The committed chain this writer appends to. Each append replaces it; none mutates it. */
@@ -140,6 +146,8 @@ export class Writer {
       return committed;
     }
     this.#chain = trial;
+    this.#moved.resolve();
+    this.#moved = Promise.withResolvers<void>();
     return ok(added);
   }
 

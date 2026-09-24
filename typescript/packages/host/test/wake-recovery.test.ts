@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { agent, type Model, scriptedModel, sqlite } from "@threads/core";
 import { knownEvents, storeConnection } from "@threads/core/host";
+import { hostTicked } from "../src/host";
 import { cleanup, expireLeases, fold, serveAgent, stall } from "./api-kit";
 import { alice, say, until } from "./kit";
 
@@ -23,10 +24,11 @@ const scan = {
   usage: { input_tokens: 10, output_tokens: 2 },
 };
 
-const support = (lead: Model, child: Model) =>
+const support = (lead: Model, child: Model, instructions?: string) =>
   agent({
     name: "support",
     model: lead,
+    ...(instructions === undefined ? {} : { instructions }),
     subagents: [agent({ name: "scanner", model: child })],
   });
 
@@ -90,5 +92,48 @@ describe("a pending wake after a crash", () => {
       kind: "result",
       result: { status: "completed", output: "The scan is clean." },
     });
+  }, 15_000);
+});
+
+describe("a pending wake whose rerun fails for good", () => {
+  test("is not run again until its log moves", async () => {
+    const store = sqlite(":memory:");
+    const first = serveAgent(
+      store,
+      support(scriptedModel({ responses: [scan, say("Started.")] }), stall()),
+    );
+    const started = await first.startRun(
+      { agent: "support", input: "Scan in the background." },
+      { principal: alice, idempotencyKey: "k-1" },
+    );
+    if (!started.ok) throw new Error(started.error.message);
+    const { branch_id } = started.value;
+    await until(async () =>
+      knownEvents(await fold(store, alice.tenant, branch_id)).some(
+        (e) => e.type === "turn_completed",
+      ),
+    );
+    await expireLeases(store);
+    // The next host's agent has another config: every rerun of the thread throws.
+    const said: string[] = [];
+    const error = console.error;
+    console.error = (...args: unknown[]) => {
+      said.push(args.map(String).join(" "));
+    };
+    try {
+      const second = serveAgent(
+        store,
+        support(scriptedModel({ responses: [] }), stall(), "Changed."),
+      );
+      await second.ready();
+      for (let i = 0; i < 6; i++) await hostTicked(second);
+    } finally {
+      console.error = error;
+    }
+    const retried = said.filter(
+      (line) => line.includes(branch_id) && line.includes("not retried"),
+    );
+    expect(retried).toHaveLength(1);
+    expect(await rows(store)).toHaveLength(1);
   }, 15_000);
 });

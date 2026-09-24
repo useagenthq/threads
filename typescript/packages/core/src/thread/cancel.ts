@@ -28,6 +28,7 @@ export async function cancelTree(
   log: LogStore,
   threadId: ThreadId,
   principal: Principal,
+  reason = "ancestor cancelled",
 ): Promise<void> {
   const branch = log.mainBranch(threadId);
   if (!branch.ok) return;
@@ -44,7 +45,7 @@ export async function cancelTree(
         type_version: 1,
         critical: true,
         actor: { kind: "host", principal },
-        data: { scope: "tree", reason: "ancestor cancelled" },
+        data: { scope: "tree", reason },
       },
     });
   });

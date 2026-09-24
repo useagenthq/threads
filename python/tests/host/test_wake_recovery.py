@@ -4,7 +4,9 @@ end with the woken that wakes the lead. The run's outcome is the wake turn's ans
 index wipe rebuilds the rows from the log alone."""
 
 import asyncio
+import logging
 
+import pytest
 from host.test_api_recovery import (
     ALICE,
     USAGE,
@@ -23,7 +25,7 @@ from pydantic import JsonValue
 from threads import Store, agent, sqlite
 from threads._generated.host_api_v1 import RunAccepted
 from threads.agents.store import open_store
-from threads.host import Host, host
+from threads.host import Host, host, reopen
 from threads.host.app import recovered
 from threads.log import ToolResultLateEvent, TurnCompletedEvent, WokenEvent
 from threads.reduce.wakes import pending_wakes
@@ -43,9 +45,10 @@ SCAN: JsonValue = {
 }
 
 
-def serve(store: Store, lead: Counted, child: Counted) -> Host:
+def serve(store: Store, lead: Counted, child: Counted, instructions: str = "") -> Host:
     scanner = agent(name="scanner", model=child)
-    return host(store=store, agents={"support": agent(model=lead, subagents=[scanner])})
+    support = agent(model=lead, subagents=[scanner], instructions=instructions)
+    return host(store=store, agents={"support": support})
 
 
 async def turns(store: Store, run: RunAccepted) -> int:
@@ -113,3 +116,30 @@ def test_an_index_wipe_rebuilds_the_rows_from_the_log() -> None:
         await first.stop()
 
     asyncio.run(main())
+
+
+def test_a_pending_wake_whose_rerun_fails_for_good_is_not_run_again_until_its_log_moves(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(reopen, "REOPEN_S", 0.05)
+
+    async def main() -> None:
+        store = sqlite(":memory:")
+        first = serve(store, answering(SCAN, text("Started.")), stalled(text("late")))
+        run = await start(first, ALICE)
+
+        async def answered() -> bool:
+            return await turns(store, run) == 1
+
+        await until(answered)
+        await expire_leases(store)
+        # The next host's agent has another config: every rerun of the thread fails.
+        async with serve(store, answering(), stalled(), "Changed.") as second:
+            await recovered(second)
+            await asyncio.sleep(0.5)
+        said = [r.getMessage() for r in caplog.records if run.branch_id in r.getMessage()]
+        assert len([m for m in said if "not retried" in m]) == 1
+        assert len(await rows(store)) == 1
+
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(main())

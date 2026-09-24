@@ -60,6 +60,7 @@ function scanner(ends: (ChildEnd | Halt)[]): {
         await gate.promise;
         return ends.shift() ?? busy;
       },
+      stop: async () => undefined,
     },
     onEvent: (e) => {
       if (e.type !== "turn_completed") return;

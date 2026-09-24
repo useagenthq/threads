@@ -51,6 +51,10 @@ export function subagent<Deps, Output>(
       );
       return ended(result, await usage(env, result));
     },
+    stop: async (child, principal, reason) => {
+      const { log } = await openStore(env.store);
+      await cancelTree(log, child, principal, reason);
+    },
   });
 }
 

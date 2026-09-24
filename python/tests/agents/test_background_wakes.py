@@ -4,6 +4,7 @@ the same append, the woken turn belongs to the run that spawned the child, run()
 answer after the last wake, and results of two runs are never recorded under one woken."""
 
 import asyncio
+from collections.abc import Awaitable
 
 import pytest
 from agents.wake_kit import (
@@ -43,7 +44,9 @@ def one_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
     """The lead records ends only once every running child has ended, so children that end
     close together are recorded at one boundary however the event loop orders them."""
 
-    async def every_end(self: Background) -> None:
+    async def every_end(self: Background, *also: Awaitable[None]) -> None:
+        for extra in also:  # the lead's log moving is not awaited here: every child ends first
+            asyncio.ensure_future(extra).cancel()
         done, _ = await asyncio.wait(self.running.values())
         for task in done:
             task.result()

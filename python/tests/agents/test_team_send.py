@@ -61,3 +61,37 @@ def test_an_unknown_recipient_is_refused_and_a_member_is_not() -> None:
         assert sent == ["reviewer"]
 
     asyncio.run(main())
+
+
+def test_a_member_messages_a_named_sibling() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        writer = agent(name="writer", model=scripted_model({"responses": []}))
+        reviewer = agent(
+            name="reviewer",
+            model=scripted_model({"responses": [send("writer", "r1"), text("Told the writer.")]}),
+        )
+        spawn: JsonValue = {
+            "content": [
+                {
+                    "type": "tool_use",
+                    "call_id": "c1",
+                    "name": "spawn_agent",
+                    "input": {"agent": "reviewer", "prompt": "Review, then tell the writer."},
+                }
+            ],
+            "stop_reason": "tool_use",
+            "usage": USAGE,
+        }
+        lead = agent(
+            name="lead",
+            model=scripted_model({"responses": [spawn, text("Done.")]}),
+            subagents=[reviewer, writer],
+        )
+        result = await lead.run("Review.", store=store)
+        assert isinstance(result, Completed)
+        events = await events_of(result.thread)
+        sent = [(e.data.from_, e.data.to) for e in events if isinstance(e, TeamMessageEvent)]
+        assert sent == [("reviewer", "writer")]
+
+    asyncio.run(main())

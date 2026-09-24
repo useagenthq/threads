@@ -87,3 +87,23 @@ export function lateIds(log: readonly KnownEvent[]): readonly string[] {
     e.type === "tool_result_late" ? [e.event_id] : [],
   );
 }
+
+/** `model`, counting its requests and settling `entered` on the first. */
+export function watched(model: Model): {
+  readonly model: Model;
+  readonly calls: () => number;
+  readonly entered: Promise<void>;
+} {
+  let calls = 0;
+  const entered = Promise.withResolvers<void>();
+  const made: Model = {
+    ...model,
+    send: (...args: Parameters<Model["send"]>) => {
+      calls += 1;
+      entered.resolve();
+      return model.send(...args);
+    },
+  };
+  markTestKit(made);
+  return { model: made, calls: () => calls, entered: entered.promise };
+}

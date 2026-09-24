@@ -34,6 +34,7 @@ class Writer:
         self._clock = clock
         self._poisoned = False
         self._lock = asyncio.Lock()
+        self._moved = asyncio.Event()
         effects = fold.effects.values()
         in_doubt = any(s == "unknown" for _, s in effects)
         self._requires_recovery = bool(fold.pending or fold.open_requests) or in_doubt
@@ -134,6 +135,13 @@ class Writer:
     def _settled(self, batch: lease.Batch) -> None:
         self._last_line = batch.rows[-1][1]
         self._poisoned = False
+        self._moved.set()
+        self._moved = asyncio.Event()
+
+    async def moved(self) -> None:
+        """Returns on this writer's next committed append, whoever made it (a control
+        included)."""
+        await self._moved.wait()
 
     def _build(
         self, drafts: Sequence[Draft], now: int

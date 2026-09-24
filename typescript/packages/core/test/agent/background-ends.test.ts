@@ -18,6 +18,7 @@ import {
   scan,
   usage,
   wakes,
+  watched,
 } from "./wake-kit";
 
 // When a run's end is decided otherwise, it is not woken and run() returns at once
@@ -29,21 +30,35 @@ const types = (log: readonly { readonly type: string }[]): string =>
   log.map((e) => e.type).join(" ");
 
 describe("a run whose end is decided is not woken", () => {
-  test("a failed first turn returns at once, with its child still running", async () => {
+  test("a failed first turn stops its child and records its end; the next run succeeds", async () => {
     const store = sqlite(":memory:");
     const gate = Promise.withResolvers<void>();
-    const scanner = agent({
-      name: "scanner",
-      model: gated([say("Clean.")], gate.promise),
-    });
-    const result = await lead(scanner, [
+    const kid = watched(gated([say("Clean.")], gate.promise));
+    const scanner = agent({ name: "scanner", model: kid.model });
+    const running = lead(scanner, [
       scan("c1"),
       { error: { reason: "prompt_too_long", http_status: 400 } },
       say("never"),
-    ]).run("Scan.", { store, principal: alice });
-    gate.resolve();
-    expect(result.status).toBe("failed");
-    expect(wakes(await events(store, result.thread))).toEqual([]);
+    ]).stream("Scan.", { store, principal: alice });
+    for await (const item of running)
+      if (item.kind === "event" && item.event.type === "turn_completed")
+        gate.resolve();
+    const first = await running.result;
+    expect(first.status).toBe("failed");
+    const log = await events(store, first.thread);
+    expect(wakes(log)).toEqual([]);
+    expect(lateIds(log)).toHaveLength(1);
+    const finished = log.find((e) => e.type === "agent_finished");
+    expect(finished?.type === "agent_finished" && finished.data.status).toBe(
+      "cancelled",
+    );
+    const second = await lead(scanner, [say("Second.")]).run("Again.", {
+      store,
+      principal: alice,
+      thread: first.thread,
+    });
+    expect(second).toMatchObject({ status: "completed", output: "Second." });
+    expect(kid.calls()).toBe(1);
   });
 
   test("a wake turn that exhausts the budget ends the run budget_exhausted", async () => {
@@ -71,25 +86,26 @@ describe("a run whose end is decided is not woken", () => {
     expect(wakes(log)).toEqual([lateIds(log)]);
   });
 
-  test("a cancel while the lead waits stops the run: no wake, cancelled", async () => {
+  test("a cancel while the lead waits on a hung child stops the run at once", async () => {
     const store = sqlite(":memory:");
     const gate = Promise.withResolvers<void>();
-    const scanner = agent({
-      name: "scanner",
-      model: gated([say("Clean.")], gate.promise),
-    });
+    const kid = watched(gated([say("Clean.")], gate.promise));
+    const scanner = agent({ name: "scanner", model: kid.model });
     const running = lead(scanner, [
       scan("c1"),
       say("Started."),
       say("never"),
     ]).stream("Scan.", { store, principal: alice });
+    // The child is inside its model call and never returns: only the cancel on the lead's own
+    // log can end the wait.
     for await (const item of running)
       if (item.kind === "event" && item.event.type === "turn_completed") {
+        await kid.entered;
         const thread = unwrap(await openThread(store, item.event.thread_id));
         unwrap(await thread.cancel(alice));
-        gate.resolve();
       }
     const result = await running.result;
+    gate.resolve();
     expect(result.status).toBe("cancelled");
     expect(wakes(await events(store, result.thread))).toEqual([]);
   });
@@ -123,11 +139,14 @@ describe("a run whose end is decided is not woken", () => {
       subagents: [scanner],
       handoffs: [target],
     });
-    const result = await bot.run("Scan, then hand off.", {
+    const running = bot.stream("Scan, then hand off.", {
       store,
       principal: alice,
     });
-    gate.resolve();
+    for await (const item of running)
+      if (item.kind === "event" && item.event.type === "turn_completed")
+        gate.resolve();
+    const result = await running.result;
     expect(result.status).toBe("handed_off");
     const source = result.status === "handed_off" ? result.thread : undefined;
     expect(source).toBeDefined();

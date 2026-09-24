@@ -51,7 +51,9 @@ def unfinished(fold: Fold) -> list[ThreadId]:
     return [child for child, done in fold.children.items() if not done]
 
 
-async def bar_child(store: Store, child: ThreadId, principal: Principal) -> None:
+async def bar_child(
+    store: Store, child: ThreadId, principal: Principal, reason: str = REASON
+) -> None:
     """The child's tree barrier, when its turn is open and not barred yet, then its own
     children's. A refusal (the child's lease held elsewhere) is left to that child's run: its
     parent bars it again before running it on."""
@@ -59,7 +61,7 @@ async def bar_child(store: Store, child: ThreadId, principal: Principal) -> None
     root = await sq.root(child)
     if isinstance(root, Err):
         return
-    data: dict[str, JsonValue] = {"scope": "tree", "reason": REASON}
+    data: dict[str, JsonValue] = {"scope": "tree", "reason": reason}
     by: dict[str, JsonValue] = {"kind": "host", "principal": to_json(principal)}
     barrier = first("cancel_requested", data, by)
 

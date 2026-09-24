@@ -4,7 +4,7 @@ recorded while the wake condition holds (rule 32, `wake_bar`) wakes the parent i
 append (spec/schema/README.md, "Background wakes"; rules 32 and 45)."""
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass, field, replace
 
 from pydantic import JsonValue
@@ -44,12 +44,20 @@ class Background:
     def has(self, child: ThreadId) -> bool:
         return child in self.running or child in self.ended
 
-    async def next_end(self) -> None:
-        """Waits until a running child ends. A child that raised (the process is going down)
-        ends the run with it."""
-        done, _ = await asyncio.wait(self.running.values(), return_when=asyncio.FIRST_COMPLETED)
+    async def next_end(self, *also: Awaitable[None]) -> None:
+        """Waits until a running child ends, or one of `also` does. A child that raised (the
+        process is going down) ends the run with it."""
+        extra = [asyncio.ensure_future(a) for a in also]
+        try:
+            done, _ = await asyncio.wait(
+                [*self.running.values(), *extra], return_when=asyncio.FIRST_COMPLETED
+            )
+        finally:
+            for waiter in extra:
+                waiter.cancel()
         for task in done:
-            task.result()
+            if task not in extra:
+                task.result()
 
 
 async def settle(rt: Runtime, bg: Background) -> Halt | None:

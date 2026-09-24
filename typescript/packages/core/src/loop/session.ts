@@ -46,6 +46,11 @@ export class Session {
     return this.#cache.events;
   }
 
+  /** Settles on the branch's next committed append, a control's included. */
+  moved(): Promise<void> {
+    return this.#writer.moved();
+  }
+
   get fold(): Fold {
     return this.#writer.chain.fold;
   }

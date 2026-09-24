@@ -6,7 +6,7 @@ the run then waits for that one too."""
 import asyncio
 from collections.abc import AsyncIterator, Sequence
 
-from agents.wake_kit import ALICE, USAGE, child, events_of, lates, spawns, text, wakes
+from agents.wake_kit import ALICE, USAGE, Gated, child, events_of, lates, spawns, text, wakes
 from pydantic import JsonValue
 
 from threads import (
@@ -22,7 +22,7 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.log import Budget, TurnCompletedEvent
+from threads.log import AgentFinishedEvent, Budget, TurnCompletedEvent
 from threads.loop.model import ModelChunk
 from threads.loop.scripted import ScriptedModel
 from threads.result import Ok
@@ -31,18 +31,36 @@ from threads.thread.handle import open_thread
 TOO_LONG: JsonValue = {"error": {"reason": "prompt_too_long", "http_status": 400}}
 
 
-def test_a_failed_first_turn_returns_at_once_with_its_child_still_running() -> None:
+def test_a_failed_first_turn_stops_its_child_and_the_next_run_succeeds() -> None:
     async def main() -> None:
         store, gate = sqlite(":memory:"), asyncio.Event()
+        kid = Gated({"responses": [text("Clean.")]}, gate)
+        scanner = agent(name="scanner", model=kid)
         lead = agent(
             name="lead",
             model=scripted_model({"responses": [spawns("scanner"), TOO_LONG, text("never")]}),
-            subagents=[child("scanner", "Clean.", gate)],
+            subagents=[scanner],
         )
-        result = await lead.run("Scan.", store=store, principal=ALICE, deps=None)
-        gate.set()
-        assert isinstance(result, Failed)
-        assert wakes(await events_of(result.thread)) == []
+        stream = lead.stream("Scan.", store=store, principal=ALICE, deps=None)
+        async for item in stream:
+            if isinstance(item, EventItem) and isinstance(item.event, TurnCompletedEvent):
+                gate.set()
+        first = await stream.result
+        assert isinstance(first, Failed)
+        events = await events_of(first.thread)
+        assert wakes(events) == []
+        assert len(lates(events)) == 1
+        finished = [e for e in events if isinstance(e, AgentFinishedEvent)]
+        assert [f.data.status for f in finished] == ["cancelled"]
+        again = agent(
+            name="lead",
+            model=scripted_model({"responses": [text("Second.")]}),
+            subagents=[scanner],
+        )
+        second = await again.run("Again.", store=store, principal=ALICE, thread=first.thread)
+        assert isinstance(second, Completed)
+        assert second.output == "Second."
+        assert kid.calls == 1
 
     asyncio.run(main())
 
@@ -73,24 +91,28 @@ def test_a_wake_turn_that_exhausts_the_budget_ends_the_run_budget_exhausted() ->
     asyncio.run(main())
 
 
-def test_a_cancel_while_the_lead_waits_stops_the_run_with_no_wake() -> None:
+def test_a_cancel_while_the_lead_waits_on_a_hung_child_stops_the_run_at_once() -> None:
     async def main() -> None:
         store, gate = sqlite(":memory:"), asyncio.Event()
+        kid = Gated({"responses": [text("Clean.")]}, gate)
         lead = agent(
             name="lead",
             model=scripted_model(
                 {"responses": [spawns("scanner"), text("Started."), text("never")]}
             ),
-            subagents=[child("scanner", "Clean.", gate)],
+            subagents=[agent(name="scanner", model=kid)],
         )
         stream = lead.stream("Scan.", store=store, principal=ALICE, deps=None)
+        # The child is inside its model call and never returns: only the cancel on the lead's
+        # own log can end the wait.
         async for item in stream:
             if isinstance(item, EventItem) and isinstance(item.event, TurnCompletedEvent):
+                await kid.entered.wait()
                 opened = await open_thread(store, item.event.thread_id)
                 assert isinstance(opened, Ok)
                 assert isinstance(await opened.value.cancel(ALICE), Ok)
-                gate.set()
-        result = await stream.result
+        result = await asyncio.wait_for(stream.result, 5)
+        gate.set()
         assert isinstance(result, Cancelled)
         assert wakes(await events_of(result.thread)) == []
 
@@ -119,8 +141,11 @@ def test_a_lead_that_hands_off_with_a_child_running_is_never_woken() -> None:
             subagents=[child("scanner", "Clean.", gate)],
             handoffs=[target],
         )
-        result = await lead.run("Scan, then hand off.", store=store, principal=ALICE, deps=None)
-        gate.set()
+        stream = lead.stream("Scan, then hand off.", store=store, principal=ALICE, deps=None)
+        async for item in stream:
+            if isinstance(item, EventItem) and isinstance(item.event, TurnCompletedEvent):
+                gate.set()
+        result = await stream.result
         assert isinstance(result, HandedOff)
 
     asyncio.run(main())

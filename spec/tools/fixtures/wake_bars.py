@@ -9,11 +9,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .agents import CHILD_A, HANDOFF
-from .common import ALICE
+from .common import ALICE, tokens
 from .log import Log
 from .pieces import answer, call, reduce_case, reject, result, started, user
 from .policies import policy
 from .run_end import run_projection
+from .team_index import pending_wakes
 from .teams import catalog_specs
 from .wakes import KIDS, late, woken
 
@@ -117,4 +118,27 @@ def build(root: pathlib.Path) -> None:
         ),
         log,
         {"run": run_projection(log.events)},
+    )
+    log = _failed()
+    finished: Obj = {"child_thread_id": KIDS[0], "status": "cancelled", "usage": tokens(5, 1)}
+    log.add("agent_finished", finished)
+    stopped: Obj = {
+        "call_id": "call_1",
+        "is_error": True,
+        "completeness": "complete",
+        "preview": "cancelled: parent run ended",
+    }
+    log.add("tool_result_late", stopped, actor="tool")
+    reduce_case(
+        root,
+        (
+            "legacy-run-failed-children-recorded",
+            FAM,
+            "The run's turn failed while its background child ran: the run is failed, the child "
+            "got a tree cancel (parent run ended) in its own log, and its cancelled end is "
+            "recorded in the lead's log with no woken before run() returns, leaving no "
+            "pending_wakes row.",
+        ),
+        log,
+        {"run": run_projection(log.events), "pending_wakes": pending_wakes([log])},
     )

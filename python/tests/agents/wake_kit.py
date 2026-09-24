@@ -45,13 +45,18 @@ def spawns(*names: str, first: int = 1) -> JsonValue:
 
 
 class Gated(ScriptedModel):
-    """A scripted model whose every answer waits for `gate`."""
+    """A scripted model whose every answer waits for `gate`; it counts its requests and sets
+    `entered` on the first."""
 
     def __init__(self, script: Mapping[str, JsonValue], gate: asyncio.Event) -> None:
         super().__init__(scripted_model(script)._entries, {})
         self._gate = gate
+        self.calls = 0
+        self.entered = asyncio.Event()
 
     async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
+        self.calls += 1
+        self.entered.set()
         await self._gate.wait()
         async for chunk in super().send(request, context):
             yield chunk

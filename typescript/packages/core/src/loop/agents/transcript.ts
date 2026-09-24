@@ -60,12 +60,13 @@ export function handoffTranscript(
     total -= size(lines[first] ?? "") + (tools.length > 0 ? 1 : 0);
     dropped.push(first);
   }
-  const [marker, ...gone] = dropped;
+  const [marker, ...rest] = dropped;
+  const gone = new Set(rest);
   return lines
     .flatMap((line, i) =>
       i === marker
         ? [`[${dropped.length} earlier tool lines dropped]`]
-        : gone.includes(i)
+        : gone.has(i)
           ? []
           : [line],
     )
