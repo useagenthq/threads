@@ -96,12 +96,12 @@ def mcp(
   The effect class every tool from this server is pinned with. Use read_only for a server whose tools change nothing; the default unguarded means an uncertain call parks and is never retried. idempotent needs dedup_window_ms.
 </Field>
 
-<Field name="dedupWindowMs / dedup_window_ms" type={"PosInt"}>
-  Milliseconds within which the server dedups a repeated call that carries the same effect key (sent as the call's _meta threads/effect_key). Required exactly when effect is idempotent; giving it with any other effect is a setup error invalid_config. Omitted: no dedup window (effect is not idempotent).
-</Field>
-
 <Field name="defer" type={"boolean"} default={"false"}>
   true: the model sees only this server's tool names, listed in tool_search's description, until it loads them with tool_search; their descriptions and schemas are sent only after a load. Use it for a server with many tools. context.defer_tools decides whether the flag is honoured. Default false.
+</Field>
+
+<Field name="dedupWindowMs / dedup_window_ms" type={"PosInt"}>
+  Milliseconds within which the server dedups a repeated call that carries the same effect key (sent as the call's _meta threads/effect_key). Required exactly when effect is idempotent; giving it with any other effect is a setup error invalid_config. Omitted: no dedup window (effect is not idempotent).
 </Field>
 
 ## Returns

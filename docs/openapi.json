@@ -333,6 +333,7 @@
                             "not_found",
                             "invalid_request",
                             "no_open_question",
+                            "invalid_answer",
                             "branch_busy"
                           ]
                         }
@@ -1193,6 +1194,7 @@
           "input_denied",
           "stop_hook_limit",
           "no_open_question",
+          "invalid_answer",
           "not_parked",
           "unavailable",
           "timeout",
@@ -1888,6 +1890,9 @@
               },
               {
                 "$ref": "#/components/schemas/events_ev_tools_loaded"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_answer_rejected"
               }
             ]
           }
@@ -3791,6 +3796,51 @@
           },
           "type": {
             "const": "agent_spawned"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_answer_rejected": {
+        "description": "The asker's channel reply matched none of the open question's options (rule 49). The question stays open; the host derives the correction message from this event. Render v1 renders nothing for it.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "call_id": {
+                "$ref": "#/components/schemas/events_CallId",
+                "description": "The open ask_user call the reply was for."
+              },
+              "delivery_event_id": {
+                "$ref": "#/components/schemas/events_EventId",
+                "description": "The reply's channel_delivery."
+              },
+              "reason": {
+                "enum": [
+                  "not_an_option"
+                ]
+              }
+            },
+            "required": [
+              "call_id",
+              "delivery_event_id",
+              "reason"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "answer_rejected"
           },
           "type_version": {
             "const": 1
@@ -8495,6 +8545,58 @@
           }
         },
         "summary": "Approve or deny"
+      }
+    },
+    "/v1/threads/{thread_id}/questions/{call_id}/answer": {
+      "post": {
+        "operationId": "answerQuestion",
+        "x-api": [
+          "Thread.answer"
+        ],
+        "x-error-codes": [
+          "unauthenticated",
+          "forbidden",
+          "not_found",
+          "invalid_request",
+          "no_open_question",
+          "invalid_answer",
+          "branch_busy"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/thread_id"
+          },
+          {
+            "$ref": "#/components/parameters/branch_id"
+          },
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/events_CallId"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Answer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Appended"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/AnswerQuestionError"
+          }
+        },
+        "summary": "Answer a question"
       }
     },
     "/v1/threads/{thread_id}/parked/{effect_key}/resolve": {
