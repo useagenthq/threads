@@ -31,11 +31,12 @@ import asyncio
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING, Literal
 
 import aiohttp
 
-from threads.adapters.loop_resources import LoopResources
+from threads.adapters.loop_resources import LoopResources, close_all, drain
 from threads.adapters.sandboxes import posix
 from threads.adapters.sandboxes.daytona import transport
 from threads.adapters.sandboxes.daytona.control import Control, Placement, classify, client
@@ -246,12 +247,8 @@ async def _close(clients: _Clients) -> None:
     """Closes the session, then the exec streams still reading it. The session goes first:
     closing it closes every connection it holds or is opening, so a pump mid-request ends with
     an error rather than being cancelled in a connect that leaves a socket behind."""
-    await clients.session.close()
-    if clients.pumps:
-        _, stuck = await asyncio.wait(clients.pumps, timeout=_PUMP_GRACE_S)
-        for pump in stuck:  # waiting on a reader that is gone, not on the network
-            pump.cancel()
-        await asyncio.gather(*stuck, return_exceptions=True)
+    # A pump still running after the grace waits on a reader that is gone, not the network.
+    await close_all([clients.session.close, partial(drain, clients.pumps, _PUMP_GRACE_S)])
 
 
 def daytona(  # noqa: PLR0913 - the provider's options

@@ -22,7 +22,7 @@ from typing import Literal
 from e2b.api import AsyncApiClient
 from e2b.connection_config import ConnectionConfig
 
-from threads.adapters.loop_resources import LoopResources
+from threads.adapters.loop_resources import LoopResources, close_all
 from threads.adapters.sandboxes.e2b.control import Control
 from threads.adapters.sandboxes.e2b.envd import Envd, Transports
 from threads.adapters.sandboxes.e2b.session import E2BSession, Owner, call
@@ -191,11 +191,10 @@ class _Plane:
 
 async def _close(plane: _Plane) -> None:
     """Every envd (its exec streams, then its clients), the control client, then the
-    transports they all share."""
-    for envd in list(plane.envds):
-        await envd.aclose()
-    await plane.client.get_async_httpx_client().aclose()
-    await plane.transports.aclose()
+    transports they all share; each is attempted even if one before it fails."""
+    envds = [envd.aclose for envd in list(plane.envds)]
+    control = plane.client.get_async_httpx_client().aclose
+    await close_all([*envds, control, plane.transports.aclose])
 
 
 def e2b(  # noqa: PLR0913 - the provider's settings

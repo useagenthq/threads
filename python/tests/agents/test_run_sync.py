@@ -21,6 +21,7 @@ from threads import (
     sqlite,
     tool,
 )
+from threads.agents import run as agent_run
 from threads.cli import store as cli_store
 from threads.host import host
 
@@ -38,9 +39,13 @@ def test_run_sync_returns_what_run_returns() -> None:
     assert result.output == "Hello!"
 
 
-def test_run_sync_inside_a_loop_raises_and_touches_nothing() -> None:
+def test_run_sync_inside_a_loop_raises_and_touches_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     bot = agent(model=scripted_model({"responses": [text("never")]}))
     store = sqlite(":memory:")
+    opened: list[object] = []
+    monkeypatch.setattr(agent_run, "open_store", opened.append)  # opening one starts its thread
 
     async def main() -> None:
         with pytest.raises(ConfigError) as raised:
@@ -48,9 +53,8 @@ def test_run_sync_inside_a_loop_raises_and_touches_nothing() -> None:
         assert raised.value.code == "invalid_config"
         assert "await agent.run" in raised.value.message
 
-    before = threading.active_count()
     asyncio.run(main())  # warnings are errors: an un-awaited run coroutine would fail here
-    assert threading.active_count() == before  # no store thread was started
+    assert opened == []
 
 
 def test_missing_deps_is_config_error() -> None:

@@ -209,3 +209,38 @@ def test_failures_kept_under_a_long_hold_are_bounded(caplog: pytest.LogCaptureFi
     assert len(logged) == failed  # each logged once, when it happened
     assert len(reported) == KEPT + 1
     assert reported[-1].endswith(f"{failed - KEPT} more failures were logged earlier")
+
+
+@pytest.mark.parametrize("at", ["closing", "draining"])
+def test_a_cancel_mid_release_still_closes_every_bundle(at: str) -> None:
+    """A second Ctrl-C, or a host stop cut short, lands while release closes (or drains the
+    loop's background tasks): every retired bundle is still closed, then the cancel is raised."""
+    slow, other = Adapter("slow"), Adapter("other")
+
+    async def main() -> None:
+        slow.gate = asyncio.Event()  # its close waits until the test lets it go
+
+        async def run() -> None:
+            async with holding():
+                slow.bundle()
+                other.bundle()
+                if at == "draining":
+                    spawn_owned(asyncio.sleep(60), "stuck stop")
+
+        task = asyncio.create_task(run())
+        if at == "closing":
+            while slow.closing != ["slow0"]:  # newest first: other closed, slow at its gate
+                await asyncio.sleep(0)
+        else:
+            await asyncio.sleep(loop_resources.GRACE_S / 5)  # release waits on the stuck stop
+            assert not slow.closing
+        task.cancel()
+        await asyncio.sleep(0)
+        slow.gate.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(main())
+    assert slow.made[0].closed
+    assert other.made[0].closed
+    assert loop_resources._entries == {}  # pyright: ignore[reportPrivateUsage] - the registry

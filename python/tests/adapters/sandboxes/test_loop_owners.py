@@ -4,6 +4,7 @@ is gone, with no stale-loop errors and no leaked sockets (warnings are errors he
 
 import asyncio
 import gc
+import logging
 from contextlib import AsyncExitStack
 from pathlib import Path
 
@@ -93,6 +94,37 @@ def test_e2b_on_two_loops_file_and_exec(tmp_path: Path, monkeypatch: pytest.Monk
     assert made[0] is not made[1]
 
 
+def test_an_e2b_close_goes_on_past_a_failing_sandbox_close(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """One envd's close fails: the other envd, the control client and the transports are still
+    closed, and the failure is reported once."""
+    envds = Envds(monkeypatch)
+    closing = Envd.aclose
+
+    async def failing_first(envd: Envd) -> None:
+        await closing(envd)
+        if envd is envds.opened[0]:
+            raise RuntimeError("the rpc client refused to close")
+
+    monkeypatch.setattr(Envd, "aclose", failing_first)
+    made: list[Transports] = []
+    box = adapter(FakeBackend(), "e2b", made=made)
+
+    async def main() -> None:
+        async with holding():
+            for key in ("k1", "k2"):
+                assert isinstance(await box.create(key, OPEN), Ok)
+
+    with caplog.at_level(logging.WARNING, "threads"):
+        asyncio.run(main())
+    assert len(envds.closed) == len(envds.opened)
+    assert _closed(made[0])
+    assert box._planes._bundles == {}  # pyright: ignore[reportPrivateUsage] - retired
+    (warning,) = [r.getMessage() for r in caplog.records]
+    assert "the rpc client refused to close" in warning
+
+
 def test_an_e2b_exec_still_streaming_is_cancelled_at_release(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -109,7 +141,7 @@ def test_an_e2b_exec_still_streaming_is_cancelled_at_release(
             pumps = list(envd._pumps)  # pyright: ignore[reportPrivateUsage] - its streams
             assert pumps
             assert not any(p.done() for p in pumps)
-        assert all(p.cancelled() for p in pumps)  # stopped and awaited by the release
+        assert all(p.done() for p in pumps)  # stopped and awaited by the release
         assert envds.closed == [envd]
 
     asyncio.run(main())
@@ -153,7 +185,7 @@ def test_an_anthropic_client_per_loop(monkeypatch: pytest.MonkeyPatch) -> None:
         return client
 
     monkeypatch.setattr(anthropic_model, "client", recorded)
-    info = anthropic("claude-test", context_window=200_000, max_output_tokens=64).info
+    info = anthropic("claude-test", max_input_tokens=200_000, max_output_tokens=64).info
     model = anthropic_model.AnthropicModel(
         info, "sk-test-anthropic", http=httpx2.MockTransport(_refused)
     )

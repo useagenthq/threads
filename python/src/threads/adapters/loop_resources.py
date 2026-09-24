@@ -17,7 +17,7 @@ import asyncio
 import logging
 import threading
 from collections import deque
-from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine
+from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from functools import partial
@@ -138,7 +138,10 @@ def _hold() -> _Entry:
 
 
 async def _release(entry: _Entry) -> list[str]:
-    """Drops one hold. The last one retires, drains and closes; returns what failed."""
+    """Drops one hold. The last one retires, drains and closes; returns what failed. A
+    cancellation that arrives meanwhile (a second Ctrl-C, a host stop cut short) doesn't cut
+    it short: the bundles are already retired, so nothing else would close them. Each step
+    runs to its end and the cancellation is raised after the last."""
     with _lock:
         entry.holds -= 1
         if entry.holds > 0:
@@ -147,29 +150,74 @@ async def _release(entry: _Entry) -> list[str]:
             del _entries[id(entry.loop)]
         for closer in entry.closers:
             closer.retire()
-    await _drain(entry)
+    _, cancelled = await _to_the_end(partial(_drain, entry))
     report = list(entry.failures)
     if entry.dropped:
         report.append(f"{entry.dropped} more failures were logged earlier")
     for closer in reversed(entry.closers):
-        try:
-            await closer.close()
-        except Exception as error:
-            report.append(_record(f"closing {closer.name}", error))
+        failed, stopped = await _to_the_end(closer.close)
+        cancelled = cancelled or stopped
+        if failed is not None:
+            report.append(_record(f"closing {closer.name}", failed))
+    if cancelled is not None:
+        for line in report:
+            _log.warning("threads: while closing connections: %s", line)
+        raise cancelled
     return report
 
 
 async def _drain(entry: _Entry) -> None:
     tasks = set(entry.tasks)
-    if running := {task for task in tasks if not task.done()}:
-        _, stuck = await asyncio.wait(running, timeout=GRACE_S)
+    await drain(tasks, GRACE_S)
+    # A task can be done with its done callback still queued: collect it now, so the report
+    # has it; the callback then finds it collected.
+    for task in tasks:
+        _collect(entry, task)
+
+
+async def _attempt(step: Callable[[], Awaitable[object]]) -> Exception | None:
+    """Runs `step`; what it raised comes back as a value."""
+    try:
+        await step()
+    except Exception as error:
+        return error
+    return None
+
+
+async def _to_the_end(
+    step: Callable[[], Awaitable[object]],
+) -> tuple[Exception | None, asyncio.CancelledError | None]:
+    """Runs `step` to its end even if this task is cancelled meanwhile; returns what it raised
+    and the cancellation that arrived, for the caller to raise when it is done."""
+    running = asyncio.ensure_future(_attempt(step))
+    cancelled: asyncio.CancelledError | None = None
+    while True:
+        try:
+            return await asyncio.shield(running), cancelled
+        except asyncio.CancelledError as error:
+            if running.cancelled():  # the step itself was cancelled, not this task
+                return None, error
+            cancelled = error
+
+
+async def drain[T](tasks: Iterable["asyncio.Task[T]"], grace_s: float) -> None:
+    """Waits up to `grace_s` for `tasks`, then cancels those still running and waits for them
+    to end."""
+    if running := [task for task in tasks if not task.done()]:
+        _, stuck = await asyncio.wait(running, timeout=grace_s)
         for task in stuck:
             task.cancel()
         await asyncio.gather(*stuck, return_exceptions=True)
-    # A task can be done with its done callback still queued: collect it now, so the report
-    # below has it; the callback then finds it collected.
-    for task in tasks:
-        _collect(entry, task)
+
+
+async def close_all(steps: Iterable[Callable[[], Awaitable[object]]]) -> None:
+    """Runs every close step, in order, even when one fails; then raises the first failure,
+    with the others as notes."""
+    failed = [error for step in steps if (error := await _attempt(step)) is not None]
+    if failed:
+        for other in failed[1:]:
+            failed[0].add_note(f"also: {_record('close', other)}")
+        raise failed[0]
 
 
 @asynccontextmanager
