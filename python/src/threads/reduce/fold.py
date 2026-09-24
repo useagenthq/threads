@@ -180,6 +180,12 @@ def policy(fold: Fold) -> Policy | None:
     return started.policy if started is not None and isinstance(started.policy, Policy) else None
 
 
+def call_spec(fold: Fold, call_id: CallId) -> ToolSpec | None:
+    """The spec a recorded call was made under; a later tools_changed never reclasses it. None:
+    its tool was not in the set when the call was made."""
+    return fold.call_specs.get(call_id)
+
+
 def reject(
     event: Event | UnknownEvent, message: str, code: ErrorCode = "invalid_transition"
 ) -> ParseError:

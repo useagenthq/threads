@@ -1,0 +1,11 @@
+{
+  "name": "recover-removed-tool-call-not-executed",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Plan mode. A read_file call is recorded, not yet authorized, and a valid tools_changed then removes read_file. A removal is a policy change: recovery closes the never-begun call not_executed instead of authorizing or dispatching it.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

@@ -1,0 +1,80 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [
+      "call_1"
+    ],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 80,
+      "output_tokens": 20,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 7,
+      "hash": "f8e7e2411455ba739b07d74db383d69f86e2e5cedc63ec36e51124b4a801c6df"
+    }
+  },
+  "appended": [
+    {
+      "type": "tool_result",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "is_error": true,
+        "origin": "not_executed",
+        "preview": "not executed: unknown tool mcp__ops__deploy"
+      }
+    },
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "sandbox": {
+    "dispatches": {
+      "mcp__ops__deploy": 0
+    }
+  }
+}

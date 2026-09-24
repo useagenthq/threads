@@ -138,7 +138,12 @@ export type LoopConfig = {
   /** The adapter for a settings epoch's model; the loop never sends to any other. */
   readonly models: (ref: Model["info"]["model"]) => Model | undefined;
   readonly tools: ReadonlyMap<string, ToolImpl>;
-  readonly authorize: (call: EventOf<"tool_call">, fold: Fold) => Authorization;
+  /** Decides a call by the spec it was made under (the call-time spec, never a later set's). */
+  readonly authorize: (
+    call: EventOf<"tool_call">,
+    fold: Fold,
+    spec: ToolSpec,
+  ) => Authorization;
   readonly clock: Clock;
   readonly principal: Principal;
   /** the adapter's declared clock skew margin. */
@@ -204,8 +209,14 @@ export type ChildRun = {
   };
   /** The prompt, then each subagent_stop continue reason, in order. */
   readonly inputs: readonly string[];
-  /** The parent's decision for a child's call: the child only narrows it. */
-  readonly ceiling: (call: EventOf<"tool_call">) => Authorization;
+  /**
+   * The parent's decision for a child's call, under the parent's policy and mode: the child only
+   * narrows it. The spec is the child's call-time spec; the parent's fold has no such call.
+   */
+  readonly ceiling: (
+    call: EventOf<"tool_call">,
+    spec: ToolSpec,
+  ) => Authorization;
   /** The parent's pinned tool names: the child's tools are within them. */
   readonly tools: ReadonlySet<string>;
   /** The parent's team, which the child joins as a member. */

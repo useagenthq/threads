@@ -47,6 +47,7 @@ from threads.loop.history import (
 )
 from threads.loop.runtime import Halt, Idle, Parked, Runtime, lost
 from threads.loop.turn import complete, request
+from threads.reduce.fold import call_spec
 from threads.result import Err
 
 if TYPE_CHECKING:
@@ -213,7 +214,7 @@ async def _after_results(rt: Runtime) -> Halt | None:
     for event in reversed(turn):
         if not isinstance(event, ToolResultEvent):
             break
-        spec = rt.fold.call_specs.get(event.data.call_id)
+        spec = call_spec(rt.fold, event.data.call_id)
         if spec is not None and spec.ends_turn is True and not event.data.is_error:
             return await gates.end_turn(rt)
     gated = await tool_gates.after_batch(rt)

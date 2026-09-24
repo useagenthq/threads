@@ -9,7 +9,6 @@ import {
   type TeamRuntime,
   type ToolImpl,
 } from "../loop";
-import { toolSpec } from "../loop/turn";
 import type { Model } from "../model";
 import { category, decide } from "../permissions";
 import type { BudgetLedger } from "../store";
@@ -83,9 +82,9 @@ export function loopConfig<Deps, Output>(
     ),
     authorize: narrowed(
       capped(
-        (call, fold) =>
+        (call, fold, spec) =>
           withMemoryWrite(
-            authorize(call, fold),
+            authorize(call, fold, spec),
             def.memoryWrite,
             call.data.name,
             env.events(),
@@ -115,13 +114,13 @@ export function loopConfig<Deps, Output>(
   };
 }
 
-const authorize: LoopConfig["authorize"] = (call, fold) => {
+/** The pinned policy's decision, in the current mode, for a call by the spec it was made under. */
+export const authorize: LoopConfig["authorize"] = (call, fold, spec) => {
   const permissions = fold.policy?.permissions;
   if (permissions === undefined) return { decision: "ask", source: "default" };
-  const spec = toolSpec(fold, call.data.name);
   const d = decide(permissions, WORKSPACE, {
     tool: call.data.name,
-    category: category(call.data.name, spec?.effect_class),
+    category: category(call.data.name, spec.effect_class),
     input: call.data.input,
     mode: fold.mode,
   });
@@ -141,15 +140,12 @@ function capped(
   ceilings: readonly Permissions[],
 ): LoopConfig["authorize"] {
   if (ceilings.length === 0) return own;
-  return (call, fold) =>
+  return (call, fold, spec) =>
     ceilings.reduce(
       (decided: Authorization, ceiling) => {
         const d = decide(ceiling, WORKSPACE, {
           tool: call.data.name,
-          category: category(
-            call.data.name,
-            toolSpec(fold, call.data.name)?.effect_class,
-          ),
+          category: category(call.data.name, spec.effect_class),
           input: call.data.input,
           mode: ceiling.mode,
         });
@@ -161,7 +157,7 @@ function capped(
             }
           : decided;
       },
-      own(call, fold),
+      own(call, fold, spec),
     );
 }
 
@@ -171,11 +167,11 @@ function narrowed(
   parent: ChildRun["ceiling"] | undefined,
 ): LoopConfig["authorize"] {
   if (parent === undefined) return own;
-  return (call, fold): Authorization => {
-    const mine = own(call, fold);
+  return (call, fold, spec): Authorization => {
+    const mine = own(call, fold, spec);
     // The thread's own structured result touches only its log; the parent has no such tool.
     if (call.data.name === FINAL_OUTPUT) return mine;
-    const ceiling = parent(call);
+    const ceiling = parent(call, spec);
     return RANK[ceiling.decision] > RANK[mine.decision] ? ceiling : mine;
   };
 }

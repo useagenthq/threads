@@ -13,7 +13,7 @@ import { type LoopEnd, runLoop } from "./run";
 import { Session } from "./session";
 import type { LoopConfig } from "./types";
 
-export { FINAL_OUTPUT } from "./output";
+export { FINAL_OUTPUT } from "../tools/loop-tools";
 export { RETRY_DEFAULTS } from "./policy";
 export type { LoopEnd } from "./run";
 export { Session } from "./session";

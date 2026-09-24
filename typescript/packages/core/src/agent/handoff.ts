@@ -73,7 +73,7 @@ export async function handedOff<Deps, Output>(
   const chain: ChildEnv["chain"] =
     plan.child === undefined
       ? plan.chain
-      : (call) => authorize(call, writer.chain.fold);
+      : (call, spec) => authorize(call, writer.chain.fold, spec);
   const handoff = events.findLast(
     (e): e is EventOf<"handoff"> => e.type === "handoff",
   );

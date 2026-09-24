@@ -30,9 +30,12 @@ SKEW_MS: Final = 1000
 
 def invocation(state: CallState, spec: ToolSpec) -> Invocation:
     call = state.call
-    # The derived effect key (wire rule 13): the tool_call's branch and its call_id.
-    key = f"{call.branch_id}:{call.data.call_id}"
-    return Invocation(spec, call.data.call_id, call.data.input, key)
+    return Invocation(spec, call.data.call_id, call.data.input, _effect_key(state))
+
+
+def _effect_key(state: CallState) -> str:
+    """The derived effect key (wire rule 13): the tool_call's branch and its call_id."""
+    return f"{state.call.branch_id}:{state.call.data.call_id}"
 
 
 async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
@@ -107,9 +110,12 @@ async def _not_sent(rt: Runtime, inv: Invocation, *, unmatched: bool) -> Halt | 
 
 
 async def settle(
-    rt: Runtime, state: CallState, spec: ToolSpec, reason: str, actor: ActorKind
+    rt: Runtime, state: CallState, spec: ToolSpec | None, reason: str, actor: ActorKind
 ) -> Halt | None:
-    """Applies the class rule to an effect in doubt: settle it with a proof, or park it."""
+    """Applies the class rule to an effect in doubt: settle it with a proof, or park it. A call
+    made to a tool not in the set has no class to prove anything by, so it parks."""
+    if spec is None:
+        return await park_effect(rt, _effect_key(state), actor)
     inv = invocation(state, spec)
     match spec.effect_class:
         case "sandbox_local":
@@ -122,7 +128,7 @@ async def settle(
             settled = False
     if settled is not False:
         return settled
-    return await park_effect(rt, inv, actor)
+    return await park_effect(rt, inv.effect_key, actor)
 
 
 async def _terminate(
@@ -183,8 +189,8 @@ async def _reconcile(
     return lost(done.error) if isinstance(done, Err) else None
 
 
-async def park_effect(rt: Runtime, inv: Invocation, actor: ActorKind) -> Halt | None:
-    address: JsonValue = {"kind": "effect", "id": inv.effect_key}
+async def park_effect(rt: Runtime, effect_key: str, actor: ActorKind) -> Halt | None:
+    address: JsonValue = {"kind": "effect", "id": effect_key}
     data: dict[str, JsonValue] = {
         "address": address,
         "reason": "effect_unknown",

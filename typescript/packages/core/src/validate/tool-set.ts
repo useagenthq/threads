@@ -1,5 +1,6 @@
 import type { EventOf, Fold } from "../fold/state";
 import { canonicalize, JsonValue, type ToolSpec } from "../log";
+import { isLoopTool } from "../tools/loop-tools";
 import { invalid, type Violation } from "./violation";
 
 // Rule 17, points 1-5: a new tool set never makes dispatch less safe (invariant 3).
@@ -32,6 +33,10 @@ export function checkToolSet(
 
 /** Point 3: a name nothing pinned enters as unguarded, so uncertainty about it always parks. */
 function checkAdded(spec: ToolSpec): Violation {
+  if (isLoopTool(spec.name))
+    return invalid(
+      `tools_changed adds ${spec.name}, a tool the loop runs itself with no effect record`,
+    );
   return spec.effect_class === "unguarded" &&
     spec.dedup_window_ms === undefined &&
     spec.ends_turn === undefined

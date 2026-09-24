@@ -11,6 +11,7 @@ from pydantic import JsonValue, TypeAdapter
 
 from threads._generated import tools_v1
 from threads._strict_model import StrictModel
+from threads._tool_names import FRAMEWORK, PINNED_MEMBERS, TEAM
 from threads.log import EffectClass, ToolSpec
 
 
@@ -77,15 +78,9 @@ HOST: Final = frozenset({"read_tool_result"})
 """Built-ins that run on the host: offered with or without a sandbox."""
 SKILL: Final = "load_skill"
 """Host-side over the pinned skills; pinned only when the agent has skills."""
-TEAM: Final = frozenset({"send_message", "team_task_claim", "team_task_create", "team_task_update"})
-"""Offered to a team: an agent with subagents, and every child it spawns."""
 MEMBERS: Final = frozenset({"ask", "cancel", "monitor", "reply", "send", "start", "wait"})
 """A team's model tools (spec/schema/README.md, Teams): pinned for a lead and its members, so no
 tool of a team's agent may take one of these names."""
-PINNED_MEMBERS: Final = frozenset({"send", "start"})
-"""The team tools pinned and run so far: lane 21E pins ask, reply, wait, monitor and cancel."""
-FRAMEWORK: Final = TEAM | PINNED_MEMBERS | {"todo_write", "handoff", "spawn_agent"}
-"""Log-only tools: `read_only` is exact, since only log state changes."""
 WEB: Final = frozenset({"web_fetch", "web_search"})
 """Host tools through the host's fenced web transport."""
 GIT: Final = frozenset({"git_clone", "git_fetch", "git_push", "open_pull_request"})

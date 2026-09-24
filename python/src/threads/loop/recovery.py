@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, assert_never
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import CancelledEvent, EventId, ModelRequestEvent, SteerEvent
+from threads.log import CancelledEvent, EventId, ModelRequestEvent, SteerEvent, ToolSpec
 from threads.loop import calls, effects
 from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
@@ -29,6 +29,7 @@ from threads.loop.model import (
     looked_up,
 )
 from threads.loop.runtime import Failed, Halt, Runtime, WriterContext, epoch_model, fence, lost
+from threads.reduce.fold import call_spec
 from threads.reduce.openers import turn_start
 from threads.result import Err, Ok
 
@@ -121,7 +122,7 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
 
 
 async def _call(rt: Runtime, state: CallState) -> Halt | None:
-    spec = rt.fold.call_specs[state.call.data.call_id]
+    spec = call_spec(rt.fold, state.call.data.call_id)
     match state.effect:
         case "begun":
             data = {"call_id": state.call.data.call_id, "reason": "crash_after_begin"}
@@ -134,16 +135,32 @@ async def _call(rt: Runtime, state: CallState) -> Halt | None:
             reason = state.unknown_reason or "crash_after_begin"
             return await effects.settle(rt, state, spec, reason, "recovery")
         case None:
-            return await _never_began(rt, state)
+            return await _dispatchable(rt, state, spec, began=False)
         case "safe_to_retry" | "not_sent" | "assume_not_done":
             # Settled as never performed: the loop may re-dispatch under the same key, after
             # the same cancellation and policy re-checks as a call that never began.
-            return await _never_began(rt, state)
+            return await _dispatchable(rt, state, spec, began=True)
         case _:
             return await effects.close_settled(rt, state, "recovery")
 
 
-async def _never_began(rt: Runtime, state: CallState) -> Halt | None:
+async def _dispatchable(
+    rt: Runtime, state: CallState, spec: ToolSpec | None, *, began: bool
+) -> Halt | None:
+    """A call the loop would dispatch never runs without a tool: one made to a tool not in the
+    set closes not_executed, and so does one that never began whose tool a later tools_changed
+    removed (a removal is a policy change, so an earlier allow never dispatches past it)."""
+    call_id = state.call.data.call_id
+    if spec is None:
+        why = f"not executed: unknown tool {state.call.data.name}"
+        return await calls.close(rt, call_id, "not_executed", why, "recovery")
+    if not began and spec.name not in rt.fold.tools:
+        why = f"not executed: {spec.name} was removed from the tool set"
+        return await calls.close(rt, call_id, "not_executed", why, "recovery")
+    return await _never_began(rt, state, spec)
+
+
+async def _never_began(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
     """Not started is not permission."""
     call_id = state.call.data.call_id
     if rt.fold.last_cancel_seq > state.call.seq:
@@ -153,5 +170,5 @@ async def _never_began(rt: Runtime, state: CallState) -> Halt | None:
     if state.decision == "ask" and state.approved is None:
         return await calls.await_approval(rt, state, "recovery")
     if state.decision == "allow":
-        return await calls.recheck(rt, state)
+        return await calls.recheck(rt, state, spec)
     return None

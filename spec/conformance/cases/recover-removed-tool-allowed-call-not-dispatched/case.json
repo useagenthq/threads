@@ -1,0 +1,11 @@
+{
+  "name": "recover-removed-tool-allowed-call-not-dispatched",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "An allowed send_email call that never began, then a valid tools_changed removes send_email. Recovery closes it not_executed: an allow recorded before the removal never dispatches a call past it.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

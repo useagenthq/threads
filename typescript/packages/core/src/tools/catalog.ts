@@ -17,6 +17,7 @@ import {
   WebFetchInput,
   WebSearchInput,
 } from "./gateway-inputs";
+import { FINAL_OUTPUT, LOOP_TOOLS, TEAM_LOOP_TOOLS } from "./loop-tools";
 import {
   ForgetMemoryInput,
   LoadSkillInput,
@@ -337,15 +338,11 @@ export function entry(name: string): CatalogEntry {
 }
 
 /** the entries: pinned with subagents, handoffs and todos, and run by the loop. */
-export const AGENT_TOOLS: ReadonlySet<string> = new Set([
-  "handoff",
-  "send_message",
-  "spawn_agent",
-  "team_task_claim",
-  "team_task_create",
-  "team_task_update",
-  "todo_write",
-]);
+export const AGENT_TOOLS: ReadonlySet<string> = new Set(
+  LOOP_TOOLS.filter(
+    (name) => name !== FINAL_OUTPUT && !TEAM_LOOP_TOOLS.has(name),
+  ),
+);
 
 /**
  * A team's model tools (spec/schema/README.md, Teams): pinned for a lead and its members and run

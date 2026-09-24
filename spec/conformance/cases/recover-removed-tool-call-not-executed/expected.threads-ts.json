@@ -1,0 +1,80 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [
+      "call_1"
+    ],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 80,
+      "output_tokens": 20,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 6,
+      "hash": "b1bd5bcdc2c16f5802e2c1a44cc2f2a13fc2d958a22c43f9653e5864a09e3b51"
+    }
+  },
+  "appended": [
+    {
+      "type": "tool_result",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "is_error": true,
+        "origin": "not_executed",
+        "preview": "not executed: read_file was removed from the tool set"
+      }
+    },
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "sandbox": {
+    "dispatches": {
+      "read_file": 0
+    }
+  }
+}

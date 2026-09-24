@@ -1,5 +1,6 @@
 import type { EventOf } from "../fold/state";
 import { canonicalize } from "../log";
+import { FINAL_OUTPUT } from "../tools/loop-tools";
 import { conforms } from "../validate/json-schema";
 import { draft, TOOL } from "./drafts";
 import { endTurn } from "./request";
@@ -11,7 +12,6 @@ import type { Halt } from "./types";
 // Structured final output in tool mode: each final_output candidate is
 // checked once and recorded as output_validated, next to its raw tool_call.
 
-export const FINAL_OUTPUT = "final_output";
 const ASK_FOR_OUTPUT = `Return the final result by calling ${FINAL_OUTPUT}.`;
 
 export function validateCandidate(

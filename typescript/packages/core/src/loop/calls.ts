@@ -1,7 +1,7 @@
 import { AGENT_TOOLS, entry, MEMBER_TOOLS } from "../tools/catalog";
+import { FINAL_OUTPUT } from "../tools/loop-tools";
 import { authorize } from "./authorize";
 import { draft } from "./drafts";
-import { FINAL_OUTPUT } from "./output";
 import { parseErrors } from "./schema";
 import type { Session } from "./session";
 import type { Response } from "./turn";

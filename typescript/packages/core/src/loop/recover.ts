@@ -157,7 +157,7 @@ async function recoverCall(
     case "resolved":
       return resolved(s, callId);
     case undefined:
-      return notStarted(s, callId);
+      return dispatchable(s, callId, false);
     default:
       return assertNever(status);
   }
@@ -179,7 +179,7 @@ function resolved(s: Session, callId: string): Halt | undefined {
     case "safe_to_retry":
     case "not_sent":
     case "assume_not_done":
-      return notStarted(s, callId);
+      return dispatchable(s, callId, true);
     case "confirmed_success":
     case "interrupted":
     case "assume_done":
@@ -241,6 +241,41 @@ function notStarted(s: Session, callId: string): Halt | undefined {
       RECOVERY,
     ),
   );
+}
+
+/**
+ * A call the loop would dispatch never runs without a tool: one made to a tool not in the set
+ * closes not_executed, and so does one that never began whose tool a later tools_changed removed
+ * (a removal is a policy change, so an earlier allow never dispatches a call past it).
+ */
+function dispatchable(
+  s: Session,
+  callId: string,
+  began: boolean,
+): Halt | undefined {
+  const spec = s.fold.calls.get(callId)?.spec;
+  if (spec === undefined)
+    return closed(
+      s,
+      callId,
+      "not_executed",
+      `not executed: unknown tool ${callName(s, callId)}`,
+    );
+  if (!began && !s.fold.tools.some((t) => t.name === spec.name))
+    return closed(
+      s,
+      callId,
+      "not_executed",
+      `not executed: ${spec.name} was removed from the tool set`,
+    );
+  return notStarted(s, callId);
+}
+
+function callName(s: Session, callId: string): string {
+  const call = s.events.findLast(
+    (e) => e.type === "tool_call" && e.data.call_id === callId,
+  );
+  return call?.type === "tool_call" ? call.data.name : callId;
 }
 
 function closed(

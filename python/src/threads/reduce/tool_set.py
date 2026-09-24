@@ -3,6 +3,7 @@
 
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads._tool_names import LOOP_TOOLS
 from threads.log import ToolsChangedEvent, ToolSpec
 from threads.log.jcs import canonicalize
 from threads.reduce.fold import Fold
@@ -33,6 +34,8 @@ def tool_set_error(fold: Fold, event: ToolsChangedEvent) -> str | None:
 def _added_error(spec: ToolSpec) -> str | None:
     """Point 3: a name nothing pinned enters as unguarded, so uncertainty about it always
     parks."""
+    if spec.name in LOOP_TOOLS:
+        return f"tools_changed adds {spec.name}, a tool the loop runs itself with no effect record"
     if (
         spec.effect_class == "unguarded"
         and spec.dedup_window_ms is MISSING

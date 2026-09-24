@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 FAM = "tools_streaming"
 DEPLOY = tool("mcp__ops__deploy", "Deploy the app.", {"env": {"type": "string"}}, "unguarded")
 WIDE: Obj = {"type": "object"}
+TODO_WRITE = tool("todo_write", "Replace the todo list.", {"todos": {"type": "array"}}, "unguarded")
 
 
 def changed(log: Log, tools: list[JsonValue], cause: Obj | None = None) -> None:
@@ -128,6 +129,13 @@ def _added() -> list[tuple[str, str, Log]]:
             _one([READ_FILE], [READ_FILE, {**MCP_SEARCH, "ends_turn": True}]),
         ),
         (
+            "tools-changed-added-framework-name-rejected",
+            "A tools_changed adds todo_write as unguarded. The loop runs a framework tool itself, "
+            "with no effect_begin whatever its spec, so an added one would grant a capability "
+            "the pin never did.",
+            _one([READ_FILE], [READ_FILE, TODO_WRITE]),
+        ),
+        (
             "tools-changed-added-tool-changed-rejected",
             "An added tool keeps the spec it was first added with: a later set widens its "
             "input_schema.",
@@ -213,10 +221,17 @@ def _after_call(root: pathlib.Path) -> None:
                         "by": "provider_dedup",
                     },
                 },
-                {"type": "effect_begin", "epoch": 2, "data": {"call_id": "call_1", "attempt": 2}},
+                {
+                    "type": "effect_begin",
+                    "epoch": 2,
+                    "data": {"call_id": "call_1", "attempt": 2},
+                },
                 {
                     "type": "effect_commit",
-                    "data": {"call_id": "call_1", "result_ref": aref(out, "text/plain")},
+                    "data": {
+                        "call_id": "call_1",
+                        "result_ref": aref(out, "text/plain"),
+                    },
                 },
                 {
                     "type": "tool_result",

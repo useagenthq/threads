@@ -15,6 +15,7 @@ from threads.loop.history import CallState, call_state, open_cancel
 from threads.loop.results import As, reference_drafts, result_draft
 from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
+from threads.reduce.fold import call_spec
 from threads.result import Err, Ok
 from threads.store import Draft
 from threads.store.lines import uuid7
@@ -61,6 +62,15 @@ def _invalid(rt: Runtime, use: ToolUsePart) -> str | None:
     return rt.tools.invalid(spec, use.input)
 
 
+def pending_spec(rt: Runtime, call_id: CallId) -> ToolSpec:
+    """The call-time spec of a call the loop runs. Recording closes a call to an unknown tool
+    pre-effect, and recovery closes or parks one it finds, so every call the loop runs has one."""
+    spec = call_spec(rt.fold, call_id)
+    if spec is None:
+        raise AssertionError(f"call {call_id} runs with no call-time spec")
+    return spec
+
+
 async def run_call(rt: Runtime, call_id: CallId) -> Halt | None:
     """Advances one pending call until it has a result, or the run must stop. A cancel that
     lands meanwhile (authorize's hooks await) stops it: the cancellation step closes the call."""
@@ -68,8 +78,7 @@ async def run_call(rt: Runtime, call_id: CallId) -> Halt | None:
         if open_cancel(rt.events) is not None:
             return None
         state = call_state(rt.events, call_id)
-        spec = rt.fold.call_specs[state.call.data.call_id]
-        halt = await _advance(rt, state, spec)
+        halt = await _advance(rt, state, pending_spec(rt, call_id))
         if halt is not None:
             return halt
     return None
@@ -124,10 +133,9 @@ async def close(
     return lost(done.error) if isinstance(done, Err) else None
 
 
-async def recheck(rt: Runtime, state: CallState) -> Halt | None:
+async def recheck(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
     """An allow recorded before a crash is re-checked against current policy before dispatch; a
     changed decision is recorded and followed instead."""
-    spec = rt.fold.call_specs[state.call.data.call_id]
     if rt.authorize(rt.fold, state.call.data, spec).decision == "allow":
         return None
     return await authorize(rt, state, spec, "recovery")
@@ -229,7 +237,7 @@ async def cancel_call(rt: Runtime, call_id: CallId, actor: ActorKind = "host") -
     """Closes a pending call behind a cancel barrier: one that never began as not_executed; one
     whose effect may have been sent is settled or parked, never assumed undone."""
     state = call_state(rt.events, call_id)
-    spec = rt.fold.call_specs[state.call.data.call_id]
+    spec = call_spec(rt.fold, call_id)
     if rt.framework is not None and _child_started(rt, call_id):
         # A spawned child is never cancelled over: the parent runs it (barred) to its end and
         # records its one agent_finished, or parks on it (spec/schema/README.md).

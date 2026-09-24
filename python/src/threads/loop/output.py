@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Final
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._json_schema import conforms
+from threads._tool_names import FINAL_OUTPUT
 from threads.log import Event, InjectedEvent, OutputValidatedEvent, ToolSpec
 from threads.log import Output as OutputPolicy
 from threads.log.jcs import canonicalize
@@ -23,7 +24,6 @@ from threads.store import Draft
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-FINAL_OUTPUT: Final = "final_output"
 ASK: Final = f"Return the final result by calling {FINAL_OUTPUT}."
 
 

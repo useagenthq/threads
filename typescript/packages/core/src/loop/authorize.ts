@@ -5,6 +5,7 @@ import type { KnownEvent } from "../log";
 import { draft } from "./drafts";
 import { decision, defining, observe, recorded, run } from "./hooks";
 import type { Session } from "./session";
+import { callSpec } from "./turn";
 import type { Authorization, Halt } from "./types";
 
 // The permission fold for one call:
@@ -113,7 +114,13 @@ export async function authorize(
 ): Promise<Halt | undefined> {
   const hooked = await hookVerdict(s, "before_tool", call);
   if (isHalt(hooked)) return hooked;
-  let final = folded(s.config.authorize(call, s.fold), hooked);
+  // Recording closes a call to an unknown tool pre-effect, and recovery closes one it finds.
+  const spec = callSpec(s.fold, call);
+  if (spec === undefined)
+    throw new Error(
+      `call ${call.data.call_id} is authorized with no call-time spec`,
+    );
+  let final = folded(s.config.authorize(call, s.fold, spec), hooked);
   // The self-config guard is never an ask a programmatic approver can answer.
   if (final.decision === "ask" && final.source !== "self_config_guard") {
     const answered = await hookVerdict(s, "permission_request", call);

@@ -190,7 +190,7 @@ export async function runChild(
       event_id: spawned.event_id,
     },
     inputs: inputsOf(s, spawned),
-    ceiling: (call) => s.config.authorize(call, s.fold),
+    ceiling: (call, spec) => s.config.authorize(call, s.fold, spec),
     tools: new Set(s.fold.tools.map((t) => t.name)),
     team: teamOf(s),
     covering: inheritedBy(s),
