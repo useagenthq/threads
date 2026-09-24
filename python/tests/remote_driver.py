@@ -4,7 +4,7 @@ format. Declarations are parameters, so the kit's derived SandboxInfo can be tes
 
 from collections.abc import AsyncGenerator, AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
-from typing import Literal
+from typing import Literal, Self
 
 from sandbox_backend import Box, FakeBackend, LostAnswerError, UnavailableError
 
@@ -37,6 +37,9 @@ class MemoryDriver:
         self.lookup: NonfinalLookup | FinalLookup = NonfinalLookup(self.find)
         self.termination: Unconfirmed | Confirmed = Unconfirmed(self.stop_process)
         self.capture: Capture | None = Capture("stopped", self.take, self.delete)
+
+    def bound(self) -> Self:
+        return self
 
     @property
     def classify(self) -> fence.Classify:

@@ -22,55 +22,34 @@ What this adapter declares (Daytona 0.216, container sandboxes):
   snapshot is disruptive: the parent's processes don't survive it. Capture class filesystem;
   no provider expiry is declared. A snapshot can't be found by key with its manifest, so
   snapshot lookup is none. Restore verifies the manifest and deletes a mismatched child.
-- The manifest a snapshot returns is the parent's just before the stop: a claim. Core proves
-  it against the image by a ledgered restore before recording the snapshot, and refuses one
-  whose image differs (thread/snapshot.py).
+- The manifest a snapshot returns is the parent's just before the stop, and must equal the
+  parent's after the start (the remote kit, sandbox/remote/session.py): still a claim. Core
+  proves it against the image by a ledgered restore before recording the snapshot, and
+  refuses one whose image differs (thread/snapshot.py).
+- The sandbox, session and snapshot logic is the remote kit's; this adapter is its driver
+  (driver.py) over Daytona's clients (clients.py).
 """
 
-import asyncio
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
-from functools import partial
-from typing import TYPE_CHECKING, Literal
 
 import aiohttp
 
-from threads.adapters.loop_resources import LoopResources, close_all, drain
-from threads.adapters.sandboxes import posix
-from threads.adapters.sandboxes.daytona import transport
-from threads.adapters.sandboxes.daytona.control import Control, Placement, classify, client
-from threads.adapters.sandboxes.daytona.session import DaytonaSession, resource_name
-from threads.adapters.sandboxes.daytona.toolbox import Toolbox
-from threads.adapters.sandboxes.daytona.wire import SandboxDto
-from threads.adapters.sandboxes.fence import dispatch
+from threads.adapters.loop_resources import LoopResources
+from threads.adapters.sandboxes.daytona.clients import Clients, close_clients, open_clients
+from threads.adapters.sandboxes.daytona.control import Placement
+from threads.adapters.sandboxes.daytona.driver import DaytonaDriver
 from threads.agents.config import ConfigError
-from threads.log import SnapshotData
-from threads.loop.model import Found, LookupUnknown, NotFoundNonfinal
-from threads.result import Err, Ok
-from threads.sandbox import manifest
-from threads.sandbox.protocol import (
-    Looked,
-    LookupSupport,
-    SandboxContext,
-    SandboxError,
-    SandboxInfo,
-    SandboxSession,
-    unanswered,
-)
+from threads.sandbox.remote.sandbox import RemoteInfo, RemoteSandbox
 from threads.secrets import Secret, credential
-
-if TYPE_CHECKING:
-    from threads.sandbox.manifest import ManifestEntry
 
 DEFAULT_API = "https://app.daytona.io/api"
 API_KEY = "DAYTONA_API_KEY"
 HOUR_MS = 3_600_000
 _PROVIDER = re.compile(r"[a-z][a-z0-9_]{0,63}")
-_PUMP_GRACE_S = 0.25
 
 
-class DaytonaSandbox:
+class DaytonaSandbox(RemoteSandbox):
     """spec/api.json `Sandbox` on Daytona (module docstring)."""
 
     def __init__(  # noqa: PLR0913 - the factory's options
@@ -98,161 +77,24 @@ class DaytonaSandbox:
         self.lifetime_ms: int | None = lifetime_ms
         """The declared provider expiry of a created sandbox, when set."""
         ttl = None if lifetime_ms is None else -(-lifetime_ms // 60_000)
-        self._placed = Placement(
+        placed = Placement(
             target, ttl, auto_stop_minutes=auto_stop_minutes, block_network=not allow_internet
         )
         self._key = credential("daytona", "api_key", api_key, API_KEY)
-        self._api_url, self._base = api_url, snapshot
-        self._name, self._poll_s, self._wait_s, self._traces = name, poll_s, wait_s, traces
-        self._clients = LoopResources(name, _close)
-
-    @property
-    def info(self) -> SandboxInfo:
-        return SandboxInfo(
-            provider=self._name,
-            egress="unenforced" if not self._placed.block_network else "enforced",
-            capture_classes=("filesystem",),
-            browser="none",
-            desktop="none",
-            lookup=LookupSupport(create="nonfinal", snapshot="none"),
-            termination="unconfirmed",
-        )
+        self._api_url, self._pacing, self._traces = api_url, (poll_s, wait_s), traces
+        self._clients = LoopResources(name, close_clients)
+        driver = DaytonaDriver(self._loop_clients, snapshot, placed, self._pacing)
+        super().__init__(driver, RemoteInfo(name, "unenforced" if allow_internet else "enforced"))
 
     async def setup(self) -> None:
         """Resolves the key on the host. The HTTP session is opened on first use, in the run
         and on its event loop, and closed when nothing holds that loop any more."""
         self._key()
 
-    async def create(
-        self, operation_key: str, context: SandboxContext
-    ) -> Ok[SandboxSession] | Err[SandboxError]:
-        name = resource_name(operation_key)
-        return await dispatch(
-            context, lambda: self._create(name, self._base, self._placed), classify
+    def _loop_clients(self) -> Clients:
+        return self._clients.get(
+            lambda: open_clients(self._key(), self._api_url, self._traces, *self._pacing)
         )
-
-    async def restore(
-        self, snapshot_id: str, manifest_hash: str, operation_key: str, context: SandboxContext
-    ) -> Ok[SandboxSession] | Err[SandboxError]:
-        name = resource_name(operation_key)
-        made = await self._measured(snapshot_id, name, self._placed, context)
-        if isinstance(made, Err):
-            return made
-        child, tree = made.value
-        if manifest.manifest_hash(tree) == manifest_hash:
-            return Ok(child)
-        await child.close(context)
-        return Err(SandboxError("snapshot_manifest_mismatch", f"{snapshot_id}: manifest"))
-
-    async def lookup(self, operation_key: str, context: SandboxContext) -> Looked[SandboxSession]:
-        found = await dispatch(context, lambda: self._find(resource_name(operation_key)), classify)
-        if isinstance(found, Err):
-            return unanswered(found.error)
-        return Ok(NotFoundNonfinal() if found.value is None else Found(found.value))
-
-    async def lookup_snapshot(
-        self, operation_key: str, context: SandboxContext
-    ) -> Looked[SnapshotData]:
-        return Ok(LookupUnknown("a Daytona snapshot can't be found by key with its manifest"))
-
-    async def attach(
-        self, ref: str, context: SandboxContext
-    ) -> Ok[SandboxSession] | Err[SandboxError]:
-        found = await dispatch(context, lambda: self._find(ref), classify)
-        if isinstance(found, Err):
-            return found
-        if found.value is None:
-            return Err(SandboxError("not_found", f"no sandbox {ref}"))
-        return Ok(found.value)
-
-    async def release(
-        self, ref: str, context: SandboxContext
-    ) -> Ok[Literal["released", "already_gone"]] | Err[SandboxError]:
-        removed = await dispatch(context, lambda: self._controls().remove(ref), classify)
-        if isinstance(removed, Err):
-            if removed.error.code != "unavailable":
-                return removed
-            return Err(SandboxError("release_failed", removed.error.message))
-        return Ok("released" if removed.value else "already_gone")
-
-    async def _measured(
-        self, snapshot_id: str, name: str, placed: Placement, context: SandboxContext
-    ) -> "Ok[tuple[DaytonaSession, list[ManifestEntry]]] | Err[SandboxError]":
-        """A sandbox restored from the snapshot, and its manifest; deleted if unmeasurable."""
-        made = await dispatch(context, lambda: self._restore(snapshot_id, name, placed), classify)
-        if isinstance(made, Err):
-            return made
-        if isinstance(made.value, SandboxError):
-            return Err(made.value)
-        child = made.value
-        tree = await posix.manifest(child, context)
-        if isinstance(tree, Err):
-            await child.close(context)
-            return Err(SandboxError("snapshot_restore_failed", tree.error.message))
-        return Ok((child, tree.value))
-
-    async def _create(self, name: str, snapshot: str | None, placed: Placement) -> DaytonaSession:
-        dto = await self._controls().create(name, snapshot, placed)
-        await self._toolbox(dto).prepare()
-        return self._open(dto)
-
-    async def _restore(
-        self, snapshot: str, name: str, placed: Placement
-    ) -> DaytonaSession | SandboxError:
-        snap = await self._controls().snapshot(snapshot)
-        if snap is None:
-            return SandboxError("snapshot_missing", f"no snapshot {snapshot}")
-        if snap.state == "inactive":
-            return SandboxError("snapshot_expired", f"snapshot {snapshot} is inactive")
-        if snap.state != "active":
-            return SandboxError("snapshot_restore_failed", f"snapshot {snapshot} is {snap.state}")
-        return await self._create(name, snap.name, placed)
-
-    async def _find(self, ref: str) -> DaytonaSession | None:
-        found = await self._controls().get(ref)
-        return None if found is None else self._open(found)
-
-    def _open(self, dto: SandboxDto) -> DaytonaSession:
-        return DaytonaSession(dto.id, self._name, self._controls(), self._toolbox(dto))
-
-    def _toolbox(self, dto: SandboxDto) -> Toolbox:
-        clients = self._loop_clients()
-        return Toolbox(
-            dto.toolbox_proxy_url,
-            dto.id,
-            session=clients.session,
-            poll_s=self._poll_s,
-            wait_s=self._wait_s,
-            tasks=clients.pumps,
-        )
-
-    def _controls(self) -> Control:
-        return self._loop_clients().control
-
-    def _loop_clients(self) -> "_Clients":
-        def make() -> _Clients:
-            session = transport.session(self._key(), self._traces)
-            control = Control(client(self._api_url, session), self._poll_s, self._wait_s)
-            return _Clients(session, control, set())
-
-        return self._clients.get(make)
-
-
-@dataclass(frozen=True, slots=True)
-class _Clients:
-    """One event loop's session, the control client over it, and the exec streams reading it."""
-
-    session: aiohttp.ClientSession
-    control: Control
-    pumps: set[asyncio.Task[None]]
-
-
-async def _close(clients: _Clients) -> None:
-    """Closes the session, then the exec streams still reading it. The session goes first:
-    closing it closes every connection it holds or is opening, so a pump mid-request ends with
-    an error rather than being cancelled in a connect that leaves a socket behind."""
-    # A pump still running after the grace waits on a reader that is gone, not the network.
-    await close_all([clients.session.close, partial(drain, clients.pumps, _PUMP_GRACE_S)])
 
 
 def daytona(  # noqa: PLR0913 - the provider's options

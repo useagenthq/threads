@@ -171,4 +171,4 @@ class RemoteSandbox:
         return Err(SandboxError("snapshot_manifest_mismatch", message))
 
     def _session(self, ident: str) -> RemoteSession:
-        return RemoteSession(self._driver, self._info.provider, ident)
+        return RemoteSession(self._driver.bound(), self._info.provider, ident)

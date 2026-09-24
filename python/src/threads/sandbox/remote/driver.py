@@ -13,7 +13,7 @@ what it can prove, and each stronger declaration carries its proof:
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, Self
 
 from threads.adapters.sandboxes.fence import Classify
 from threads.loop.model import Found, LookupResult, LookupUnknown, NotFoundNonfinal
@@ -89,6 +89,12 @@ class Confirmed:
 
 
 class SandboxDriver(Protocol):
+    def bound(self) -> Self:
+        """This driver on the running event loop's clients, kept by a session for its later
+        calls: a background stop may still run while that loop's hold is released
+        (adapters/loop_resources.py). Made without I/O."""
+        ...
+
     @property
     def classify(self) -> Classify:
         """The provider's expected failures; None re-raises (a bug)."""
