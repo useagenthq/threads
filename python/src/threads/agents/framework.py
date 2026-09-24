@@ -1,19 +1,21 @@
 """The framework tools of one run, as the loop's `Framework`: spawn_agent, handoff and
-the team tools each advance their call on the log; background children run beside the loop and
-are all settled before the run gives its lease back."""
+the team tools each advance their call on the log; background children run beside the loop,
+their ends are recorded at step boundaries (waking the idle lead), and the run waits for them
+before it gives its lease back."""
 
-import asyncio
 from typing import TYPE_CHECKING, Final
 
 from threads.agents import stops
+from threads.agents.background import Background, settle
 from threads.agents.handoff import handoff
 from threads.agents.results import Parked
 from threads.agents.scope import Scope
-from threads.agents.spawn import Tasks, busy, once, spawn, start_background
+from threads.agents.spawn import busy, once, spawn, start_background
 from threads.agents.team import deliver, team_tool
 from threads.log import AgentSpawnedEvent, ParkAddress
+from threads.loop import runtime
 from threads.loop.drafts import draft
-from threads.loop.drive import parked
+from threads.loop.drive import drive, parked
 from threads.loop.history import CallState, open_cancel
 from threads.loop.runtime import Halt, Idle, Runtime, lost
 from threads.reduce.handlers import to_json
@@ -29,7 +31,7 @@ NAMES: Final = TEAM | {"spawn_agent", "handoff"}
 class Agents[D]:
     def __init__(self, scope: Scope[D]) -> None:
         self._scope = scope
-        self._tasks: Tasks = {}
+        self._bg = Background()
 
     @property
     def names(self) -> frozenset[str]:
@@ -38,7 +40,7 @@ class Agents[D]:
     async def run(self, rt: Runtime, state: CallState) -> Halt | None:
         match state.call.data.name:
             case "spawn_agent":
-                return await spawn(self._scope, rt, state, self._tasks)
+                return await spawn(self._scope, rt, state, self._bg)
             case "handoff":
                 return await handoff(self._scope, rt, state)
             case _:
@@ -48,7 +50,7 @@ class Agents[D]:
     async def flush(self, rt: Runtime) -> Halt | None:
         """At a step boundary: first every child the branch is parked on runs again, and one
         that no longer ends parked is resumed; then a background child a crash left running is
-        restarted."""
+        restarted, and the background ends this boundary may record are recorded."""
         for at in [a for a in rt.fold.parked if a.kind == "child"]:
             spawned = next(
                 e
@@ -72,14 +74,14 @@ class Agents[D]:
             if isinstance(done, Err):
                 return lost(done.error)
         self._restart(rt)
-        return None
+        return await settle(rt, self._bg)
 
     def _restart(self, rt: Runtime) -> None:
         """A background child the log says was spawned and never finished, that nothing in
         this process runs and the branch isn't parked on."""
         for child, finished in rt.fold.children.items():
             parked = ParkAddress(kind="child", id=child) in rt.fold.parked
-            if finished or parked or child in self._tasks:
+            if finished or parked or self._bg.has(child):
                 continue
             spawned = next(
                 e
@@ -87,7 +89,7 @@ class Agents[D]:
                 if isinstance(e, AgentSpawnedEvent) and e.data.child_thread_id == child
             )
             if spawned.data.mode == "background":
-                start_background(self._scope, rt, spawned, self._tasks)
+                start_background(self._scope, rt, spawned, self._bg)
 
     async def deliver(self, rt: Runtime) -> Halt | bool:
         scope = self._scope
@@ -96,14 +98,20 @@ class Agents[D]:
         return await deliver(scope.lead(rt), scope.member(), rt)
 
     async def finish(self, rt: Runtime, halt: Halt) -> Halt:
-        """Every background child reaches its result, or parks, before the run ends (v0.1 has
-        no detached work), under this lease. One that parked after the turn ended parks the
+        """The run waits for its background children under this lease (spec/schema/README.md,
+        "Run completion"): each end is recorded, and one recorded while no turn is open wakes
+        the lead for another turn. A parked run stops once nothing more is running; an end held
+        for another run waits for the next run. One that parked after the turn ended parks the
         run too."""
-        self._restart(rt)
-        while self._tasks:
-            pending = list(self._tasks.values())
-            self._tasks.clear()
-            await asyncio.gather(*pending)
+        bg = self._bg
+        while isinstance(halt, Idle | runtime.Parked):
+            self._restart(rt)
+            ends = isinstance(halt, Idle) and bool(bg.ended)
+            if not ends and not bg.running:
+                break
+            if not ends:
+                await bg.next_end()
+            halt = await drive(rt)
         if isinstance(halt, Idle) and rt.fold.parked:
             return parked(rt.events, rt.fold.parked)
         return halt

@@ -17,11 +17,13 @@ export type Step =
   | { readonly kind: "respond"; readonly response: Response }
   | { readonly kind: "end_turn" };
 
-/** The events of the open turn, from its user_input. */
+/** The events of the open (or last) turn, from the user_input or woken that opened it. */
 export function turnEvents(
   events: readonly KnownEvent[],
 ): readonly KnownEvent[] {
-  const start = events.findLastIndex((e) => e.type === "user_input");
+  const start = events.findLastIndex(
+    (e) => e.type === "user_input" || e.type === "woken",
+  );
   return start === -1 ? [] : events.slice(start);
 }
 

@@ -2,13 +2,14 @@ import {
   type BranchId,
   knownEvents,
   type Principal,
+  pendingWakes,
   StoreError,
   type ThreadId,
 } from "@threads/core/host";
 import type { HostContext, HostedAgent } from "./context";
 
 // Runs a crash left open, run on from the log by a host's recovery pass (spec/schema/README.md,
-// "API run recovery"). A watched thread is looked at on every tick until it settles. A lost lease
+// "API run recovery"), and branches with a background child still to report (pending_wakes). A watched thread is looked at on every tick until it settles. A lost lease
 // is tried again on the next tick; a store outage (StoreError, wherever it met the store: reading
 // the thread, or the run) after a wait that doubles from 1 s to 60 s while it lasts, said once per
 // streak. Any other failure is said with its reason and not retried: the turn stays open in the
@@ -96,9 +97,11 @@ export class Recovery {
     }
     const thread = { id, branch };
     const { fold } = read.value;
-    if (!fold.turnOpen || fold.parked.length > 0)
-      return this.#ctx.replies(tenant, thread);
     const events = knownEvents(read.value);
+    // A background child a crash stopped runs on too, so it reports and wakes this thread.
+    const waiting = pendingWakes(events, branch).length > 0;
+    if ((!fold.turnOpen && !waiting) || fold.parked.length > 0)
+      return this.#ctx.replies(tenant, thread);
     const hosted = this.#ctx.agentOf(events);
     const who = events.findLast((e) => e.type === "user_input")?.actor
       .principal;

@@ -3,7 +3,7 @@ import { assertNever } from "../assert-never";
 import { type EventOf, type ParkAddress, responseText } from "../fold/state";
 import type { BranchId, KnownEvent, ThreadId } from "../log";
 import type { LoopEnd, RunErrorCode } from "../loop";
-import { turnEvents } from "../loop/turn";
+import { type RunEnd, runEnd } from "../reduce/run-end";
 import type { Thread } from "../thread/handle";
 import type { Store } from "./sqlite";
 
@@ -68,17 +68,30 @@ export function runResult<Output>(
       last?.type === "parked" ? last.data.reason : "effect_unknown";
     return { status: "parked", reason, pending: parked, thread };
   }
-  const turn = turnEvents(events);
-  const done = turn.findLast((e) => e.type === "turn_completed");
+  const request = events.findLast((e) => e.type === "user_input");
+  if (request === undefined) throw new Error("an idle run had an input");
+  return endedRun(runEnd(events, request.event_id), thread, decode);
+}
+
+/**
+ * The result of a run that ended (spec/schema/README.md, "Run completion"): completed with its
+ * last answer, or the outcome of the run turn that ended otherwise.
+ */
+export function endedRun<Output>(
+  run: RunEnd,
+  thread: Thread,
+  decode: Decode<Output>,
+): RunResult<Output> {
+  const done = run.turn.at(-1);
   if (done?.type !== "turn_completed")
-    throw new Error("an idle run ended its turn");
+    throw new Error("an ended run ended its turn");
   // A typed error end (the capability pre-check) reports its own code.
   const { code } = done.data;
   // Only a team member's rebind ends a turn this way, and a member's result is a MemberResult.
   if (code === "pin_unavailable" || code === "pin_mismatch")
     throw new Error(`a run's turn can't end ${code}: only a member rebinds`);
   if (code !== undefined) return failed(code, done.data.reason, thread);
-  return ended(done.data.reason, turn, thread, decode);
+  return ended(done.data.reason, run.turn, thread, decode);
 }
 
 function ended<Output>(

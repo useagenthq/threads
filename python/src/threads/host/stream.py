@@ -1,5 +1,6 @@
 """`Host.subscribe` (GET /v1/threads/{thread_id}/runs/{run_id}/events):
-one run's committed events, read from the log, then one result message naming the run.
+one run's committed events, read from the log and bounded to that run, then one result message
+naming the run.
 
 A subscription takes no input and starts nothing: it reads the log, and a run of this host
 wakes it on each append. It resumes after `after_seq` (the SSE Last-Event-ID).
@@ -11,7 +12,7 @@ from dataclasses import dataclass
 from pydantic import JsonValue
 
 from threads.agents.store import Store, now_ms, open_store
-from threads.host.outcome import logged, outcome, run_start
+from threads.host.outcome import logged, outcome, run_events, run_start
 from threads.host.runs import Runner
 from threads.log import BranchId, EventId, ParseError, Principal, ThreadId
 from threads.reduce.handlers import to_json
@@ -54,7 +55,7 @@ async def _follow(
         start = run_start(events, run_id)
         if start is None:
             return
-        for event in events[start:]:
+        for event in run_events(events, start):
             if event.seq > seen:
                 seen = event.seq
                 yield Message({"kind": "event", "event": to_json(event)}, event.seq)

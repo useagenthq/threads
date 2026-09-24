@@ -1,8 +1,10 @@
 import type { Fold, Todo } from "../fold/state";
 import type { CacheBreak, Cost, KnownEvent } from "../log";
+import { pendingWakes } from "../store/wakes";
 import type { Chain } from "../verify/chain";
 import { type CostOverflow, cost } from "./cost";
 import { knownEvents } from "./reduce";
+import { runProjection } from "./run-end";
 
 /** The events a cache break is attributed to, checked against the schema's causes. */
 const CAUSES = [
@@ -33,6 +35,11 @@ export type Projections = {
   readonly mode: Fold["mode"];
   readonly model: Fold["model"];
   readonly output: Fold["output"];
+  readonly run: ReturnType<typeof runProjection>;
+  readonly pending_wakes: readonly {
+    readonly branch_id: string;
+    readonly child_thread_id: string;
+  }[];
 };
 
 export function projections(chain: Chain): Projections {
@@ -63,7 +70,20 @@ export function projections(chain: Chain): Projections {
     mode: fold.mode,
     model: fold.model,
     output: fold.output,
+    run: runProjection(events),
+    pending_wakes: wakeRows(chain, events),
   };
+}
+
+/** The pending_wakes rows the branch's own events rebuild, sorted. */
+function wakeRows(
+  chain: Chain,
+  events: readonly KnownEvent[],
+): Projections["pending_wakes"] {
+  const branch = chain.segments.at(-1)?.header.branch_id ?? "";
+  return pendingWakes(events, branch)
+    .toSorted()
+    .map((child) => ({ branch_id: branch, child_thread_id: child }));
 }
 
 const DROP_MIN = 2000;

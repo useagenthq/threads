@@ -33,6 +33,7 @@ from threads.log import (
     Usage,
 )
 from threads.log.jcs import MAX_SAFE_INTEGER
+from threads.reduce import run_end, wakes
 from threads.reduce.fold import Fold, policy
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
@@ -334,5 +335,7 @@ PROJECTIONS: Mapping[str, Callable[[Fold], JsonValue]] = {
     "children": children,
     "team_tasks": team_tasks,
     "mode": mode,
+    "run": run_end.projection,
+    "pending_wakes": wakes.projection,
 }
 """By name. `model` and `output` aren't implemented yet; no case lists them."""

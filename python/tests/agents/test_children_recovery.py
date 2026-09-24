@@ -65,11 +65,13 @@ def test_a_background_child_left_running_by_a_crash_finishes_exactly_once() -> N
         parent = Thread(seen[0].thread_id, seen[0].branch_id, store)
         fixed = agent(name="scanner", model=scripted_model({"responses": [text("clean")]}))
         again = agent(
-            model=scripted_model({"responses": [text("next")]}),
+            model=scripted_model({"responses": [text("next"), text("The first scan is clean.")]}),
             subagents=[fixed],
         )
         result = await again.run("status?", store=store, thread=parent)
         assert isinstance(result, Completed)
+        # The first run's child reports once this run's turn is over, and wakes the lead.
+        assert result.output == "next"
         events = await events_of(result.thread)
         assert len([e for e in events if isinstance(e, AgentSpawnedEvent)]) == 1
         finished = [e for e in events if isinstance(e, AgentFinishedEvent)]

@@ -7,6 +7,7 @@ import {
   type Store,
   storeConnection,
   ThreadId,
+  wakeBranches,
 } from "@threads/core/host";
 import { consume } from "./consume";
 import { type HostCeiling, HostContext } from "./context";
@@ -169,6 +170,11 @@ export function host(options: HostOptions): Host {
         watch.add(r.tenant_id, r.thread_id, r.branch_id);
       seeded = true;
     }
+    // Every tick: a branch whose background child has not reported is run on, which relaunches
+    // the child and records its end with its wake (Gate 1 §2.7.3).
+    const { db } = await storeConnection(ctx.store);
+    for (const r of wakeBranches(db))
+      watch.add(r.tenant_id, r.thread_id, r.branch_id);
     // Side by side: one thread's slow reply never holds up another's recovery.
     await Promise.all(
       watch.entries().map(async ({ thread: t, settled }) => {

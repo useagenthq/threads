@@ -106,6 +106,8 @@ FAMILIES = (
     team_rebind,
     team_operator,
     team_nested,
+    legacy_run,
+    legacy_wake_rows,
 )
 
 
@@ -132,9 +134,8 @@ def _build(out: pathlib.Path) -> None:
         family.build(out)
 
 
-# Staged families, by the phase whose build moves them into FAMILIES: Phase 0 (the legacy wake)
-# takes the first, the Teams Phase 1 read side (lanes 21A and 21B) the second.
-STAGED_PHASE_0 = (legacy_run.build, legacy_wake_rows.build)
+# Staged families, by the phase whose build moves them into FAMILIES: the Teams Phase 1 read side
+# (lanes 21A and 21B). Phase 0 (the legacy wake) moved legacy_run and legacy_wake_rows.
 STAGED_PHASE_1 = (
     team_bindings.build_staged,
     team_cancel_rule.build,
@@ -146,7 +147,7 @@ def _build_staged(out: pathlib.Path) -> None:
     """Cases for an approved spec whose build hasn't landed: generated and checked like the
     corpus, but no runner reads them until the build moves each family into FAMILIES."""
     out.mkdir()
-    for build in (*STAGED_PHASE_0, *STAGED_PHASE_1):
+    for build in STAGED_PHASE_1:
         build(out)
 
 

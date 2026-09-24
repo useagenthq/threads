@@ -14,6 +14,7 @@ from pydantic import JsonValue
 
 from threads._generated.tools_v1 import SpawnAgentInput
 from threads.agents import stops
+from threads.agents.background import Background
 from threads.agents.bindings import permissions
 from threads.agents.children import finished, shown
 from threads.agents.definition import Definition
@@ -27,7 +28,6 @@ from threads.log import (
     AgentSpawnedEvent,
     CallId,
     HookDecisionEvent,
-    ThreadId,
 )
 from threads.loop.budget import inherited
 from threads.loop.drafts import draft
@@ -39,14 +39,13 @@ from threads.loop.runtime import Halt, Runtime, lost
 from threads.result import Err
 from threads.store.lines import uuid7
 
-type Tasks = dict[ThreadId, asyncio.Task[None]]
 type Ended = tuple[dict[str, JsonValue], str]
 """A child's agent_finished data and the spawn call's result text."""
 
 _DEFERRED: Final = "started in background"
 
 
-async def spawn[D](scope: Scope[D], rt: Runtime, state: CallState, tasks: Tasks) -> Halt | None:
+async def spawn[D](scope: Scope[D], rt: Runtime, state: CallState, bg: Background) -> Halt | None:
     call_id = state.call.data.call_id
     args = SpawnAgentInput.model_validate(dict(state.call.data.input))
     spawned = _spawned(rt, call_id)
@@ -63,7 +62,7 @@ async def spawn[D](scope: Scope[D], rt: Runtime, state: CallState, tasks: Tasks)
     if child is None:
         return await _close(rt, call_id, f"agent {spawned.data.agent_name} is not configured")
     if spawned.data.mode == "background":
-        start_background(scope, rt, spawned, tasks)
+        start_background(scope, rt, spawned, bg)
         return None
     return await _foreground(rt, spawned, await _outcome(scope, rt, spawned, child, args.prompt))
 
@@ -166,30 +165,32 @@ async def _start[D](
 
 
 def start_background[D](
-    scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, tasks: Tasks
+    scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, bg: Background
 ) -> None:
-    """Runs the child beside the parent; its result lands as tool_result_late. Also restarts a
-    background child a crash interrupted: the same child thread, never a second one."""
+    """Runs the child beside the parent; the loop records its end as tool_result_late at a step
+    boundary (threads.agents.background). Also restarts a background child a crash
+    interrupted: the same child thread, never a second one."""
+    child_id = spawned.data.child_thread_id
     child = _child(scope, spawned.data.agent_name)
-    if spawned.data.child_thread_id in tasks or child is None:
+    if bg.has(child_id) or child is None:
         return
     prompt = SpawnAgentInput.model_validate(dict(rt.fold.calls[spawned.data.call_id].data.input))
 
     async def body() -> None:
         ended = await _outcome(scope, rt, spawned, child, prompt.prompt)
-        # ponytail: a busy background child is left unfinished for the next run to restart.
-        if isinstance(ended, HaltFailed):
-            return
+        del bg.running[child_id]
         if isinstance(ended, Parked):
             await stops.park(rt, spawned, ended)
-            return
-        data, text = ended
-        late = await result_draft(rt, spawned.data.call_id, text, As("executed"))
-        fields = {k: v for k, v in late.data.items() if k != "origin"}
-        fields["is_error"] = data["status"] != "completed"
-        await rt.append(draft("agent_finished", data), draft("tool_result_late", fields))
+        elif isinstance(ended, HaltFailed):
+            bg.ended[child_id] = (spawned, ended)
+        else:
+            data, text = ended
+            late = await result_draft(rt, spawned.data.call_id, text, As("executed"))
+            fields = {k: v for k, v in late.data.items() if k != "origin"}
+            fields["is_error"] = data["status"] != "completed"
+            bg.ended[child_id] = (spawned, (data, fields))
 
-    tasks[spawned.data.child_thread_id] = asyncio.create_task(body())
+    bg.running[child_id] = asyncio.create_task(body())
 
 
 async def _outcome[D](

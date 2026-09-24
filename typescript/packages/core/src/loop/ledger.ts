@@ -3,7 +3,6 @@ import type { KnownEvent, ThreadId } from "../log";
 import { reservation, settlement, tokenBounds } from "../reduce/cost";
 import type { Claim, LimitName } from "../store";
 import type { Session } from "./session";
-import { turnEvents } from "./turn";
 import type { Covering } from "./types";
 
 // Tree-wide budgets: before every model_request in any thread of a tree, its
@@ -30,7 +29,8 @@ type View = {
 /** A thread's own budgets as of its `events`: its thread budget and the open run's. */
 export function ownCovering(s: View): readonly Covering[] {
   const thread = s.fold.policy?.budget;
-  const input = turnEvents(s.events)[0];
+  // A wake turn is under the budget of the latest run's input, as refusal() counts it.
+  const input = s.events.findLast((e) => e.type === "user_input");
   const run = input?.type === "user_input" ? input.data.budget : undefined;
   return [
     ...(thread === undefined

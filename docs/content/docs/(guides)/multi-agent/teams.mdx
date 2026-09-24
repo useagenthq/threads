@@ -97,7 +97,7 @@ The scripted model plays the calls a real model would make. With a real model, t
 - **Claims are atomic.** Two members racing for one task: one wins, the other gets an error it can act on.
 - **Blockers are respected.** A task with `blocked_by` can't be claimed until every blocker is completed.
 - **Safe to retry.** If a member's process restarts and repeats a call, it gets the same answer. Nothing is claimed or sent twice.
-- **Run members in parallel** by starting them with `background: true`. The lead's run returns once all of them have finished.
+- **Run members in parallel** by starting them with `background: true`. Each result wakes the lead for another turn, and the lead's run returns once all of them have reported, with the lead's last answer. See [Background subagents](/docs/multi-agent/subagents#background-subagents).
 
 <Callout>
   There is no API to read the task list directly today. It lives in the lead's log as `team_task_*` and `team_message` events.

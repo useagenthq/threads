@@ -6,9 +6,9 @@ import { type ThreadId, ThreadId as ThreadIdSchema } from "../../src/log";
 import { deleteTenant, deleteThread } from "../../src/store/deletion";
 import { code, T0, unwrap } from "../store/helpers";
 import {
+  CASES,
   caseLogs,
   relinked,
-  STAGED,
   storeLogs,
   type Team,
   teamStore,
@@ -42,7 +42,7 @@ function spare(
   edit: (line: Record<string, unknown>) => Record<string, unknown>,
 ) {
   const bytes = new Uint8Array(
-    readFileSync(join(STAGED, "legacy-wake-pending-row", "log.jsonl")),
+    readFileSync(join(CASES, "legacy-wake-pending-row", "log.jsonl")),
   );
   return verified(relinked(bytes, edit));
 }

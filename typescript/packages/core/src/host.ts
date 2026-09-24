@@ -2,7 +2,12 @@
 
 export type { HostRunner } from "./agent/hosted";
 export { hostRunner } from "./agent/registry";
-export { type RunResult, runResult, type ThreadRef } from "./agent/result";
+export {
+  endedRun,
+  type RunResult,
+  runResult,
+  type ThreadRef,
+} from "./agent/result";
 export {
   openStore,
   type Store,
@@ -37,6 +42,7 @@ export {
 export { turnEvents } from "./loop/turn";
 export { redactSecrets } from "./redact";
 export { knownEvents } from "./reduce";
+export { type RunEnd, runEnd } from "./reduce/run-end";
 export { err, ok, type Result } from "./result";
 export { collect, type Sandbox } from "./sandbox";
 export { dispatched, FenceRefused, within } from "./sandbox/remote";
@@ -56,6 +62,7 @@ export { StoreError } from "./store/driver";
 export { uuidv7 } from "./store/encode";
 export { sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";
+export { pendingWakes, wakeBranches } from "./store/wakes";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control } from "./thread/control";
 export { decide } from "./thread/decide";

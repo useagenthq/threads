@@ -2,9 +2,11 @@ import type { ParkAddress } from "@threads/core/host";
 import {
   type BranchId,
   type EventId,
+  endedRun,
   type JsonValue,
   type KnownEvent,
   type RunResult,
+  runEnd,
   runResult,
   type Thread,
   type ThreadId,
@@ -71,8 +73,10 @@ const decode = (text: string, accepted: Json | undefined): Json =>
   accepted ?? text;
 
 /**
- * The outcome of the run whose user_input is `runId`, once the log shows it ended: its turn
- * completed, or the branch is parked with no later input. Undefined while it is still going.
+ * The outcome of the run whose user_input is `runId`, once the log shows it ended
+ * (spec/schema/README.md, "Run completion"): after its last wake turn once every background
+ * child it spawned reported, at the first turn that ended otherwise, or parked. Undefined while
+ * it is still going.
  */
 export function outcomeFromLog(
   events: readonly KnownEvent[],
@@ -80,30 +84,27 @@ export function outcomeFromLog(
   parked: readonly ParkAddress[],
   thread: Thread,
 ): RunOutcome | undefined {
-  const start = events.findIndex((e) => e.event_id === runId);
-  if (start === -1) return undefined;
-  const rest = events.slice(start);
-  const done = rest.findIndex((e) => e.type === "turn_completed");
-  const ids = { thread_id: thread.id, branch_id: thread.branch };
-  if (done !== -1) {
-    const upto = events.slice(0, start + done + 1);
-    const handoff = upto.findLast((e) => e.type === "handoff");
-    const ended = upto.at(-1);
-    if (
-      ended?.type === "turn_completed" &&
-      ended.data.reason === "handoff" &&
-      handoff?.type === "handoff"
-    )
+  if (!events.some((e) => e.event_id === runId)) return undefined;
+  const run = runEnd(events, runId);
+  switch (run.status) {
+    case "running":
+      return undefined;
+    case "parked":
+      return toOutcome(
+        runResult({ kind: "parked" }, events, parked, thread, decode),
+      );
+    case "handed_off": {
+      const handoff = run.turn.findLast((e) => e.type === "handoff");
+      if (handoff?.type !== "handoff")
+        throw new Error("a handed-off turn records its handoff");
       return {
-        ...ids,
+        thread_id: thread.id,
+        branch_id: thread.branch,
         status: "handed_off",
         to_thread_id: handoff.data.to_thread_id,
       };
-    return toOutcome(runResult({ kind: "idle" }, upto, [], thread, decode));
+    }
+    default:
+      return toOutcome(endedRun(run, thread, decode));
   }
-  const later = rest.slice(1).some((e) => e.type === "user_input");
-  if (parked.length === 0 || later) return undefined;
-  return toOutcome(
-    runResult({ kind: "parked" }, events, parked, thread, decode),
-  );
 }

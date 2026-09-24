@@ -1,5 +1,6 @@
 import type { EventOf } from "../../fold/state";
 import { type Principal, ThreadId } from "../../log";
+import type { EventDraft } from "../../store";
 import { uuidv7 } from "../../store/encode";
 import { SpawnAgentInput } from "../../tools/agent-inputs";
 import { draft, TOOL } from "../drafts";
@@ -111,7 +112,9 @@ export function launch(s: Session, spawned: Spawned): void {
   const { call_id } = spawned.data;
   if (s.background.has(call_id)) return;
   const running = (async () => {
-    s.finished.set(call_id, await runChild(s, spawned));
+    const end = await runChild(s, spawned);
+    s.background.delete(call_id);
+    s.finished.set(call_id, end);
   })();
   s.background.set(call_id, running);
 }
@@ -187,6 +190,19 @@ export function finish(
   end: ChildDone,
   late: boolean,
 ): Halt | undefined {
+  return s.append(...endDrafts(s, spawned, end, late));
+}
+
+/**
+ * The child's agent_finished and the call's result. A late result brings its own event_id, so a
+ * woken in the same append can name it.
+ */
+export function endDrafts(
+  s: Session,
+  spawned: Spawned,
+  end: ChildDone,
+  late: boolean,
+): readonly [EventDraft, EventDraft] {
   const { call_id } = spawned.data;
   const text =
     end.status === "completed" ? end.output : `${end.status}: ${end.output}`;
@@ -197,12 +213,12 @@ export function finish(
     preview: shown.preview,
     ...(shown.ref === undefined ? {} : { ref: shown.ref }),
   };
-  return s.append(
+  return [
     draft.agentFinished(finished(s, spawned, end)),
     late
-      ? draft.toolResultLate(result)
+      ? { ...draft.toolResultLate(result), event_id: uuidv7(s.now()) }
       : draft.toolResult({ ...result, origin: "executed" }, TOOL),
-  );
+  ];
 }
 
 function closed(
