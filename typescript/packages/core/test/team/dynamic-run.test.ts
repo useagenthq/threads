@@ -214,7 +214,7 @@ describe("a dynamic member's limits", () => {
     const first = rows[0];
     if (first === undefined) throw new Error("no member log");
     const thread = unwrap(await openThread(store, first.thread_id));
-    const [pending] = await thread.pendingApprovals();
+    const [pending] = unwrap(await thread.pendingApprovals());
     expect(pending?.member).toEqual({
       name: "specialist-1",
       label: "invoice checker",
