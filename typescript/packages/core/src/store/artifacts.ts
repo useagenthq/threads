@@ -5,14 +5,21 @@ import {
   linkSync,
   mkdirSync,
   openSync,
-  readFileSync,
   unlinkSync,
+  utimesSync,
   writeSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { sha256Hex } from "../hash";
 import { err, ok, type Result } from "../result";
 import { type LogError, logError } from "../verify/error";
+import {
+  artifactSeams,
+  codeOf,
+  readIfPresent,
+  restoreFromTrash,
+  seam,
+} from "./artifact-trash";
 import { StoreError } from "./driver";
 
 /**
@@ -151,10 +158,7 @@ function fileSink(
       const dir = join(root, "sha256", sha256.slice(0, 2));
       mkdirSync(dir, { recursive: true, mode: 0o700 });
       try {
-        linkSync(temp, path(sha256));
-      } catch (error) {
-        if (!isExists(error)) throw error;
-        if (!verified(sha256, readArtifact(path(sha256))).ok) throw error;
+        place(temp, path(sha256), sha256);
       } finally {
         unlinkSync(temp);
       }
@@ -177,16 +181,52 @@ function fsyncDir(dir: string): void {
   }
 }
 
-function readArtifact(path: string): Uint8Array | undefined {
+const ROUNDS = 3;
+
+/**
+ * Links the temp file to its content address. An existing copy is refreshed (mtime now, so a
+ * gc grace counts from this put) and then verified. If a concurrent gc moved it to trash
+ * meanwhile (ENOENT), the temp file, still ours, is linked again; the new link is a name gc
+ * never deletes (spec/schema/README.md, "Artifacts", rule 1).
+ */
+function place(temp: string, path: string, sha256: string): void {
+  for (let round = 0; round < ROUNDS; round++) {
+    try {
+      linkSync(temp, path);
+      return;
+    } catch (error) {
+      if (codeOf(error) !== "EEXIST") throw error;
+    }
+    seam("put:exists");
+    if (artifactSeams.rules && !refreshed(path)) continue;
+    seam("put:verify");
+    const bytes = readIfPresent(path);
+    if (bytes === undefined && artifactSeams.rules) continue;
+    if (!verified(sha256, bytes).ok)
+      throw new StoreError(
+        `artifact ${sha256}: the existing copy fails its hash`,
+      );
+    return;
+  }
+  throw new StoreError(`artifact ${sha256} kept vanishing while it was stored`);
+}
+
+/** Sets the existing copy's mtime to now; false when it vanished. */
+function refreshed(path: string): boolean {
+  const now = new Date();
   try {
-    return new Uint8Array(readFileSync(path));
+    utimesSync(path, now, now);
+    return true;
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT")
-      return undefined;
+    if (codeOf(error) === "ENOENT") return false;
     throw error;
   }
 }
 
-function isExists(error: unknown): boolean {
-  return error instanceof Error && "code" in error && error.code === "EEXIST";
+/** The artifact's bytes, restored from a gc's trash name when its content path is gone. */
+function readArtifact(path: string): Uint8Array | undefined {
+  return (
+    readIfPresent(path) ??
+    restoreFromTrash(dirname(path), path.slice(-64), path)
+  );
 }

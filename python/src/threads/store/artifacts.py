@@ -19,7 +19,10 @@ from typing import Protocol
 from threads.log import ParseError
 from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
+from threads.store.trash import SEAMS, read_if_present, restore_from_trash, seam
 from threads.store.worker import StoreError
+
+_ROUNDS = 3
 
 
 class ArtifactSink(Protocol):
@@ -78,12 +81,14 @@ class FileArtifacts:
         return sink.commit()
 
     def get(self, sha256: str) -> Ok[bytes] | Err[ParseError]:
-        try:
-            data = self.path(sha256).read_bytes()
-        except FileNotFoundError:
+        path = self.path(sha256)
+        with _disk():
+            # A gc may have moved it to a trash name meanwhile: restore it from there.
+            data = read_if_present(path)
+            if data is None:
+                data = restore_from_trash(path)
+        if data is None:
             return _missing(sha256)
-        except OSError as error:
-            raise StoreError(str(error)) from error
         if sha256_hex(data) != sha256:
             return Err(ParseError("artifact_corrupt", f"artifact {sha256} fails its hash"))
         return Ok(data)
@@ -127,11 +132,7 @@ class _FileSink:
             self._file.close()
             for directory in (path.parents[1], path.parent):
                 directory.mkdir(mode=0o700, exist_ok=True)
-            try:
-                os.link(self._temp, path)
-            except FileExistsError:
-                if isinstance(self._store.get(sha), Err):
-                    raise
+            _place(self._temp, path, sha)
         finally:
             self.discard()
         _fsync_dir(path.parent)
@@ -140,6 +141,40 @@ class _FileSink:
     def discard(self) -> None:
         self._file.close()
         self._temp.unlink(missing_ok=True)
+
+
+def _place(temp: Path, path: Path, sha: str) -> None:
+    """Links the temp file to its content address. An existing copy is refreshed (mtime now, so
+    a gc grace counts from this put) and then verified. If a concurrent gc moved it to trash
+    meanwhile, the temp file, still ours, is linked again; the new link is a name gc never
+    deletes (spec/schema/README.md, "Artifacts", rule 1)."""
+    for _ in range(_ROUNDS):
+        try:
+            os.link(temp, path)
+        except FileExistsError:
+            pass
+        else:
+            return
+        seam("put:exists")
+        if SEAMS.rules and not _refreshed(path):
+            continue
+        seam("put:verify")
+        data = read_if_present(path)
+        if data is None and SEAMS.rules:
+            continue
+        if data is None or sha256_hex(data) != sha:
+            raise StoreError(f"artifact {sha}: the existing copy fails its hash")
+        return
+    raise StoreError(f"artifact {sha} kept vanishing while it was stored")
+
+
+def _refreshed(path: Path) -> bool:
+    """Sets the existing copy's mtime to now; False when it vanished."""
+    try:
+        os.utime(path)
+    except FileNotFoundError:
+        return False
+    return True
 
 
 type ArtifactStore = MemoryArtifacts | FileArtifacts
