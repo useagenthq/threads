@@ -41,7 +41,7 @@ def test_a_fresh_store_has_exactly_the_spec_tables(tmp_path: Path) -> None:
     with closing(sqlite3.connect(":memory:")) as spec, closing(sqlite3.connect(path)) as conn:
         spec.executescript(STORE_SQL.read_text(encoding="utf-8"))
         assert schema(conn) == schema(spec)
-        assert conn.execute("PRAGMA user_version").fetchone() == (1,)
+        assert conn.execute("PRAGMA user_version").fetchone() == (4,)
         assert conn.execute("SELECT * FROM threads").fetchall() == [(THREAD, LOCAL_TENANT)]
         assert conn.execute("SELECT tenant_id FROM branches").fetchall() == [(LOCAL_TENANT,)]
 
@@ -49,7 +49,7 @@ def test_a_fresh_store_has_exactly_the_spec_tables(tmp_path: Path) -> None:
 def test_a_newer_schema_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "threads.db"
     with closing(sqlite3.connect(path)) as conn:
-        conn.execute("PRAGMA user_version = 2")
+        conn.execute("PRAGMA user_version = 5")
     assert open_store(path) == Err("unsupported_format")
 
 

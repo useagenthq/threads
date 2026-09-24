@@ -1,0 +1,9 @@
+{
+  "name": "run-member-parks-then-final-answer",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "The parked member settles: its notification is control mail that clears the lead's last park (message_received, then resumed) and opens the wake turn, whose answer is the run's output.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

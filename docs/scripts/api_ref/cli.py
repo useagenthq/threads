@@ -11,7 +11,7 @@ from .members import Explain
 from .openapi import bundle_openapi
 from .overview import overview_page, sidebar_meta, type_groups
 from .pages import function_page, type_page
-from .tables import OPENAPI, REF, ROOT, SPEC
+from .tables import NOT_BUILT, OPENAPI, REF, ROOT, SPEC
 
 
 def schemas() -> dict[str, Json]:
@@ -19,6 +19,15 @@ def schemas() -> dict[str, Json]:
     paths = [*(SPEC / "schema").rglob("*.json"), SPEC / "conformance" / "case.schema.json"]
     docs = [load(p) for p in paths]
     return {text(d["$id"]): d for d in docs if isinstance(d, dict) and "$id" in d}
+
+
+def built(api: Obj) -> Obj:
+    """api.json without the functions and types missing in both languages (a whole-member gap)."""
+
+    def keep(section: str) -> Obj:
+        return {k: v for k, v in obj(api[section]).items() if ("", k) not in NOT_BUILT}
+
+    return {**api, "functions": keep("functions"), "types": keep("types")}
 
 
 def outputs(api: Obj, explain: Explain) -> dict[Path, str]:
@@ -55,7 +64,7 @@ def main() -> int:
         # The same rule as check_api.py: every row the pages print needs an explanation.
         print("\n".join(unexplained), file=sys.stderr)
         return 1
-    files = outputs(api, Explain(obj(api["types"]), wire))
+    files = outputs(built(api), Explain(obj(api["types"]), wire))
     stale = stale_pages(files)
     changed = [p for p, content in files.items() if not p.exists() or p.read_text() != content]
     if check:

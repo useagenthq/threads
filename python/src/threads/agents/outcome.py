@@ -59,7 +59,13 @@ def ended(events: Sequence[Event], reason: str, thread: Thread) -> RunResult[str
 def _turn_code(events: Sequence[Event]) -> RunErrorCode | None:
     """The typed code an error turn ended with (turn_completed.code), when it has one."""
     ended = next((e for e in reversed(events) if isinstance(e, TurnCompletedEvent)), None)
-    return None if ended is None or ended.data.code is MISSING else ended.data.code
+    if ended is None or ended.data.code is MISSING:
+        return None
+    code = ended.data.code
+    # Only a team member's rebind ends a turn this way, and a member's result is a MemberResult.
+    if code in ("pin_unavailable", "pin_mismatch"):
+        raise AssertionError(f"a run's turn can't end {code}: only a member rebinds")
+    return code
 
 
 def output_text(events: Sequence[Event]) -> str:

@@ -30,6 +30,7 @@ import {
   LspInput,
   NotebookEditInput,
 } from "./sandbox-inputs";
+import { TEAM_ENTRIES } from "./team-inputs";
 
 // The built-in tool catalog: each tool's name, description and input schema,
 // authored once here. `bun run schema:export` writes spec/schema/tools.v1.schema.json and the
@@ -142,10 +143,9 @@ export type CatalogEntry = {
   readonly input: z.ZodType;
 };
 
-/** Sorted by name: the sandbox tools (shell, files, computer, lsp,
- * notebooks), the host gateway tools (web, git), read_tool_result, the memory and
- * knowledge tools and the tools. */
-export const CATALOG: readonly CatalogEntry[] = [
+/** The sandbox tools (shell, files, computer, lsp, notebooks), the host gateway tools (web,
+ * git), read_tool_result, the memory and knowledge tools and the agent tools. */
+const ENTRIES: readonly CatalogEntry[] = [
   {
     name: "bash",
     description:
@@ -323,6 +323,12 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
 ];
 
+/** Every built-in, sorted by name. */
+export const CATALOG: readonly CatalogEntry[] = [
+  ...ENTRIES,
+  ...TEAM_ENTRIES,
+].toSorted((a, b) => (a.name < b.name ? -1 : 1));
+
 /** A catalog entry by name; the catalog is the only source of built-in schemas. */
 export function entry(name: string): CatalogEntry {
   const found = CATALOG.find((e) => e.name === name);
@@ -340,6 +346,14 @@ export const AGENT_TOOLS: ReadonlySet<string> = new Set([
   "team_task_update",
   "todo_write",
 ]);
+
+/**
+ * A team's model tools (spec/schema/README.md, Teams): catalog entries, neither pinned nor run
+ * until the Teams build, so a user tool may still take one of these names.
+ */
+export const MEMBER_TOOLS: ReadonlySet<string> = new Set(
+  TEAM_ENTRIES.map((e) => e.name),
+);
 
 /**
  * Pinned only when their host source is configured: a memory or knowledge provider,

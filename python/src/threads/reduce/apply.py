@@ -3,7 +3,14 @@
 from collections.abc import Mapping
 
 from threads.log import Event, Header, ParseError, UnknownEvent
-from threads.reduce import rules_misc, rules_requested, rules_tools, rules_turns
+from threads.reduce import (
+    rules_misc,
+    rules_requested,
+    rules_team,
+    rules_tools,
+    rules_turns,
+    rules_wake,
+)
 from threads.reduce.fold import Fold, reject
 from threads.reduce.handlers import Handler
 
@@ -12,6 +19,7 @@ _HANDLERS: Mapping[type, Handler] = {
     **rules_tools.HANDLERS,
     **rules_misc.HANDLERS,
     **rules_requested.HANDLERS,
+    **rules_wake.HANDLERS,
 }
 
 
@@ -29,7 +37,7 @@ def apply(fold: Fold, event: Event | UnknownEvent) -> ParseError | None:
     error = _envelope_error(fold, event)
     if error is None and not isinstance(event, UnknownEvent):
         handler = _HANDLERS.get(type(event))
-        error = None if handler is None else handler(fold, event)
+        error = rules_team.not_yet(event) or (None if handler is None else handler(fold, event))
     if error is not None:
         return error
     fold.seq = event.seq
@@ -37,6 +45,7 @@ def apply(fold: Fold, event: Event | UnknownEvent) -> ParseError | None:
     fold.event_ids.add(event.event_id)
     if not isinstance(event, UnknownEvent):
         fold.events.append(event)
+        rules_wake.advance(fold, event)
     if not fold.pending and not fold.open_requests:
         fold.boundaries.add(event.seq)
     return None

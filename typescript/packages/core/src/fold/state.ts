@@ -6,6 +6,7 @@ import type {
   Policy,
   ToolSpec,
 } from "../log";
+import { emptyWake, type WakeFold } from "./wake";
 
 /** The known event with tag `T`. */
 export type EventOf<T extends KnownEvent["type"]> = Extract<
@@ -124,6 +125,7 @@ export type Fold = {
   readonly messageIds: Set<string>;
   readonly itemKeys: Set<string>;
   readonly occurrenceIds: Set<string>;
+  readonly wake: WakeFold;
 };
 
 export function emptyFold(): Fold {
@@ -166,6 +168,7 @@ export function emptyFold(): Fold {
     messageIds: new Set(),
     itemKeys: new Set(),
     occurrenceIds: new Set(),
+    wake: emptyWake(),
   };
 }
 

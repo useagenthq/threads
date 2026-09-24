@@ -15,6 +15,7 @@ import {
   EventId,
   SandboxId,
   SnapshotId,
+  TeamId,
   ThreadId,
 } from "../ids";
 import { Policy } from "../policy";
@@ -32,7 +33,7 @@ import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
 
 // Thread lifecycle, settings epochs, tool sets, snapshots and branches.
 
-const RELATIONS = ["subagent", "handoff"] as const;
+const RELATIONS = ["subagent", "handoff", "team_member"] as const;
 const TOOLS_CAUSES = ["tool_search", "mcp_list_changed", "host"] as const;
 const SETTINGS_REASONS = ["user", "fallback", "escalation", "revert"] as const;
 const CAPTURE_CLASSES = [
@@ -42,6 +43,38 @@ const CAPTURE_CLASSES = [
 ] as const;
 const FORK_REASONS = ["snapshot", "repair"] as const;
 const KNOWLEDGE_POLICIES = ["pinned", "current"] as const;
+
+/** A child thread's structural parent: the event that created it. */
+export const ThreadParent: Strict<{
+  thread_id: typeof ThreadId;
+  branch_id: typeof BranchId;
+  event_id: typeof EventId;
+  relation: EnumOf<typeof RELATIONS>;
+}> = z
+  .strictObject({
+    thread_id: ThreadId,
+    branch_id: BranchId,
+    event_id: EventId,
+    relation: z.enum(RELATIONS),
+  })
+  .describe(
+    "Set on a child thread: the parent event that created it (agent_spawned, handoff, or for a team member the lead's member_started, or the lead's thread_started for an operator-started member).",
+  );
+
+/** The team a lead's thread opens, created in the lead's first append with the team log. */
+export const TeamSettings: Strict<{
+  id: typeof TeamId;
+  log_branch_id: typeof BranchId;
+}> = z
+  .strictObject({
+    id: TeamId,
+    log_branch_id: BranchId.describe(
+      "The team log's branch, opened in this append's transaction with its team_opened.",
+    ),
+  })
+  .describe(
+    "Set on the thread of an agent defined with team (a lead). Its first append also opens the team log and inserts the teams row and the lead's team_members row (role lead, generation 1).",
+  );
 
 export const ThreadStartedData: Strict<{
   agent_name: typeof NonEmpty;
@@ -53,14 +86,8 @@ export const ThreadStartedData: Strict<{
   tools: Arr<typeof ToolSpec>;
   sandbox_provider: Opt<typeof Name>;
   policy: Opt<typeof Policy>;
-  parent: Opt<
-    Strict<{
-      thread_id: typeof ThreadId;
-      branch_id: typeof BranchId;
-      event_id: typeof EventId;
-      relation: EnumOf<typeof RELATIONS>;
-    }>
-  >;
+  parent: Opt<typeof ThreadParent>;
+  team: Opt<typeof TeamSettings>;
 }> = z.strictObject({
   agent_name: NonEmpty,
   config_hash: Sha256.describe(
@@ -79,17 +106,8 @@ export const ThreadStartedData: Strict<{
   tools: z.array(ToolSpec),
   sandbox_provider: Name.optional(),
   policy: Policy.optional(),
-  parent: z
-    .strictObject({
-      thread_id: ThreadId,
-      branch_id: BranchId,
-      event_id: EventId,
-      relation: z.enum(RELATIONS),
-    })
-    .describe(
-      "Set on a child thread: the parent event that created it (agent_spawned or handoff).",
-    )
-    .optional(),
+  parent: ThreadParent.optional(),
+  team: TeamSettings.optional(),
 });
 export const ThreadStarted: EventDef<
   "thread_started",

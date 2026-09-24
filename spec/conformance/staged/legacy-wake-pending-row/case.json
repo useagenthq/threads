@@ -1,0 +1,9 @@
+{
+  "name": "legacy-wake-pending-row",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "legacy-wake-in-the-late-result-append's log: the child that finished leaves no pending_wakes row, and the one still running keeps its row.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

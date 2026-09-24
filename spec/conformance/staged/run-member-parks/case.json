@@ -1,0 +1,9 @@
+{
+  "name": "run-member-parks",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "researcher-1, which this run started, parks on an approval: its one member_parked notice parks the idle lead on it, and the run returns parked.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

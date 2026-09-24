@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from surface_contract import Gap, Member, needs_coverage, obj
+from surface_contract import LANGS, Gap, Member, needs_coverage, obj
 
 if TYPE_CHECKING:
     import pathlib
@@ -72,8 +72,11 @@ def normalize(test_id: str, lang: str) -> str:
 
 def _expected(contract: dict[str, Member], gaps: list[Gap], lang: str) -> set[str]:
     """Names that need a test in this language: not missing themselves, and for an option, its
-    function or method isn't missing. A member of a type missing from its entry still exists."""
+    function or method isn't missing. A member of a type missing from its entry still exists,
+    unless the type is missing in both languages: a type built nowhere yet has nothing to test."""
     missing = {g.name for g in gaps if g.lang == lang and g.kind == "missing"}
+    keys = {(g.name, g.lang) for g in gaps if g.kind == "missing"}
+    nowhere = {name for name, _ in keys if all((name, lg) in keys for lg in LANGS)}
     return {
         m.name
         for m in contract.values()
@@ -81,6 +84,7 @@ def _expected(contract: dict[str, Member], gaps: list[Gap], lang: str) -> set[st
         and lang in m.langs
         and m.name not in missing
         and not (m.role == "option" and m.parent in missing)
+        and m.parent not in nowhere
     }
 
 

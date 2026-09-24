@@ -10,6 +10,7 @@ import {
   responseText,
   sameAddress,
 } from "./state";
+import { applyWake } from "./wake";
 
 /** Advances the fold past one event that already passed validate_next. */
 export function apply(fold: Fold, line: EventLine): void {
@@ -20,6 +21,7 @@ export function apply(fold: Fold, line: EventLine): void {
   // The restore slot is open for one event only.
   fold.restoreStyle = undefined;
   if (line.kind === "event") applyKnown(fold, line.event);
+  if (line.kind === "event") applyWake(fold, line.event);
   fold.boundaries[event.seq] =
     fold.pending.size === 0 && fold.awaiting.size === 0;
 }
@@ -100,6 +102,22 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "context_edited":
     case "permission_rule_added":
     case "context_preflight_blocked":
+    case "team_opened":
+    case "member_started":
+    case "member_idle":
+    case "member_ended":
+    case "member_observed":
+    case "monitor_set":
+    case "wait_started":
+    case "wait_finished":
+    case "woken":
+    case "message_sent":
+    case "message_received":
+    case "mail_refused":
+    case "ask_closed":
+    case "operator_request":
+    case "operator_refused":
+    case "message_policy_decided":
       return;
     default:
       assertNever(e);

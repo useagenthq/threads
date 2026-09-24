@@ -1,0 +1,15 @@
+{
+  "name": "team-tree-missing-branch-after-notice-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "The lead received researcher-1's task notification, so its branch must exist, but no log has it: the tree walk is log_corrupt.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "team"
+    ]
+  }
+}

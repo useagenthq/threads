@@ -17,6 +17,7 @@ from threads.log import (
     Event,
     ModelRef,
     ParkAddress,
+    ParkReason,
     ParseError,
     ToolCallData,
     ToolSpec,
@@ -128,7 +129,7 @@ class Idle:
 
 @dataclass(frozen=True, slots=True)
 class Parked:
-    reason: Literal["awaiting_approval", "effect_unknown", "awaiting_input", "awaiting_resource"]
+    reason: ParkReason
     pending: tuple[ParkAddress, ...]
 
 

@@ -47,12 +47,32 @@ import {
   UserInput,
 } from "./input";
 import {
+  AskClosed,
+  MailRefused,
+  MessagePolicyDecided,
+  MessageReceived,
+  MessageSent,
+  OperatorRefused,
+  OperatorRequest,
+} from "./mail";
+import {
   ModelAttemptAbandoned,
   ModelRequest,
   ModelResponse,
   ModelResponseRecovered,
   RetryScheduled,
 } from "./model";
+import {
+  MemberEnded,
+  MemberIdle,
+  MemberObserved,
+  MemberStarted,
+  MonitorSet,
+  TeamOpened,
+  WaitFinished,
+  WaitStarted,
+  Woken,
+} from "./team";
 import {
   Fork,
   LogRepaired,
@@ -69,65 +89,6 @@ import {
   PermissionDecision,
   ToolCall,
 } from "./tools";
-
-/** Every known event `type` at `type_version` 1. Pinned: add only, never rename. */
-export const EVENT_TYPES = [
-  "thread_started",
-  "tools_changed",
-  "user_input",
-  "steer",
-  "injected",
-  "heartbeat",
-  "model_request",
-  "model_response",
-  "model_response_recovered",
-  "model_attempt_abandoned",
-  "tool_call",
-  "permission_decision",
-  "hook_decision",
-  "approval_requested",
-  "approval_granted",
-  "approval_denied",
-  "effect_begin",
-  "effect_commit",
-  "effect_unknown",
-  "effect_resolved",
-  "tool_result",
-  "tool_result_late",
-  "snapshot",
-  "fork",
-  "parked",
-  "park_escalated",
-  "resumed",
-  "compacted",
-  "cancel_requested",
-  "cancelled",
-  "stop_when_idle",
-  "turn_completed",
-  "schedule_fired",
-  "schedule_skipped",
-  "channel_delivery",
-  "log_repaired",
-  "settings_changed",
-  "retry_scheduled",
-  "budget_exceeded",
-  "output_validated",
-  "context_edited",
-  "compaction_failed",
-  "mode_changed",
-  "permission_rule_added",
-  "agent_spawned",
-  "agent_finished",
-  "handoff",
-  "todos_updated",
-  "team_task_created",
-  "team_task_claimed",
-  "team_task_updated",
-  "team_message",
-  "context_preflight_blocked",
-  "compaction_requested",
-] as const;
-export type EventType = (typeof EVENT_TYPES)[number];
 
 /** The parser for every known event, keyed on `type`. */
 export const KnownEvent: z.ZodDiscriminatedUnion<
@@ -186,6 +147,22 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
     typeof TeamMessage.schema,
     typeof ContextPreflightBlocked.schema,
     typeof CompactionRequested.schema,
+    typeof TeamOpened.schema,
+    typeof MemberStarted.schema,
+    typeof MemberIdle.schema,
+    typeof MemberEnded.schema,
+    typeof MemberObserved.schema,
+    typeof MonitorSet.schema,
+    typeof WaitStarted.schema,
+    typeof WaitFinished.schema,
+    typeof Woken.schema,
+    typeof MessageSent.schema,
+    typeof MessageReceived.schema,
+    typeof MailRefused.schema,
+    typeof AskClosed.schema,
+    typeof OperatorRequest.schema,
+    typeof OperatorRefused.schema,
+    typeof MessagePolicyDecided.schema,
   ],
   "type"
 > = z.discriminatedUnion("type", [
@@ -243,6 +220,22 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
   TeamMessage.schema,
   ContextPreflightBlocked.schema,
   CompactionRequested.schema,
+  TeamOpened.schema,
+  MemberStarted.schema,
+  MemberIdle.schema,
+  MemberEnded.schema,
+  MemberObserved.schema,
+  MonitorSet.schema,
+  WaitStarted.schema,
+  WaitFinished.schema,
+  Woken.schema,
+  MessageSent.schema,
+  MessageReceived.schema,
+  MailRefused.schema,
+  AskClosed.schema,
+  OperatorRequest.schema,
+  OperatorRefused.schema,
+  MessagePolicyDecided.schema,
 ]);
 export type KnownEvent = z.infer<typeof KnownEvent>;
 
@@ -302,6 +295,22 @@ export const EVENT_FRAGMENTS: readonly z.ZodType[] = [
   TeamMessage.fragment,
   ContextPreflightBlocked.fragment,
   CompactionRequested.fragment,
+  TeamOpened.fragment,
+  MemberStarted.fragment,
+  MemberIdle.fragment,
+  MemberEnded.fragment,
+  MemberObserved.fragment,
+  MonitorSet.fragment,
+  WaitStarted.fragment,
+  WaitFinished.fragment,
+  Woken.fragment,
+  MessageSent.fragment,
+  MessageReceived.fragment,
+  MailRefused.fragment,
+  AskClosed.fragment,
+  OperatorRequest.fragment,
+  OperatorRefused.fragment,
+  MessagePolicyDecided.fragment,
 ];
 
 export * from "./agents";
@@ -309,7 +318,10 @@ export * from "./context";
 export * from "./control";
 export * from "./effects";
 export * from "./input";
+export * from "./mail";
 export * from "./model";
 export * from "./one-of";
+export * from "./team";
 export * from "./thread";
 export * from "./tools";
+export * from "./types";

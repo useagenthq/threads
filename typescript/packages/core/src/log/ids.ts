@@ -46,3 +46,79 @@ export type SnapshotId = z.infer<typeof SnapshotId>;
 export const OccurrenceId: Brand<z.ZodString, "OccurrenceId"> =
   NonEmpty.brand<"OccurrenceId">();
 export type OccurrenceId = z.infer<typeof OccurrenceId>;
+
+// Teams (spec/schema/README.md, "Teams"). Mail, ask, wait and monitor ids are derived from
+// logged bytes, so a re-dispatched call names the same row and a fold rebuilds the same ids.
+
+export const TeamId: Brand<z.ZodString, "TeamId"> = Uuid.meta({
+  id: "TeamId",
+}).brand<"TeamId">();
+export type TeamId = z.infer<typeof TeamId>;
+
+export const RequestId: Brand<z.ZodString, "RequestId"> = Uuid.meta({
+  id: "RequestId",
+  description:
+    "One operator request: a team.start, send, ask, wait or cancel call.",
+}).brand<"RequestId">();
+export type RequestId = z.infer<typeof RequestId>;
+
+export const MemberName: Brand<z.ZodString, "MemberName"> = z
+  .string()
+  .regex(/^[a-z][a-z0-9_]{0,63}(-[1-9][0-9]*)?$/)
+  .meta({
+    id: "MemberName",
+    description:
+      "<agent>-<k>, k counting that agent's members in the team from 1. The lead's name is its agent name.",
+  })
+  .brand<"MemberName">();
+export type MemberName = z.infer<typeof MemberName>;
+
+export const MailId: Brand<z.ZodString, "MailId"> = z
+  .string()
+  .regex(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[A-Za-z0-9_.-]{1,128}$/,
+  )
+  .meta({
+    id: "MailId",
+    description:
+      "<sender branch_id>:<call_id or request_id> for mail a call sends; <sender branch_id>:<event_id of the message_sent> for mail the runtime sends (notifications, bounces, lead-close cancels).",
+  })
+  .brand<"MailId">();
+export type MailId = z.infer<typeof MailId>;
+
+export const AskId: Brand<z.ZodString, "AskId"> = z
+  .string()
+  .regex(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[A-Za-z0-9_.-]{1,128}$/,
+  )
+  .meta({
+    id: "AskId",
+    description: "The MailId of the ask.",
+  })
+  .brand<"AskId">();
+export type AskId = z.infer<typeof AskId>;
+
+export const MonitorId: Brand<z.ZodString, "MonitorId"> = z
+  .string()
+  .regex(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[a-z][a-z0-9_]{0,63}(-[1-9][0-9]*)?$/,
+  )
+  .meta({
+    id: "MonitorId",
+    description:
+      "<watcher branch_id>:<event_id of the registering event>:<target name>; the target name is task for a start's task monitor. Derived, never generated.",
+  })
+  .brand<"MonitorId">();
+export type MonitorId = z.infer<typeof MonitorId>;
+
+export const WaitId: Brand<z.ZodString, "WaitId"> = z
+  .string()
+  .regex(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[A-Za-z0-9_.-]{1,128}$/,
+  )
+  .meta({
+    id: "WaitId",
+    description: "<waiter branch_id>:<call_id or request_id>.",
+  })
+  .brand<"WaitId">();
+export type WaitId = z.infer<typeof WaitId>;

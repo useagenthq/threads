@@ -1,0 +1,9 @@
+{
+  "name": "park-unknown-ask-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 40: a park on an ask this log never sent.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

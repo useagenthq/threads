@@ -85,7 +85,10 @@
         "sandbox_required",
         "cleanup_claim_lost",
         "transport_fence_unsupported",
-        "cost_overflow"
+        "cost_overflow",
+        "handoff_in_team",
+        "busy",
+        "thread_in_team"
       ]
     },
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
@@ -121,7 +124,8 @@
         "permission_rule_invalid",
         "hosted_tool_unsupported",
         "egress_policy_unsupported",
-        "transport_fence_unsupported"
+        "transport_fence_unsupported",
+        "handoff_in_team"
       ]
     },
     "ConfigErrorEntry": {
@@ -177,11 +181,27 @@
         "generics": { "type": "array", "items": { "$ref": "#/$defs/Generic" } },
         "params": { "type": "array", "items": { "$ref": "#/$defs/Param" } },
         "returns": { "$ref": "#/$defs/TypeExpr" },
-        "throws": {
-          "description": "Exceptions that are part of the contract. Only ConfigError at setup; everything else expected is a value.",
+        "overloads": {
+          "description": "Narrower return types a call gets when it passes an option: TS overloads selected by that option, Python the class the factory returns for it. returns stays the type without it.",
           "type": "array",
-          "items": { "const": "ConfigError" }
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Overload" }
+        },
+        "throws": {
+          "description": "Exceptions that are part of the contract: ConfigError at setup, and StoreCorruptError when a result the verified log names is missing or corrupt (a broken store invariant). Everything else expected is a value.",
+          "type": "array",
+          "items": { "enum": ["ConfigError", "StoreCorruptError"] }
         }
+      }
+    },
+    "Overload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["when", "returns", "doc"],
+      "properties": {
+        "when": { "description": "The option (a param name) whose presence selects this return type.", "$ref": "#/$defs/FieldName" },
+        "returns": { "$ref": "#/$defs/TypeExpr" },
+        "doc": { "$ref": "#/$defs/Doc" }
       }
     },
     "Generic": {

@@ -1,0 +1,9 @@
+{
+  "name": "woken-cause-repeated-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 32: woken names one cause twice.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

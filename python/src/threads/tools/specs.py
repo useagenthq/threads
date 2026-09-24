@@ -77,6 +77,9 @@ SKILL: Final = "load_skill"
 """Host-side over the pinned skills; pinned only when the agent has skills."""
 TEAM: Final = frozenset({"send_message", "team_task_claim", "team_task_create", "team_task_update"})
 """Offered to a team: an agent with subagents, and every child it spawns."""
+MEMBERS: Final = frozenset({"ask", "cancel", "monitor", "reply", "send", "start", "wait"})
+"""A team's model tools (spec/schema/README.md, Teams): catalog entries, neither pinned nor run
+until the Teams build, so a user tool may still take one of these names."""
 FRAMEWORK: Final = TEAM | {"todo_write", "handoff", "spawn_agent"}
 """Log-only tools: `read_only` is exact, since only log state changes."""
 WEB: Final = frozenset({"web_fetch", "web_search"})

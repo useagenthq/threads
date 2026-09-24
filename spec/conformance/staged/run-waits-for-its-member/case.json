@@ -1,0 +1,9 @@
+{
+  "name": "run-waits-for-its-member",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "The lead answered, but researcher-1, which this run started, has not reported: the run is still running (run() has not returned).",
+  "clock": {
+    "now": 1790000060000
+  }
+}

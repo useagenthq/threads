@@ -1,0 +1,9 @@
+{
+  "name": "legacy-wake-after-pre-woken-late-result",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "The upgrade: a writer from before woken recorded the first child's late result with no wake; the upgraded writer then records the second child's end and a woken naming only it. The causes are the tail of the late-result block, so the earlier result is never woken retroactively and the new wake is accepted.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -11,6 +11,7 @@ from threads.log import (
     BudgetExceededData,
     EventId,
     ParkAddress,
+    ParkReason,
 )
 from threads.loop.runtime import RunErrorCode
 from threads.store import StoredEvent
@@ -26,7 +27,7 @@ class Completed[O]:
 
 @dataclass(frozen=True, slots=True)
 class Parked:
-    reason: Literal["awaiting_approval", "effect_unknown", "awaiting_input", "awaiting_resource"]
+    reason: ParkReason
     pending: tuple[ParkAddress, ...]
     thread: Thread
     status: Literal["parked"] = "parked"

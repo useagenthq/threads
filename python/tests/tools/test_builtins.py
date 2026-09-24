@@ -18,7 +18,7 @@ from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertai
 from threads.result import Ok
 from threads.store import SqliteStore
 from threads.tools import SandboxTools, specs
-from threads.tools.specs import GATED, Writes, agent_tools
+from threads.tools.specs import GATED, MEMBERS, Writes, agent_tools
 
 LIMITS = Spill(threshold_bytes=64, head_bytes=16, tail_bytes=8, request_budget_bytes=4096)
 DAY_MS = 86_400_000
@@ -86,7 +86,9 @@ def test_specs_are_the_shared_catalog_and_read_tool_result_is_always_there() -> 
         {"name": s.name, "description": s.description, "input_schema": s.input_schema}
         for s in SPECS.values()
     ]
-    assert json.loads(json.dumps(pinned)) == catalog
+    assert isinstance(catalog, list)
+    built = [e for e in catalog if isinstance(e, dict) and e["name"] not in MEMBERS]
+    assert json.loads(json.dumps(pinned)) == built
     bare = specs(sandbox=False, egress_denied=True)
     assert [s.name for s in bare] == ["read_tool_result", "todo_write"]
 

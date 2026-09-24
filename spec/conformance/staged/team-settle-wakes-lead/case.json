@@ -1,0 +1,16 @@
+{
+  "name": "team-settle-wakes-lead",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "The lead starts researcher-1 and goes idle. The member's task is its user_input; it answers, goes idle and fires the lead's task monitor with member_settled. That notification alone opens the idle lead's next turn, of the same request. The receipt copies the sender's envelope byte for byte, and the logs rebuild every index row: the task and the notification consumed, the task monitor gone, both members idle.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "researcher",
+      "team"
+    ]
+  }
+}

@@ -15,6 +15,7 @@ type ConfigErrorCode = Literal[
     "hosted_tool_unsupported",
     "egress_policy_unsupported",
     "transport_fence_unsupported",
+    "handoff_in_team",
 ]
 
 

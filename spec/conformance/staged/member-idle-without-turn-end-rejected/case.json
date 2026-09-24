@@ -1,0 +1,9 @@
+{
+  "name": "member-idle-without-turn-end-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 38: member_idle with the task's turn still open.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

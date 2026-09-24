@@ -1,0 +1,9 @@
+{
+  "name": "wait-members-repeat-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 39: a wait lists researcher-1 twice.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

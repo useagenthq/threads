@@ -26,7 +26,7 @@ describe("store schema", () => {
     expect(
       f.db.all("SELECT type, name, sql FROM sqlite_master ORDER BY name", []),
     ).toEqual(schema(spec));
-    expect(f.db.all("PRAGMA user_version", [])).toEqual([{ user_version: 1 }]);
+    expect(f.db.all("PRAGMA user_version", [])).toEqual([{ user_version: 4 }]);
     expect(f.db.all("SELECT thread_id, tenant_id FROM threads", [])).toEqual([
       { thread_id: THREAD, tenant_id: LOCAL_TENANT },
     ]);
@@ -37,7 +37,7 @@ describe("store schema", () => {
 
   test("a database with a newer schema is unsupported_format", () => {
     const db = openBunSqlite(":memory:");
-    db.exec("PRAGMA user_version = 2");
+    db.exec("PRAGMA user_version = 5");
     const opened = LogStore.open(db, () => 0, memoryArtifacts());
     expect(opened.ok ? "ok" : opened.error.code).toBe("unsupported_format");
   });

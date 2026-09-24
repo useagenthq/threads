@@ -1,0 +1,9 @@
+{
+  "name": "legacy-run-waits-for-its-children",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "A run with two background children: the first reported and woke the lead, which answered; the second still runs, so the run is still running.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

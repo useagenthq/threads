@@ -1,0 +1,16 @@
+{
+  "name": "team-receipt-envelope-mismatch-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 43: the member's receipt of the lead's message carries another body than the lead's message_sent. Only the two logs together show it: invalid_transition at the receipt, in the researcher's log.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "researcher",
+      "team"
+    ]
+  }
+}

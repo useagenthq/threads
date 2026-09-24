@@ -1,5 +1,24 @@
 {
   "$defs": {
+    "AskInput": {
+      "additionalProperties": false,
+      "properties": {
+        "question": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "to": {
+          "description": "A member's name, such as researcher-1.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "question"
+      ],
+      "type": "object"
+    },
     "BashInput": {
       "additionalProperties": false,
       "properties": {
@@ -17,6 +36,20 @@
       },
       "required": [
         "command"
+      ],
+      "type": "object"
+    },
+    "CancelInput": {
+      "additionalProperties": false,
+      "properties": {
+        "member": {
+          "description": "A member's name, such as researcher-1.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "member"
       ],
       "type": "object"
     },
@@ -363,6 +396,20 @@
       ],
       "type": "object"
     },
+    "MonitorInput": {
+      "additionalProperties": false,
+      "properties": {
+        "member": {
+          "description": "A member's name, such as researcher-1.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "member"
+      ],
+      "type": "object"
+    },
     "NotebookEditInput": {
       "additionalProperties": false,
       "properties": {
@@ -492,6 +539,25 @@
       ],
       "type": "object"
     },
+    "ReplyInput": {
+      "additionalProperties": false,
+      "properties": {
+        "ask_id": {
+          "description": "The ask_id of an ask you received.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "ask_id",
+        "text"
+      ],
+      "type": "object"
+    },
     "SaveMemoryInput": {
       "additionalProperties": false,
       "properties": {
@@ -552,6 +618,25 @@
       ],
       "type": "object"
     },
+    "SendInput": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "to": {
+          "description": "A member's name, such as researcher-1.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "text"
+      ],
+      "type": "object"
+    },
     "SendMessageInput": {
       "additionalProperties": false,
       "properties": {
@@ -602,6 +687,26 @@
       "required": [
         "agent",
         "prompt"
+      ],
+      "type": "object"
+    },
+    "StartInput": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "description": "An agent your team lists.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "task": {
+          "description": "The member's first input; it sees nothing else.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent",
+        "task"
       ],
       "type": "object"
     },
@@ -706,6 +811,24 @@
       },
       "required": [
         "todos"
+      ],
+      "type": "object"
+    },
+    "WaitInput": {
+      "additionalProperties": false,
+      "properties": {
+        "members": {
+          "items": {
+            "description": "A member's name, such as researcher-1.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "members"
       ],
       "type": "object"
     },

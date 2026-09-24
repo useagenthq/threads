@@ -216,6 +216,23 @@ CASES_: tuple[tuple[str, Obj, bool], ...] = (
         {"path": "a.ipynb", "cell_id": "c1", "new_source": "x", "cell_type": "raw"},
         False,
     ),
+    # The team's model tools (spec/schema/README.md, "Teams").
+    ("start", {"agent": "researcher", "task": "Topic: batteries."}, True),
+    ("start", {"agent": "researcher", "task": ""}, False),
+    ("start", {"agent": "researcher", "task": "x", "budget": {"max_turns": 1}}, False),
+    ("send", {"to": "researcher-1", "text": "Keep it short."}, True),
+    ("send", {"to": "", "text": "x"}, False),
+    ("ask", {"to": "writer-1", "question": "Which topic?"}, True),
+    ("ask", {"to": "writer-1", "text": "Which topic?"}, False),
+    ("reply", {"ask_id": "b:c1", "text": "Batteries."}, True),
+    ("reply", {"ask_id": "", "text": "Batteries."}, False),
+    ("wait", {"members": ["researcher-1", "researcher-2"]}, True),
+    ("wait", {"members": []}, False),
+    ("wait", {"members": ["researcher-1"], "mode": "any"}, False),
+    ("monitor", {"member": "researcher-1"}, True),
+    ("monitor", {"member": 1}, False),
+    ("cancel", {"member": "researcher-1"}, True),
+    ("cancel", {}, False),
 )
 
 
