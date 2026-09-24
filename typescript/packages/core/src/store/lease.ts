@@ -9,7 +9,7 @@ import { Writer } from "./writer";
 /** 30 s lease TTL, renewed every 10 s by the holder. */
 export const LEASE_TTL_MS = 30_000;
 
-/** What the lease and fork steps use of a LogStore: one tenant's connection, clock and reads. */
+/** What the lease and fork writes use of a LogStore: one tenant's connection, clock and reads. */
 export type StoreAccess = {
   readonly db: SqliteDriver;
   readonly now: () => number;

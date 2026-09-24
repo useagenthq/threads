@@ -7,7 +7,7 @@ import type {
   KnownEvent,
   PermissionRule,
 } from "../log";
-import type { ListedBranch } from "../store/forking";
+import type { ListedBranch } from "../store/fork-reads";
 
 // Thread.pendingApprovals and Thread.branches: projections of the log and the branch rows.
 

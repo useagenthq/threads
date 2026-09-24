@@ -124,7 +124,7 @@ next_result = await support.run("When?", thread=result.thread)
 </Tab>
 </Tabs>
 
-`result.thread` is the thread's handle: read its `timeline()`, `usage()` or `cost()`, or pass it back to continue. Later, with only the stored id, get it again with [`openThread`](/docs/reference/functions/openThread).
+`result.thread` is the thread's handle: read its `timeline()`, `usage()` or `cost()`, or pass it back to continue. Later, with only the stored id, get it again with [`openThread`](/docs/reference/functions/openThread). In TypeScript the handle holds functions, so `structuredClone` and `postMessage` can't copy a result; to log a result or send it elsewhere, send `result.thread.id` and `result.thread.branch`.
 
 ## Change the reply style, or compact, between runs
 
@@ -155,13 +155,13 @@ await support.run("And the one from May?", { store, thread: result.thread });
 <Tab value="Python">
 
 ```python
+from threads import Principal
+
 support = agent(
     model=model,
     output_styles={"concise": "Answer in at most three sentences."},
 )
 result = await support.run("Where is my invoice?", store=store)
-
-from threads import Principal
 
 operator = Principal(issuer="api", tenant="local", subject="operator")
 await result.thread.set_output_style("concise", operator)
@@ -263,7 +263,7 @@ shipped = await orders.run(
 </Tabs>
 
 <Callout>
-In Python, `deps=` is needed only when a tool reads it. When every tool takes `RunContext[None]`, leave it out and tools see `None`. For tools typed with your own deps class, pyright flags a run without `deps=`, and the run raises `ConfigError("invalid_config")`.
+In Python, `deps=` is needed only when a tool reads it. When every tool takes `RunContext[None]`, leave it out and tools see `None`. For tools typed with your own deps class, pyright flags a run without `deps=`, and the run raises `ConfigError("invalid_config")`. Only the context parameter's annotation is read, through `functools.partial` and `functools.wraps`; when it can't be read (a decorator without `wraps`, say), the error names the tool, and `deps=None` fixes it.
 </Callout>
 
 `ctx` also carries `thread_id`, `branch_id`, `principal` (who started the run) and, inside a tool, `call_id` and `effect_key`. See [RunContext](/docs/reference/types/RunContext).

@@ -3,12 +3,13 @@ import { err, ok, type Result } from "../result";
 import { type Chain, tipHash, type VerifiedLog } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import { newBranch } from "./branch";
-import * as forking from "./forking";
+import * as forking from "./fork-reads";
 import { grantLease, type StoreAccess, takeLease } from "./lease";
 import { atomically, ownedBranch, putLease, setBranchState } from "./tables";
 import type { Writer } from "./writer";
 
-// The fork steps of LogStore (beginFork, reclaimFork, finishFork): each runs in one transaction.
+// The fork writes of LogStore (beginFork, reclaimFork, finishFork), each in one transaction.
+// The queries they and LogStore read with are in fork-reads.ts.
 
 export type ForkRequest = {
   readonly parent: BranchId;

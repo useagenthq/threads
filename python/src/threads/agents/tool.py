@@ -7,7 +7,7 @@ validator to drift from it.
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Literal, Required, TypedDict, Unpack, get_args, get_origin, get_type_hints
+from typing import Literal, Required, TypedDict, Unpack
 
 from pydantic import BaseModel, JsonValue, TypeAdapter, ValidationError
 from pydantic_core import to_json
@@ -58,16 +58,6 @@ class Tool[I: BaseModel, O, D]:
     ends_turn: bool = False
     concurrent: bool = False
     """Runs with the other concurrent read-only calls of one response. Hashed, not in line 0."""
-
-    def takes_no_deps(self) -> bool:
-        """True when execute annotates its context `RunContext[None]`, so a run may omit deps.
-        Another deps type, or no annotation to read, needs deps."""
-        try:
-            hints = get_type_hints(self.execute)
-        except (NameError, TypeError):
-            return False
-        none = (type(None),)
-        return any(get_origin(h) is RunContext and get_args(h) == none for h in hints.values())
 
     def spec(self) -> ToolSpec:
         """The pinned ToolSpec: what line 0 shows and what decides the effect class."""

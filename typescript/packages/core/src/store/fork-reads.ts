@@ -1,3 +1,6 @@
+// Read-side queries for forks: fork eligibility, a branch's chain through its parents, and the
+// listed and mid-fork branches. The fork writes are in fork-writes.ts.
+
 import { z } from "zod";
 import type { Fold } from "../fold/state";
 import { BranchId } from "../log";

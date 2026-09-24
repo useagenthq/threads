@@ -14,6 +14,7 @@ from typing import Final, Literal, Required, TypedDict, TypeGuard, Unpack, overl
 from pydantic import BaseModel
 
 from threads._json_schema import unchecked
+from threads._tool_deps import ContextDeps, context_deps, missing_deps
 from threads.agents import narrowing
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress
@@ -177,8 +178,10 @@ class Agent[D, O]:
             return options["deps"]
         if self._default_deps:
             return self._default_deps[0]
-        why = f"agent {self.name} needs deps for its tools: pass run(..., deps=...)"
-        raise ConfigError("invalid_config", f"{why}, or type each tool's context RunContext[None]")
+        tools: list[tuple[str, ContextDeps]] = [
+            (t.name, _deps_of(t)) for t in self._definition.tools
+        ]
+        raise ConfigError("invalid_config", missing_deps(self.name, tools))
 
     @overload
     async def run(
@@ -274,7 +277,14 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, o
 def _take_no_deps[D](tools: tuple[AppTool[D], ...]) -> TypeGuard[tuple[AppTool[None], ...]]:
     """Every tool's context is annotated `RunContext[None]` (or there are none), so a run's deps
     default to None. Read from the annotations, which are the tools' static type."""
-    return all(isinstance(t, Tool) and t.takes_no_deps() for t in tools)
+    return all(_deps_of(t) == "none" for t in tools)
+
+
+def _deps_of(app_tool: object) -> ContextDeps:
+    """A `tool()`'s context annotation; another AppTool's is never read, so it needs deps."""
+    # Read before narrowing: only the callable matters, not the Tool's type parameters.
+    execute: object = getattr(app_tool, "execute", None)
+    return context_deps(execute) if isinstance(app_tool, Tool) else "deps"
 
 
 def _output(output: object) -> type[BaseModel] | None:

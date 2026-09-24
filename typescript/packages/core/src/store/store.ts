@@ -8,9 +8,13 @@ import { newBranch } from "./branch";
 import { BudgetLedger } from "./budget";
 import { ObserverCursors } from "./cursors";
 import type { SqliteDriver } from "./driver";
-import type { ForkRequest } from "./fork-steps";
-import * as fork from "./fork-steps";
-import * as forking from "./forking";
+import * as forking from "./fork-reads";
+import {
+  beginFork,
+  type ForkRequest,
+  finishFork,
+  reclaimFork,
+} from "./fork-writes";
 import { importSegments, verifiedImport } from "./import";
 import { LEASE_TTL_MS, type StoreAccess, takeLease } from "./lease";
 import { ResourceLedger } from "./ledger";
@@ -27,7 +31,7 @@ import {
 } from "./tables";
 import { type Writer, writerMismatch } from "./writer";
 
-export type { ForkRequest } from "./fork-steps";
+export type { ForkRequest } from "./fork-writes";
 export { LEASE_TTL_MS } from "./lease";
 
 /**
@@ -179,7 +183,7 @@ export class LogStore {
     holderId: string,
     ttlMs: number = LEASE_TTL_MS,
   ): Result<Writer, LogError> {
-    return fork.reclaimFork(this.#access, branchId, holderId, ttlMs);
+    return reclaimFork(this.#access, branchId, holderId, ttlMs);
   }
 
   /**
@@ -215,7 +219,7 @@ export class LogStore {
     request: ForkRequest,
     ttlMs: number = LEASE_TTL_MS,
   ): Result<Writer, LogError> {
-    return fork.beginFork(this.#access, request, ttlMs);
+    return beginFork(this.#access, request, ttlMs);
   }
 
   /** Step 4, in one transaction: the child's fork event bound to the parent's line, then ready. */
@@ -226,7 +230,7 @@ export class LogStore {
       readonly knowledgePolicy: "pinned" | "current";
     },
   ): Result<void, LogError> {
-    return fork.finishFork(this.#access, writer, restored);
+    return finishFork(this.#access, writer, restored);
   }
 
   /** A fork that can't finish: the branch becomes `fork_failed`, never listed or runnable. */
@@ -271,7 +275,7 @@ export class LogStore {
     return this.#db;
   }
 
-  /** What the lease and fork steps (lease.ts, fork-steps.ts) use of this store. */
+  /** What the lease and fork steps (lease.ts, fork-writes.ts) use of this store. */
   get #access(): StoreAccess {
     return {
       db: this.#db,
