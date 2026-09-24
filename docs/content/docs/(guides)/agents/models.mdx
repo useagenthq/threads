@@ -37,6 +37,33 @@ claude = anthropic("claude-sonnet-5")
 
 Reads `ANTHROPIC_API_KEY`.
 
+### Prompt caching
+
+Anthropic models cache the prompt for 5 minutes by default: the system prompt and tools, and the conversation as it grows. A cached token costs a fraction of a normal input token to read back. For a thread with longer pauses, cache for an hour:
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const claude = anthropic("claude-sonnet-5", { promptCache: "1h" });
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+claude = anthropic("claude-sonnet-5", prompt_cache="1h")
+```
+
+</Tab>
+</Tabs>
+
+- Writing to the cache costs more than plain input: 1.25 x for 5 minutes, 2 x for an hour. If you give a `price` without `cache_write`, threads fills it in from `input` at that rate.
+- A short one-off prompt may pay the write and never read it back. `promptCache: false` (`prompt_cache=False`) turns caching off.
+- `"1h"` can't be combined with `hostedTools`: Anthropic caches hosted tool results for 5 minutes, so writes would be billed at two rates. `cache_control` in `params` or a hosted tool is refused too; `promptCache` is the one way to set caching.
+- The setting is part of the thread's pinned config. Threads started before prompt caching existed continue only with `promptCache: false`.
+- `citations: true` turns on citations for every document in a request. It can't be combined with a native structured-output field in `params` (`output_format`, `output_config.format`); agent `output` is unaffected.
+
 ## OpenAI
 
 Uses the Responses API.
@@ -64,7 +91,7 @@ gpt = openai("gpt-5.5", params={"reasoning": {"effort": "medium"}})
 </Tab>
 </Tabs>
 
-Reads `OPENAI_API_KEY`. Both factories read the key at `check()` or the first run, never when you call them.
+Reads `OPENAI_API_KEY`. Both factories read the key at `check()` or the first run, never when you call them. OpenAI caches prompts on its own; set `params: { prompt_cache_retention: "24h" }` to keep them longer.
 
 ## Limits
 
@@ -135,7 +162,7 @@ A thread continues only with the same pinned limits and cap it started with. The
     });
     ```
 
-    `createProvider` stands for your provider's factory, such as `createOpenAI` or `createMistral`. Passing a ready-made model instead of a factory is refused at setup. The two limits are required: the model id alone doesn't say whose model it is. Other options: `maxTokens`, `params` (AI SDK call options like `temperature`), `accepts` (input types, default text only), `price`.
+    `createProvider` stands for your provider's factory, such as `createOpenAI` or `createMistral`. Passing a ready-made model instead of a factory is refused at setup. The two limits are required: the model id alone doesn't say whose model it is. Other options: `maxTokens`, `params` (AI SDK call options like `temperature`), `accepts` (input types, default text only), `price`, and `cacheTtlMs`: how long the provider keeps prompt-cache entries, in milliseconds, or `"none"` (see [Cache lifetimes](#cache-lifetimes)).
   </Tab>
   <Tab value="Python: LiteLLM">
     `litellm()` works with any OpenAI-compatible endpoint through LiteLLM's `openai/` route, such as a LiteLLM proxy or a local server.
@@ -151,7 +178,7 @@ A thread continues only with the same pinned limits and cap it started with. The
     )
     ```
 
-    The two limits are required: the name doesn't say which model sits behind `base_url`. Only the `openai/` route is supported; other routes raise `ConfigError("transport_fence_unsupported")`. The key comes from `api_key`, or from `OPENAI_API_KEY` when you don't pass one.
+    The two limits are required: the name doesn't say which model sits behind `base_url`. Only the `openai/` route is supported; other routes raise `ConfigError("transport_fence_unsupported")`. The key comes from `api_key`, or from `OPENAI_API_KEY` when you don't pass one. `cache_ttl_ms` declares how long the provider keeps prompt-cache entries, in milliseconds, or `"none"` (see [Cache lifetimes](#cache-lifetimes)).
   </Tab>
 </Tabs>
 
@@ -169,6 +196,23 @@ A thread continues only with the same pinned limits and cap it started with. The
 | `baseUrl` / `base_url` | A proxy or compatible endpoint |
 
 Model settings are fixed for the life of a thread, which keeps the prompt prefix identical on every request so provider caches keep hitting.
+
+## Cache lifetimes
+
+[Cache breaks](/docs/control/usage-and-cost#prompt-cache-breaks) are judged by how long the provider keeps the cache. Each model declares it: `anthropic()` from `promptCache`, `openai()` from its retention, the scripted test model as none. An agent uses the lifetime its models agree on, so `anthropic("claude-sonnet-5", { promptCache: "1h" })` needs nothing else.
+
+`check()` (and the first run) asks you to set `context.cache_ttl_ms` when threads can't decide:
+
+- the model and a fallback cache for different lifetimes;
+- a model's lifetime is unknown: an `aiSdk()` or `litellm()` model that doesn't pass `cacheTtlMs` / `cache_ttl_ms`.
+
+```ts
+const assistant = agent({
+  model: anthropic("claude-sonnet-5", { promptCache: "1h" }),
+  fallback: [gpt],
+  context: { cache_ttl_ms: 3_600_000 },
+});
+```
 
 ## Retries
 

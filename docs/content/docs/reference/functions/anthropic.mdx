@@ -4,7 +4,7 @@ description: "A Claude model through the Messages API."
 icon: "Plug"
 ---
 
-anthropic("claude-sonnet-5") needs no limits: they come from spec/models/anthropic.v1.json, verified against the Anthropic Models API. Pass it as agent(&#123;model: anthropic("claude-sonnet-5")&#125;).
+anthropic("claude-sonnet-5") needs no limits: they come from spec/models/anthropic.v1.json, verified against the Anthropic Models API. Pass it as agent(&#123;model: anthropic("claude-sonnet-5")&#125;). Prompt caching is on (5 minutes) unless prompt_cache is false; its info.cache declares the cache lifetime: &#123;ttl_ms: 300000&#125; for "5m", &#123;ttl_ms: 3600000&#125; for "1h", "none" for false.
 
 Import from `@threads/anthropic` (TypeScript) or `threads.anthropic` (Python).
 
@@ -19,6 +19,8 @@ function anthropic(model: string, options?: {
   params?: JsonObject;
   price?: Price;
   hostedTools?: readonly JsonObject[];
+  promptCache?: "5m" | "1h" | false;
+  citations?: boolean;
   apiKey?: string | Secret;
   baseUrl?: string;
   fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -38,7 +40,8 @@ def anthropic(
     params: Mapping[str, pydantic.JsonValue] | None = None,
     price: threads.log.Price | None = None,
     hosted_tools: Sequence[Mapping[str, pydantic.JsonValue]] | None = None,
-    citations: bool | None = None,
+    prompt_cache: Literal["5m", "1h"] | Literal[False] = "5m",
+    citations: bool = False,
     api_key: str | Secret | None = None,
     base_url: str | None = None,
 ) -> Model
@@ -66,19 +69,23 @@ def anthropic(
 </Field>
 
 <Field name="params" type={"JsonObject"}>
-  Other Messages API request fields (temperature, reasoning and the like), pinned in the system prompt. A field the adapter derives from the render, or the cap, is invalid_config. Omitted: none.
+  Other Messages API request fields (temperature, reasoning and the like), pinned in the system prompt. A field the adapter derives from the render, or the cap, is invalid_config, and so is cache_control anywhere in it: prompt_cache is the one source of cache controls. Omitted: none.
 </Field>
 
 <Field name="price" type={"Price"}>
-  Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown.
+  Nano-currency units per token, pinned in policy.models; a cost budget needs it. Without cache_write and with prompt caching on, cache_write is derived from input: 1.25 x for "5m", 2 x for "1h", rounded up. Omitted: cost is unknown.
 </Field>
 
 <Field name="hostedTools / hosted_tools" type={"readonly JsonObject[]"}>
-  Provider-executed tools, sent as given and pinned in the system prompt: web search and web fetch (web_search_YYYYMMDD, web_fetch_YYYYMMDD) only; any other is hosted_tool_unsupported. Omitted: none.
+  Provider-executed tools, sent as given and pinned in the system prompt: web search and web fetch (web_search_YYYYMMDD, web_fetch_YYYYMMDD) only; any other is hosted_tool_unsupported. cache_control inside one is invalid_config, and so is any hosted tool with prompt_cache "1h": Anthropic caches hosted tool results for 5 minutes, so writes would be billed at two rates. Omitted: none.
 </Field>
 
-<Field name="citations" type={"bool"}>
-  Python only. Enables citations on documents (an adapter setting, pinned in the system prompt). Omitted: off.
+<Field name="promptCache / prompt_cache" type={"\"5m\" | \"1h\" | false"} default={"5m"}>
+  Prompt caching, pinned in the system prompt as adapter setting prompt_cache: a breakpoint at the end of the system prompt (the system prompt, else the last tool) and automatic caching of the history, both with this lifetime. "1h" costs 2 x input per written token instead of 1.25 x. false sends no cache controls; it is also what continues a thread started before prompt caching existed. Omitted: "5m".
+</Field>
+
+<Field name="citations" type={"boolean"} default={"false"}>
+  Enables citations on every document in the request (an adapter setting, pinned in the system prompt). With a native structured-output field in params (output_format or output_config.format) it is invalid_config, as the provider refuses the pair; agent output (tool mode) is unaffected. Omitted: off.
 </Field>
 
 <Field name="apiKey / api_key" type={"string | Secret"}>

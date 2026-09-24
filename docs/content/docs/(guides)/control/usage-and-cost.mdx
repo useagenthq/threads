@@ -145,7 +145,7 @@ for b in breaks.value:
 </Tab>
 </Tabs>
 
-`likely_cause` is `settings_changed` (model or settings switched), `compacted`, `context_edited`, `tools_changed`, `ttl_expired` (the gap since the last request outlived the cache) or `unknown`. The cache lifetime it judges by is `context.cache_ttl_ms`, 5 minutes by default; if you set a longer provider cache, set `cache_ttl_ms` to match.
+`likely_cause` is `settings_changed` (model or settings switched), `compacted`, `context_edited`, `tools_changed`, `ttl_expired` (the gap since the last request outlived the cache) or `unknown`. The cache lifetime it judges by is `context.cache_ttl_ms`. By default it is the lifetime your models declare, so `anthropic("claude-sonnet-5", { promptCache: "1h" })` judges by an hour; see [Cache lifetimes](/docs/agents/models#cache-lifetimes).
 
 ## Errors
 

@@ -33,3 +33,11 @@ icon: "Braces"
 <Field name="lookup" type={"LookupCapability"} required>
   Response lookup by client request id.
 </Field>
+
+<Field name="cache" type={"{ ttl_ms: PosInt } | \"none\""}>
+  How long this model's provider keeps prompt-cache entries: a TTL, "none" when it never caches, absent when unknown. The definition check (check() or the first run) uses agreeing declared TTLs as the default context.cache_ttl_ms and otherwise asks for context.cache_ttl_ms.
+</Field>
+
+<Field name="cache.ttl_ms" type={"PosInt"} required>
+  How long a prompt-cache entry lives, in milliseconds.
+</Field>

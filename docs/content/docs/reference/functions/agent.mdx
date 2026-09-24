@@ -165,7 +165,7 @@ def agent(
 </Field>
 
 <Field name="context" type={"Partial<Policy.context>"}>
-  Context-window settings: reserve_tokens, clearing old tool results, spilling large results, compaction and what is restored after it, output continuations and tool deferral. In TypeScript the fields you give override the defaults; Python takes a complete Context. Omitted: the default context policy.
+  Context-window settings: reserve_tokens, clearing old tool results, spilling large results, compaction and what is restored after it, output continuations and tool deferral. In TypeScript the fields you give override the defaults; Python takes a complete Context. Omitted: the default context policy, with cache_ttl_ms from the models' declared cache lifetimes (ModelInfo.cache) when they agree; models that disagree, or whose lifetime is unknown, need cache_ttl_ms set (checked at check() or the first run).
 </Field>
 
 <Field name="egress" type={"readonly string[] | \"unenforced\""} default={"[]"}>
