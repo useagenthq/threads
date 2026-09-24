@@ -1,0 +1,37 @@
+---
+title: "MonitorResult"
+description: "The model's monitor tool result."
+icon: "Braces"
+---
+
+A union discriminated by `status`.
+
+### monitoring
+
+<Field name="status" type={"\"monitoring\""} required>
+  "monitoring": a message arrives when the member ends.
+</Field>
+
+<Field name="member" type={"MemberRef"} required>
+  The member watched.
+</Field>
+
+### ended
+
+<Field name="status" type={"\"ended\""} required>
+  "ended": the member had already ended.
+</Field>
+
+<Field name="result" type={"MemberResult"} required>
+  How it ended.
+</Field>
+
+### refused
+
+<Field name="status" type={"\"refused\""} required>
+  "refused": nothing was done; code says why.
+</Field>
+
+<Field name="code" type={"ObserveRefusal"} required>
+  Why it was refused.
+</Field>

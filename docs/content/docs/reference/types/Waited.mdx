@@ -1,0 +1,35 @@
+---
+title: "Waited"
+description: "A finished wait."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="status" type={"\"waited\""} required>
+  "waited": the wait finished.
+</Field>
+
+<Field name="finished" type={"readonly MemberResult[]"} required>
+  Members that settled (idle or ended).
+</Field>
+
+<Field name="parked" type={"readonly ({ member: MemberRef; reason: ParkReason })[]"} required>
+  Members parked at the end: they don't settle.
+</Field>
+
+<Field name="parked.member" type={"MemberRef"} required>
+  The parked member.
+</Field>
+
+<Field name="parked.reason" type={"ParkReason"} required>
+  Why it is parked.
+</Field>
+
+<Field name="pending" type={"readonly MemberRef[]"} required>
+  Members still running or starting.
+</Field>
+
+<Field name="timedOut / timed_out" type={"boolean"} required>
+  true when the deadline passed with the mode unmet.
+</Field>

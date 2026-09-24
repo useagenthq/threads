@@ -1,0 +1,83 @@
+---
+title: "MemberResult"
+description: "What a settled member returned."
+icon: "Braces"
+---
+
+The result APIs (wait, members, ask, askStatus) read a large output from the artifact store and verify it.
+
+A union discriminated by `status`.
+
+### completed
+
+<Field name="member" type={"MemberRef"} required>
+  Whose result.
+</Field>
+
+<Field name="status" type={"\"completed\""} required>
+  "completed": the latest task is done and the member is idle.
+</Field>
+
+<Field name="output" type={"string"} required>
+  The answer; structured output as its RFC 8785 JSON text.
+</Field>
+
+### failed
+
+<Field name="member" type={"MemberRef"} required>
+  Whose result.
+</Field>
+
+<Field name="status" type={"\"failed\""} required>
+  "failed": the member ended with an error.
+</Field>
+
+<Field name="error" type={"{ code: MemberErrorCode; message: string }"} required>
+  Why the member failed.
+</Field>
+
+<Field name="error.code" type={"MemberErrorCode"} required>
+  What went wrong: a run error code, or pin_unavailable / pin_mismatch when the member's definition couldn't be rebound in this process.
+</Field>
+
+<Field name="error.message" type={"string"} required>
+  A readable explanation.
+</Field>
+
+### cancelled
+
+<Field name="member" type={"MemberRef"} required>
+  Whose result.
+</Field>
+
+<Field name="status" type={"\"cancelled\""} required>
+  "cancelled": the member was cancelled.
+</Field>
+
+### budget_exhausted
+
+<Field name="member" type={"MemberRef"} required>
+  Whose result.
+</Field>
+
+<Field name="status" type={"\"budget_exhausted\""} required>
+  "budget_exhausted": a budget stopped the member.
+</Field>
+
+<Field name="budget" type={"BudgetExceededEvent.data"} required>
+  Which limit was hit.
+</Field>
+
+### handed_off
+
+<Field name="member" type={"MemberRef"} required>
+  Whose result.
+</Field>
+
+<Field name="status" type={"\"handed_off\""} required>
+  "handed_off": the lead handed the conversation off, which closes its team.
+</Field>
+
+<Field name="toThread / to_thread" type={"ThreadId"} required>
+  The thread it moved to.
+</Field>

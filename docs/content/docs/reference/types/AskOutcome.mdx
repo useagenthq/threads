@@ -1,0 +1,83 @@
+---
+title: "AskOutcome"
+description: "How an ask ended."
+icon: "Braces"
+---
+
+A union discriminated by `status`.
+
+### answered
+
+<Field name="status" type={"\"answered\""} required>
+  "answered": the member replied.
+</Field>
+
+<Field name="askId / ask_id" type={"AskId"} required>
+  The ask.
+</Field>
+
+<Field name="text" type={"string"} required>
+  The reply.
+</Field>
+
+<Field name="member" type={"MemberRef"} required>
+  Who replied.
+</Field>
+
+### timed_out
+
+<Field name="status" type={"\"timed_out\""} required>
+  "timed_out": no reply before the deadline.
+</Field>
+
+<Field name="askId / ask_id" type={"AskId"} required>
+  The ask.
+</Field>
+
+### member_ended
+
+<Field name="status" type={"\"member_ended\""} required>
+  "member_ended": the member ended before replying.
+</Field>
+
+<Field name="askId / ask_id" type={"AskId"} required>
+  The ask.
+</Field>
+
+<Field name="result" type={"MemberResult"} required>
+  How it ended.
+</Field>
+
+### cancelled
+
+<Field name="status" type={"\"cancelled\""} required>
+  "cancelled": the asker's turn or the whole team was cancelled.
+</Field>
+
+<Field name="askId / ask_id" type={"AskId"} required>
+  The ask.
+</Field>
+
+### needs_input
+
+<Field name="status" type={"\"needs_input\""} required>
+  "needs_input": a remote member needs input (Phase 4).
+</Field>
+
+<Field name="askId / ask_id" type={"AskId"} required>
+  The ask.
+</Field>
+
+<Field name="prompt" type={"string"} required>
+  What it asks for.
+</Field>
+
+### uncertain
+
+<Field name="status" type={"\"uncertain\""} required>
+  "uncertain": a remote member's outcome is unknown, and the ask parks (Phase 4).
+</Field>
+
+<Field name="askId / ask_id" type={"AskId"} required>
+  The ask.
+</Field>

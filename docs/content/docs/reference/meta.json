@@ -111,7 +111,17 @@
     "types/StartRefusal",
     "types/InvalidDefinition",
     "types/SendRefusal",
+    "types/AskRefusal",
+    "types/ReplyRefusal",
+    "types/ObserveRefusal",
+    "types/MemberResult",
     "types/StartResult",
-    "types/SendResult"
+    "types/SendResult",
+    "types/AskOutcome",
+    "types/AskResult",
+    "types/ReplyResult",
+    "types/Waited",
+    "types/WaitResult",
+    "types/MonitorResult"
   ]
 }

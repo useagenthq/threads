@@ -1,0 +1,22 @@
+---
+title: "AskRefusal"
+description: "Why an ask was refused: a send's refusals, or no budget headroom for one request of the member's model."
+icon: "Braces"
+---
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+type AskRefusal = "forbidden" | "unknown_member" | "stale_member" | "member_ended" | "self" | "mailbox_full" | "team_closed" | "budget_exceeded";
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+type AskRefusal = Literal["forbidden", "unknown_member", "stale_member", "member_ended", "self", "mailbox_full", "team_closed", "budget_exceeded"]
+```
+
+</Tab>
+</Tabs>

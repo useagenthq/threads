@@ -108,6 +108,11 @@ def shape_section(explain: Explain, name: str, t: Obj, casing: str) -> list[str]
     disc = text(t["discriminator"])
     out = [f"A union discriminated by `{disc}`.", ""]
     for variant in objs(t["variants"]):
+        if "$ref" in variant:
+            # A variant that is a whole other union (AskResult's AskOutcome): link it.
+            ref = text(variant["$ref"]).rsplit("/", 1)[-1]
+            out += [f"### {ref}", "", f"Any [`{ref}`](/docs/reference/types/{ref}).", ""]
+            continue
         fields = obj(variant["object"])
         tag = obj(obj(fields.get(disc, {})).get("type", {})).get("literal", "variant")
         variant_casing = text(variant.get("casing", casing))
