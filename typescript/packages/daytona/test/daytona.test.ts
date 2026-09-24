@@ -16,12 +16,12 @@ import { API, daytonaBackend } from "./backend";
 // crash/takeover suite, then what is Daytona's own: the fence at its clients' transport, the
 // cold snapshot, the log demux and its declarations. No network.
 
-function adapter(world: World, network: "blocked" | "open" = "blocked") {
+function adapter(world: World, allowInternet = false) {
   const backend = daytonaBackend(world);
   const sandbox = daytona({
     apiKey: CANARY,
     apiUrl: API,
-    network,
+    ...(allowInternet ? { allowInternet } : {}),
     fetch: backend.fetch,
     openSocket: backend.open,
     pollMs: 0,
@@ -149,6 +149,9 @@ describe("the log demux", () => {
   });
 });
 
+const createBody = (traffic: string): string | undefined =>
+  traffic.split("\n").find((line) => line.startsWith(`POST ${API}/sandbox `));
+
 describe("daytona declarations", () => {
   test("egress, termination, snapshots, lookup and expiry are declared as Daytona documents them", () => {
     const { sandbox } = adapter(new World());
@@ -163,7 +166,7 @@ describe("daytona declarations", () => {
     });
     expect(sandbox.quiescence).toBe("stopped");
     expect(sandbox.expiry).toEqual({ sandboxMs: 3_600_000, snapshotMs: null });
-    expect(adapter(new World(), "open").sandbox.info.egress).toBe("unenforced");
+    expect(adapter(new World(), true).sandbox.info.egress).toBe("unenforced");
   });
 
   test("a sandbox is created with no env, the network blocked, and named by its operation key", async () => {
@@ -176,6 +179,45 @@ describe("daytona declarations", () => {
     expect(body).toContain('"env":{}');
     expect(body).toContain('"networkBlockAll":true');
     expect(body).toContain('"name":"threads-op-7"');
+  });
+
+  test("defaults: a one-hour lifetime, the network blocked, Daytona's snapshot and region", async () => {
+    const { sandbox, backend } = adapter(new World());
+    unwrap(await sandbox.create("op-9", CTX));
+    const body = createBody(backend.traffic());
+    expect(body).toContain('"ttlMinutes":60');
+    expect(body).toContain('"networkBlockAll":true');
+    expect(body).not.toContain('"snapshot"');
+    expect(body).not.toContain('"target"');
+    expect(sandbox.expiry.sandboxMs).toBe(3_600_000);
+  });
+
+  test("snapshot, target and lifetimeMs are sent as given; a lifetime rounds up to a minute", async () => {
+    const backend = daytonaBackend(new World());
+    const sandbox = daytona({
+      apiKey: CANARY,
+      apiUrl: API,
+      fetch: backend.fetch,
+      openSocket: backend.open,
+      target: "eu",
+      lifetimeMs: 90_000,
+      pollMs: 0,
+    });
+    unwrap(await sandbox.create("op-10", CTX));
+    const body = createBody(backend.traffic());
+    expect(body).toContain('"target":"eu"');
+    expect(body).toContain('"ttlMinutes":2');
+    expect(sandbox.expiry.sandboxMs).toBe(90_000);
+    const named = daytona({
+      apiKey: CANARY,
+      apiUrl: API,
+      fetch: backend.fetch,
+      openSocket: backend.open,
+      snapshot: "my-snapshot",
+      pollMs: 0,
+    });
+    await named.create("op-11", CTX);
+    expect(backend.traffic()).toContain('"snapshot":"my-snapshot"');
   });
 
   test("a sandbox is private and can't outlive a leak: finite auto-stop, then auto-delete", async () => {

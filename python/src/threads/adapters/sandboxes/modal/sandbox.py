@@ -28,7 +28,8 @@ from grpclib.exceptions import GRPCError
 
 from threads.adapters.loop_resources import LoopResources
 from threads.adapters.sandboxes.fence import dispatch
-from threads.adapters.sandboxes.modal.channel import Connect, classify, connect
+from threads.adapters.sandboxes.modal.channel import Connect, classify
+from threads.adapters.sandboxes.modal.channel import connect as tls_channel
 from threads.adapters.sandboxes.modal.control import Control, Settings
 from threads.adapters.sandboxes.modal.router import Router
 from threads.adapters.sandboxes.modal.session import ModalSession
@@ -209,7 +210,7 @@ def modal(  # noqa: PLR0913 - the options a Modal sandbox is configured by
     allow_internet: bool = False,
     name: str = "modal",
     server_url: str = SERVER_URL,
-    connect: Connect = connect,
+    connect: Connect | None = None,
 ) -> ModalSandbox:
     """A Modal sandbox provider (extra `modal`). `image_id` is a built Modal image (`im-...`,
     for example `modal.Image.debian_slim().build(app)` once at setup); it needs /bin/sh, sed,
@@ -228,5 +229,9 @@ def modal(  # noqa: PLR0913 - the options a Modal sandbox is configured by
         allow_internet,
     )
     return ModalSandbox(
-        settings, (token_id, token_secret), name=name, server_url=server_url, connect=connect
+        settings,
+        (token_id, token_secret),
+        name=name,
+        server_url=server_url,
+        connect=tls_channel if connect is None else connect,
     )

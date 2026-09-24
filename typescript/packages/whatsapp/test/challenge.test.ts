@@ -8,12 +8,12 @@ process.env["WA_TEST_VERIFY_TOKEN"] = "verify-me";
 process.env["WA_TEST_APP_SECRET_2"] = "app";
 process.env["WA_TEST_TOKEN_2"] = "token";
 
-function adapter(withToken = true) {
+function adapter() {
   return whatsapp({
     agent: "support",
     appSecret: secret("WA_TEST_APP_SECRET_2"),
     accessToken: secret("WA_TEST_TOKEN_2"),
-    ...(withToken ? { verifyToken: secret("WA_TEST_VERIFY_TOKEN") } : {}),
+    verifyToken: secret("WA_TEST_VERIFY_TOKEN"),
   });
 }
 
@@ -51,7 +51,14 @@ describe("challenge", () => {
     expect(JSON.stringify(answer)).not.toContain("verify-me");
   });
 
-  test("without a verify token the adapter serves no check", () => {
-    expect(adapter(false).challenge).toBeUndefined();
+  test("the verify token is required, so every channel serves the check", () => {
+    expect(adapter().challenge).toBeDefined();
+    whatsapp({
+      agent: "support",
+      appSecret: secret("WA_TEST_APP_SECRET_2"),
+      accessToken: secret("WA_TEST_TOKEN_2"),
+      // @ts-expect-error: verifyToken is required (spec/api.json whatsapp)
+      verifyToken: undefined,
+    });
   });
 });

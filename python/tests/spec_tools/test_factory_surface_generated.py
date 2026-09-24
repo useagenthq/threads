@@ -90,6 +90,24 @@ def test_an_optional_option_s_platform_type_is_not_imported() -> None:
     assert "import datetime" not in render_py(api)
 
 
+def test_a_contract_type_is_imported_from_its_own_packages_module() -> None:
+    """ChannelAdapter is threads.host's, not threads'; an undeclared type stays core's."""
+    functions, packages = API["functions"], API["packages"]
+    assert isinstance(functions, dict)
+    assert isinstance(packages, dict)
+    make = functions["make"]
+    assert isinstance(make, dict)
+    api: Obj = {
+        **API,
+        "packages": {**packages, "host": {"kind": "core", "py": "threads.host", "doc": "Host."}},
+        "types": {"ChannelAdapter": {"package": "host"}},
+        "functions": {"make": {**make, "returns": {"$ref": "#/types/ChannelAdapter"}}},
+    }
+    source = render_py(api)
+    assert "from threads.host import ChannelAdapter\n" in source
+    assert "from threads import Secret\n" in source
+
+
 @pytest.mark.parametrize(
     ("package", "clean"),
     [

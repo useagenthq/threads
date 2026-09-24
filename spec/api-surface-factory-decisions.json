@@ -20,6 +20,34 @@
     "openai": {
       "ts": ["typescript/packages/openai/src"],
       "py": ["python/src/threads/openai.py", "python/src/threads/adapters/models/openai"]
+    },
+    "e2b": {
+      "ts": ["typescript/packages/e2b/src"],
+      "py": ["python/src/threads/e2b.py", "python/src/threads/adapters/sandboxes/e2b"]
+    },
+    "daytona": {
+      "ts": ["typescript/packages/daytona/src"],
+      "py": ["python/src/threads/daytona.py", "python/src/threads/adapters/sandboxes/daytona"]
+    },
+    "modal": {
+      "ts": ["typescript/packages/modal/src"],
+      "py": ["python/src/threads/modal.py", "python/src/threads/adapters/sandboxes/modal"]
+    },
+    "mem0": {
+      "ts": ["typescript/packages/mem0/src"],
+      "py": ["python/src/threads/mem0.py", "python/src/threads/adapters/memories/mem0.py"]
+    },
+    "slack": {
+      "ts": ["typescript/packages/slack/src"],
+      "py": ["python/src/threads/slack.py", "python/src/threads/adapters/channels/slack.py", "python/src/threads/adapters/channels/common.py"]
+    },
+    "github": {
+      "ts": ["typescript/packages/github/src"],
+      "py": ["python/src/threads/github.py", "python/src/threads/adapters/channels/github.py", "python/src/threads/adapters/channels/common.py"]
+    },
+    "whatsapp": {
+      "ts": ["typescript/packages/whatsapp/src"],
+      "py": ["python/src/threads/whatsapp.py", "python/src/threads/adapters/channels/whatsapp.py", "python/src/threads/adapters/channels/common.py"]
     }
   },
   "factories": {
@@ -32,13 +60,13 @@
     "openai": { "owner": "06" },
     "aiSdk": { "owner": "06", "pending": "Any AI SDK model (TypeScript only)." },
     "litellm": { "owner": "06", "pending": "Models through LiteLLM (Python only)." },
-    "e2b": { "owner": "15B", "pending": "E2B sandboxes." },
-    "daytona": { "owner": "15B", "pending": "Daytona sandboxes." },
-    "modal": { "owner": "15B", "pending": "Modal sandboxes (Python; the TypeScript factory always refuses)." },
-    "mem0": { "owner": "15B", "pending": "Mem0 memory (refused in both languages today)." },
-    "slack": { "owner": "15B", "pending": "The Slack channel." },
-    "github": { "owner": "15B", "pending": "The GitHub channel." },
-    "whatsapp": { "owner": "15B", "pending": "The WhatsApp channel." }
+    "e2b": { "owner": "15B" },
+    "daytona": { "owner": "15B", "review_only": { "api_url": "The live endpoint is the network itself; tests point it at a fake.", "poll_ms": "Seam: a polling interval; no request differs by it.", "wait_ms": "Seam: a polling deadline, reached only when Daytona stalls." } },
+    "modal": { "owner": "15B", "review_only": { "server_url": "Seam: the live endpoint is the network itself; tests pass a fake one." } },
+    "mem0": { "owner": "15B" },
+    "slack": { "owner": "15B", "review_only": { "api": "Seam: the live endpoint is the network itself; tests pass a fake one." } },
+    "github": { "owner": "15B", "review_only": { "api": "Seam: the live endpoint is the network itself; tests pass a fake one." } },
+    "whatsapp": { "owner": "15B", "review_only": { "api": "Seam: the live endpoint is the network itself; tests pass a fake one." } }
   },
   "decisions": [
     { "factory": "anthropic", "option": "model", "lang": "both", "decision": "The model id is the first positional parameter in both languages (TS moves it out of the options object).", "owner": "06" },
@@ -58,9 +86,12 @@
     { "factory": "e2b", "option": "name", "lang": "py", "decision": "Python only: scopes ledger rows by provider name.", "owner": "15B" },
     { "factory": "daytona", "option": "snapshot", "lang": "both", "decision": "TS image becomes snapshot.", "owner": "15B" },
     { "factory": "daytona", "option": "target", "lang": "both", "decision": "TS gains target.", "owner": "15B" },
-    { "factory": "daytona", "option": "lifetime_ms", "lang": "both", "decision": "TS ttlMinutes becomes lifetimeMs.", "owner": "15B" },
+    { "factory": "daytona", "option": "lifetime_ms", "lang": "both", "decision": "TS ttlMinutes becomes lifetimeMs; default 3_600_000 in both (TS kept 60 minutes; Python had none), as for e2b and modal.", "owner": "15B" },
     { "factory": "daytona", "option": "allow_internet", "lang": "both", "decision": "TS network becomes allowInternet.", "owner": "15B" },
-    { "factory": "daytona", "option": "fetch", "lang": "ts", "decision": "Seams: fetch, openSocket, pollMs, waitMs.", "owner": "15B" },
+    { "factory": "daytona", "option": "fetch", "lang": "ts", "decision": "Seam.", "owner": "15B" },
+    { "factory": "daytona", "option": "open_socket", "lang": "ts", "decision": "Seam: the log WebSocket opener (platform type OpenSocket, exported by the package; its socket type isn't a contract type).", "owner": "15B" },
+    { "factory": "daytona", "option": "poll_ms", "lang": "ts", "decision": "Seam.", "owner": "15B" },
+    { "factory": "daytona", "option": "wait_ms", "lang": "ts", "decision": "Seam.", "owner": "15B" },
     { "factory": "daytona", "option": "name", "lang": "py", "decision": "Python only, as for e2b.", "owner": "15B" },
     { "factory": "modal", "option": "*", "lang": "py", "decision": "Every option is Python only; TS modal() takes no parameters and always refuses (transport_fence_unsupported).", "owner": "15B" },
     { "factory": "supermemory", "option": "base_url", "lang": "both", "decision": "baseUrl / base_url.", "owner": "09" },
@@ -68,13 +99,26 @@
     { "factory": "zep", "option": "base_url", "lang": "both", "decision": "baseUrl / base_url.", "owner": "09" },
     { "factory": "zep", "option": "fetch", "lang": "ts", "decision": "Seam: the SDK's fetch, fenced either way.", "owner": "15A" },
     { "factory": "mem0", "option": "host", "lang": "both", "decision": "Python gains host; the refusal is unchanged.", "owner": "15B" },
+    { "factory": "mem0", "option": "api_key", "lang": "py", "decision": "A required Secret in both, as TS had it: the refused adapter keeps no default (lane 09). Python's was optional.", "owner": "15B" },
     { "factory": "slack", "option": "bot_user_id", "lang": "both", "decision": "Python gains the optional override.", "owner": "15B" },
     { "factory": "slack", "option": "tenant", "lang": "ts", "decision": "TypeScript only: multi-workspace mapping; Python binds one workspace per channel.", "owner": "15B" },
+    { "factory": "slack", "option": "now", "lang": "ts", "decision": "Seam: the request-timestamp clock.", "owner": "15B" },
+    { "factory": "slack", "option": "fetch", "lang": "ts", "decision": "Seam.", "owner": "15B" },
+    { "factory": "slack", "option": "api", "lang": "py", "decision": "Seam: the API base URL.", "owner": "15B" },
+    { "factory": "slack", "option": "transport", "lang": "py", "decision": "Seam: the httpx transport (platform type).", "owner": "15B" },
     { "factory": "github", "option": "app_slug", "lang": "both", "decision": "Python gains the optional override.", "owner": "15B" },
     { "factory": "github", "option": "tenant", "lang": "ts", "decision": "TypeScript only, as for slack.", "owner": "15B" },
+    { "factory": "github", "option": "fetch", "lang": "ts", "decision": "Seam.", "owner": "15B" },
+    { "factory": "github", "option": "api", "lang": "py", "decision": "Seam: the API base URL.", "owner": "15B" },
+    { "factory": "github", "option": "transport", "lang": "py", "decision": "Seam: the httpx transport (platform type).", "owner": "15B" },
     { "factory": "whatsapp", "option": "phone_number_id", "lang": "py", "decision": "Removed: replies go from the phone number the message arrived on, as in TS.", "owner": "15B" },
     { "factory": "whatsapp", "option": "verify_token", "lang": "both", "decision": "Required in both (TS change).", "owner": "15B" },
-    { "factory": "whatsapp", "option": "graph_version", "lang": "both", "decision": "Python gains it; default \"v21.0\".", "owner": "15B" },
+    { "factory": "whatsapp", "option": "graph_version", "lang": "both", "decision": "Python gains it; default \"v21.0\". Python's api seam loses the version.", "owner": "15B" },
+    { "factory": "whatsapp", "option": "tenant", "lang": "ts", "decision": "TypeScript only, as for slack.", "owner": "15B" },
+    { "factory": "whatsapp", "option": "fetch", "lang": "ts", "decision": "Seam.", "owner": "15B" },
+    { "factory": "whatsapp", "option": "now", "lang": "ts", "decision": "Seam: the session-window clock.", "owner": "15B" },
+    { "factory": "whatsapp", "option": "api", "lang": "py", "decision": "Seam: the Graph API base URL.", "owner": "15B" },
+    { "factory": "whatsapp", "option": "transport", "lang": "py", "decision": "Seam: the httpx transport (platform type).", "owner": "15B" },
     { "factory": "exa", "option": "transport", "lang": "ts", "decision": "Seam: an optional positional transport (platform type WebTransport).", "owner": "15A" },
     { "factory": "tavily", "option": "transport", "lang": "ts", "decision": "Seam, as for exa.", "owner": "15A" },
     { "factory": "brave", "option": "transport", "lang": "ts", "decision": "Seam, as for exa.", "owner": "15A" },

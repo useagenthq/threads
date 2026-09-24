@@ -144,7 +144,7 @@ export function performer(sender: Sender): ChannelAdapter["perform"] {
       return failed("permanent", "definite_not_sent");
     const token = credentials["accessToken"];
     if (token === undefined)
-      throw new Error("whatsapp: the host passed no accessToken credential");
+      throw new Error("whatsapp: the host passed no accessToken");
     const url = `https://graph.facebook.com/${sender.graphVersion}/${op.installation_id}/messages`;
     let response: Response;
     try {

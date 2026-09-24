@@ -150,7 +150,6 @@ def test_whatsapp_tenant_is_the_phone_number() -> None:
         app_secret=secret("SIGNING"),
         access_token=secret("TOKEN"),
         verify_token=secret("VERIFY"),
-        phone_number_id="P1",
         agent="a",
     )
     entries = [whatsapp_entry("WABA1", "P1", "wamid.1"), whatsapp_entry("WABA2", "P1", "wamid.2")]

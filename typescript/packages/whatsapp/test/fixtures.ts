@@ -42,6 +42,7 @@ export function adapter(
     agent: "support",
     appSecret: secret("WA_TEST_APP_SECRET"),
     accessToken: secret("WA_TEST_ACCESS_TOKEN"),
+    verifyToken: secret("WA_TEST_VERIFY_TOKEN"),
     fetch,
     now: () => NOW,
   });

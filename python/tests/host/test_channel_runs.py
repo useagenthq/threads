@@ -165,7 +165,6 @@ def test_the_webhook_url_answers_a_subscription_check_only_for_a_channel_that_ha
         app_secret=secret("WA_APP"),
         access_token=secret("WA_TOKEN"),
         verify_token=secret("WA_VERIFY"),
-        phone_number_id="p",
         agent="support",
     )
     talk = slack(

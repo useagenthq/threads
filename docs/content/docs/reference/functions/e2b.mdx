@@ -1,0 +1,77 @@
+---
+title: "e2b"
+description: "A Sandbox on an E2B cloud VM."
+icon: "Plug"
+---
+
+Pass it as agent(&#123;sandbox: e2b()&#125;). Each sandbox starts from a template with no environment and no internet; the API key authenticates the host's requests only. TypeScript: runs on Bun (on Node the E2B SDK sends through undici, which threads can't fence).
+
+Import from `@threads/e2b` (TypeScript) or `threads.e2b` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function e2b(options?: {
+  apiKey?: string | Secret;
+  template?: string;
+  lifetimeMs?: number;
+  allowInternet?: boolean;
+  domain?: string;
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+}): Sandbox
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def e2b(
+    *,
+    api_key: str | Secret | None = None,
+    template: str = "base",
+    lifetime_ms: int = 3600000,
+    allow_internet: bool = False,
+    domain: str | None = None,
+    name: str = "e2b",
+) -> Sandbox
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="apiKey / api_key" type={"string | Secret"}>
+  The E2B API key: a secret() or a string. Omitted: secret("E2B_API_KEY"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. It never enters a sandbox.
+</Field>
+
+<Field name="template" type={"string"} default={"base"}>
+  The E2B template a new sandbox starts from. It needs /bin/sh, sed, find, stat and sha256sum (E2B's base has them).
+</Field>
+
+<Field name="lifetimeMs / lifetime_ms" type={"number"} default={"3600000"}>
+  How long a sandbox lives, in milliseconds, before E2B kills it (the declared expiry).
+</Field>
+
+<Field name="allowInternet / allow_internet" type={"boolean"} default={"false"}>
+  Lets the sandbox reach the internet. Its egress is then unenforced, so the agent must also set egress: "unenforced".
+</Field>
+
+<Field name="domain" type={"string"}>
+  The E2B domain, for a self-hosted or regional deployment. Omitted: E2B's default.
+</Field>
+
+<Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
+  TypeScript only. Seam: the fetch the SDK sends through (a proxy, a test server); the run's fence wraps it either way. Omitted: the process's fetch.
+</Field>
+
+<Field name="name" type={"str"} default={"e2b"}>
+  Python only. The provider name in SandboxInfo and the sandbox ledger; rows under another name are never touched.
+</Field>
+
+## Returns
+
+[`Sandbox`](/docs/reference/types/Sandbox)
+
+**Throws** `ConfigError` with one of these codes: `missing_secret`, `transport_fence_unsupported` (TypeScript only).

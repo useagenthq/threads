@@ -633,6 +633,125 @@
       "tests/web/test_search_unset_key.py::test_check_reports_an_unset_key_as_missing_secret[brave]"
     ]
   },
+  "daytona": {
+    "ts": [
+      "packages/daytona/test/daytona.test.ts > daytona declarations > egress, termination, snapshots, lookup and expiry are declared as Daytona documents them"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_daytona_defaults"
+    ]
+  },
+  "daytona!invalid_config": {
+    "ts": [
+      "packages/daytona/test/daytona.test.ts > daytona declarations > a sandbox is private and can't outlive a leak: finite auto-stop, then auto-delete"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_daytona.py::test_a_sandbox_is_private_and_cannot_outlive_a_leak"
+    ]
+  },
+  "daytona!missing_secret": {
+    "ts": [
+      "packages/daytona/test/credentials.test.ts > daytona() credentials > missing: the factory and agent() succeed; check() and the run fail at setup"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_missing_key_fails_check_as_a_value_and_the_run_before_any_append[daytona]"
+    ]
+  },
+  "daytona.allow_internet=default": {
+    "ts": [
+      "packages/daytona/test/daytona.test.ts > daytona declarations > defaults: a one-hour lifetime, the network blocked, Daytona's snapshot and region"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_daytona_defaults"
+    ]
+  },
+  "daytona.api_key=default": {
+    "ts": [
+      "packages/daytona/test/credentials.test.ts > daytona() credentials > a fixed environment is picked up by the same agent"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[daytona]"
+    ]
+  },
+  "daytona.auto_stop_minutes=default": {
+    "ts": [
+      "packages/daytona/test/daytona.test.ts > daytona declarations > a sandbox is private and can't outlive a leak: finite auto-stop, then auto-delete"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_daytona_defaults"
+    ]
+  },
+  "daytona.lifetime_ms=default": {
+    "ts": [
+      "packages/daytona/test/daytona.test.ts > daytona declarations > defaults: a one-hour lifetime, the network blocked, Daytona's snapshot and region"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_daytona_defaults"
+    ]
+  },
+  "daytona.name=default": {
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_daytona_defaults"
+    ]
+  },
+  "e2b": {
+    "ts": [
+      "packages/e2b/test/e2b.test.ts > e2b declarations > egress, termination, snapshots, lookup and expiry are declared as E2B documents them"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_e2b_defaults"
+    ]
+  },
+  "e2b!missing_secret": {
+    "ts": [
+      "packages/e2b/test/credentials.test.ts > e2b() credentials > missing: the factory and agent() succeed; check() and the run fail at setup"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_missing_key_fails_check_as_a_value_and_the_run_before_any_append[e2b]"
+    ]
+  },
+  "e2b!transport_fence_unsupported": {
+    "ts": [
+      "packages/e2b/test/e2b.test.ts > e2b transport > on a runtime whose SDK sends through undici (Node), e2b() is transport_fence_unsupported"
+    ]
+  },
+  "e2b.allow_internet=default": {
+    "ts": [
+      "packages/e2b/test/e2b.test.ts > e2b declarations > defaults: template base, a one-hour lifetime and no internet"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_e2b_defaults"
+    ]
+  },
+  "e2b.api_key=default": {
+    "ts": [
+      "packages/e2b/test/credentials.test.ts > e2b() credentials > a fixed environment is picked up by the same agent"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[e2b]"
+    ]
+  },
+  "e2b.lifetime_ms=default": {
+    "ts": [
+      "packages/e2b/test/e2b.test.ts > e2b declarations > defaults: template base, a one-hour lifetime and no internet"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_e2b_defaults"
+    ]
+  },
+  "e2b.name=default": {
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_e2b_defaults"
+    ]
+  },
+  "e2b.template=default": {
+    "ts": [
+      "packages/e2b/test/e2b.test.ts > e2b declarations > defaults: template base, a one-hour lifetime and no internet"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_e2b_defaults"
+    ]
+  },
   "exa": {
     "ts": [
       "packages/core/test/tools/search-backends.test.ts > search backends > exa: one JSON POST with the key header and domain filters; hits mapped"
@@ -671,6 +790,54 @@
     ],
     "py": [
       "tests/sandbox/test_fake.py::test_exec_is_scripted_per_command_with_provider_dedup"
+    ]
+  },
+  "github": {
+    "ts": [
+      "packages/github/test/inbound.test.ts > verify > a good signature yields tenant, installation and the body's hash as delivery"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_github_ignores_bots_and_classifies_send_errors"
+    ]
+  },
+  "github!invalid_config": {
+    "ts": [
+      "packages/host/test/channel-bindings.test.ts > channel bindings at ready() > github: an agent that isn't a host agent is invalid_config"
+    ],
+    "py": [
+      "tests/host/test_channel_bindings.py::test_ready_refuses_a_channel_whose_agent_is_not_a_host_agent[github]"
+    ]
+  },
+  "github!missing_secret": {
+    "ts": [
+      "packages/host/test/channel-bindings.test.ts > channel bindings at ready() > github: an unset secret is missing_secret"
+    ],
+    "py": [
+      "tests/host/test_channel_bindings.py::test_ready_refuses_a_channel_whose_secret_is_unset[github]"
+    ]
+  },
+  "github.agent": {
+    "ts": [
+      "packages/host/test/channel-bindings.test.ts > channel bindings at ready() > github: an agent that isn't a host agent is invalid_config"
+    ],
+    "py": [
+      "tests/host/test_channel_bindings.py::test_ready_refuses_a_channel_whose_agent_is_not_a_host_agent[github]"
+    ]
+  },
+  "github.token": {
+    "ts": [
+      "packages/github/test/outbound.test.ts > lookup > finds the comment carrying the marker, across pages"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_lookups_find_the_effect_key_in_the_ops_conversation"
+    ]
+  },
+  "github.webhook_secret": {
+    "ts": [
+      "packages/github/test/inbound.test.ts > verify > a good signature yields tenant, installation and the body's hash as delivery"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_github_ignores_bots_and_classifies_send_errors"
     ]
   },
   "host": {
@@ -735,6 +902,93 @@
     ],
     "py": [
       "tests/adapters/test_mcp.py::test_a_stdio_server_in_one_line_pins_sorted_namespaced_tools_and_records_calls"
+    ]
+  },
+  "mem0": {
+    "ts": [
+      "packages/mem0/test/mem0.test.ts > mem0() is refused at setup with transport_fence_unsupported"
+    ],
+    "py": [
+      "tests/adapters/test_hosted_memory.py::test_mem0_refuses_at_setup_because_its_sdk_cannot_be_fenced"
+    ]
+  },
+  "mem0!transport_fence_unsupported": {
+    "ts": [
+      "packages/mem0/test/mem0.test.ts > mem0() is refused at setup with transport_fence_unsupported"
+    ],
+    "py": [
+      "tests/adapters/test_hosted_memory.py::test_mem0_refuses_at_setup_because_its_sdk_cannot_be_fenced"
+    ]
+  },
+  "mem0.api_key": {
+    "ts": [
+      "packages/mem0/test/mem0.test.ts > mem0() is refused at setup with transport_fence_unsupported"
+    ],
+    "py": [
+      "tests/adapters/test_hosted_memory.py::test_mem0_refuses_at_setup_because_its_sdk_cannot_be_fenced"
+    ]
+  },
+  "modal": {
+    "ts": [
+      "packages/modal/test/modal.test.ts > modal() is refused at setup: its command router can't be fenced"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_modal_defaults"
+    ]
+  },
+  "modal!invalid_config": {
+    "py": [
+      "tests/adapters/sandboxes/test_modal.py::test_the_factory_refuses_bad_config"
+    ]
+  },
+  "modal!missing_secret": {
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_missing_key_fails_check_as_a_value_and_the_run_before_any_append[modal]"
+    ]
+  },
+  "modal!transport_fence_unsupported": {
+    "ts": [
+      "packages/modal/test/modal.test.ts > modal() is refused at setup: its command router can't be fenced"
+    ]
+  },
+  "modal.allow_internet=default": {
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_modal_defaults"
+    ]
+  },
+  "modal.app_name=default": {
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_modal_defaults"
+    ]
+  },
+  "modal.environment=default": {
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_modal_defaults"
+    ]
+  },
+  "modal.image_id": {
+    "py": [
+      "tests/adapters/sandboxes/test_modal.py::test_the_factory_refuses_bad_config"
+    ]
+  },
+  "modal.lifetime_ms=default": {
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_modal_defaults"
+    ]
+  },
+  "modal.name=default": {
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_modal_defaults"
+    ]
+  },
+  "modal.token_id=default": {
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[modal]"
+    ]
+  },
+  "modal.token_secret=default": {
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[modal]"
     ]
   },
   "openThread": {
@@ -825,6 +1079,54 @@
       "tests/test_secrets.py::test_a_secret_serializes_and_prints_as_its_name_only"
     ]
   },
+  "slack": {
+    "ts": [
+      "packages/slack/test/inbound.test.ts > verify > a good signature yields the workspace tenant, installation and event id"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_slack_verifies_the_signature_and_keys_its_event"
+    ]
+  },
+  "slack!invalid_config": {
+    "ts": [
+      "packages/host/test/channel-bindings.test.ts > channel bindings at ready() > slack: an agent that isn't a host agent is invalid_config"
+    ],
+    "py": [
+      "tests/host/test_channel_bindings.py::test_ready_refuses_a_channel_whose_agent_is_not_a_host_agent[slack]"
+    ]
+  },
+  "slack!missing_secret": {
+    "ts": [
+      "packages/host/test/channel-bindings.test.ts > channel bindings at ready() > slack: an unset secret is missing_secret"
+    ],
+    "py": [
+      "tests/host/test_channel_bindings.py::test_ready_refuses_a_channel_whose_secret_is_unset[slack]"
+    ]
+  },
+  "slack.agent": {
+    "ts": [
+      "packages/host/test/channel-bindings.test.ts > channel bindings at ready() > slack: an agent that isn't a host agent is invalid_config"
+    ],
+    "py": [
+      "tests/host/test_channel_bindings.py::test_ready_refuses_a_channel_whose_agent_is_not_a_host_agent[slack]"
+    ]
+  },
+  "slack.bot_token": {
+    "ts": [
+      "packages/slack/test/outbound.test.ts > lookup > finds the post by its metadata effect key, in the thread"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_lookups_find_the_effect_key_in_the_ops_conversation"
+    ]
+  },
+  "slack.signing_secret": {
+    "ts": [
+      "packages/slack/test/inbound.test.ts > verify > a good signature yields the workspace tenant, installation and event id"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_slack_verifies_the_signature_and_keys_its_event"
+    ]
+  },
   "sqlite": {
     "ts": [
       "packages/core/test/agent/agent.test.ts > the README example > two lines: agent() and run()"
@@ -903,6 +1205,70 @@
     ],
     "py": [
       "tests/agents/test_api.py::test_a_tool_call_parses_through_its_input_model_and_runs"
+    ]
+  },
+  "whatsapp": {
+    "ts": [
+      "packages/whatsapp/test/inbound.test.ts > verify > a good signature names the phone number as the installation"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_whatsapp_keys_each_batched_message_by_its_own_id"
+    ]
+  },
+  "whatsapp!invalid_config": {
+    "ts": [
+      "packages/host/test/channel-bindings.test.ts > channel bindings at ready() > whatsapp: an agent that isn't a host agent is invalid_config"
+    ],
+    "py": [
+      "tests/host/test_channel_bindings.py::test_ready_refuses_a_channel_whose_agent_is_not_a_host_agent[whatsapp]"
+    ]
+  },
+  "whatsapp!missing_secret": {
+    "ts": [
+      "packages/host/test/channel-bindings.test.ts > channel bindings at ready() > whatsapp: an unset secret is missing_secret"
+    ],
+    "py": [
+      "tests/host/test_channel_bindings.py::test_ready_refuses_a_channel_whose_secret_is_unset[whatsapp]"
+    ]
+  },
+  "whatsapp.access_token": {
+    "ts": [
+      "packages/whatsapp/test/outbound.test.ts > perform > a reply is sent from the phone number its message arrived on"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channel_options.py::test_whatsapp_replies_from_the_phone_number_the_message_arrived_on"
+    ]
+  },
+  "whatsapp.agent": {
+    "ts": [
+      "packages/host/test/channel-bindings.test.ts > channel bindings at ready() > whatsapp: an agent that isn't a host agent is invalid_config"
+    ],
+    "py": [
+      "tests/host/test_channel_bindings.py::test_ready_refuses_a_channel_whose_agent_is_not_a_host_agent[whatsapp]"
+    ]
+  },
+  "whatsapp.app_secret": {
+    "ts": [
+      "packages/whatsapp/test/inbound.test.ts > verify > a good signature names the phone number as the installation"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_whatsapp_keys_each_batched_message_by_its_own_id"
+    ]
+  },
+  "whatsapp.graph_version=default": {
+    "ts": [
+      "packages/whatsapp/test/outbound.test.ts > perform > a reply is sent from the phone number its message arrived on"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channel_options.py::test_whatsapp_replies_from_the_phone_number_the_message_arrived_on"
+    ]
+  },
+  "whatsapp.verify_token": {
+    "ts": [
+      "packages/whatsapp/test/challenge.test.ts > challenge > the right token echoes hub.challenge"
+    ],
+    "py": [
+      "tests/adapters/channels/test_channels.py::test_whatsapp_keys_each_batched_message_by_its_own_id"
     ]
   },
   "zep": {

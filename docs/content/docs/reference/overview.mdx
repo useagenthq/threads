@@ -26,6 +26,13 @@ say so.
 | zep | `@threads/zep` | `threads.zep` |
 | anthropic | `@threads/anthropic` | `threads.anthropic` |
 | openai | `@threads/openai` | `threads.openai` |
+| e2b | `@threads/e2b` | `threads.e2b` |
+| daytona | `@threads/daytona` | `threads.daytona` |
+| modal | `@threads/modal` | `threads.modal` |
+| mem0 | `@threads/mem0` | `threads.mem0` |
+| slack | `@threads/slack` | `threads.slack` |
+| github | `@threads/github` | `threads.github` |
+| whatsapp | `@threads/whatsapp` | `threads.whatsapp` |
 | search | `@threads/core` | `threads.search` |
 
 ## Functions
@@ -58,18 +65,18 @@ A provider factory connects an agent to an outside service and returns one of th
 | [`exa`](/docs/reference/functions/exa) | `exa` | A web_search backend that searches with Exa (exa.ai). |
 | [`tavily`](/docs/reference/functions/tavily) | `tavily` | A web_search backend that searches with Tavily (tavily.com). |
 | [`brave`](/docs/reference/functions/brave) | `brave` | A web_search backend that searches with Brave (search.brave.com). |
+| [`e2b`](/docs/reference/functions/e2b) | `e2b` | A Sandbox on an E2B cloud VM. |
+| [`daytona`](/docs/reference/functions/daytona) | `daytona` | A Sandbox on Daytona. |
+| [`modal`](/docs/reference/functions/modal) | `modal` | A Sandbox on Modal. |
+| [`mem0`](/docs/reference/functions/mem0) | `mem0` | Mem0 memory: refused, since the mem0ai SDK sends outside any transport threads can fence (its constructor checks the key and it posts telemetry on its own). |
+| [`slack`](/docs/reference/functions/slack) | `slack` | A Slack channel. |
+| [`github`](/docs/reference/functions/github) | `github` | A GitHub channel. |
+| [`whatsapp`](/docs/reference/functions/whatsapp) | `whatsapp` | A WhatsApp Cloud API channel. |
 
 These providers exist but are not in the reference yet; their guides describe them: [Models](/docs/agents/models), [Sandboxes](/docs/sandboxes/overview), [Host server](/docs/host/overview) and [Memory](/docs/memory/memory).
 
 - `aiSdk`: Any AI SDK model (TypeScript only).
 - `litellm`: Models through LiteLLM (Python only).
-- `e2b`: E2B sandboxes.
-- `daytona`: Daytona sandboxes.
-- `modal`: Modal sandboxes (Python; the TypeScript factory always refuses).
-- `mem0`: Mem0 memory (refused in both languages today).
-- `slack`: The Slack channel.
-- `github`: The GitHub channel.
-- `whatsapp`: The WhatsApp channel.
 
 ## Types
 

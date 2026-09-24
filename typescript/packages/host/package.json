@@ -11,6 +11,8 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@threads/github": "workspace:*",
+    "@threads/slack": "workspace:*",
     "@threads/whatsapp": "workspace:*"
   }
 }

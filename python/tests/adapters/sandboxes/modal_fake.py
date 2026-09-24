@@ -45,6 +45,8 @@ class FakeModal:
         """A sandbox id to answer SandboxCreate with, instead of the backend's (by name)."""
         self.blocked: list[bool] = []
         """block_network of every SandboxCreate."""
+        self.creates: list[api_pb2.SandboxCreateRequest] = []
+        self.apps: list[api_pb2.AppGetOrCreateRequest] = []
         self._execs: dict[str, _Exec] = {}
 
     def __mapping__(self) -> dict[str, grpclib.const.Handler]:
@@ -73,12 +75,14 @@ class FakeModal:
             ),
         }
 
-    async def _app(self, _: api_pb2.AppGetOrCreateRequest) -> Message:
+    async def _app(self, request: api_pb2.AppGetOrCreateRequest) -> Message:
+        self.apps.append(request)
         return api_pb2.AppGetOrCreateResponse(app_id="ap-test")
 
     async def _create(self, request: api_pb2.SandboxCreateRequest) -> Message:
         name = request.definition.name
         self.blocked.append(request.definition.block_network)
+        self.creates.append(request)
         if self._find(name) is not None:
             raise GRPCError(Status.ALREADY_EXISTS, f"{name} exists")
         box = self.backend.create(name, {})

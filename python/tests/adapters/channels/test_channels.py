@@ -93,7 +93,6 @@ def test_whatsapp_keys_each_batched_message_by_its_own_id() -> None:
         app_secret=secret("SIGNING"),
         access_token=secret("TOKEN"),
         verify_token=secret("VERIFY"),
-        phone_number_id="p",
         agent="a",
     )
     messages: list[JsonValue] = [

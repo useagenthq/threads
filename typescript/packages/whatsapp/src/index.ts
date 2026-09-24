@@ -24,8 +24,8 @@ export type WhatsappOptions = {
   readonly agent: string;
   /** The Meta app secret that signs webhooks. */
   readonly appSecret: Secret;
-  /** The token Meta's GET subscription check must present; absent, the check is not served. */
-  readonly verifyToken?: Secret;
+  /** The token Meta's GET subscription check must present. */
+  readonly verifyToken: Secret;
   /** A system-user access token; the host resolves it and passes it to perform only. */
   readonly accessToken: Secret;
   /** Graph API version. Defaults to "v21.0". */
@@ -107,9 +107,7 @@ export function whatsapp(options: WhatsappOptions): ChannelAdapter {
         : { ok: true, value: items };
     },
     ack: () => ({ status: 200, headers: {}, body: new Uint8Array() }),
-    ...(options.verifyToken === undefined
-      ? {}
-      : { challenge: challenger(options.verifyToken) }),
+    challenge: challenger(options.verifyToken),
     render,
     perform: performer({
       graphVersion: options.graphVersion ?? "v21.0",

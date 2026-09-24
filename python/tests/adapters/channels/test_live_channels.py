@@ -37,13 +37,15 @@ def _needs(*names: str) -> tuple[str, ...]:
     return tuple(os.environ[n] for n in names)
 
 
-def _send(channel: ChannelAdapter, address: str, token_name: str) -> DeliveryOutcome:
+def _send(
+    channel: ChannelAdapter, address: str, token_name: str, installation: str = ""
+) -> DeliveryOutcome:
     async def allowed() -> bool:
         return True
 
     async def run() -> DeliveryOutcome:
         with bound(allowed):
-            op = {"text": "threads live gate", "address": address}
+            op = {"text": "threads live gate", "address": address, "installation_id": installation}
             credentials = dict.fromkeys(channel.secrets, os.environ[token_name])
             return await channel.perform(op, f"live:{uuid.uuid4().hex}", credentials)
 
@@ -67,10 +69,9 @@ def test_whatsapp_sends() -> None:
         app_secret=secret("WHATSAPP_APP_SECRET"),
         access_token=secret("WHATSAPP_ACCESS_TOKEN"),
         verify_token=secret("WHATSAPP_VERIFY_TOKEN"),
-        phone_number_id=phone,
         agent="a",
     )
-    assert isinstance(_send(channel, to, "WHATSAPP_ACCESS_TOKEN"), Sent)
+    assert isinstance(_send(channel, to, "WHATSAPP_ACCESS_TOKEN", phone), Sent)
 
 
 def test_github_comments() -> None:

@@ -1,0 +1,81 @@
+---
+title: "github"
+description: "A GitHub channel."
+icon: "Plug"
+---
+
+Pass it as host(&#123;channels: &#123;github: github(&#123;...&#125;)&#125;&#125;). A GitHub App webhook, verified with the webhook secret, turns a new issue or pull request comment into a run of agent; the reply is a comment on the same issue. GitHub has no buttons, so approvals are /approve &lt;id> replies. Secrets are resolved on the host at ready().
+
+Import from `@threads/github` (TypeScript) or `threads.github` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function github(options: {
+  agent: string;
+  webhookSecret: Secret;
+  token: Secret;
+  appSlug?: string;
+  tenant?: string | ((installationId: string) => string | undefined);
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+}): ChannelAdapter
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def github(
+    *,
+    agent: str,
+    webhook_secret: Secret,
+    token: Secret,
+    app_slug: str | None = None,
+    api: str = "https://api.github.com",
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> ChannelAdapter
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="agent" type={"string"} required>
+  The key of host(&#123;agents&#125;) this channel routes to. invalid_config: the channel's agent must be a key of host(&#123; agents &#125;).
+</Field>
+
+<Field name="webhookSecret / webhook_secret" type={"Secret"} required>
+  The App's webhook secret, which verifies every delivery. Unset at ready() is missing_secret. See [Secret](/docs/reference/types/Secret).
+</Field>
+
+<Field name="token" type={"Secret"} required>
+  An installation or fine-grained token with issues write, used to comment and to look a reply up. Unset at ready() is missing_secret. See [Secret](/docs/reference/types/Secret).
+</Field>
+
+<Field name="appSlug / app_slug" type={"string"}>
+  The App's slug: comments by &lt;slug>[bot] are ignored, and a reply is looked up among its comments only. Omitted: every bot's comments are ignored, and a reply is found by its marker alone.
+</Field>
+
+<Field name="tenant" type={"string | ((installationId: string) => string | undefined)"}>
+  TypeScript only. The tenant for an installation, or a function mapping an installation id to one (undefined refuses it). Omitted: github:&lt;installation_id>. In Python each channel is github:&lt;installation_id>.
+</Field>
+
+<Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
+  TypeScript only. Seam: the fetch the SDK sends through (tests); the run's fence wraps it either way. Omitted: the process's fetch.
+</Field>
+
+<Field name="api" type={"str"} default={"https://api.github.com"}>
+  Python only. Seam: the GitHub REST API base URL (tests point it at a fake).
+</Field>
+
+<Field name="transport" type={"httpx.AsyncBaseTransport"}>
+  Python only. Seam: the httpx transport replies are sent through (tests); the run's fence wraps it either way. Omitted: httpx's default.
+</Field>
+
+## Returns
+
+[`ChannelAdapter`](/docs/reference/types/ChannelAdapter)
+
+**Throws** `ConfigError` with one of these codes: `invalid_config`, `missing_secret`.

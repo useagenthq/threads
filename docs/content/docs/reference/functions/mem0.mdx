@@ -1,0 +1,49 @@
+---
+title: "mem0"
+description: "Mem0 memory: refused, since the mem0ai SDK sends outside any transport threads can fence (its constructor checks the key and it posts telemetry on its own)."
+icon: "Plug"
+---
+
+TypeScript refuses at check() or the first run, Python when mem0() is called. Use supermemory() or zep().
+
+Import from `@threads/mem0` (TypeScript) or `threads.mem0` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function mem0(options: {
+  apiKey: Secret;
+  host?: string;
+}): MemoryProvider
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def mem0(
+    *,
+    api_key: Secret,
+    host: str | None = None,
+) -> MemoryProvider
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="apiKey / api_key" type={"Secret"} required>
+  A secret() naming the host environment variable that holds the Mem0 API key. See [Secret](/docs/reference/types/Secret).
+</Field>
+
+<Field name="host" type={"string"}>
+  The Mem0 API host. Omitted: Mem0's hosted platform.
+</Field>
+
+## Returns
+
+[`MemoryProvider`](/docs/reference/types/MemoryProvider)
+
+**Throws** `ConfigError` with one of these codes: `transport_fence_unsupported`.

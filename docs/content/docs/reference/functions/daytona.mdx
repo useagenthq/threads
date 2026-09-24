@@ -1,0 +1,104 @@
+---
+title: "daytona"
+description: "A Sandbox on Daytona."
+icon: "Plug"
+---
+
+Pass it as agent(&#123;sandbox: daytona()&#125;). Each sandbox is private, starts with no environment and its network blocked, and stops, then is deleted, after autoStopMinutes idle as a backstop to the ledger's cleanup. The API key authenticates the host's requests only.
+
+Import from `@threads/daytona` (TypeScript) or `threads.daytona` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function daytona(options?: {
+  apiKey?: string | Secret;
+  apiUrl?: string;
+  snapshot?: string;
+  target?: string;
+  lifetimeMs?: number;
+  allowInternet?: boolean;
+  autoStopMinutes?: number;
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+  openSocket?: OpenSocket;
+  pollMs?: number;
+  waitMs?: number;
+}): Sandbox
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def daytona(
+    *,
+    api_key: str | Secret | None = None,
+    api_url: str = "https://app.daytona.io/api",
+    snapshot: str | None = None,
+    target: str | None = None,
+    lifetime_ms: int = 3600000,
+    allow_internet: bool = False,
+    auto_stop_minutes: int = 60,
+    name: str = "daytona",
+) -> Sandbox
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="apiKey / api_key" type={"string | Secret"}>
+  The Daytona API key: a secret() or a string. Omitted: secret("DAYTONA_API_KEY"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. It never enters a sandbox.
+</Field>
+
+<Field name="apiUrl / api_url" type={"string"} default={"https://app.daytona.io/api"}>
+  The Daytona API URL.
+</Field>
+
+<Field name="snapshot" type={"string"}>
+  The Daytona snapshot a new sandbox starts from. Omitted: Daytona's default snapshot.
+</Field>
+
+<Field name="target" type={"string"}>
+  The Daytona region (target) sandboxes are created in. Omitted: the organization's default.
+</Field>
+
+<Field name="lifetimeMs / lifetime_ms" type={"number"} default={"3600000"}>
+  How long a sandbox lives, in milliseconds, before Daytona deletes it (the declared expiry). Daytona counts whole minutes, so it is rounded up to a whole minute.
+</Field>
+
+<Field name="allowInternet / allow_internet" type={"boolean"} default={"false"}>
+  Lifts Daytona's network block. Egress is then unenforced, so the agent must also set egress: "unenforced".
+</Field>
+
+<Field name="autoStopMinutes / auto_stop_minutes" type={"number"} default={"60"}>
+  Idle minutes before Daytona stops a sandbox, and minutes after that before it deletes it: a backstop for a leak, never the normal cleanup. A positive integer; anything else is invalid_config.
+</Field>
+
+<Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
+  TypeScript only. Seam: the fetch the API clients send through (a proxy, a test server); the run's fence wraps it either way. Omitted: the global fetch.
+</Field>
+
+<Field name="openSocket" type={"OpenSocket"}>
+  TypeScript only. Seam: opens the exec log WebSocket (tests). Omitted: the runtime's WebSocket with headers; the fence checks each open either way.
+</Field>
+
+<Field name="pollMs" type={"number"} default={"1000"}>
+  TypeScript only. Seam: how often a wait for a sandbox state polls, in milliseconds.
+</Field>
+
+<Field name="waitMs" type={"number"} default={"300000"}>
+  TypeScript only. Seam: how long a wait for a sandbox state polls before it fails, in milliseconds.
+</Field>
+
+<Field name="name" type={"str"} default={"daytona"}>
+  Python only. The provider name in SandboxInfo and the sandbox ledger ([a-z][a-z0-9_]*, else invalid_config); rows under another name are never touched.
+</Field>
+
+## Returns
+
+[`Sandbox`](/docs/reference/types/Sandbox)
+
+**Throws** `ConfigError` with one of these codes: `invalid_config`, `missing_secret`.

@@ -3,7 +3,8 @@
 The official mem0ai SDK's `AsyncMemoryClient` validates its key in the constructor with a
 blocking `requests` call and sends telemetry, both outside any httpx client we can fence. A
 provider whose requests can't all pass the run's fence at the real send point is never run with
-a weaker one, so the extra carries no SDK until one can be fenced.
+a weaker one, so the extra carries no SDK until one can be fenced. The options match TypeScript's
+so a config line stays valid when it can be.
 """
 
 from typing import NoReturn
@@ -12,7 +13,7 @@ from threads.agents.config import ConfigError
 from threads.secrets import Secret
 
 
-def mem0(*, api_key: Secret | None = None) -> NoReturn:
+def mem0(*, api_key: Secret, host: str | None = None) -> NoReturn:
     raise ConfigError(
         "transport_fence_unsupported",
         "mem0: the mem0ai client sends outside a fenceable transport (a requests key check "

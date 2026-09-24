@@ -20,11 +20,11 @@ Daytona's log stream splits stdout from stderr with in-band markers (`01 01 01`,
 Every sandbox is created with:
 
 - `public: false`, always. No option makes a sandbox public.
-- `networkBlockAll: true` (egress denied) unless `network: "open"`.
+- `networkBlockAll: true` (egress denied) unless `allowInternet: true`.
 - `autoStopInterval: autoStopMinutes` (default 60, a positive integer) and `autoDeleteInterval` of the same minutes: an idle sandbox stops, and a stopped one is deleted. This is only a backstop for a leak; the resource ledger owns normal cleanup.
-- `ttlMinutes` (default 60): Daytona destroys the sandbox after it.
+- `ttlMinutes` from `lifetimeMs` (default one hour, rounded up to whole minutes): Daytona destroys the sandbox after it.
 
-The Python adapter (`threads.daytona`, `auto_stop_minutes`) sends the same values.
+The Python adapter (`threads.daytona`, `auto_stop_minutes`, `lifetime_ms`, `allow_internet`) sends the same values.
 
 ## The toolbox runs as a non-root user
 

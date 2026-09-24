@@ -1,6 +1,6 @@
 """The E2B control plane through the SDK's generated client (e2b.api.client), on a fenced
 transport. Every call is one attempt: nothing here retries, a lost answer is the ledger's to
-resolve by the operation key. Responses are parsed with wire.py; statuses the operation expects
+settle by the operation key. Responses are parsed with wire.py; statuses the operation expects
 are values, any other is an ApiError."""
 
 import urllib.parse

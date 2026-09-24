@@ -32,6 +32,8 @@ type Handler = Callable[[web.Request], Awaitable[web.StreamResponse]]
 class _Create(BaseModel):
     name: str
     snapshot: str | None = None
+    target: str | None = None
+    ttl_minutes: int | None = Field(default=None, alias="ttlMinutes")
     network_block_all: Literal[True] = Field(alias="networkBlockAll")  # egress denied by default
     public: Literal[False]
     auto_stop_interval: int = Field(alias="autoStopInterval", gt=0)

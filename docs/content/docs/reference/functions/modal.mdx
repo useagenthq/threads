@@ -1,0 +1,86 @@
+---
+title: "modal"
+description: "A Sandbox on Modal."
+icon: "Plug"
+---
+
+Pass it as agent(&#123;sandbox: modal(image_id="im-...")&#125;). Each sandbox starts with no environment and its network blocked. TypeScript: always refuses (Modal's JS SDK runs commands over a transport threads can't fence); use Python.
+
+Import from `@threads/modal` (TypeScript) or `threads.modal` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function modal(): Sandbox
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def modal(
+    *,
+    image_id: str,
+    token_id: str | Secret | None = None,
+    token_secret: str | Secret | None = None,
+    app_name: str = "threads",
+    environment: str = "",
+    lifetime_ms: int = 3600000,
+    allow_internet: bool = False,
+    name: str = "modal",
+    server_url: str = "https://api.modal.com",
+    connect: threads.adapters.sandboxes.modal.channel.Connect | None = None,
+) -> Sandbox
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="image_id" type={"str"} required>
+  Python only. A built Modal image (im-..., for example modal.Image.debian_slim().build(app) once at setup). It needs /bin/sh, sed, find, sha256sum and stat. Empty is invalid_config.
+</Field>
+
+<Field name="token_id" type={"str | Secret"}>
+  Python only. The Modal token id: a secret() or a string. Omitted: secret("MODAL_TOKEN_ID"). Resolved on the host at setup with token_secret; either unset is missing_secret. It goes only to Modal's control plane.
+</Field>
+
+<Field name="token_secret" type={"str | Secret"}>
+  Python only. The Modal token secret: a secret() or a string. Omitted: secret("MODAL_TOKEN_SECRET"). Resolved with token_id.
+</Field>
+
+<Field name="app_name" type={"str"} default={"threads"}>
+  Python only. The Modal app sandboxes are created under.
+</Field>
+
+<Field name="environment" type={"str"} default={""}>
+  Python only. The Modal environment. Empty: the workspace's default.
+</Field>
+
+<Field name="lifetime_ms" type={"int"} default={"3600000"}>
+  Python only. How long a sandbox lives, in milliseconds, before Modal ends it (the declared expiry). 1000 to 86400000; anything else is invalid_config.
+</Field>
+
+<Field name="allow_internet" type={"bool"} default={"false"}>
+  Python only. Lifts Modal's network block. Egress is then unenforced, so the agent must also set egress: "unenforced".
+</Field>
+
+<Field name="name" type={"str"} default={"modal"}>
+  Python only. The provider name in SandboxInfo and the sandbox ledger; rows under another name are never touched.
+</Field>
+
+<Field name="server_url" type={"str"} default={"https://api.modal.com"}>
+  Python only. Seam: the Modal API URL (tests point it at a fake).
+</Field>
+
+<Field name="connect" type={"threads.adapters.sandboxes.modal.channel.Connect"}>
+  Python only. Seam: opens a gRPC channel to a URL (tests). Omitted: a TLS channel; the fence checks every request on it either way.
+</Field>
+
+## Returns
+
+[`Sandbox`](/docs/reference/types/Sandbox)
+
+**Throws** `ConfigError` with one of these codes: `invalid_config` (Python only), `missing_secret` (Python only), `transport_fence_unsupported` (TypeScript only).

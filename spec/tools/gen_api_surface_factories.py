@@ -186,10 +186,17 @@ def _py_helper(key: str, f: Obj, r: Render) -> list[str]:
     ]
 
 
+def _py_home(api: Obj, ref: str) -> str:
+    """The Python module a contract type is exported from: its package's (`ChannelAdapter` is
+    `threads.host`'s)."""
+    package = text(obj(obj(api.get("types", {})).get(ref, {})).get("package", "core"))
+    return text(obj(obj(api["packages"])[package])["py"])
+
+
 def render_py(api: Obj) -> str:
     """Each factory, called with its declared inputs, returns its declared protocol. Contract
-    types come from `threads`; a qualified platform type (`httpx.AsyncBaseTransport`) imports
-    its module (everything before the last dot)."""
+    types come from their package's module; a qualified platform type
+    (`httpx.AsyncBaseTransport`) imports its module (everything before the last dot)."""
     r = Render("py")
     names: dict[str, set[str]] = {}
     modules: set[str] = set()
@@ -202,7 +209,8 @@ def render_py(api: Obj) -> str:
             names.setdefault(module, set()).add(text(f["py"]))
             # Only what the helper spells: an import of an optional option's type is unused.
             named: Json = [*(p for ps in _py_inputs(f) for p in ps), f.get("returns")]
-            names.setdefault("threads", set()).update(_refs(named))
+            for ref in _refs(named):
+                names.setdefault(_py_home(api, ref), set()).add(ref)
             modules.update(m for t in _platforms(named, "py") for m in modules_of(t))
             body += _py_helper(key, f, r)
     lines = [f'"""{HEADER}"""', ""]

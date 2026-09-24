@@ -14,7 +14,9 @@ export type DriverOptions = {
   readonly clients: () => Clients;
   readonly open: OpenSocket;
   /** The Daytona snapshot new sandboxes start from; undefined: Daytona's default. */
-  readonly image: string | undefined;
+  readonly snapshot: string | undefined;
+  /** The region sandboxes are created in; undefined: the organization's default. */
+  readonly target: string | undefined;
   readonly ttlMinutes: number;
   /** Idle minutes before Daytona stops a sandbox; a stopped one is deleted after as long. */
   readonly autoStopMinutes: number;
@@ -109,14 +111,17 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
   };
 
   /** Creates the key's sandbox; a name is unique, so a 409 is this key's earlier create. */
-  const post = async (key: string, image: string | undefined) => {
+  const post = async (key: string, snapshot: string | undefined) => {
     try {
       return await unless404(
         async () =>
           (
             await sandboxes().createSandbox({
               name: nameOf(key),
-              ...(image === undefined ? {} : { snapshot: image }),
+              ...(snapshot === undefined ? {} : { snapshot }),
+              ...(options.target === undefined
+                ? {}
+                : { target: options.target }),
               env: {},
               labels: { threads_operation_key: key },
               user: "root",
@@ -139,7 +144,7 @@ export function daytonaDriver(options: DriverOptions): SandboxDriver {
 
   return {
     create: async (key, snapshot) => {
-      const made = await post(key, snapshot ?? options.image);
+      const made = await post(key, snapshot ?? options.snapshot);
       if (made === undefined)
         return {
           kind: "snapshot_missing",

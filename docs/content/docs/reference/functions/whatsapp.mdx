@@ -1,0 +1,92 @@
+---
+title: "whatsapp"
+description: "A WhatsApp Cloud API channel."
+icon: "Plug"
+---
+
+Pass it as host(&#123;channels: &#123;whatsapp: whatsapp(&#123;...&#125;)&#125;&#125;). Webhooks are verified with the app secret; a message becomes a run of agent, and the reply is sent from the business phone number the message arrived on. Secrets are resolved on the host at ready().
+
+Import from `@threads/whatsapp` (TypeScript) or `threads.whatsapp` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function whatsapp(options: {
+  agent: string;
+  appSecret: Secret;
+  verifyToken: Secret;
+  accessToken: Secret;
+  graphVersion?: string;
+  tenant?: string | ((phoneNumberId: string) => string | undefined);
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+  now?: () => number;
+}): ChannelAdapter
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def whatsapp(
+    *,
+    agent: str,
+    app_secret: Secret,
+    verify_token: Secret,
+    access_token: Secret,
+    graph_version: str = "v21.0",
+    api: str = "https://graph.facebook.com",
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> ChannelAdapter
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="agent" type={"string"} required>
+  The key of host(&#123;agents&#125;) this channel routes to. invalid_config: the channel's agent must be a key of host(&#123; agents &#125;).
+</Field>
+
+<Field name="appSecret / app_secret" type={"Secret"} required>
+  The Meta app secret that signs webhooks. Unset at ready() is missing_secret. See [Secret](/docs/reference/types/Secret).
+</Field>
+
+<Field name="verifyToken / verify_token" type={"Secret"} required>
+  The token Meta's subscription check (GET) must present. Unset at ready() is missing_secret. See [Secret](/docs/reference/types/Secret).
+</Field>
+
+<Field name="accessToken / access_token" type={"Secret"} required>
+  A system-user access token replies are sent with. Unset at ready() is missing_secret. See [Secret](/docs/reference/types/Secret).
+</Field>
+
+<Field name="graphVersion / graph_version" type={"string"} default={"v21.0"}>
+  The Graph API version replies are sent to.
+</Field>
+
+<Field name="tenant" type={"string | ((phoneNumberId: string) => string | undefined)"}>
+  TypeScript only. The tenant for a business phone number, or a function mapping a phone number id to one (undefined refuses it). Omitted: whatsapp:&lt;phone_number_id>. In Python each number is whatsapp:&lt;phone_number_id>.
+</Field>
+
+<Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
+  TypeScript only. Seam: the fetch replies are sent through (tests); the run's fence wraps it either way. Omitted: the process's fetch.
+</Field>
+
+<Field name="now" type={"() => number"}>
+  TypeScript only. Seam: the clock the 24-hour session window is checked against, in milliseconds (tests). Omitted: Date.now.
+</Field>
+
+<Field name="api" type={"str"} default={"https://graph.facebook.com"}>
+  Python only. Seam: the Graph API base URL, before the version (tests point it at a fake).
+</Field>
+
+<Field name="transport" type={"httpx.AsyncBaseTransport"}>
+  Python only. Seam: the httpx transport replies are sent through (tests); the run's fence wraps it either way. Omitted: httpx's default.
+</Field>
+
+## Returns
+
+[`ChannelAdapter`](/docs/reference/types/ChannelAdapter)
+
+**Throws** `ConfigError` with one of these codes: `invalid_config`, `missing_secret`.

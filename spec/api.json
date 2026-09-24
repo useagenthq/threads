@@ -58,6 +58,55 @@
       "provider": "OpenAI",
       "doc": "OpenAI models on the official OpenAI SDK (Python extra openai). Every request goes through the run's fenced transport."
     },
+    "e2b": {
+      "kind": "adapter",
+      "ts": "@threads/e2b",
+      "py": "threads.e2b",
+      "provider": "E2B",
+      "doc": "Sandboxes on E2B cloud VMs through the official e2b SDK (Python extra e2b). Every control-plane and sandbox request goes through the run's fenced transport."
+    },
+    "daytona": {
+      "kind": "adapter",
+      "ts": "@threads/daytona",
+      "py": "threads.daytona",
+      "provider": "Daytona",
+      "doc": "Sandboxes on Daytona through its official API clients (Python extra daytona). Every control-plane and toolbox request goes through the run's fenced transport."
+    },
+    "modal": {
+      "kind": "adapter",
+      "ts": "@threads/modal",
+      "py": "threads.modal",
+      "provider": "Modal",
+      "doc": "Sandboxes on Modal over the official SDK's gRPC protocol (Python extra modal), on channels fenced at every request. The TypeScript package always refuses: Modal's JS SDK sends commands over a transport threads can't fence."
+    },
+    "mem0": {
+      "kind": "adapter",
+      "ts": "@threads/mem0",
+      "py": "threads.mem0",
+      "provider": "Mem0",
+      "doc": "Mem0 memory, refused in both languages: the mem0ai SDK sends outside any transport threads can fence."
+    },
+    "slack": {
+      "kind": "adapter",
+      "ts": "@threads/slack",
+      "py": "threads.slack",
+      "provider": "Slack",
+      "doc": "The Slack channel for host({channels}): Events API and interactivity in, chat.postMessage out (Python extra slack). Sends go through the run's fenced transport."
+    },
+    "github": {
+      "kind": "adapter",
+      "ts": "@threads/github",
+      "py": "threads.github",
+      "provider": "GitHub",
+      "doc": "The GitHub channel for host({channels}): App webhooks in, issue and pull request comments out (Python extra github). Sends go through the run's fenced transport."
+    },
+    "whatsapp": {
+      "kind": "adapter",
+      "ts": "@threads/whatsapp",
+      "py": "threads.whatsapp",
+      "provider": "WhatsApp",
+      "doc": "The WhatsApp Cloud API channel for host({channels}) (Python extra whatsapp). Sends go through the run's fenced transport."
+    },
     "search": {
       "kind": "adapter",
       "ts": "@threads/core",
@@ -990,6 +1039,141 @@
       ],
       "returns": {"$ref": "#/types/SearchBackend"},
       "config_errors": [{"code": "missing_secret"}]
+    },
+    "e2b": {
+      "ts": "e2b",
+      "py": "e2b",
+      "package": "e2b",
+      "doc": "A Sandbox on an E2B cloud VM. Pass it as agent({sandbox: e2b()}). Each sandbox starts from a template with no environment and no internet; the API key authenticates the host's requests only. TypeScript: runs on Bun (on Node the E2B SDK sends through undici, which threads can't fence).",
+      "async": false,
+      "params": [
+        {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"E2B_API_KEY\")", "doc": "The E2B API key: a secret() or a string. Omitted: secret(\"E2B_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. It never enters a sandbox."},
+        {"name": "template", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "base", "doc": "The E2B template a new sandbox starts from. It needs /bin/sh, sed, find, stat and sha256sum (E2B's base has them)."},
+        {"name": "lifetime_ms", "kind": "option", "type": {"prim": "integer"}, "required": false, "default": 3600000, "doc": "How long a sandbox lives, in milliseconds, before E2B kills it (the declared expiry)."},
+        {"name": "allow_internet", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "Lets the sandbox reach the internet. Its egress is then unenforced, so the agent must also set egress: \"unenforced\"."},
+        {"name": "domain", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The E2B domain, for a self-hosted or regional deployment. Omitted: E2B's default."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch the SDK sends through (a proxy, a test server); the run's fence wraps it either way. Omitted: the process's fetch."},
+        {"name": "name", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "e2b", "doc": "The provider name in SandboxInfo and the sandbox ledger; rows under another name are never touched."}
+      ],
+      "returns": {"$ref": "#/types/Sandbox"},
+      "config_errors": [{"code": "missing_secret"}, {"code": "transport_fence_unsupported", "lang": "ts"}]
+    },
+    "daytona": {
+      "ts": "daytona",
+      "py": "daytona",
+      "package": "daytona",
+      "doc": "A Sandbox on Daytona. Pass it as agent({sandbox: daytona()}). Each sandbox is private, starts with no environment and its network blocked, and stops, then is deleted, after autoStopMinutes idle as a backstop to the ledger's cleanup. The API key authenticates the host's requests only.",
+      "async": false,
+      "params": [
+        {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"DAYTONA_API_KEY\")", "doc": "The Daytona API key: a secret() or a string. Omitted: secret(\"DAYTONA_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. It never enters a sandbox."},
+        {"name": "api_url", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "https://app.daytona.io/api", "doc": "The Daytona API URL."},
+        {"name": "snapshot", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The Daytona snapshot a new sandbox starts from. Omitted: Daytona's default snapshot."},
+        {"name": "target", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The Daytona region (target) sandboxes are created in. Omitted: the organization's default."},
+        {"name": "lifetime_ms", "kind": "option", "type": {"prim": "integer"}, "required": false, "default": 3600000, "doc": "How long a sandbox lives, in milliseconds, before Daytona deletes it (the declared expiry). Daytona counts whole minutes, so it is rounded up to a whole minute."},
+        {"name": "allow_internet", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "Lifts Daytona's network block. Egress is then unenforced, so the agent must also set egress: \"unenforced\"."},
+        {"name": "auto_stop_minutes", "kind": "option", "type": {"prim": "integer"}, "required": false, "default": 60, "doc": "Idle minutes before Daytona stops a sandbox, and minutes after that before it deletes it: a backstop for a leak, never the normal cleanup. A positive integer; anything else is invalid_config."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch the API clients send through (a proxy, a test server); the run's fence wraps it either way. Omitted: the global fetch."},
+        {"name": "open_socket", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "OpenSocket"}}, "required": false, "doc": "Seam: opens the exec log WebSocket (tests). Omitted: the runtime's WebSocket with headers; the fence checks each open either way."},
+        {"name": "poll_ms", "kind": "option", "lang": "ts", "type": {"prim": "integer"}, "required": false, "default": 1000, "doc": "Seam: how often a wait for a sandbox state polls, in milliseconds."},
+        {"name": "wait_ms", "kind": "option", "lang": "ts", "type": {"prim": "integer"}, "required": false, "default": 300000, "doc": "Seam: how long a wait for a sandbox state polls before it fails, in milliseconds."},
+        {"name": "name", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "daytona", "doc": "The provider name in SandboxInfo and the sandbox ledger ([a-z][a-z0-9_]*, else invalid_config); rows under another name are never touched."}
+      ],
+      "returns": {"$ref": "#/types/Sandbox"},
+      "config_errors": [{"code": "invalid_config"}, {"code": "missing_secret"}]
+    },
+    "modal": {
+      "ts": "modal",
+      "py": "modal",
+      "package": "modal",
+      "doc": "A Sandbox on Modal. Pass it as agent({sandbox: modal(image_id=\"im-...\")}). Each sandbox starts with no environment and its network blocked. TypeScript: always refuses (Modal's JS SDK runs commands over a transport threads can't fence); use Python.",
+      "async": false,
+      "params": [
+        {"name": "image_id", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": true, "doc": "A built Modal image (im-..., for example modal.Image.debian_slim().build(app) once at setup). It needs /bin/sh, sed, find, sha256sum and stat. Empty is invalid_config."},
+        {"name": "token_id", "kind": "option", "lang": "py", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"MODAL_TOKEN_ID\")", "doc": "The Modal token id: a secret() or a string. Omitted: secret(\"MODAL_TOKEN_ID\"). Resolved on the host at setup with token_secret; either unset is missing_secret. It goes only to Modal's control plane."},
+        {"name": "token_secret", "kind": "option", "lang": "py", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"MODAL_TOKEN_SECRET\")", "doc": "The Modal token secret: a secret() or a string. Omitted: secret(\"MODAL_TOKEN_SECRET\"). Resolved with token_id."},
+        {"name": "app_name", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "threads", "doc": "The Modal app sandboxes are created under."},
+        {"name": "environment", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "", "doc": "The Modal environment. Empty: the workspace's default."},
+        {"name": "lifetime_ms", "kind": "option", "lang": "py", "type": {"prim": "integer"}, "required": false, "default": 3600000, "doc": "How long a sandbox lives, in milliseconds, before Modal ends it (the declared expiry). 1000 to 86400000; anything else is invalid_config."},
+        {"name": "allow_internet", "kind": "option", "lang": "py", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "Lifts Modal's network block. Egress is then unenforced, so the agent must also set egress: \"unenforced\"."},
+        {"name": "name", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "modal", "doc": "The provider name in SandboxInfo and the sandbox ledger; rows under another name are never touched."},
+        {"name": "server_url", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "https://api.modal.com", "doc": "Seam: the Modal API URL (tests point it at a fake)."},
+        {"name": "connect", "kind": "option", "lang": "py", "type": {"platform": {"py": "threads.adapters.sandboxes.modal.channel.Connect"}}, "required": false, "doc": "Seam: opens a gRPC channel to a URL (tests). Omitted: a TLS channel; the fence checks every request on it either way."}
+      ],
+      "returns": {"$ref": "#/types/Sandbox"},
+      "config_errors": [{"code": "transport_fence_unsupported", "lang": "ts"}, {"code": "invalid_config", "lang": "py"}, {"code": "missing_secret", "lang": "py"}]
+    },
+    "mem0": {
+      "ts": "mem0",
+      "py": "mem0",
+      "package": "mem0",
+      "doc": "Mem0 memory: refused, since the mem0ai SDK sends outside any transport threads can fence (its constructor checks the key and it posts telemetry on its own). TypeScript refuses at check() or the first run, Python when mem0() is called. Use supermemory() or zep().",
+      "async": false,
+      "params": [
+        {"name": "api_key", "kind": "option", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "A secret() naming the host environment variable that holds the Mem0 API key."},
+        {"name": "host", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The Mem0 API host. Omitted: Mem0's hosted platform."}
+      ],
+      "returns": {"$ref": "#/types/MemoryProvider"},
+      "config_errors": [{"code": "transport_fence_unsupported"}]
+    },
+    "slack": {
+      "ts": "slack",
+      "py": "slack",
+      "package": "slack",
+      "doc": "A Slack channel. Pass it as host({channels: {slack: slack({...})}}). Requests are verified with the signing secret; a message becomes a run of agent, and its reply is posted in the same conversation. Secrets are resolved on the host at ready().",
+      "async": false,
+      "params": [
+        {"name": "agent", "kind": "option", "type": {"prim": "string"}, "required": true, "doc": "The key of host({agents}) this channel routes to. invalid_config: the channel's agent must be a key of host({ agents })."},
+        {"name": "signing_secret", "kind": "option", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "The Slack app's signing secret, which verifies every request. Unset at ready() is missing_secret."},
+        {"name": "bot_token", "kind": "option", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "The bot token (xoxb-...) replies are posted with. Unset at ready() is missing_secret."},
+        {"name": "bot_user_id", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The bot's own user id: its messages are ignored. Omitted: messages Slack marks as from a bot are ignored, which covers the bot's own."},
+        {"name": "tenant", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "string | ((teamId: string) => string | undefined)"}}, "required": false, "doc": "The tenant for a workspace, or a function mapping a team id to one (undefined refuses that workspace). Omitted: slack:<team_id>. In Python each channel is slack:<team_id>."},
+        {"name": "now", "kind": "option", "lang": "ts", "type": {"fn": {"async": false, "params": [], "returns": {"prim": "number"}}}, "required": false, "doc": "Seam: the clock the request timestamp is checked against, in milliseconds (tests). Omitted: Date.now."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch replies are sent through (tests); the run's fence wraps it either way. Omitted: the process's fetch."},
+        {"name": "api", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "https://slack.com/api", "doc": "Seam: the Slack Web API base URL (tests point it at a fake)."},
+        {"name": "transport", "kind": "option", "lang": "py", "type": {"platform": {"py": "httpx.AsyncBaseTransport"}}, "required": false, "doc": "Seam: the httpx transport replies are sent through (tests); the run's fence wraps it either way. Omitted: httpx's default."}
+      ],
+      "returns": {"$ref": "#/types/ChannelAdapter"},
+      "config_errors": [{"code": "missing_secret"}, {"code": "invalid_config"}]
+    },
+    "github": {
+      "ts": "github",
+      "py": "github",
+      "package": "github",
+      "doc": "A GitHub channel. Pass it as host({channels: {github: github({...})}}). A GitHub App webhook, verified with the webhook secret, turns a new issue or pull request comment into a run of agent; the reply is a comment on the same issue. GitHub has no buttons, so approvals are /approve <id> replies. Secrets are resolved on the host at ready().",
+      "async": false,
+      "params": [
+        {"name": "agent", "kind": "option", "type": {"prim": "string"}, "required": true, "doc": "The key of host({agents}) this channel routes to. invalid_config: the channel's agent must be a key of host({ agents })."},
+        {"name": "webhook_secret", "kind": "option", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "The App's webhook secret, which verifies every delivery. Unset at ready() is missing_secret."},
+        {"name": "token", "kind": "option", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "An installation or fine-grained token with issues write, used to comment and to look a reply up. Unset at ready() is missing_secret."},
+        {"name": "app_slug", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The App's slug: comments by <slug>[bot] are ignored, and a reply is looked up among its comments only. Omitted: every bot's comments are ignored, and a reply is found by its marker alone."},
+        {"name": "tenant", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "string | ((installationId: string) => string | undefined)"}}, "required": false, "doc": "The tenant for an installation, or a function mapping an installation id to one (undefined refuses it). Omitted: github:<installation_id>. In Python each channel is github:<installation_id>."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch the SDK sends through (tests); the run's fence wraps it either way. Omitted: the process's fetch."},
+        {"name": "api", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "https://api.github.com", "doc": "Seam: the GitHub REST API base URL (tests point it at a fake)."},
+        {"name": "transport", "kind": "option", "lang": "py", "type": {"platform": {"py": "httpx.AsyncBaseTransport"}}, "required": false, "doc": "Seam: the httpx transport replies are sent through (tests); the run's fence wraps it either way. Omitted: httpx's default."}
+      ],
+      "returns": {"$ref": "#/types/ChannelAdapter"},
+      "config_errors": [{"code": "missing_secret"}, {"code": "invalid_config"}]
+    },
+    "whatsapp": {
+      "ts": "whatsapp",
+      "py": "whatsapp",
+      "package": "whatsapp",
+      "doc": "A WhatsApp Cloud API channel. Pass it as host({channels: {whatsapp: whatsapp({...})}}). Webhooks are verified with the app secret; a message becomes a run of agent, and the reply is sent from the business phone number the message arrived on. Secrets are resolved on the host at ready().",
+      "async": false,
+      "params": [
+        {"name": "agent", "kind": "option", "type": {"prim": "string"}, "required": true, "doc": "The key of host({agents}) this channel routes to. invalid_config: the channel's agent must be a key of host({ agents })."},
+        {"name": "app_secret", "kind": "option", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "The Meta app secret that signs webhooks. Unset at ready() is missing_secret."},
+        {"name": "verify_token", "kind": "option", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "The token Meta's subscription check (GET) must present. Unset at ready() is missing_secret."},
+        {"name": "access_token", "kind": "option", "type": {"$ref": "#/types/Secret"}, "required": true, "doc": "A system-user access token replies are sent with. Unset at ready() is missing_secret."},
+        {"name": "graph_version", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "v21.0", "doc": "The Graph API version replies are sent to."},
+        {"name": "tenant", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "string | ((phoneNumberId: string) => string | undefined)"}}, "required": false, "doc": "The tenant for a business phone number, or a function mapping a phone number id to one (undefined refuses it). Omitted: whatsapp:<phone_number_id>. In Python each number is whatsapp:<phone_number_id>."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch replies are sent through (tests); the run's fence wraps it either way. Omitted: the process's fetch."},
+        {"name": "now", "kind": "option", "lang": "ts", "type": {"fn": {"async": false, "params": [], "returns": {"prim": "number"}}}, "required": false, "doc": "Seam: the clock the 24-hour session window is checked against, in milliseconds (tests). Omitted: Date.now."},
+        {"name": "api", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "https://graph.facebook.com", "doc": "Seam: the Graph API base URL, before the version (tests point it at a fake)."},
+        {"name": "transport", "kind": "option", "lang": "py", "type": {"platform": {"py": "httpx.AsyncBaseTransport"}}, "required": false, "doc": "Seam: the httpx transport replies are sent through (tests); the run's fence wraps it either way. Omitted: httpx's default."}
+      ],
+      "returns": {"$ref": "#/types/ChannelAdapter"},
+      "config_errors": [{"code": "missing_secret"}, {"code": "invalid_config"}]
     },
     "openTeam": {
       "ts": "openTeam",

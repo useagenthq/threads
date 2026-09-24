@@ -34,6 +34,7 @@ describe("verify", () => {
       agent: "support",
       appSecret: secret("WA_TEST_APP_SECRET"),
       accessToken: secret("WA_TEST_ACCESS_TOKEN"),
+      verifyToken: secret("WA_TEST_VERIFY_TOKEN"),
       tenant: (id) => (id === "other" ? "acme" : undefined),
     });
     expect(only.verify(request(batch)).ok).toBe(false);

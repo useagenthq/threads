@@ -138,6 +138,7 @@ class SlackChannel:
     agent: str
     api: str = API
     transport: httpx.AsyncBaseTransport | None = None
+    bot_user_id: str | None = None
     clock: Callable[[], float] = time.time
     capabilities: ChannelCapabilities = field(
         default_factory=lambda: ChannelCapabilities("nonfinal", True, True, True, True)
@@ -177,7 +178,7 @@ class SlackChannel:
         verified = self.verify(raw)
         if payload is None or isinstance(verified, Err):
             return Err(ParseError("invalid", "not a verified Slack payload"))
-        return Ok(_items(payload, verified.value))
+        return Ok(_items(payload, verified.value, self.bot_user_id))
 
     def ack(self, raw: RawRequest) -> RawResponse:
         payload = _payload(raw)
@@ -282,10 +283,10 @@ def _installation(team: str, enterprise: str | None) -> str:
     return f"{enterprise}/{team}" if enterprise else team
 
 
-def _items(payload: Payload, delivery: VerifiedDelivery) -> Sequence[Inbound]:
+def _items(payload: Payload, delivery: VerifiedDelivery, bot: str | None) -> Sequence[Inbound]:
     if isinstance(payload, _Interaction):
         return tuple(_decision(payload, delivery, i) for i in range(len(payload.actions)))
-    return (_message(payload, delivery),)
+    return (_message(payload, delivery, bot),)
 
 
 def _decision(press: _Interaction, delivery: VerifiedDelivery, index: int) -> Inbound:
@@ -307,11 +308,11 @@ def _decision(press: _Interaction, delivery: VerifiedDelivery, index: int) -> In
     )
 
 
-def _message(payload: _Envelope, delivery: VerifiedDelivery) -> Inbound:
+def _message(payload: _Envelope, delivery: VerifiedDelivery, bot: str | None) -> Inbound:
     event = payload.event
     if event is None or event.type != "message" or payload.team_id is None:
         return Ignore(kind="ignore")
-    if event.bot_id is not None or event.subtype is not None or not event.user:
+    if event.bot_id is not None or event.subtype is not None or event.user in (None, "", bot):
         # The bot's own messages, edits and joins are not input.
         return Ignore(kind="ignore")
     if not event.channel or not event.text:
@@ -330,13 +331,16 @@ def _principal(team: str, tenant: str, user: str) -> Principal:
     return Principal(issuer=f"slack:{team}", tenant=tenant, subject=user)
 
 
-def slack(
+def slack(  # noqa: PLR0913 - the channel's settings
     *,
     signing_secret: Secret,
     bot_token: Secret,
     agent: str,
+    bot_user_id: str | None = None,
     api: str = API,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> SlackChannel:
-    """A Slack channel for host(channels=...). Secrets are resolved on the host at use."""
-    return SlackChannel(signing_secret, bot_token, agent, api, transport)
+    """A Slack channel for host(channels=...). Secrets are resolved on the host at use.
+    `bot_user_id`: the bot's own user id, whose messages are ignored (those Slack marks as a
+    bot's are ignored either way)."""
+    return SlackChannel(signing_secret, bot_token, agent, api, transport, bot_user_id=bot_user_id)

@@ -22,6 +22,7 @@ describe.skipIf(!live)("live gate: whatsapp", () => {
       agent: "live",
       appSecret: secret("WHATSAPP_APP_SECRET"),
       accessToken: secret("WHATSAPP_ACCESS_TOKEN"),
+      verifyToken: secret("WHATSAPP_VERIFY_TOKEN"),
     });
     const credentials = { accessToken: token ?? "" };
     const op = {

@@ -49,7 +49,8 @@ from threads.loop.model import LookupResult, LookupUnknown
 from threads.result import Err, Ok
 from threads.secrets import Secret, resolve
 
-API: Final = "https://graph.facebook.com/v21.0"
+API: Final = "https://graph.facebook.com"
+GRAPH_VERSION: Final = "v21.0"
 
 
 class _Text(Loose):
@@ -104,8 +105,8 @@ class WhatsAppChannel:
     app_secret: Secret
     access_token: Secret
     verify_token: Secret
-    phone_number_id: str
     agent: str
+    graph_version: str = GRAPH_VERSION
     api: str = API
     transport: httpx.AsyncBaseTransport | None = None
     capabilities: ChannelCapabilities = field(
@@ -162,6 +163,10 @@ class WhatsAppChannel:
     async def perform(
         self, op: JsonObject, effect_key: str, credentials: Mapping[str, str]
     ) -> DeliveryOutcome:
+        phone = op.get("installation_id")
+        if not isinstance(phone, str) or not phone:
+            # The reply is sent from the number the message arrived on: without it, nothing is.
+            return DeliveryError("permanent", "definite_not_sent")
         body: dict[str, JsonValue] = {
             "messaging_product": "whatsapp",
             "to": op["address"],
@@ -174,7 +179,7 @@ class WhatsAppChannel:
             del body["text"]
             body |= {"type": "interactive", "interactive": _card(str(op["text"]), challenge)}
         headers = {"authorization": f"Bearer {credentials['access_token']}"}
-        url = f"{self.api}/{self.phone_number_id}/messages"
+        url = f"{self.api}/{self.graph_version}/{phone}/messages"
         async with client(self.transport) as http:
             response = await send(http, url, headers, body)
         if isinstance(response, DeliveryError):
@@ -251,12 +256,13 @@ def whatsapp(  # noqa: PLR0913 - the Cloud API's settings
     app_secret: Secret,
     access_token: Secret,
     verify_token: Secret,
-    phone_number_id: str,
     agent: str,
+    graph_version: str = GRAPH_VERSION,
     api: str = API,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> WhatsAppChannel:
-    """A WhatsApp channel for host(channels=...). Secrets are resolved on the host."""
+    """A WhatsApp channel for host(channels=...). Secrets are resolved on the host. A reply is
+    sent from the business phone number the message arrived on (the verified installation)."""
     return WhatsAppChannel(
-        app_secret, access_token, verify_token, phone_number_id, agent, api, transport
+        app_secret, access_token, verify_token, agent, graph_version, api, transport
     )

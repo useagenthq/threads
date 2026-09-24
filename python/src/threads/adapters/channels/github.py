@@ -68,6 +68,11 @@ class _Installation(Loose):
 class _User(Loose):
     id: int
     type: str = "User"
+    login: str = ""
+
+
+class _Author(Loose):
+    login: str = ""
 
 
 class _Repository(Loose):
@@ -85,6 +90,7 @@ class _Comment(Loose):
 class _Posted(Loose):
     id: int
     body: str = ""
+    user: _Author | None = None
 
 
 class _Comments(RootModel[tuple[_Posted, ...]]):
@@ -114,6 +120,7 @@ class GitHubChannel:
     agent: str
     api: str = API
     transport: httpx.AsyncBaseTransport | None = None
+    app_slug: str | None = None
     capabilities: ChannelCapabilities = field(
         default_factory=lambda: ChannelCapabilities("nonfinal", False, True, False, False)
     )
@@ -122,6 +129,11 @@ class GitHubChannel:
     @property
     def secrets(self) -> Mapping[str, Secret]:
         return {"token": self.token}
+
+    @property
+    def _bot(self) -> str | None:
+        """The App's own login, when its slug is known."""
+        return None if self.app_slug is None else f"{self.app_slug}[bot]"
 
     def verify(self, raw: RawRequest) -> Ok[VerifiedDelivery] | Err[ParseError]:
         header = raw.headers.get("x-hub-signature-256")
@@ -139,7 +151,7 @@ class GitHubChannel:
         verified = self.verify(raw)
         if hook is None or isinstance(verified, Err):
             return Err(ParseError("invalid", "not a verified GitHub delivery"))
-        return Ok((_item(raw, hook, verified.value),))
+        return Ok((_item(raw, hook, verified.value, self._bot),))
 
     def ack(self, raw: RawRequest) -> RawResponse:
         return RawResponse(200, {}, b"")
@@ -185,7 +197,7 @@ class GitHubChannel:
                 if refused(response) is not None:
                     return LookupUnknown(f"listing answered {response.status_code}")
                 comments = _Comments.model_validate_json(response.content or b"[]").root
-                found = next((c for c in comments if wanted in c.body), None)
+                found = next((c for c in comments if _ours(c, wanted, self._bot)), None)
                 if found is not None:
                     return Found(str(found.id))
                 if len(comments) < _PER_PAGE:
@@ -197,6 +209,12 @@ def _page(page: int) -> dict[str, str]:
     return {"per_page": str(_PER_PAGE), "page": str(page)}
 
 
+def _ours(comment: _Posted, wanted: str, bot: str | None) -> bool:
+    """The comment carries the key's marker and, when the App is known, the App wrote it."""
+    author = None if comment.user is None else comment.user.login
+    return wanted in comment.body and (bot is None or author == bot)
+
+
 def _hook(raw: RawRequest) -> _Hook | None:
     try:
         return _Hook.model_validate_json(raw.body)
@@ -204,12 +222,13 @@ def _hook(raw: RawRequest) -> _Hook | None:
         return None
 
 
-def _item(raw: RawRequest, hook: _Hook, delivery: VerifiedDelivery) -> Inbound:
+def _item(raw: RawRequest, hook: _Hook, delivery: VerifiedDelivery, bot: str | None) -> Inbound:
     event = raw.headers.get("x-github-event")
     person = hook.sender
     if event != "issue_comment" or hook.action != "created" or person is None:
         return Ignore(kind="ignore")
-    if person.type == "Bot" or hook.repository is None or hook.issue is None:
+    own = person.type == "Bot" or (bot is not None and person.login == bot)
+    if own or hook.repository is None or hook.issue is None:
         return Ignore(kind="ignore")
     if hook.comment is None or not hook.comment.body.strip() or _MARK in hook.comment.body:
         return Ignore(kind="ignore")
@@ -232,14 +251,16 @@ def _item(raw: RawRequest, hook: _Hook, delivery: VerifiedDelivery) -> Inbound:
     )
 
 
-def github(
+def github(  # noqa: PLR0913 - the channel's settings
     *,
     webhook_secret: Secret,
     token: Secret,
     agent: str,
+    app_slug: str | None = None,
     api: str = API,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> GitHubChannel:
     """A GitHub channel for host(channels=...). `token` is an installation or fine-grained token
-    with issues write; secrets are resolved on the host at use."""
-    return GitHubChannel(webhook_secret, token, agent, api, transport)
+    with issues write; secrets are resolved on the host at use. `app_slug`: the App's slug, so
+    only its own comments count when a reply is looked up."""
+    return GitHubChannel(webhook_secret, token, agent, api, transport, app_slug)

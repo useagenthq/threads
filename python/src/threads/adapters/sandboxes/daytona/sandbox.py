@@ -65,6 +65,7 @@ if TYPE_CHECKING:
 
 DEFAULT_API = "https://app.daytona.io/api"
 API_KEY = "DAYTONA_API_KEY"
+HOUR_MS = 3_600_000
 _PROVIDER = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _PUMP_GRACE_S = 0.25
 
@@ -257,7 +258,7 @@ def daytona(  # noqa: PLR0913 - the provider's options
     api_url: str = DEFAULT_API,
     snapshot: str | None = None,
     target: str | None = None,
-    lifetime_ms: int | None = None,
+    lifetime_ms: int = HOUR_MS,
     allow_internet: bool = False,
     auto_stop_minutes: int = 60,
     name: str = "daytona",

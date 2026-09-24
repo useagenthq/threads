@@ -1,0 +1,86 @@
+---
+title: "slack"
+description: "A Slack channel."
+icon: "Plug"
+---
+
+Pass it as host(&#123;channels: &#123;slack: slack(&#123;...&#125;)&#125;&#125;). Requests are verified with the signing secret; a message becomes a run of agent, and its reply is posted in the same conversation. Secrets are resolved on the host at ready().
+
+Import from `@threads/slack` (TypeScript) or `threads.slack` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function slack(options: {
+  agent: string;
+  signingSecret: Secret;
+  botToken: Secret;
+  botUserId?: string;
+  tenant?: string | ((teamId: string) => string | undefined);
+  now?: () => number;
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+}): ChannelAdapter
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def slack(
+    *,
+    agent: str,
+    signing_secret: Secret,
+    bot_token: Secret,
+    bot_user_id: str | None = None,
+    api: str = "https://slack.com/api",
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> ChannelAdapter
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="agent" type={"string"} required>
+  The key of host(&#123;agents&#125;) this channel routes to. invalid_config: the channel's agent must be a key of host(&#123; agents &#125;).
+</Field>
+
+<Field name="signingSecret / signing_secret" type={"Secret"} required>
+  The Slack app's signing secret, which verifies every request. Unset at ready() is missing_secret. See [Secret](/docs/reference/types/Secret).
+</Field>
+
+<Field name="botToken / bot_token" type={"Secret"} required>
+  The bot token (xoxb-...) replies are posted with. Unset at ready() is missing_secret. See [Secret](/docs/reference/types/Secret).
+</Field>
+
+<Field name="botUserId / bot_user_id" type={"string"}>
+  The bot's own user id: its messages are ignored. Omitted: messages Slack marks as from a bot are ignored, which covers the bot's own.
+</Field>
+
+<Field name="tenant" type={"string | ((teamId: string) => string | undefined)"}>
+  TypeScript only. The tenant for a workspace, or a function mapping a team id to one (undefined refuses that workspace). Omitted: slack:&lt;team_id>. In Python each channel is slack:&lt;team_id>.
+</Field>
+
+<Field name="now" type={"() => number"}>
+  TypeScript only. Seam: the clock the request timestamp is checked against, in milliseconds (tests). Omitted: Date.now.
+</Field>
+
+<Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
+  TypeScript only. Seam: the fetch replies are sent through (tests); the run's fence wraps it either way. Omitted: the process's fetch.
+</Field>
+
+<Field name="api" type={"str"} default={"https://slack.com/api"}>
+  Python only. Seam: the Slack Web API base URL (tests point it at a fake).
+</Field>
+
+<Field name="transport" type={"httpx.AsyncBaseTransport"}>
+  Python only. Seam: the httpx transport replies are sent through (tests); the run's fence wraps it either way. Omitted: httpx's default.
+</Field>
+
+## Returns
+
+[`ChannelAdapter`](/docs/reference/types/ChannelAdapter)
+
+**Throws** `ConfigError` with one of these codes: `invalid_config`, `missing_secret`.

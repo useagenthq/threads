@@ -19,6 +19,7 @@ from threads.memory.guard import Binder, scoped_memory
 from threads.memory.protocol import MemoryProvider
 from threads.memory.types import MemoryHit, Outcome, Provenance, RecordRef
 from threads.result import Err, Ok
+from threads.secrets import secret
 from threads.store import SqliteStore
 from threads.supermemory import supermemory
 from threads.zep import zep
@@ -161,9 +162,13 @@ def test_a_stale_fence_writes_nothing_and_is_proven_not_sent(
 
 
 def test_mem0_refuses_at_setup_because_its_sdk_cannot_be_fenced() -> None:
-    with pytest.raises(ConfigError) as raised:
-        mem0()
-    assert raised.value.code == "transport_fence_unsupported"
+    """With TypeScript's options (a required api_key, an optional host), still refused."""
+    for options in ({}, {"host": "https://mem0.example"}):
+        with pytest.raises(ConfigError) as raised:
+            mem0(api_key=secret("MEM0_API_KEY"), **options)
+        assert raised.value.code == "transport_fence_unsupported"
+    with pytest.raises(TypeError):
+        mem0()  # type: ignore[call-arg] - api_key is required, as in TypeScript
 
 
 @pytest.mark.live

@@ -8,6 +8,7 @@ import { losesAfter } from "../../core/test/sandbox/remote/kit";
 import { World } from "../../core/test/sandbox/remote/world";
 import { code, unwrap } from "../../core/test/store/helpers";
 import { e2b } from "../src";
+import { e2bOn } from "../src/sandbox";
 import { fenceable } from "../src/transport";
 import { e2bBackend } from "./backend";
 
@@ -22,7 +23,7 @@ function adapter(world: World, internet = false) {
   const sandbox = e2b({
     apiKey: CANARY,
     domain: DOMAIN,
-    internet,
+    ...(internet ? { allowInternet: true } : {}),
     fetch: backend.fetch,
   });
   return { sandbox, backend };
@@ -69,6 +70,13 @@ describe("e2b transport", () => {
     expect(fenceable()).toBe(true);
     expect(fenceable({})).toBe(false);
   });
+
+  test("on a runtime whose SDK sends through undici (Node), e2b() is transport_fence_unsupported", () => {
+    expect(() => e2bOn({}, {})).toThrow(
+      expect.objectContaining({ code: "transport_fence_unsupported" }),
+    );
+    expect(() => e2bOn({ Deno: {} }, {})).not.toThrow();
+  });
 });
 
 describe("e2b declarations", () => {
@@ -84,7 +92,7 @@ describe("e2b declarations", () => {
       termination: "unconfirmed",
     });
     expect(sandbox.quiescence).toBe("unconfirmed");
-    expect(sandbox.expiry).toEqual({ sandboxMs: 300_000, snapshotMs: null });
+    expect(sandbox.expiry).toEqual({ sandboxMs: 3_600_000, snapshotMs: null });
     expect(adapter(new World(), true).sandbox.info.egress).toBe("unenforced");
   });
 
@@ -101,5 +109,22 @@ describe("e2b declarations", () => {
     expect(body).toContain('"envVars":{}');
     expect(body).toContain('"allow_internet_access":false');
     expect(body).toContain('"threads_operation_key":"op-7"');
+  });
+
+  test("defaults: template base, a one-hour lifetime and no internet", async () => {
+    const world = new World();
+    const { sandbox, backend } = adapter(world);
+    await sandbox.create("op-8", CTX);
+    const body = backend
+      .traffic()
+      .split("\n")
+      .find((line) =>
+        line.startsWith("POST https://api.e2b.test/v2/sandboxes"),
+      );
+    expect(body).toContain('"templateID":"base"');
+    expect(body).toContain('"timeout":3600');
+    expect(body).toContain('"allow_internet_access":false');
+    expect(sandbox.expiry.sandboxMs).toBe(3_600_000);
+    expect(sandbox.info.egress).toBe("enforced");
   });
 });

@@ -10,7 +10,16 @@ import { err } from "../../core/src/result";
 import type { SandboxContext } from "../../core/src/sandbox";
 import { CTX } from "../../core/test/sandbox/context";
 import { unwrap } from "../../core/test/store/helpers";
-import { adapter, CHALLENGE, fakeFetch, NOW, PHONE, TOKEN } from "./fixtures";
+import {
+  adapter,
+  CHALLENGE,
+  fakeFetch,
+  NOW,
+  PHONE,
+  request,
+  TOKEN,
+  webhook,
+} from "./fixtures";
 
 const envelope = {
   seq: 5,
@@ -85,6 +94,24 @@ async function perform(
 }
 
 describe("perform", () => {
+  test("a reply is sent from the phone number its message arrived on", async () => {
+    for (const phone of ["PHONE_A", "PHONE_B"]) {
+      const fake = fakeFetch(() =>
+        Response.json({ messages: [{ id: "wamid.OUT" }] }),
+      );
+      const verified = unwrap(
+        adapter(fake.fetch).verify(request(webhook({}, phone))),
+      );
+      await perform(fake.fetch, {
+        ...op,
+        installation_id: verified.installation_id,
+      });
+      expect(fake.calls[0]?.url).toBe(
+        `https://graph.facebook.com/v21.0/${phone}/messages`,
+      );
+    }
+  });
+
   test("a 200 with a message id is sent, with the effect key in the callback data", async () => {
     const fake = fakeFetch(() =>
       Response.json({ messages: [{ id: "wamid.OUT" }] }),

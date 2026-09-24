@@ -146,7 +146,6 @@ def test_whatsapp_posts_reply_buttons_and_parses_the_press() -> None:
             app_secret=secret("SIGNING"),
             access_token=secret("TOKEN"),
             verify_token=secret("VERIFY"),
-            phone_number_id="p",
             agent="a",
             transport=transport,
         )
@@ -155,11 +154,11 @@ def test_whatsapp_posts_reply_buttons_and_parses_the_press() -> None:
         app_secret=secret("SIGNING"),
         access_token=secret("TOKEN"),
         verify_token=secret("VERIFY"),
-        phone_number_id="p",
         agent="a",
     )
     (card,) = channel.render(requested())
-    body = posted(make, {**card, "address": "1555"}, {"access_token": "tok"})
+    op: JsonObject = {**card, "address": "1555", "installation_id": "p"}
+    body = posted(make, op, {"access_token": "tok"})
     assert isinstance(body, dict)
     assert body["type"] == "interactive"
     buttons = body["interactive"]["action"]["buttons"]  # type: ignore[index] - JSON
