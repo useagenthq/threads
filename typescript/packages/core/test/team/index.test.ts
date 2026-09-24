@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { z } from "zod";
-import { type KnownEvent, TeamId } from "../../src/log";
+import { TeamId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import type { SqliteDriver } from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
@@ -10,6 +9,7 @@ import { changeRows, insertRows, turnOpeners } from "../../src/team/index";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
 import { code, fixture, unwrap } from "../store/helpers";
 import {
+  appendable,
   caseLogs,
   storeLogs,
   TENANT,
@@ -42,29 +42,6 @@ function rowsOf(t: Team) {
   return rest;
 }
 
-const Exists = z.array(z.strictObject({ n: z.int() }));
-
-function has(t: Team, table: string, key: string, id: string): boolean {
-  const rows = Exists.parse(
-    t.db.all(`SELECT COUNT(*) AS n FROM ${table} WHERE ${key} = ?`, [id]),
-  );
-  return (rows[0]?.n ?? 0) > 0;
-}
-
-/** Whether `e`'s append could have happened yet: the rows it moves exist (causal order). */
-function ready(t: Team, e: KnownEvent): boolean {
-  if (e.type === "message_received" || e.type === "mail_refused")
-    return has(t, "mail", "mail_id", e.data.mail_id);
-  if (e.type === "user_input" && e.data.mail_id !== undefined)
-    return has(t, "mail", "mail_id", e.data.mail_id);
-  if (e.type === "ask_closed") return has(t, "asks", "ask_id", e.data.ask_id);
-  if (e.type === "thread_started" && e.data.parent?.relation === "team_member")
-    return has(t, "team_members", "thread_id", e.thread_id);
-  if (e.type === "operator_request")
-    return has(t, "teams", "team_log_branch_id", e.branch_id);
-  return true;
-}
-
 /**
  * Wipes the team's rows, then appends every event as the team's writers would: one log at a
  * time, each event once the rows it moves exist, insertRows then changeRows.
@@ -88,7 +65,7 @@ function written(t: Team): void {
     for (const q of queues)
       for (
         let e = q.events[0];
-        e !== undefined && ready(t, e);
+        e !== undefined && appendable(t.db, e);
         e = q.events[0]
       ) {
         q.events.shift();

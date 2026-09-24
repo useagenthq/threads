@@ -2,28 +2,29 @@
 child of a branch, inserted in the append of its agent_spawned and deleted in the append of its
 agent_finished, or of the parent's parked{kind: child} for it (a parked child is resumed by the
 control path). A host resumes a branch with rows, so a child a crash stopped still reports and
-wakes its parent. The rows follow the replay rule: `threads.reduce.wakes.pending_wakes` is the
-fold that rebuilds them."""
+wakes its parent. Every append writes them through the index hooks (`wake_rows`);
+`threads.reduce.wakes.pending_wakes` is the fold that rebuilds them."""
 
 import sqlite3
 from collections.abc import Callable, Sequence
 
-from threads.log import BranchId, Event, ThreadId
+from threads.log import BranchId, Event, ParseError, ThreadId
 from threads.reduce.wakes import change, pending_wakes
+from threads.store.appended import Appended
 from threads.store.sql import text_of
-from threads.store.verify import StoredEvent
 
 _INSERT = "INSERT OR IGNORE INTO pending_wakes (branch_id, child_thread_id) VALUES (?, ?)"
 _DELETE = "DELETE FROM pending_wakes WHERE branch_id = ? AND child_thread_id = ?"
 
 
-def record(conn: sqlite3.Connection, events: Sequence[StoredEvent]) -> None:
-    """Runs inside an append's transaction, after its events are inserted."""
-    for event in events:
+def wake_rows(conn: sqlite3.Connection, a: Appended) -> ParseError | None:
+    """The wake rows one append's events insert and delete: an index hook of every append."""
+    for event in a.events:
         found = change(event)
         if found is not None:
             added, child = found
-            conn.execute(_INSERT if added else _DELETE, (event.branch_id, child))
+            conn.execute(_INSERT if added else _DELETE, (a.branch_id, child))
+    return None
 
 
 def branches(conn: sqlite3.Connection) -> tuple[tuple[str, ThreadId, BranchId], ...]:
@@ -46,5 +47,11 @@ def rebuild(conn: sqlite3.Connection, read: Callable[[BranchId], Sequence[Event]
     found: list[tuple[object]] = conn.execute("SELECT branch_id FROM branches").fetchall()
     for (column,) in found:
         branch = BranchId(text_of(column))
-        for child in pending_wakes(read(branch), branch):
-            conn.execute(_INSERT, (branch, child))
+        refold(conn, branch, read(branch))
+
+
+def refold(conn: sqlite3.Connection, branch: BranchId, events: Sequence[Event]) -> None:
+    """One branch's wake rows again from its resolved events: a rebuild's or an import's."""
+    conn.execute("DELETE FROM pending_wakes WHERE branch_id = ?", (branch,))
+    for child in pending_wakes(events, branch):
+        conn.execute(_INSERT, (branch, child))

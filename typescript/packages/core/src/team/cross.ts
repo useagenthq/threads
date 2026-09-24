@@ -37,7 +37,11 @@ type Facts = {
   readonly parents: ReadonlyMap<string, Parent>;
   /** Who each log speaks for: `team_log`, or `<team>/<name>/<generation>`. */
   readonly identities: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Each team's log, as its lead's thread_started names it. */
+  readonly teamLogs: ReadonlyMap<string, TeamLogRef>;
 };
+
+type TeamLogRef = { readonly thread: string; readonly branch: string };
 
 const TEAM_LOG = "team_log";
 const member = (team: TeamId, name: string, generation: number): string =>
@@ -50,6 +54,7 @@ function facts(logs: readonly TeamLogEvents[]): Facts {
     identities: new Map<string, Set<string>>(
       logs.map((log) => [log.threadId, new Set<string>()]),
     ),
+    teamLogs: new Map<string, TeamLogRef>(),
   };
   for (const log of logs) for (const e of log.events) learn(known, log, e);
   return known;
@@ -60,6 +65,7 @@ function learn(
     readonly sent: Map<string, MailEnvelope>;
     readonly parents: Map<string, Parent>;
     readonly identities: Map<string, Set<string>>;
+    readonly teamLogs: Map<string, TeamLogRef>;
   },
   log: TeamLogEvents,
   e: KnownEvent,
@@ -68,9 +74,11 @@ function learn(
   if (e.type === "message_sent")
     known.sent.set(e.data.envelope.mail_id, e.data.envelope);
   else if (e.type === "team_opened") own?.add(TEAM_LOG);
-  else if (e.type === "thread_started" && e.data.team !== undefined)
-    own?.add(member(e.data.team.id, e.data.agent_name, 1));
-  else if (e.type === "member_started") {
+  else if (e.type === "thread_started" && e.data.team !== undefined) {
+    const { id, log_thread_id, log_branch_id } = e.data.team;
+    own?.add(member(id, e.data.agent_name, 1));
+    known.teamLogs.set(id, { thread: log_thread_id, branch: log_branch_id });
+  } else if (e.type === "member_started") {
     const m = e.data.member;
     known.parents.set(e.data.thread_id, e.data.parent);
     known.identities
@@ -157,6 +165,7 @@ function check(
   const own = known.identities.get(log.threadId) ?? new Set<string>();
   if (e.type === "message_received") return received(e, own, known);
   if (e.type === "message_sent") return sent(e, log, own, known);
+  if (e.type === "team_opened") return named(e, log, known);
   if (e.type === "thread_started") {
     const parent = known.parents.get(log.threadId);
     return parent !== undefined && !sameJson(e.data.parent ?? null, parent)
@@ -171,6 +180,19 @@ function check(
       : undefined;
   }
   return undefined;
+}
+
+/** A team log is the thread and branch its lead's thread_started.team names. */
+function named(
+  e: EventOf<"team_opened">,
+  log: TeamLogEvents,
+  known: Facts,
+): string | undefined {
+  const ref = known.teamLogs.get(e.data.team);
+  if (ref === undefined) return undefined;
+  return ref.thread === log.threadId && ref.branch === log.branchId
+    ? undefined
+    : "a team log is not the thread its lead names";
 }
 
 function received(

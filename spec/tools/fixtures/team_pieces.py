@@ -110,7 +110,8 @@ def _pin(log: Log, agent: str, extra: Obj, tools: tuple[str, ...] = TEAM_TOOLS) 
 def lead_log(tools: tuple[str, ...] = TEAM_TOOLS) -> Log:
     """The lead's log: thread_started carries the team, whose log opens in the same append."""
     log = Log(LEAD_BRANCH, thread=LEAD_THREAD)
-    _pin(log, "lead", {"team": {"id": TEAM, "log_branch_id": LOG_BRANCH}}, tools)
+    team: Obj = {"id": TEAM, "log_thread_id": LOG_THREAD, "log_branch_id": LOG_BRANCH}
+    _pin(log, "lead", {"team": team}, tools)
     return log
 
 

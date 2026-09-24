@@ -34,6 +34,7 @@ from threads.render.artifacts import read_verified
 from threads.result import Err, Ok
 from threads.store import Clock, Draft, SqliteStore, StoredEvent, Writer
 from threads.store.companion import Companion
+from threads.store.writer import Decide, DecideTx, Refusal
 
 type Authorize = Callable[[Fold, ToolCallData, ToolSpec], Decision]
 """The permission fold for one call, against the current policy and mode."""
@@ -239,6 +240,26 @@ class Runtime:
 
         done = await self.writer.append(drafts, companion, admit=admit)
         if isinstance(done, Err):
+            return done
+        self.observe(done.value)
+        return Barred(done.value) if any(changed) else done
+
+    async def append_decided[E](self, decide: Decide[E]) -> Appended | Refusal[E]:
+        """A decided append (a team operation): `decide` reads the store inside the append's
+        transaction and builds the batch, which passes the cancel barrier as `append_with`'s
+        does, or refuses. A refusal appends nothing and comes back for the caller to record."""
+        changed: list[bool] = []
+
+        def barred(tx: DecideTx) -> Sequence[Draft] | Refusal[E]:
+            decided = decide(tx)
+            if isinstance(decided, Refusal):
+                return decided
+            kept = after_barrier(tx.fold, decided)
+            changed.append(len(kept) != len(decided))
+            return kept
+
+        done = await self.writer.append_decided(barred)
+        if isinstance(done, Refusal | Err):
             return done
         self.observe(done.value)
         return Barred(done.value) if any(changed) else done

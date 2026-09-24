@@ -1,0 +1,15 @@
+{
+  "name": "team-log-thread-mismatch-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 43: the lead's thread_started.team names the team log's thread and branch, and the team log on that branch is another thread. Each log reads on its own; only the two together show it: invalid_transition at the team log's team_opened.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "team"
+    ]
+  }
+}

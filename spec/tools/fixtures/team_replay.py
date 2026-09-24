@@ -15,9 +15,12 @@ from .team_nested import INNER, INNER_LOG
 from .team_pieces import (
     LEAD,
     LEAD_BRANCH,
+    LEAD_THREAD,
+    LOG_BRANCH,
     MEMBER_BRANCH,
     MEMBER_THREAD,
     RESEARCHER,
+    TEAM,
     TENANT,
     Route,
     at,
@@ -44,6 +47,7 @@ def build(root: pathlib.Path) -> None:
     _tree(root, notified=True)
     _settle(root)
     _receipt_mismatch(root)
+    _team_log_elsewhere(root)
     _other_run(root)
     _nested_other_run(root)
 
@@ -106,6 +110,23 @@ def _receipt_mismatch(root: pathlib.Path) -> None:
     )
 
 
+def _team_log_elsewhere(root: pathlib.Path) -> None:
+    """The team log's branch is the one the lead names, but its thread is another."""
+    lead = lead_log()
+    user(lead, "Research batteries.")
+    log = Log(LOG_BRANCH, thread="0192a000-0000-7000-8000-0000000000cf")
+    log.add("team_opened", {"team": TEAM, "lead": LEAD, "lead_thread_id": LEAD_THREAD})
+    write_team(
+        root,
+        "team-log-thread-mismatch-rejected",
+        "Rule 43: the lead's thread_started.team names the team log's thread and branch, and "
+        "the team log on that branch is another thread. Each log reads on its own; only the two "
+        "together show it: invalid_transition at the team log's team_opened.",
+        {"lead": lead, "team": log},
+        {"code": "invalid_transition", "seq": 1, "log": "team"},
+    )
+
+
 def _other_run(root: pathlib.Path) -> None:
     """Alice's second run messages the member while its task turn, of her first run, is open."""
     lead = lead_log()
@@ -142,7 +163,7 @@ def _nested_other_run(root: pathlib.Path) -> None:
     lead = lead_log()
     first = text(user(lead, "Research batteries.")["event_id"])
     started_id, task = start(lead, first, RESEARCHER, "c1")
-    inner: Obj = {"id": INNER, "log_branch_id": INNER_LOG[0]}
+    inner: Obj = {"id": INNER, "log_thread_id": INNER_LOG[1], "log_branch_id": INNER_LOG[0]}
     member = materialize(started_id, task, team=inner)
     own = Log(INNER_LOG[0], thread=INNER_LOG[1])
     nested_lead: Obj = {"tenant": TENANT, "team": INNER, "name": "researcher", "generation": 1}

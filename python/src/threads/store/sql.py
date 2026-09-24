@@ -230,36 +230,43 @@ def insert_events(
     )
 
 
+def insert_segments(
+    conn: sqlite3.Connection, log: VerifiedLog, tenant_id: str, dropped_ref: str | None
+) -> ParseError | None:
+    """Stores a verified export's segments, byte for byte, in the caller's transaction. A branch
+    already in the store must hold the same lines (an idempotent re-import). A leaf whose head
+    didn't verify keeps that evidence (and the dropped bytes' artifact) and is inspection-only
+    until recovery records log_repaired."""
+    new: list[Segment] = []
+    for segment in log.segments:
+        existing = branch(conn, segment.header.branch_id)
+        if existing is None:
+            new.append(segment)
+        elif existing.tenant_id != tenant_id:
+            return ParseError("branch_not_found", f"no branch {existing.branch_id}")
+        elif not _holds(conn, existing, segment, _evidence(log, segment, dropped_ref)):
+            return ParseError("seq_conflict", f"branch {existing.branch_id} has other lines")
+    if new and _owner(conn, log.segments[0].header.thread_id) not in (None, tenant_id):
+        # The owner stays unnamed: a tenant learns only that the thread id is taken.
+        thread = log.segments[0].header.thread_id
+        return ParseError("branch_exists", f"thread {thread} already exists")
+    parents = {s.header.branch_id: p.header.branch_id for p, s in pairwise(log.segments)}
+    for segment in new:
+        row = _row(segment, tenant_id, parents.get(segment.header.branch_id))
+        if segment is log.segments[-1] and not log.head_verified:
+            row = replace(row, state="inspection_only", head_verified=False)
+            row = replace(row, dropped_ref=dropped_ref)
+        insert_branch(conn, row)
+        insert_events(conn, segment.events, sha256_hex(segment.last_line))
+    return None
+
+
 def import_segments(
     conn: sqlite3.Connection, log: VerifiedLog, tenant_id: str, dropped_ref: str | None
 ) -> ParseError | None:
-    """Stores a verified export's segments, byte for byte, in one transaction. A branch already
-    in the store must hold the same lines (an idempotent re-import). A leaf whose head didn't
-    verify keeps that evidence (and the dropped bytes' artifact) and is inspection-only until
-    recovery records log_repaired."""
+    """`insert_segments` in a transaction of its own."""
     with transaction(conn):
-        new: list[Segment] = []
-        for segment in log.segments:
-            existing = branch(conn, segment.header.branch_id)
-            if existing is None:
-                new.append(segment)
-            elif existing.tenant_id != tenant_id:
-                return ParseError("branch_not_found", f"no branch {existing.branch_id}")
-            elif not _holds(conn, existing, segment, _evidence(log, segment, dropped_ref)):
-                return ParseError("seq_conflict", f"branch {existing.branch_id} has other lines")
-        if new and _owner(conn, log.segments[0].header.thread_id) not in (None, tenant_id):
-            # The owner stays unnamed: a tenant learns only that the thread id is taken.
-            thread = log.segments[0].header.thread_id
-            return ParseError("branch_exists", f"thread {thread} already exists")
-        parents = {s.header.branch_id: p.header.branch_id for p, s in pairwise(log.segments)}
-        for segment in new:
-            row = _row(segment, tenant_id, parents.get(segment.header.branch_id))
-            if segment is log.segments[-1] and not log.head_verified:
-                row = replace(row, state="inspection_only", head_verified=False)
-                row = replace(row, dropped_ref=dropped_ref)
-            insert_branch(conn, row)
-            insert_events(conn, segment.events, sha256_hex(segment.last_line))
-    return None
+        return insert_segments(conn, log, tenant_id, dropped_ref)
 
 
 def _evidence(

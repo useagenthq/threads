@@ -49,7 +49,10 @@ async def reserve_due(p: Pass, started: Draft, due: Sequence[Due], now: int) -> 
             thread = current_thread(conn, tenant_id, schedule_id)
             if thread is None or not _keeps(conn, tenant_id, thread, started, now):
                 make_current(conn, tenant_id, schedule_id, fresh.row.thread_id, now)
-                insert_root(conn, fresh)
+                error = insert_root(conn, fresh)
+                if error is not None:
+                    # Refused inside the transaction: nothing of the reservation is written.
+                    raise ValueError(f"a schedule's thread can't open: {error.message}")
                 thread = fresh.row.thread_id
             for d in todo:
                 insert_pending(conn, tenant_id, thread, d, now)

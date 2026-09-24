@@ -21,11 +21,14 @@ export type NewBranch = {
   readonly createdAt: number;
 };
 
-/** Stores a branch row with this implementation's header line; an existing id is refused. */
+/**
+ * Stores a branch row with this implementation's header line, and returns that line; an existing
+ * id is refused.
+ */
 export function newBranch(
   db: SqliteDriver,
   branch: NewBranch,
-): Result<void, LogError> {
+): Result<Uint8Array, LogError> {
   const existing = getBranch(db, branch.branchId);
   if (!existing.ok) return existing;
   if (existing.value !== undefined)
@@ -57,5 +60,5 @@ export function newBranch(
     head_verified: 1,
     dropped_ref: null,
   });
-  return ok(undefined);
+  return ok(header.value);
 }

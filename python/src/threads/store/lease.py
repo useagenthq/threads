@@ -5,12 +5,11 @@ split by another process.
 """
 
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from threads.log import BranchId, ParseError
-from threads.store import approvals, wakes
-from threads.store.companion import Companion
+from threads.store import approvals
 from threads.store.sql import Branch, branch, insert_branch, insert_events, root, transaction
 from threads.store.verify import StoredEvent
 
@@ -116,6 +115,8 @@ class Batch:
     expected_seq: int
     rows: Sequence[tuple[StoredEvent, bytes]]
     head_hash: str
+    opened: frozenset[str] = frozenset()
+    """The ids of its events that opened a turn."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,32 +131,51 @@ class _RollbackError(Exception):
         self.error = error
 
 
+@dataclass(frozen=True, slots=True)
+class Head:
+    """Where a writer's append goes: its branch, under its lease, after its committed head."""
+
+    branch_id: BranchId
+    lease: Lease
+    expected_seq: int
+
+
+type Build = Callable[[sqlite3.Connection], Batch | Refused]
+"""The batch of an append, made inside its transaction after the fence (a decided append reads
+the store to make it); Refused rolls back and leaves the writer usable."""
+
+type After = Callable[[sqlite3.Connection, Branch, Batch], ParseError | None]
+"""Runs after the rows, in their transaction: the index hooks (`threads.store.indexing`), then a
+companion's host rows. The writer passes it in; an error rolls the append back."""
+
+
 def append(
-    conn: sqlite3.Connection, mine: Lease, now: int, batch: Batch, companion: Companion | None
-) -> ParseError | Refused | None:
-    """The conditional append: the lease is still ours and live, and the
-    committed head is where the writer expects it. Then the rows and the head move together,
-    with an approval_requested's challenge row, the pending_wakes rows and the companion's
-    rows."""
-    branch_id = batch.rows[0][0].branch_id
+    conn: sqlite3.Connection, head: Head, now: int, build: Build, after: After
+) -> Batch | ParseError | Refused:
+    """The conditional append: the lease is still ours and live, and the committed head is where
+    the writer expects it. Then `build` makes the batch, and the rows and the head move together,
+    with an approval_requested's challenge row and what `after` writes."""
     try:
         with transaction(conn):
-            if _stale(conn, branch_id, mine, now):
-                return ParseError("stale_epoch", f"epoch {mine.epoch} no longer holds the lease")
-            stored = branch(conn, branch_id)
-            if stored is None or stored.head_seq != batch.expected_seq:
-                message = f"the committed head is not at {batch.expected_seq}"
+            if _stale(conn, head.branch_id, head.lease, now):
+                epoch = head.lease.epoch
+                return ParseError("stale_epoch", f"epoch {epoch} no longer holds the lease")
+            stored = branch(conn, head.branch_id)
+            if stored is None or stored.head_seq != head.expected_seq:
+                message = f"the committed head is not at {head.expected_seq}"
                 return ParseError("seq_conflict", message)
+            batch = build(conn)
+            if isinstance(batch, Refused):
+                raise _RollbackError(batch.error)
             insert_events(conn, batch.rows, batch.head_hash)
             events = tuple(event for event, _ in batch.rows)
             approvals.record(conn, stored.tenant_id, events)
-            wakes.record(conn, events)
-            refused = None if companion is None else companion(conn, events)
+            refused = after(conn, stored, batch)
             if refused is not None:
                 raise _RollbackError(refused)
     except _RollbackError as rollback:
         return Refused(rollback.error)
-    return None
+    return batch
 
 
 def create(conn: sqlite3.Connection, row: Branch, lease: Lease | None) -> ParseError | None:
@@ -163,11 +183,17 @@ def create(conn: sqlite3.Connection, row: Branch, lease: Lease | None) -> ParseE
     starts `forking` with the lease that fences its fork (step 1): it is
     neither listed nor runnable until `finish_fork`."""
     with transaction(conn):
-        if branch(conn, row.branch_id) is not None:
-            return ParseError("seq_conflict", f"branch {row.branch_id} already exists")
-        insert_branch(conn, row)
-        if lease is not None:
-            _put(conn, row.branch_id, lease)
+        return insert_new(conn, row, lease)
+
+
+def insert_new(conn: sqlite3.Connection, row: Branch, lease: Lease | None) -> ParseError | None:
+    """`create` in the caller's transaction: the branch `branch.open` inserts inside another
+    writer's append."""
+    if branch(conn, row.branch_id) is not None:
+        return ParseError("seq_conflict", f"branch {row.branch_id} already exists")
+    insert_branch(conn, row)
+    if lease is not None:
+        _put(conn, row.branch_id, lease)
     return None
 
 

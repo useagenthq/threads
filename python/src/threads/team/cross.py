@@ -4,7 +4,8 @@ rules"). Checked by the `team` runner and every index rebuild, never by one log'
 Every receipt copies its sender's envelope byte for byte, and each mail leaves the log its
 `from` names and arrives in the log its `to` names. A bounce's causal is the refuser's
 mail_refused, naming the ask exactly when the refused mail is an ask. A member's
-thread_started.parent is its member_started's parent. A task's input principal is the task's
+thread_started.parent is its member_started's parent, and a team log is the thread and branch its
+lead's thread_started.team names. A task's input principal is the task's
 provenance principal. The reference is spec/tools/fixtures/ref_team.py.
 """
 
@@ -58,6 +59,8 @@ class _Team:
     sent: Mapping[str, MailEnvelope]
     started: Mapping[ThreadId, MemberStartedEvent]
     identities: Mapping[ThreadId, frozenset[Identity]]
+    team_logs: Mapping[str, tuple[str, str]]
+    """Each team's log (thread, branch), as its lead's thread_started names it."""
 
 
 def check_team_logs(
@@ -128,12 +131,14 @@ def _team(logs: Sequence[TeamLogEvents]) -> _Team:
     events = [(log, e) for log in logs for e in log.events]
     started = {e.data.thread_id: e for _, e in events if isinstance(e, MemberStartedEvent)}
     identities: dict[ThreadId, set[Identity]] = {}
+    team_logs: dict[str, tuple[str, str]] = {}
     for log, e in events:
         if isinstance(e, TeamOpenedEvent):
             identities.setdefault(log.thread_id, set()).add("team_log")
         elif isinstance(e, ThreadStartedEvent) and e.data.team is not MISSING:
-            lead = (e.data.team.id, e.data.agent_name, 1)
-            identities.setdefault(log.thread_id, set()).add(lead)
+            t = e.data.team
+            identities.setdefault(log.thread_id, set()).add((t.id, e.data.agent_name, 1))
+            team_logs[t.id] = (t.log_thread_id, t.log_branch_id)
     for thread, s in started.items():
         m = s.data.member
         identities.setdefault(thread, set()).add((m.team, m.name, m.generation))
@@ -142,7 +147,7 @@ def _team(logs: Sequence[TeamLogEvents]) -> _Team:
         for _, e in events
         if isinstance(e, MessageSentEvent)
     }
-    return _Team(sent, started, {t: frozenset(i) for t, i in identities.items()})
+    return _Team(sent, started, {t: frozenset(i) for t, i in identities.items()}, team_logs)
 
 
 def _check(e: Event, log: TeamLogEvents, mine: frozenset[Identity], team: _Team) -> str | None:
@@ -150,6 +155,8 @@ def _check(e: Event, log: TeamLogEvents, mine: frozenset[Identity], team: _Team)
         return _receipt(e.data.envelope, mine, team)
     if isinstance(e, MessageSentEvent):
         return _sent(e.data.envelope, log, mine, team)
+    if isinstance(e, TeamOpenedEvent):
+        return _named(e, log, team)
     if isinstance(e, ThreadStartedEvent):
         start = team.started.get(e.thread_id)
         parent = None if e.data.parent is MISSING else e.data.parent
@@ -160,6 +167,14 @@ def _check(e: Event, log: TeamLogEvents, mine: frozenset[Identity], team: _Team)
         if task is not None and e.actor.principal != task.provenance.principal:
             return "a task's input principal is not its mail's provenance principal"
     return None
+
+
+def _named(e: TeamOpenedEvent, log: TeamLogEvents, team: _Team) -> str | None:
+    """A team log is the thread and branch its lead's thread_started.team names."""
+    named = team.team_logs.get(e.data.team)
+    if named is None or named == (log.thread_id, log.branch_id):
+        return None
+    return "a team log is not the thread its lead names"
 
 
 def _link(p: Parent | Parent1 | None) -> tuple[str, str, str, str] | None:

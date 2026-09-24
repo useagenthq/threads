@@ -8,9 +8,11 @@ import {
   SecretInProviderOutput,
 } from "../redact";
 import { knownEvents, type ReducedState, reduce } from "../reduce";
-import { err, ok } from "../result";
+import { err, ok, type Result } from "../result";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
-import type { Chain } from "../verify";
+import { type DecideTx, isRefusal, type Refusal } from "../store/writer";
+import type { Chain, ChainEvent } from "../verify";
+import type { LogError } from "../verify/error";
 import { afterBarrier, opensWork } from "./turn";
 import type { ChildEnd, Halt, LoopConfig } from "./types";
 import { BARRED, type Barred } from "./types";
@@ -98,10 +100,36 @@ export class Session {
     return stopped ?? (refused ? BARRED : undefined);
   }
 
+  /**
+   * A decided append (a team operation): `decide` reads the store inside the append's
+   * transaction and builds the batch, which passes the cancel barrier as `appendWork`'s does, or
+   * refuses. A refusal appends nothing and comes back for the caller to record.
+   */
+  appendDecided<E>(
+    decide: (tx: DecideTx) => Result<readonly EventDraft[], E>,
+  ): Halt | Barred | Refusal<E> | undefined {
+    const batch = { barred: false };
+    const appended = this.#writer.appendDecided((tx) => {
+      const decided = decide(tx);
+      if (!decided.ok) return decided;
+      const kept = afterBarrier(this.fold, this.events, decided.value);
+      batch.barred = kept.length !== decided.value.length;
+      return ok(kept);
+    });
+    if (isRefusal(appended)) return appended;
+    return this.#committed(appended) ?? (batch.barred ? BARRED : undefined);
+  }
+
   #admit(drafts: readonly EventDraft[]): Halt | undefined {
     const admitted = afterBarrier(this.fold, this.events, drafts);
     if (admitted.length === 0) return undefined;
-    const appended = this.#writer.append(admitted);
+    return this.#committed(this.#writer.append(admitted));
+  }
+
+  /** A lost lease or head halts the run; committed events go to `onEvent`. */
+  #committed(
+    appended: Result<readonly ChainEvent[], LogError>,
+  ): Halt | undefined {
     if (!appended.ok) {
       const { code, message } = appended.error;
       return code === "secret_in_stored_bytes"

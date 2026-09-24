@@ -53,7 +53,7 @@
       "status": "in_turn",
       "head": {
         "seq": 10,
-        "hash": "8af1dddde34f2d8e3d870152e3e460b0703285be15ebe18fb9b2682fa307784b"
+        "hash": "e2a4dc40ae7aa844e39f4755df13cf4779ca8dfe403563a91c5718c6974eb6f8"
       }
     },
     "researcher": {
@@ -79,7 +79,7 @@
       "status": "in_turn",
       "head": {
         "seq": 2,
-        "hash": "8dfada12f1b2d0d51d875f3a8e2e284f07bd82cb6175595316853393326e795f"
+        "hash": "b84b79e929b51265ba4391f227400795942c001f4af420ad0cba3dcb315ce6d0"
       }
     },
     "team": {

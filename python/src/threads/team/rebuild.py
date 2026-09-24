@@ -5,18 +5,22 @@ log and the team log, read verified, checked across (rule 43), then folded with 
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import ParseError, TeamOpenedEvent, ThreadId, ThreadStartedEvent
 from threads.result import Err, Ok
-from threads.store import SqliteStore, VerifiedLog
+from threads.store import wakes
 from threads.store.deletion import TEAM_TABLES
 from threads.store.sql import export, transaction
 from threads.store.started import Opened, opened_threads
-from threads.store.verify import verify_export
+from threads.store.verify import VerifiedLog, verify_export
 from threads.team.cross import TeamLogEvents, check_team_logs
 from threads.team.index import TeamLog, change_rows, insert_rows, turn_openers
+
+if TYPE_CHECKING:
+    from threads.store import SqliteStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +62,7 @@ def _in_team(o: Opened, lead: ThreadId, team_id: str) -> bool:
     return parent is not MISSING and parent.relation == "team_member" and parent.thread_id == lead
 
 
-async def rebuild_team_index(store: SqliteStore, team_id: str) -> Ok[None] | Err[ParseError]:
+async def rebuild_team_index(store: "SqliteStore", team_id: str) -> Ok[None] | Err[ParseError]:
     """Wipes and refolds every index row of `team_id` (and its branches' pending_wakes); the
     feed starts a new epoch. not_found: no lead names the team. invalid_transition: rule 43. The
     reads, the check and the refold are one transaction, so no append lands between the read
@@ -69,23 +73,26 @@ async def rebuild_team_index(store: SqliteStore, team_id: str) -> Ok[None] | Err
 
 def _rebuild(conn: sqlite3.Connection, tenant: str, team_id: str) -> Ok[None] | Err[ParseError]:
     with transaction(conn):
-        logs = team_branches(conn, tenant, team_id)
-        if not logs:
-            return Err(ParseError("not_found", f"no team {team_id}"))
-        reads = _read_all(conn, logs)
-        if isinstance(reads, Err):
-            return reads
-        broken = check_team_logs(
-            [
-                TeamLogEvents(r.log.thread_id, r.log.branch_id, r.verified.fold.events)
-                for r in reads
-            ],
-            team_id,
-        )
-        if broken is not None:
-            message = f"{broken.branch_id}: {broken.message}"
-            return Err(ParseError("invalid_transition", message, broken.seq))
-        _refold(conn, team_id, reads)
+        # Nothing is written before a refusal, so the transaction commits nothing then.
+        return refold_team(conn, tenant, team_id)
+
+
+def refold_team(conn: sqlite3.Connection, tenant: str, team_id: str) -> Ok[None] | Err[ParseError]:
+    """`rebuild_team_index` in the caller's transaction (an import's)."""
+    logs = team_branches(conn, tenant, team_id)
+    if not logs:
+        return Err(ParseError("not_found", f"no team {team_id}"))
+    reads = _read_all(conn, logs)
+    if isinstance(reads, Err):
+        return reads
+    broken = check_team_logs(
+        [TeamLogEvents(r.log.thread_id, r.log.branch_id, r.verified.fold.events) for r in reads],
+        team_id,
+    )
+    if broken is not None:
+        message = f"{broken.branch_id}: {broken.message}"
+        return Err(ParseError("invalid_transition", message, broken.seq))
+    _refold(conn, team_id, reads)
     return Ok(None)
 
 
@@ -108,7 +115,7 @@ def _refold(conn: sqlite3.Connection, team_id: str, reads: Sequence[_Read]) -> N
     for table in TEAM_TABLES:
         conn.execute(f"DELETE FROM {table} WHERE team_id = ?", (team_id,))  # noqa: S608
     for r in reads:
-        conn.execute("DELETE FROM pending_wakes WHERE branch_id = ?", (r.log.branch_id,))
+        wakes.refold(conn, r.log.branch_id, r.verified.fold.events)
     for r in reads:
         insert_rows(conn, r.log, r.verified.fold.events, team_id)
     for r in reads:

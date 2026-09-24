@@ -64,10 +64,14 @@ export const ThreadParent: Strict<{
 /** The team a lead's thread opens, created in the lead's first append with the team log. */
 export const TeamSettings: Strict<{
   id: typeof TeamId;
+  log_thread_id: typeof ThreadId;
   log_branch_id: typeof BranchId;
 }> = z
   .strictObject({
     id: TeamId,
+    log_thread_id: ThreadId.describe(
+      "The team log's thread, opened in this append's transaction with its team_opened.",
+    ),
     log_branch_id: BranchId.describe(
       "The team log's branch, opened in this append's transaction with its team_opened.",
     ),

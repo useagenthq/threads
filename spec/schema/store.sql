@@ -330,6 +330,9 @@ CREATE TABLE IF NOT EXISTS teams (
   closed_at INTEGER
 ) STRICT;
 
+-- A team log belongs to one team; every append asks whether its branch is one.
+CREATE UNIQUE INDEX IF NOT EXISTS teams_log_branch ON teams (team_log_branch_id);
+
 -- One row per member generation, the lead included: role lead is inserted by the lead's first
 -- append, from its thread_started{team} and the team log's team_opened (a lead has no
 -- provenance); every other row comes from member_started. branch_id is null only in the starting
@@ -354,6 +357,9 @@ CREATE TABLE IF NOT EXISTS team_members (
   CHECK ((state = 'starting') = (branch_id IS NULL)),
   CHECK ((role = 'lead') = (provenance IS NULL))
 ) STRICT;
+
+-- Every append asks which team a branch belongs to (its team rows and feed), by thread and branch.
+CREATE INDEX IF NOT EXISTS team_members_thread ON team_members (thread_id, branch_id);
 
 -- One row per mail, inserted by the sender's message_sent: envelope is that event's envelope
 -- byte for byte, and created_at is its time (the consume order is (created_at, mail_id)). The

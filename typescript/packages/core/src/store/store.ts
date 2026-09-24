@@ -1,5 +1,6 @@
 import type { BranchId, SandboxId, ThreadId } from "../log";
 import { err, ok, type Result } from "../result";
+import { indexImported } from "../team/imported";
 import { type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import type { ArtifactStore } from "./artifacts";
@@ -19,6 +20,7 @@ import { importSegments, verifiedImport } from "./import";
 import { LEASE_TTL_MS, type StoreAccess, takeLease } from "./lease";
 import { ResourceLedger } from "./ledger";
 import { exportBytes } from "./lines";
+import { ALREADY_OPEN, type BranchOpening, openBranch } from "./open";
 import { isTorn, markRepaired, recordRepair } from "./repair";
 import {
   atomically,
@@ -29,7 +31,7 @@ import {
   rootBranch,
   setBranchState,
 } from "./tables";
-import { type Writer, writerMismatch } from "./writer";
+import { Writer, writerMismatch } from "./writer";
 
 export type { ForkRequest } from "./fork-writes";
 export { LEASE_TTL_MS } from "./lease";
@@ -78,15 +80,40 @@ export class LogStore {
 
   /** Writes a new root branch: its header line, head at seq 0. */
   createBranch(threadId: ThreadId, branchId: BranchId): Result<void, LogError> {
-    return atomically(this.#db, () =>
-      newBranch(this.#db, {
+    return atomically(this.#db, () => {
+      const made = newBranch(this.#db, {
         tenantId: this.tenant,
         threadId,
         branchId,
         parent: null,
         state: "ready",
         createdAt: this.#now(),
-      }),
+      });
+      return made.ok ? ok(undefined) : made;
+    });
+  }
+
+  /**
+   * `branch.open` in a transaction of its own: a new root branch of this tenant with its first
+   * events, held by the returned writer at epoch 1. `already_open` when the branch exists.
+   */
+  openBranch(
+    opening: Omit<BranchOpening, "tenantId">,
+  ): Result<Writer | typeof ALREADY_OPEN, LogError> {
+    const opened = openBranch(this.#db, this.#now(), {
+      ...opening,
+      tenantId: this.tenant,
+    });
+    if (!opened.ok) return opened;
+    if (opened.value === ALREADY_OPEN) return ok(ALREADY_OPEN);
+    const { branchId, lease } = opening;
+    return ok(
+      new Writer(
+        this.#db,
+        this.#now,
+        { branchId, holderId: lease.holderId, epoch: 1, ttlMs: lease.ttlMs },
+        opened.value,
+      ),
     );
   }
 
@@ -130,6 +157,8 @@ export class LogStore {
    * `threads import`: verifies the export, then stores the same bytes, segment by segment. A
    * torn tail's bytes are kept as an artifact, durable before the rows that name them. Every
    * model request must replay from the log and the artifacts already stored (C7, Render v1).
+   * The index rows the log holds (wake rows, its teams) are folded again in the same
+   * transaction.
    */
   importLog(bytes: Uint8Array): Result<VerifiedLog, LogError> {
     const log = verifiedImport(bytes, this.#artifacts);
@@ -139,9 +168,10 @@ export class LogStore {
       tenantId: this.tenant,
       droppedRef: torn === undefined ? null : this.#artifacts.put(torn.bytes),
     };
-    const stored = atomically(this.#db, () =>
-      importSegments(this.#db, log.value, target),
-    );
+    const stored = atomically(this.#db, () => {
+      const imported = importSegments(this.#db, log.value, target);
+      return imported.ok ? indexImported(this, log.value) : imported;
+    });
     return stored.ok ? log : stored;
   }
 

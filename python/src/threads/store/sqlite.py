@@ -5,11 +5,10 @@ with the default ":memory:" path is the in-memory store tests use: the same code
 """
 
 import sqlite3
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path
-
-from pydantic import JsonValue
+from typing import TYPE_CHECKING, Literal
 
 from threads import VERSION
 from threads.log import BranchId, Event, EventId, ParseError, ThreadId
@@ -21,26 +20,26 @@ from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
 from threads.store.bindings import Bindings, Kind
+from threads.store.branches import BranchStore, corrupt
 from threads.store.budgets import BudgetLedger
 from threads.store.context import CleanupContext, OwnerContext
 from threads.store.cursors import ObserverCursors
-from threads.store.forking import Forking, ForkRequest, forking, publish_fork, start_child
 from threads.store.lines import Draft, head_line, header_line, imported_bytes
+from threads.store.opening import ALREADY_OPEN, BranchOpening, open_alone
 from threads.store.resources import Ledger, Resource
 from threads.store.spill import Spill
 from threads.store.tables import Tables
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
+from threads.team.imported import import_indexed
+
+if TYPE_CHECKING:
+    from pydantic import JsonValue
 
 
-class SqliteStore:
+class SqliteStore(BranchStore):
     """Append-only branches of lines, their head checkpoints and their leases."""
-
-    def __init__(self, worker: Worker, tenant_id: str, artifacts: ArtifactStore) -> None:
-        self._worker = worker
-        self._tenant = tenant_id
-        self._artifacts = artifacts
 
     @classmethod
     async def open(
@@ -140,10 +139,34 @@ class SqliteStore:
         )
         return await self._worker.call(lambda c: lease.root_or_create(c, row))
 
+    async def open_branch(
+        self,
+        thread_id: ThreadId,
+        branch_id: BranchId,
+        drafts: Sequence[Draft],
+        *,
+        holder_id: str,
+        clock: Clock,
+    ) -> Ok[Writer | Literal["already_open"]] | Err[ParseError]:
+        """`branch.open` in a transaction of its own: a new root branch of this tenant with its
+        first events, held by the returned writer at epoch 1. `already_open` when the branch
+        exists."""
+        now = clock()
+        held = lease.Lease(holder_id, 1, now + lease.TTL_MS)
+        o = BranchOpening(self._tenant, thread_id, branch_id, held, drafts)
+        # Registration is paused until the rows are durable: the drafts are checked inside (C5).
+        opened = await self._worker.call(lambda c: published(b"", lambda: open_alone(c, o, now)))
+        if isinstance(opened, ParseError):
+            return Err(opened)
+        if isinstance(opened, str):
+            return Ok(ALREADY_OPEN)
+        return Ok(Writer(self._worker, held, opened.fold, opened.last_line, clock))
+
     async def import_log(self, log: VerifiedLog) -> Ok[None] | Err[ParseError]:
         """Stores a verified export's lines byte for byte: parents referenced, never copied.
         Every model request must first replay from the log and the artifacts already in the
-        store (C7, Render v1): the first failing request's error is the result."""
+        store (C7, Render v1): the first failing request's error is the result. The index rows
+        the log holds (wake rows, its teams) are folded again in the same transaction."""
         tenant, artifacts = self._tenant, self._artifacts
 
         def store(conn: sqlite3.Connection) -> ParseError | None:
@@ -152,7 +175,7 @@ class SqliteStore:
                 return replayed.error
             # The dropped bytes are durable before the row that references them.
             dropped = artifacts.put(log.dropped) if log.dropped else None
-            return sql.import_segments(conn, log, tenant, dropped)
+            return import_indexed(conn, log, tenant, dropped)
 
         try:
             # Imported bytes are stored exactly as exported, torn tail included (C5).
@@ -236,7 +259,7 @@ class SqliteStore:
             return Err(ParseError("branch_not_runnable", message, found.head_seq))
         read = await self.read(branch_id, clock())
         if isinstance(read, Err):
-            return Err(_corrupt(read.error))
+            return Err(corrupt(read.error))
         return await self._take(read.value, holder_id, clock)
 
     async def repair_torn(
@@ -280,98 +303,6 @@ class SqliteStore:
             return Err(taken)
         return Ok(Writer(self._worker, taken, log.fold, log.segments[-1].last_line, clock))
 
-    async def fork(
-        self, request: ForkRequest, holder_id: str, clock: Clock
-    ) -> Ok[Writer | None] | Err[ParseError]:
-        """Creates a child at the parent's line `at_seq` with nothing to restore (a repair, or a
-        test): `begin_fork` then `finish_fork`. Parent rows are referenced, never copied. A
-        repair child is inspection-only and gets no writer."""
-        begun = await self.begin_fork(
-            request.parent, request.at_seq, request.child, holder_id, clock
-        )
-        if isinstance(begun, Err):
-            return begun
-        finished = await self.finish_fork(begun.value, request.data, clock)
-        if isinstance(finished, Err):
-            await self.fail_fork(request.child)
-        return finished
-
-    async def begin_fork(
-        self, parent: BranchId, at_seq: int, child: BranchId, holder_id: str, clock: Clock
-    ) -> Ok[Forking] | Err[ParseError]:
-        """Stores the child as `forking` with its first lease, which fences the ledger rows of
-        whatever the fork restores. Fork-point eligibility (semantic rule 16) and the restore
-        belong to the fork operation above the store."""
-        now = clock()
-        read = await self._prefix(parent, at_seq, now)
-        if isinstance(read, Err):
-            return read
-        started = forking(read.value, self._tenant, child, holder_id, now)
-        held = started.owner.lease
-        error = await self._worker.call(lambda c: lease.create(c, started.row, held))
-        return Err(error) if error is not None else Ok(started)
-
-    async def finish_fork(
-        self, started: Forking, data: Mapping[str, JsonValue], clock: Clock
-    ) -> Ok[Writer | None] | Err[ParseError]:
-        """Writes the child's `fork` event and makes it ready (or inspection-only) in one
-        transaction, fenced by the fork's lease."""
-        built = start_child(started, data, clock())
-        if isinstance(built, Err):
-            return built
-        start, held = built.value, started.owner.lease
-        error = await self._worker.call(lambda c: publish_fork(c, start, held))
-        if error is not None:
-            return Err(error)
-        if not start.runnable:
-            return Ok(None)
-        return Ok(Writer(self._worker, held, start.fold, start.fork[1], clock))
-
-    async def fail_fork(self, child: BranchId) -> None:
-        """The fork failed: the child becomes `fork_failed` and is never listed."""
-        await self._worker.call(lambda c: lease.fail_fork(c, child))
-
-    async def interrupted_forks(self, holder_id: str, clock: Clock) -> tuple[lease.Owner, ...]:
-        """Forks a crash left `forking`, each taken over under a new lease:
-        this holder's own, or any whose lease ran out. A fork is never resumed; the caller
-        releases what it created and marks it `fork_failed`."""
-        tenant, now = self._tenant, clock()
-
-        def take_over(conn: sqlite3.Connection) -> tuple[lease.Owner, ...]:
-            owners: list[lease.Owner] = []
-            for child in sql.forking(conn, tenant):
-                taken = lease.take(conn, child, holder_id, 0, now)
-                if isinstance(taken, lease.Lease):
-                    owners.append(lease.Owner(child, taken))
-            return tuple(owners)
-
-        return await self._worker.call(take_over)
-
-    async def branch(self, branch_id: BranchId) -> Ok[sql.Branch] | Err[ParseError]:
-        """The branch's row, in any state; another tenant's is branch_not_found."""
-        return await self._owned(branch_id)
-
-    async def _prefix(
-        self, parent: BranchId, at_seq: int, now: int
-    ) -> Ok[VerifiedLog] | Err[ParseError]:
-        """The parent's verified resolved chain through `at_seq`, where a child forks."""
-        owned = await self._owned(parent)
-        if isinstance(owned, Err):
-            return owned
-        prefix = await self._worker.call(lambda c: sql.prefix(c, parent, at_seq))
-        read = verify_export(prefix, now)
-        if isinstance(read, Err):
-            return Err(_corrupt(read.error))
-        if read.value.fold.seq != at_seq:
-            return Err(ParseError("seq_mismatch", f"the parent has no line {at_seq}", at_seq))
-        return read
-
-    async def _owned(self, branch_id: BranchId) -> Ok[sql.Branch] | Err[ParseError]:
-        found = await self._worker.call(lambda c: sql.branch(c, branch_id))
-        if found is None or found.tenant_id != self._tenant:
-            return Err(ParseError("branch_not_found", f"no branch {branch_id}"))
-        return Ok(found)
-
 
 def _repaired(log: VerifiedLog, dropped_sha256: str) -> Draft:
     data: dict[str, JsonValue] = {
@@ -392,9 +323,3 @@ def _major(version: str) -> str:
 
 def _result(error: ParseError | None) -> Ok[None] | Err[ParseError]:
     return Ok(None) if error is None else Err(error)
-
-
-def _corrupt(cause: ParseError) -> ParseError:
-    # A stored branch that fails verification refuses writable opens; the precise code is the
-    # cause (spec/schema/README.md wire rule 14). Readers still get the precise error.
-    return ParseError("log_corrupt", f"{cause.code}: {cause.message}", cause.seq)
