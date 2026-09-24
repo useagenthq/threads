@@ -9,11 +9,8 @@ import { memoryContext, parseRender } from "@threads/core/adapter";
 import { anthropic } from "../src";
 import { toAnthropic } from "../src/request";
 
-const model = anthropic({
-  model: "claude-sonnet-5",
+const model = anthropic("claude-sonnet-5", {
   maxTokens: 1024,
-  contextWindow: 200_000,
-  maxOutputTokens: 64_000,
   params: { temperature: 0 },
 });
 const head = {
@@ -114,7 +111,7 @@ describe("replay", () => {
     const context = memoryContext();
     const ref = await context.put(encoder.encode("{}"), "application/json");
     const { fetch, calls } = recordingFetch([]);
-    const m = anthropic({ ...options(), fetch });
+    const m = anthropic("claude-sonnet-5", { ...options(), fetch });
     const body = renderBody([
       head,
       {
@@ -164,9 +161,9 @@ describe("replay", () => {
 
 describe("setup", () => {
   test("params can't override what the render decides", () => {
-    expect(() => anthropic({ ...options(), params: { messages: [] } })).toThrow(
-      "can't set messages",
-    );
+    expect(() =>
+      anthropic("claude-sonnet-5", { ...options(), params: { messages: [] } }),
+    ).toThrow("can't set messages");
   });
 
   test("model info is declared, lookup honestly none", () => {
@@ -179,9 +176,6 @@ describe("setup", () => {
 
 function options() {
   return {
-    model: "claude-sonnet-5",
     maxTokens: 1024,
-    contextWindow: 200_000,
-    maxOutputTokens: 64_000,
   };
 }

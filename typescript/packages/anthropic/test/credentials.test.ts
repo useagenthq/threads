@@ -15,11 +15,8 @@ credentialCases({
   env: "ANTHROPIC_API_KEY",
   slot: (apiKey) => ({
     fallback: [
-      anthropic({
-        model: "claude-sonnet-5",
+      anthropic("claude-sonnet-5", {
         maxTokens: 1024,
-        contextWindow: 200_000,
-        maxOutputTokens: 64_000,
         fetch: offline,
         ...(apiKey === undefined ? {} : { apiKey }),
       }),
@@ -30,11 +27,8 @@ credentialCases({
 test("the client uses the key setup resolved, not the env at send time", async () => {
   process.env["ANTHROPIC_API_KEY"] = "sk-lane09-at-setup";
   const seen: (string | null)[] = [];
-  const model = anthropic({
-    model: "claude-sonnet-5",
+  const model = anthropic("claude-sonnet-5", {
     maxTokens: 1024,
-    contextWindow: 200_000,
-    maxOutputTokens: 64_000,
     fetch: async (input, init) => {
       seen.push(new Headers(init?.headers).get("x-api-key"));
       throw new Error(`no network: ${String(input)}`);

@@ -530,6 +530,70 @@
       "tests/agents/test_api.py::test_readme_example"
     ]
   },
+  "anthropic": {
+    "ts": [
+      "packages/anthropic/test/catalog.test.ts > anthropic(id) > a listed id needs no options: verified limits and the default cap"
+    ],
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
+    ]
+  },
+  "anthropic!hosted_tool_unsupported": {
+    "ts": [
+      "packages/anthropic/test/hosted.test.ts > anthropic hosted tools > code_execution_20250825 is refused with hosted_tool_unsupported"
+    ],
+    "py": [
+      "tests/adapters/test_hosted_tools.py::test_anthropic_refuses_effectful_hosted_tools_at_setup[tool0]"
+    ]
+  },
+  "anthropic!invalid_config": {
+    "ts": [
+      "packages/anthropic/test/catalog.test.ts > anthropic(id) > an unlisted id needs both limits, and says so"
+    ],
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_params_can_t_set_the_cap[anthropic-max_tokens]"
+    ]
+  },
+  "anthropic!missing_secret": {
+    "ts": [
+      "packages/anthropic/test/credentials.test.ts > anthropic() credentials > missing: the factory and agent() succeed; check() and the run fail at setup"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_missing_key_fails_check_as_a_value_and_the_run_before_any_append[anthropic]"
+    ]
+  },
+  "anthropic.api_key=default": {
+    "ts": [
+      "packages/anthropic/test/credentials.test.ts > anthropic() credentials > a fixed environment is picked up by the same agent"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[anthropic]"
+    ]
+  },
+  "anthropic.max_input_tokens=default": {
+    "ts": [
+      "packages/anthropic/test/catalog.test.ts > anthropic(id) > a listed id needs no options: verified limits and the default cap"
+    ],
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
+    ]
+  },
+  "anthropic.max_output_tokens=default": {
+    "ts": [
+      "packages/anthropic/test/catalog.test.ts > anthropic(id) > a listed id needs no options: verified limits and the default cap"
+    ],
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
+    ]
+  },
+  "anthropic.max_tokens=default": {
+    "ts": [
+      "packages/anthropic/test/catalog.test.ts > anthropic(id) > a listed id needs no options: verified limits and the default cap"
+    ],
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
+    ]
+  },
   "brave": {
     "ts": [
       "packages/core/test/tools/search-backends.test.ts > search backends > brave: a GET with site: operators and the subscription token"
@@ -656,6 +720,70 @@
     ],
     "py": [
       "tests/thread/test_handle.py::test_fork_restores_an_isolated_sandbox_and_the_child_runs"
+    ]
+  },
+  "openai": {
+    "ts": [
+      "packages/openai/test/catalog.test.ts > openai(id) > a listed id needs no options: verified limits and the default cap"
+    ],
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
+    ]
+  },
+  "openai!hosted_tool_unsupported": {
+    "ts": [
+      "packages/openai/test/hosted.test.ts > openai hosted tools > code_interpreter is refused with hosted_tool_unsupported"
+    ],
+    "py": [
+      "tests/adapters/test_hosted_tools.py::test_openai_refuses_effectful_hosted_tools_at_setup[code_interpreter]"
+    ]
+  },
+  "openai!invalid_config": {
+    "ts": [
+      "packages/openai/test/catalog.test.ts > openai(id) > each option overrides one limit; an unlisted id needs both"
+    ],
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_params_can_t_set_the_cap[openai-max_output_tokens]"
+    ]
+  },
+  "openai!missing_secret": {
+    "ts": [
+      "packages/openai/test/credentials.test.ts > openai() credentials > missing: the factory and agent() succeed; check() and the run fail at setup"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_missing_key_fails_check_as_a_value_and_the_run_before_any_append[openai]"
+    ]
+  },
+  "openai.api_key=default": {
+    "ts": [
+      "packages/openai/test/credentials.test.ts > openai() credentials > a fixed environment is picked up by the same agent"
+    ],
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[openai]"
+    ]
+  },
+  "openai.max_input_tokens=default": {
+    "ts": [
+      "packages/openai/test/catalog.test.ts > openai(id) > a listed id needs no options: verified limits and the default cap"
+    ],
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
+    ]
+  },
+  "openai.max_output_tokens=default": {
+    "ts": [
+      "packages/openai/test/catalog.test.ts > openai(id) > a listed id needs no options: verified limits and the default cap"
+    ],
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
+    ]
+  },
+  "openai.max_tokens=default": {
+    "ts": [
+      "packages/openai/test/catalog.test.ts > openai(id) > a listed id needs no options: verified limits and the default cap"
+    ],
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
     ]
   },
   "scriptedModel": {

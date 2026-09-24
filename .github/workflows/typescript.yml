@@ -20,6 +20,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run check
+      - name: Model catalogs are append-only
+        working-directory: .
+        run: python3 spec/tools/check_model_catalog.py
       - name: API surface base
         working-directory: .
         run: |

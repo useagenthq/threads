@@ -1,0 +1,122 @@
+{
+  "$id": "urn:threads:schema:model-catalog:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Entry ids are unique, and so are withdrawn ids (a semantic rule, spec/schema/README.md). A released entry's id, limits and alias_of never change; a wrong one is withdrawn.",
+  "properties": {
+    "entries": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "alias_of": {
+            "description": "Informational: the dated snapshot this alias pointed to when it was verified.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "id": {
+            "description": "The provider's exact model id; matched by string equality only.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "max_input_tokens": {
+            "description": "The most input tokens one request may carry. Pinned as policy.models[].context_window.",
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "max_output_tokens": {
+            "description": "The most output tokens one response may hold.",
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "note": {
+            "description": "How a value was obtained when the source doesn't state it outright (evidence, not behavior).",
+            "minLength": 1,
+            "type": "string"
+          },
+          "source": {
+            "description": "Where the limits were read (a Models API URL or a model page).",
+            "pattern": "^https:\\/\\/\\S+$",
+            "type": "string"
+          },
+          "verified": {
+            "description": "The day the limits were last read there (YYYY-MM-DD).",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "max_input_tokens",
+          "max_output_tokens",
+          "source",
+          "verified"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "provider": {
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "type": "string"
+    },
+    "version": {
+      "const": 1,
+      "type": "number"
+    },
+    "withdrawn": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "A released entry that turned out wrong. It stays in entries.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "use": {
+            "additionalProperties": false,
+            "description": "The corrected limits.",
+            "properties": {
+              "max_input_tokens": {
+                "description": "The most input tokens one request may carry. Pinned as policy.models[].context_window.",
+                "maximum": 9007199254740991,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "max_output_tokens": {
+                "description": "The most output tokens one response may hold.",
+                "maximum": 9007199254740991,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "max_input_tokens",
+              "max_output_tokens"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "use"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "version",
+    "provider",
+    "entries",
+    "withdrawn"
+  ],
+  "type": "object"
+}

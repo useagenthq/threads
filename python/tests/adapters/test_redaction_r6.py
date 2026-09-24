@@ -110,7 +110,7 @@ def test_escaped_provider_material_holding_a_value_fails_closed(tmp_path: Path) 
     done: JsonValue = {"type": "response.completed", "response": {"usage": USAGE}}
     reply = sse([(None, {"type": "response.output_item.done", "item": item}), (None, done)])
     info = openai(
-        "gpt-test", context_window=400_000, max_output_tokens=64, api_key="sk-test-openai"
+        "gpt-test", max_input_tokens=400_000, max_output_tokens=64, api_key="sk-test-openai"
     ).info
     model = OpenAIModel(info, "sk-test-openai", http=httpx2.MockTransport(Script([reply])))
     store = tmp_path / "store"

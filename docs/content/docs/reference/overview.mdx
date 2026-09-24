@@ -24,6 +24,8 @@ say so.
 | mcp | `@threads/mcp` | `threads.mcp` |
 | supermemory | `@threads/supermemory` | `threads.supermemory` |
 | zep | `@threads/zep` | `threads.zep` |
+| anthropic | `@threads/anthropic` | `threads.anthropic` |
+| openai | `@threads/openai` | `threads.openai` |
 | search | `@threads/core` | `threads.search` |
 
 ## Functions
@@ -51,14 +53,14 @@ A provider factory connects an agent to an outside service and returns one of th
 |---|---|---|
 | [`supermemory`](/docs/reference/functions/supermemory) | `supermemory` | A MemoryProvider that stores records in Supermemory. |
 | [`zep`](/docs/reference/functions/zep) | `zep` | A MemoryProvider that stores records in Zep. |
+| [`anthropic`](/docs/reference/functions/anthropic) | `anthropic` | A Claude model through the Messages API. |
+| [`openai`](/docs/reference/functions/openai) | `openai` | An OpenAI model through the Responses API (stateless: store is false). |
 | [`exa`](/docs/reference/functions/exa) | `exa` | A web_search backend that searches with Exa (exa.ai). |
 | [`tavily`](/docs/reference/functions/tavily) | `tavily` | A web_search backend that searches with Tavily (tavily.com). |
 | [`brave`](/docs/reference/functions/brave) | `brave` | A web_search backend that searches with Brave (search.brave.com). |
 
 These providers exist but are not in the reference yet; their guides describe them: [Models](/docs/agents/models), [Sandboxes](/docs/sandboxes/overview), [Host server](/docs/host/overview) and [Memory](/docs/memory/memory).
 
-- `anthropic`: Claude models.
-- `openai`: OpenAI models.
 - `aiSdk`: Any AI SDK model (TypeScript only).
 - `litellm`: Models through LiteLLM (Python only).
 - `e2b`: E2B sandboxes.

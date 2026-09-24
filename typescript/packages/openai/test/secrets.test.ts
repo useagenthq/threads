@@ -37,10 +37,7 @@ async function run(item: { readonly [key: string]: Json }, key: string) {
       completed,
     ]),
   ]);
-  const model = openai({
-    model: "gpt-5.5",
-    contextWindow: 400_000,
-    maxOutputTokens: 128_000,
+  const model = openai("gpt-5.5", {
     hostedTools: [{ type: "web_search" }],
     apiKey: "sk-test-openai",
     fetch,

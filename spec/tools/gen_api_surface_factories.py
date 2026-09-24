@@ -162,11 +162,16 @@ def render_ts(api: Obj, packages: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _py_inputs(f: Obj) -> tuple[list[Obj], list[Obj]]:
+    """The params the Python helper names: the positional ones and the required options."""
+    required = [p for p in _params(f, "py", "option") if p.get("required")]
+    return _params(f, "py", "positional"), required
+
+
 def _py_helper(key: str, f: Obj, r: Render) -> list[str]:
     """A function taking the declared positional types and required options, calling the
     factory with them (options by name), and keeping the result as the declared protocol."""
-    positional = _params(f, "py", "positional")
-    required = [p for p in _params(f, "py", "option") if p.get("required")]
+    positional, required = _py_inputs(f)
     args = [f"{text(p['name'])}: {r.expr(obj(p['type']))}" for p in positional]
     if required:
         args += ["*", *(f"{text(p['name'])}: {r.expr(obj(p['type']))}" for p in required)]
@@ -195,8 +200,10 @@ def render_py(api: Obj) -> str:
             if not isinstance(module, str) or f.get("lang", "py") != "py":
                 continue
             names.setdefault(module, set()).add(text(f["py"]))
-            names.setdefault("threads", set()).update(_refs(_used(f, "py")))
-            modules.update(m for t in _platforms(_used(f, "py"), "py") for m in modules_of(t))
+            # Only what the helper spells: an import of an optional option's type is unused.
+            named: Json = [*(p for ps in _py_inputs(f) for p in ps), f.get("returns")]
+            names.setdefault("threads", set()).update(_refs(named))
+            modules.update(m for t in _platforms(named, "py") for m in modules_of(t))
             body += _py_helper(key, f, r)
     lines = [f'"""{HEADER}"""', ""]
     lines += [f"import {m}" for m in sorted(modules)]

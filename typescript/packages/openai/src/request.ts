@@ -64,11 +64,15 @@ export async function toOpenAI(
     })),
     ...(Array.isArray(hosted) ? hosted : []),
   ];
+  // Line 0 pins the cap under the provider-neutral max_tokens; the Responses API names it
+  // max_output_tokens.
+  const { max_tokens: cap, ...params } = head.params;
   return {
     ok: true,
     body: {
       model: head.model.name,
-      ...head.params,
+      ...params,
+      ...(cap === undefined ? {} : { max_output_tokens: cap }),
       ...(head.system === "" ? {} : { instructions: head.system }),
       ...(tools.length === 0 ? {} : { tools }),
       input,

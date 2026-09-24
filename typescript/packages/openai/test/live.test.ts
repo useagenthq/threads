@@ -15,11 +15,8 @@ const live =
 
 describe.skipIf(!live)("live gate: openai", () => {
   test("one real attempt streams text and reports usage", async () => {
-    const model = openai({
-      model: name ?? "",
-      contextWindow: 128_000,
-      maxOutputTokens: 16_000,
-      params: { max_output_tokens: 64 },
+    const model = openai(name ?? "", {
+      maxTokens: 64,
     });
     const { adapter, params } = model.info;
     const body = renderBody([

@@ -12,11 +12,8 @@ const name = process.env["THREADS_LIVE_ANTHROPIC_MODEL"] ?? "claude-sonnet-5";
 
 describe.skipIf(!live)("live gate: anthropic", () => {
   test("one real attempt streams text and reports usage", async () => {
-    const model = anthropic({
-      model: name,
+    const model = anthropic(name, {
       maxTokens: 64,
-      contextWindow: 200_000,
-      maxOutputTokens: 64_000,
     });
     const { adapter, params } = model.info;
     const body = renderBody([

@@ -51,6 +51,7 @@ SCRIPTED_INFO: Final = ModelInfo(
         input_billing_bound="context_window",
     ),
     lookup="none",
+    accepts=("text",),
 )
 
 type Entry = ModelResponse | Rejected
@@ -130,8 +131,7 @@ def _answer(answer: JsonValue) -> LookupResult[ModelResponse]:
 
 
 def _with_lookup() -> ModelInfo:
-    base = SCRIPTED_INFO
-    return ModelInfo(base.model, base.adapter, base.params, base.limits, "final")
+    return replace(SCRIPTED_INFO, lookup="final")
 
 
 def _response(entry: dict[str, JsonValue]) -> Entry:

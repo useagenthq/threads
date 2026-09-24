@@ -27,6 +27,7 @@ export {
   JsonValue,
   type KnownEvent,
   OutputPart,
+  type Price,
   type ResultPart,
   type Usage,
 } from "./log";
@@ -63,6 +64,7 @@ export {
 /** Test kit: lets a model whose transport is mocked past the global model-request guard. */
 export { markTestKit } from "./model/guard";
 export { checkHostedTools } from "./model/hosted";
+export { type LimitOptions, modelLimits } from "./model/limits";
 export {
   loadedTools,
   parseRender,

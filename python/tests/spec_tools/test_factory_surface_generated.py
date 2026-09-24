@@ -71,6 +71,25 @@ def test_the_generated_file_names_required_options_and_platform_modules() -> Non
     assert "make(key, region=region, amount=amount)" in source
 
 
+def test_an_optional_option_s_platform_type_is_not_imported() -> None:
+    """The helper names only positional params and required options, so importing an optional
+    option's module would be an unused import pyright rejects."""
+    f = API["functions"]
+    assert isinstance(f, dict)
+    make = f["make"]
+    assert isinstance(make, dict)
+    params = make["params"]
+    assert isinstance(params, list)
+    zone: Obj = {
+        "name": "zone",
+        "kind": "option",
+        "type": {"platform": {"py": "datetime.tzinfo"}},
+        "required": False,
+    }
+    api: Obj = {**API, "functions": {"make": {**make, "params": [*params, zone]}}}
+    assert "import datetime" not in render_py(api)
+
+
 @pytest.mark.parametrize(
     ("package", "clean"),
     [

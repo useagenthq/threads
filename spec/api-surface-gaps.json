@@ -32,7 +32,6 @@
   {"name": "MessagePolicyRule.from", "lang": "ts", "kind": "missing", "lane": "90-ma-p1"},
   {"name": "MessagePolicyRule.to", "lang": "ts", "kind": "missing", "lane": "90-ma-p1"},
   {"name": "ModelContext", "lang": "ts", "kind": "missing", "lane": "01-api-surface-gate"},
-  {"name": "ModelInfo.accepts", "lang": "py", "kind": "required_mismatch", "lane": "06-model-catalog"},
   {"name": "MonitorResult", "lang": "py", "kind": "missing", "lane": "90-ma-p1"},
   {"name": "MonitorResult", "lang": "ts", "kind": "missing", "lane": "90-ma-p1"},
   {"name": "ObserveRefusal", "lang": "py", "kind": "missing", "lane": "90-ma-p1"},

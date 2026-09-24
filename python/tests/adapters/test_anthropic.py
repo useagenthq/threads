@@ -51,7 +51,7 @@ def reply(*events: Ev) -> httpx2.Response:
 
 
 def model(script: Script) -> AnthropicModel:
-    declared = anthropic("claude-test", context_window=WINDOW, max_output_tokens=4096).info
+    declared = anthropic("claude-test", max_input_tokens=WINDOW, max_output_tokens=4096).info
     return AnthropicModel(declared, "sk-test-1", http=httpx2.MockTransport(script))
 
 
@@ -196,7 +196,7 @@ def _raises(error: type[httpx2.TransportError]) -> AnthropicModel:
     def handle(request: httpx2.Request) -> httpx2.Response:
         raise error("down", request=request)
 
-    info = anthropic("claude-test", context_window=WINDOW, max_output_tokens=10).info
+    info = anthropic("claude-test", max_input_tokens=WINDOW, max_output_tokens=10).info
     return AnthropicModel(info, "sk-test-1", http=httpx2.MockTransport(handle))
 
 
@@ -217,7 +217,7 @@ def test_a_stream_error_before_content_is_a_rejection_and_after_content_uncertai
 
 def test_the_factory_declares_its_limits_and_no_lookup() -> None:
     made = anthropic(
-        "claude-test", context_window=WINDOW, max_output_tokens=8192, params={"temperature": 0}
+        "claude-test", max_input_tokens=WINDOW, max_output_tokens=8192, params={"temperature": 0}
     )
     assert made.info.limits.context_window == WINDOW
     assert made.info.params == {"max_tokens": 8192, "temperature": 0}
@@ -227,7 +227,7 @@ def test_the_factory_declares_its_limits_and_no_lookup() -> None:
 
 def test_the_client_uses_the_key_setup_resolved(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-lane09-at-setup")
-    declared = anthropic("claude-test", context_window=WINDOW, max_output_tokens=4096).info
+    declared = anthropic("claude-test", max_input_tokens=WINDOW, max_output_tokens=4096).info
     script = Script([reply(begin(), start(0, TEXT), delta(0, "text", "ok"), stop(0), END)])
     claude = AnthropicModel(declared, None, http=httpx2.MockTransport(script))
     asyncio.run(claude.setup())

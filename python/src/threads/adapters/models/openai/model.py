@@ -7,13 +7,14 @@ lease while the SDK prepared or queued the request sends nothing.
 
 import re
 from collections.abc import AsyncIterator, Mapping, Sequence
-from typing import Unpack
+from typing import Final, Unpack
 
 import httpx2
 import openai as sdk
+from pydantic import JsonValue
 
 from threads.adapters.models import transport
-from threads.adapters.models.hosted import HostedTool, declare
+from threads.adapters.models.hosted import declare
 from threads.adapters.models.openai.request import PROVIDER, build
 from threads.adapters.models.openai.stream import Assembler, ProviderStreamError
 from threads.adapters.models.openai.wire import parse
@@ -112,25 +113,36 @@ def _too_long(error: sdk.APIStatusError) -> bool:
 
 
 class OpenAIOptions(ModelOptions, total=False):
-    hosted_tools: Sequence[HostedTool]
+    """Limits default from spec/models/openai.v1.json when the model id is listed there."""
+
+    hosted_tools: Sequence[Mapping[str, JsonValue]]
     """Hosted tools, sent as given and pinned in line 0: web search only (`web_search`, with an
     optional `_preview` and date); anything else raises hosted_tool_unsupported."""
+
+
+RESERVED: Final = (
+    *("model", "input", "instructions", "tools", "stream", "store", "include"),
+    *("previous_response_id", "conversation", "background", "max_tokens", "max_output_tokens"),
+)
+"""Request fields the adapter derives from the render, and both cap keys (the max_tokens
+option)."""
 
 
 def _web(kind: str) -> bool:
     return re.fullmatch(r"web_search(_preview)?(_\d{4}_\d{2}_\d{2})?", kind) is not None
 
 
-def openai(name: str, **options: Unpack[OpenAIOptions]) -> OpenAIModel:
-    """An OpenAI model (the `openai()` of spec/api.json conventions.adapters).
-    `max_output_tokens` is pinned as the request's cap; other `params` are Responses API
-    fields. `api_key` defaults to `secret("OPENAI_API_KEY")`, resolved at setup."""
+def openai(model: str, **options: Unpack[OpenAIOptions]) -> OpenAIModel:
+    """An OpenAI model by its exact id: `openai("gpt-5.5")` (spec/api.json conventions.adapters).
+    The cap is pinned as `params.max_tokens` (default min(8192, max_output_tokens)) and sent as
+    `max_output_tokens`; other `params` are Responses API fields. `api_key` defaults to
+    `secret("OPENAI_API_KEY")`, resolved at setup."""
     settings, hosted = declare(options.get("hosted_tools", ()), _web, "type")
     declared = info(
-        ModelRef(provider=PROVIDER, name=name),
+        ModelRef(provider=PROVIDER, name=model),
         AdapterRef(name=ADAPTER, version=VERSION, settings=settings),
         options,
-        {"max_output_tokens": options["max_output_tokens"]},
+        RESERVED,
         hosted,
     )
     return OpenAIModel(declared, options.get("api_key"), options.get("base_url"))

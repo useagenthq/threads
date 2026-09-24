@@ -182,12 +182,7 @@ You'll build a small weather agent with one tool. First it runs on a **scripted 
     const weather = agent({
       name: "weather",
       instructions: "Answer questions about the weather.",
-      model: anthropic({
-        model: "claude-sonnet-5",
-        maxTokens: 8192,
-        contextWindow: 1_000_000,
-        maxOutputTokens: 128_000,
-      }),
+      model: anthropic("claude-sonnet-5"),
       tools: [getWeather],
     });
 
@@ -214,7 +209,7 @@ You'll build a small weather agent with one tool. First it runs on a **scripted 
     weather = agent(
         name="weather",
         instructions="Answer questions about the weather.",
-        model=anthropic("claude-sonnet-5", context_window=1_000_000, max_output_tokens=128_000),
+        model=anthropic("claude-sonnet-5"),
         tools=[weather_tool],
     )
 

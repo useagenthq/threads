@@ -6,7 +6,7 @@ import { aiSdk } from "../src";
 import { toPrompt } from "../src/prompt";
 import { type Entry, fakeModel, offline, unknownUsage, usage } from "./fake";
 
-const limits = { contextWindow: 128_000, maxOutputTokens: 8192 };
+const limits = { maxInputTokens: 128_000, maxOutputTokens: 8192 };
 
 function bridge(script: readonly Entry[], live = () => true) {
   const { factory, calls } = fakeModel(script);
@@ -14,7 +14,7 @@ function bridge(script: readonly Entry[], live = () => true) {
     model: factory,
     fetch: offline,
     ...limits,
-    params: { maxOutputTokens: 512 },
+    maxTokens: 512,
   });
   const head = {
     adapter: m.info.adapter,
@@ -359,7 +359,7 @@ describe("refused before dispatch", () => {
       aiSdk({
         model: () => model,
         ...limits,
-        params: { maxOutputTokens: "lots" },
+        params: { temperature: "hot" },
       }),
     ).toThrow("aiSdk params");
   });

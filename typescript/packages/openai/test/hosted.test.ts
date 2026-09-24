@@ -6,9 +6,6 @@ import { openai } from "../src";
 // image generation fail at construction.
 
 const options = {
-  model: "gpt-5.5",
-  contextWindow: 400_000,
-  maxOutputTokens: 128_000,
   apiKey: "test-key",
 };
 
@@ -18,7 +15,7 @@ describe("openai hosted tools", () => {
       { type: "web_search" },
       { type: "web_search_preview_2025_03_11" },
     ];
-    const { info } = openai({ ...options, hostedTools });
+    const { info } = openai("gpt-5.5", { ...options, hostedTools });
     expect(info.adapter.settings).toEqual({ hosted_tools: hostedTools });
     expect(info.hosted_tools).toEqual([
       "web_search",
@@ -34,8 +31,8 @@ describe("openai hosted tools", () => {
     "image_generation",
     "local_shell",
   ])("%s is refused with hosted_tool_unsupported", (type) => {
-    expect(() => openai({ ...options, hostedTools: [{ type }] })).toThrow(
-      expect.objectContaining({ code: "hosted_tool_unsupported" }),
-    );
+    expect(() =>
+      openai("gpt-5.5", { ...options, hostedTools: [{ type }] }),
+    ).toThrow(expect.objectContaining({ code: "hosted_tool_unsupported" }));
   });
 });

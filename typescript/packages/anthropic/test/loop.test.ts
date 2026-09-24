@@ -38,11 +38,8 @@ function reply(text: string, stop: string): Response {
 
 async function run(responses: Response[]) {
   const { fetch, calls } = recordingFetch(responses);
-  const model = anthropic({
-    model: "claude-sonnet-5",
+  const model = anthropic("claude-sonnet-5", {
     maxTokens: 256,
-    contextWindow: 200_000,
-    maxOutputTokens: 64_000,
     apiKey: "test-key",
     fetch,
   });

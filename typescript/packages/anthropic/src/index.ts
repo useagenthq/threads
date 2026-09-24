@@ -6,11 +6,13 @@ import Anthropic, {
 import type { Stream } from "@anthropic-ai/sdk/core/streaming";
 import type {
   Fetch,
+  LimitOptions,
   Model,
   ModelChunk,
   ModelContext,
   ModelInfo,
   ModelRequest,
+  Price,
   Secret,
 } from "@threads/core/adapter";
 import {
@@ -19,6 +21,7 @@ import {
   credential,
   fencedFetch,
   type JsonObject,
+  modelLimits,
   parseRender,
   rejectionFor,
   staleEpoch,
@@ -27,28 +30,24 @@ import {
 import { toAnthropic } from "./request";
 import { decode } from "./stream";
 
+export type { JsonObject, Price } from "@threads/core/adapter";
+
 // anthropic(): the Messages API through the official SDK, as a threads Model (spec/api.json).
 // threads owns every attempt, so SDK retries are off, and the request body is
 // derived from the Render v1 bytes alone.
 
 type Rejected = Extract<ModelChunk, { kind: "rejected" }>;
 
-export type AnthropicOptions = {
-  /** The model id, e.g. "claude-sonnet-5". No default. */
-  readonly model: string;
-  /** Sent as max_tokens. */
-  readonly maxTokens: number;
-  /** The model's declared context window and output cap, as the Models API reports them. */
-  readonly contextWindow: number;
-  readonly maxOutputTokens: number;
+/** The limits default from spec/models/anthropic.v1.json when the model id is listed there. */
+export type AnthropicOptions = LimitOptions & {
   /** Other Messages API parameters (thinking, temperature, output_config, ...), pinned in line 0. */
   readonly params?: JsonObject;
-  readonly price?: ModelInfo["limits"]["price"];
-  /** Provider-executed tools (web search, code execution), sent as recorded here. */
+  readonly price?: Price;
+  /** Provider-executed tools (web search, web fetch), sent as recorded here. */
   readonly hostedTools?: readonly JsonObject[];
   /** Defaults to secret("ANTHROPIC_API_KEY"), resolved at setup. Never pinned or logged. */
   readonly apiKey?: string | Secret;
-  readonly baseURL?: string;
+  readonly baseUrl?: string;
   readonly fetch?: Fetch;
 };
 
@@ -64,28 +63,35 @@ const ADAPTER = { name: "anthropic", version: "1" } as const;
 /** Server tools read-only toward the outside world: web search and web fetch. */
 const HOSTED_READ_ONLY = /^(web_search|web_fetch)_\d{8}$/;
 
-export function anthropic(options: AnthropicOptions): Model {
+/** A Claude model by its exact id: anthropic("claude-sonnet-5"). */
+export function anthropic(
+  model: string,
+  options: AnthropicOptions = {},
+): Model {
   const params = options.params ?? {};
   const clash = RESERVED.find((key) => Object.hasOwn(params, key));
   if (clash !== undefined)
     throw new ConfigError(
       "invalid_config",
-      `anthropic params can't set ${clash}: the adapter derives it from the render`,
+      clash === "max_tokens"
+        ? "anthropic params can't set max_tokens: pass maxTokens"
+        : `anthropic params can't set ${clash}: the adapter derives it from the render`,
     );
   const hosted = options.hostedTools ?? [];
   checkHostedTools("anthropic", hosted, HOSTED_READ_ONLY);
+  const limits = modelLimits("anthropic", model, options);
   const info: ModelInfo = {
-    model: { provider: "anthropic", name: options.model },
+    model: { provider: "anthropic", name: model },
     adapter: {
       ...ADAPTER,
       settings: hosted.length === 0 ? {} : { hosted_tools: [...hosted] },
     },
-    params: { ...params, max_tokens: options.maxTokens },
+    params: { ...params, max_tokens: limits.max_tokens },
     limits: {
       provider: "anthropic",
-      name: options.model,
-      context_window: options.contextWindow,
-      max_output_tokens: options.maxOutputTokens,
+      name: model,
+      context_window: limits.max_input_tokens,
+      max_output_tokens: limits.max_output_tokens,
       input_billing_bound: "context_window",
       ...(options.price === undefined ? {} : { price: options.price }),
     },
@@ -126,7 +132,7 @@ async function* send(
   }
   const client = new Anthropic({
     apiKey: apiKey(),
-    ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
+    ...(options.baseUrl === undefined ? {} : { baseURL: options.baseUrl }),
     maxRetries: 0,
     fetch: fencedFetch(context, options.fetch ?? fetch),
   });

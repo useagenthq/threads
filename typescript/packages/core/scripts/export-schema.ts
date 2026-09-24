@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { z } from "zod";
+import { z } from "zod";
 import { canonicalize } from "../src/log";
+import { ModelCatalog } from "../src/model/catalog";
 import { specSchema } from "./spec-schema";
 import { toolCatalog, toolSchema } from "./tool-catalog";
 
@@ -81,17 +82,38 @@ function checkBytes(expected: string, file: string): number {
   return 1;
 }
 
+const MODEL_CATALOG = join(
+  import.meta.dir,
+  "../../../../spec/schema/model-catalog.v1.schema.json",
+);
+
+/** The shape of spec/models/<provider>.v1.json. */
+function catalogSchema(): Json {
+  const exported = z.toJSONSchema(ModelCatalog, {
+    target: "draft-2020-12",
+    io: "input",
+    unrepresentable: "throw",
+  });
+  return {
+    ...JSON.parse(JSON.stringify(exported)),
+    $id: "urn:threads:schema:model-catalog:v1",
+  };
+}
+
 const [flag, file = SPEC] = process.argv.slice(2);
 const schema = specSchema();
 if (flag === "--check") {
   process.exitCode =
     check(schema, file) +
     (file === SPEC
-      ? check(toolSchema(), TOOLS) + checkBytes(toolCatalog(), CATALOG)
+      ? check(toolSchema(), TOOLS) +
+        checkBytes(toolCatalog(), CATALOG) +
+        check(catalogSchema(), MODEL_CATALOG)
       : 0);
 } else {
   writeFileSync(SPEC, format(schema));
   writeFileSync(TOOLS, format(toolSchema()));
   writeFileSync(CATALOG, toolCatalog());
-  console.log(`wrote ${SPEC}, ${TOOLS} and ${CATALOG}`);
+  writeFileSync(MODEL_CATALOG, format(catalogSchema()));
+  console.log(`wrote ${SPEC}, ${TOOLS}, ${CATALOG} and ${MODEL_CATALOG}`);
 }

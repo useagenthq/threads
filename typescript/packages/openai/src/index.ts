@@ -1,11 +1,13 @@
 import type {
   Fetch,
   JsonObject,
+  LimitOptions,
   Model,
   ModelChunk,
   ModelContext,
   ModelInfo,
   ModelRequest,
+  Price,
   Secret,
 } from "@threads/core/adapter";
 import {
@@ -13,6 +15,7 @@ import {
   checkHostedTools,
   credential,
   fencedFetch,
+  modelLimits,
   parseRender,
   rejectionFor,
   staleEpoch,
@@ -26,26 +29,24 @@ import type { Stream } from "openai/core/streaming";
 import { toOpenAI } from "./request";
 import { decode, ResponseFailed } from "./stream";
 
+export type { JsonObject, Price } from "@threads/core/adapter";
+
 // openai(): the Responses API through the official SDK, as a threads Model (spec/api.json).
 // threads owns every attempt, so SDK retries are off, and the request body is
 // derived from the Render v1 bytes alone.
 
 type Rejected = Extract<ModelChunk, { kind: "rejected" }>;
 
-export type OpenAIOptions = {
-  /** The model id the caller chooses, e.g. "gpt-5.5". No default. */
-  readonly model: string;
-  /** The model's declared context window and output cap. */
-  readonly contextWindow: number;
-  readonly maxOutputTokens: number;
-  /** Responses API parameters (max_output_tokens, reasoning, text, ...), pinned in line 0. */
+/** The limits default from spec/models/openai.v1.json when the model id is listed there. */
+export type OpenAIOptions = LimitOptions & {
+  /** Other Responses API parameters (reasoning, text, ...), pinned in line 0. */
   readonly params?: JsonObject;
-  readonly price?: ModelInfo["limits"]["price"];
-  /** Provider-executed tools (web_search, file_search, ...), sent as recorded here. */
+  readonly price?: Price;
+  /** Provider-executed tools (web search only), sent as recorded here. */
   readonly hostedTools?: readonly JsonObject[];
   /** Defaults to secret("OPENAI_API_KEY"), resolved at setup. Never pinned or logged. */
   readonly apiKey?: string | Secret;
-  readonly baseURL?: string;
+  readonly baseUrl?: string;
   readonly fetch?: Fetch;
 };
 
@@ -60,34 +61,43 @@ const RESERVED = [
   "previous_response_id",
   "conversation",
   "background",
+  "max_tokens",
+  "max_output_tokens",
 ];
+/** The cap is set only by the maxTokens option. */
+const CAPS = new Set(["max_tokens", "max_output_tokens"]);
 
 /** Hosted tools read-only toward the outside world: web search only. */
 const HOSTED_READ_ONLY = /^web_search(_preview)?(_\d{4}_\d{2}_\d{2})?$/;
 
-export function openai(options: OpenAIOptions): Model {
+/** An OpenAI model by its exact id: openai("gpt-5.5"). */
+export function openai(model: string, options: OpenAIOptions = {}): Model {
   const params = options.params ?? {};
   const clash = RESERVED.find((key) => Object.hasOwn(params, key));
   if (clash !== undefined)
     throw new ConfigError(
       "invalid_config",
-      `openai params can't set ${clash}: the adapter derives it from the render`,
+      CAPS.has(clash)
+        ? `openai params can't set ${clash}: pass maxTokens`
+        : `openai params can't set ${clash}: the adapter derives it from the render`,
     );
   const hosted = options.hostedTools ?? [];
   checkHostedTools("openai", hosted, HOSTED_READ_ONLY);
+  const limits = modelLimits("openai", model, options);
   const info: ModelInfo = {
-    model: { provider: "openai", name: options.model },
+    model: { provider: "openai", name: model },
     adapter: {
       name: "openai",
       version: "1",
       settings: hosted.length === 0 ? {} : { hosted_tools: [...hosted] },
     },
-    params,
+    // Pinned under the provider-neutral key budgets read; sent as max_output_tokens.
+    params: { ...params, max_tokens: limits.max_tokens },
     limits: {
       provider: "openai",
-      name: options.model,
-      context_window: options.contextWindow,
-      max_output_tokens: options.maxOutputTokens,
+      name: model,
+      context_window: limits.max_input_tokens,
+      max_output_tokens: limits.max_output_tokens,
       input_billing_bound: "context_window",
       ...(options.price === undefined ? {} : { price: options.price }),
     },
@@ -128,7 +138,7 @@ async function* send(
   }
   const client = new OpenAI({
     apiKey: apiKey(),
-    ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
+    ...(options.baseUrl === undefined ? {} : { baseURL: options.baseUrl }),
     maxRetries: 0,
     fetch: fencedFetch(context, options.fetch ?? fetch),
   });
