@@ -16,6 +16,7 @@ import { pinChange } from "./pin-change";
 import { bindProviders } from "./providers";
 import { type RunResult, runResult } from "./result";
 import {
+  asks,
   ceilingsOf,
   type Hooks,
   inheritedOf,
@@ -52,15 +53,15 @@ export async function execute<Deps, Output>(
   const link = linkOf(plan);
   const context = inheritDefer(def.context, parentDefer(plan));
   const set: SetUp<Deps, Output> = { ...def, context, mcp: mcp.tools };
-  const pinned = pin(set, link);
+  const created = pin(set, link, undefined, plan.answerer === true);
   // Durable before any event names them (a thread_started of this pin).
-  storeSpecs(artifacts, pinned.artifacts);
+  storeSpecs(artifacts, created.artifacts);
   // Each run is its own executor: a second run on a busy branch is branch_busy.
   const holder = plan.holder ?? `run-${crypto.randomUUID()}`;
   const began = open(
     log,
     child?.threadId ?? target?.threadId ?? plan.thread,
-    [leadStarted(def, pinned.started, log.now()), ...(target?.prefix ?? [])],
+    [leadStarted(def, created.started, log.now()), ...(target?.prefix ?? [])],
     holder,
     link !== undefined,
   );
@@ -74,6 +75,11 @@ export async function execute<Deps, Output>(
   const stop = keepLease(writer);
   const team = teamOf(def, plan, writer, opened);
   try {
+    // A host continues a thread as it was started: with ask_user when its pin has it.
+    const pinned =
+      plan.answerer === "pinned" && asks(knownEvents(writer.chain))
+        ? pin(set, link, undefined, true)
+        : created;
     checkPin(writer, pinned.started);
     const builtin = bindBuiltins(
       child === undefined ? def.sandbox : undefined,

@@ -8,7 +8,7 @@ import type {
 } from "@threads/core/adapter";
 import { challenger } from "./challenge";
 import { itemsOf, phoneNumbersOf } from "./inbound";
-import { performer, render, SESSION_WINDOW_MS } from "./outbound";
+import { performer, render, renderText, SESSION_WINDOW_MS } from "./outbound";
 
 // whatsapp(): the WhatsApp Cloud API as a threads channel (spec/api.json ChannelAdapter,
 //). What it declares, and why:
@@ -109,6 +109,7 @@ export function whatsapp(options: WhatsappOptions): ChannelAdapter {
     ack: () => ({ status: 200, headers: {}, body: new Uint8Array() }),
     challenge: challenger(options.verifyToken),
     render,
+    renderText,
     perform: performer({
       graphVersion: options.graphVersion ?? "v21.0",
       fetch: options.fetch ?? ((input, init) => fetch(input, init)),

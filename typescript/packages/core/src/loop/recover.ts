@@ -45,6 +45,7 @@ export async function recover(s: Session): Promise<Halt | undefined> {
     fold.pending.size === 0 &&
     fold.parked.length === 0 &&
     !cancelOpen(s) &&
+    !answeredSinceRequest(s) &&
     // A response's calls are recorded next, never left without results.
     (owedCalls(s.events, fold)?.parts.length ?? 0) === 0
   )
@@ -64,6 +65,17 @@ export async function recover(s: Session): Promise<Halt | undefined> {
     if (stopped !== undefined) return stopped;
   }
   return settleRequested(s);
+}
+
+/**
+ * A question settled (answered or expired) since the last request: the turn waited for it, and the
+ * loop sends the answer on, so nothing was interrupted.
+ */
+function answeredSinceRequest(s: Session): boolean {
+  const request = s.events.findLastIndex((e) => e.type === "model_request");
+  return s.events
+    .slice(request + 1)
+    .some((e) => e.type === "resumed" && e.data.address.kind === "input");
 }
 
 /** A cancel_requested in the open turn that no cancelled has answered yet. */

@@ -51,10 +51,11 @@ const marker = (effectKey: string): string =>
 export const render: Render = (event) => {
   switch (event.type) {
     case "model_response": {
-      const text = event.data.content
-        .flatMap((p) => (p.type === "text" ? [p.text] : []))
-        .join("");
-      return text === "" ? [] : [{ kind: "comment", text }];
+      return renderText(
+        event.data.content
+          .flatMap((p) => (p.type === "text" ? [p.text] : []))
+          .join(""),
+      );
     }
     case "approval_requested": {
       const id = event.data.challenge_id;
@@ -65,6 +66,10 @@ export const render: Render = (event) => {
       return [];
   }
 };
+
+/** A plain message: an ask_user question or its correction, or a reply's text. */
+export const renderText: ChannelAdapter["renderText"] = (text) =>
+  text === "" ? [] : [{ kind: "comment", text }];
 
 function target(address: string): {
   owner: string;

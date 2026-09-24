@@ -24,9 +24,18 @@ export type NewThreadPin = {
 };
 
 export type HostRunner = {
-  /** The pinned thread_started for a new thread of this agent. Throws ConfigError. */
-  readonly started: () => Promise<NewThreadPin>;
-  /** Runs the branch until idle or parked: `inputs` are appended in order, each once idle. */
+  /**
+   * The pinned thread_started for a new thread of this agent. Throws ConfigError. `answerer`:
+   * the run is for someone who can answer (a channel conversation, an authenticated API call),
+   * so ask_user is pinned.
+   */
+  readonly started: (options?: {
+    readonly answerer?: boolean;
+  }) => Promise<NewThreadPin>;
+  /**
+   * Runs the branch until idle or parked: `inputs` are appended in order, each once idle. The
+   * thread is continued as its pin says, ask_user included.
+   */
   readonly execute: (
     plan: {
       readonly store: Store;
@@ -52,14 +61,16 @@ export function hosted<Deps, Output>(
 ): HostRunner {
   return {
     // A lead's first append, whoever makes it (a run, a channel, a schedule), opens its team.
-    started: async () => {
-      const pinned = await pinnedAfterSetup(def);
+    started: async (options = {}) => {
+      const answerer = options.answerer === true;
+      const pinned = await pinnedAfterSetup(def, false, undefined, answerer);
       return {
         event: leadStarted(def, pinned.started, Date.now()),
         put: (store) => putSpecs(store, pinned),
       };
     },
-    execute: (plan, inputs, hooks = {}) => execute(def, plan, inputs, hooks),
+    execute: (plan, inputs, hooks = {}) =>
+      execute(def, { ...plan, answerer: "pinned" }, inputs, hooks),
     approvers,
     sandbox: def.sandbox,
     targets: def.targets,

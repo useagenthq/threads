@@ -72,9 +72,28 @@ export function recordApprovals(
   return ok(undefined);
 }
 
+/**
+ * The approval rows a verified log implies, from its settlement events alone, never the clock
+ * (import): a challenge with a later answer is that answer's state, one without is open, and an
+ * expired one is still refused when someone decides it.
+ */
+export function projectApprovals(
+  db: SqliteDriver,
+  branch: Owner,
+  events: readonly KnownEvent[],
+): void {
+  for (const e of events) {
+    if (e.type === "approval_requested") open(db, branch, e.data);
+    if (e.type === "approval_granted" || e.type === "approval_denied")
+      decide(db, e, e.time);
+  }
+}
+
+type Owner = Pick<BranchRow, "tenant_id" | "thread_id" | "branch_id">;
+
 function open(
   db: SqliteDriver,
-  branch: BranchRow,
+  branch: Owner,
   data: Extract<KnownEvent, { type: "approval_requested" }>["data"],
 ): void {
   db.run(
@@ -106,16 +125,20 @@ function consume(
   if (row.value === undefined) return ok(undefined);
   const refused = refusal(row.value, branch, e, now);
   if (refused !== undefined) return err(refused);
+  decide(db, e, now);
+  return ok(undefined);
+}
+
+function decide(db: SqliteDriver, e: Answer, at: number): void {
   db.run(
     "UPDATE approvals SET state = ?, decided_by = ?, decided_at = ? WHERE challenge_id = ? AND state = 'open'",
     [
       e.type === "approval_granted" ? "granted" : "denied",
       principalKey(e.actor.principal),
-      now,
-      id,
+      at,
+      e.data.challenge_id,
     ],
   );
-  return ok(undefined);
 }
 
 function refusal(

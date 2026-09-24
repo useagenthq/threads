@@ -39,10 +39,7 @@ function asking(fold: Fold, callId: string): boolean {
 }
 
 /** Rule 46: a park on {kind: input} names a pending ask_user call the question rules accept. */
-export function checkQuestionPark(
-  fold: Fold,
-  e: EventOf<"parked">,
-): Violation {
+export function checkQuestionPark(fold: Fold, e: EventOf<"parked">): Violation {
   const { address } = e.data;
   if (address.kind !== "input") return undefined;
   const ask = fold.asks.get(address.id);

@@ -127,3 +127,11 @@ export function correctionText(ask: Ask): string {
   if (options === undefined) return "Please answer with some text.";
   return `Please answer with one of:\n\n${choices(options)}\n\n${hint(ask, options)}`;
 }
+
+/** Why Thread.answer refused an answer (invalid_answer): what it accepts. */
+export function invalidAnswer(ask: Ask): string {
+  const { options } = ask;
+  return options === undefined
+    ? "answer with some text"
+    : `answer one of: ${options.join(", ")}`;
+}

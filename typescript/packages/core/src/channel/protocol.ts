@@ -176,6 +176,11 @@ export type ChannelAdapter = {
    * model_response and sets each op's `address` and `installation_id` before perform.
    */
   readonly render: (event: KnownEvent) => readonly z.infer<typeof JsonObject>[];
+  /**
+   * Outbound ops for a plain message the host writes itself: an open ask_user question with its
+   * choices, or the correction after a reply that matched none of them.
+   */
+  readonly renderText: (text: string) => readonly z.infer<typeof JsonObject>[];
   /** Must answer definite_not_sent only when it can prove nothing reached the provider. */
   readonly perform: (
     op: z.infer<typeof JsonObject>,

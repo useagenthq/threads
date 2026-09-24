@@ -8,6 +8,7 @@ export {
   runResult,
   type ThreadRef,
 } from "./agent/result";
+export { asks } from "./agent/run";
 export {
   openStore,
   type Store,
@@ -40,6 +41,7 @@ export {
   ThreadId,
   Uuid,
 } from "./log";
+export { dueQuestions } from "./loop/questions";
 export { turnEvents } from "./loop/turn";
 export { redactSecrets } from "./redact";
 export { knownEvents } from "./reduce";
@@ -61,13 +63,20 @@ export {
 export { deleteTenant, deleteThread } from "./store/deletion";
 export { StoreError } from "./store/driver";
 export { uuidv7 } from "./store/encode";
+export { dueQuestionBranches } from "./store/questions";
 export { sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";
 export { pendingWakes, wakeBranches } from "./store/wakes";
 export { bindTelemetry } from "./telemetry";
 export { cancelChildren } from "./thread/cancel";
-export { type Alongside, control } from "./thread/control";
+export { type Alongside, control, resumed } from "./thread/control";
 export { decide } from "./thread/decide";
 export { type Thread, threadHandle } from "./thread/handle";
+export { type OpenQuestion, openQuestions } from "./thread/questions";
 export { cancel, stopWhenIdle } from "./thread/settings";
+export {
+  correctionText,
+  matchAnswer,
+  questionText,
+} from "./tools/ask-user";
 export type { ChainEvent, LogError, VerifiedLog } from "./verify";

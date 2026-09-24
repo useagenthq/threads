@@ -124,6 +124,11 @@ export type Plan<Deps> = RunOptions<Deps> & {
   readonly ceilings?: readonly Permissions[];
   /** A handoff target of a subagent: the handing-off child's decision, every ancestor's included. */
   readonly chain?: ChildRun["ceiling"];
+  /**
+   * true: a host started the run for someone who can answer, so a new thread pins ask_user;
+   * "pinned": continue a thread as its pin says (the host's resume).
+   */
+  readonly answerer?: boolean | "pinned";
   /** A handoff target: every budget covering the handing-off thread, as an ancestor's. */
   readonly covering?: readonly Covering[];
   /** A handoff target's or member's parent's resolved defer_tools, unless it sets its own. */
@@ -154,11 +159,21 @@ export async function pinnedAfterSetup<Deps, Output>(
   def: Resolved<Deps, Output>,
   member = false,
   deferTools?: DeferTools,
+  answerer = false,
 ): Promise<ReturnType<typeof pin>> {
   await def.setup();
   await using mcp = await connectAll(def.servers);
   const context = inheritDefer(def.context, deferTools);
-  return pin({ ...def, context, mcp: mcp.tools }, undefined, member);
+  return pin({ ...def, context, mcp: mcp.tools }, undefined, member, answerer);
+}
+
+/** Whether a thread's pin offers ask_user: a host started it for someone who can answer. */
+export function asks(events: readonly KnownEvent[]): boolean {
+  const started = events.find((e) => e.type === "thread_started");
+  return (
+    started?.type === "thread_started" &&
+    started.data.tools.some((t) => t.name === "ask_user")
+  );
 }
 
 /** Puts a pin's spec artifacts: before any append of its thread_started. */

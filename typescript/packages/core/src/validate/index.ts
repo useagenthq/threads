@@ -5,11 +5,11 @@ import { err, ok, type Result } from "../result";
 import { type LogError, logError } from "../verify/error";
 import { checkAgentFinished, checkTask, checkUnique } from "./agents";
 import {
+  checkAnswerRejected,
   checkApproval,
   checkCancelled,
   checkContextEdit,
   checkEffect,
-  checkAnswerRejected,
   checkLateResult,
   checkQuestionPark,
   checkToolCall,

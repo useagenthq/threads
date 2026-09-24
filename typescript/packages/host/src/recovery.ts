@@ -1,5 +1,6 @@
 import {
   type BranchId,
+  dueQuestions,
   knownEvents,
   type Principal,
   pendingWakes,
@@ -104,7 +105,9 @@ export class Recovery {
     const events = knownEvents(read.value);
     // A background child a crash stopped runs on too, so it reports and wakes this thread.
     const waiting = pendingWakes(events, branch).length > 0;
-    if ((!fold.turnOpen && !waiting) || fold.parked.length > 0)
+    // A question past its expiry is closed by the next run, so a parked branch with one runs on.
+    const expired = dueQuestions(events, fold, Date.now()).length > 0;
+    if ((!fold.turnOpen && !waiting) || (fold.parked.length > 0 && !expired))
       return this.#ctx.replies(tenant, thread);
     const hosted = this.#ctx.agentOf(events);
     const who = events.findLast((e) => e.type === "user_input")?.actor

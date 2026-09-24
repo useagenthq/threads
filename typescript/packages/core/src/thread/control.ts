@@ -17,7 +17,9 @@ import {
   liveWriter,
   type Writer,
 } from "../store";
+import { type Ask, invalidAnswer, matchAnswer } from "../tools/ask-user";
 import type { ChainEvent, LogError } from "../verify";
+import { askerOf } from "./questions";
 
 // The Thread control methods (spec/api.json Thread): each appends the actor's
 // event through the run's own writer when this process runs the branch, else under a short lease
@@ -35,6 +37,7 @@ export type ControlError = {
     | "approval_expired"
     | "approval_duplicate"
     | "no_open_question"
+    | "invalid_answer"
     | "not_parked"
     | "invalid_transition"
     | "branch_busy"
@@ -199,18 +202,15 @@ function asker(
   callId: string,
   principal: Principal,
 ): boolean {
-  const at = events.findIndex(
-    (e) => e.type === "tool_call" && e.data.call_id === callId,
-  );
-  const opener = events
-    .slice(0, Math.max(at, 0))
-    .findLast((e) => e.type === "user_input")?.actor.principal;
+  const opener = askerOf(events, callId);
   return (
     opener !== undefined && principalKey(opener) === principalKey(principal)
   );
 }
 
-/** answer: the ask_user call's result, from the asking principal. */
+const FREE: Ask = { question: "" };
+
+/** answer: the ask_user call's result, from the asking principal, strict to its options. */
 export function answer(
   callId: string,
   text: string | readonly string[],
@@ -232,6 +232,12 @@ export function answer(
         code: "forbidden",
         message: "only the user whose input opened this turn may answer",
       });
+    const asked = writer.chain.fold.asks.get(callId);
+    // Rule 46 keeps an unreadable question from parking; one that did anyway takes free text.
+    const ask = asked === undefined || asked === "invalid" ? FREE : asked;
+    const recorded = matchAnswer(ask, text);
+    if (recorded === undefined)
+      return err({ code: "invalid_answer", message: invalidAnswer(ask) });
     return ok({
       record: {
         type: "tool_result",
@@ -243,7 +249,7 @@ export function answer(
           is_error: false,
           origin: "answered",
           completeness: "complete",
-          preview: typeof text === "string" ? text : text.join("\n"),
+          preview: recorded,
         },
       },
       after,

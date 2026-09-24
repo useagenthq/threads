@@ -8,6 +8,7 @@ import { unparkChildren } from "./agents/park";
 import { runStatus, stopChildren } from "./agents/stop";
 import { observe } from "./hooks";
 import { sessionStart } from "./lifecycle";
+import { expireQuestions } from "./questions";
 import { recover } from "./recover";
 import { type LoopEnd, runLoop } from "./run";
 import { Session } from "./session";
@@ -88,6 +89,8 @@ async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
   if (denied !== undefined) return { kind: "halted", halt: denied };
   const unparked = await unparkChildren(s);
   if (unparked !== undefined) return { kind: "halted", halt: unparked };
+  const expired = expireQuestions(s);
+  if (expired !== undefined) return { kind: "halted", halt: expired };
   resumeBackground(s);
   if (s.config.team === undefined)
     return waitForChildren(s, await turns(s, input));

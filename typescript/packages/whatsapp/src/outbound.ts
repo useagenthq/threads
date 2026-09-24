@@ -22,8 +22,7 @@ export function render(event: Event): readonly Op[] {
     const text = event.data.content
       .map((part) => (part.type === "text" ? part.text : ""))
       .join("");
-    // ponytail: no splitting past limits.text_bytes; a longer reply fails permanent at Meta.
-    return text === "" ? [] : [{ kind: "text", text }];
+    return renderText(text);
   }
   if (event.type === "approval_requested") {
     const { challenge_id, call_id, args_hash } = event.data;
@@ -31,6 +30,12 @@ export function render(event: Event): readonly Op[] {
     return [{ kind: "approval", challenge_id, text }];
   }
   return [];
+}
+
+/** A plain message: an ask_user question or its correction, or a reply's text. */
+export function renderText(text: string): readonly Op[] {
+  // ponytail: no splitting past limits.text_bytes; a longer reply fails permanent at Meta.
+  return text === "" ? [] : [{ kind: "text", text }];
 }
 
 // The host sets address (the recipient wa_id) and installation_id (the phone number id).

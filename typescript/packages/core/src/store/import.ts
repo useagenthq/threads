@@ -4,8 +4,11 @@ import { refReader, verifyRequests } from "../render";
 import { err, ok, type Result } from "../result";
 import { type Segment, type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
+import { projectApprovals } from "./approvals";
 import type { ArtifactStore } from "./artifacts";
 import type { SqliteDriver } from "./driver";
+import { knownOf } from "./indexing";
+import { projectQuestions } from "./questions";
 import {
   eventLines,
   getBranch,
@@ -123,6 +126,21 @@ function insertSegment(
     dropped_ref: leaf ? target.droppedRef : null,
   });
   insertEvents(db, segment.header.branch_id, segment.events);
+  // The historical projector: rows from the segment's settlement events, never today's clock,
+  // so a grant made before its challenge expired imports as granted.
+  const { thread_id, branch_id } = segment.header;
+  const events = knownOf(segment.events);
+  projectApprovals(
+    db,
+    { tenant_id: target.tenantId, thread_id, branch_id },
+    events,
+  );
+  projectQuestions(
+    db,
+    { tenant: target.tenantId, branch: branch_id },
+    events,
+    (e) => e.time,
+  );
   return ok(undefined);
 }
 

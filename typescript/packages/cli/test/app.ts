@@ -29,6 +29,7 @@ const slack: ChannelAdapter = {
   parse: () => ({ ok: true, value: [] }),
   ack: () => ({ status: 200, headers: {}, body: new Uint8Array() }),
   render: () => [],
+  renderText: () => [],
   perform: async () => ({
     status: "delivery_error",
     kind: "permanent",

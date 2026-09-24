@@ -137,6 +137,7 @@ function fileChannel(where: string, lookups: string): ChannelAdapter {
             },
           ]
         : [],
+    renderText: (text) => [{ text }],
     perform: async (op, key) => {
       reached("effect_begin", where);
       // The transport: the host's fence is checked where the request would leave.

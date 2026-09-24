@@ -5,6 +5,7 @@ import {
   type Exporter,
 } from "@threads/core";
 import {
+  dueQuestionBranches,
   type EventId,
   type Principal,
   type Result,
@@ -186,6 +187,10 @@ export function host(options: HostOptions): Host {
     // the child and records its end with its wake (Gate 1 §2.7.3).
     const { db } = await storeConnection(ctx.store);
     for (const r of wakeBranches(db))
+      watch.add(r.tenant_id, r.thread_id, r.branch_id);
+    // Every tick: a question past its expiry is closed by running its branch on, even one that
+    // expired while no host ran (its row survives restarts).
+    for (const r of dueQuestionBranches(db, Date.now()))
       watch.add(r.tenant_id, r.thread_id, r.branch_id);
     // Side by side: one thread's slow reply never holds up another's recovery.
     await Promise.all(

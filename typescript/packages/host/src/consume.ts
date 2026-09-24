@@ -9,11 +9,15 @@ import {
   type EventDraft,
   type EventId,
   knownEvents,
+  type SqliteDriver,
+  type Store,
   stopWhenIdle,
   storeConnection,
   type ThreadId,
   uuidv7,
+  type Writer,
 } from "@threads/core/host";
+import { type Replied, replyToQuestion } from "./answers";
 import { type HostContext, type HostedAgent, newPin, samePin } from "./context";
 import {
   type Conversation,
@@ -28,7 +32,8 @@ import {
 // user_input{source: channel}, a decision as an approval by a principal with approval
 // authority, a control as a cancel or a stop_when_idle. An item is consumed in the transaction that applies it, so a
 // busy branch leaves it queued; a decision or control never waits behind a message the branch
-// can't take yet.
+// can't take yet. While a question is open, the asker's message is its answer (answers.ts), and
+// anyone else's waits without holding the asker's up.
 
 type Message = InboxItem & { readonly item: { readonly kind: "message" } };
 
@@ -62,7 +67,9 @@ async function step(
     // An item whose channel or pinned agent this host lacks waits, like a busy one, for a host
     // that has them: every host sweeps every pending row, so discarding it here would lose it.
     const t = await target(ctx, tenant, threadId, next);
-    if (t !== undefined && (await item(ctx, t, next)) === "done") return true;
+    const outcome = t === undefined ? "busy" : await item(ctx, t, next);
+    if (outcome === "done") return true;
+    if (outcome === "held") continue;
     if (next.item.kind !== "message") return false;
     messagesWait = true;
   }
@@ -109,7 +116,7 @@ async function item(
   ctx: HostContext,
   t: Target,
   next: InboxItem,
-): Promise<"busy" | "done"> {
+): Promise<"busy" | "done" | "held"> {
   const { item } = next;
   switch (item.kind) {
     case "message":
@@ -126,7 +133,7 @@ async function message(
   ctx: HostContext,
   t: Target,
   next: Message,
-): Promise<"busy" | "done"> {
+): Promise<"busy" | "done" | "held"> {
   const { tenant } = t.conversation;
   const { log } = await ctx.open(tenant);
   const { db } = await storeConnection(ctx.store);
@@ -141,49 +148,69 @@ async function message(
   }
   const writer = log.acquire(branchId, `host-${crypto.randomUUID()}`);
   if (!writer.ok) return "busy";
+  let outcome: Replied | "input";
   try {
-    if (writer.value.chain.fold.turnOpen) return "busy";
     const w = writer.value;
-    // Only the thread's first event is its thread_started, whichever process creates it.
-    const first: readonly EventDraft[] =
-      w.chain.fold.seq === 0
-        ? [await newPin(t.hosted, ctx.storeFor(tenant))]
-        : [];
-    // Checked again on the chain this lease holds: another host may have pinned another config
-    // since target() looked, and nothing can be appended under it until release.
-    if (first.length === 0 && !(await samePin(knownEvents(w.chain), t.hosted)))
-      return "busy";
-    const done = w.fenced(() => {
-      const delivered = w.append([...first, delivery(next)]);
-      if (!delivered.ok) return delivered;
-      const cause = delivered.value.at(-1);
-      if (cause?.kind !== "event") throw new Error("channel_delivery is known");
-      return w.append(
-        [input(next, cause.event.event_id)],
-        consumes(db, next.inbox_id),
-      );
-    });
-    if (!done.ok) return "busy";
+    // A turn in progress takes no new input, but the asker's reply answers its open question.
+    outcome = w.chain.fold.turnOpen
+      ? replyToQuestion(w, db, {
+          inboxId: next.inbox_id,
+          principal: next.item.principal,
+          text: textOf(next),
+          delivery: delivery(next),
+        })
+      : await appendInput(w, t, next, db, ctx.storeFor(tenant));
   } finally {
     writer.value.release();
   }
+  const thread = { id: t.threadId, branch: branchId };
+  if (outcome === "busy" || outcome === "held") return outcome;
+  // A rejected reply's correction is derived from the log like any reply (outbound.ts).
+  if (outcome === "rejected") void ctx.replies(tenant, thread);
   // The run goes on alone, its replies after it in the same lane (outbound.ts): awaited, it
   // would hold this thread's consumer, and a cancel sent during the run would wait for its end.
-  void ctx.resume(t.hosted, tenant, next.item.principal, {
-    id: t.threadId,
-    branch: branchId,
-  });
+  else void ctx.resume(t.hosted, tenant, next.item.principal, thread);
   return "done";
+}
+
+/** The message as the turn's input, after the thread's thread_started when it is new. */
+async function appendInput(
+  w: Writer,
+  t: Target,
+  next: Message,
+  db: SqliteDriver,
+  store: Store,
+): Promise<"input" | "busy"> {
+  // Only the thread's first event is its thread_started, whichever process creates it.
+  const first: readonly EventDraft[] =
+    w.chain.fold.seq === 0 ? [await newPin(t.hosted, store, true)] : [];
+  // Checked again on the chain this lease holds: another host may have pinned another config
+  // since target() looked, and nothing can be appended under it until release.
+  if (first.length === 0 && !(await samePin(knownEvents(w.chain), t.hosted)))
+    return "busy";
+  const done = w.fenced(() => {
+    const delivered = w.append([...first, delivery(next)]);
+    if (!delivered.ok) return delivered;
+    const cause = delivered.value.at(-1);
+    if (cause?.kind !== "event") throw new Error("channel_delivery is known");
+    return w.append(
+      [input(next, cause.event.event_id)],
+      consumes(db, next.inbox_id),
+    );
+  });
+  return done.ok ? "input" : "busy";
+}
+
+function textOf(next: Message): string {
+  const { content } = next.item;
+  return typeof content === "string"
+    ? content
+    : content.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("\n");
 }
 
 function delivery(next: Message): EventDraft {
   const { item } = next;
-  const text =
-    typeof item.content === "string"
-      ? item.content
-      : item.content
-          .flatMap((p) => (p.type === "text" ? [p.text] : []))
-          .join("\n");
+  const text = textOf(next);
   return {
     type: "channel_delivery",
     type_version: 1,

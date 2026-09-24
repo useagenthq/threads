@@ -235,6 +235,7 @@ export async function answer(call: Call): Promise<Response> {
         "not_found",
         "invalid_request",
         "no_open_question",
+        "invalid_answer",
         "branch_busy",
       ],
       done.error,

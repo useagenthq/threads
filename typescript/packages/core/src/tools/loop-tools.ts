@@ -4,6 +4,7 @@
  */
 export const LOOP_TOOLS = [
   "final_output",
+  "ask_user",
   "handoff",
   "send_message",
   "spawn_agent",

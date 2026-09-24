@@ -351,7 +351,10 @@ export function entry(name: string): CatalogEntry {
   return found;
 }
 
-/** the entries: pinned with subagents, handoffs and todos, and run by the loop. */
+/**
+ * the entries: pinned with subagents, handoffs, todos and host-started runs (ask_user), and run
+ * by the loop.
+ */
 export const AGENT_TOOLS: ReadonlySet<string> = new Set(
   LOOP_TOOLS.filter(
     (name) => name !== FINAL_OUTPUT && !TEAM_LOOP_TOOLS.has(name),

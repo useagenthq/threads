@@ -55,7 +55,8 @@ export function pendingWakes(
   return [...rows];
 }
 
-const WakeBranch: Strict<{
+/** A branch a host resumes, with its thread and tenant. */
+export const WakeBranch: Strict<{
   tenant_id: z.ZodString;
   thread_id: typeof ThreadId;
   branch_id: typeof BranchId;

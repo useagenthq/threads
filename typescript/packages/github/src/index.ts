@@ -1,6 +1,6 @@
 import type { ChannelAdapter, Fetch, Secret } from "@threads/core/adapter";
 import { parser, type TenantOf, verifier } from "./inbound";
-import { looker, performer, render } from "./outbound";
+import { looker, performer, render, renderText } from "./outbound";
 
 // github(): GitHub issues and pull requests as a threads channel (spec/api.json ChannelAdapter,
 //). Inbound is a GitHub App webhook; outbound is an issue comment through the official
@@ -43,6 +43,7 @@ export function github(options: GithubOptions): ChannelAdapter {
     parse: parser(options.appSlug, tenantOf),
     ack: () => ({ status: 200, headers: {}, body: EMPTY }),
     render,
+    renderText,
     perform: performer(inner),
     lookup: looker(options.token, inner, options.appSlug),
   };

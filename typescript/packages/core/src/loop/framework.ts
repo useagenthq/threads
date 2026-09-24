@@ -9,6 +9,7 @@ import { sendTool, startTool } from "./agents/members";
 import { spawnAgent } from "./agents/spawn";
 import { teamTool } from "./agents/team";
 import { validateCandidate } from "./output";
+import { askUser } from "./questions";
 import type { Session } from "./session";
 import { writeTodos } from "./todos";
 import { searchPinned, searchTools } from "./tool-search";
@@ -27,6 +28,7 @@ const HANDLERS: Readonly<Record<LoopTool, Handler>> = {
   final_output: validateCandidate,
   todo_write: writeTodos,
   tool_search: searchTools,
+  ask_user: askUser,
   spawn_agent: spawnAgent,
   handoff: handOff,
   send_message: teamTool,

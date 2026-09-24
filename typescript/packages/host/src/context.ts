@@ -1,5 +1,6 @@
 import type { Agent, ChannelAdapter } from "@threads/core";
 import {
+  asks,
   type BranchId,
   type EventDraft,
   type HostRunner,
@@ -288,20 +289,30 @@ export type Attempt =
   | { readonly kind: "threw"; readonly error: unknown }
   | { readonly kind: "stopped" };
 
-/** A pin never changes in place: continuing a thread needs the config it started with. */
+/**
+ * A pin never changes in place: continuing a thread needs the config it started with, ask_user
+ * included when a host started it for someone who can answer.
+ */
 export async function samePin(
   events: readonly KnownEvent[],
   hosted: HostedAgent,
 ): Promise<boolean> {
-  return pinMatches(events, (await hosted.runner.started()).event);
+  return pinMatches(
+    events,
+    (await hosted.runner.started({ answerer: asks(events) })).event,
+  );
 }
 
-/** A new thread's thread_started, its spec artifacts put first: it is about to be appended. */
+/**
+ * A new thread's thread_started, its spec artifacts put first: it is about to be appended.
+ * `answerer`: a channel conversation or an authenticated API call, so ask_user is pinned.
+ */
 export async function newPin(
   hosted: HostedAgent,
   store: Store,
+  answerer = false,
 ): Promise<EventDraft> {
-  const pin = await hosted.runner.started();
+  const pin = await hosted.runner.started({ answerer });
   await pin.put(store);
   return pin.event;
 }

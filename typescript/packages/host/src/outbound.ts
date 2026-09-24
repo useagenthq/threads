@@ -1,9 +1,11 @@
 import type { ChannelAdapter } from "@threads/core";
 import {
   type BranchId,
+  correctionText,
   type KnownEvent,
   keepLease,
   knownEvents,
+  questionText,
   storeConnection,
   ThreadId,
   type VerifiedLog,
@@ -12,16 +14,20 @@ import type { HostContext } from "./context";
 import { sendOp } from "./deliver";
 import { type Conversation, conversationOf } from "./inbox";
 
-// A channel thread's replies are derived from its log, whatever ran it (spec/schema/README.md, // "Channel replies"): each end_turn reply and each open approval card
-// is a host-issued channel_send with call_id send_<source seq>_<op index>. Every call the log
+// A channel thread's replies are derived from its log, whatever ran it (spec/schema/README.md,
+// "Channel replies"): each end_turn reply and each open approval card is a host-issued
+// channel_send with call_id send_<source seq>_<op index>; an open ask_user question is
+// question_<call_id>_<op index>, and the correction of a rejected answer
+// question_retry_<answer_rejected event_id>_<op index>. Every call the log
 // lacks is issued, a begun one is reconciled by sendOp, and one with a result or a parked
 // effect is left alone, so a crash between a turn's end and its reply loses nothing and never
 // sends twice.
 
 type Fold = VerifiedLog["fold"];
+type Op = Parameters<ChannelAdapter["perform"]>[0];
 type Call = {
   readonly callId: string;
-  readonly op: Parameters<ChannelAdapter["perform"]>[0];
+  readonly op: Op;
   readonly requestId: string;
 };
 
@@ -120,15 +126,14 @@ function calls(
   events: readonly KnownEvent[],
   fold: Fold,
 ): readonly Call[] {
-  return sources(events, fold).flatMap((source) => {
-    const before = events.slice(0, events.indexOf(source));
+  return sources(adapter, events, fold).flatMap(({ event, key, ops }) => {
+    const before = events.slice(0, events.indexOf(event));
     const request = before.findLast((e) => e.type === "model_request");
     if (request === undefined) return [];
     const inbound =
-      before.findLast((e) => e.type === "channel_delivery")?.time ??
-      source.time;
-    return adapter.render(source).map((op, i) => ({
-      callId: `send_${source.seq}_${i}`,
+      before.findLast((e) => e.type === "channel_delivery")?.time ?? event.time;
+    return ops.map((op, i) => ({
+      callId: `${key}_${i}`,
       op: {
         ...op,
         address: conversation.address,
@@ -140,12 +145,28 @@ function calls(
   });
 }
 
-/** Each end_turn turn's last response and each open approval card, in log order. */
+type Source = {
+  readonly event: KnownEvent;
+  /** The call_id prefix of its ops: send_<seq>, question_<call_id> or question_retry_<event_id>. */
+  readonly key: string;
+  readonly ops: readonly Op[];
+};
+
+/**
+ * Each end_turn turn's last response, each open approval card, each open question and each
+ * correction of a rejected answer to a question still open, in log order.
+ */
 function sources(
+  adapter: ChannelAdapter,
   events: readonly KnownEvent[],
   fold: Fold,
-): readonly KnownEvent[] {
-  const out: KnownEvent[] = [];
+): readonly Source[] {
+  const out: Source[] = [];
+  const rendered = (e: KnownEvent): Source => ({
+    event: e,
+    key: `send_${e.seq}`,
+    ops: adapter.render(e),
+  });
   let response: KnownEvent | undefined;
   for (const e of events) {
     if (e.type === "user_input") response = undefined;
@@ -160,10 +181,44 @@ function sources(
       e.data.code === undefined &&
       response !== undefined
     )
-      out.push(response);
-    if (e.type === "approval_requested" && open(fold, e.data)) out.push(e);
+      out.push(rendered(response));
+    if (e.type === "approval_requested" && open(fold, e.data))
+      out.push(rendered(e));
+    out.push(...question(adapter, e, fold));
   }
   return out;
+}
+
+/** An open question's message, or the correction after a reply that matched none of its options. */
+function question(
+  adapter: ChannelAdapter,
+  e: KnownEvent,
+  fold: Fold,
+): readonly Source[] {
+  const callId =
+    e.type === "parked" && e.data.address.kind === "input"
+      ? e.data.address.id
+      : e.type === "answer_rejected"
+        ? e.data.call_id
+        : undefined;
+  const ask = callId === undefined ? undefined : fold.asks.get(callId);
+  const asking = fold.parked.some((a) => a.kind === "input" && a.id === callId);
+  if (ask === undefined || ask === "invalid" || !asking) return [];
+  return e.type === "answer_rejected"
+    ? [
+        {
+          event: e,
+          key: `question_retry_${e.event_id}`,
+          ops: adapter.renderText(correctionText(ask)),
+        },
+      ]
+    : [
+        {
+          event: e,
+          key: `question_${callId}`,
+          ops: adapter.renderText(questionText(ask)),
+        },
+      ];
 }
 
 function open(

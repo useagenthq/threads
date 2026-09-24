@@ -93,12 +93,15 @@ const byName = (a: { readonly name: string }, b: { readonly name: string }) =>
 
 /**
  * The pinned tool specs, the thread_started draft and the canonical config its config_hash names
- * (stored before a team member's start). Throws ConfigError on a bad setup.
+ * (stored before a team member's start). Throws ConfigError on a bad setup. `answerer`: a host
+ * started the run for a person who can answer (a channel conversation or an authenticated API
+ * call), so ask_user is pinned; never for a child.
  */
 export function pin(
   options: PinOptions,
   child?: ChildPin,
   member: boolean = child?.parent.relation === "team_member",
+  answerer = false,
 ): {
   readonly specs: readonly ToolSpec[];
   readonly started: EventDraft;
@@ -110,6 +113,7 @@ export function pin(
     options,
     child?.tools,
     member,
+    answerer && child === undefined,
   );
   return {
     specs,
@@ -135,6 +139,7 @@ function pinned(
   options: PinOptions,
   within: ReadonlySet<string> | undefined,
   member: boolean,
+  answerer: boolean,
 ): {
   readonly specs: readonly ToolSpec[];
   readonly cfg: Cfg;
@@ -171,6 +176,7 @@ function pinned(
         o,
         within !== undefined,
         o.team !== undefined || member,
+        answerer,
       ).map(frameworkSpec),
       ...(o.memory === undefined ? [] : memorySpecs(o.memory)),
       ...(o.knowledge === undefined ? [] : knowledgeSpecs()),
@@ -317,16 +323,18 @@ const TEAM = [
 ];
 
 /**
- * todo_write always; spawn and task-board tools with subagents; handoff with targets; the team
- * tools for a lead (agent({team})) and for a team's members.
+ * todo_write always; ask_user for an answerer; spawn and task-board tools with subagents;
+ * handoff with targets; the team tools for a lead (agent({team})) and for a team's members.
  */
 function agentTools(
   o: PinOptions,
   subagent: boolean,
   team: boolean,
+  answerer: boolean,
 ): readonly string[] {
   return [
     "todo_write",
+    ...(answerer ? ["ask_user"] : []),
     ...(o.subagents.length > 0 ? ["spawn_agent"] : []),
     ...(o.subagents.length > 0 || subagent ? TEAM : []),
     ...(o.handoffs.length > 0 ? ["handoff"] : []),

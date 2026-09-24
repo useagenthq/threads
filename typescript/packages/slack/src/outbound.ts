@@ -61,10 +61,8 @@ const UNREACHED = new Set([
 const EVENT_TYPE = "threads_effect";
 
 export function render(event: Event): readonly Json[] {
-  if (event.type === "model_response") {
-    const text = responseText(event.data.content);
-    return text === "" ? [] : [{ kind: "message", text }];
-  }
+  if (event.type === "model_response")
+    return renderText(responseText(event.data.content));
   if (event.type === "approval_requested")
     return [
       {
@@ -74,6 +72,11 @@ export function render(event: Event): readonly Json[] {
       },
     ];
   return [];
+}
+
+/** A plain message: an ask_user question or its correction, or a reply's text. */
+export function renderText(text: string): readonly Json[] {
+  return text === "" ? [] : [{ kind: "message", text }];
 }
 
 function button(challenge_id: string, decision: "grant" | "deny"): Json {

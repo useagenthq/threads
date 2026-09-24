@@ -201,7 +201,8 @@ async function branchFor(
     const branchId = BranchId.parse(uuidv7(log.now()));
     const made = log.createBranch(threadId, branchId);
     if (!made.ok) return fail("invalid_request", made.error.message);
-    const pin = await hosted.runner.started();
+    // An authenticated caller can answer this run's questions: ask_user is pinned.
+    const pin = await hosted.runner.started({ answerer: true });
     // The spec artifacts are durable before first, which names them, is appended.
     await pin.put(store);
     return ok({ threadId, branchId, first: [pin.event] });

@@ -77,9 +77,10 @@ export function deleteTeam(
 }
 
 /**
- * One thread's rows: its branches' log rows, leases, cursors and wake rows (and its parent's wake
- * row for it), approvals, inbox and channel rows, receipts and budget rows go; its live resources
- * move to releasing for gc; a tombstone and one loss row per telemetry observer record it.
+ * One thread's rows: its branches' log rows, leases, cursors, wake and question rows (and its
+ * parent's wake row for it), approvals, inbox and channel rows, receipts and budget rows go; its
+ * live resources move to releasing for gc; a tombstone and one loss row per telemetry observer
+ * record it.
  */
 export function deleteOne(
   db: SqliteDriver,
@@ -97,6 +98,7 @@ export function deleteOne(
       "leases",
       "observer_cursors",
       "pending_wakes",
+      "questions",
     ])
       db.run(`DELETE FROM ${table} WHERE branch_id = ?`, [branch]);
     db.run(

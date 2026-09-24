@@ -11,6 +11,7 @@ import {
   tool,
 } from "@threads/core";
 import {
+  type KnownEvent,
   knownEvents,
   openStore,
   type Principal,
@@ -133,6 +134,15 @@ export async function eventsOf(
 ): Promise<
   readonly { readonly type: string; readonly [k: string]: unknown }[]
 > {
+  return knownEventsOf(store, tenant, branch);
+}
+
+/** The tenant's branch events as their typed union. */
+export async function knownEventsOf(
+  store: Store,
+  tenant: string,
+  branch: string,
+): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(tenantStore(store, tenant));
   const read = log.read(z.string().brand<"BranchId">().parse(branch));
   if (!read.ok) throw new Error(read.error.message);
@@ -222,6 +232,7 @@ export function fakeChannel(
         return [{ kind: "approval", challenge_id: event.data.challenge_id }];
       return [];
     },
+    renderText: (text) => [{ kind: "text", text }],
     perform: async (op, key, credentials) => {
       if (credentials["token"] !== "token-value")
         throw new Error("no credentials");

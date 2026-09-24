@@ -1,6 +1,6 @@
 import type { ChannelAdapter, Fetch, Secret } from "@threads/core/adapter";
 import { ack, parser, type Tenancy, verifier } from "./inbound";
-import { lookuper, performer, render } from "./outbound";
+import { lookuper, performer, render, renderText } from "./outbound";
 
 export type SlackOptions = {
   readonly agent: string;
@@ -39,6 +39,7 @@ export function slack(options: SlackOptions): ChannelAdapter {
     parse: parser(options.tenant, options.botUserId),
     ack,
     render,
+    renderText,
     perform: performer(transport),
     lookup: lookuper(transport, () => options.botToken.reveal()),
   };
