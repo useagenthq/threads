@@ -119,6 +119,12 @@ describe("conservative shell rules", () => {
   ])("%p is not allowed by a git status prefix rule", (command) => {
     expect(bash(command, ["bash(git status:*)"]).decision).toBe("ask");
   });
+  test("only the literal bash(*) is the any-command rule, not a tool pattern", () => {
+    const pipeline = "cd app && npm test 2>&1 | tail -50";
+    expect(bash(pipeline, ["b*(*)"]).decision).toBe("ask");
+    expect(bash(pipeline, [], ["b*(*)"]).decision).toBe("ask");
+    expect(bash(pipeline, ["bash(*)"]).decision).toBe("allow");
+  });
   test("a deny still sees a command hidden behind an escaped quote", () => {
     expect(
       bash('git status \\"; rm -rf /; echo \\"', [], ["bash(rm:*)"]).decision,

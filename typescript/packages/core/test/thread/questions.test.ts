@@ -94,7 +94,7 @@ describe("suggested rules", () => {
     [`'it''s' go`, [`bash('it''s' go)`, "bash(its go:*)"]],
     [`echo "unclosed`, [`bash(echo "unclosed)`]],
     // bash(*) allows every command: only configured policy may hold it.
-    ["*", ["bash(*:*)"]],
+    ["*", []],
   ])("bash %j", (command, rules) => {
     expect(suggestedRules("bash", { command })).toEqual(rules);
   });

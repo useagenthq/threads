@@ -213,5 +213,5 @@ def test_a_remembered_rule_must_be_one_the_challenge_suggested() -> None:
 
 def test_bash_any_is_never_a_suggested_rule() -> None:
     # bash(*) allows every command: only configured policy may hold it.
-    assert suggested_rules("bash", {"command": "*"}) == ("bash(*:*)",)
+    assert suggested_rules("bash", {"command": "*"}) == ()
     assert suggested_rules("bash", {"command": "ls"}) == ("bash(ls)", "bash(ls:*)")

@@ -155,7 +155,7 @@ function specMatches(
 
 /** `bash(*)`: every command, parsed or not; the sandbox is the boundary. */
 function anyCommand(rule: Rule): boolean {
-  return toolMatches(rule.tool, "bash") && rule.spec === "*";
+  return rule.tool === "bash" && rule.spec === "*";
 }
 
 /** Deny and ask semantics: a bash rule matches if any simple command matches it. */

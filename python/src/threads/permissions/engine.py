@@ -194,7 +194,7 @@ def _any_hit(rule: Rule, call: _Call) -> bool:
 
 def _any_command(rule: Rule) -> bool:
     """`bash(*)`: every command, parsed or not; the sandbox is the boundary."""
-    return rule.names("bash") and rule.specifier == "*"
+    return rule.tool == "bash" and rule.specifier == "*"
 
 
 def _bash_hit(rule: Rule, command: shell.Simple) -> bool:

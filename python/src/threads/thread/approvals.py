@@ -11,8 +11,6 @@ import shlex
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
 
-from pydantic.experimental.missing_sentinel import MISSING
-
 from threads._generated.host_api_v1 import PendingApproval
 from threads.agents.store import Store, now_ms, open_store
 from threads.log import (
@@ -57,18 +55,19 @@ def pending(fold: Fold) -> tuple[PendingApproval, ...]:
             continue
         if data.call_id not in fold.pending:
             continue
-        approval = PendingApproval(
-            challenge_id=data.challenge_id,
-            call_id=data.call_id,
-            tool=call.data.name,
-            input=call.data.input,
-            args_hash=data.args_hash,
-            expires_at=data.expires_at,
-            suggested_rules=suggested_rules(call.data.name, call.data.input),
-        )
-        reason = reasons.get(data.call_id, MISSING)
+        reason = reasons.get(data.call_id)
         found.append(
-            approval if reason is MISSING else approval.model_copy(update={"reason": reason})
+            PendingApproval(
+                challenge_id=data.challenge_id,
+                call_id=data.call_id,
+                tool=call.data.name,
+                input=call.data.input,
+                args_hash=data.args_hash,
+                expires_at=data.expires_at,
+                suggested_rules=suggested_rules(call.data.name, call.data.input),
+                # An explicit MISSING is refused: omit the field instead.
+                **({"reason": reason} if isinstance(reason, str) else {}),
+            )
         )
     return tuple(found)
 
@@ -79,15 +78,16 @@ def suggested_rules(tool: str, input: JsonObject) -> tuple[str, ...]:
     command = input.get("command")
     if tool != "bash" or not isinstance(command, str) or not command.strip():
         return (tool,)
-    exact = f"bash({command})"
+    # `bash(*)` allows every command; only configured policy may say that.
+    if command == "*":
+        return ()
     try:
         words = shlex.split(command)
     except ValueError:
-        return (exact,)
+        return (f"bash({command})",)
     # ponytail: two-word prefix (git push, npm run); a smarter prefix needs the shell grammar.
-    prefix = f"bash({' '.join(words[:2])}:*)"
-    # `bash(*)` allows every command; only configured policy may say that.
-    return (prefix,) if exact == "bash(*)" else (exact, prefix)
+    prefix = " ".join(words[:2])
+    return (f"bash({command})", f"bash({prefix}:*)")
 
 
 async def decide(  # noqa: PLR0913 - one answer and its bindings

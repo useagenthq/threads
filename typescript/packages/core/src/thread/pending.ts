@@ -80,14 +80,13 @@ export function suggestedRules(
   const command = input["command"];
   if (tool !== "bash" || typeof command !== "string" || command.trim() === "")
     return [tool];
+  // `bash(*)` allows every command; only configured policy may say that.
+  if (command === "*") return [];
   const words = shellWords(command);
   // ponytail: two-word prefix (git push, npm run); a smarter prefix needs the shell grammar.
-  const rules =
-    words === undefined
-      ? [`bash(${command})`]
-      : [`bash(${command})`, `bash(${words.slice(0, 2).join(" ")}:*)`];
-  // `bash(*)` allows every command; only configured policy may say that.
-  return rules.filter((rule) => rule !== "bash(*)");
+  return words === undefined
+    ? [`bash(${command})`]
+    : [`bash(${command})`, `bash(${words.slice(0, 2).join(" ")}:*)`];
 }
 
 // A shell word: bare characters, a backslash escape, a single-quoted or a double-quoted run.

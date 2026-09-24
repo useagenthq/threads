@@ -117,7 +117,7 @@ def agent(
 </Field>
 
 <Field name="memoryWrite / memory_write" type={"\"deny\" | \"ask\" | \"allow_principal\" | \"allow\""} default={"ask"}>
-  Write authority for save_memory. A write it turns into an ask records a reason naming memory_write, shown as PendingApproval.reason.
+  Write authority for save_memory. A write it turns into an ask records a reason naming memory_write, shown as PendingApproval.reason. The reason uses wire names: memory_write is memoryWrite in TypeScript.
 </Field>
 
 <Field name="knowledge" type={"KnowledgeProvider"}>
@@ -165,7 +165,7 @@ def agent(
 </Field>
 
 <Field name="permissions" type={"Partial<Policy.permissions>"}>
-  The permission policy every tool call is decided under: mode, allow, ask and deny rules, protected_paths, allow_bypass and plan_exit_mode. The rule bash(*) matches every shell command, whatever it contains, in allow, ask and deny; deny rules, plan mode, protected paths, ask rules and the .threads guard still decide first. A bare bash rule allows only commands that parse. In TypeScript the fields you give override the defaults; Python takes a complete Permissions. Omitted: mode default, no rules, the built-in protected paths, allow_bypass false and plan_exit_mode default.
+  The permission policy every tool call is decided under: mode, allow, ask and deny rules, protected_paths, allow_bypass and plan_exit_mode. The rule bash(*) matches every shell command, whatever it contains, in allow, ask and deny. The .threads guard, deny rules, plan mode and ask rules still decide first (protected_paths cover the file tools, not bash). The guard and deny rules match command text, so they are guardrails: with bash(*), the sandbox is the boundary. A bare bash rule allows only commands that parse. In TypeScript the fields you give override the defaults; Python takes a complete Permissions. Omitted: mode default, no rules, the built-in protected paths, allow_bypass false and plan_exit_mode default.
 </Field>
 
 <Field name="approvers" type={"readonly Principal[]"}>

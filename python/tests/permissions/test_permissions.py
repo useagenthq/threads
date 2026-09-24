@@ -72,6 +72,13 @@ def test_bash_without_a_command_string_is_never_allowed(bad: JsonValue) -> None:
     assert got.decision == "ask"
 
 
+def test_only_the_literal_bash_any_rule_matches_every_command() -> None:
+    pipeline = Call("bash", "other", {"command": "cd app && npm test 2>&1 | tail -50"})
+    assert decide(perms(["b*(*)"]), WORKSPACE, "default", pipeline).decision == "ask"
+    assert decide(perms([], ["b*(*)"]), WORKSPACE, "default", pipeline).decision == "ask"
+    assert decide(perms(["bash(*)"]), WORKSPACE, "default", pipeline).decision == "allow"
+
+
 def test_thread_rules_follow_policy_rules() -> None:
     call = Call("bash", "other", {"command": "make x"})
     got = decide(perms([]), WORKSPACE, "default", call, thread_rules=[thread_rule("bash(make:*)")])
