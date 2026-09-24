@@ -258,7 +258,7 @@ export function teamIndexRows(
     ),
     team_feed: rows(
       db,
-      `SELECT DISTINCT branch_id, seq FROM team_feed WHERE ${inTeams} ORDER BY branch_id, seq`,
+      `SELECT team_id, branch_id, seq FROM team_feed WHERE ${inTeams} ORDER BY team_id, branch_id, seq`,
       teams,
     ),
     pending_wakes: rows(

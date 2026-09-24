@@ -130,11 +130,11 @@ def test_an_effect_in_doubt_is_busy() -> None:
 
 
 def test_a_nested_team_goes_whole() -> None:
-    """team-nested-lead-rows: researcher-1 leads its own team; deleting the outer lead takes the
+    """team-nested-lead-feeds: researcher-1 leads its own team; deleting the outer lead takes the
     nested lead, its team log and both teams' rows."""
 
     async def main_() -> None:
-        logs = case_logs("team-nested-lead-rows")
+        logs = case_logs("team-nested-lead-feeds")
         store = await holding(logs)
         await rebuild_all(await open_store(store), logs)
         assert await delete(store, LEAD) == Ok(len(logs))

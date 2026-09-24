@@ -106,12 +106,13 @@ async def add(store: SqliteStore, logs: Mapping[str, bytes], tenant: str = TENAN
 
 def index_rows(conn: sqlite3.Connection) -> dict[str, JsonValue]:
     """Every team's rows as the conformance `index` holds them: each table by primary key, JSON
-    columns parsed, mail's claim columns left out, the feed as the (branch_id, seq) it holds."""
+    columns parsed, mail's claim columns left out, the feed as the (team_id, branch_id, seq) it
+    holds."""
     out: dict[str, JsonValue] = {t: _rows(conn, t) for t in _PKS}
     feed = conn.execute(
-        "SELECT DISTINCT branch_id, seq FROM team_feed ORDER BY branch_id, seq"
+        "SELECT team_id, branch_id, seq FROM team_feed ORDER BY team_id, branch_id, seq"
     ).fetchall()
-    out["team_feed"] = [{"branch_id": b, "seq": s} for b, s in feed]
+    out["team_feed"] = [{"team_id": t, "branch_id": b, "seq": s} for t, b, s in feed]
     wakes = conn.execute(
         "SELECT branch_id, child_thread_id FROM pending_wakes ORDER BY branch_id, child_thread_id"
     ).fetchall()

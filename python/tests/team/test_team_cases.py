@@ -101,17 +101,21 @@ async def run(case: Path) -> Found:
 
 
 async def _tree(store: Store, leads: dict[str, tuple[str, VerifiedLog]]) -> Found:
-    """Step 4: every team_members row in key order, a lead row counted, a member row counted or
-    pending as its own lead's walk finds it."""
-    rows: list[tuple[str, str, int, str]] = await (await open_store(store)).run(
+    """Step 4: every team_members row in key order, each thread once, a lead row counted, a
+    member row counted or pending as its own lead's walk finds it."""
+    rows: list[tuple[str, str, int, str, str]] = await (await open_store(store)).run(
         lambda c: c.execute(
-            "SELECT team_id, name, generation, role FROM team_members"
+            "SELECT team_id, name, generation, role, thread_id FROM team_members"
             " ORDER BY team_id, name, generation"
         ).fetchall()
     )
     counted: list[JsonValue] = []
     pending: list[JsonValue] = []
-    for team, name, generation, role in rows:
+    seen: set[str] = set()
+    for team, name, generation, role, thread in rows:
+        if thread in seen:  # a nested lead has two rows and one thread: counted once
+            continue
+        seen.add(thread)
         if role == "lead":  # where a walk starts: counted, never a child
             counted.append(name)
             continue

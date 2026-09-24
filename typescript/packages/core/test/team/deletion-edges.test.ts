@@ -106,10 +106,10 @@ describe("a doomed lead's teams are found through their rows, in this tenant", (
 describe("what goes with a thread, and what doesn't", () => {
   test("a nested team goes whole with the outer lead", () => {
     const t = teamStore(
-      caseLogs("team-nested-lead-rows", [
+      caseLogs("team-nested-lead-feeds", [
+        "inner",
         "lead",
         "researcher",
-        "researcher_team",
         "team",
       ]),
     );

@@ -77,6 +77,7 @@ function tenantOf(logs: readonly Labelled[]): string {
 
 const Row = z.strictObject({
   team_id: TeamId,
+  thread_id: z.string(),
   name: z.string(),
   generation: z.int(),
   role: z.enum(["lead", "member"]),
@@ -96,11 +97,15 @@ function tree(
     .array(Row)
     .parse(
       store.driver.all(
-        "SELECT team_id, name, generation, role FROM team_members ORDER BY team_id, name, generation",
+        "SELECT team_id, name, generation, role, thread_id FROM team_members ORDER BY team_id, name, generation",
         [],
       ),
     );
+  const seen = new Set<string>();
   for (const row of rows) {
+    // A nested lead has two rows and one thread: counted once.
+    if (seen.has(row.thread_id)) continue;
+    seen.add(row.thread_id);
     if (row.role === "lead") {
       counted.push(row.name);
       continue;
