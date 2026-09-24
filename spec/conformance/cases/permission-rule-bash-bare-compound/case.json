@@ -1,0 +1,71 @@
+{
+  "name": "permission-rule-bash-bare-compound",
+  "family": "permissions_approvals",
+  "kind": "policy",
+  "description": "A bare bash allow rule matches every simple command, so it allows a compound of them. A deny rule still denies any part, and a redirection still asks.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "workspace": "/workspace",
+    "permissions": {
+      "mode": "default",
+      "allow": [
+        "bash"
+      ],
+      "ask": [
+        "bash(git push:*)"
+      ],
+      "deny": [
+        "bash(rm:*)"
+      ],
+      "protected_paths": [
+        ".git/**",
+        ".threads/**",
+        ".claude/**",
+        ".mcp.json",
+        "**/.bashrc",
+        "**/.zshrc",
+        "**/.profile",
+        "**/.gitconfig",
+        "**/.ssh/**"
+      ],
+      "allow_bypass": false,
+      "plan_exit_mode": "default"
+    },
+    "calls": [
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test | tail"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test && git status"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test | rm -rf build"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "npm test | tail > out.txt"
+        }
+      }
+    ]
+  }
+}

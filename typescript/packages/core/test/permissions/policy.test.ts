@@ -168,6 +168,57 @@ describe("conservative shell rules", () => {
   });
 });
 
+// Shell structures a denied command can hide in; `%` is where the inner command goes.
+const NESTINGS = [
+  "if true; then %; fi",
+  "if %; then true; fi",
+  "while true; do %; done",
+  "until %; do true; done",
+  "for x in a b; do %; done",
+  "case a in a) %;; esac",
+  "( % )",
+  "{ %; }",
+  "! %",
+  "coproc %",
+  "echo $(%)",
+  "echo `%`",
+  "f() { %; }",
+  "true && %",
+  "% | tail",
+];
+const DENIED = [
+  "rm -rf /",
+  "r''m -rf /",
+  "FOO=1 rm x",
+  "nice -n 5 rm x",
+  "timeout 5 rm x",
+];
+
+describe("a deny sees a command at any depth", () => {
+  const nested = (inner: string): readonly string[] => [
+    inner,
+    ...NESTINGS.flatMap((a) => {
+      const once = a.replace("%", inner);
+      return [once, ...NESTINGS.map((b) => b.replace("%", once))];
+    }),
+  ];
+  test.each(DENIED)("%p, nested up to two deep", (inner) => {
+    const allow = ["bash", "bash(true)", "bash(echo:*)"];
+    for (const command of nested(inner)) {
+      const got = decide(
+        { ...DEFAULT_PERMISSIONS, mode: "bypass", allow, deny: ["bash(rm:*)"] },
+        "/workspace",
+        { tool: "bash", category: "other", mode: "bypass", input: { command } },
+      );
+      expect([command, got.decision, got.rule]).toEqual([
+        command,
+        "deny",
+        "bash(rm:*)",
+      ]);
+    }
+  });
+});
+
 const file = (
   tool: string,
   path: string,

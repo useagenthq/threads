@@ -1,8 +1,11 @@
 """The shell parser behind bash rules.
 
 A command is tokenized with POSIX quoting and split into simple commands on `;`, `&&`, `||`,
-`|`, `&` and newlines. It only makes rules conservative: anything it can't read is flagged
-unparseable, which can be denied but never allowed. The sandbox stays the security boundary.
+`|`, `&`, newlines and the edges of subshells and substitutions (`(`, `)`, backticks). Reserved
+words (`if`, `then`, `do`, `!`, ...) that open a simple command are read past, so deny and ask
+rules see every command at any depth. It only makes rules conservative: anything it can't read
+is flagged unparseable, which can be denied but never allowed. The sandbox stays the security
+boundary.
 """
 
 import re
@@ -13,8 +16,30 @@ _SEPARATORS = ("&&", "||", ";", "|", "&", "\n")
 _DANGEROUS_ENV = frozenset({"PATH", "BASH_ENV", "ENV", "IFS", "PYTHONPATH", "NODE_OPTIONS", "PS4"})
 _ASSIGNMENT = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=")
 _UNPARSEABLE_WORDS = frozenset({"eval", "exec", "function"})
-# Unquoted characters that expand, redirect or group: a command holding one never matches allow.
-_META = frozenset("$<>(){}`")
+# Reserved words that can open a simple command without being it.
+_KEYWORDS = frozenset(
+    {
+        "!",
+        "{",
+        "}",
+        "if",
+        "then",
+        "elif",
+        "else",
+        "fi",
+        "while",
+        "until",
+        "do",
+        "done",
+        "esac",
+        "coproc",
+    }
+)
+# Unquoted characters that expand, redirect, group or comment: a command holding one never
+# matches allow.
+_META = frozenset("$<>(){}`#")
+# Unquoted characters that open or close a subshell or a substitution: they end a simple command.
+_EDGES = frozenset("()`")
 _RAW_WORD = re.compile(r"[^\s;&|()`$<>{}\"'\\]+")
 
 
@@ -24,7 +49,8 @@ class Simple:
 
     words: tuple[str, ...]
     allowable: bool
-    """False when a dangerous environment assignment was stripped from it."""
+    """False when a dangerous environment assignment was stripped from it, or when it opens with or
+    follows a reserved word."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,19 +58,31 @@ class Shell:
     commands: tuple[Simple, ...]
     unparseable: bool
     plain: bool
-    """One simple command with no unquoted metacharacter: no separator, escape, expansion or
-    redirection. Only a plain command can match an allow rule (it fails closed)."""
+    """No unquoted metacharacter: no escape, expansion, redirection, group or comment (separators
+    don't count). Only a plain command can match an allow rule (it fails closed)."""
     raw_words: tuple[str, ...]
-    """The raw text split on whitespace and shell punctuation, for denying unparseable input."""
+    """The raw text split on whitespace and shell punctuation, for denying input that isn't
+    plain."""
 
 
 def parse(text: str) -> Shell:
     lexer = _Lexer(text)
     tokens, unparseable, meta = lexer.run()
-    commands = tuple(simple(t) for t in tokens if t)
-    unparseable = unparseable or any(_unreadable(c.words) for c in commands)
-    plain = not meta and len(commands) == 1
-    return Shell(commands, unparseable, plain, tuple(_RAW_WORD.findall(text)))
+    firsts = [simple(t) for t in tokens]
+    unparseable = unparseable or any(_unreadable(c.words) for c in firsts)
+    commands = tuple(c for first in firsts for c in _unwrap_keywords(first))
+    return Shell(commands, unparseable, not meta, tuple(_RAW_WORD.findall(text)))
+
+
+def _unwrap_keywords(command: Simple) -> tuple[Simple, ...]:
+    """A command that opens with a reserved word, and the command after the word, both as deny
+    and ask rules read them. Neither is allowed."""
+    if not command.words:
+        return ()
+    if command.words[0] not in _KEYWORDS:
+        return (command,)
+    inner = _unwrap_keywords(simple(command.words[1:]))
+    return tuple(Simple(c.words, allowable=False) for c in (command, *inner))
 
 
 def _unreadable(words: tuple[str, ...]) -> bool:
@@ -117,10 +155,15 @@ class _Lexer:
             self._meta = True
             self._take(self._text[self._i + 1 : self._i + 2].replace("\n", ""))
             self._i += 2
+        elif c in _EDGES:
+            # Subshells, function definitions, command and process substitution: the command
+            # inside is read on its own.
+            self._unparseable = self._meta = True
+            self._end_command()
+            self._i += 1
         elif not self._separator():
-            # Subshells, function definitions, command and process substitution, here-docs.
-            if c in "()`" or self._text.startswith("<<", self._i):
-                self._unparseable = True
+            if self._text.startswith("<<", self._i):
+                self._unparseable = True  # a here-doc
             self._meta = self._meta or c in _META
             self._take(c)
             self._i += 1
@@ -128,7 +171,6 @@ class _Lexer:
     def _separator(self) -> bool:
         for sep in _SEPARATORS:
             if self._text.startswith(sep, self._i):
-                self._meta = True
                 self._end_command()
                 self._i += len(sep)
                 return True

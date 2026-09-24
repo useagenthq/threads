@@ -124,7 +124,7 @@ def test_unparseable_is_never_allowed_by_a_rule(before: str, construct: str, aft
         "git status $(printf marker)",
         "git status ${HOME}",
         "git status\nprintf marker",
-        "git status && git status",
+        "git status && printf marker",
         "git status | cat",
         "git status > out",
         "git status \\; printf marker",
@@ -178,3 +178,34 @@ def test_self_config_guard_sees_quoted_and_nested_words(value: JsonValue) -> Non
 def test_self_config_guard_needs_a_whole_segment(value: str) -> None:
     got = decide(perms(["bash"]), WORKSPACE, "bypass", Call("bash", "other", {"command": value}))
     assert got.source != "self_config_guard"
+
+
+# Shell structures a denied command can hide in; `{}` is where the inner command goes.
+NESTINGS = [
+    "if true; then {}; fi",
+    "if {}; then true; fi",
+    "while true; do {}; done",
+    "until {}; do true; done",
+    "for x in a b; do {}; done",
+    "case a in a) {};; esac",
+    "( {} )",
+    "{{ {}; }}",
+    "! {}",
+    "coproc {}",
+    "echo $({})",
+    "echo `{}`",
+    "f() {{ {}; }}",
+    "true && {}",
+    "{} | tail",
+]
+DENIED = ["rm -rf /", "r''m -rf /", "FOO=1 rm x", "nice -n 5 rm x", "timeout 5 rm x"]
+
+
+@given(inner=st.sampled_from(DENIED), outer=st.lists(st.sampled_from(NESTINGS), max_size=3))
+def test_a_deny_sees_a_command_at_any_depth(inner: str, outer: list[str]) -> None:
+    command = inner
+    for nesting in outer:
+        command = nesting.format(command)
+    allow = perms(["bash", "bash(true)", "bash(echo:*)"], ["bash(rm:*)"])
+    got = decide(allow, WORKSPACE, "bypass", Call("bash", "other", {"command": command}))
+    assert (got.decision, got.rule) == ("deny", "bash(rm:*)"), command

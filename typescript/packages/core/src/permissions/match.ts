@@ -158,7 +158,10 @@ function anyCommand(rule: Rule): boolean {
   return rule.tool === "bash" && rule.spec === "*";
 }
 
-/** Deny and ask semantics: a bash rule matches if any simple command matches it. */
+/**
+ * Deny and ask semantics: a bash rule matches if any simple command matches it, at any depth,
+ * or, for an unparseable command, if its words appear anywhere in the raw text.
+ */
 export function anyMatch(
   rules: readonly string[],
   call: Call,
@@ -174,15 +177,16 @@ export function anyMatch(
     if (anyCommand(rule)) return true;
     const spec = rule.spec;
     if (shell === undefined) return false;
-    return shell.kind === "unparseable"
-      ? rawMatches(spec, shell.words)
-      : shell.commands.some((c) => bashMatches(spec, c));
+    return (
+      shell.commands.some((c) => bashMatches(spec, c)) ||
+      (shell.unparseable && rawMatches(spec, shell.words))
+    );
   });
 }
 
 /**
  * Allow semantics: a bash call is allowed only when it parses and every simple command matches
- * an allow rule without a dangerous leading assignment. Returns the first command's rule.
+ * an allow rule and is allowable (see SimpleCommand). Returns the first command's rule.
  * `bash(*)` is the one exception: it matches every command.
  */
 export function allMatch(
@@ -194,15 +198,16 @@ export function allMatch(
   if (call.tool !== "bash") return anyMatch(rules, call, workspace, shell);
   const anything = rules.find((text) => anyCommand(parseRule(text)));
   if (anything !== undefined) return anything;
-  if (shell?.kind !== "parsed" || shell.commands.length === 0) return undefined;
+  if (shell === undefined || shell.unparseable || shell.commands.length === 0)
+    return undefined;
   const matched = shell.commands.map((command) =>
-    command.dangerousEnv
-      ? undefined
-      : rules.find((text) => {
+    command.allowable
+      ? rules.find((text) => {
           const rule = parseRule(text);
           if (!toolMatches(rule.tool, call.tool)) return false;
           return rule.spec === undefined || bashMatches(rule.spec, command);
-        }),
+        })
+      : undefined,
   );
   return matched.every((r) => r !== undefined) ? matched[0] : undefined;
 }

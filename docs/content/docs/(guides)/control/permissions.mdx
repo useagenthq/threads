@@ -164,7 +164,9 @@ A rule is a tool name, optionally with a specifier in parentheses: `tool` or `to
 | `spawn_agent`, `handoff` | An agent name | `spawn_agent(researcher)` |
 | Any tool | None | `send_email`, `mcp__github__*` |
 
-For `bash`, a command is split into its simple commands (`a && b | c`). A `deny` or `ask` rule matches if any of them matches. An `allow` rule allows only if the command parses and every one of them is allowed, so a bare `bash` allow still asks for a redirection, `$`, a backslash or a leading `PATH=`. `bash(*)` is the exception: it matches every command in `allow`, `ask` and `deny`, and it is never offered as a suggested rule. With `bash(*)`, the `.threads` guard and deny rules still read the command text, but text can be disguised, so treat them as guardrails: the sandbox is the boundary. Protected paths cover the file tools, not `bash`.
+For `bash`, a command is split into its simple commands (`a && b | c`, `a; b`), including the ones inside `if`, `while`, `for` and `case`, subshells `( … )`, groups `{ …; }` and `$( … )`. A `deny` or `ask` rule matches if any of them matches, at any depth. An `allow` rule allows only if every one of them is allowed, so `git status && npm test` needs both commands allowed. A command inside a control structure or a group is never allowed by a rule, and neither is anything the parser doesn't read (a redirection, `$`, a backslash, a leading `PATH=`, or a script handed to `bash -c`), so even a bare `bash` allow asks for those, or leaves them to the mode.
+
+`bash(*)` is the exception: it matches every command in `allow`, `ask` and `deny`, and it is never offered as a suggested rule. With `bash(*)`, the `.threads` guard and deny rules still read the command text, but text can be disguised, so treat them as guardrails: the sandbox is the boundary. Protected paths cover the file tools, not `bash`.
 
 ## Approvals
 

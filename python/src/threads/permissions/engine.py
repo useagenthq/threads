@@ -162,16 +162,17 @@ def _first_any(candidates: Sequence[Rule], call: _Call) -> str | None:
 
 
 def _allowed(candidates: Sequence[Rule], call: _Call) -> str | None:
-    """Allow: for bash, only a plain single simple command can match (fail closed: separators,
-    escapes, expansions and redirections never do), and never one with a dangerous leading
-    assignment. `bash(*)` is the one exception: it matches every command."""
+    """Allow: for bash, every simple command must match (a compound joined with separators is
+    allowed only when each part is). Fail closed: escapes, expansions, redirections, groups and
+    unparseable input never match, nor does a command with a dangerous leading assignment or
+    one inside a control structure. `bash(*)` is the one exception: it matches every command."""
     parsed = call.command
     if parsed is None:
         return next((r.text for r in candidates if _hit(r, call)), None)
     anything = next((r.text for r in candidates if _any_command(r)), None)
     if anything is not None:
         return anything
-    if parsed.unparseable or not parsed.plain:
+    if parsed.unparseable or not parsed.plain or not parsed.commands:
         return None
     first: str | None = None
     for command in parsed.commands:
@@ -188,8 +189,12 @@ def _any_hit(rule: Rule, call: _Call) -> bool:
         return _hit(rule, call)
     if _any_command(rule) or any(_bash_hit(rule, c) for c in parsed.commands):
         return True
-    # Unparseable input: the rule's leading words appearing anywhere in the raw text deny it.
-    return parsed.unparseable and rule.names("bash") and _consecutive(rule, parsed.raw_words)
+    # Input that isn't plain: the rule's leading words appearing anywhere in the raw text match.
+    return (
+        (parsed.unparseable or not parsed.plain)
+        and rule.names("bash")
+        and _consecutive(rule, parsed.raw_words)
+    )
 
 
 def _any_command(rule: Rule) -> bool:

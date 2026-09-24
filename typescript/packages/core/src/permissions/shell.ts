@@ -4,65 +4,103 @@
 /** One simple command, as rules see it. */
 export type SimpleCommand = {
   readonly tokens: readonly string[];
-  /** A leading assignment to a variable that changes what runs: never matches an allow rule. */
-  readonly dangerousEnv: boolean;
+  /**
+   * False after a dangerous leading assignment, or when the command opens with or follows a
+   * reserved word (`if`, `do`, `!`, ...): such a command never matches an allow rule.
+   */
+  readonly allowable: boolean;
 };
 
-/** A parsed command line, or the marker that it holds a construct the parser won't follow. */
-export type ParsedShell =
-  | { readonly kind: "parsed"; readonly commands: readonly SimpleCommand[] }
-  | { readonly kind: "unparseable"; readonly words: readonly string[] };
+/**
+ * A command line split into simple commands. An unparseable line holds a construct the lexer
+ * doesn't model: its commands are a best effort that deny and ask rules still read, its raw
+ * `words` are read too, and no allow rule matches it.
+ */
+export type ParsedShell = {
+  readonly commands: readonly SimpleCommand[];
+  readonly unparseable: boolean;
+  readonly words: readonly string[];
+};
 
 const DANGEROUS_ENV =
   /^(PATH|LD_\w*|DYLD_\w*|BASH_ENV|ENV|IFS|PYTHONPATH|NODE_OPTIONS|PS4)$/;
 const ASSIGNMENT = /^([A-Za-z_]\w*)=/;
-// Words of a command the lexer refused: what a deny rule may still find.
+// Words of an unparseable command: what a deny rule may still find.
 const RAW_WORD = /[^\s;&|()<>`$"'{}\\]+/g;
-// One lexer step: blanks, a separator, a word piece (bare text, a single-quoted string, or a
-// double-quoted one holding no escape or expansion), or anything else. Anything else (an
-// escape, expansion, redirection, group, comment or unclosed quote) is a construct the lexer
-// does not model, so the command fails closed.
+// Reserved words that can open a simple command without being it. The command after one is
+// read too, so a deny rule sees `rm` in `if true; then rm -rf /; fi`.
+const KEYWORDS = new Set([
+  "!",
+  "{",
+  "}",
+  "if",
+  "then",
+  "elif",
+  "else",
+  "fi",
+  "while",
+  "until",
+  "do",
+  "done",
+  "esac",
+  "coproc",
+]);
+// Commands whose words run as code the parser doesn't read.
+const OPAQUE = new Set(["eval", "exec", "function"]);
+// One lexer step: blanks, a separator, a modelled word piece (bare text, a single-quoted string,
+// or a double-quoted one holding no escape or expansion), a group edge (a subshell's or a
+// substitution's parenthesis, a backtick), or anything else (a double-quoted string with an
+// escape or expansion, an escape, or one character such as `$`, `>`, `{` or `#`). A group edge
+// ends the simple command, so the command inside is read on its own; a group edge or anything
+// else makes the line unparseable.
 const PIECE =
-  /([ \t]+)|([;&|\n])|('[^']*'|"[^"\\$`]*"|[^\s'";&|\\$`(){}<>#]+)|([\s\S])/g;
+  /([ \t]+)|([;&|\n])|('[^']*'|"[^"\\$`]*"|[^\s'";&|\\$`(){}<>#]+)|([()`])|("(?:[^"\\]|\\[\s\S])*"|\\[\s\S]?|[\s\S])/g;
 
-/** POSIX-quoted words, split into simple commands on ; && || | & and newlines. */
+/** POSIX-quoted words, split into simple commands on ; && || | &, newlines and group edges. */
 export function parseShell(command: string): ParsedShell {
-  const unparseable = {
-    kind: "unparseable",
-    words: command.match(RAW_WORD) ?? [],
-  } as const;
-  const split = lex(command);
-  if (split === undefined) return unparseable;
+  const { lines, odd } = lex(command);
   const commands: SimpleCommand[] = [];
-  for (const words of split) {
+  let unparseable = odd;
+  for (const words of lines) {
     const simple = simplify(words);
-    if (simple === undefined) return unparseable;
-    if (simple.tokens.length > 0) commands.push(simple);
+    unparseable ||= opaque(simple.tokens);
+    commands.push(...unwrapKeywords(simple));
   }
-  return { kind: "parsed", commands };
+  return { commands, unparseable, words: command.match(RAW_WORD) ?? [] };
 }
 
 /**
- * Words per simple command, exact for the subset it accepts: bare words, single quotes
- * (literal), and double quotes holding no escape or expansion. Anything else is undefined.
+ * Words per simple command, exact for the subset it models: bare words, single quotes
+ * (literal), and double quotes holding no escape or expansion. Anything else is read as well as
+ * the lexer can and flagged odd.
  */
-function lex(command: string): string[][] | undefined {
-  const commands: string[][] = [[]];
+function lex(command: string): {
+  readonly lines: readonly (readonly string[])[];
+  readonly odd: boolean;
+} {
+  const lines: string[][] = [[]];
   let word: string | undefined;
+  let odd = false;
   const end = (): void => {
-    if (word !== undefined) commands.at(-1)?.push(word);
+    if (word !== undefined) lines.at(-1)?.push(word);
     word = undefined;
   };
-  for (const [, blank, separator, piece] of command.matchAll(PIECE)) {
+  for (const [, blank, separator, piece, edge, other] of command.matchAll(
+    PIECE,
+  )) {
     if (piece !== undefined) word = (word ?? "") + unquote(piece);
     else if (blank !== undefined) end();
-    else if (separator !== undefined) {
+    else if (separator !== undefined || edge !== undefined) {
+      odd ||= edge !== undefined;
       end();
-      commands.push([]);
-    } else return undefined;
+      lines.push([]);
+    } else {
+      odd = true;
+      word = (word ?? "") + readEscaped(other ?? "");
+    }
   }
   end();
-  return commands;
+  return { lines, odd };
 }
 
 /** Quotes are removed; the quoted text joins the word. */
@@ -71,35 +109,61 @@ function unquote(piece: string): string {
   return q === "'" || q === '"' ? piece.slice(1, -1) : piece;
 }
 
-/** Strips leading assignments and wrappers; undefined for eval, exec and brace groups. */
-function simplify(words: readonly string[]): SimpleCommand | undefined {
-  let rest = [...words];
-  let dangerousEnv = false;
-  for (let name = ASSIGNMENT.exec(rest[0] ?? ""); name !== null; ) {
-    dangerousEnv ||= DANGEROUS_ENV.test(name[1] ?? "");
-    rest = rest.slice(1);
-    name = ASSIGNMENT.exec(rest[0] ?? "");
-  }
-  rest = stripWrappers(rest);
-  const first = rest[0];
-  if (first === "eval" || first === "exec") return undefined;
-  if (rest.some((w) => w === "{" || w === "}")) return undefined;
-  return { tokens: rest, dangerousEnv };
+/** An escape gives its character (a line continuation gives nothing), as the shell reads it. */
+function readEscaped(piece: string): string {
+  if (piece.startsWith("\\")) return piece.slice(1).replace("\n", "");
+  if (piece.length > 1 && piece.startsWith('"'))
+    return piece
+      .slice(1, -1)
+      .replace(/\\([\\$`"\n])/g, (_, c: string) => (c === "\n" ? "" : c));
+  return piece;
 }
 
-function stripWrappers(words: string[]): string[] {
+/** Strips leading assignments and wrappers, in any order. */
+function simplify(words: readonly string[]): SimpleCommand {
   let rest = words;
+  let allowable = true;
   for (;;) {
-    const [first, second] = rest;
-    if (first === "timeout" && second !== undefined && /^\d+/.test(second))
-      rest = rest.slice(2);
-    else if (first === "nice" || first === "nohup" || first === "time")
-      rest = rest.slice(1);
-    else return rest;
+    const name = ASSIGNMENT.exec(rest[0] ?? "");
+    const skip = name === null ? wrapperLength(rest) : 1;
+    if (skip === 0) return { tokens: rest, allowable };
+    allowable &&= !DANGEROUS_ENV.test(name?.[1] ?? "");
+    rest = rest.slice(skip);
   }
 }
 
-/** Whitespace-separated words of a rule specifier (quotes removed). */
+/** How many leading words are a `timeout N`, `nice`, `nohup` or `time` wrapper. */
+function wrapperLength(words: readonly string[]): number {
+  const [head] = words;
+  if (head === "nohup" || head === "time") return 1;
+  if (head !== "timeout" && head !== "nice") return 0;
+  let n = 1;
+  // -s SIGNAL, -k DURATION and nice's -n N take a separate argument.
+  for (let w = words[n]; w?.startsWith("-"); w = words[n])
+    n += w === "-s" || w === "-k" || w === "-n" ? 2 : 1;
+  return head === "timeout" ? n + 1 : n;
+}
+
+function opaque(tokens: readonly string[]): boolean {
+  return (
+    OPAQUE.has(tokens[0] ?? "") || tokens.some((w) => w === "{" || w === "}")
+  );
+}
+
+/**
+ * A command that opens with a reserved word, and the command after the word, both as deny and
+ * ask rules read them. Neither is allowed.
+ */
+function unwrapKeywords(simple: SimpleCommand): readonly SimpleCommand[] {
+  const [first] = simple.tokens;
+  if (first === undefined) return [];
+  if (!KEYWORDS.has(first)) return [simple];
+  const inner = unwrapKeywords(simplify(simple.tokens.slice(1)));
+  return [simple, ...inner].map((c) => ({ ...c, allowable: false }));
+}
+
+/** Whitespace-separated words of a rule specifier (quotes removed); none if it isn't modelled. */
 export function specTokens(spec: string): readonly string[] {
-  return lex(spec)?.flat() ?? [];
+  const { lines, odd } = lex(spec);
+  return odd ? [] : lines.flat();
 }
