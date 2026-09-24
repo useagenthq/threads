@@ -51,6 +51,7 @@ Add `slack()` to a host and each Slack conversation becomes a thread. The agent 
         agent="support",
         signing_secret=secret("SLACK_SIGNING_SECRET"),
         bot_token=secret("SLACK_BOT_TOKEN"),
+        bot_user_id="U0123456789",
     )
     ```
 
@@ -79,8 +80,8 @@ Add `slack()` to a host and each Slack conversation becomes a thread. The agent 
 <Field name="botToken / bot_token" type="Secret" required>
   Used to post replies.
 </Field>
-<Field name="botUserId" type="string">
-  TypeScript only. The bot's own user id, so its messages are ignored.
+<Field name="botUserId / bot_user_id" type="string">
+  The bot's own user id, so its messages are ignored. Messages Slack marks as a bot's are ignored either way.
 </Field>
 <Field name="tenant" type="string | (teamId) => string | undefined">
   TypeScript only. The tenant for a workspace. Default `slack:<team_id>`. A function that returns `undefined` refuses that workspace.

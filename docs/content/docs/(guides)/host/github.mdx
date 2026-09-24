@@ -52,6 +52,7 @@ Add `github()` to a host and each issue or pull request becomes a thread. A comm
         agent="support",
         webhook_secret=secret("GITHUB_WEBHOOK_SECRET"),
         token=secret("GITHUB_TOKEN"),
+        app_slug="my-threads-app",
     )
     ```
 
@@ -73,8 +74,8 @@ Add `github()` to a host and each issue or pull request becomes a thread. A comm
 <Field name="token" type="Secret" required>
   Posts reply comments.
 </Field>
-<Field name="appSlug" type="string">
-  TypeScript only. The App's slug; comments by `<slug>[bot]` are ignored. (Python ignores every bot account.)
+<Field name="appSlug / app_slug" type="string">
+  The App's slug. Comments by `<slug>[bot]` are ignored, and when a reply's outcome is unclear only the App's own comments count as the reply. Other bot accounts are ignored either way.
 </Field>
 <Field name="tenant" type="string | (installationId) => string | undefined">
   TypeScript only. Tenant for an installation, default `github:<installation_id>`. Returning `undefined` refuses it.

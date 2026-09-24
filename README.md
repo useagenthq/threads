@@ -204,7 +204,7 @@ sandbox=daytona()                    # DAYTONA_API_KEY
 sandbox=modal(image_id="im-...")     # MODAL_TOKEN_ID, MODAL_TOKEN_SECRET
 ```
 
-To open the network, set the provider's option (`internet: true` for TS e2b, `network: "open"` for TS daytona, `allow_internet=True` in Python) **and** `egress: "unenforced"` on the agent.
+To open the network, pass `allowInternet: true` (TS) or `allow_internet=True` (Python) to the provider **and** set `egress: "unenforced"` on the agent.
 
 </details>
 
@@ -225,7 +225,7 @@ export default host({
   agents: { fixer },
   channels: {
     slack: slack({ agent: "fixer", signingSecret: secret("SLACK_SIGNING_SECRET"), botToken: secret("SLACK_BOT_TOKEN") }),
-    whatsapp: whatsapp({ agent: "fixer", appSecret: secret("WHATSAPP_APP_SECRET"), accessToken: secret("WHATSAPP_ACCESS_TOKEN") }),
+    whatsapp: whatsapp({ agent: "fixer", appSecret: secret("WHATSAPP_APP_SECRET"), accessToken: secret("WHATSAPP_ACCESS_TOKEN"), verifyToken: secret("WHATSAPP_VERIFY_TOKEN") }),
     github: github({ agent: "fixer", webhookSecret: secret("GITHUB_WEBHOOK_SECRET"), token: secret("GITHUB_TOKEN") }),
   },
 });
@@ -248,7 +248,6 @@ app = host(
             app_secret=secret("WHATSAPP_APP_SECRET"),
             access_token=secret("WHATSAPP_ACCESS_TOKEN"),
             verify_token=secret("WHATSAPP_VERIFY_TOKEN"),
-            phone_number_id="1234567890",
         ),
         "github": github(agent="fixer", webhook_secret=secret("GITHUB_WEBHOOK_SECRET"), token=secret("GITHUB_TOKEN")),
     },

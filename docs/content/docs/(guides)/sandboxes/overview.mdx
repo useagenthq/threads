@@ -70,7 +70,7 @@ Every sandbox starts with its network blocked. To open it, set the provider's op
 ```ts
 const researcher = agent({
   model,
-  sandbox: e2b({ internet: true }),
+  sandbox: e2b({ allowInternet: true }),
   egress: "unenforced",
 });
 ```
@@ -91,8 +91,8 @@ researcher = agent(
 
 | Provider | TypeScript option | Python option |
 |---|---|---|
-| E2B | `internet: true` | `allow_internet=True` |
-| Daytona | `network: "open"` | `allow_internet=True` |
+| E2B | `allowInternet: true` | `allow_internet=True` |
+| Daytona | `allowInternet: true` | `allow_internet=True` |
 | Modal | — | `allow_internet=True` |
 
 <Callout>

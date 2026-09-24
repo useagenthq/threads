@@ -12,7 +12,7 @@ icon: Server
 ```ts
 import { daytona } from "@threads/daytona";
 
-const daytonaSandbox = daytona({ ttlMinutes: 60 }); // DAYTONA_API_KEY
+const daytonaSandbox = daytona({ snapshot: "my-snapshot", lifetimeMs: 60 * 60_000 }); // DAYTONA_API_KEY
 ```
 
 </Tab>
@@ -37,11 +37,12 @@ The key comes from the `DAYTONA_API_KEY` environment variable unless you pass `a
 |---|---|---|---|
 | `apiKey` | `api_key` | `DAYTONA_API_KEY` | Authenticates threads' calls to Daytona. Never enters the sandbox. |
 | `apiUrl` | `api_url` | `https://app.daytona.io/api` | Daytona API endpoint. |
-| `image` | `snapshot` | Daytona's default | The Daytona snapshot new sandboxes start from. |
-| `ttlMinutes` | `lifetime_ms` | 60 minutes (TS), none (Python) | How long a sandbox lives before Daytona deletes it. |
+| `snapshot` | `snapshot` | Daytona's default | The Daytona snapshot new sandboxes start from. |
+| `target` | `target` | Daytona's | The Daytona region to place sandboxes in. |
+| `lifetimeMs` | `lifetime_ms` | 1 hour | How long a sandbox lives before Daytona deletes it, rounded up to whole minutes. |
 | `autoStopMinutes` | `auto_stop_minutes` | `60` | Idle minutes before Daytona stops a leaked sandbox. A safety net, not the normal cleanup. |
-| `network: "open"` | `allow_internet=True` | blocked | Opens the network. Also set `egress: "unenforced"` on the agent. |
-| — | `target` | Daytona's | Python only: the Daytona region to place sandboxes in. |
+| `allowInternet` | `allow_internet` | `false` | Opens the network. Also set `egress: "unenforced"` on the agent. |
+| — | `name` | `"daytona"` | Python only: the provider name sandboxes are recorded under. |
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -49,7 +50,7 @@ The key comes from the `DAYTONA_API_KEY` environment variable unless you pass `a
 ```ts
 const open = agent({
   model,
-  sandbox: daytona({ network: "open" }),
+  sandbox: daytona({ allowInternet: true }),
   egress: "unenforced",
 });
 ```

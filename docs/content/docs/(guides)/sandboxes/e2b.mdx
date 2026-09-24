@@ -14,7 +14,7 @@ import { e2b } from "@threads/e2b";
 
 const e2bSandbox = e2b({
   template: "base",
-  timeoutMs: 10 * 60_000,
+  lifetimeMs: 10 * 60_000,
 });
 ```
 
@@ -40,9 +40,10 @@ In TypeScript, `@threads/e2b` runs on **Bun** only. On Node, the E2B SDK sends r
 |---|---|---|---|
 | `apiKey` | `api_key` | `E2B_API_KEY` | Authenticates threads' calls to E2B. Never enters the sandbox. |
 | `template` | `template` | `"base"` | The E2B template a new sandbox starts from. |
-| `timeoutMs` | `lifetime_ms` | 5 minutes (TS), 1 hour (Python) | How long a sandbox lives before E2B deletes it. |
-| `internet` | `allow_internet` | `false` | Opens the network. Also set `egress: "unenforced"` on the agent. |
+| `lifetimeMs` | `lifetime_ms` | 1 hour | How long a sandbox lives before E2B deletes it. |
+| `allowInternet` | `allow_internet` | `false` | Opens the network. Also set `egress: "unenforced"` on the agent. |
 | `domain` | `domain` | E2B's | The E2B domain to connect to, for self-hosted E2B. |
+| — | `name` | `"e2b"` | Python only: the provider name sandboxes are recorded under. |
 
 A custom template needs `/bin/sh` and the GNU tools `env`, `find`, `stat` and `sha256sum`. E2B's `base` template has them.
 

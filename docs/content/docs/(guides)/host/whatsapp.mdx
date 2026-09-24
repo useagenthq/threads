@@ -53,7 +53,6 @@ Add `whatsapp()` to a host and each person who messages your business number get
         app_secret=secret("WHATSAPP_APP_SECRET"),
         access_token=secret("WHATSAPP_ACCESS_TOKEN"),
         verify_token=secret("WHATSAPP_VERIFY_TOKEN"),
-        phone_number_id="1234567890",
     )
     ```
 
@@ -80,14 +79,11 @@ Add `whatsapp()` to a host and each person who messages your business number get
 <Field name="accessToken / access_token" type="Secret" required>
   Used to send replies.
 </Field>
-<Field name="verifyToken / verify_token" type="Secret">
-  The token Meta's setup check must present. Required in Python. In TypeScript it is optional, and without it the setup check is not answered.
+<Field name="verifyToken / verify_token" type="Secret" required>
+  The token Meta's setup check must present.
 </Field>
-<Field name="phone_number_id" type="string">
-  Python only, required: the business phone number id this channel sends from. TypeScript reads it from each webhook.
-</Field>
-<Field name="graphVersion" type="string">
-  TypeScript only. Graph API version, default `"v21.0"`.
+<Field name="graphVersion / graph_version" type="string">
+  Graph API version, default `"v21.0"`.
 </Field>
 <Field name="tenant" type="string | (phoneNumberId) => string | undefined">
   TypeScript only. Tenant for a phone number, default `whatsapp:<phone_number_id>`. Returning `undefined` refuses that number.
@@ -96,6 +92,7 @@ Add `whatsapp()` to a host and each person who messages your business number get
 ## Behavior to know
 
 - **One thread per sender.** Each phone number that writes to you is its own conversation.
+- **Replies come from the number that was messaged.** A channel can serve several business phone numbers; each reply is sent from the number its conversation arrived on.
 - **24-hour window.** WhatsApp only allows free-form replies within 24 hours of the person's last message. A reply outside the window fails. TypeScript catches this before sending anything; in Python the Cloud API rejects the send.
 - **No delivery lookup.** Meta offers no way to look up a sent message, so if a crash leaves it unclear whether a reply went out, the reply is held for a person to resolve instead of being sent twice. See [Durability & crash safety](/docs/production/durability).
 - A webhook that speaks for two phone numbers at once is refused rather than filed under one of them.
