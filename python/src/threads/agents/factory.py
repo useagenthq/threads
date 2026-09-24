@@ -331,6 +331,7 @@ def build_definition[T](
         output_retries=_retries(options),
         fallback=tuple(options.get("fallback", ())),
         output_styles=_styles(options.get("output_styles", {})),
+        context_set=_context_set(options.get("context")),
     )
     if "approvers" in options:
         definition = replace(definition, approvers=tuple(options["approvers"]))
@@ -356,3 +357,8 @@ def build_definition[T](
         if len(set(names)) != len(names):
             raise ConfigError("duplicate_name", f"{kind} names repeat: {names}")
     return definition
+
+
+def _context_set(context: Section[Context] | None) -> frozenset[str] | None:
+    """The fields a partial context names; None for a complete one (or none at all)."""
+    return None if context is None or isinstance(context, BaseModel) else frozenset(context)

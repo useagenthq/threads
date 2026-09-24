@@ -95,6 +95,9 @@ class Definition[D]:
     """Models to fall back to, in order, when the current one stays overloaded."""
     output_styles: tuple[tuple[str, str], ...] = ()
     """Named instructions Thread.set_output_style switches to, pinned as policy.output_styles."""
+    context_set: frozenset[str] | None = None
+    """The context fields a partial context names; None: a complete context sets them all. A
+    field left out takes what an omitted context would (cache_ttl_ms, defer_tools)."""
     models: tuple[tuple[str, Model], ...] = ()
     """dynamic_agent(models=...): a template's model keys in order, the first the default (and
     `model`). Empty: not a template."""
@@ -131,21 +134,26 @@ class Definition[D]:
         return pinned
 
     def _context(self) -> Context:
-        """The given context; else the default context with the models' agreed cache TTL and a
-        parent's defer_tools."""
-        if self.context is not None:
-            return self.context
+        """The given context, else the default, with what the agent didn't set itself filled in:
+        cache_ttl_ms from the models' agreed lifetime and defer_tools from a parent."""
+        base = self.context or CONTEXT
         update: dict[str, object] = {}
-        ttl = agreed_cache_ttl((self.model, *self.fallback))
+        ttl = None if self._sets("cache_ttl_ms") else agreed_cache_ttl((self.model, *self.fallback))
         if ttl is not None:
             update["cache_ttl_ms"] = ttl
-        if self.inherited_defer is not None:
-            update["defer_tools"] = self.inherited_defer
-        return CONTEXT.model_copy(update=update)
+        inherited = None if self._sets("defer_tools") else self.inherited_defer
+        if inherited is not None:
+            update["defer_tools"] = inherited
+        return base.model_copy(update=update) if update else base
+
+    def _sets(self, field: str) -> bool:
+        """The agent set this context field itself: a complete context sets every field."""
+        given = self.context_set
+        return self.context is not None and (given is None or field in given)
 
     def defer_tools(self) -> DeferTools:
         """The resolved defer_tools: what this agent pins, and what its children inherit."""
-        if self.context is not None:
+        if self.context is not None and self._sets("defer_tools"):
             return self.context.defer_tools
         return self.inherited_defer or CONTEXT.defer_tools
 

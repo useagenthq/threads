@@ -170,3 +170,25 @@ def test_litellm_refuses_a_cache_ttl_that_is_not_a_positive_integer(bad: object)
 
 def test_the_scripted_model_never_caches() -> None:
     assert SCRIPTED_INFO.cache == "none"
+
+
+def test_a_partial_context_without_cache_ttl_takes_the_models_lifetime() -> None:
+    """As in TypeScript: only a cache_ttl_ms the agent names skips the models' lifetime."""
+    a, b = declaring("anthropic/claude-sonnet-5", HOUR), declaring("anthropic/haiku", HOUR)
+
+    async def main() -> tuple[int, int]:
+        bot = agent(model=a, fallback=[b], context={"reserve_tokens": 1234})
+        done = await bot.run("hi", store=sqlite(":memory:"))
+        assert isinstance(done, Completed)
+        policy = (await _started(done.thread)).data.policy
+        assert policy is not MISSING
+        assert policy.context is not MISSING
+        return policy.context.cache_ttl_ms, policy.context.reserve_tokens
+
+    assert asyncio.run(main()) == (HOUR_MS, 1234)
+    bridge = declaring("litellm/large", None)
+    checked = asyncio.run(agent(model=bridge, context={"reserve_tokens": 1234}).check())
+    assert isinstance(checked, Err)
+    assert "is unknown" in checked.error.message
+    named = agent(model=bridge, context={"cache_ttl_ms": TEN_MINUTES_MS})
+    assert isinstance(asyncio.run(named.check()), Ok)

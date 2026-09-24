@@ -165,3 +165,32 @@ def test_children_inherit_the_parent_defer_tools_unless_they_set_it() -> None:
         assert "tool_search" in names  # its own, from its own deferred set
     assert by_name["own"].defer_tools() == "never"
     assert "tool_search" not in {s.name for s in by_name["own"].specs()}
+
+
+def test_a_partial_child_context_without_defer_tools_still_inherits_it() -> None:
+    """As in TypeScript: only a defer_tools the child names keeps it from inheriting."""
+    child = agent(
+        name="child",
+        model=scripted_model(NO_MODEL),
+        tools=[_tool("lookup")],
+        context={"reserve_tokens": 1234},
+    )
+    named = agent(
+        name="named",
+        model=scripted_model(NO_MODEL),
+        tools=[_tool("lookup")],
+        context={"defer_tools": "never"},
+    )
+    lead = agent(
+        name="lead",
+        model=scripted_model(NO_MODEL),
+        tools=[_tool("lookup")],
+        context=CONTEXT.model_copy(update={"defer_tools": "always"}),
+        subagents=[child, named],
+    )
+    by_name = {c.name: c for c in lead.definition.subagents}
+    assert by_name["child"].defer_tools() == "always"
+    context = by_name["child"].policy()["context"]
+    assert isinstance(context, dict)
+    assert (context["defer_tools"], context["reserve_tokens"]) == ("always", 1234)
+    assert by_name["named"].defer_tools() == "never"

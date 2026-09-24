@@ -134,6 +134,25 @@ describe("the default cache TTL comes from the models' declared lifetimes", () =
     expect(() => agent({ model: a, fallback: [b] })).not.toThrow();
   });
 
+  test("a partial context without cache_ttl_ms takes the models' lifetime, as in Python", async () => {
+    const a = declaring("anthropic/claude-sonnet-5", HOUR);
+    const b = declaring("anthropic/claude-haiku-4-5", HOUR);
+    const context = { reserve_tokens: 1234 };
+    const bot = agent({ model: a, fallback: [b], context });
+    const result = await bot.run("hi", { store: sqlite(":memory:") });
+    const started = (await logOf(result.thread)).find(
+      (e) => e.type === "thread_started",
+    );
+    if (started?.type !== "thread_started") throw new Error("no thread_started");
+    expect(started.data.policy?.context).toMatchObject({
+      cache_ttl_ms: 3_600_000,
+      reserve_tokens: 1234,
+    });
+    const bridge = declaring("mistral/large", undefined);
+    const checked = await agent({ model: bridge, context }).check();
+    expect(checked.ok ? "" : checked.error.message).toContain("is unknown");
+  });
+
   test("the scripted model never caches", () => {
     expect(scriptedModel({ responses: [] }).info.cache).toBe("none");
   });
