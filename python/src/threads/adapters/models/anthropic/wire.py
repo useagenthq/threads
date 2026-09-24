@@ -13,11 +13,19 @@ class Wire(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="ignore", frozen=True, strict=True)
 
 
+class CacheCreation(Wire):
+    """Cache writes split by TTL."""
+
+    ephemeral_5m_input_tokens: int | None = None
+    ephemeral_1h_input_tokens: int | None = None
+
+
 class Counts(Wire):
     input_tokens: int | None = None
     output_tokens: int | None = None
     cache_creation_input_tokens: int | None = None
     cache_read_input_tokens: int | None = None
+    cache_creation: CacheCreation | None = None
 
 
 class Message(Wire):

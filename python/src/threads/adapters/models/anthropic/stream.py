@@ -12,6 +12,7 @@ from typing import Literal, assert_never
 
 from pydantic import JsonValue, ValidationError
 
+from threads.adapters.models.anthropic.caching import Ttl
 from threads.adapters.models.anthropic.request import PROVIDER
 from threads.adapters.models.anthropic.wire import (
     ARGS,
@@ -64,6 +65,8 @@ class Assembler:
     context: ModelContext
     model: str
     documents: Sequence[str]
+    ttl: Ttl | None
+    """The pinned prompt_cache TTL: a cache write under any other is unknown."""
     open: dict[int, _Block] = field(default_factory=dict[int, _Block])
     parts: list[list[OutputPart]] = field(default_factory=list[list[OutputPart]])
     """Each finished block's parts, in block order."""
@@ -172,7 +175,7 @@ class Assembler:
         if stop == "max_tokens" and blocks and not _is_text(blocks[-1]):
             blocks = blocks[:-1]
         chunks: list[ModelChunk] = [PartChunk(p) for parts in blocks for p in parts]
-        chunks.append(Done(stop, _usage(self.usage)))
+        chunks.append(Done(stop, _usage(self.usage, self.ttl)))
         return chunks
 
 
@@ -221,15 +224,26 @@ def _merge(old: Counts, new: Counts) -> Counts:
             old.cache_creation_input_tokens, new.cache_creation_input_tokens
         ),
         cache_read_input_tokens=pick(old.cache_read_input_tokens, new.cache_read_input_tokens),
+        cache_creation=old.cache_creation if new.cache_creation is None else new.cache_creation,
     )
 
 
-def _usage(u: Counts) -> Usage:
+def _usage(u: Counts, ttl: Ttl | None) -> Usage:
     """Anthropic's input_tokens already exclude cache reads and writes; its usage profile has
     both cache categories, so they are present, and None when they didn't arrive."""
     return Usage(
         input_tokens=u.input_tokens,
         output_tokens=u.output_tokens,
         cache_read_tokens=u.cache_read_input_tokens,
-        cache_write_tokens=u.cache_creation_input_tokens,
+        cache_write_tokens=_priced_writes(u, ttl),
     )
+
+
+def _priced_writes(u: Counts, ttl: Ttl | None) -> int | None:
+    """Cache writes all billed at the pinned TTL's price, or None (unknown) when the provider
+    reports any under the other TTL: a number priced at the wrong rate would understate cost."""
+    split = u.cache_creation
+    other = None
+    if split is not None and ttl is not None:
+        other = split.ephemeral_5m_input_tokens if ttl == "1h" else split.ephemeral_1h_input_tokens
+    return None if (other or 0) > 0 else u.cache_creation_input_tokens

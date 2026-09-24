@@ -7,8 +7,9 @@ lease while the SDK prepared or queued the request sends nothing.
 
 import re
 from collections.abc import AsyncIterator, Mapping, Sequence
+from dataclasses import replace
 from http import HTTPStatus
-from typing import Final, Unpack
+from typing import Final, Literal, Unpack
 
 import anthropic as sdk
 import httpx2
@@ -16,12 +17,19 @@ from pydantic import JsonValue
 
 from threads.adapters.loop_resources import LoopResources
 from threads.adapters.models import transport
+from threads.adapters.models.anthropic.caching import (
+    cache_info,
+    cache_price,
+    prompt_cache,
+    refuse_cache_control,
+)
 from threads.adapters.models.anthropic.request import PROVIDER, build
 from threads.adapters.models.anthropic.stream import Assembler, ProviderStreamError
 from threads.adapters.models.anthropic.wire import parse
 from threads.adapters.models.hosted import declare
 from threads.adapters.models.options import ModelOptions, info
 from threads.adapters.models.render import prepare
+from threads.agents.config import ConfigError
 from threads.log import AdapterRef, ModelRef
 from threads.loop.model import (
     ModelChunk,
@@ -96,7 +104,7 @@ class AnthropicModel:
                 yield Rejected("server_error")
                 return
             raise
-        assembler = Assembler(context, rendered.head.model.name, body.documents)
+        assembler = Assembler(context, rendered.head.model.name, body.documents, body.ttl)
         async for chunk in transport.relay(response, parse, assembler.feed, _rejected):
             yield chunk
 
@@ -113,10 +121,15 @@ class AnthropicOptions(ModelOptions, total=False):
     """Limits default from spec/models/anthropic.v1.json when the model id is listed there."""
 
     citations: bool
-    """Enables citations on documents (an adapter setting, so pinned in line 0)."""
+    """Enables citations on every document in the request (an adapter setting, so pinned in
+    line 0). Refused with a native structured-output field in `params`."""
     hosted_tools: Sequence[Mapping[str, JsonValue]]
     """Server tools, sent as given and pinned in line 0: web search and web fetch only
     (`web_search_YYYYMMDD`, `web_fetch_YYYYMMDD`); anything else raises hosted_tool_unsupported."""
+    prompt_cache: Literal["5m", "1h"] | Literal[False]
+    """Prompt caching, pinned in line 0: the end of line 0 and the growing history are cached for
+    this long. Defaults to "5m"; False sends no cache controls (and continues threads started
+    before prompt caching existed)."""
 
 
 RESERVED: Final = ("model", "messages", "system", "tools", "stream", "max_tokens")
@@ -132,8 +145,15 @@ def anthropic(model: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel
     conventions.adapters). `max_tokens` defaults to min(8192, max_output_tokens); other `params`
     are Messages API fields. `api_key` defaults to `secret("ANTHROPIC_API_KEY")`, resolved at
     setup."""
-    settings, hosted = declare(options.get("hosted_tools", ()), _web, "name")
+    tools = options.get("hosted_tools", ())
+    settings, hosted = declare(tools, _web, "name")
+    params = options.get("params", {})
+    refuse_cache_control(params, tools)
+    ttl = prompt_cache(options.get("prompt_cache", "5m"), tools)
+    if ttl is not None:
+        settings["prompt_cache"] = ttl
     if options.get("citations"):
+        _refuse_structured_output(params)
         settings["citations"] = True
     declared = info(
         ModelRef(provider=PROVIDER, name=model),
@@ -142,7 +162,22 @@ def anthropic(model: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel
         RESERVED,
         hosted,
     )
+    declared = replace(declared, cache=cache_info(ttl))
+    price = cache_price(options.get("price"), ttl)
+    if price is not None:
+        declared = replace(declared, limits=declared.limits.model_copy(update={"price": price}))
     return AnthropicModel(declared, options.get("api_key"), options.get("base_url"))
+
+
+def _refuse_structured_output(params: Mapping[str, JsonValue]) -> None:
+    """The provider refuses citations with native structured output (output_config.format)."""
+    config = params.get("output_config")
+    if "output_format" in params or (isinstance(config, dict) and "format" in config):
+        raise ConfigError(
+            "invalid_config",
+            "anthropic citations can't be combined with structured output (output_format or "
+            "output_config.format in params): drop one, or use agent output, which is unaffected",
+        )
 
 
 def client(

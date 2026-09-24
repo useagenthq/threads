@@ -7,6 +7,7 @@ lease while the SDK prepared or queued the request sends nothing.
 
 import re
 from collections.abc import AsyncIterator, Mapping, Sequence
+from dataclasses import replace
 from typing import Final, Unpack
 
 import httpx2
@@ -137,6 +138,9 @@ def openai(model: str, **options: Unpack[OpenAIOptions]) -> OpenAIModel:
     `max_output_tokens`; other `params` are Responses API fields. `api_key` defaults to
     `secret("OPENAI_API_KEY")`, resolved at setup."""
     settings, hosted = declare(options.get("hosted_tools", ()), _web, "type")
+    # OpenAI caches automatically: 24 hours with extended retention, else the documented
+    # in-memory lower bound of 5 minutes.
+    retention = options.get("params", {}).get("prompt_cache_retention")
     declared = info(
         ModelRef(provider=PROVIDER, name=model),
         AdapterRef(name=ADAPTER, version=VERSION, settings=settings),
@@ -144,6 +148,7 @@ def openai(model: str, **options: Unpack[OpenAIOptions]) -> OpenAIModel:
         RESERVED,
         hosted,
     )
+    declared = replace(declared, cache={"ttl_ms": 86_400_000 if retention == "24h" else 300_000})
     return OpenAIModel(declared, options.get("api_key"), options.get("base_url"))
 
 

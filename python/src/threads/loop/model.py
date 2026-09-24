@@ -8,7 +8,7 @@ the attempt abandoned as unknown.
 
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, TypedDict, runtime_checkable
 
 from pydantic import JsonValue
 
@@ -41,6 +41,17 @@ type RejectReason = ProviderRejection | Literal["stale_epoch"] | Refused
 type LookupCapability = Literal["none", "nonfinal", "final"]
 
 
+class CacheTtl(TypedDict):
+    """A declared prompt-cache lifetime."""
+
+    ttl_ms: int
+    """How long a prompt-cache entry lives, in milliseconds."""
+
+
+type Cache = CacheTtl | Literal["none"]
+"""spec/api.json `ModelInfo.cache`: a TTL, or "none" when the provider never caches."""
+
+
 @dataclass(frozen=True, slots=True)
 class ModelInfo:
     model: ModelRef
@@ -53,6 +64,9 @@ class ModelInfo:
     accepts: tuple[Literal["text", "image_ref", "document_ref", "audio_ref"], ...]
     """Input parts it accepts; others fail pre-dispatch with content_unsupported."""
     hosted_tools: tuple[str, ...] = ()
+    cache: Cache | None = None
+    """How long the provider keeps prompt-cache entries; None when unknown. The default
+    context.cache_ttl_ms comes from it."""
 
 
 @dataclass(frozen=True, slots=True)

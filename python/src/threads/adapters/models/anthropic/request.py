@@ -2,6 +2,9 @@
 
 - Line 0 `params` are Messages API fields, sent as pinned; `system` and the current tool set
   come from the render. Adapter setting `citations: true` enables citations on documents.
+- Adapter setting `prompt_cache` asks for automatic caching of the history (top level) and puts
+  one breakpoint at the end of line 0: on the system block, else on the last tool. A function of
+  line 0 alone, never of history content.
 - Consecutive lines of one role merge into one message; in a user message, tool results come
   first (the API requires it), everything else keeps its recorded order.
 - Recorded thinking blocks go back byte for byte from their artifact. Citation parts annotate
@@ -14,9 +17,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import assert_never
 
-from pydantic import JsonValue, TypeAdapter
+from pydantic import JsonValue, TypeAdapter, ValidationError
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads.adapters.models.anthropic.caching import Ttl, cache_control
 from threads.adapters.models.hosted import pinned
 from threads.adapters.models.render import (
     AssistantLine,
@@ -25,6 +29,7 @@ from threads.adapters.models.render import (
     ToolLine,
     UnsupportedContentError,
     UserLine,
+    late_marker,
     read,
 )
 from threads.log import (
@@ -42,6 +47,7 @@ from threads.loop.model import ModelContext
 PROVIDER = "anthropic"
 REASONING_FORMATS = ("thinking", "redacted_thinking")
 _BLOCK: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
+_TTL: TypeAdapter[Ttl | None] = TypeAdapter(Ttl | None, config={"strict": True})
 
 type Block = dict[str, JsonValue]
 
@@ -51,6 +57,8 @@ class Body:
     json: dict[str, JsonValue]
     documents: Sequence[str]
     """The sha256 of each document block, in request order: citations name them by index."""
+    ttl: Ttl | None
+    """The pinned prompt_cache TTL: a cache write under any other is unknown."""
 
 
 @dataclass
@@ -102,7 +110,7 @@ class _Builder:
             }
             self.add("user", [block])
             return
-        head: Block = {"type": "text", "text": f"Late result of tool call {line.call_id}:"}
+        head: Block = {"type": "text", "text": late_marker(line.call_id)}
         self.add("user", [head, *content])
 
     async def reasoning(self, part: ReasoningPart) -> Block:
@@ -160,8 +168,27 @@ def _ordered(role: str, blocks: list[Block]) -> JsonValue:
     return {"role": role, "content": list[JsonValue](blocks)}
 
 
+def _ttl(settings: dict[str, JsonValue]) -> Ttl | None:
+    """Adapter setting prompt_cache from line 0; any other value is refused before dispatch."""
+    try:
+        return _TTL.validate_python(settings.get("prompt_cache"))
+    except ValidationError:
+        what = f"line 0 adapter setting prompt_cache {settings.get('prompt_cache')!r}"
+        raise UnsupportedContentError("continuation_unsupported", what) from None
+
+
+def _cached(body: dict[str, JsonValue], system: str, tools: list[JsonValue], ttl: Ttl) -> None:
+    control = cache_control(ttl)
+    body["cache_control"] = control
+    if system:
+        body["system"] = [{"type": "text", "text": system, "cache_control": control}]
+    elif tools and isinstance(last := tools[-1], dict):
+        body["tools"] = [*tools[:-1], {**last, "cache_control": control}]
+
+
 async def build(request: Request, context: ModelContext) -> Body:
     head = request.head
+    ttl = _ttl(dict(head.adapter.settings))
     builder = _Builder(context, head.adapter.settings.get("citations") is True)
     for line in request.messages:
         match line:
@@ -184,4 +211,6 @@ async def build(request: Request, context: ModelContext) -> Body:
     tools = [*(_tool(t) for t in request.tools), *pinned(head.adapter.settings)]
     if tools:
         body["tools"] = tools
-    return Body(body, tuple(builder.documents))
+    if ttl is not None:
+        _cached(body, head.system, tools, ttl)
+    return Body(body, tuple(builder.documents), ttl)

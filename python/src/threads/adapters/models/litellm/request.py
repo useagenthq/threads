@@ -26,6 +26,7 @@ from threads.adapters.models.render import (
     UnsupportedContentError,
     UserLine,
     canonical,
+    late_marker,
     read,
 )
 from threads.log import (
@@ -90,7 +91,7 @@ class _Builder:
                 {"role": "tool", "tool_call_id": line.call_id, "content": "".join(texts)}
             )
             return
-        late = f"Late result of tool call {line.call_id}:\n" + "".join(texts)
+        late = f"{late_marker(line.call_id)}\n" + "".join(texts)
         self.messages.append({"role": "user", "content": late})
 
     async def part(self, part: TextPart | ImagePart | DocumentPart | AudioPart) -> Message:

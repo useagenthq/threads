@@ -27,6 +27,7 @@ from threads.adapters.models.render import (
     UnsupportedContentError,
     UserLine,
     canonical,
+    late_marker,
     read,
 )
 from threads.log import (
@@ -83,7 +84,7 @@ class _Builder:
         if line.is_error:
             parts.insert(0, {"type": "input_text", "text": "Error: "})
         if line.late is not MISSING:
-            head: Item = {"type": "input_text", "text": f"Late result of tool call {line.call_id}:"}
+            head: Item = {"type": "input_text", "text": late_marker(line.call_id)}
             self.items.append({"role": "user", "content": [head, *parts]})
             return
         output: JsonValue = list[JsonValue](parts)

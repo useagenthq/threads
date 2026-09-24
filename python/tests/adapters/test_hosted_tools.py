@@ -64,7 +64,7 @@ def test_openai_refuses_effectful_hosted_tools_at_setup(kind: str) -> None:
 def test_allowed_hosted_tools_are_pinned_in_adapter_settings() -> None:
     fetch: dict[str, JsonValue] = {"type": "web_fetch_20250910", "name": "web_fetch"}
     info = anthropic("c", hosted_tools=[WEB_SEARCH, fetch], max_input_tokens=1, max_output_tokens=1)
-    assert info.info.adapter.settings == {"hosted_tools": [WEB_SEARCH, fetch]}
+    assert info.info.adapter.settings == {"hosted_tools": [WEB_SEARCH, fetch], "prompt_cache": "5m"}
     assert info.info.hosted_tools == ("web_search", "web_fetch")
     oa = openai(
         "g",
@@ -75,7 +75,7 @@ def test_allowed_hosted_tools_are_pinned_in_adapter_settings() -> None:
     )
     assert oa.info.hosted_tools == ("web_search",)
     plain = anthropic("c", max_input_tokens=1, max_output_tokens=1)
-    assert plain.info.adapter.settings == {}
+    assert plain.info.adapter.settings == {"prompt_cache": "5m"}
     assert plain.info.hosted_tools == ()
 
 

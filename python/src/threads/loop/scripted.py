@@ -52,6 +52,7 @@ SCRIPTED_INFO: Final = ModelInfo(
     ),
     lookup="none",
     accepts=("text",),
+    cache="none",
 )
 
 type Entry = ModelResponse | Rejected

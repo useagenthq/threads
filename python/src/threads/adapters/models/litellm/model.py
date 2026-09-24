@@ -11,9 +11,9 @@ routes are refused at setup (`transport_fence_unsupported`), never run with a we
 """
 
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
-from typing import Final, Protocol, TypeGuard, Unpack
+from typing import Final, Literal, Protocol, TypeGuard, Unpack
 
 import litellm as bridge
 import openai as sdk
@@ -28,6 +28,7 @@ from threads.adapters.models.render import prepare
 from threads.agents.config import ConfigError
 from threads.log import AdapterRef, ModelRef
 from threads.loop.model import (
+    Cache,
     ModelChunk,
     ModelContext,
     ModelInfo,
@@ -160,7 +161,30 @@ RESERVED: Final = ("model", "messages", "tools", "stream", "stream_options", "ma
 """Request fields the adapter derives from the render, and the cap (the max_tokens option)."""
 
 
-def litellm(name: str, **options: Unpack[ExplicitOptions]) -> LiteLLMModel:
+class LiteLLMOptions(ExplicitOptions, total=False):
+    cache_ttl_ms: int | Literal["none"]
+    """How long the provider keeps prompt-cache entries, in ms, or "none" when it doesn't cache.
+    threads can't see the provider behind `base_url`, so an agent using this model needs it or
+    context.cache_ttl_ms."""
+
+
+def _cache(given: object) -> Cache | None:
+    """The declared cache lifetime; None is unknown. An untyped caller may pass anything."""
+    if given is None:
+        return None
+    if given == "none":
+        return "none"
+    # Exactly int: a bool is an int to Python.
+    if type(given) is int and given > 0:
+        return {"ttl_ms": given}
+    raise ConfigError(
+        "invalid_config",
+        f'litellm cache_ttl_ms must be a positive whole number of milliseconds or "none", '
+        f"not {given!r}",
+    )
+
+
+def litellm(name: str, **options: Unpack[LiteLLMOptions]) -> LiteLLMModel:
     """A model behind LiteLLM's `openai/` route (any OpenAI-compatible endpoint via `base_url`).
     Both limits are required: the name doesn't identify the model behind `base_url`. `params`
     are completion fields; `max_tokens` defaults to min(8192, max_output_tokens). `api_key`
@@ -177,6 +201,7 @@ def litellm(name: str, **options: Unpack[ExplicitOptions]) -> LiteLLMModel:
         options,
         RESERVED,
     )
+    declared = replace(declared, cache=_cache(options.get("cache_ttl_ms")))
     base_url = options.get("base_url")
 
     def connect(key: str) -> Connection:

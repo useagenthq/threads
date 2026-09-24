@@ -8,6 +8,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.bindings import AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
+from threads.agents.cache_ttl import agreed_cache_ttl
 from threads.agents.catalog import NO_CATALOG, Catalog
 from threads.agents.skills import Skill, listing, pinned
 from threads.agents.tool import Tool, json_schema
@@ -15,6 +16,7 @@ from threads.hooks.extension import Extension, extension_tools
 from threads.log import Budget, Context, Permissions, Principal, Retry, ToolSpec
 from threads.log.digest import canonical_sha256, sha256_hex
 from threads.log.jcs import canonicalize
+from threads.loop.defaults import CONTEXT
 from threads.loop.model import Model
 from threads.loop.output import FINAL_OUTPUT
 from threads.memory.authority import MemoryWrite
@@ -88,7 +90,7 @@ class Definition[D]:
             ("permissions", self.permissions),
             ("budget", self.budget),
             ("retry", self.retry),
-            ("context", self.context),
+            ("context", self._context()),
         )
         pinned |= {name: to_json(value) for name, value in sections if value is not None}
         if self.on_unknown_usage is not None:
@@ -98,6 +100,16 @@ class Definition[D]:
         if self.output_styles:
             pinned["output_styles"] = dict(self.output_styles)
         return pinned
+
+    def _context(self) -> Context | None:
+        """The given context; else, when the models agree on a cache TTL other than the default,
+        the default context with it. An all-5m agent pins what it always did."""
+        if self.context is not None:
+            return self.context
+        ttl = agreed_cache_ttl((self.model, *self.fallback))
+        if ttl is None or ttl == CONTEXT.cache_ttl_ms:
+            return None
+        return CONTEXT.model_copy(update={"cache_ttl_ms": ttl})
 
     def _models(self) -> list[JsonValue]:
         """Every model this thread may use, primary first, once per (provider, name)."""

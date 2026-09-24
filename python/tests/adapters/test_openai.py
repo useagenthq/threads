@@ -199,3 +199,11 @@ def test_the_factory_declares_its_limits_and_no_lookup() -> None:
     assert made.info.limits.context_window == WINDOW
     assert made.info.params == {"max_tokens": 8192}
     assert made.info.lookup == "none"
+
+
+def test_openai_declares_its_automatic_cache_lifetime() -> None:
+    # In-memory retention: the documented 5-minute lower bound; extended retention: 24 hours.
+    assert openai("gpt-5.5", api_key="sk-test-openai").info.cache == {"ttl_ms": 300_000}
+    params: dict[str, JsonValue] = {"prompt_cache_retention": "24h"}
+    extended = openai("gpt-5.5", params=params, api_key="sk-test-openai")
+    assert extended.info.cache == {"ttl_ms": 86_400_000}

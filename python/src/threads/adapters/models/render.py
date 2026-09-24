@@ -99,6 +99,11 @@ class UnsupportedContentError(Exception):
         self.code: Unencodable = code
 
 
+def late_marker(call_id: str) -> str:
+    """The text every adapter sends before a late tool result's content."""
+    return f"[late tool result: call_id={call_id}]"
+
+
 def parse(body: bytes) -> Request:
     """Raises on bytes that are not Render v1: the loop rendered them, so that is a bug."""
     first, *rest = body.decode("utf-8").splitlines()
