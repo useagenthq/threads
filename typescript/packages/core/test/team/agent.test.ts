@@ -3,7 +3,9 @@ import { z } from "zod";
 import {
   type Agent,
   agent,
+  assertNever,
   ConfigError,
+  type StartResult,
   scriptedModel,
   sqlite,
   type Team,
@@ -115,5 +117,23 @@ describe("agent({team})", () => {
       ok: false,
       error: { code: "duplicate_name" },
     });
+  });
+
+  test("assertNever ends a switch over a tool result's statuses", () => {
+    const describe = (r: StartResult): string => {
+      switch (r.status) {
+        case "started":
+          return r.member.name;
+        case "refused":
+          return r.code;
+        default:
+          return assertNever(r);
+      }
+    };
+    expect(describe({ status: "refused", code: "team_closed" })).toBe(
+      "team_closed",
+    );
+    // @ts-expect-error a value outside the union reaches assertNever only at run time
+    expect(() => assertNever("surprise")).toThrow();
   });
 });

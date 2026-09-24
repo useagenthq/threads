@@ -169,7 +169,8 @@ function claimsOf(
 /**
  * Re-enters, at its bound, every model_request of this branch the ledger lacks, so a lost,
  * wiped or imported ledger never resets a budget (invariant 1); settleOpen then settles them.
- * ponytail: this branch's attempts only; a finished descendant's are re-entered when it runs again.
+ * ponytail: this branch's attempts only; a finished descendant's are re-entered when it runs again,
+ * and a team member's without its request's run budget (re-enter by the turn's root to add it).
  */
 function rebuild(s: Session): void {
   const budgets = s.config.budgets;

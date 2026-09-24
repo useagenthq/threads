@@ -133,6 +133,9 @@ function firstEvents(
   branchId: string,
 ): void {
   const { started, task } = s;
+  // start writes a task's body inline.
+  const text = task.body?.text;
+  if (text === undefined) throw new Error(`task ${task.mail_id} has no text`);
   const nested = rebind.status === "ok" ? rebind.team : undefined;
   batch.add({
     type: "thread_started",
@@ -153,7 +156,7 @@ function firstEvents(
     actor: { kind: "host", principal: task.provenance.principal },
     data: {
       source: "team_task",
-      text: task.body?.text ?? "",
+      text,
       mail_id: task.mail_id,
     },
   });

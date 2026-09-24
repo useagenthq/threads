@@ -89,9 +89,18 @@ async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
   const unparked = await unparkChildren(s);
   if (unparked !== undefined) return { kind: "halted", halt: unparked };
   resumeBackground(s);
-  const end = await waitForChildren(s, await turns(s, input));
-  if (s.config.team === undefined) return end;
-  return teamTurns(s, end, async () => waitForChildren(s, await runLoop(s)));
+  if (s.config.team === undefined)
+    return waitForChildren(s, await turns(s, input));
+  const turn = async (): Promise<LoopEnd> =>
+    waitForChildren(s, await runLoop(s));
+  // A lead parked on its members first waits for them, as a parent runs the children it is
+  // parked on: their settlements resume it, and only then does a new input start a turn.
+  const { parked } = s.fold;
+  if (parked.length > 0 && parked.every((p) => p.kind === "member")) {
+    const unparked = await teamTurns(s, { kind: "parked" }, turn);
+    if (unparked.kind !== "idle") return unparked;
+  }
+  return teamTurns(s, await waitForChildren(s, await turns(s, input)), turn);
 }
 
 /**
