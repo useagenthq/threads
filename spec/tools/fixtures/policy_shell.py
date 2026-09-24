@@ -97,6 +97,13 @@ def _nested(root: pathlib.Path) -> None:
         _sh("! npm test", "ask", "mode"),
         # A string another shell runs is not looked into, so nothing allows it.
         _sh("bash -c 'rm -rf /'", "ask", "mode"),
+        # Wrapper options and a closing -- are stripped with the wrapper.
+        _sh("time -p rm -rf /", "deny", "policy", RM),
+        _sh("nohup -- rm -rf /", "deny", "policy", RM),
+        _sh("timeout --signal KILL 5 rm -rf /", "deny", "policy", RM),
+        _sh("timeout --kill-after 1 -- 5 rm -rf /", "deny", "policy", RM),
+        _sh("nice --adjustment 5 rm -rf /", "deny", "policy", RM),
+        _sh("timeout --signal KILL 5 npm test", "allow", "policy", NPM),
     ]
     write_policy_case(
         root,
@@ -104,7 +111,9 @@ def _nested(root: pathlib.Path) -> None:
         "Deny and ask rules see every simple command the parser finds at any depth: inside "
         "if, while, until, for and case, after ! and coproc, and in subshells, brace groups, "
         "function bodies and command substitutions. A command inside one of these is never "
-        "allowed. A string another shell runs (bash -c) is not looked into, so it asks.",
+        "allowed. A string another shell runs (bash -c) is not looked into, so it asks. "
+        "Wrappers (time, nohup, nice, timeout) are stripped with their options, an option's "
+        "separate value and a closing --.",
         {"permissions": _perms(STATUS, NPM, "bash(true)")},
         rows,
     )

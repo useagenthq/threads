@@ -45,6 +45,16 @@ const KEYWORDS = new Set([
   "esac",
   "coproc",
 ]);
+const WRAPPERS = new Set(["timeout", "nice", "nohup", "time"]);
+// Wrapper options whose value is the next word: timeout's signal and kill-after, nice's niceness.
+const OPTIONS_WITH_VALUE = new Set([
+  "-s",
+  "-k",
+  "-n",
+  "--signal",
+  "--kill-after",
+  "--adjustment",
+]);
 // Commands whose words run as code the parser doesn't read.
 const OPAQUE = new Set(["eval", "exec", "function"]);
 // One lexer step: blanks, a separator, a modelled word piece (bare text, a single-quoted string,
@@ -132,15 +142,21 @@ function simplify(words: readonly string[]): SimpleCommand {
   }
 }
 
-/** How many leading words are a `timeout N`, `nice`, `nohup` or `time` wrapper. */
+/**
+ * How many leading words are a `timeout [options] N`, `nice`, `nohup` or `time` wrapper,
+ * options and a closing `--` included.
+ */
 function wrapperLength(words: readonly string[]): number {
   const [head] = words;
-  if (head === "nohup" || head === "time") return 1;
-  if (head !== "timeout" && head !== "nice") return 0;
+  if (head === undefined || !WRAPPERS.has(head)) return 0;
   let n = 1;
-  // -s SIGNAL, -k DURATION and nice's -n N take a separate argument.
-  for (let w = words[n]; w?.startsWith("-"); w = words[n])
-    n += w === "-s" || w === "-k" || w === "-n" ? 2 : 1;
+  for (let w = words[n]; w?.startsWith("-"); w = words[n]) {
+    if (w === "--") {
+      n += 1;
+      break;
+    }
+    n += OPTIONS_WITH_VALUE.has(w) ? 2 : 1;
+  }
   return head === "timeout" ? n + 1 : n;
 }
 

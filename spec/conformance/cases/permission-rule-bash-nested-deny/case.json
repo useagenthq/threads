@@ -2,7 +2,7 @@
   "name": "permission-rule-bash-nested-deny",
   "family": "permissions_approvals",
   "kind": "policy",
-  "description": "Deny and ask rules see every simple command the parser finds at any depth: inside if, while, until, for and case, after ! and coproc, and in subshells, brace groups, function bodies and command substitutions. A command inside one of these is never allowed. A string another shell runs (bash -c) is not looked into, so it asks.",
+  "description": "Deny and ask rules see every simple command the parser finds at any depth: inside if, while, until, for and case, after ! and coproc, and in subshells, brace groups, function bodies and command substitutions. A command inside one of these is never allowed. A string another shell runs (bash -c) is not looked into, so it asks. Wrappers (time, nohup, nice, timeout) are stripped with their options, an option's separate value and a closing --.",
   "clock": {
     "now": 1790000060000
   },
@@ -218,6 +218,54 @@
         "category": "other",
         "input": {
           "command": "bash -c 'rm -rf /'"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "time -p rm -rf /"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "nohup -- rm -rf /"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "timeout --signal KILL 5 rm -rf /"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "timeout --kill-after 1 -- 5 rm -rf /"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "nice --adjustment 5 rm -rf /"
+        }
+      },
+      {
+        "mode": "default",
+        "tool": "bash",
+        "category": "other",
+        "input": {
+          "command": "timeout --signal KILL 5 npm test"
         }
       }
     ]

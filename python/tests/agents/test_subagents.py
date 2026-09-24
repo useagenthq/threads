@@ -14,6 +14,7 @@ from threads import (
     BudgetExhausted,
     Completed,
     EventItem,
+    Parked,
     RunContext,
     Store,
     Thread,
@@ -23,6 +24,7 @@ from threads import (
     sqlite,
     tool,
 )
+from threads.agents.run import execute
 from threads.hooks.types import StopGate, SwitchGate
 from threads.log import (
     AgentFinishedData,
@@ -31,6 +33,7 @@ from threads.log import (
     Budget,
     Event,
     HookDecisionEvent,
+    PermissionDecisionEvent,
     Permissions,
     ThreadId,
     ThreadStartedEvent,
@@ -40,6 +43,7 @@ from threads.log import (
 )
 from threads.loop.scripted import ScriptExhaustedError
 from threads.result import Ok
+from threads.thread.control import LOCAL_OPERATOR
 from threads.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
@@ -195,6 +199,54 @@ def test_a_child_never_gains_a_permission_its_parent_lacks() -> None:
         assert (echoed.data.origin, echoed.data.is_error) == ("denied", True)
 
     asyncio.run(main())
+
+
+def test_a_rule_the_parent_remembered_never_widens_its_cap_on_a_child() -> None:
+    sent: list[str] = []
+
+    async def record(args: Echo, _ctx: RunContext[None]) -> str:
+        sent.append(args.text)
+        return "sent"
+
+    send = tool(name="send", description="Send.", input=Echo, runs="host", execute=record)
+
+    async def main() -> None:
+        child = agent(
+            name="helper",
+            model=scripted_model({"responses": [call("send", {"text": "child"}), text("done")]}),
+            tools=[send],
+            permissions=perms(allow=["send"]),
+        )
+        script: JsonValue = {
+            "responses": [
+                call("send", {"text": "parent"}),
+                spawn("helper", call_id="call_2"),
+                text("ok"),
+            ]
+        }
+        lead = agent(model=scripted_model(script), tools=[send], subagents=[child])
+        store = sqlite(":memory:")
+        first = await lead.run("go", store=store, deps=None)
+        assert isinstance(first, Parked)
+        pending = await first.thread.pending_approvals()
+        assert isinstance(pending, Ok)
+        (challenge,) = pending.value
+        granted = await first.thread.approve(
+            challenge.challenge_id, LOCAL_OPERATOR, remember_rule="send"
+        )
+        assert isinstance(granted, Ok)
+        await execute(lead.definition, None, {"thread": first.thread}, None, _drop)
+        spawned = only(await events_of(first.thread), AgentSpawnedEvent)[0]
+        inside = await child_events(store, spawned.data.child_thread_id)
+        decided = [(e.data.decision, e.data.source) for e in only(inside, PermissionDecisionEvent)]
+        assert decided == [("ask", "mode")]
+
+    asyncio.run(main())
+    assert sent == ["parent"]
+
+
+def _drop(_item: object) -> None:
+    pass
 
 
 def test_the_parent_budget_covers_the_child_and_a_child_budget_stops_only_the_child() -> None:

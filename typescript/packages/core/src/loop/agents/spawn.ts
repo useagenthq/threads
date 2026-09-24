@@ -1,4 +1,4 @@
-import type { EventOf } from "../../fold/state";
+import { asCeiling, type EventOf } from "../../fold/state";
 import { type Principal, ThreadId } from "../../log";
 import type { EventDraft } from "../../store";
 import { uuidv7 } from "../../store/encode";
@@ -190,7 +190,7 @@ export async function runChild(
       event_id: spawned.event_id,
     },
     inputs: inputsOf(s, spawned),
-    ceiling: (call, spec) => s.config.authorize(call, s.fold, spec),
+    ceiling: (call, spec) => s.config.authorize(call, asCeiling(s.fold), spec),
     tools: new Set(s.fold.tools.map((t) => t.name)),
     team: teamOf(s),
     covering: inheritedBy(s),

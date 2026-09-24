@@ -16,6 +16,9 @@ _SEPARATORS = ("&&", "||", ";", "|", "&", "\n")
 _DANGEROUS_ENV = frozenset({"PATH", "BASH_ENV", "ENV", "IFS", "PYTHONPATH", "NODE_OPTIONS", "PS4"})
 _ASSIGNMENT = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=")
 _UNPARSEABLE_WORDS = frozenset({"eval", "exec", "function"})
+_WRAPPERS = frozenset({"timeout", "nice", "nohup", "time"})
+# Wrapper options whose value is the next word: timeout's signal and kill-after, nice's niceness.
+_OPTIONS_WITH_VALUE = frozenset({"-s", "-k", "-n", "--signal", "--kill-after", "--adjustment"})
 # Reserved words that can open a simple command without being it.
 _KEYWORDS = frozenset(
     {
@@ -113,16 +116,17 @@ def _dangerous(name: str) -> bool:
 
 
 def _wrapper_length(words: list[str]) -> int:
-    """How many leading words are a `timeout N`, `nice`, `nohup` or `time` wrapper."""
+    """How many leading words are a `timeout [options] N`, `nice`, `nohup` or `time` wrapper,
+    options and a closing `--` included."""
     head = words[0]
-    if head in ("nohup", "time"):
-        return 1
-    if head not in ("timeout", "nice"):
+    if head not in _WRAPPERS:
         return 0
     n = 1
     while n < len(words) and words[n].startswith("-"):
-        # -s SIGNAL, -k DURATION and nice's -n N take a separate argument.
-        n += 2 if words[n] in ("-s", "-k", "-n") else 1
+        if words[n] == "--":
+            n += 1
+            break
+        n += 2 if words[n] in _OPTIONS_WITH_VALUE else 1
     return n + 1 if head == "timeout" else n
 
 

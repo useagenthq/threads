@@ -137,6 +137,14 @@ export type Fold = {
   readonly team: TeamFold;
 };
 
+/**
+ * The fold as a cap on another thread reads it: the pinned policy and mode only. A rule
+ * remembered on this thread is scoped to it and never widens a child's or a target's cap.
+ */
+export function asCeiling(fold: Fold): Fold {
+  return { ...fold, threadRules: [] };
+}
+
 export function emptyFold(): Fold {
   return {
     seq: 0,

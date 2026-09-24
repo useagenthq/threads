@@ -1,4 +1,4 @@
-import type { EventOf } from "../fold/state";
+import { asCeiling, type EventOf } from "../fold/state";
 import type { LoopConfig } from "../loop";
 import { inheritedFrom } from "../loop/ledger";
 import { knownEvents } from "../reduce";
@@ -73,7 +73,7 @@ export async function handedOff<Deps, Output>(
   const chain: ChildEnv["chain"] =
     plan.child === undefined
       ? plan.chain
-      : (call, spec) => authorize(call, writer.chain.fold, spec);
+      : (call, spec) => authorize(call, asCeiling(writer.chain.fold), spec);
   const handoff = events.findLast(
     (e): e is EventOf<"handoff"> => e.type === "handoff",
   );

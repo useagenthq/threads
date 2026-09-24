@@ -110,6 +110,36 @@
     {
       "decision": "ask",
       "source": "mode"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
+    },
+    {
+      "decision": "deny",
+      "source": "policy",
+      "rule": "bash(rm:*)"
+    },
+    {
+      "decision": "allow",
+      "source": "policy",
+      "rule": "bash(npm test)"
     }
   ]
 }

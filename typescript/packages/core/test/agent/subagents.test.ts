@@ -9,6 +9,7 @@ import {
   type ThreadRef,
   tool,
 } from "../../src";
+import { hostRunner } from "../../src/agent/registry";
 import { openStore } from "../../src/agent/sqlite";
 import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
@@ -195,6 +196,63 @@ describe("spawn_agent in the foreground", () => {
     expect(
       only(child, "permission_decision").map((e) => e.data.decision),
     ).toEqual(["deny"]);
+  });
+
+  test("a rule the parent remembered never widens its cap on a child", async () => {
+    const store = sqlite(":memory:");
+    const sent: string[] = [];
+    const send = tool({
+      name: "send_email",
+      description: "Send an email.",
+      input: z.object({ to: z.string() }),
+      runs: "host",
+      execute: async ({ to }) => {
+        sent.push(to);
+        return "sent";
+      },
+    });
+    const reviewer = agent({
+      name: "reviewer",
+      model: scriptedModel({
+        responses: [use("send_email", { to: "child" }, "k1"), say("done")],
+      }),
+      tools: [send],
+      permissions: { allow: ["send_email"] },
+    });
+    const lead = agent({
+      model: scriptedModel({
+        responses: [
+          use("send_email", { to: "parent" }, "c1"),
+          spawn({}, "c2"),
+          say("ok"),
+        ],
+      }),
+      tools: [send],
+      subagents: [reviewer],
+    });
+    const first = await lead.run("go", { store });
+    expect(first.status).toBe("parked");
+    const principal = { issuer: "api", tenant: "local", subject: "alice" };
+    const thread = unwrap(await openThread(store, first.thread.id));
+    const [pending] = await thread.pendingApprovals();
+    if (pending === undefined) throw new Error("one open challenge");
+    unwrap(
+      await thread.approve(pending.challenge_id, principal, {
+        rememberRule: "send_email",
+      }),
+    );
+    const runner = hostRunner(lead);
+    if (runner === undefined)
+      throw new Error("agent() registers a host runner");
+    await runner.execute({ store, principal, thread: first.thread }, []);
+    const child = await childEvents(store, await events(store, first.thread));
+    expect(
+      only(child, "permission_decision").map((e) => [
+        e.data.decision,
+        e.data.source,
+      ]),
+    ).toEqual([["ask", "mode"]]);
+    expect(sent).toEqual(["parent"]);
   });
 });
 
