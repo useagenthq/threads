@@ -11,7 +11,7 @@ from threads import Completed, HandedOff, RunContext, Store, agent, scripted_mod
 from threads.agents.store import now_ms, open_store
 from threads.log import AgentSpawnedEvent, Event, Permissions, ThreadId, ToolResultEvent
 from threads.result import Err, Ok
-from threads.store.retention import delete_thread
+from threads.store.deletion import delete_thread
 from threads.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
@@ -128,7 +128,7 @@ def test_deleting_a_thread_deletes_its_subagents_recursively() -> None:
         grandchild = only(await events(store, child.child_thread_id), AgentSpawnedEvent)[0].data
         sq = await open_store(store)
         tenant, root, now = store.tenant, result.thread.id, now_ms()
-        await sq.run(lambda c: delete_thread(c, tenant, root, now))
+        assert await sq.run(lambda c: delete_thread(c, tenant, root, now)) == Ok(3)
         for gone in (root, child.child_thread_id, grandchild.child_thread_id):
             assert isinstance(await open_thread(store, gone), Err)
 
@@ -147,7 +147,7 @@ def test_deleting_a_thread_keeps_its_handoff_target() -> None:
         assert isinstance(result, HandedOff)
         sq = await open_store(store)
         tenant, source, now = store.tenant, result.thread.id, now_ms()
-        await sq.run(lambda c: delete_thread(c, tenant, source, now))
+        assert await sq.run(lambda c: delete_thread(c, tenant, source, now)) == Ok(1)
         assert isinstance(await open_thread(store, source), Err)
         assert isinstance(await open_thread(store, result.to_thread.id), Ok)
 

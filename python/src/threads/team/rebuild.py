@@ -8,10 +8,11 @@ from dataclasses import dataclass
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import BranchId, ParseError, ThreadId, ThreadStartedEvent
+from threads.log import ParseError, TeamOpenedEvent, ThreadId, ThreadStartedEvent
 from threads.result import Err, Ok
-from threads.store import SqliteStore, VerifiedLog, sql
-from threads.store.sql import blob_of, text_of, transaction
+from threads.store import SqliteStore, VerifiedLog
+from threads.store.sql import transaction
+from threads.store.started import Opened, opened_threads
 from threads.team.cross import TeamLogEvents, check_team_logs
 from threads.team.index import TeamLog, change_rows, insert_rows, turn_openers
 
@@ -25,45 +26,35 @@ class _Read:
     verified: VerifiedLog
 
 
-def started_lines(
-    conn: sqlite3.Connection, tenant_id: str
-) -> list[tuple[ThreadId, BranchId, ThreadStartedEvent]]:
-    """Every main branch of the tenant with its thread_started: where team and parent links
-    are read from, the log being the only truth."""
-    rows: list[tuple[object, object, object]] = conn.execute(
-        "SELECT b.thread_id, b.branch_id, e.line FROM events e"
-        " JOIN branches b ON b.branch_id = e.branch_id"
-        " WHERE b.tenant_id = ? AND b.parent_branch_id IS NULL AND e.type = 'thread_started'",
-        (tenant_id,),
-    ).fetchall()
-    return [
-        (
-            ThreadId(text_of(t)),
-            BranchId(text_of(b)),
-            ThreadStartedEvent.model_validate_json(blob_of(line)),
-        )
-        for t, b, line in rows
-    ]
-
-
 def team_branches(conn: sqlite3.Connection, tenant_id: str, team_id: str) -> list[TeamLog]:
     """The team's logs, by branch: its lead's, every member's (parent team_member through the
-    lead) and the team log; empty when no lead names the team."""
-    started = started_lines(conn, tenant_id)
-    leads = [(t, b, e.data.team) for t, b, e in started if e.data.team is not MISSING]
-    lead = next(((t, b, team) for t, b, team in leads if team.id == team_id), None)
+    lead) and its team log; empty when no lead names the team."""
+    opened = opened_threads(conn, tenant_id)
+    lead = next((o for o in opened if _leads(o, team_id)), None)
     if lead is None:
         return []
-    thread, branch, team = lead
-    logs = [TeamLog(thread, branch)]
-    logs += [TeamLog(t, b) for t, b, e in started if _member_of(e, thread)]
-    team_log = sql.branch(conn, team.log_branch_id)
-    if team_log is not None and team_log.tenant_id == tenant_id:
-        logs.append(TeamLog(team_log.thread_id, team_log.branch_id))
+    logs = [
+        TeamLog(o.thread_id, o.branch_id)
+        for o in opened
+        if o is lead or _in_team(o, lead.thread_id, team_id)
+    ]
     return sorted(logs, key=lambda log: log.branch_id)
 
 
-def _member_of(e: ThreadStartedEvent, lead: ThreadId) -> bool:
+def _leads(o: Opened, team_id: str) -> bool:
+    e = o.event
+    return (
+        isinstance(e, ThreadStartedEvent)
+        and e.data.team is not MISSING
+        and e.data.team.id == team_id
+    )
+
+
+def _in_team(o: Opened, lead: ThreadId, team_id: str) -> bool:
+    """A member (parent team_member through the lead) or the team log."""
+    e = o.event
+    if isinstance(e, TeamOpenedEvent):
+        return e.data.team == team_id
     parent = e.data.parent
     return parent is not MISSING and parent.relation == "team_member" and parent.thread_id == lead
 
