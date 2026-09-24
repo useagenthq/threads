@@ -107,7 +107,7 @@ Unknown non-critical events are skipped by every rule except `head`.
 
 ## What a runner does per kind
 
-Each runner gets a fresh temp directory with a copy of the case, a fresh store, the injected clock, a `ScriptedModel`, a `ScriptedSandbox` and, for `stub`, the stub gateway. Tool calls the runner creates are authorized by a fixed conformance policy: `permission_decision{decision: allow, source: policy, rule_id: conformance_allow}`.
+Each runner gets a fresh temp directory with a copy of the case, a fresh store, the injected clock, a `ScriptedModel`, a `ScriptedSandbox` and, for `stub`, the stub gateway. Tool calls the runner creates are authorized by a fixed conformance policy: `permission_decision{decision: allow, source: policy, rule_id: conformance_allow}`, or, for a tool whose `sandbox.json` entry names a `decision`, that decision with `rule_id: conformance_<decision>`. A tool whose entry has `concurrent: true` is declared concurrent. The runner registers no hooks.
 
 **`reduce`**
 1. Import the log **read-only**, in this order. The first failure is the result.

@@ -90,11 +90,14 @@ async function run(
   const config: LoopConfig = {
     models: () => model,
     tools: sandbox.tools,
-    authorize: () => ({
-      decision: "allow",
-      source: "policy",
-      rule_id: "conformance_allow",
-    }),
+    authorize: (call) => {
+      const decision = sandbox.decision(call.data.name);
+      return {
+        decision,
+        source: "policy",
+        rule_id: `conformance_${decision}`,
+      };
+    },
     clock: {
       now: () => clock.now,
       sleepUntil: async (t) => {

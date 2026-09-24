@@ -1,0 +1,11 @@
+{
+  "name": "calls-mixed-decisions-recorded-in-part-order",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "One response calls read_file (allowed), send_email (denied) and charge_card (ask). Each tool_call is followed by its permission_decision before the next part is recorded; then, in call order, the read runs, the deny closes with `denied`, and the ask opens its challenge and parks the run.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

@@ -20,6 +20,8 @@ const ScriptedTool: Strict<{
     >
   >;
   process: Opt<EnumOf<["running", "terminated", "unknown"]>>;
+  concurrent: Opt<z.ZodBoolean>;
+  decision: Opt<EnumOf<["allow", "ask", "deny"]>>;
 }> = z.strictObject({
   output: z.string(),
   is_error: z.boolean().optional(),
@@ -35,6 +37,8 @@ const ScriptedTool: Strict<{
     )
     .optional(),
   process: z.enum(["running", "terminated", "unknown"]).optional(),
+  concurrent: z.boolean().optional(),
+  decision: z.enum(["allow", "ask", "deny"]).optional(),
 });
 
 /** One captured file: the manifest entry whose canonical list the snapshot hashes. */

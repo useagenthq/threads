@@ -1,0 +1,112 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [
+      "call_1",
+      "call_2"
+    ],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 80,
+      "output_tokens": 25,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 6,
+      "hash": "0368c9dd1ffdd088e90e9469bfec349b8806e1ed1d830cf344711d737bdddc84"
+    }
+  },
+  "appended": [
+    {
+      "type": "permission_decision",
+      "actor_kind": "host",
+      "data": {
+        "call_id": "call_1",
+        "decision": "allow",
+        "source": "policy",
+        "rule_id": "conformance_allow",
+        "mode": "default"
+      }
+    },
+    {
+      "type": "permission_decision",
+      "actor_kind": "host",
+      "data": {
+        "call_id": "call_2",
+        "decision": "allow",
+        "source": "policy",
+        "rule_id": "conformance_allow",
+        "mode": "default"
+      }
+    },
+    {
+      "type": "tool_result",
+      "actor_kind": "tool",
+      "data": {
+        "call_id": "call_1",
+        "is_error": false,
+        "origin": "executed",
+        "preview": "# demo\n"
+      }
+    },
+    {
+      "type": "tool_result",
+      "actor_kind": "tool",
+      "data": {
+        "call_id": "call_2",
+        "is_error": false,
+        "origin": "executed",
+        "preview": "# demo\n"
+      }
+    },
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "sandbox": {
+    "dispatches": {
+      "read_file": 2
+    }
+  }
+}

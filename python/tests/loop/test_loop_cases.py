@@ -37,7 +37,7 @@ from threads.loop.drafts import draft
 from threads.loop.drive import drive
 from threads.loop.model import Model
 from threads.loop.recovery import recover
-from threads.loop.runtime import Failed, Halt, Runtime
+from threads.loop.runtime import Authorize, Failed, Halt, Runtime
 from threads.loop.scripted import ScriptedModel, scripted_model
 from threads.loop.stubs import StubGateway, parse_stubs
 from threads.loop.tools import ToolRunner
@@ -53,6 +53,24 @@ from threads.store import SqliteStore, StoredEvent, verify_export
 def conformance_allow(_fold: Fold, _call: ToolCallData, _spec: ToolSpec) -> Decision:
     """The fixed conformance policy: every call the runner creates is allowed."""
     return Decision("allow", "policy", "conformance_allow")
+
+
+def conformance_policy(sandbox: dict[str, JsonValue]) -> Authorize:
+    """The conformance policy, with the decision a tool's `sandbox.json` entry names."""
+    tools = obj(sandbox.get("tools", {}))
+
+    def decide(fold: Fold, call: ToolCallData, spec: ToolSpec) -> Decision:
+        named = obj(tools.get(spec.name, {})).get("decision")
+        if named in ("ask", "deny"):
+            return Decision(named, "policy", f"conformance_{named}")
+        return conformance_allow(fold, call, spec)
+
+    return decide
+
+
+def _concurrent(sandbox: dict[str, JsonValue]) -> frozenset[str]:
+    tools = obj(sandbox.get("tools", {}))
+    return frozenset(n for n, t in tools.items() if obj(t).get("concurrent") is True)
 
 
 @dataclass
@@ -80,6 +98,7 @@ async def run_case(case: Path) -> Outcome:
     clock = Clock(now_of(meta))
     model = scripted_model(_script(case, meta, "model_script") or {"responses": []})
     tools = _runner(case, meta, clock)
+    sandbox = _script(case, meta, "sandbox_script")
     verified = verify_export(own(case, "log.jsonl").read_bytes(), clock())
     assert isinstance(verified, Ok), verified
     artifacts = stored_artifacts(case)
@@ -104,12 +123,13 @@ async def run_case(case: Path) -> Outcome:
             # One scripted model plays every settings epoch a case names (fallbacks included).
             lambda _ref: _model(model),
             _tools(tools),
-            conformance_allow,
+            conformance_policy(sandbox),
             clock,
             clock.wait_until,
             output,
             # README recover step 5: the thread is its own team lead, named by its pin.
             framework=Lead(_agent_name(verified.value.fold)),
+            concurrent=_concurrent(sandbox),
         )
         halt = await _resume(rt, meta)
         exported = await store.export(branch)

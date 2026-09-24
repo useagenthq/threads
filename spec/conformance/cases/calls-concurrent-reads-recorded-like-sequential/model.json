@@ -1,0 +1,50 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "call_1",
+          "name": "read_file",
+          "input": {
+            "path": "doc1.md"
+          }
+        },
+        {
+          "type": "tool_use",
+          "call_id": "call_2",
+          "name": "read_file",
+          "input": {
+            "path": "doc2.md"
+          }
+        },
+        {
+          "type": "tool_use",
+          "call_id": "call_3",
+          "name": "read_file",
+          "input": {
+            "path": "doc3.md"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 80,
+        "output_tokens": 25
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Done."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 200,
+        "output_tokens": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "tools": {
+    "read_file": {
+      "output": "# demo\n"
+    },
+    "send_email": {
+      "output": "sent",
+      "decision": "deny"
+    },
+    "charge_card": {
+      "output": "charged",
+      "decision": "ask"
+    }
+  }
+}

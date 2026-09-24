@@ -1,0 +1,39 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "call_1",
+          "name": "read_file",
+          "input": {
+            "path": "README.md"
+          }
+        },
+        {
+          "type": "tool_use",
+          "call_id": "call_2",
+          "name": "send_email",
+          "input": {
+            "body": "The build is green.",
+            "to": "bob@example.com"
+          }
+        },
+        {
+          "type": "tool_use",
+          "call_id": "call_3",
+          "name": "charge_card",
+          "input": {
+            "amount_cents": 2000,
+            "customer": "c_42"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 80,
+        "output_tokens": 25
+      }
+    }
+  ]
+}

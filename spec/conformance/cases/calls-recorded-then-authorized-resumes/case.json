@@ -1,0 +1,11 @@
+{
+  "name": "calls-recorded-then-authorized-resumes",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "A log written when calls were all recorded before any was authorized (Python before 0.1) reads and reduces. Resumed, its undecided calls are authorized in call order before either runs.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

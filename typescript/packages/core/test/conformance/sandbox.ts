@@ -12,6 +12,8 @@ import type { Counters } from "./cases";
 export type ScriptedTools = {
   readonly tools: ReadonlyMap<string, ToolImpl>;
   readonly counters: () => Required<Counters>;
+  /** The conformance policy's decision for a tool: the one its entry names, else allow. */
+  readonly decision: (name: string) => "allow" | "ask" | "deny";
 };
 
 export function scriptedTools(
@@ -44,6 +46,7 @@ export function scriptedTools(
     impls.set(spec.name, {
       spec,
       input,
+      ...(t.concurrent === true ? { concurrent: true } : {}),
       run: async (_input, ctx) => {
         bump("dispatches", spec.name);
         const deduped = t.executed_keys?.[ctx.effectKey];
@@ -73,5 +76,9 @@ export function scriptedTools(
       providerNow: now,
     });
   }
-  return { tools: impls, counters: () => counters };
+  return {
+    tools: impls,
+    counters: () => counters,
+    decision: (name) => tools[name]?.decision ?? "allow",
+  };
 }

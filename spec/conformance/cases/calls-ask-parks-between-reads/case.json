@@ -1,0 +1,11 @@
+{
+  "name": "calls-ask-parks-between-reads",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "One response calls read_file, charge_card (ask) and read_file again. All three are recorded and authorized first; the first read runs, then the ask parks the run, so the third call stays pending, authorized but not run.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

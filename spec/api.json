@@ -2969,7 +2969,7 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the call is refused and never runs. It closes as a denied tool_result the model sees, and permission_denied observers are told."},
-                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. TypeScript shows it to the model in the denied tool_result (denied: reason); Python shows the fixed text denied by policy."}
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. The model sees it in the denied tool_result (denied: reason)."}
                     },
                     "casing": "wire"
                   },
@@ -3013,7 +3013,7 @@
                   {
                     "object": {
                       "decision": {"type": {"literal": "deny"}, "required": true, "doc": "deny: the programmatic approver refuses the call; it closes as a denied tool_result the model sees."},
-                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. TypeScript shows it to the model in the denied tool_result (denied: reason); Python shows the fixed text denied by policy."}
+                      "reason": {"type": {"prim": "string"}, "required": true, "doc": "Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. The model sees it in the denied tool_result (denied: reason)."}
                     },
                     "casing": "wire"
                   },

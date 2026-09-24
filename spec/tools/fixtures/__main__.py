@@ -13,6 +13,7 @@ import tempfile
 from . import (
     agents,
     anthropic_requests,
+    call_order,
     catalog_tools,
     changes,
     channels,
@@ -99,6 +100,7 @@ FAMILIES = (
     children,
     policy,
     policy_shell,
+    call_order,
     ladder,
     extras,
     cost_usage,

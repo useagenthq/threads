@@ -1,0 +1,11 @@
+{
+  "name": "calls-recording-resumes-mid-response",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "Crash after the first of two calls was recorded and authorized. The resumed run records and authorizes the second before either runs, so the log continues as an uninterrupted run's would.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

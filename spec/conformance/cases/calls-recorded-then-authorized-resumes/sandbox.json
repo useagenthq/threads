@@ -1,0 +1,7 @@
+{
+  "tools": {
+    "read_file": {
+      "output": "# demo\n"
+    }
+  }
+}

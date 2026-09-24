@@ -887,6 +887,18 @@
                   }
                 }
               },
+              "concurrent": {
+                "description": "The tool is declared concurrent (spec/schema/README.md, Parallel tool calls). Absent means false.",
+                "type": "boolean"
+              },
+              "decision": {
+                "description": "The conformance policy's decision for this tool's calls, recorded as permission_decision{decision, source: policy, rule_id: conformance_<decision>}. Absent means allow (rule_id conformance_allow).",
+                "enum": [
+                  "allow",
+                  "ask",
+                  "deny"
+                ]
+              },
               "process": {
                 "description": "What the sandbox reports about the call's process group during recovery.",
                 "enum": [
