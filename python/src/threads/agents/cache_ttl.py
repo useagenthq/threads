@@ -19,8 +19,9 @@ def agreed_cache_ttl(models: Iterable[Model]) -> int | None:
         if cache is None:
             raise ConfigError(
                 "invalid_config",
-                f"the cache lifetime of {_name(model)} is unknown: set context.cache_ttl_ms, or "
-                "pass cache_ttl_ms to its factory",
+                f"the cache lifetime of {_name(model)} is unknown: set cache_ttl_ms in the "
+                "agent's context, or declare info.cache on the model (litellm() takes it as "
+                "cache_ttl_ms)",
             )
         ttl = cache["ttl_ms"]
         if agreed is None:
@@ -28,8 +29,8 @@ def agreed_cache_ttl(models: Iterable[Model]) -> int | None:
         elif agreed[1] != ttl:
             raise ConfigError(
                 "invalid_config",
-                f"{_name(agreed[0])} caches for {_span(agreed[1])} but fallback {_name(model)} "
-                f"for {_span(ttl)}: set context.cache_ttl_ms",
+                f"{_name(agreed[0])} caches for {_span(agreed[1])} but {_name(model)} "
+                f"for {_span(ttl)}: set cache_ttl_ms in the agent's context",
             )
     return None if agreed is None else agreed[1]
 

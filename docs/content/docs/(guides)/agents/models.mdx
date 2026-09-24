@@ -58,7 +58,7 @@ claude = anthropic("claude-sonnet-5", prompt_cache="1h")
 </Tab>
 </Tabs>
 
-- Writing to the cache costs more than plain input: 1.25 x for 5 minutes, 2 x for an hour. If you give a `price` without `cache_write`, threads fills it in from `input` at that rate.
+- Writing to the cache costs more than plain input: 1.25 x for 5 minutes, 2 x for an hour. If you give a `price` without `cache_write`, threads fills it in from `input` at that rate. Without `cache_read` it fills in 0.1 x `input`, the highest read rate Anthropic lists, so a cost can come out high but never low; pass `cache_read` for your model's exact rate (0.05 x on `claude-opus-5-5`).
 - A short one-off prompt may pay the write and never read it back. `promptCache: false` (`prompt_cache=False`) turns caching off.
 - `"1h"` can't be combined with `hostedTools`: Anthropic caches hosted tool results for 5 minutes, so writes would be billed at two rates. `cache_control` in `params` or a hosted tool is refused too; `promptCache` is the one way to set caching.
 - The setting is part of the thread's pinned config. Threads started before prompt caching existed continue only with `promptCache: false`.
@@ -204,7 +204,7 @@ Model settings are fixed for the life of a thread, which keeps the prompt prefix
 `check()` (and the first run) asks you to set `context.cache_ttl_ms` when threads can't decide:
 
 - the model and a fallback cache for different lifetimes;
-- a model's lifetime is unknown: an `aiSdk()` or `litellm()` model that doesn't pass `cacheTtlMs` / `cache_ttl_ms`.
+- a model's lifetime is unknown: an `aiSdk()` or `litellm()` model that doesn't pass `cacheTtlMs` / `cache_ttl_ms`, or a `Model` you wrote yourself whose `info` has no `cache` (declare `cache: { ttl_ms: 300_000 }`, or `"none"` if it never caches).
 
 ```ts
 const assistant = agent({

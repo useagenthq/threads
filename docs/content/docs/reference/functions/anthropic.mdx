@@ -73,7 +73,7 @@ def anthropic(
 </Field>
 
 <Field name="price" type={"Price"}>
-  Nano-currency units per token, pinned in policy.models; a cost budget needs it. Without cache_write and with prompt caching on, cache_write is derived from input: 1.25 x for "5m", 2 x for "1h", rounded up. Omitted: cost is unknown.
+  Nano-currency units per token, pinned in policy.models; a cost budget needs it. With prompt caching on, a missing cache_write is derived from input (1.25 x for "5m", 2 x for "1h") and a missing cache_read as 0.1 x input, the highest documented read rate, both rounded up, so cost is never understated. Omitted: cost is unknown.
 </Field>
 
 <Field name="hostedTools / hosted_tools" type={"readonly JsonObject[]"}>

@@ -76,7 +76,7 @@ describe("the default cache TTL comes from the models' declared lifetimes", () =
     const a = declaring("anthropic/claude-sonnet-5", HOUR);
     const b = declaring("anthropic/claude-haiku-4-5", FIVE);
     expect(await refused(a, [b])).toBe(
-      "anthropic/claude-sonnet-5 caches for 1h but fallback anthropic/claude-haiku-4-5 for 5m: set context.cache_ttl_ms",
+      "anthropic/claude-sonnet-5 caches for 1h but anthropic/claude-haiku-4-5 for 5m: set cache_ttl_ms in the agent's context",
     );
     expect(await pinned(a, [b], { cache_ttl_ms: 3_600_000 })).toBe(3_600_000);
   });
@@ -84,7 +84,7 @@ describe("the default cache TTL comes from the models' declared lifetimes", () =
   test("1h primary and an OpenAI fallback (5m, automatic) are refused", async () => {
     const a = declaring("anthropic/claude-sonnet-5", HOUR);
     const b = declaring("openai/gpt-5.5", FIVE);
-    expect(await refused(a, [b])).toContain("fallback openai/gpt-5.5 for 5m");
+    expect(await refused(a, [b])).toContain("but openai/gpt-5.5 for 5m");
   });
 
   test("OpenAI models with 24h retention pin 86400000", async () => {
@@ -110,7 +110,7 @@ describe("the default cache TTL comes from the models' declared lifetimes", () =
     const five = declaring("anthropic/claude-haiku-4-5", FIVE);
     const bridge = declaring("mistral/large", undefined);
     const why =
-      "the cache lifetime of mistral/large is unknown: set context.cache_ttl_ms, or pass cacheTtlMs to its factory";
+      "the cache lifetime of mistral/large is unknown: set cache_ttl_ms in the agent's context, or declare info.cache on the model (aiSdk() takes it as cacheTtlMs)";
     expect(await refused(hour, [bridge])).toBe(why);
     expect(await refused(five, [bridge])).toBe(why);
     const declared = declaring("mistral/large", FIVE);

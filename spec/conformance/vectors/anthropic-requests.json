@@ -1163,6 +1163,170 @@
           "ttl": "1h"
         }
       }
+    },
+    {
+      "name": "tools-line-in-history-off",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"role\":\"tools\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"},{\"description\":\"Write a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"write_file\"}]}\n{\"content\":[{\"text\":\"Save.\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              },
+              {
+                "type": "text",
+                "text": "Save."
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "write_file",
+            "description": "Write a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "tools-line-in-history-5m",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"5m\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"role\":\"tools\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"},{\"description\":\"Write a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"write_file\"}]}\n{\"content\":[{\"text\":\"Save.\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              },
+              {
+                "type": "text",
+                "text": "Save."
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "write_file",
+            "description": "Write a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            },
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    },
+    {
+      "name": "tools-line-in-history-1h",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"1h\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"role\":\"tools\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"},{\"description\":\"Write a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"write_file\"}]}\n{\"content\":[{\"text\":\"Save.\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              },
+              {
+                "type": "text",
+                "text": "Save."
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "write_file",
+            "description": "Write a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            },
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
     }
   ]
 }

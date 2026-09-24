@@ -65,19 +65,22 @@ export function cacheInfo(
   return ttl === undefined ? "none" : { ttl_ms: TTL_MS[ttl] };
 }
 
-/** An explicit cache_write wins; otherwise it follows the TTL, rounded up to whole nano-units. */
+/**
+ * Cache prices a caching model's price leaves out, rounded up to whole nano-units: a write
+ * follows the TTL, and a read is 0.1 x input, the highest read rate Anthropic documents, so a
+ * cost can be overstated but never understated. Explicit prices win.
+ */
 export function cachePrice(
   price: Price | undefined,
   ttl: Ttl | undefined,
 ): Price | undefined {
-  if (
-    price === undefined ||
-    ttl === undefined ||
-    price.cache_write !== undefined
-  )
-    return price;
+  if (price === undefined || ttl === undefined) return price;
   const [num, den] = WRITE_RATIO[ttl];
-  return { ...price, cache_write: Math.ceil((price.input * num) / den) };
+  return {
+    ...price,
+    cache_read: price.cache_read ?? Math.ceil(price.input / 10),
+    cache_write: price.cache_write ?? Math.ceil((price.input * num) / den),
+  };
 }
 
 /** The wire cache control for a TTL; 5m is the provider's default, so it is left implicit. */

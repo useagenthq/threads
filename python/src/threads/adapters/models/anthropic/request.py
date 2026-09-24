@@ -3,8 +3,8 @@
 - Line 0 `params` are Messages API fields, sent as pinned; `system` and the current tool set
   come from the render. Adapter setting `citations: true` enables citations on documents.
 - Adapter setting `prompt_cache` asks for automatic caching of the history (top level) and puts
-  one breakpoint at the end of line 0: on the system block, else on the last tool. A function of
-  line 0 alone, never of history content.
+  one breakpoint at the end of line 0: on the system block, else on the last current tool. A
+  function of the settings, system and current tool set, never of message content.
 - Consecutive lines of one role merge into one message; in a user message, tool results come
   first (the API requires it), everything else keeps its recorded order.
 - Recorded thinking blocks go back byte for byte from their artifact. Citation parts annotate

@@ -35,7 +35,7 @@ icon: "Braces"
 </Field>
 
 <Field name="cache" type={"{ ttl_ms: PosInt } | \"none\""}>
-  How long this model's provider keeps prompt-cache entries: a TTL, "none" when it never caches, absent when unknown. The definition check (check() or the first run) uses agreeing declared TTLs as the default context.cache_ttl_ms and otherwise asks for context.cache_ttl_ms.
+  How long this model's provider keeps prompt-cache entries: a TTL, "none" when it never caches, absent when unknown. The definition check (check() or the first run) uses agreeing declared TTLs as the default context.cache_ttl_ms and otherwise asks for context.cache_ttl_ms. A custom Model declares it too: without it, an agent needs context.cache_ttl_ms.
 </Field>
 
 <Field name="cache.ttl_ms" type={"PosInt"} required>

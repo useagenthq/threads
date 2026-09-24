@@ -96,8 +96,8 @@ def test_1h_primary_and_1h_fallback_pin_3600000() -> None:
 def test_1h_primary_and_5m_fallback_need_context_cache_ttl_ms() -> None:
     a, b = declaring("anthropic/claude-sonnet-5", HOUR), declaring("anthropic/haiku", FIVE)
     assert refused(a, [b]) == (
-        "anthropic/claude-sonnet-5 caches for 1h but fallback anthropic/haiku for 5m: "
-        "set context.cache_ttl_ms"
+        "anthropic/claude-sonnet-5 caches for 1h but anthropic/haiku for 5m: "
+        "set cache_ttl_ms in the agent's context"
     )
     a, b = declaring("anthropic/claude-sonnet-5", HOUR), declaring("anthropic/haiku", FIVE)
     assert pinned(a, [b], ttl=HOUR_MS) == HOUR_MS
@@ -105,7 +105,7 @@ def test_1h_primary_and_5m_fallback_need_context_cache_ttl_ms() -> None:
 
 def test_1h_primary_and_an_openai_fallback_are_refused() -> None:
     a, b = declaring("anthropic/claude-sonnet-5", HOUR), declaring("openai/gpt-5.5", FIVE)
-    assert "fallback openai/gpt-5.5 for 5m" in refused(a, [b])
+    assert "but openai/gpt-5.5 for 5m" in refused(a, [b])
 
 
 def test_openai_models_with_24h_retention_pin_86400000() -> None:
@@ -125,8 +125,8 @@ def test_a_fallback_that_never_caches_is_ignored() -> None:
 
 def test_an_unknown_lifetime_is_refused_even_beside_a_5m_primary() -> None:
     why = (
-        "the cache lifetime of litellm/large is unknown: set context.cache_ttl_ms, or pass "
-        "cache_ttl_ms to its factory"
+        "the cache lifetime of litellm/large is unknown: set cache_ttl_ms in the agent's "
+        "context, or declare info.cache on the model (litellm() takes it as cache_ttl_ms)"
     )
     bridge = declaring("litellm/large", None)
     assert refused(declaring("anthropic/claude-sonnet-5", HOUR), [bridge]) == why

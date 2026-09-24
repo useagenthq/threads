@@ -17,13 +17,13 @@ export function agreedCacheTtl(models: readonly Model[]): number | undefined {
     if (cache === undefined)
       throw new ConfigError(
         "invalid_config",
-        `the cache lifetime of ${name(model)} is unknown: set context.cache_ttl_ms, or pass cacheTtlMs to its factory`,
+        `the cache lifetime of ${name(model)} is unknown: set cache_ttl_ms in the agent's context, or declare info.cache on the model (aiSdk() takes it as cacheTtlMs)`,
       );
     if (agreed === undefined) agreed = { model, ttl: cache.ttl_ms };
     else if (agreed.ttl !== cache.ttl_ms)
       throw new ConfigError(
         "invalid_config",
-        `${name(agreed.model)} caches for ${span(agreed.ttl)} but fallback ${name(model)} for ${span(cache.ttl_ms)}: set context.cache_ttl_ms`,
+        `${name(agreed.model)} caches for ${span(agreed.ttl)} but ${name(model)} for ${span(cache.ttl_ms)}: set cache_ttl_ms in the agent's context`,
       );
   }
   return agreed?.ttl;

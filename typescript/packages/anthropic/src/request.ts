@@ -106,7 +106,7 @@ export async function toAnthropic(
 /**
  * System and tools, with the cache controls prompt_cache asks for: automatic caching of the
  * history (top level) and one breakpoint at the end of line 0, on the system block, else on the
- * last tool. A function of line 0 alone, never of history content.
+ * last tool. A function of the settings, system and current tool set, never of message content.
  */
 function cached(
   system: string,

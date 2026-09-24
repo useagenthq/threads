@@ -285,8 +285,12 @@ def test_a_thread_started_before_caching_continues_only_with_prompt_cache_false(
         off = agent(model=_claude(Script([_reply(PLAIN)]), prompt_cache=False))
         async with holding():
             first = await off.run("hi", store=sqlite(":memory:"))
-            with pytest.raises(ConfigError, match="another config"):
+            with pytest.raises(ConfigError) as raised:
                 await agent(model=_claude(Script([]))).run("again", thread=first.thread)
+            assert raised.value.message == (
+                "this thread was started before prompt caching: pass prompt_cache=False to "
+                "anthropic() (promptCache: false in TypeScript) to continue it"
+            )
             again = agent(model=_claude(later, prompt_cache=False))
             assert isinstance(await again.run("again", thread=first.thread), Completed)
 
@@ -294,6 +298,39 @@ def test_a_thread_started_before_caching_continues_only_with_prompt_cache_false(
     (body,) = later.bodies()
     assert isinstance(body, dict)
     assert "cache_control" not in body
+
+
+def test_a_missing_cache_read_is_a_tenth_of_input_rounded_up() -> None:
+    def read(price: Price, ttl: Literal["5m", "1h"] | Literal[False] = "5m") -> object:
+        limits = claude(price=price, prompt_cache=ttl).info.limits
+        assert isinstance(limits.price, Price)
+        return limits.price.cache_read
+
+    assert read(Price(input=3001, output=15_000)) == 301  # noqa: PLR2004
+    assert read(Price(input=3000, output=15_000, cache_read=250)) == 250  # noqa: PLR2004
+    assert read(Price(input=3000, output=15_000), False) is MISSING
+
+
+@pytest.mark.usefixtures("offline")
+def test_a_price_without_cache_read_still_charges_cache_reads() -> None:
+    usage: dict[str, JsonValue] = {
+        "input_tokens": 1000,
+        "cache_read_input_tokens": 100_000,
+        "cache_creation_input_tokens": 0,
+    }
+    script = Script([_reply(usage)])
+
+    async def main() -> None:
+        bot = agent(model=_claude(script, price=Price(input=3000, output=15_000)))
+        async with holding():
+            done = await bot.run("hi", store=sqlite(":memory:"))
+        cost = await done.thread.cost()
+        assert isinstance(cost, Ok)
+        assert cost.value is not None
+        # 1000 x 3000 + 100000 x 300 (derived) + 1 x 15000 output.
+        assert (cost.value.known_nanos, cost.value.complete) == (33_015_000, True)
+
+    asyncio.run(main())
 
 
 @pytest.mark.usefixtures("offline")

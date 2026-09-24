@@ -128,6 +128,14 @@ describe("the cache-write price follows the pinned TTL", () => {
     const off = make({ price, promptCache: false });
     expect(off.info.limits.price?.cache_write).toBeUndefined();
   });
+
+  test("a missing cacheRead is 0.1 x input, rounded up, so reads are never free", () => {
+    const bare = { input: 3001, output: 15_000 };
+    expect(make({ price: bare }).info.limits.price?.cache_read).toBe(301);
+    expect(make({ price }).info.limits.price?.cache_read).toBe(300);
+    const off = make({ price: bare, promptCache: false });
+    expect(off.info.limits.price?.cache_read).toBeUndefined();
+  });
 });
 
 const ev = (data: { readonly type: string } & { [key: string]: Json }) => ({

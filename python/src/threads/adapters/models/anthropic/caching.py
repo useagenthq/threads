@@ -70,12 +70,18 @@ def cache_info(ttl: Ttl | None) -> Cache:
 
 
 def cache_price(price: Price | None, ttl: Ttl | None) -> Price | None:
-    """An explicit cache_write wins; otherwise it follows the TTL, rounded up to whole
-    nano-units."""
-    if price is None or ttl is None or price.cache_write is not MISSING:
+    """Cache prices a caching model's price leaves out, rounded up to whole nano-units: a write
+    follows the TTL, and a read is 0.1 x input, the highest read rate Anthropic documents, so a
+    cost can be overstated but never understated. Explicit prices win."""
+    if price is None or ttl is None:
         return price
     num, den = _WRITE_RATIO[ttl]
-    return price.model_copy(update={"cache_write": -(-price.input * num // den)})
+    derived: dict[str, int] = {}
+    if price.cache_read is MISSING:
+        derived["cache_read"] = -(-price.input // 10)
+    if price.cache_write is MISSING:
+        derived["cache_write"] = -(-price.input * num // den)
+    return price.model_copy(update=derived)
 
 
 def cache_control(ttl: Ttl) -> dict[str, JsonValue]:

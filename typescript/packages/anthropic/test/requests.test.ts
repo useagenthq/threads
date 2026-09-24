@@ -143,11 +143,29 @@ describe("a cached run", () => {
     const cached = bot([reply("Two.", plain)]);
     await expect(
       cached.bot.run("again", { thread: first.thread }),
-    ).rejects.toThrow("another config");
+    ).rejects.toThrow(
+      "this thread was started before prompt caching: pass promptCache: false to anthropic() (prompt_cache=False in Python) to continue it",
+    );
     const same = bot([reply("Two.", plain)], off);
     const next = await same.bot.run("again", { thread: first.thread });
     expect(next.status).toBe("completed");
     expect(Body.parse(same.calls[0]?.body).cache_control).toBeUndefined();
+  });
+
+  test("a price without cacheRead still charges cache reads", async () => {
+    const usage = {
+      input_tokens: 1000,
+      cache_read_input_tokens: 100_000,
+      cache_creation_input_tokens: 0,
+    };
+    const price = { input: 3000, output: 15_000 };
+    const { bot: a } = bot([reply("One.", usage)], { price });
+    const result = await a.run("hi", { store: sqlite(":memory:") });
+    // 1000 x 3000 + 100000 x 300 (derived) + 2 x 15000 output.
+    expect(await result.thread.cost()).toMatchObject({
+      ok: true,
+      value: { known_nanos: 33_030_000, complete: true },
+    });
   });
 
   test("mixed-TTL writes leave the attempt's cost incomplete", async () => {

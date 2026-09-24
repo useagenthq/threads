@@ -29,6 +29,7 @@ import { handedOff } from "./handoff";
 import { open } from "./open-thread";
 import type { ChildPin, PinOptions } from "./pin";
 import { pin } from "./pin";
+import { pinChange } from "./pin-change";
 import { bindProviders } from "./providers";
 import {
   type Decode,
@@ -354,7 +355,7 @@ function checkPin(
   )
     throw new ConfigError(
       "invalid_config",
-      "this thread was started with another config; a config change starts a new thread",
+      pinChange(first.data, started.data),
     );
 }
 

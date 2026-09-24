@@ -4,7 +4,8 @@ is pinned with its parent link, and gets only the inputs its parent sent that it
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+
+from pydantic import JsonValue
 
 from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
@@ -12,6 +13,7 @@ from threads.agents.handoff import launch as handoff_launch
 from threads.agents.handoff import target
 from threads.agents.intake import Intake
 from threads.agents.launch import Launch, open_launched
+from threads.agents.pin_change import pin_change
 from threads.agents.results import Failed, HandedOff, RunError, RunResult, Thread
 from threads.agents.scope import Scope
 from threads.agents.store import now_ms
@@ -34,9 +36,6 @@ from threads.redaction import contains_secret
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import Draft, SqliteStore, Writer
-
-if TYPE_CHECKING:
-    from pydantic import JsonValue
 
 type Input = str | Sequence[InputPart]
 
@@ -72,7 +71,7 @@ async def prepare[D](
         return (
             lost(done.error) if isinstance(done, Err) else await gates.session_start(rt, "startup")
         )
-    _check_pin(rt, started["config_hash"])
+    _check_pin(rt, started)
     halt = await recover(rt)
     if halt is None and rt.fold.in_turn:
         halt = await drive(rt)
@@ -95,15 +94,12 @@ def same_pin(events: Iterable[object], started: Draft) -> bool:
     return pinned is not None and pinned == started.data.get("config_hash")
 
 
-def _check_pin(rt: Runtime, config_hash: object) -> None:
+def _check_pin(rt: Runtime, started: dict[str, JsonValue]) -> None:
     """A pin never changes in place: continuing a thread needs the config it started with, checked
     before recovery can dispatch anything."""
-    pinned = pinned_config(rt.events)
-    if pinned is not None and pinned != config_hash:
-        raise ConfigError(
-            "invalid_config",
-            "this thread was started with another config; a config change starts a new thread",
-        )
+    stored = next((e for e in rt.events if isinstance(e, ThreadStartedEvent)), None)
+    if stored is not None and stored.data.config_hash != started["config_hash"]:
+        raise ConfigError("invalid_config", pin_change(to_json(stored.data), started))
 
 
 def wants_input(rt: Runtime, launch: Launch | None) -> bool:

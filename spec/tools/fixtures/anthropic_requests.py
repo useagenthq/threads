@@ -64,8 +64,10 @@ def _document(citations: bool) -> Obj:
     return {**block, "citations": {"enabled": True}} if citations else block
 
 
-# (name, system, tools, history lines, messages sent, citations setting)
-type Base = tuple[str, str, list[JsonValue], list[JsonValue], list[JsonValue], bool]
+# (name, system, line-0 tools, history lines, messages sent, citations setting, tools sent)
+type Base = tuple[
+    str, str, list[JsonValue], list[JsonValue], list[JsonValue], bool, list[JsonValue]
+]
 
 
 def _bases() -> list[Base]:
@@ -127,16 +129,24 @@ def _bases() -> list[Base]:
             {"role": "user", "content": [_document(citations), _text("What color is the grass?")]}
         ]
 
+    loaded: Obj = {**TOOL, "name": "write_file", "description": "Write a file."}
+    grown: list[JsonValue] = [hi, {"role": "tools", "tools": [TOOL, loaded]}, _user(_text("Save."))]
+    sent_grown: list[JsonValue] = [
+        {"role": "user", "content": [_text("hi"), _text("Save.")]},
+    ]
     system = "Be brief."
     return [
-        ("system-only", system, [], [hi], [sent_hi], False),
-        ("tools-only", "", [TOOL], [hi], [sent_hi], False),
-        ("system-and-tools", system, [TOOL], [hi], [sent_hi], False),
-        ("two-turn-history", system, [], turn, sent_turn, False),
-        ("interleaved-tool-results", system, [TOOL], interleaved, sent_interleaved, False),
-        ("late-tool-result", system, [], late, sent_late, False),
-        ("document", system, [], list[JsonValue](asked), sent_doc(False), False),
-        ("document-citations", system, [], list[JsonValue](asked), sent_doc(True), True),
+        ("system-only", system, [], [hi], [sent_hi], False, []),
+        ("tools-only", "", [TOOL], [hi], [sent_hi], False, [TOOL]),
+        ("system-and-tools", system, [TOOL], [hi], [sent_hi], False, [TOOL]),
+        ("two-turn-history", system, [], turn, sent_turn, False, []),
+        ("interleaved-tool-results", system, [TOOL], interleaved, sent_interleaved, False, [TOOL]),
+        ("late-tool-result", system, [], late, sent_late, False, []),
+        ("document", system, [], list[JsonValue](asked), sent_doc(False), False, []),
+        ("document-citations", system, [], list[JsonValue](asked), sent_doc(True), True, []),
+        # Deferred loading: the latest tools line is the current tool set, so with no system the
+        # line-0 breakpoint sits on its last tool.
+        ("tools-line-in-history", "", [TOOL], grown, sent_grown, False, [TOOL, loaded]),
     ]
 
 
@@ -164,7 +174,7 @@ def _cached(body: Obj, ttl: str | None) -> Obj:
 
 
 def _case(base: Base, ttl: str | None) -> Obj:
-    name, system, tools, history, messages, citations = base
+    name, system, tools, history, messages, citations, sent = base
     settings: Obj = {}
     if ttl is not None:
         settings["prompt_cache"] = ttl
@@ -181,8 +191,8 @@ def _case(base: Base, ttl: str | None) -> Obj:
     body: Obj = {"model": MODEL["name"], **PARAMS, "messages": messages, "stream": True}
     if system:
         body["system"] = system
-    if tools:
-        body["tools"] = tools
+    if sent:
+        body["tools"] = sent
     return {"name": f"{name}-{ttl or 'off'}", "render": render, "body": _cached(body, ttl)}
 
 
