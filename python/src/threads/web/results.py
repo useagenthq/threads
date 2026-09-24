@@ -2,8 +2,10 @@
 hit text is a text part annotated by a `citation{source_kind: web}` part, and the fetched bytes
 are an artifact the citation names, so replay reads exactly what the model saw."""
 
+import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import replace
+from hashlib import sha256
 from typing import Final
 
 from threads.log import ArtifactRef, CitationPart, ResultPart, TextPart
@@ -19,7 +21,8 @@ type Put = Callable[[bytes, str], Awaitable[ArtifactRef]]
 
 TEXT_CAP: Final = 100_000
 """Characters of converted content shown to the model; the whole page stays in the artifact."""
-_TEXTUAL: Final = ("text/", "application/json", "application/xml", "application/xhtml+xml")
+_TEXTUAL: Final = re.compile(r"^(text/|application/(json|xml|xhtml\+xml|[a-z.+-]+\+(json|xml))$)")
+"""The text media types web_fetch reads, as TypeScript's; a page with no content type is text."""
 
 
 def _media(kind: str) -> str:
@@ -29,32 +32,33 @@ def _media(kind: str) -> str:
 
 
 async def page_output(page: Page, put: Put) -> Output:
-    textual = page.media_type.startswith(_TEXTUAL)
-    if not textual and contains_secret(page.body):
-        # Non-text bytes are never edited, so a page holding a secret is not stored (C5).
-        return Output(f"URL: {page.url}\nthe response holds a registered secret; not kept", True)
-    # The page is stored as the cited artifact: redacted first (C5).
-    body = redact_bytes(page.body) if textual else page.body
+    # The page is stored as the cited artifact: redacted first (C5). Only text is kept.
+    body = redact_bytes(page.body)
+    head = f"URL: {page.url}\nStatus: {page.status}\nSHA-256: "
+    if page.media_type and not _TEXTUAL.match(page.media_type):
+        kind = page.media_type
+        return Output(f"{head}{_sha(body)}\nunsupported content type {kind}; nothing to read", True)
     if contains_secret(body):
         # An escaped form redaction can't replace (a JSON page) is refused, never stored.
-        return Output(f"URL: {page.url}\nthe response holds a registered secret; not kept", True)
+        return Output(f"{head}{_sha(body)}\nthe page holds a registered secret; not kept", True)
     page = replace(page, body=body)
     ref = await put(page.body, _media(page.media_type))
-    header = f"URL: {page.url}\nStatus: {page.status}\nSHA-256: {ref.sha256}\n"
+    header = f"{head}{ref.sha256}\n"
     if page.truncated:
         header += "The response was cut at the size cap.\n"
-    if not textual:
-        body = f"{page.media_type} content ({len(page.body)} bytes), not shown as text."
-    else:
-        text = _decode(page.body, page.charset)
-        html = page.media_type in ("text/html", "application/xhtml+xml")
-        body = to_markdown(text, page.url) if html else text
-        if len(body) > TEXT_CAP:
-            body = body[:TEXT_CAP] + "\n[content cut at the cap; the full page is the artifact]"
-    text = f"{header}\n{body}"
+    text = _decode(page.body, page.charset)
+    html = page.media_type in ("text/html", "application/xhtml+xml")
+    shown = to_markdown(text, page.url) if html else text
+    if len(shown) > TEXT_CAP:
+        shown = shown[:TEXT_CAP] + "\n[content cut at the cap; the full page is the artifact]"
+    text = f"{header}\n{shown}"
     cite = CitationPart(type="citation", source_kind="web", source_id=page.url, ref=ref)
     parts: tuple[ResultPart, ...] = (TextPart(type="text", text=text), cite)
     return Output(text, page.status >= 400, content=parts)  # noqa: PLR2004 - HTTP errors
+
+
+def _sha(body: bytes) -> str:
+    return sha256(body).hexdigest()
 
 
 def _decode(body: bytes, charset: str | None) -> str:

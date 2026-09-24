@@ -517,7 +517,7 @@ Every write to the store, and the rule it follows:
 | Stored text: results, spills, commits, reconciled results, child outputs, handoff transcripts, compaction summaries, channel delivery receipts (TS `Session.store` and `host/deliver.ts`; Python `text_ref`, `compact`) | UTF-8 text | redacted |
 | Model request (Render v1 bytes) | rendered from recorded events and artifacts | holds only redacted text |
 | Spilled exec output (TS `redactingSink`; Python `Spill`) | stream | redacted as it streams; dropped if a value is registered meanwhile |
-| `web_fetch` cited page | page bytes | text redacted; a non-text page holding a value is refused |
+| `web_fetch` cited page | page bytes | text redacted; a non-text page is refused (not stored) |
 | Provider material (`ModelContext.put`, `putJson`, `store_json`) | provider JSON | byte-exact: `secret_in_provider_output` |
 | Screenshots (`computer_screenshot`, Python `desktop`) | PNG bytes | byte-exact: an error result, nothing stored |
 | Local knowledge sources (the local provider's `ingest`) | document bytes | byte-exact: the provider refuses (`invalid`) before any write; a configured path fails setup with `invalid_config` naming the path |

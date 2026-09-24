@@ -331,3 +331,25 @@ def test_search_backends_send_the_key_on_the_host_and_parse_hits() -> None:
         asyncio.run(main())
     finally:
         monkey.undo()
+
+
+def test_a_non_text_page_is_refused_and_not_stored_as_in_typescript() -> None:
+    stored: list[bytes] = []
+
+    async def put(data: bytes, media_type: str) -> ArtifactRef:
+        stored.append(data)
+        return ArtifactRef(sha256="a" * 64, bytes=len(data), media_type=media_type)
+
+    async def main() -> None:
+        png = Page("https://example.com/i.png", 200, "image/png", None, b"\x89PNG", False)
+        out = await page_output(png, put)
+        assert out.is_error
+        assert out.text.endswith("unsupported content type image/png; nothing to read")
+        assert stored == []
+        # Structured +json/+xml types and a page with no content type are read as text.
+        ld = Page("https://example.com/a", 200, "application/ld+json", None, b"{}", False)
+        assert not (await page_output(ld, put)).is_error
+        bare = Page("https://example.com/b", 200, "", None, b"hi", False)
+        assert (await page_output(bare, put)).text.endswith("\n\nhi")
+
+    asyncio.run(main())

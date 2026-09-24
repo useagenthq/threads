@@ -55,7 +55,7 @@ async def get(
                 Page(
                     current,
                     response.status,
-                    kind.strip().lower() or "application/octet-stream",
+                    kind.strip().lower(),
                     _charset(params),
                     response.body,
                     response.truncated,
