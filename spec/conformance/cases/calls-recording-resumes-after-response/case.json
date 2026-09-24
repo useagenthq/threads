@@ -1,0 +1,11 @@
+{
+  "name": "calls-recording-resumes-after-response",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "Crash right after a model_response with two calls, before either was recorded. Nothing is pending, but recovery doesn't close the turn interrupted: the response still owes its calls, so the run records and authorizes both, runs them and continues as an uninterrupted run would.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

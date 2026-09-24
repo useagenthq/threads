@@ -8,9 +8,16 @@ from typing import TYPE_CHECKING
 from threads.log import CallId, EventId, ToolUsePart
 from threads.loop import calls, output
 from threads.loop.drafts import call_draft, draft
-from threads.loop.history import call_state, last_response, response_calls, turn_events
+from threads.loop.history import (
+    call_state,
+    last_response,
+    open_cancel,
+    response_calls,
+    turn_events,
+)
 from threads.loop.runtime import Halt, Runtime, lost
 from threads.result import Err
+from threads.store import Draft
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
@@ -34,6 +41,8 @@ async def record_calls(rt: Runtime) -> Halt | None:
     if response is None:
         return None
     for use, call in response_calls(rt.events):
+        if open_cancel(rt.events) is not None:
+            return None  # nothing new is authorized: the cancellation step closes the rest
         if call is None:
             halt = await _record(rt, response.data.request_event_id, use)
         elif _undecided(rt, call.data.call_id):
@@ -51,14 +60,7 @@ async def _record(rt: Runtime, request_id: EventId, use: ToolUsePart) -> Halt | 
     why = _invalid(rt, use)
     drafts = [call_draft(request_id, use)]
     if why is not None:
-        error: dict[str, JsonValue] = {
-            "call_id": use.call_id,
-            "completeness": "complete",
-            "is_error": True,
-            "origin": "not_executed",
-            "preview": why,
-        }
-        drafts.append(draft("tool_result", error))
+        drafts.append(_not_executed(use, why))
     done = await rt.append(*drafts)
     if isinstance(done, Err):
         return lost(done.error)
@@ -77,3 +79,32 @@ def _invalid(rt: Runtime, use: ToolUsePart) -> str | None:
     if output.is_candidate(rt.fold, spec):
         return None  # validated against the pinned output schema, recorded as output_validated
     return rt.tools.invalid(spec, use.input)
+
+
+async def close_unrecorded(rt: Runtime) -> Halt | None:
+    """Behind a cancel barrier: each part not yet recorded gets its `tool_call` and its
+    not_executed result, so no `tool_use` is left without a result."""
+    response = last_response(turn_events(rt.events))
+    if response is None:
+        return None
+    drafts: list[Draft] = []
+    for use, call in response_calls(rt.events):
+        if call is None:
+            request = response.data.request_event_id
+            drafts += [call_draft(request, use), _not_executed(use, "not executed: cancelled")]
+    if not drafts:
+        return None
+    done = await rt.append(*drafts)
+    return lost(done.error) if isinstance(done, Err) else None
+
+
+def _not_executed(use: ToolUsePart, why: str) -> Draft:
+    """The result of a call that never ran: refused before any effect, or cancelled."""
+    data: dict[str, JsonValue] = {
+        "call_id": use.call_id,
+        "completeness": "complete",
+        "is_error": True,
+        "origin": "not_executed",
+        "preview": why,
+    }
+    return draft("tool_result", data)

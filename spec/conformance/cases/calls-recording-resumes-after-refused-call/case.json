@@ -1,0 +1,11 @@
+{
+  "name": "calls-recording-resumes-after-refused-call",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "Crash after the first call, send_email without a body, was recorded with its not_executed result, before the second part was recorded. Nothing is pending, but the response still owes a call: the run records and runs the read, and send_email never runs.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

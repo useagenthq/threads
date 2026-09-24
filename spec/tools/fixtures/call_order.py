@@ -5,9 +5,10 @@ every part is. Both runtimes append exactly these events, in this order."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .common import ALLOW, NOW, sha, tokens
+from .common import ALICE, ALLOW, NOW, sha, tokens
 from .jcs import canonical
 from .log import Log, reduce
 from .pieces import CHARGE, EMAIL, EMAIL_IN, FINAL, READ_FILE, TAIL, case, started, user, write_case
@@ -97,16 +98,20 @@ def _fresh() -> Log:
     return log
 
 
-def _write(
-    root: pathlib.Path,
-    name: str,
-    description: str,
-    log: Log,
-    appended: list[JsonValue],
-    responses: list[JsonValue],
-    sandbox: Obj,
-) -> None:
-    reads = sum(1 for e in appended if isinstance(e, dict) and e.get("actor_kind") == "tool")
+@dataclass(frozen=True, slots=True)
+class Run:
+    """What the resumed run appends, the model answers it gets, and the scripted tools."""
+
+    appended: list[JsonValue]
+    responses: list[JsonValue]
+    sandbox: Obj
+    dispatches: Obj | None = None
+    """Per-tool dispatch counts; default: read_file, once per executed result."""
+
+
+def _write(root: pathlib.Path, name: str, description: str, log: Log, run: Run) -> None:
+    reads = sum(1 for e in run.appended if isinstance(e, dict) and e.get("actor_kind") == "tool")
+    dispatches = run.dispatches or {"read_file": reads}
     write_case(
         root,
         case(
@@ -122,10 +127,10 @@ def _write(
         {
             "outcome": "ok",
             "state": reduce(log, NOW),
-            "appended": appended,
-            "sandbox": {"dispatches": {"read_file": reads}},
+            "appended": run.appended,
+            "sandbox": {"dispatches": dispatches},
         },
-        extra={"model.json": {"responses": responses}, "sandbox.json": sandbox},
+        extra={"model.json": {"responses": run.responses}, "sandbox.json": run.sandbox},
     )
 
 
@@ -147,19 +152,21 @@ def _mixed(root: pathlib.Path) -> None:
         "then, in call order, the read runs, the deny closes with `denied`, and the ask opens "
         "its challenge and parks the run.",
         _fresh(),
-        [
-            *_requested(uses),
-            *_recorded(a),
-            *_recorded(b, "deny"),
-            *_recorded(ask, "ask"),
-            _read_result("call_1"),
-            {"type": "tool_result", "actor_kind": "host", "data": denied},
-            *_asked("call_3", CHARGE_IN),
-        ],
-        [_response(uses)],
-        _tools(
-            send_email={"output": "sent", "decision": "deny"},
-            charge_card={"output": "charged", "decision": "ask"},
+        Run(
+            [
+                *_requested(uses),
+                *_recorded(a),
+                *_recorded(b, "deny"),
+                *_recorded(ask, "ask"),
+                _read_result("call_1"),
+                {"type": "tool_result", "actor_kind": "host", "data": denied},
+                *_asked("call_3", CHARGE_IN),
+            ],
+            [_response(uses)],
+            _tools(
+                send_email={"output": "sent", "decision": "deny"},
+                charge_card={"output": "charged", "decision": "ask"},
+            ),
         ),
     )
 
@@ -175,16 +182,18 @@ def _park_in_middle(root: pathlib.Path) -> None:
         "recorded and authorized first; the first read runs, then the ask parks the run, so "
         "the third call stays pending, authorized but not run.",
         _fresh(),
-        [
-            *_requested(uses),
-            *_recorded(a),
-            *_recorded(b, "ask"),
-            *_recorded(c),
-            _read_result("call_1"),
-            *_asked("call_2", CHARGE_IN),
-        ],
-        [_response(uses)],
-        _tools(charge_card={"output": "charged", "decision": "ask"}),
+        Run(
+            [
+                *_requested(uses),
+                *_recorded(a),
+                *_recorded(b, "ask"),
+                *_recorded(c),
+                _read_result("call_1"),
+                *_asked("call_2", CHARGE_IN),
+            ],
+            [_response(uses)],
+            _tools(charge_card={"output": "charged", "decision": "ask"}),
+        ),
     )
 
 
@@ -198,14 +207,16 @@ def _group(root: pathlib.Path) -> None:
         "recorded and authorized in part order before the group starts; the reads run together "
         "and their results are recorded in call order, so the log equals a sequential run's.",
         _fresh(),
-        [
-            *_requested(uses),
-            *recorded,
-            *(_read_result(f"call_{i}") for i in (1, 2, 3)),
-            *TAIL,
-        ],
-        [_response(uses), FINAL],
-        {"tools": {"read_file": {"output": OUT, "concurrent": True}}},
+        Run(
+            [
+                *_requested(uses),
+                *recorded,
+                *(_read_result(f"call_{i}") for i in (1, 2, 3)),
+                *TAIL,
+            ],
+            [_response(uses), FINAL],
+            {"tools": {"read_file": {"output": OUT, "concurrent": True}}},
+        ),
     )
 
 
@@ -224,9 +235,11 @@ def _resumed(root: pathlib.Path) -> None:
         "records and authorizes the second before either runs, so the log continues as an "
         "uninterrupted run's would.",
         log,
-        [*_recorded(b), _read_result("call_1"), _read_result("call_2"), *TAIL],
-        [FINAL],
-        _tools(),
+        Run(
+            [*_recorded(b), _read_result("call_1"), _read_result("call_2"), *TAIL],
+            [FINAL],
+            _tools(),
+        ),
     )
 
 
@@ -246,15 +259,115 @@ def _lazy(root: pathlib.Path) -> None:
         "0.1) reads and reduces. Resumed, its undecided calls are authorized in call order "
         "before either runs.",
         log,
-        [
-            _decided("call_1"),
-            _decided("call_2"),
-            _read_result("call_1"),
-            _read_result("call_2"),
-            *TAIL,
-        ],
-        [FINAL],
-        _tools(),
+        Run(
+            [
+                _decided("call_1"),
+                _decided("call_2"),
+                _read_result("call_1"),
+                _read_result("call_2"),
+                *TAIL,
+            ],
+            [FINAL],
+            _tools(),
+        ),
+    )
+
+
+def _responded(root: pathlib.Path) -> None:
+    """Crash right after the response: none of its calls is recorded yet."""
+    a, b = _read("call_1", "README.md"), _read("call_2", "NOTES.md")
+    log = _fresh()
+    r = log.model_request()
+    log.model_response(r, [a, b], "tool_use", tokens(80, 25))
+    _write(
+        root,
+        "calls-recording-resumes-after-response",
+        "Crash right after a model_response with two calls, before either was recorded. "
+        "Nothing is pending, but recovery doesn't close the turn interrupted: the response "
+        "still owes its calls, so the run records and authorizes both, runs them and "
+        "continues as an uninterrupted run would.",
+        log,
+        Run(
+            [*_recorded(a), *_recorded(b), _read_result("call_1"), _read_result("call_2"), *TAIL],
+            [FINAL],
+            _tools(),
+        ),
+    )
+
+
+def _refused(root: pathlib.Path) -> None:
+    """Crash after the first call was refused as invalid, before the second was recorded."""
+    bad: Obj = {"to": "bob@example.com"}
+    a, b = _use("call_1", "send_email", bad), _read("call_2", "README.md")
+    log = _fresh()
+    r = log.model_request()
+    log.model_response(r, [a, b], "tool_use", tokens(80, 25))
+    log.tool_call(r, "call_1", "send_email", bad)
+    refused: Obj = {
+        "call_id": "call_1",
+        "completeness": "complete",
+        "is_error": True,
+        "origin": "not_executed",
+        "preview": "invalid input: body is required",
+    }
+    log.add("tool_result", refused)
+    _write(
+        root,
+        "calls-recording-resumes-after-refused-call",
+        "Crash after the first call, send_email without a body, was recorded with its "
+        "not_executed result, before the second part was recorded. Nothing is pending, but the "
+        "response still owes a call: the run records and runs the read, and send_email never "
+        "runs.",
+        log,
+        Run(
+            [*_recorded(b), _read_result("call_2"), *TAIL],
+            [FINAL],
+            _tools(send_email={"output": "sent"}),
+            {"read_file": 1, "send_email": 0},
+        ),
+    )
+
+
+def _cancelled(root: pathlib.Path) -> None:
+    """A cancel landed after the first of three calls was recorded and authorized."""
+    a, b, c = (_read(f"call_{i}", f"doc{i}.md") for i in (1, 2, 3))
+    log = _fresh()
+    r = log.model_request()
+    log.model_response(r, [a, b, c], "tool_use", tokens(80, 25))
+    log.tool_call(r, "call_1", "read_file", {"path": "doc1.md"})
+    log.add("permission_decision", {"call_id": "call_1", **ALLOW, "mode": "default"})
+    cancel = log.add("cancel_requested", {"scope": "turn"}, actor="user", principal=ALICE)
+
+    def closed(call_id: str, actor: str) -> Obj:
+        data: Obj = {
+            "call_id": call_id,
+            "is_error": True,
+            "origin": "not_executed",
+            "preview": "not executed: cancelled",
+        }
+        return {"type": "tool_result", "actor_kind": actor, "data": data}
+
+    _write(
+        root,
+        "calls-cancel-mid-recording-closes-the-rest",
+        "A cancel_requested landed after the first of three calls was recorded and authorized. "
+        "Nothing new is authorized after it: recovery closes the recorded call, and the "
+        "cancellation step records each remaining part with its not_executed result, so no "
+        "tool_use is left without a result, then ends the turn cancelled.",
+        log,
+        Run(
+            [
+                closed("call_1", "recovery"),
+                _call(b),
+                closed("call_2", "host"),
+                _call(c),
+                closed("call_3", "host"),
+                {"type": "cancelled", "data": {"request_event_id": cancel["event_id"]}},
+                {"type": "turn_completed", "data": {"reason": "cancelled"}},
+            ],
+            [],
+            _tools(),
+        ),
     )
 
 
@@ -264,3 +377,6 @@ def build(root: pathlib.Path) -> None:
     _group(root)
     _resumed(root)
     _lazy(root)
+    _responded(root)
+    _refused(root)
+    _cancelled(root)

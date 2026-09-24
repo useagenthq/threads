@@ -134,6 +134,9 @@ async def _cancel(rt: Runtime, cancel: CancelRequestedEvent) -> Halt | None:
         halt = await calls.cancel_call(rt, call_id)
         if halt is not None:
             return halt
+    halt = await record.close_unrecorded(rt)
+    if halt is not None:
+        return halt
     data = {"request_event_id": cancel.event_id}
     done = await rt.append(
         draft("cancelled", data), draft("turn_completed", {"reason": "cancelled"})

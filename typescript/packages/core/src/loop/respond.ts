@@ -55,7 +55,7 @@ async function proceed(
   response: Response,
 ): Promise<Halt | undefined> {
   if (response.data.content.some((p) => p.type === "tool_use"))
-    return recordCalls(s, response);
+    return recordCalls(s);
   const stop = response.data.stop_reason;
   switch (stop) {
     case "end_turn":

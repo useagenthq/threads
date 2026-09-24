@@ -3,6 +3,7 @@ import type { EventOf } from "../fold/state";
 import { settleBackground } from "./agents/background";
 import { parkOn } from "./agents/park";
 import { finish as record, runChild, spawnedFor } from "./agents/spawn";
+import { closeUnrecorded } from "./calls";
 import { draft } from "./drafts";
 import { afterStep, finish } from "./lifecycle";
 import { runCalls } from "./parallel";
@@ -101,6 +102,8 @@ async function cancel(
     );
     if (stopped !== undefined) return stopped;
   }
+  const closed = closeUnrecorded(s);
+  if (closed !== undefined) return closed;
   // One batch: a lease lost between them can't leave the cancellation half recorded.
   return s.append(
     draft.cancelled({ request_event_id: request.event_id }),

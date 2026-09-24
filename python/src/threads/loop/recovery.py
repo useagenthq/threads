@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, assert_never
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import CancelledEvent, EventId, ModelRequestEvent, SteerEvent, ToolSpec
-from threads.loop import calls, effects
+from threads.loop import calls, effects, record
 from threads.loop.attempt import response_draft
 from threads.loop.drafts import draft
 from threads.loop.history import CallState, call_state, open_cancel, turn_events
@@ -69,6 +69,8 @@ def _open_turn_to_close(rt: Runtime) -> bool:
     fold = rt.fold
     if not fold.in_turn or fold.pending or fold.open_requests or fold.parked:
         return False
+    if record.owed(rt):
+        return False  # the response's calls are recorded next, never left without results
     if open_cancel(rt.events) is not None:
         return False
     # The turn's opener (an input, a woken, a receipt) or a later steer.

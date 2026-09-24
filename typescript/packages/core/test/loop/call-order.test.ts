@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { z } from "zod";
 import { resume } from "../../src/loop";
 import { ROOT, unwrap } from "../store/helpers";
 import { EMAIL, events, harness, userInput } from "./harness";
@@ -55,5 +56,42 @@ test("each call is recorded with its before_tool decision before the next", asyn
   const denied = log.filter((e) => e.type === "tool_result")[1];
   expect(denied?.type === "tool_result" && denied.data.preview).toBe(
     "denied: nope",
+  );
+});
+
+test("a crash right after a refused call's tool_call never lets it run", async () => {
+  const refused = { ...send("call_1"), input: {} };
+  const h = harness(
+    [EMAIL],
+    [],
+    [{ content: [refused], stop_reason: "tool_use", usage }, FINAL],
+  );
+  // send_email's own schema needs `to`, so the call is refused before any effect.
+  const impl = h.config().tools.get("send_email");
+  if (impl === undefined) throw new Error("the harness binds send_email");
+  const tools = new Map([
+    ["send_email", { ...impl, input: z.strictObject({ to: z.string() }) }],
+  ]);
+  const first = unwrap(h.store.acquire(ROOT, "owner"));
+  await resume(
+    first,
+    h.artifacts,
+    h.config({
+      tools,
+      onEvent: (e) => {
+        if (e.type === "tool_call") throw new Error("crash");
+      },
+    }),
+    { input: userInput("mail nobody") },
+  ).catch(() => undefined);
+  h.clock.now += 60_000;
+  const again = unwrap(h.store.acquire(ROOT, "owner-2"));
+  await resume(again, h.artifacts, h.config({ tools }));
+  const log = events(again);
+  expect(h.runs.get("send_email") ?? 0).toBe(0);
+  expect(log.some((e) => e.type === "permission_decision")).toBe(false);
+  const result = log.find((e) => e.type === "tool_result");
+  expect(result?.type === "tool_result" && result.data.origin).toBe(
+    "not_executed",
   );
 });

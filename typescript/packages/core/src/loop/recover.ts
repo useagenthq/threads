@@ -7,7 +7,7 @@ import { settleRequested } from "./manual";
 import type { Session } from "./session";
 import { resolvedResult, settleUnknown } from "./settle";
 import { recordOutput } from "./spill";
-import { cancelRequested } from "./turn";
+import { cancelRequested, owedCalls } from "./turn";
 import type { Halt } from "./types";
 
 // the recovery classifier, run once a new lease is taken and before anything
@@ -44,7 +44,9 @@ export async function recover(s: Session): Promise<Halt | undefined> {
     fold.awaiting.size === 0 &&
     fold.pending.size === 0 &&
     fold.parked.length === 0 &&
-    !cancelOpen(s)
+    !cancelOpen(s) &&
+    // A response's calls are recorded next, never left without results.
+    (owedCalls(s.events, fold)?.parts.length ?? 0) === 0
   )
     return s.append({
       type: "turn_completed",

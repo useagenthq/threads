@@ -89,12 +89,9 @@ export function nextStep(events: readonly KnownEvent[], fold: Fold): Step {
   const response = turn[at];
   const after = turn.slice(at + 1);
   // Every call of a response is recorded and authorized before any runs, also after a crash.
-  if (
-    response !== undefined &&
-    isTurnResponse(response, fold) &&
-    owesCalls(response, after, fold)
-  )
-    return { kind: "respond", response };
+  const owed = owedCalls(events, fold);
+  if (owed !== undefined && owed.parts.length > 0)
+    return { kind: "respond", response: owed.response };
   if (fold.pending.size > 0) return { kind: "calls" };
   if (response === undefined || !isTurnResponse(response, fold))
     return { kind: "request" };
@@ -106,30 +103,48 @@ export function nextStep(events: readonly KnownEvent[], fold: Fold): Step {
   return endsTurn(after, fold) ? { kind: "end_turn" } : { kind: "request" };
 }
 
+export type ToolUse = Extract<
+  Response["data"]["content"][number],
+  { type: "tool_use" }
+>;
+
+/** A response's part still owed its tool_call, or its recorded call still owed a decision. */
+export type OwedPart =
+  | { readonly kind: "unrecorded"; readonly use: ToolUse }
+  | { readonly kind: "undecided"; readonly call: EventOf<"tool_call"> };
+
 /**
- * The response has a tool_use part with no tool_call after it, or a pending call with no
- * permission_decision (a run stopped mid-recording, or a log whose calls were all recorded
- * before any was authorized).
+ * The open turn's latest response and its parts still owed, in part order: a run stopped
+ * mid-recording, or a log whose calls were all recorded before any was authorized.
  */
-function owesCalls(
-  response: Response,
-  after: readonly KnownEvent[],
+export function owedCalls(
+  events: readonly KnownEvent[],
   fold: Fold,
-): boolean {
-  const recorded = new Set(
-    after.flatMap((e) => (e.type === "tool_call" ? [e.data.call_id] : [])),
-  );
+):
+  | { readonly response: Response; readonly parts: readonly OwedPart[] }
+  | undefined {
+  const turn = turnEvents(events, fold);
+  const at = turn.findLastIndex((e) => isTurnResponse(e, fold));
+  const response = turn[at];
+  if (response === undefined || !isTurnResponse(response, fold)) return;
+  const after = turn.slice(at + 1);
   const decided = new Set(
     after.flatMap((e) =>
       e.type === "permission_decision" ? [e.data.call_id] : [],
     ),
   );
-  return response.data.content.some(
-    (p) =>
-      p.type === "tool_use" &&
-      (!recorded.has(p.call_id) ||
-        (fold.pending.has(p.call_id) && !decided.has(p.call_id))),
-  );
+  const parts = response.data.content.flatMap((use): OwedPart[] => {
+    if (use.type !== "tool_use") return [];
+    const call = after.find(
+      (e): e is EventOf<"tool_call"> =>
+        e.type === "tool_call" && e.data.call_id === use.call_id,
+    );
+    if (call === undefined) return [{ kind: "unrecorded", use }];
+    return fold.pending.has(use.call_id) && !decided.has(use.call_id)
+      ? [{ kind: "undecided", call }]
+      : [];
+  });
+  return { response, parts };
 }
 
 /**

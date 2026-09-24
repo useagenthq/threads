@@ -1,0 +1,11 @@
+{
+  "name": "calls-cancel-mid-recording-closes-the-rest",
+  "family": "permissions_approvals",
+  "kind": "recover",
+  "description": "A cancel_requested landed after the first of three calls was recorded and authorized. Nothing new is authorized after it: recovery closes the recorded call, and the cancellation step records each remaining part with its not_executed result, so no tool_use is left without a result, then ends the turn cancelled.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}
