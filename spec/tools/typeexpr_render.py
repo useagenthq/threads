@@ -198,8 +198,10 @@ class Render:
         return PRIMS[text(t["prim"])][0 if self.ts else 1]
 
     def _literal(self, t: Obj, casing: str) -> str:
-        value = json.dumps(t["literal"])
-        return value if self.ts else f"Literal[{value}]"
+        value = t["literal"]
+        # Python spells a boolean literal False, not false.
+        py = repr(value) if isinstance(value, bool) else json.dumps(value)
+        return json.dumps(value) if self.ts else f"Literal[{py}]"
 
     def _enum(self, t: Obj, casing: str) -> str:
         values = [json.dumps(v) for v in array(t["enum"])]

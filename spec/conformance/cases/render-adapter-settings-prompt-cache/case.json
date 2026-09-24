@@ -1,0 +1,9 @@
+{
+  "name": "render-adapter-settings-prompt-cache",
+  "family": "cancellation_resume",
+  "kind": "render",
+  "description": "Adapter setting prompt_cache is line 0: the thread started with 5m, and a settings_changed to 1h starts a new settings epoch whose line 0 carries 1h. Each epoch's line 0 is byte-identical in both runners, and history bytes don't change.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

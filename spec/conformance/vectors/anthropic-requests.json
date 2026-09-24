@@ -1,0 +1,1168 @@
+{
+  "description": "Anthropic Messages API request bodies (spec/schema/README.md, Cache controls): load `artifacts` (base64, named by sha256) into the model context, map `render` (Render v1 bytes) with the anthropic adapter, and compare the body to `body` as RFC 8785 canonical JSON.",
+  "artifacts": {
+    "60f94aee57e1e6671782cc1929dcc9dbcc6e55e9137f6a0db9a2b99b8b64e8df": "VGhlIGdyYXNzIGlzIGdyZWVuLiBUaGUgc2t5IGlzIGJsdWUu"
+  },
+  "cases": [
+    {
+      "name": "system-only-off",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": "Be brief."
+      }
+    },
+    {
+      "name": "system-only-5m",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"5m\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    },
+    {
+      "name": "system-only-1h",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"1h\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
+    },
+    {
+      "name": "tools-only-off",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "tools-only-5m",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"5m\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            },
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    },
+    {
+      "name": "tools-only-1h",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"1h\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            },
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
+    },
+    {
+      "name": "system-and-tools-off",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": "Be brief.",
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "system-and-tools-5m",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"5m\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    },
+    {
+      "name": "system-and-tools-1h",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"1h\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ],
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
+    },
+    {
+      "name": "two-turn-history-off",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"content\":[{\"text\":\"Hello!\",\"type\":\"text\"}],\"role\":\"assistant\"}\n{\"content\":[{\"text\":\"Again?\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Hello!"
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Again?"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": "Be brief."
+      }
+    },
+    {
+      "name": "two-turn-history-5m",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"5m\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"content\":[{\"text\":\"Hello!\",\"type\":\"text\"}],\"role\":\"assistant\"}\n{\"content\":[{\"text\":\"Again?\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Hello!"
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Again?"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    },
+    {
+      "name": "two-turn-history-1h",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"1h\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"content\":[{\"text\":\"Hello!\",\"type\":\"text\"}],\"role\":\"assistant\"}\n{\"content\":[{\"text\":\"Again?\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Hello!"
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Again?"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
+    },
+    {
+      "name": "interleaved-tool-results-off",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"Read a twice.\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"content\":[{\"call_id\":\"call_1\",\"input\":{\"path\":\"a\"},\"name\":\"read_file\",\"type\":\"tool_use\"},{\"call_id\":\"call_2\",\"input\":{\"path\":\"a\"},\"name\":\"read_file\",\"type\":\"tool_use\"}],\"role\":\"assistant\"}\n{\"call_id\":\"call_1\",\"content\":[{\"text\":\"one\",\"type\":\"text\"}],\"is_error\":false,\"role\":\"tool\"}\n{\"content\":[{\"text\":\"Also check b.\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"call_id\":\"call_2\",\"content\":[{\"text\":\"two\",\"type\":\"text\"}],\"is_error\":false,\"role\":\"tool\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Read a twice."
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "call_1",
+                "name": "read_file",
+                "input": {
+                  "path": "a"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "call_2",
+                "name": "read_file",
+                "input": {
+                  "path": "a"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "call_1",
+                "is_error": false,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "one"
+                  }
+                ]
+              },
+              {
+                "type": "tool_result",
+                "tool_use_id": "call_2",
+                "is_error": false,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": "Also check b."
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": "Be brief.",
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "interleaved-tool-results-5m",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"5m\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"Read a twice.\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"content\":[{\"call_id\":\"call_1\",\"input\":{\"path\":\"a\"},\"name\":\"read_file\",\"type\":\"tool_use\"},{\"call_id\":\"call_2\",\"input\":{\"path\":\"a\"},\"name\":\"read_file\",\"type\":\"tool_use\"}],\"role\":\"assistant\"}\n{\"call_id\":\"call_1\",\"content\":[{\"text\":\"one\",\"type\":\"text\"}],\"is_error\":false,\"role\":\"tool\"}\n{\"content\":[{\"text\":\"Also check b.\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"call_id\":\"call_2\",\"content\":[{\"text\":\"two\",\"type\":\"text\"}],\"is_error\":false,\"role\":\"tool\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Read a twice."
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "call_1",
+                "name": "read_file",
+                "input": {
+                  "path": "a"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "call_2",
+                "name": "read_file",
+                "input": {
+                  "path": "a"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "call_1",
+                "is_error": false,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "one"
+                  }
+                ]
+              },
+              {
+                "type": "tool_result",
+                "tool_use_id": "call_2",
+                "is_error": false,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": "Also check b."
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    },
+    {
+      "name": "interleaved-tool-results-1h",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"1h\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[{\"description\":\"Read a file.\",\"input_schema\":{\"properties\":{\"path\":{\"type\":\"string\"}},\"type\":\"object\"},\"name\":\"read_file\"}]}\n{\"content\":[{\"text\":\"Read a twice.\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"content\":[{\"call_id\":\"call_1\",\"input\":{\"path\":\"a\"},\"name\":\"read_file\",\"type\":\"tool_use\"},{\"call_id\":\"call_2\",\"input\":{\"path\":\"a\"},\"name\":\"read_file\",\"type\":\"tool_use\"}],\"role\":\"assistant\"}\n{\"call_id\":\"call_1\",\"content\":[{\"text\":\"one\",\"type\":\"text\"}],\"is_error\":false,\"role\":\"tool\"}\n{\"content\":[{\"text\":\"Also check b.\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"call_id\":\"call_2\",\"content\":[{\"text\":\"two\",\"type\":\"text\"}],\"is_error\":false,\"role\":\"tool\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Read a twice."
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "call_1",
+                "name": "read_file",
+                "input": {
+                  "path": "a"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "call_2",
+                "name": "read_file",
+                "input": {
+                  "path": "a"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "call_1",
+                "is_error": false,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "one"
+                  }
+                ]
+              },
+              {
+                "type": "tool_result",
+                "tool_use_id": "call_2",
+                "is_error": false,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": "Also check b."
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ],
+        "tools": [
+          {
+            "name": "read_file",
+            "description": "Read a file.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
+    },
+    {
+      "name": "late-tool-result-off",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"content\":[{\"text\":\"Waiting.\",\"type\":\"text\"}],\"role\":\"assistant\"}\n{\"call_id\":\"call_0\",\"content\":[{\"text\":\"finished\",\"type\":\"text\"}],\"is_error\":false,\"late\":true,\"role\":\"tool\"}\n{\"content\":[{\"text\":\"Thanks.\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Waiting."
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "[late tool result: call_id=call_0]"
+              },
+              {
+                "type": "text",
+                "text": "finished"
+              },
+              {
+                "type": "text",
+                "text": "Thanks."
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": "Be brief."
+      }
+    },
+    {
+      "name": "late-tool-result-5m",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"5m\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"content\":[{\"text\":\"Waiting.\",\"type\":\"text\"}],\"role\":\"assistant\"}\n{\"call_id\":\"call_0\",\"content\":[{\"text\":\"finished\",\"type\":\"text\"}],\"is_error\":false,\"late\":true,\"role\":\"tool\"}\n{\"content\":[{\"text\":\"Thanks.\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Waiting."
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "[late tool result: call_id=call_0]"
+              },
+              {
+                "type": "text",
+                "text": "finished"
+              },
+              {
+                "type": "text",
+                "text": "Thanks."
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    },
+    {
+      "name": "late-tool-result-1h",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"1h\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"text\":\"hi\",\"type\":\"text\"}],\"role\":\"user\"}\n{\"content\":[{\"text\":\"Waiting.\",\"type\":\"text\"}],\"role\":\"assistant\"}\n{\"call_id\":\"call_0\",\"content\":[{\"text\":\"finished\",\"type\":\"text\"}],\"is_error\":false,\"late\":true,\"role\":\"tool\"}\n{\"content\":[{\"text\":\"Thanks.\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "hi"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Waiting."
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "[late tool result: call_id=call_0]"
+              },
+              {
+                "type": "text",
+                "text": "finished"
+              },
+              {
+                "type": "text",
+                "text": "Thanks."
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
+    },
+    {
+      "name": "document-off",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"ref\":{\"bytes\":36,\"media_type\":\"text/plain\",\"sha256\":\"60f94aee57e1e6671782cc1929dcc9dbcc6e55e9137f6a0db9a2b99b8b64e8df\"},\"title\":\"Colors\",\"type\":\"document_ref\"},{\"text\":\"What color is the grass?\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "document",
+                "source": {
+                  "type": "text",
+                  "media_type": "text/plain",
+                  "data": "The grass is green. The sky is blue."
+                },
+                "title": "Colors"
+              },
+              {
+                "type": "text",
+                "text": "What color is the grass?"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": "Be brief."
+      }
+    },
+    {
+      "name": "document-5m",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"5m\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"ref\":{\"bytes\":36,\"media_type\":\"text/plain\",\"sha256\":\"60f94aee57e1e6671782cc1929dcc9dbcc6e55e9137f6a0db9a2b99b8b64e8df\"},\"title\":\"Colors\",\"type\":\"document_ref\"},{\"text\":\"What color is the grass?\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "document",
+                "source": {
+                  "type": "text",
+                  "media_type": "text/plain",
+                  "data": "The grass is green. The sky is blue."
+                },
+                "title": "Colors"
+              },
+              {
+                "type": "text",
+                "text": "What color is the grass?"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    },
+    {
+      "name": "document-1h",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"prompt_cache\":\"1h\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"ref\":{\"bytes\":36,\"media_type\":\"text/plain\",\"sha256\":\"60f94aee57e1e6671782cc1929dcc9dbcc6e55e9137f6a0db9a2b99b8b64e8df\"},\"title\":\"Colors\",\"type\":\"document_ref\"},{\"text\":\"What color is the grass?\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "document",
+                "source": {
+                  "type": "text",
+                  "media_type": "text/plain",
+                  "data": "The grass is green. The sky is blue."
+                },
+                "title": "Colors"
+              },
+              {
+                "type": "text",
+                "text": "What color is the grass?"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
+    },
+    {
+      "name": "document-citations-off",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"citations\":true},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"ref\":{\"bytes\":36,\"media_type\":\"text/plain\",\"sha256\":\"60f94aee57e1e6671782cc1929dcc9dbcc6e55e9137f6a0db9a2b99b8b64e8df\"},\"title\":\"Colors\",\"type\":\"document_ref\"},{\"text\":\"What color is the grass?\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "document",
+                "source": {
+                  "type": "text",
+                  "media_type": "text/plain",
+                  "data": "The grass is green. The sky is blue."
+                },
+                "title": "Colors",
+                "citations": {
+                  "enabled": true
+                }
+              },
+              {
+                "type": "text",
+                "text": "What color is the grass?"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": "Be brief."
+      }
+    },
+    {
+      "name": "document-citations-5m",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"citations\":true,\"prompt_cache\":\"5m\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"ref\":{\"bytes\":36,\"media_type\":\"text/plain\",\"sha256\":\"60f94aee57e1e6671782cc1929dcc9dbcc6e55e9137f6a0db9a2b99b8b64e8df\"},\"title\":\"Colors\",\"type\":\"document_ref\"},{\"text\":\"What color is the grass?\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "document",
+                "source": {
+                  "type": "text",
+                  "media_type": "text/plain",
+                  "data": "The grass is green. The sky is blue."
+                },
+                "title": "Colors",
+                "citations": {
+                  "enabled": true
+                }
+              },
+              {
+                "type": "text",
+                "text": "What color is the grass?"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    },
+    {
+      "name": "document-citations-1h",
+      "render": "{\"adapter\":{\"name\":\"anthropic\",\"settings\":{\"citations\":true,\"prompt_cache\":\"1h\"},\"version\":\"1\"},\"model\":{\"name\":\"claude-sonnet-5\",\"provider\":\"anthropic\"},\"params\":{\"max_tokens\":1024},\"system\":\"Be brief.\",\"tools\":[]}\n{\"content\":[{\"ref\":{\"bytes\":36,\"media_type\":\"text/plain\",\"sha256\":\"60f94aee57e1e6671782cc1929dcc9dbcc6e55e9137f6a0db9a2b99b8b64e8df\"},\"title\":\"Colors\",\"type\":\"document_ref\"},{\"text\":\"What color is the grass?\",\"type\":\"text\"}],\"role\":\"user\"}\n",
+      "body": {
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "document",
+                "source": {
+                  "type": "text",
+                  "media_type": "text/plain",
+                  "data": "The grass is green. The sky is blue."
+                },
+                "title": "Colors",
+                "citations": {
+                  "enabled": true
+                }
+              },
+              {
+                "type": "text",
+                "text": "What color is the grass?"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "system": [
+          {
+            "type": "text",
+            "text": "Be brief.",
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ],
+        "cache_control": {
+          "type": "ephemeral",
+          "ttl": "1h"
+        }
+      }
+    }
+  ]
+}

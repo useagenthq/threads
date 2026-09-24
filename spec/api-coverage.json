@@ -593,12 +593,28 @@
       "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
     ]
   },
+  "anthropic.citations=default": {
+    "ts": [
+      "packages/anthropic/test/caching.test.ts > promptCache pins line 0 and declares the cache lifetime > the default is \"5m\": pinned, and a 5-minute lifetime"
+    ],
+    "py": [
+      "tests/adapters/test_anthropic_caching.py::test_the_default_pins_5m_and_declares_a_5_minute_lifetime"
+    ]
+  },
   "anthropic.max_tokens=default": {
     "ts": [
       "packages/anthropic/test/catalog.test.ts > anthropic(id) > a listed id needs no options: verified limits and the default cap"
     ],
     "py": [
       "tests/adapters/test_model_catalog.py::test_anthropic_and_openai_need_only_the_model_id"
+    ]
+  },
+  "anthropic.prompt_cache=default": {
+    "ts": [
+      "packages/anthropic/test/caching.test.ts > promptCache pins line 0 and declares the cache lifetime > the default is \"5m\": pinned, and a 5-minute lifetime"
+    ],
+    "py": [
+      "tests/adapters/test_anthropic_caching.py::test_the_default_pins_5m_and_declares_a_5_minute_lifetime"
     ]
   },
   "brave": {

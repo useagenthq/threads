@@ -12,6 +12,7 @@ import tempfile
 
 from . import (
     agents,
+    anthropic_requests,
     catalog_tools,
     changes,
     channels,
@@ -37,6 +38,7 @@ from . import (
     output_schemas,
     outputs,
     policy,
+    prompt_cache,
     recovery,
     ref_team,
     renders,
@@ -84,6 +86,7 @@ FAMILIES = (
     content,
     context,
     models,
+    prompt_cache,
     fallbacks,
     outputs,
     output_schemas,
@@ -217,6 +220,7 @@ def main() -> int:
                 tool_inputs.check() + tool_groups.check() + team_wire.check() + team_ops.check()
             )
             problems += handoff_transcripts.check()
+            problems += anthropic_requests.check()
         for p in problems:
             print(f"coverage.json: {p}")
         if problems:
@@ -232,6 +236,7 @@ def main() -> int:
         team_wire.write()
         team_ops.write()
         handoff_transcripts.write()
+        anthropic_requests.write()
         for built, dest in ((out, CASES), (staged, STAGED)):
             shutil.rmtree(dest, ignore_errors=True)
             shutil.copytree(built, dest)
