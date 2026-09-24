@@ -11,6 +11,7 @@ Turns and wall time are checked from the thread's own log instead (loop/limits.p
 """
 
 from collections.abc import Sequence
+from typing import Literal
 
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
@@ -175,10 +176,15 @@ def _covers(covering: Sequence[Covering]) -> list[Cover]:
     return [c for c in map(_cover, covering) if c is not None]
 
 
-async def reserve(rt: Runtime, answer: Draft | None = None) -> Failed | None:
-    """None when the next attempt's reservation committed; else the turn ends budget_exhausted
-    and no model_request is appended. `answer` (a side request's compaction_failed) is recorded
-    in the same batch, before the turn ends."""
+type Reservation = Literal["reserved", "refused"]
+"""Reserved: the attempt may be sent. Refused: budget_exceeded (and `answer`) is recorded, and
+the turn ended budget_exhausted, or a pending cancel's step ends it."""
+
+
+async def reserve(rt: Runtime, answer: Draft | None = None) -> Failed | Reservation:
+    """The next attempt's reservation. When a covering budget refuses it, no model_request is
+    appended: budget_exceeded, `answer` (a side request's compaction_failed) and the turn's end
+    are one batch."""
     await _sync(rt, rt.budgets)
     thread_id = rt.writer.fold.thread_id
     if thread_id is None:
@@ -187,7 +193,7 @@ async def reserve(rt: Runtime, answer: Draft | None = None) -> Failed | None:
     key = f"{rt.writer.branch_id}:{rt.fold.seq + 1}"
     refused = await rt.store.budgets.reserve(key, _covers(covering), _reserve(rt.fold))
     if refused is None:
-        return None
+        return "reserved"
     by = next(c for c in covering if c.budget_id == refused.budget_id)
     data: dict[str, JsonValue] = {
         "scope": by.scope,
@@ -204,7 +210,7 @@ async def reserve(rt: Runtime, answer: Draft | None = None) -> Failed | None:
         *answered,
         draft("turn_completed", {"reason": "budget_exhausted"}),
     )
-    return lost(done.error) if isinstance(done, Err) else None
+    return lost(done.error) if isinstance(done, Err) else "refused"
 
 
 async def settle(rt: Runtime) -> None:

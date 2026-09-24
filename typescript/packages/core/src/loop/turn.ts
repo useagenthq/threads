@@ -1,5 +1,6 @@
 import type { EventOf, Fold } from "../fold/state";
 import type { KnownEvent, ToolSpec } from "../log";
+import type { EventDraft } from "../store";
 import { maxPauseContinuations } from "./policy";
 
 // What the open turn looks like, read from the log. The loop decides every step from these,
@@ -118,3 +119,38 @@ function endsTurn(after: readonly KnownEvent[], fold: Fold): boolean {
     );
   });
 }
+
+/**
+ * The cancel barrier (spec/schema/README.md, "Nothing new after a barrier"): with a cancel pending
+ * in the open turn, a batch that starts new work is refused (only its hook decisions are kept),
+ * and any other batch keeps what it owes (an abandonment, a side request's compaction_failed) but
+ * no turn_completed other than cancelled. The cancellation step closes the turn.
+ */
+export function afterBarrier(
+  fold: Fold,
+  events: readonly KnownEvent[],
+  drafts: readonly EventDraft[],
+): readonly EventDraft[] {
+  if (!fold.turnOpen || cancelRequested(events) === undefined) return drafts;
+  // Refused whole, but the hooks that ran for it stay on record.
+  if (drafts.some(opensWork))
+    return drafts.filter((d) => d.type === "hook_decision");
+  return drafts.filter(
+    (d) => d.type !== "turn_completed" || d.data.reason === "cancelled",
+  );
+}
+
+/**
+ * Events that start new work: a request, a dispatch, a handoff target, a child, a retry wait, a
+ * model switch. Teams' member starts and deliveries join this list when they become writable.
+ */
+export const OPENS_WORK: ReadonlySet<EventDraft["type"]> = new Set([
+  "model_request",
+  "effect_begin",
+  "handoff",
+  "agent_spawned",
+  "retry_scheduled",
+  "settings_changed",
+]);
+
+export const opensWork = (d: EventDraft): boolean => OPENS_WORK.has(d.type);

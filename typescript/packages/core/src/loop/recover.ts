@@ -20,6 +20,15 @@ export async function recover(s: Session): Promise<Halt | undefined> {
   // it) or a cancel is durable in it (the loop carries the cancel out). A requested compaction's
   // side request is cut before the input, so it never sent it.
   const { fold } = s;
+  // A cancelled an older writer recorded without its turn_completed: the turn ends cancelled.
+  if (fold.turnOpen && cancelAnswered(s))
+    return s.append({
+      type: "turn_completed",
+      type_version: 1,
+      critical: true,
+      actor: RECOVERY,
+      data: { reason: "cancelled" },
+    });
   const last = s.events.findLastIndex(
     (e) => e.type === "user_input" || e.type === "steer",
   );
@@ -64,6 +73,12 @@ function cancelOpen(s: Session): boolean {
         e.type === "cancelled" && e.data.request_event_id === cancel.event_id,
     )
   );
+}
+
+/** The open turn's cancelled, already recorded. */
+function cancelAnswered(s: Session): boolean {
+  const start = s.events.findLastIndex((e) => e.type === "user_input");
+  return s.events.slice(Math.max(start, 0)).some((e) => e.type === "cancelled");
 }
 
 /** ask the adapter first; only a final answer settles the attempt. */

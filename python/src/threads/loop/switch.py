@@ -14,7 +14,7 @@ from threads.loop import epoch, gates
 from threads.loop.defaults import fallbacks, retry
 from threads.loop.drafts import draft
 from threads.loop.gates import said, verdict
-from threads.loop.runtime import Halt, Runtime, lost
+from threads.loop.runtime import Barred, Halt, Runtime, lost
 from threads.reduce.fold import Fold
 from threads.reduce.handlers import to_json
 from threads.result import Err
@@ -83,4 +83,6 @@ async def revert(rt: Runtime) -> Halt | None:
     done = await rt.append(*drafts)
     if isinstance(done, Err):
         return lost(done.error)
+    if isinstance(done, Barred):
+        return None  # a cancel landed first: the revert waits for the next turn
     return await gates.observe(rt, "after_model_switch", settings) if allowed else None

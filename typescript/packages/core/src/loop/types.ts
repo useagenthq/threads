@@ -245,3 +245,7 @@ export type Agents = {
   /** Present when this thread is a member: its parent's team. */
   readonly team?: Team;
 };
+
+/** A batch the cancel barrier refused: nothing of the work it would start was recorded. */
+export const BARRED: unique symbol = Symbol("barred");
+export type Barred = typeof BARRED;

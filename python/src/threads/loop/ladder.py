@@ -17,7 +17,7 @@ from threads.loop import compact, defaults, manual
 from threads.loop.drafts import draft
 from threads.loop.estimate import estimate
 from threads.loop.gates import AGAIN, Gated, append
-from threads.loop.history import turn_events
+from threads.loop.history import open_cancel, turn_events
 from threads.loop.runtime import Runtime
 from threads.result import Err
 
@@ -52,7 +52,10 @@ async def fit(rt: Runtime) -> Gated:
 
 
 async def _preflight(rt: Runtime, guess: int, *, blocked: bool) -> Gated:
-    """L4: the estimate reaches W, so no request is made or billed."""
+    """L4: the estimate reaches W, so no request is made or billed. A cancel pending ends the
+    turn cancelled, never context_exhausted: the cancellation step is next."""
+    if open_cancel(rt.events) is not None:
+        return AGAIN
     window = defaults.effective_window(rt.fold)
     if guess < window:
         return None

@@ -11,7 +11,7 @@ from threads.log import AgentSpawnedEvent, CallId, EventId, ToolSpec, ToolUsePar
 from threads.log.digest import canonical_sha256
 from threads.loop import effects, gates, output, todos, tool_gates
 from threads.loop.drafts import ActorKind, draft
-from threads.loop.history import CallState, call_state
+from threads.loop.history import CallState, call_state, open_cancel
 from threads.loop.results import As, reference_drafts, result_draft
 from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
@@ -62,8 +62,11 @@ def _invalid(rt: Runtime, use: ToolUsePart) -> str | None:
 
 
 async def run_call(rt: Runtime, call_id: CallId) -> Halt | None:
-    """Advances one pending call until it has a result, or the run must stop."""
+    """Advances one pending call until it has a result, or the run must stop. A cancel that
+    lands meanwhile (authorize's hooks await) stops it: the cancellation step closes the call."""
     while call_id in rt.fold.pending:
+        if open_cancel(rt.events) is not None:
+            return None
         state = call_state(rt.events, call_id)
         spec = rt.fold.tools[state.call.data.name]
         halt = await _advance(rt, state, spec)

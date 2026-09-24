@@ -69,13 +69,22 @@ class Writer:
         return self._requires_recovery
 
     async def append(
-        self, drafts: Sequence[Draft], companion: Companion | None = None
+        self,
+        drafts: Sequence[Draft],
+        companion: Companion | None = None,
+        *,
+        admit: Callable[[Fold, Sequence[Draft]], Sequence[Draft]] | None = None,
     ) -> Ok[tuple[StoredEvent, ...]] | Err[ParseError]:
         """Appends the drafts as one transaction and resolves after it is durable. A companion
-        that refuses rolls the append back: its error is the result and the writer goes on."""
+        that refuses rolls the append back: its error is the result and the writer goes on.
+        `admit` picks the drafts the batch keeps, from the fold as it is under the writer's lock
+        (another task's append can land while this one waits for it). The result is what was
+        appended; `Runtime.append_with` reports a batch `admit` changed as `Barred`."""
         async with self._lock:
             if self._poisoned:
                 return Err(ParseError("writer_poisoned", "this writer lost its lease or head"))
+            if admit is not None:
+                drafts = admit(self._fold, drafts)
             now = self._clock()
             expected = self._fold.seq
             built = self._build(drafts, now)

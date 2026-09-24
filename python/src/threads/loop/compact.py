@@ -122,7 +122,7 @@ def _decided(events: Sequence[Event], request: CompactionRequestedEvent | None) 
 
 async def _side_request(rt: Runtime, bounds: tuple[Event, Event], trigger: Trigger) -> Halt | None:
     """The side request; if it is itself too long, clear every clearable result and retry it
-    once."""
+    once (never past a cancel barrier: `attempt.request` checks it)."""
     for side_attempt in (1, 2):
         sent = await attempt.request(rt, side_attempt, "compaction")
         if sent is None or isinstance(sent, Failed):

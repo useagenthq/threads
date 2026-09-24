@@ -228,3 +228,23 @@ def test_a_recorded_hook_decision_is_reused() -> None:
         assert "Additional instructions:\\nKeep A.\\nKeep B." in sent
 
     asyncio.run(main())
+
+
+def test_a_crashed_side_request_with_a_cancel_pending_is_answered_failed_not_resent() -> None:
+    """Recovery answers the request (compaction_failed) rather than leaving it to run in a later
+    turn: nothing is sent again after the cancel."""
+    model = scripted_model({"responses": [text("Hi."), text(SUMMARY), text("A.")]})
+    bot = agent(model=model)
+
+    async def main() -> list[str]:
+        cancel = Draft("cancel_requested", {"scope": "thread"}, USER)
+        thread = await _crashed(bot, ["crash"], [cancel])
+        await _resume(bot, thread)
+        events = await logged(thread)
+        assert len(requests(events, side=True)) == 1
+        failed = [e for e in events if isinstance(e, CompactionFailedEvent)]
+        assert len(failed) == 1
+        return [e.type for e in events]
+
+    names = asyncio.run(main())
+    assert names[-2:] == ["cancelled", "turn_completed"]

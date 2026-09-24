@@ -24,7 +24,7 @@ from threads.log import (
 )
 from threads.loop import epoch
 from threads.loop.covering import Covering
-from threads.loop.history import CallState
+from threads.loop.history import CallState, open_cancel
 from threads.loop.model import Model
 from threads.loop.tools import ToolRunner
 from threads.permissions import Decision
@@ -161,6 +161,18 @@ class Framework(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class Barred:
+    """A batch the cancel barrier changed: `kept` is what was appended (maybe nothing). The
+    cancellation step closes the turn next."""
+
+    kept: tuple[StoredEvent, ...]
+
+
+type Appended = Ok[tuple[StoredEvent, ...]] | Err[ParseError] | Barred
+"""What a loop append did: every draft appended, a refusal, or a batch the barrier changed."""
+
+
+@dataclass(frozen=True, slots=True)
 class Runtime:
     store: SqliteStore
     writer: Writer
@@ -198,18 +210,55 @@ class Runtime:
     def events(self) -> Sequence[Event]:
         return self.writer.fold.events
 
-    async def append(self, *drafts: Draft) -> Ok[tuple[StoredEvent, ...]] | Err[ParseError]:
+    async def append(self, *drafts: Draft) -> Appended:
         """Appends one durable batch. Nothing is dispatched on its account until this returns."""
         return await self.append_with(drafts, None)
 
-    async def append_with(
-        self, drafts: Sequence[Draft], companion: Companion | None
-    ) -> Ok[tuple[StoredEvent, ...]] | Err[ParseError]:
-        """`append`, with host rows bound to the same transaction."""
-        done = await self.writer.append(drafts, companion)
-        if isinstance(done, Ok):
-            self.observe(done.value)
-        return done
+    async def append_with(self, drafts: Sequence[Draft], companion: Companion | None) -> Appended:
+        """`append`, with host rows bound to the same transaction. Every loop append passes the
+        cancel barrier (`after_barrier`) under the writer's lock: a batch it changed comes back
+        as `Barred`, never as a plain success, so a caller that opened work (or ended the
+        turn) knows it didn't."""
+        changed: list[bool] = []
+
+        def admit(fold: Fold, batch: Sequence[Draft]) -> Sequence[Draft]:
+            kept = after_barrier(fold, batch)
+            changed.append(len(kept) != len(batch))
+            return kept
+
+        done = await self.writer.append(drafts, companion, admit=admit)
+        if isinstance(done, Err):
+            return done
+        self.observe(done.value)
+        return Barred(done.value) if any(changed) else done
+
+
+OPENS_WORK: Final = frozenset(
+    {
+        "model_request",
+        "effect_begin",
+        "handoff",
+        "agent_spawned",
+        "retry_scheduled",
+        "settings_changed",
+    }
+)
+"""Events that start new work: a request, a dispatch, a handoff target, a child, a retry wait,
+a model switch. Teams' member starts and deliveries join this list when they become writable
+(spec/schema/README.md, Teams); TypeScript's `OPENS_WORK` (loop/turn.ts) is the same list."""
+
+
+def after_barrier(fold: Fold, drafts: Sequence[Draft]) -> Sequence[Draft]:
+    """Nothing new after a cancel barrier (spec/schema/README.md). With a cancel pending in the
+    open turn, a batch that starts new work is refused (only the hook decisions that ran for it
+    are kept, as the audit record), and any other batch keeps what it owes (an abandonment, a
+    side request's compaction_failed) but no turn_completed other than cancelled. The
+    cancellation step closes the turn."""
+    if not fold.in_turn or open_cancel(fold.events) is None:
+        return drafts
+    if any(d.type in OPENS_WORK for d in drafts):
+        return [d for d in drafts if d.type == "hook_decision"]
+    return [d for d in drafts if d.type != "turn_completed" or d.data.get("reason") == "cancelled"]
 
 
 @dataclass(frozen=True, slots=True)

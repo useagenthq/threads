@@ -19,8 +19,8 @@ import { retryPolicy } from "./policy";
 import { revert } from "./revert";
 import type { Session } from "./session";
 import { todoReminder } from "./todos";
-import { nextAttempt, stepEvents } from "./turn";
-import type { Halt } from "./types";
+import { cancelRequested, nextAttempt, stepEvents } from "./turn";
+import { BARRED, type Halt } from "./types";
 
 // A turn request: one attempt and what its outcome requires (// L5). Counters come from the step's events, so a recovered run keeps them.
 
@@ -88,6 +88,10 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
   // A compaction side request the budget refused already recorded why.
   if (s.fold.budgetBlocked) return endTurn(s, "budget_exhausted");
   const got = await attempt(s, "turn", nextAttempt(s.events, s.fold));
+  // A cancel that landed during the attempt: its outcome is recorded, and nothing more happens
+  // in this step (no retry, fallback or sleep); the cancellation step is next.
+  if (got.kind !== "halt" && cancelRequested(s.events) !== undefined)
+    return undefined;
   switch (got.kind) {
     case "halt":
       return got.halt;
@@ -99,10 +103,13 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
     case "unsupported":
       return s.append(draft.turnCompleted("error", got.refused.code));
     case "leaked":
-      // The attempt already ended the turn, in the same batch as its abandonment.
+      // Recorded by the attempt: the turn ended with it, or a cancel closes it next.
       return undefined;
     case "budget":
       return endTurn(s, "budget_exhausted");
+    case "barred":
+      // Nothing was sent: the cancellation step is next.
+      return undefined;
     default:
       return assertNever(got);
   }
@@ -152,24 +159,34 @@ async function rejected(
     reason === "overloaded" &&
     overloadedInEpoch(step) >= retry.fallback_after
   ) {
-    const next = fallbackSettings(s);
-    if (next !== undefined) {
-      const gate = await switchGate(s, next);
-      if (gate.allowed)
-        return s.append(
-          ...gate.decisions,
-          draft.settingsChanged({
-            reason: "fallback",
-            settings: next,
-            cause_event_id: last.event_id,
-          }),
-        );
-      // A deny keeps the old epoch: the attempt is retried on it.
-      const stopped = s.append(...gate.decisions);
-      if (stopped !== undefined) return stopped;
-    }
+    const fell = await fallBack(s, last);
+    if (fell !== "retry") return fell;
   }
   return schedule(s, step, last, rejections.length);
+}
+
+/**
+ * The next fallback epoch, gated by before_model_switch. "retry" when there is none or the hook
+ * denied it: the attempt is retried on the current epoch.
+ */
+async function fallBack(
+  s: Session,
+  last: Abandon,
+): Promise<Halt | undefined | "retry"> {
+  const next = fallbackSettings(s);
+  if (next === undefined) return "retry";
+  const gate = await switchGate(s, next);
+  if (!gate.allowed) return s.append(...gate.decisions) ?? "retry";
+  const switched = s.appendWork(
+    ...gate.decisions,
+    draft.settingsChanged({
+      reason: "fallback",
+      settings: next,
+      cause_event_id: last.event_id,
+    }),
+  );
+  // A cancel landed during the hook: no switch; the cancellation step is next.
+  return switched === BARRED ? undefined : switched;
 }
 
 /** Consecutive overloaded rejections since this step's last settings change. */
@@ -215,7 +232,7 @@ async function schedule(
   if (waited + delay > retry.max_total_wait_ms)
     return endTurn(s, "model_unavailable");
   const notBefore = s.now() + delay;
-  const stopped = s.append(
+  const stopped = s.appendWork(
     draft.retryScheduled({
       request_event_id: last.data.request_event_id,
       delay_ms: delay,
@@ -223,6 +240,8 @@ async function schedule(
       basis: after === undefined ? "backoff" : "retry_after",
     }),
   );
+  // A cancel landed first: no wait; the cancellation step is next.
+  if (stopped === BARRED) return undefined;
   if (stopped !== undefined) return stopped;
   await s.config.clock.sleepUntil(notBefore);
   return undefined;

@@ -2,7 +2,7 @@
 
 from threads.loop import attempt, gates, ladder, limits, switch, todos
 from threads.loop.drafts import draft
-from threads.loop.runtime import Failed, Halt, Runtime, lost
+from threads.loop.runtime import Barred, Failed, Halt, Runtime, lost
 from threads.result import Err
 
 
@@ -29,4 +29,7 @@ async def request(rt: Runtime, attempt_no: int) -> Halt | None:
 
 async def complete(rt: Runtime, reason: str) -> Halt | None:
     done = await rt.append(draft("turn_completed", {"reason": reason}))
-    return lost(done.error) if isinstance(done, Err) else await gates.failed(rt, reason)
+    if isinstance(done, Err):
+        return lost(done.error)
+    # A pending cancel kept this end out: the cancellation step ends the turn instead.
+    return None if isinstance(done, Barred) else await gates.failed(rt, reason)

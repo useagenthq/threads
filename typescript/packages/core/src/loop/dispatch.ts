@@ -13,7 +13,7 @@ import type { Session } from "./session";
 import { settleUnknown } from "./settle";
 import { type Recorded, recordOutput } from "./spill";
 import { toolSpec } from "./turn";
-import type { Halt, ToolRun } from "./types";
+import { BARRED, type Halt, type ToolRun } from "./types";
 
 // Pending calls, in call order: authorization first, then the body. An effect's
 // effect_begin is durable (and fenced by the lease in the same transaction) before dispatch,
@@ -137,9 +137,11 @@ async function dispatch(
   const attempts = s.events.filter(
     (e) => e.type === "effect_begin" && e.data.call_id === callId,
   ).length;
-  const begun = s.append(
+  const begun = s.appendWork(
     draft.effectBegin({ call_id: callId, attempt: attempts + 1 }),
   );
+  // A cancel landed first: nothing is dispatched; the cancellation step closes the call.
+  if (begun === BARRED) return undefined;
   if (begun !== undefined) return begun;
   // Fenced in the same synchronous section as the dispatch: a stale owner never runs it.
   const fenced = s.fence();

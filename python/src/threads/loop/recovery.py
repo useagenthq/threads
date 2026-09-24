@@ -14,11 +14,11 @@ from typing import TYPE_CHECKING, assert_never
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import EventId, ModelRequestEvent, SteerEvent, UserInputEvent
+from threads.log import CancelledEvent, EventId, ModelRequestEvent, SteerEvent, UserInputEvent
 from threads.loop import calls, effects
 from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
-from threads.loop.history import CallState, call_state, open_cancel
+from threads.loop.history import CallState, call_state, open_cancel, turn_events
 from threads.loop.manual import settle_requested
 from threads.loop.model import (
     Found,
@@ -39,6 +39,10 @@ async def recover(rt: Runtime) -> Halt | None:
     """Decides every in-doubt item; returns the first halt (a park or a failure), if any. A torn
     import's `log_repaired` comes before this, when the store hands the branch over. An open turn
     with nothing pending is closed or left to continue (spec/schema/README.md wire rule 11)."""
+    if rt.fold.in_turn and any(isinstance(e, CancelledEvent) for e in turn_events(rt.events)):
+        # An older writer recorded `cancelled` without its turn_completed: it ends cancelled.
+        done = await rt.append(draft("turn_completed", {"reason": "cancelled"}, "recovery"))
+        return lost(done.error) if isinstance(done, Err) else None
     if _open_turn_to_close(rt):
         # The turn's input was sent but nothing is pending: how it would have ended is lost.
         done = await rt.append(draft("turn_completed", {"reason": "interrupted"}, "recovery"))

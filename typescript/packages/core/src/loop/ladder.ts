@@ -7,7 +7,7 @@ import type { Gated } from "./gates";
 import { requested } from "./manual";
 import { contextPolicy, tokens } from "./policy";
 import type { Session } from "./session";
-import { stepEvents } from "./turn";
+import { cancelRequested, stepEvents } from "./turn";
 
 // The proactive layers of the context ladder, run before every turn request:
 // L1 clears old results, L2 compacts (L3 restore follows it), L4 blocks a request that would
@@ -100,6 +100,8 @@ async function preflight(
   estimated: number,
   window: number,
 ): Promise<Gated> {
+  // A cancel pending ends the turn cancelled, never context_exhausted.
+  if (cancelled(s)) return "ended";
   const action = reactiveSpent(s) || breakerOpen(s) ? "fail" : "compact";
   const stopped = s.append(
     draft.preflightBlocked({
@@ -116,6 +118,14 @@ async function preflight(
   return got.kind === "compacted" || got.kind === "ended"
     ? "ended"
     : (s.append(draft.turnCompleted("context_exhausted")) ?? "ended");
+}
+
+/**
+ * A cancel landed during the compaction's side request: the loop steps again, so the
+ * cancellation step closes the turn before anything else is sent or recorded.
+ */
+function cancelled(s: Session): boolean {
+  return cancelRequested(s.events) !== undefined;
 }
 
 /** consecutive failures since the last compacted reach max_failures. */

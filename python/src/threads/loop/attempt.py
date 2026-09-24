@@ -18,8 +18,9 @@ from threads.loop import budget, guard
 from threads.loop.calls import call_drafts
 from threads.loop.capabilities import mismatch
 from threads.loop.drafts import draft
+from threads.loop.history import open_cancel
 from threads.loop.model import Done, Model, ModelRequest, ModelResponse, PartChunk, Rejected
-from threads.loop.runtime import Failed, Runtime, WriterContext, epoch_model, fence, lost
+from threads.loop.runtime import Barred, Failed, Runtime, WriterContext, epoch_model, fence, lost
 from threads.redaction import SecretInProviderOutputError
 from threads.reduce.handlers import to_json
 from threads.result import Err
@@ -34,24 +35,56 @@ async def request(
     """Sends one attempt and records its outcome. Returns the model_request's event id, or None
     when the capability pre-check ended the turn before any model_request. `cause` is the
     compaction_requested a side request summarizes for: that side request never ends the turn,
-    so a refusal before any request is `model_error` for its caller to answer."""
+    so a refusal before any request is `model_error` for its caller to answer. Nothing is sent
+    after a cancel barrier: None, with a side request's compaction_failed recorded."""
     compaction = purpose == "compaction"
+    if open_cancel(rt.events) is not None:
+        return await _barred(rt, compaction, cause)
+    prepared = await _prepared(rt, compaction, cause)
+    if isinstance(prepared, Failed):
+        return prepared
+    (body, line0), model = prepared
+    refused = await _unsupported(rt, body, model, cause)
+    if refused is not False:
+        return refused
+    reserved = await budget.reserve(rt, _answer(compaction, cause))
+    if reserved != "reserved":
+        return reserved if isinstance(reserved, Failed) else None
+    event = await _recorded(rt, attempt, body, line0, cause, compaction=compaction)
+    if not isinstance(event, ModelRequestEvent):
+        return event
+    sent = await _dispatch(rt, model, event, body, cause)
+    await budget.settle(rt)
+    return sent
+
+
+async def _prepared(
+    rt: Runtime, compaction: bool, cause: EventId | None
+) -> tuple[tuple[bytes, bytes], Model] | Failed:
+    """Render v1 of the next request (its body and line 0) and the epoch's model. A missing or
+    corrupt artifact, or no adapter for the model, fails the run."""
     rendered = await rt.store.render(rt.events, compaction=compaction, cause=cause)
     if isinstance(rendered, Err):
         code = rendered.error.code
         if code in ("artifact_missing", "artifact_corrupt"):
             return Failed(code, rendered.error.message)
         raise AssertionError(f"the next request can't render: {rendered.error}")
-    body, line0 = rendered.value.body, rendered.value.line0
     model = epoch_model(rt)
     if model is None:
         return Failed("model_error", "no adapter for this settings epoch's model")
-    refused = await _unsupported(rt, body, model, cause)
-    if refused is not False:
-        return refused
-    refused = await budget.reserve(rt, _answer(compaction, cause))
-    if refused is not None or not rt.fold.in_turn:
-        return refused
+    return (rendered.value.body, rendered.value.line0), model
+
+
+async def _recorded(  # noqa: PLR0913 - the request's parts, each named
+    rt: Runtime,
+    attempt: int,
+    body: bytes,
+    line0: bytes,
+    cause: EventId | None,
+    *,
+    compaction: bool,
+) -> ModelRequestEvent | Failed | None:
+    """The durable model_request, unless a cancel became durable first: then nothing is sent."""
     sha = await rt.store.put_artifact(body)
     data: dict[str, JsonValue] = {
         "attempt": attempt,
@@ -65,12 +98,14 @@ async def request(
     appended = await rt.append(draft("model_request", data))
     if isinstance(appended, Err):
         return lost(appended.error)
+    if isinstance(appended, Barred):
+        # A cancel landed while the request was prepared: nothing is sent.
+        await budget.settle(rt)
+        return await _barred(rt, compaction, cause)
     event = appended.value[0]
     if not isinstance(event, ModelRequestEvent):
         raise AssertionError("a model_request draft stored another type")
-    sent = await _dispatch(rt, model, event, body, cause)
-    await budget.settle(rt)
-    return sent
+    return event
 
 
 async def _unsupported(
@@ -87,8 +122,18 @@ async def _unsupported(
     return lost(ended.error) if isinstance(ended, Err) else None
 
 
+async def _barred(rt: Runtime, compaction: bool, cause: EventId | None) -> Failed | None:
+    """Nothing is sent after a cancel barrier: a side request owes its compaction_failed; the
+    cancellation step is next."""
+    owed = _answer(compaction, cause)
+    if owed is None:
+        return None
+    done = await rt.append(owed)
+    return lost(done.error) if isinstance(done, Err) else None
+
+
 def _answer(compaction: bool, cause: EventId | None) -> Draft | None:
-    """A side request's compaction_failed, recorded with a budget refusal."""
+    """A side request's compaction_failed, recorded with a budget refusal or at a barrier."""
     if not compaction:
         return None
     data: dict[str, JsonValue] = {"stage": "summary", "reason": "model_error"}
@@ -113,7 +158,7 @@ async def _dispatch(
     recorded = await rt.append(*outcome_drafts(rt, event.event_id, outcome, cause=cause))
     if isinstance(recorded, Err):
         return lost(recorded.error)
-    return None if cause is None and _refused(outcome) else event.event_id
+    return None if cause is None and _refused(rt, outcome) else event.event_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,8 +201,9 @@ def outcome_drafts(
 ) -> Sequence[Draft]:
     """The events one attempt's outcome appends, in one batch: the response with its tool calls,
     or the abandonment. A send-time refusal ends the turn unless the attempt is a requested
-    compaction's side request (`cause`), which its caller answers. A refused leak ends the turn
-    either way, and answers `cause` in the same batch."""
+    compaction's side request (`cause`), which its caller answers. A refused leak answers
+    `cause` in the same batch and ends the turn, unless a cancel is already requested: then the
+    cancellation step closes the turn."""
     ends_turn = cause is None
     match outcome:
         case ModelResponse():
@@ -187,8 +233,9 @@ def outcome_drafts(
             }
             ended = {"reason": "error", "code": "secret_in_provider_output"}
             answered = [] if cause is None else [_leak_answer(request_id, cause)]
-            abandoned = draft("model_attempt_abandoned", data)
-            return [abandoned, *answered, draft("turn_completed", ended)]
+            # With a cancel pending the barrier leaves the turn to the cancellation step.
+            closing = draft("turn_completed", ended)
+            return [draft("model_attempt_abandoned", data), *answered, closing]
         case None:
             data: dict[str, JsonValue] = {
                 "request_event_id": request_id,
@@ -209,15 +256,19 @@ def _leak_answer(request_id: EventId, cause: EventId) -> Draft:
     return draft("compaction_failed", data)
 
 
-def _refused(outcome: Outcome) -> bool:
-    """A send-time refusal or a refused leak already ended the turn with its code."""
-    return isinstance(outcome, Leaked) or (
-        isinstance(outcome, Rejected)
-        and outcome.reason
-        in (
-            "content_unsupported",
-            "continuation_unsupported",
-            "transport_fence_unsupported",
+def _refused(rt: Runtime, outcome: Outcome) -> bool:
+    """A send-time refusal or a refused leak ended the turn with its code (unless a cancel
+    was pending: the barrier left the turn open)."""
+    return not rt.fold.in_turn and (
+        isinstance(outcome, Leaked)
+        or (
+            isinstance(outcome, Rejected)
+            and outcome.reason
+            in (
+                "content_unsupported",
+                "continuation_unsupported",
+                "transport_fence_unsupported",
+            )
         )
     )
 
