@@ -111,6 +111,12 @@ class Host:
         for name, adapter in self._channels.items():
             if adapter.agent not in self._agents:
                 raise ConfigError("invalid_config", f"channel {name}: no agent {adapter.agent}")
+            # Every channel thread is offered ask_user: an adapter that can't post a question
+            # is refused here, not when the first question is sent.
+            if not callable(getattr(adapter, "render_text", None)):
+                raise ConfigError(
+                    "invalid_config", f"channel {name}: the adapter has no render_text"
+                )
         self._scheduler.check(self._runner.agent)
         self._runner.resolve_secrets()
         await open_store(self._store)
