@@ -38,7 +38,11 @@ class Preview {
   #tail: Uint8Array = new Uint8Array(0);
   total = 0;
 
-  constructor(readonly keep: number) {}
+  readonly keep: number;
+
+  constructor(keep: number) {
+    this.keep = keep;
+  }
 
   add(chunk: Uint8Array): void {
     this.total += chunk.length;

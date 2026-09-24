@@ -280,8 +280,11 @@ export function putLease(
 }
 
 class Rollback extends Error {
-  constructor(readonly error: LogError) {
+  readonly error: LogError;
+
+  constructor(error: LogError) {
     super(error.message);
+    this.error = error;
   }
 }
 

@@ -17,8 +17,11 @@ const current = new AsyncLocalStorage<Scope>();
 /** Thrown by a fenced transport before any byte leaves: the caller lost its authority. */
 export class FenceRefused extends Error {
   override readonly name = "FenceRefused";
-  constructor(readonly stale: Stale) {
+  readonly stale: Stale;
+
+  constructor(stale: Stale) {
     super(stale.message);
+    this.stale = stale;
   }
 }
 

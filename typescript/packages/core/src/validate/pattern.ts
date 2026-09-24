@@ -52,7 +52,11 @@ class Translator {
   readonly #out: string[] = [];
   readonly #groups: string[] = [];
 
-  constructor(readonly text: string) {}
+  readonly text: string;
+
+  constructor(text: string) {
+    this.text = text;
+  }
 
   run(): string {
     while (this.#at < this.text.length) this.#token(this.#char(this.#at));
