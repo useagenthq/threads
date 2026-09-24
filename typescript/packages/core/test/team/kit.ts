@@ -1,12 +1,20 @@
+import { expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { sha256Hex } from "../../src/hash";
-import { type BranchId, canonicalize, type TeamId } from "../../src/log";
+import {
+  type BranchId,
+  canonicalize,
+  type KnownEvent,
+  type TeamId,
+} from "../../src/log";
+import { knownEvents } from "../../src/reduce";
 import type { SqliteDriver } from "../../src/store";
 import { importSegments } from "../../src/store/import";
 import type { LogStore } from "../../src/store/store";
-import { rebuildTeamIndex } from "../../src/team/rebuild";
+import { checkTeamLogs } from "../../src/team/cross";
+import { rebuildTeamIndex, teamChains } from "../../src/team/rebuild";
 import { type VerifiedLog, verifyExport } from "../../src/verify";
 import { fixture, unwrap } from "../store/helpers";
 
@@ -267,4 +275,50 @@ export function teamIndexRows(
       branches,
     ),
   };
+}
+
+const Count = z.array(z.strictObject({ n: z.int() }));
+
+function has(
+  db: SqliteDriver,
+  table: string,
+  key: string,
+  id: string,
+): boolean {
+  const rows = Count.parse(
+    db.all(`SELECT COUNT(*) AS n FROM ${table} WHERE ${key} = ?`, [id]),
+  );
+  return (rows[0]?.n ?? 0) > 0;
+}
+
+/** Whether `e`'s append could have happened yet: the rows it moves exist (causal order). */
+export function appendable(db: SqliteDriver, e: KnownEvent): boolean {
+  if (e.type === "message_received" || e.type === "mail_refused")
+    return has(db, "mail", "mail_id", e.data.mail_id);
+  if (e.type === "user_input" && e.data.mail_id !== undefined)
+    return has(db, "mail", "mail_id", e.data.mail_id);
+  if (e.type === "ask_closed") return has(db, "asks", "ask_id", e.data.ask_id);
+  if (e.type === "thread_started" && e.data.parent?.relation === "team_member")
+    return has(db, "team_members", "thread_id", e.thread_id);
+  if (e.type === "operator_request")
+    return has(db, "teams", "team_log_branch_id", e.branch_id);
+  return true;
+}
+
+/**
+ * The replay rule, checked on a live store: every log of the team verifies, rule 43 holds across
+ * them, and wiping and rebuilding the index leaves the rows the appends wrote, byte for byte
+ * (mail's claim columns aside; the feed compared as its (branch_id, seq) rows).
+ */
+export function assertTeamReplays(store: LogStore, team: TeamId): void {
+  const chains = unwrap(teamChains(store, team));
+  const broken = checkTeamLogs(
+    chains.map((c) => ({ ...c, events: knownEvents(c.chain) })),
+    team,
+  );
+  expect(broken).toBeUndefined();
+  const branches = chains.map((c) => c.branchId);
+  const live = teamIndexRows(store.driver, [team], branches);
+  unwrap(rebuildTeamIndex(store, team));
+  expect(teamIndexRows(store.driver, [team], branches)).toEqual(live);
 }

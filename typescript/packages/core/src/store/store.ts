@@ -19,6 +19,7 @@ import { importSegments, verifiedImport } from "./import";
 import { LEASE_TTL_MS, type StoreAccess, takeLease } from "./lease";
 import { ResourceLedger } from "./ledger";
 import { exportBytes } from "./lines";
+import { ALREADY_OPEN, type BranchOpening, openBranch } from "./open";
 import { isTorn, markRepaired, recordRepair } from "./repair";
 import {
   atomically,
@@ -29,7 +30,7 @@ import {
   rootBranch,
   setBranchState,
 } from "./tables";
-import { type Writer, writerMismatch } from "./writer";
+import { Writer, writerMismatch } from "./writer";
 
 export type { ForkRequest } from "./fork-writes";
 export { LEASE_TTL_MS } from "./lease";
@@ -78,15 +79,40 @@ export class LogStore {
 
   /** Writes a new root branch: its header line, head at seq 0. */
   createBranch(threadId: ThreadId, branchId: BranchId): Result<void, LogError> {
-    return atomically(this.#db, () =>
-      newBranch(this.#db, {
+    return atomically(this.#db, () => {
+      const made = newBranch(this.#db, {
         tenantId: this.tenant,
         threadId,
         branchId,
         parent: null,
         state: "ready",
         createdAt: this.#now(),
-      }),
+      });
+      return made.ok ? ok(undefined) : made;
+    });
+  }
+
+  /**
+   * `branch.open` in a transaction of its own: a new root branch of this tenant with its first
+   * events, held by the returned writer at epoch 1. `already_open` when the branch exists.
+   */
+  openBranch(
+    opening: Omit<BranchOpening, "tenantId">,
+  ): Result<Writer | typeof ALREADY_OPEN, LogError> {
+    const opened = openBranch(this.#db, this.#now(), {
+      ...opening,
+      tenantId: this.tenant,
+    });
+    if (!opened.ok) return opened;
+    if (opened.value === ALREADY_OPEN) return ok(ALREADY_OPEN);
+    const { branchId, lease } = opening;
+    return ok(
+      new Writer(
+        this.#db,
+        this.#now,
+        { branchId, holderId: lease.holderId, epoch: 1, ttlMs: lease.ttlMs },
+        opened.value,
+      ),
     );
   }
 

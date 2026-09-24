@@ -1,15 +1,15 @@
 import { z } from "zod";
 import { BranchId, type KnownEvent, ThreadId } from "../log";
 import type { Strict } from "../log/zod-types";
-import type { ChainEvent } from "../verify";
 import type { SqliteDriver } from "./driver";
 
 // The pending_wakes index (spec/schema/store.sql; Gate 1 §2.7.3): one row per running background
 // child of a branch, inserted in the append of its agent_spawned and deleted in the append of its
 // agent_finished, or of the parent's parked{kind: child} for it (a parked child is resumed by the
 // control path). A host resumes a branch with rows, so a child a crash stopped still reports and
-// wakes its parent. The rows follow the replay rule: `pendingWakes` over a branch's own events is
-// the fold that rebuilds them.
+// wakes its parent. An append writes them through the index hooks (store/indexing.ts, with the
+// team index's insertRows/changeRows); `pendingWakes` over a branch's own events is the fold that
+// rebuilds them.
 
 /** The row an event inserts or deletes, if any. */
 function change(
@@ -36,24 +36,6 @@ export function pendingWakes(
     else if (row !== undefined) rows.delete(row.child);
   }
   return [...rows];
-}
-
-/** Runs inside an append's transaction, after its events are inserted. */
-export function recordWakes(
-  db: SqliteDriver,
-  branch: string,
-  added: readonly ChainEvent[],
-): void {
-  for (const line of added) {
-    const row = line.kind === "event" ? change(line.event) : undefined;
-    if (row === undefined) continue;
-    db.run(
-      row.add
-        ? "INSERT OR IGNORE INTO pending_wakes (branch_id, child_thread_id) VALUES (?, ?)"
-        : "DELETE FROM pending_wakes WHERE branch_id = ? AND child_thread_id = ?",
-      [branch, row.child],
-    );
-  }
 }
 
 const WakeBranch: Strict<{

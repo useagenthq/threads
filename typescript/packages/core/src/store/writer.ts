@@ -1,48 +1,26 @@
-import type { z } from "zod";
-import type { KnownEvent } from "../log";
-import { containsSecret, redactStrings } from "../redact";
 import { err, ok, type Result } from "../result";
-import {
-  addLine,
-  type Chain,
-  type ChainEvent,
-  type VerifiedLog,
-} from "../verify";
+import type { Chain, ChainEvent, VerifiedLog } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import { VERSION } from "../version";
+import {
+  type Admitted,
+  admitDrafts,
+  copyChain,
+  type EventDraft,
+} from "./admit";
 import { recordApprovals } from "./approvals";
 import type { SqliteDriver } from "./driver";
-import { canonicalLine, uuidv7 } from "./encode";
+import { indexAppend, knownOf } from "./indexing";
 import {
   atomically,
+  type BranchRow,
   getBranch,
   getLease,
   insertEvents,
   putLease,
 } from "./tables";
-import { recordWakes } from "./wakes";
 
-type EnvelopeKey =
-  | "seq"
-  | "event_id"
-  | "thread_id"
-  | "branch_id"
-  | "epoch"
-  | "time"
-  | "prev_hash";
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
-/**
- * An event before the writer fills its envelope. It is parsed like any stored line. A draft may
- * bring its own `event_id` (minted with `uuidv7` from the writer's clock) when a later event of
- * the same append must name it; the line schema checks its format and validate_next that it is
- * unique.
- */
-export type EventDraft = DistributiveOmit<
-  z.input<typeof KnownEvent>,
-  EnvelopeKey
-> & { readonly event_id?: string };
+export type { EventDraft } from "./admit";
 
 export type Lease = {
   readonly branchId: string;
@@ -51,6 +29,18 @@ export type Lease = {
   /** How long the lease lasts from each take or renewal. */
   readonly ttlMs: number;
 };
+
+/** What a decided append's `decide` reads, inside the append's transaction. */
+export type DecideTx = {
+  readonly db: SqliteDriver;
+  /** The committed chain the drafts extend: the stored head is its head. */
+  readonly chain: Chain;
+  /** The append's clock: every event's time. */
+  readonly now: number;
+};
+
+/** A decided append whose decision refused: nothing was appended, and the writer goes on. */
+export type Refusal<E> = { readonly refused: E };
 
 /** The `writer.impl` this implementation writes in every header it creates. */
 export const IMPL = "threads-ts";
@@ -72,6 +62,9 @@ export function writerMismatch(log: VerifiedLog): LogError | undefined {
     0,
   );
 }
+
+// Rolls a refused decision back; its code never poisons the writer.
+const REFUSED: LogError = logError("invalid_request", "the decision refused");
 
 /**
  * The single writer of one branch under one lease epoch. Every append runs the
@@ -119,27 +112,56 @@ export class Writer {
   /**
    * Appends drafts in order and returns once their transaction has committed with full sync.
    * `alongside` writes host rows (an idempotency receipt, a consumed inbox item) in the same
-   * transaction, after the events; an error from it rolls the append back.
+   * transaction, after the events and their index rows; an error from it rolls the append back.
    */
   append(
     drafts: readonly EventDraft[],
+    alongside?: (added: readonly ChainEvent[]) => Result<void, LogError>,
+  ): Result<readonly ChainEvent[], LogError> {
+    return this.#run(() => ok(drafts), alongside);
+  }
+
+  /**
+   * One transaction that begins, checks the lease and head, lets `decide` read the store and
+   * build the drafts, admits them and commits. A refusal rolls back and leaves the writer
+   * usable; `stale_epoch` and `seq_conflict` poison it, as for `append`.
+   */
+  appendDecided<E>(
+    decide: (tx: DecideTx) => Result<readonly EventDraft[], E>,
+  ): Result<readonly ChainEvent[], LogError | Refusal<E>> {
+    const outcome: { refusal?: Refusal<E> } = {};
+    const appended = this.#run((tx) => {
+      const decided = decide(tx);
+      if (decided.ok) return decided;
+      outcome.refusal = { refused: decided.error };
+      return err(REFUSED);
+    });
+    return outcome.refusal === undefined ? appended : err(outcome.refusal);
+  }
+
+  #run(
+    produce: (tx: DecideTx) => Result<readonly EventDraft[], LogError>,
     alongside?: (added: readonly ChainEvent[]) => Result<void, LogError>,
   ): Result<readonly ChainEvent[], LogError> {
     if (this.#poisoned)
       return err(
         logError("writer_poisoned", "this writer lost its lease or head"),
       );
-    const trial = copy(this.#chain);
-    const added: ChainEvent[] = [];
-    for (const draft of drafts) {
-      const event = this.#admit(trial, draft);
-      if (!event.ok) return event;
-      added.push(event.value);
-    }
-    const expectedSeq = this.#chain.fold.seq;
-    const committed = atomically(this.#db, () =>
-      this.#commit(expectedSeq, added, alongside),
-    );
+    const trial = copyChain(this.#chain);
+    const now = this.#now();
+    const committed = atomically(this.#db, () => {
+      const branch = this.#fencedHead();
+      if (!branch.ok) return branch;
+      const drafts = produce({ db: this.#db, chain: this.#chain, now });
+      if (!drafts.ok) return drafts;
+      const admitted = admitDrafts(trial, drafts.value, now, this.lease.epoch);
+      if (!admitted.ok) return admitted;
+      const written = this.#write(branch.value, admitted.value, now);
+      if (!written.ok || alongside === undefined)
+        return written.ok ? ok(admitted.value.events) : written;
+      const host = alongside(admitted.value.events);
+      return host.ok ? ok(admitted.value.events) : host;
+    });
     if (!committed.ok) {
       const { code } = committed.error;
       this.#poisoned = code === "stale_epoch" || code === "seq_conflict";
@@ -148,7 +170,7 @@ export class Writer {
     this.#chain = trial;
     this.#moved.resolve();
     this.#moved = Promise.withResolvers<void>();
-    return ok(added);
+    return committed;
   }
 
   /**
@@ -222,67 +244,42 @@ export class Writer {
     this.#poisoned = true;
   }
 
-  #admit(trial: Chain, draft: EventDraft): Result<ChainEvent, LogError> {
-    const segment = trial.segments.at(-1);
-    if (segment === undefined) throw new Error("a writer's chain has a header");
-    const now = this.#now();
-    // Nothing is recorded with a resolved secret in it (C5): every event passes here.
-    const actor = redactStrings(draft.actor);
-    const data = redactStrings(draft.data);
-    const content = canonicalLine({ actor, data });
-    if (!content.ok) return content;
-    // Canonical escaping or JSON punctuation can still join redacted strings into a value.
-    if (containsSecret(content.value))
-      return err(
-        logError(
-          "secret_in_stored_bytes",
-          "the event's stored bytes would hold a registered secret; nothing appended",
-        ),
-      );
-    const line = canonicalLine({
-      ...draft,
-      actor,
-      data,
-      seq: trial.fold.seq + 1,
-      event_id: draft.event_id ?? uuidv7(now),
-      thread_id: segment.header.thread_id,
-      branch_id: segment.header.branch_id,
-      epoch: this.lease.epoch,
-      time: now,
-      prev_hash: segment.events.at(-1)?.hash ?? segment.hash,
-    });
-    if (!line.ok) return line;
-    const admitted = addLine(trial, line.value);
-    if (!admitted.ok) return admitted;
-    const event = trial.events.at(-1);
-    if (event === undefined)
-      throw new Error("an admitted event is on the chain");
-    return ok(event);
-  }
-
-  #commit(
-    expectedSeq: number,
-    added: readonly ChainEvent[],
-    alongside?: (added: readonly ChainEvent[]) => Result<void, LogError>,
-  ): Result<void, LogError> {
+  /** The lease is still this one and the stored head is where this writer left it. */
+  #fencedHead(): Result<BranchRow, LogError> {
     const live = this.#checkLease();
     if (!live.ok) return live;
     const branch = getBranch(this.#db, this.lease.branchId);
     if (!branch.ok) return branch;
-    if (branch.value === undefined || branch.value.head_seq !== expectedSeq)
+    const expected = this.#chain.fold.seq;
+    if (branch.value === undefined || branch.value.head_seq !== expected)
       return err(
-        logError("seq_conflict", `the stored head is not ${expectedSeq}`),
+        logError("seq_conflict", `the stored head is not ${expected}`),
       );
-    insertEvents(this.#db, this.lease.branchId, added);
-    recordWakes(this.#db, this.lease.branchId, added);
-    const approvals = recordApprovals(
-      this.#db,
-      branch.value,
-      added,
-      this.#now(),
-    );
-    if (!approvals.ok || alongside === undefined) return approvals;
-    return alongside(added);
+    return ok(branch.value);
+  }
+
+  /** The admitted events, their index rows and their approvals' challenge rows. */
+  #write(
+    branch: BranchRow,
+    admitted: Admitted,
+    now: number,
+  ): Result<void, LogError> {
+    const { events, opened } = admitted;
+    insertEvents(this.#db, this.lease.branchId, events);
+    const own = this.#chain.segments.at(-1)?.header;
+    if (own === undefined) throw new Error("a writer's chain has a header");
+    const indexed = indexAppend({
+      db: this.#db,
+      tenant: branch.tenant_id,
+      threadId: own.thread_id,
+      branchId: own.branch_id,
+      events: knownOf(events),
+      opened,
+      holderId: this.lease.holderId,
+      now,
+    });
+    if (!indexed.ok) return indexed;
+    return recordApprovals(this.#db, branch, events, now);
   }
 
   #checkLease(): Result<void, LogError> {
@@ -303,14 +300,4 @@ export class Writer {
           ),
         );
   }
-}
-
-/** A trial copy of a chain: new arrays and fold, shared immutable events. */
-// ponytail: O(chain length) per append batch; keep an undo log instead if batches get hot.
-function copy(chain: Chain): Chain {
-  return {
-    segments: chain.segments.map((s) => ({ ...s, events: [...s.events] })),
-    events: [...chain.events],
-    fold: structuredClone(chain.fold),
-  };
 }
